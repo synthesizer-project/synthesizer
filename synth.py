@@ -20,3 +20,11 @@ print("Array shapes (spec, ages, metallicity, wavelength):\n", grid.spec.shape, 
 
 
 
+if params.dust:
+    print("do some dust stuff here")
+
+
+if params.nebular:
+    print("do some nebular stuff here")
+
+
