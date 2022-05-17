@@ -11,26 +11,27 @@ class sps_grid:
 
         if verbose: print("Loading model from: \n\n%s\n"%(grid_file))
 
-        self.spec = load_arr('spec', grid_file)
+        self.spectra = load_arr('spectra', grid_file)
         self.ages = load_arr('ages', grid_file)
-        self.metallicity = load_arr('metallicities', grid_file)
+        self.metallicities = load_arr('metallicities', grid_file)
         self.wl = load_arr('wavelength', grid_file)
 
         if self.ages[0] > self.ages[1]:
              if verbose: print("Age array not sorted ascendingly. Sorting...\n")
              self.ages = self.ages[::-1]
-             self.spec = self.spec[:,::-1,:]
+             self.spectra = self.spectra[:,::-1,:]
 
 
-        if self.metallicity[0] > self.metallicity[1]:
+        if self.metallicities[0] > self.metallicities[1]:
             if verbose: print("Metallicity array not sorted ascendingly. Sorting...\n")
-            self.metallicity = self.metallicity[::-1]
-            self.spec = self.spec[::-1,:,:]
+            self.metallicities = self.metallicities[::-1]
+            self.spectra = self.spectra[::-1,:,:]
 
 
 
 if __name__ == '__main__':
     grid = sps_grid('../grids/output/bc03.h5')
-    print("Array shapes (spec, ages, metallicity, wavelength):\n", grid.spec.shape, grid.ages.shape, grid.metallicity.shape, grid.wl.shape)
+    print("Array shapes (spectra, ages, metallicities, wavelength):\n", 
+          grid.spectra.shape, grid.ages.shape, grid.metallicities.shape, grid.wl.shape)
 
 
