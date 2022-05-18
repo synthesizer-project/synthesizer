@@ -8,23 +8,17 @@ https://bitbucket.org/rteyssie/ramses/src/ea56da02dc3c52ba2b92650a14c206a1547aee
 """
 
 import numpy as np
-import os
 import sys
 import re
-import glob
 
-from astropy.cosmology import Planck13 as cosmo
-from astropy.cosmology import z_at_value
-import astropy.units as u
-
-from _utils import write_data_h5py
+from utils import write_data_h5py, write_attribute
 
 # TODO: read in latest bc03-2016 *binary* files
-# example: https://github.com/cmancone/easyGalaxy/blob/0608b17d84d00c2bdc069ebfb83024bf8d15e309/ezgal/utils.py#L382
-
+# example:
+# https://github.com/cmancone/easyGalaxy/blob/0608b17d84d00c2bdc069ebfb83024bf8d15e309/ezgal/utils.py#L382
 
 def readBC03Array(file, lastLineFloat=None):
-    """Read a record from bc03 ascii file. The record starts with the 
+    """Read a record from bc03 ascii file. The record starts with the
        number of elements N and is followed by N numbers. The record may
        or may not start within a line, i.e. a line need not necessarily
        start with a record.
@@ -36,24 +30,25 @@ def readBC03Array(file, lastLineFloat=None):
     Returns array, lastLine, where:
     ----------------------------------------------------------------------
     array = The array values read from the file
-    lastLine = The remainder of the last line read (in floating format), 
+    lastLine = The remainder of the last line read (in floating format),
                for continued reading of the file
     """
-    if lastLineFloat == None or len(lastLineFloat) == 0:
+
+    if lastLineFloat is None or len(lastLineFloat) == 0:
         # Nothing in last line, so read next line
         line = file.readline()
         lineStr = line.split()
         lastLineFloat = [float(x) for x in lineStr]
     # Read array 'header' (i.e. number of elements)
-    arrayCount = int(lastLineFloat[0])          # Length of returned array
-    array = np.empty(arrayCount)  # Initialise the array
+    arrayCount = int(lastLineFloat[0])    # Length of returned array
+    array = np.empty(arrayCount)          # Initialise the array
     lastLineFloat = lastLineFloat[1:len(lastLineFloat)]
-    iA = 0  # Running array index
-    while True:  # Read numbers until array is full
+    iA = 0                                # Running array index
+    while True:                           # Read numbers until array is full
         for iL in range(0, len(lastLineFloat)):  # Loop numbers in line
             array[iA] = lastLineFloat[iL]
             iA = iA+1
-            if iA >= arrayCount:  # Array is full so return
+            if iA >= arrayCount:                # Array is full so return
                 return array, lastLineFloat[iL+1:]
         line = file.readline()   # Went through the line so get the next one
         lineStr = line.split()
@@ -65,12 +60,12 @@ def convertBC03(files=None):
 
     Parameters (user will be prompted for those if not present):
     ----------------------------------------------------------------------
-    files: list of each BC03 SED ascii file, typically named 
+    files: list of each BC03 SED ascii file, typically named
            bc2003_xr_mxx_xxxx_ssp.ised_ASCII
     """
 
     # Prompt user for files if not provided--------------------
-    if files == None:
+    if files is None:
         print('Please write the model to read',)
         files = []
         while True:
@@ -136,11 +131,12 @@ def convertBC03(files=None):
             # Read useless array
             tmp, lastLine = readBC03Array(file, lastLineFloat=lastLine)
             seds[iFile, iAge] = lums
-            progress = (iAge+1)/nAge
+            progress = (iAge + 1) / nAge
             sys.stdout.write("\rProgress: [{0:50s}] {1:.1f}%".format(
                 '#' * int(progress * 50), progress * 100))
         print(' ')
         lastLine = None
+
 
     return (np.array(seds, dtype=np.float64),
             np.array(metalBins, dtype=np.float64),
@@ -148,32 +144,13 @@ def convertBC03(files=None):
             np.array(lambdaBins, dtype=np.float64))
 
 
-def convert_age_to_scalefactor(sed, ages):
-    """
-    convert age array to scale fctor, and filter corresponding sed array
 
-    Args:
-        sed - numpy array (float) dimensions [Z,a,lambda]
-        ages - (float) Gyr
-    """
-
-    # remove ages above age of universe
-    age_mask = (ages < cosmo.age(0).value) & (ages != 0.)
-
-    ages = ages[age_mask] * u.Gyr
-    sed = sed[:, age_mask, :]
-
-    # convert to scale factor
-    scale_factors = cosmo.scale_factor(
-        [z_at_value(cosmo.lookback_time, age) for age in ages])
-
-    return scale_factors, sed
 
 
 def main():
     """ Main function to convert BC03 grids and
         produce grids used by synthesizer """
-
+    
     # Define base path
     basepath = "input_files/bc03/bc03/models/Padova2000/"
 
@@ -186,26 +163,42 @@ def main():
              'bc2003_hr_m172_chab_ssp.ised_ASCII']
 
     out = convertBC03([basepath + s for s in files])
-    # bc2003_hr_m62_chab_ssp_Pickles_Stelib.ised_ASCII
 
     zsol = 0.0127
 
-    sed = out[0]                    # Lsol / AA
-    metals = np.log(out[1] / zsol)  # log(Z / Zsol)
-    ages = out[2] / 1e9             # Gyr
-    wl = out[3]      # ??
+    spec = out[0]                   # Lsol / AA
+    metals = np.log(out[1])         # log(Z)
+    ages = out[2]                   # yr
+    wl = out[3]                     # ?? (AA)
 
+    # print("sed shape", spec.shape)
     # ignore zero age model
-    ages = ages[1:]
-    sed = sed[:, 1:, :]
+    # ages = ages[1:]
+    # sed = sed[:,1:,:]
 
-    ages, sed = convert_age_to_scalefactor(sed, ages)
+    spec *= (3.826e33 / 1.1964952e40)  # erg s^-1 cm^-2 AA^-1
 
     fname = 'output/bc03.h5'
-    write_data_h5py(fname, 'spec', data=sed, overwrite=True)
+    
+    write_data_h5py(fname, 'spectra', data=spec, overwrite=True)
+    write_attribute(fname, 'spectra', 'Description',
+                    'Three-dimensional spectra grid, [Z,Age,wavelength]')
+    write_attribute(fname, 'spectra', 'Units', 'erg s^-1 cm^2 AA^-1')
+
     write_data_h5py(fname, 'ages', data=ages, overwrite=True)
+    write_attribute(fname, 'ages', 'Description', 
+            'Stellar population ages in log10 years')
+    write_attribute(fname, 'ages', 'Units', 'log10(yr)')
+
     write_data_h5py(fname, 'metallicities', data=metals, overwrite=True)
+    write_attribute(fname, 'metallicities', 'Description', 
+            'raw abundances in log10')
+    write_attribute(fname, 'metallicities', 'Units', 'dimensionless [log10(Z)]')
+
     write_data_h5py(fname, 'wavelength', data=wl, overwrite=True)
+    write_attribute(fname, 'wavelength', 'Description', 
+            'Wavelength of the spectra grid')
+    write_attribute(fname, 'wavelength', 'Units', 'AA')
 
 
 # Lets include a way to call this script not via an entry point
