@@ -27,3 +27,11 @@ def load_h5py(filename, obj_str):
     with h5py.File(filename, 'a') as h5file:
         dat = np.array(h5file.get(obj_str))
     return dat
+
+def write_attribute(filename, obj, key, value):
+
+    with h5py.File(filename, 'a') as h5file:
+        dset = h5file[obj]
+        dset.attrs[key] = value
+
+
