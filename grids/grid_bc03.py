@@ -17,7 +17,6 @@ from utils import write_data_h5py, write_attribute
 # example:
 # https://github.com/cmancone/easyGalaxy/blob/0608b17d84d00c2bdc069ebfb83024bf8d15e309/ezgal/utils.py#L382
 
-
 def readBC03Array(file, lastLineFloat=None):
     """Read a record from bc03 ascii file. The record starts with the
        number of elements N and is followed by N numbers. The record may
@@ -34,6 +33,7 @@ def readBC03Array(file, lastLineFloat=None):
     lastLine = The remainder of the last line read (in floating format),
                for continued reading of the file
     """
+
     if lastLineFloat is None or len(lastLineFloat) == 0:
         # Nothing in last line, so read next line
         line = file.readline()
@@ -85,7 +85,8 @@ def convertBC03(files=None):
     seds = np.array([[[None]]])
 
     print('Reading BC03 files and converting...')
-    for iFile, fileName in enumerate(files):  # Loop SED tables for different metallicities
+    # Loop SED tables for different metallicities
+    for iFile, fileName in enumerate(files):
         print('Converting file ', fileName)
         file = open(fileName, 'r')
         ages, lastLine = readBC03Array(file)  # Read age bins
@@ -93,8 +94,8 @@ def convertBC03(files=None):
         print("Number of ages: %s" % nAge)
         if ageBins is None:
             ageBins = ages
-            seds.resize((seds.shape[0], len(ageBins), seds.shape[2]),
-                        refcheck=False)
+            seds.resize((seds.shape[0], len(ageBins),
+                         seds.shape[2]), refcheck=False)
         if not np.array_equal(ages, ageBins):  # check for consistency
             print('Age bins are not identical everywhere!!!')
             print('CANCELLING CONVERSION!!!')
@@ -108,14 +109,14 @@ def convertBC03(files=None):
         # These last three lines are identical and contain the metallicity
         ZZ, = re.search('Z=([0-9]+\.?[0-9]*)', line).groups()
         metalBins[iFile] = eval(ZZ)
-        seds.resize((len(metalBins), seds.shape[1], seds.shape[2]),
-                    refcheck=False)
+        seds.resize(
+            (len(metalBins), seds.shape[1], seds.shape[2]), refcheck=False)
         # Read wavelength bins
         lambdas, lastLine = readBC03Array(file, lastLineFloat=lastLine)
         if lambdaBins is None:  # Write wavelengths to sed file
             lambdaBins = lambdas
-            seds.resize((seds.shape[0], seds.shape[1], len(lambdaBins)),
-                        refcheck=False)
+            seds.resize((seds.shape[0], seds.shape[1],
+                         len(lambdaBins)), refcheck=False)
         if not np.array_equal(lambdas, lambdaBins):  # check for consistency
             print('Wavelength bins are not identical everywhere!!!')
             print('CANCELLING CONVERSION!!!')
@@ -132,26 +133,36 @@ def convertBC03(files=None):
             seds[iFile, iAge] = lums
             progress = (iAge + 1) / nAge
             sys.stdout.write("\rProgress: [{0:50s}] {1:.1f}%".format(
-                                '#' * int(progress * 50), progress * 100))
+                '#' * int(progress * 50), progress * 100))
         print(' ')
         lastLine = None
 
-    return np.array(seds, dtype=np.float64),\
-        np.array(metalBins, dtype=np.float64),\
-        np.array(ageBins, dtype=np.float64),\
-        np.array(lambdaBins, dtype=np.float64)
+
+    return (np.array(seds, dtype=np.float64),
+            np.array(metalBins, dtype=np.float64),
+            np.array(ageBins, dtype=np.float64),
+            np.array(lambdaBins, dtype=np.float64))
 
 
-if __name__ == '__main__':
 
-    out = convertBC03([
-        'input_files/bc03/bc03/models/Padova2000/bc2003_hr_m122_chab_ssp.ised_ASCII',
-        'input_files/bc03/bc03/models/Padova2000/bc2003_hr_m132_chab_ssp.ised_ASCII',
-        'input_files/bc03/bc03/models/Padova2000/bc2003_hr_m142_chab_ssp.ised_ASCII',
-        'input_files/bc03/bc03/models/Padova2000/bc2003_hr_m152_chab_ssp.ised_ASCII',
-        'input_files/bc03/bc03/models/Padova2000/bc2003_hr_m162_chab_ssp.ised_ASCII',
-        'input_files/bc03/bc03/models/Padova2000/bc2003_hr_m172_chab_ssp.ised_ASCII'])
-    # bc2003_hr_m62_chab_ssp_Pickles_Stelib.ised_ASCII
+
+
+def main():
+    """ Main function to convert BC03 grids and
+        produce grids used by synthesizer """
+    
+    # Define base path
+    basepath = "input_files/bc03/bc03/models/Padova2000/"
+
+    # Define files
+    files = ['bc2003_hr_m122_chab_ssp.ised_ASCII',
+             'bc2003_hr_m132_chab_ssp.ised_ASCII',
+             'bc2003_hr_m142_chab_ssp.ised_ASCII',
+             'bc2003_hr_m152_chab_ssp.ised_ASCII',
+             'bc2003_hr_m162_chab_ssp.ised_ASCII',
+             'bc2003_hr_m172_chab_ssp.ised_ASCII']
+
+    out = convertBC03([basepath + s for s in files])
 
     zsol = 0.0127
 
@@ -168,6 +179,7 @@ if __name__ == '__main__':
     spec *= (3.826e33 / 1.1964952e40)  # erg s^-1 cm^-2 AA^-1
 
     fname = 'output/bc03.h5'
+    
     write_data_h5py(fname, 'spectra', data=spec, overwrite=True)
     write_attribute(fname, 'spectra', 'Description',
                     'Three-dimensional spectra grid, [Z,Age,wavelength]')
@@ -187,3 +199,8 @@ if __name__ == '__main__':
     write_attribute(fname, 'wavelength', 'Description', 
             'Wavelength of the spectra grid')
     write_attribute(fname, 'wavelength', 'Units', 'AA')
+
+
+# Lets include a way to call this script not via an entry point
+if __name__ == "__main__":
+    main()

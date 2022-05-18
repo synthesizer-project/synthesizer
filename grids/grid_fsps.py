@@ -33,9 +33,8 @@ def grid(Nage=80, NZ=20, zsolar=0.0142):
 
     return spec, ages, metallicities, wl
 
-
-if __name__ == "__main__":
-
+def main():
+    """ Main function to create fsps grids used by synthesizer """
     Nage = 81
     NZ = 41
 
@@ -62,3 +61,7 @@ if __name__ == "__main__":
     write_attribute(fname, 'wavelength', 'Description',
                     'Wavelength of the spectra grid')
     write_attribute(fname, 'wavelength', 'Units', 'AA')
+
+# Lets include a way to call this script not via an entry point
+if __name__ == "__main__":
+    main()
