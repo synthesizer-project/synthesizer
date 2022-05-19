@@ -2,15 +2,16 @@ import sys
 import h5py
 import numpy as np
 
+from .galaxy import Galaxy
 
 def load_FLARES(f, tag):
     with h5py.File(f, 'r') as hf:
         lens = hf[f'{tag}/Galaxy/S_Length'][:]
         ages = hf[f'{tag}/Particle/S_Age'][:]
         coods = hf[f'{tag}/Particle/S_Coordinates'][:]
-        mass = hf[f'{pre}/S_Mass'][:]
-        imass = hf[f'{pre}/S_MassInitial'][:]
-        metals = hf[f'{pre}/S_Z'][:]
+        mass = hf[f'{tag}/Particle/S_Mass'][:]
+        imass = hf[f'{tag}/Particle/S_MassInitial'][:]
+        metals = hf[f'{tag}/Particle/S_Z'][:]
         # ids = hf[f'{tag}/Particle/S_ID'][:]
         # index = hf[f'{tag}/Particle/S_Index'][:]
         # hf[f'{pre}/S_Vel']
@@ -18,7 +19,10 @@ def load_FLARES(f, tag):
 
     begin, end = get_len(lens)
 
-    # TODO: assign arrays to star particle objects, and subsequently galaxy objects
+    galaxies = [None] * len(begin)
+    for i,(b,e) in enumerate(zip(begin,end)):
+        galaxies[i] = Galaxy()
+        galaxies[i].load_stars(mass[b:e], ages[b:e], metals[b:e])
 
 
 def get_len(Length):
