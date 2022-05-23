@@ -28,6 +28,11 @@ class Galaxy:
 
         return l
 
-    def stellar_spectra(self, grid):
-        l = stellar_particle_spectra(grid)
-        return np.sum(l, axis=0)
+    def calculate_stellar_spectrum(self, grid, save=False):
+        l = self.stellar_particle_spectra(grid)
+        _spec = np.sum(l, axis=0)
+        if save:
+            self.stellar_spectrum = _spec
+        else:
+            return _spec
+
