@@ -5,25 +5,30 @@ import numpy as np
 from .galaxy import Galaxy
 
 
-def load_FLARES(f, tag):
+def load_FLARES(f, region, tag):
     with h5py.File(f, 'r') as hf:
-        lens = hf[f'{tag}/Galaxy/S_Length'][:]
-        ages = hf[f'{tag}/Particle/S_Age'][:]
+        lens = hf[f'{region}/{tag}/Galaxy/S_Length'][:]
+        ages = hf[f'{region}/{tag}/Particle/S_Age'][:]  # Gyr
         # coods = hf[f'{tag}/Particle/S_Coordinates'][:]
-        mass = hf[f'{tag}/Particle/S_Mass'][:]
+        mass = hf[f'{region}/{tag}/Particle/S_Mass'][:]  # 1e10 Msol
         # imass = hf[f'{tag}/Particle/S_MassInitial'][:]
-        metals = hf[f'{tag}/Particle/S_Z'][:]
+        metals = hf[f'{region}/{tag}/Particle/S_Z'][:]
         # ids = hf[f'{tag}/Particle/S_ID'][:]
         # index = hf[f'{tag}/Particle/S_Index'][:]
         # hf[f'{pre}/S_Vel']
         # hf[f'{pre}/S_Z_smooth']
+
+    
+    # ages = np.log10(ages * 1e9)  # log10(yr)
+    ages = (ages * 1e9)  # log10(yr)
+    mass = mass * 1e10  # Msol
 
     begin, end = get_len(lens)
 
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
-        galaxies[i].load_stars(mass[b:e] * 1e10, ages[b:e], metals[b:e])
+        galaxies[i].load_stars(mass[b:e], ages[b:e], metals[b:e])
 
     return galaxies
 
