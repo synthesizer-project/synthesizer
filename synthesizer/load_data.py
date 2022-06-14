@@ -31,7 +31,7 @@ def load_FLARES(f, region, tag):
         galaxies[i] = Galaxy()
         galaxies[i].load_stars(mass[b:e], ages[b:e], metals[b:e], 
                                coordinates=coods[b:e, :],
-                               initial_mass=imass[b:e])
+                               initial_masses=imass[b:e])
 
     return galaxies
 
