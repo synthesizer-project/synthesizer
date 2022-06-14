@@ -7,8 +7,8 @@ class Galaxy:
     def __init__(self):
         self.name = 'galaxy'
 
-    def load_stars(self, masses, ages, metals):
-        self.stars = Stars(masses, ages, metals)
+    def load_stars(self, masses, ages, metals, **kwargs):
+        self.stars = Stars(masses, ages, metals, **kwargs)
 
     def stellar_particle_spectra(self, grid):
         """
