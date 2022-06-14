@@ -9,7 +9,7 @@ def load_FLARES(f, region, tag):
     with h5py.File(f, 'r') as hf:
         lens = hf[f'{region}/{tag}/Galaxy/S_Length'][:]
         ages = hf[f'{region}/{tag}/Particle/S_Age'][:]  # Gyr
-        # coods = hf[f'{tag}/Particle/S_Coordinates'][:]
+        coods = hf[f'{region}/{tag}/Particle/S_Coordinates'][:]
         mass = hf[f'{region}/{tag}/Particle/S_Mass'][:]  # 1e10 Msol
         # imass = hf[f'{tag}/Particle/S_MassInitial'][:]
         metals = hf[f'{region}/{tag}/Particle/S_Z'][:]
@@ -28,7 +28,7 @@ def load_FLARES(f, region, tag):
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
-        galaxies[i].load_stars(mass[b:e], ages[b:e], metals[b:e])
+        galaxies[i].load_stars(mass[b:e], ages[b:e], metals[b:e], coordinates=coods[:,b:e])
 
     return galaxies
 
