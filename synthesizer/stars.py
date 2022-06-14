@@ -23,8 +23,8 @@ class Stars(Particles):
             self.coordinates = kwargs['coordinates']
             self.attributes.append('coordinates')
 
-        if 'initial_mass' in kwargs.keys():
-            self.initial_masses = kwargs['initial_mass']
+        if 'initial_masses' in kwargs.keys():
+            self.initial_masses = kwargs['initial_masses']
             self.attributes.append('initial_masses')
 
     def _power_law_sample(self, a, b, g, size=1):
