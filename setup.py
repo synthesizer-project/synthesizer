@@ -5,6 +5,16 @@ TODO: ADD GUBBINS, LICENCE, COLLABORATION DETAILS ETC
 
 from setuptools import setup, find_packages
 
+from distutils.extension import Extension
+from Cython.Build import cythonize
+from Cython.Distutils import build_ext
+
+import numpy as np
+
+extensions = [
+    Extension("weights", ["synthesizer/weights.pyx"], 
+        define_macros=[('CYTHON_TRACE', '1')])
+]
 
 setup(
     name="synthesizer",
@@ -29,4 +39,7 @@ setup(
         "console_scripts": ["init_bc03=grids.grid_bc03:main",
                             "init_fsps=grids.grid_fsps:main"]
     },
+    cmdclass={'build_ext': build_ext},
+    ext_modules=cythonize(extensions),
+    include_dirs = [np.get_include()],
 )

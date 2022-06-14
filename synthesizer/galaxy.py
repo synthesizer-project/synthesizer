@@ -1,5 +1,6 @@
 import numpy as np
 
+from weights import calculate_weights
 from .stars import Stars
 
 
@@ -17,9 +18,9 @@ class Galaxy:
         Returns
         lum (array) spectrum for each particle, (N_part, wl)
         """
-        lum = np.zeros((len(self.stars.masses), grid.spectra.shape[-1]))
+        lum = np.zeros((len(self.stars.imasses), grid.spectra.shape[-1]))
         for i, (mass, age, metal) in enumerate(zip(
-                self.stars.masses,
+                self.stars.imasses,
                 self.stars.log10ages,
                 self.stars.log10metallicities)):
 
@@ -53,15 +54,17 @@ class Galaxy:
             return np.empty([1, grid.line_luminosities.shape[0]])
 
         lum = np.zeros((np.sum(age_mask), len(grid.lines)))
-        for i, (mass, age, metal) in enumerate(zip(self.stars.masses[age_mask],
-                             self.stars.log10ages[age_mask],
-                             self.stars.log10metallicities[age_mask])):
 
-            ia = self.NGP_assignment(grid, 'ages', age)
-            iZ = self.NGP_assignment(grid, 'metallicities', metal)
-            # TODO: alternative interpolation schemes
+        in_arr = np.array([self.stars.log10metallicities[age_mask],
+                          self.stars.log10ages[age_mask],
+                          self.stars.imasses[age_mask]], dtype=np.float64)
+       
+        for i, _p in enumerate(in_arr.T):
+            weights_temp = calculate_weights(grid.metallicities, 
+                                             grid.ages[grid.ages <= grid.max_age], 
+                                             in_arr)
 
-            lum[i] = mass * grid.line_luminosities[:, iZ, ia]
+            lum[i] = np.sum(grid.line_luminosities * weights_temp, axis=(1,2))
 
         return lum
 
