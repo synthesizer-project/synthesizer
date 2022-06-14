@@ -174,12 +174,13 @@ def metallicity(elements):
     return np.sum([A[i]*10**(elements[i]) for i in metals])/np.sum([A[i]*10**(elements[i]) for i in all])
 
 
-def abundances(Z, d2m=False, scaling='Dopita+2013'):
+def abundances(Z, CO=0.0, d2m=False, scaling='Dopita+2013'):
     """
     This function returns the elemental abundances after removing the depleted amount
 
     :param Z: float, the total metallicity (includes depletion as well)
-    :param d2m: float(?), dust to metal ratio float
+    :param CO: float, the abundance of Carbon in CO (not implemented)
+    :param d2m: float(?), dust to metal ratio
     :param scaling: string
 
     :return: dictionary with different elemental abundances as log10(element/H)

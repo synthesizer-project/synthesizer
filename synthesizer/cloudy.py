@@ -83,34 +83,34 @@ def create_cloudy_binary(grid, params, verbose=False):
     # ---- remove .ascii file
     # os.remove(out_dir+model+'.ascii')
 
-    
-# def calculate_log10Q(grid, ia, iZ, **kwargs): 
-#     
+
+# def calculate_log10Q(grid, ia, iZ, **kwargs):
+#
 #     params = {'log10n_H': 2.5, # Hydrogen density
-#               'log10U_S_0': -2.0, # ionisation parameter at the reference metallicity and age 
+#               'log10U_S_0': -2.0, # ionisation parameter at the reference metallicity and age
 #               ## NOTE: this is not how other people handle this but I think it makes more sense
 #               'REF_log10Z': -2.0,
 #               'REF_log10age': 6.0
 #              }
-#     
+#
 #     for key, value in list(kwargs.items()):
 #         params[key] = value
-# 
+#
 #     # --- determine the metallicity and age indicies for the reference metallicity and age
 #     iZ_REF = (np.abs(grid.metallicities - (params['REF_log10Z']))).argmin()
 #     ia_REF = (np.abs(grid.ages - 10**(params['REF_log10age']))).argmin()
-# 
+#
 #     log10Q_REF = measure_log10Q(grid.wl, grid.spectra[iZ_REF, ia_REF])
-# 
+#
 #     # --- calculate the ionising photon luminosity for the target SED
 #     log10Q_orig = measure_log10Q(grid.wl, grid.spectra[iZ, ia])
-# 
+#
 #     # --- calculate the actual ionisation parameter for the target SED. Only when the target SED == reference SED will log10U_S = log10U_S_0
 #     log10U_S = params['log10U_S_0'] + (log10Q_orig - log10Q_REF)/3.
-# 
+#
 #     # --- now determine the actual ionising photon luminosity for the target SED. This is the normalising input to CLOUDY
 #     log10Q = determine_log10Q(log10U_S, params['log10n_H'])
-# 
+#
 #     return log10Q
 
 
@@ -120,7 +120,7 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
               'covering_factor': 1.0, # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
               'stop_T': 4000, # K
               'stop_efrac': -2,
-              'T_floor': 100, # K          
+              'T_floor': 100, # K
               'log10n_H': 2.5, # Hydrogen density
               'log10U_S_0': -2.0, # ionisation parameter at the reference metallicity and age ## NOTE: this is not how other people handle this but I think it makes more sense
               'CO': 0.0, #
@@ -152,25 +152,62 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     # --- Define the incident radiation field shape
     # cinput.append('interpolate{      10.0000     -99.0000}\n')
     # for i1 in range(int(len(CLOUDY_SED)/5)): cinput.append('continue'+''.join(CLOUDY_SED[i1*5:(i1+1)*5])+'\n')
-    
+
     # cinput.append('print line precision 6\n')
     # cinput.append('table star "model.mod" '+str(grid.ages[ia])+' '+str(grid.metallicity[iZ])+'\n')
     # cinput.append(f'table star "model.mod" {grid.metallicity[iZ]} {grid.ages[ia]}\n')
     cinput.append(f'table star "model.mod" {grid.ages[ia]} {grid.metallicities[iZ]}\n')
 
-
-    
-    # --- add graphite and silicate grains
-    # graphite, scale by total C abundance relative to ISM
-    scale = 10**a_nodep['C']/2.784000e-04
-    cinput.append(f'grains Orion graphite {scale}'+'\n')
-    # silicate, scale by total Si abundance relative to ISM NOTE: silicates also rely on other elements.
-    scale = 10**a_nodep['Si']/3.280000e-05
-    cinput.append(f'grains Orion silicate {scale}'+'\n')
-
     # --- Define the chemical composition
     for ele in ['He'] + abundances.metals:
         cinput.append('element abundance '+abundances.name[ele]+' '+str(a[ele])+'\n')
+
+
+    # --- add graphite and silicate grains
+    # This old version does not actually conserve mass as the command abundances
+    # and grains do not really talk with each other
+    # graphite, scale by total C abundance relative to ISM
+    # scale = 10**a_nodep['C']/2.784000e-04
+    # cinput.append(f'grains Orion graphite {scale}'+'\n')
+    # # silicate, scale by total Si abundance relative to ISM NOTE: silicates also rely on other elements.
+    # scale = 10**a_nodep['Si']/3.280000e-05
+    # cinput.append(f'grains Orion silicate {scale}'+'\n')
+
+    """ specifies graphitic and silicate grains with a size distribution and abundance
+    appropriate for those along the line of sight to the Trapezium stars in Orion. The Orion size
+    distribution is deficient in small particles and so produces the relatively grey extinction
+    observed in Orion (Baldwin et al., 1991).
+    One problem with the grains approach is metals/element abundances do not talk to the grains command
+    and hence there is issues with mass conservation (see cloudy documentation). To alleviate this one
+    needs to make the orion grain abundances consistent with the depletion values. Assume 1 per cent of
+    C is in PAH's.
+    PAHs appear to exist mainly at the interface between the H+ region and the molecular clouds.
+    Apparently PAHs are destroyed in ionized gas (Sellgren et al., 1990, AGN3 section 8.5) by
+    ionizing photons and by collisions with ions (mainly H+ ) and may be depleted into larger grains
+    in molecular regions. Also assume the carbon fraction of PAHs from Abel+2008
+    (https://iopscience.iop.org/article/10.1086/591505) assuming 1 percent of Carbon in PAHs.
+    The factors in the denominators are the abundances of the carbon, silicon and PAH
+    fractions when setting a value of 1 (fiducial abundance) for the orion and PAH grains.
+    Another way is to scale the abundance as a function of the metallicity using the Z_PAH vs Z_gas relation
+    from Galliano+2008 (https://iopscience.iop.org/article/10.1086/523621, y = 4.17*Z_gas_sol - 7.085),
+    which will again introduce issues on mass conservation."""
+
+    delta_C         = 10**a_nodep['C'] - 10**a['C']
+    delta_PAH       = 0.01 * (10**a_nodep['C'])
+    delta_graphite  = delta_C - delta_PAH
+    delta_Si        = 10**a_nodep['Si'] - 10**a_dep['Si']
+    orion_C_abund   = -3.6259
+    orion_Si_abund  = -4.5547
+    PAH_abund       = -4.446
+    if params['d2m']>0:
+        f_graphite  = delta_graphite/(10**(orion_C_abund))
+        f_Si        = delta_Si/(10**(orion_Si_abund))
+        f_pah       = delta_PAH/(10**(PAH_abund))
+        command = F'grains Orion graphite {f_graphite} \ngrains Orion silicate {f_Si} \ngrains PAH {f_pah}'
+        cinput.append(command+'\n')
+    else:
+        f_graphite, f_Si, f_pah = 0, 0, 0
+
 
     # cinput.append('element off limit -7') # should speed up the code
 
@@ -179,7 +216,7 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     log10Q = np.log10(calculate_Q(10**log10U))
     cinput.append(f'Q(H) = {log10Q}\n')
     # # cinput.append(f'ionization parameter = {log10U} log\n')
-    
+
     # add background continuum
     if params['cosmic_rays']:
         cinput.append(f'cosmic rays, background\n')
@@ -233,11 +270,11 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
 # def calculate_Q(U_0, R_inner=0.01 * 3.086e18, n_h=100):
 #     """
 #     Q = U_0 * 4 * pi * R_inner^2 * n_H * c
-# 
+#
 #     U - units: dimensionless
 #     R_inner - units: cm
 #     n_h - units: cm^-3
-# 
+#
 #     returns Q - units: s^-1
 #     """
 #     return U_0 * 4 * np.pi * R_inner**2 * n_h * 2.99e10
@@ -281,7 +318,7 @@ def measure_Q(lam, L_AA, limit=100):
     Args
     lam: \AA
     L_AA: erg s^-1 AA^-1
-    
+
     Returns
     Q: s^-1
     """
@@ -289,7 +326,7 @@ def measure_Q(lam, L_AA, limit=100):
     h_erg = h * 1e7 # erg s
     c = 2.99E8 # m s-1
     c_AA = c * 1e10 # AA s-1
-        
+
     f = lambda x: np.interp(x, lam, L_AA * lam) / (h_erg*c_AA)
     return integrate.quad(f, 0, 912, limit=limit)[0]
 
@@ -297,11 +334,11 @@ def measure_Q(lam, L_AA, limit=100):
 # def calculate_U(Q, R_inner=0.01 * 3.086e18, n_h=100):
 #     """
 #     U = Q / (4 * pi * R_inner^2 * n_H * c)
-#     
+#
 #     Q - units: s^-1
 #     R_inner - units: cm
 #     n_h - units: cm^-3
-# 
+#
 #     returns U - units: dimensionless
 #     """
 #     return Q / (4 * np.pi * R_inner**2 * n_h * 2.99e10)
@@ -356,20 +393,20 @@ def determine_log10Q(log10U_S, log10n_H):
 
 
 # def create_CLOUDY_SED(lam, Lnu):
-# 
-# 
+#
+#
 #     nu = 3E8/(lam*1E-10)  # frequency in Hz
 #     nu_log10 = np.log10(nu)
-# 
+#
 #     Lnu_log10 = np.log10(Lnu+1E-99)
 #     Lnu_log10 -= np.max(Lnu_log10)
-# 
+#
 #     # --- reformat for CLOUDY
-# 
+#
 #     CLOUDY_SED = ['{'+'{0:.5f} {1:.5f}'.format(x,y)+'}' for x,y in zip(nu_log10[::2], Lnu_log10[::2])]
 #     CLOUDY_SED = CLOUDY_SED[:19000]
 #     CLOUDY_SED = CLOUDY_SED[::-1]
-# 
+#
 #     return CLOUDY_SED
 
 
@@ -465,7 +502,7 @@ def read_continuum(output_dir, output_file):
     # ----- Open SED
 
     # 1 = incident, 2 = transmitted, 3 = nebular, 4 = total, 8 = contribution of lines to total
-    lam, incident, transmitted, nebular, total, linecont  = np.loadtxt(f'{output_dir}/{output_file}.cont', delimiter='\t', usecols = (0,1,2,3,4,8)).T 
+    lam, incident, transmitted, nebular, total, linecont  = np.loadtxt(f'{output_dir}/{output_file}.cont', delimiter='\t', usecols = (0,1,2,3,4,8)).T
 
     # --- frequency
     nu = 3E8/(lam*1E-10)
@@ -482,6 +519,3 @@ def read_continuum(output_dir, output_file):
 
 
     return lam, nu, incident, transmitted, nebular_continuum, total, linecont
-
-
-
