@@ -30,15 +30,18 @@ tag = '/010_z005p000/'
 regions = [f'{_r:02}' for _r in np.arange(40)]
 R23 = {}
 
-for region in regions:
-    gals = load_FLARES(_f, region, tag)
+region = '00'
+# for region in regions:
+gals = load_FLARES(_f, region, tag)
 
-    [_g.calculate_stellar_line_luminosities(_grid, save=True) for _g in gals];
+[_g.stars.resample_young_stars() for _g in gals]
 
-    R23[region] = np.array([np.sum([_g.stellar_line_luminosities[_line]\
-             for _line in ['OII3726','OIII4959','OIII5007']]) /\
-                _g.stellar_line_luminosities['HI4861'] for _g in gals\
-                if _g.stellar_line_luminosities['HI4861'] > 0.])
+[_g.calculate_stellar_line_luminosities(_grid, save=True) for _g in gals];
+
+R23[region] = np.array([np.sum([_g.stellar_line_luminosities[_line]\
+         for _line in ['OII3726','OIII4959','OIII5007']]) /\
+            _g.stellar_line_luminosities['HI4861'] for _g in gals\
+            if _g.stellar_line_luminosities['HI4861'] > 0.])
 
 
 [_g.calculate_stellar_spectrum(_grid, save=True) for _g in gals];
