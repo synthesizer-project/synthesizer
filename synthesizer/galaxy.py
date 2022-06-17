@@ -11,22 +11,6 @@ class Galaxy:
     def load_stars(self, masses, ages, metals, **kwargs):
         self.stars = Stars(masses, ages, metals, **kwargs)
 
-    def _calculate_weights(self, grid, metals, ages, imasses, young_stars=False):
-        """
-        Find weights of particles on grid
-
-        Will calculate for particles individually
-        """
-        in_arr = np.array([metals, ages, imasses], dtype=np.float64)
-        if (not hasattr(metals, '__len__')):  # check it's an array
-            in_arr = in_arr[None, :]  # update dimensions if scalar
-        
-        if young_stars:  # filter grid object 
-            return calculate_weights(grid.metallicities, 
-                                     grid.ages[grid.ages <= grid.max_age], in_arr)
-        else:
-            return calculate_weights(grid.metallicities, grid.ages, in_arr)
-
     def stellar_particle_spectra(self, grid):
         """
         Calculate spectra for all individual stellar particles
@@ -49,7 +33,7 @@ class Galaxy:
 
         return lum
 
-    def calculate_stellar_spectrum(self, grid, save=False):
+    def integrated_stellar_spectrum(self, grid, save=False):
         """
         Calculate integrated spectrum for whole galaxy
 
@@ -84,23 +68,23 @@ class Galaxy:
         grid (object)
         """
         age_mask = self.stars.log10ages < grid.max_age
-        if np.sum(age_mask) < 1:
-            return np.empty([1, grid.line_luminosities.shape[0]])
-
         lum = np.zeros((np.sum(age_mask), len(grid.lines)))
-       
-        for i, (mass, age, metal) in enumerate(zip(
-                self.stars.initial_masses[age_mask],
-                self.stars.log10ages[age_mask],
-                self.stars.log10metallicities[age_mask])):
-                
-            weights_temp = self._calculate_weights(grid, metal, age, mass, 
-                                                   young_stars=True)
-            lum[i] = np.sum(grid.line_luminosities * weights_temp, axis=(1,2))
 
-        return lum
+        if np.sum(age_mask) == 0:
+            return lum
+        else:
+            for i, (mass, age, metal) in enumerate(zip(
+                    self.stars.initial_masses[age_mask],
+                    self.stars.log10ages[age_mask],
+                    self.stars.log10metallicities[age_mask])):
+                    
+                weights_temp = self._calculate_weights(grid, metal, age, mass, 
+                                                       young_stars=True)
+                lum[i] = np.sum(grid.line_luminosities * weights_temp, axis=(1,2))
 
-    def calculate_stellar_line_luminosities(self, grid, save=False, verbose=False):
+            return lum
+
+    def integrated_stellar_line_luminosities(self, grid, save=False, verbose=False):
         """
         Calculate integrated line luminosities for whole galaxy
 
@@ -112,28 +96,41 @@ class Galaxy:
         # lum = self.stellar_particle_line_luminosities(grid)
         
         age_mask = self.stars.log10ages < grid.max_age
-        if np.sum(age_mask) < 1:
-            return np.empty([1, grid.line_luminosities.shape[0]])
-
-        weights_temp = self._calculate_weights(grid,
-                self.stars.log10metallicities[age_mask],
-                self.stars.log10ages[age_mask],
-                self.stars.initial_masses[age_mask], young_stars=True)
-
-        lum = np.sum(grid.line_luminosities * weights_temp, axis=(1,2))
-        
-        if lum is None:
+        if np.sum(age_mask) > 0:
+            weights_temp = self._calculate_weights(grid,
+                    self.stars.log10metallicities[age_mask],
+                    self.stars.log10ages[age_mask],
+                    self.stars.initial_masses[age_mask], young_stars=True)
+    
+            lum = np.sum(grid.line_luminosities * weights_temp, axis=(1,2))
+        else:
             if verbose:
                 print("Warning: no particles below max age limit")
+            lum = np.empty([grid.line_luminosities.shape[0]])
+            lum[:] = np.nan
             
-            line_lums = None
-        else:
-            # lum_arr = np.sum(lum, axis=0)
-            line_lums = {}
-            for i, line in enumerate(grid.lines):
-                line_lums[line] = lum[i]
+        line_lums = {}
+        for i, line in enumerate(grid.lines):
+            line_lums[line] = lum[i]
             
         if save:
             self.stellar_line_luminosities = line_lums
         else:
             return line_lums
+
+    def _calculate_weights(self, grid, metals, ages, imasses, young_stars=False):
+        """
+        Find weights of particles on grid
+
+        Will calculate for particles individually
+        """
+        in_arr = np.array([metals, ages, imasses], dtype=np.float64).T
+        if (not hasattr(metals, '__len__')):  # check it's an array
+            in_arr = in_arr[None, :]  # update dimensions if scalar
+        
+        if young_stars:  # filter grid object 
+            return calculate_weights(grid.metallicities, 
+                                     grid.ages[grid.ages <= grid.max_age], in_arr)
+        else:
+            return calculate_weights(grid.metallicities, grid.ages, in_arr)
+

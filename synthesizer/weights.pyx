@@ -41,8 +41,8 @@ def calculate_weights(np.ndarray[dtype_s, ndim=1] z,
     if particle.shape[1] != 3:
         particle = particle.T
 
-    if particle.shape[0] == 3:
-        print("Warning! the particles array may not be transposed correctly. Should be [P,D] where P is number of particles and D = 3.")
+    # if particle.shape[0] == 3:
+    #     print("Warning! the particles array may not be transposed correctly. Should be [P,D] where P is number of particles and D = 3.")
 
     # simple test for sorted z and a arrays
     if z[0] > z[1]:
