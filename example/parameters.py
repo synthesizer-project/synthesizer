@@ -17,7 +17,7 @@ cloudy_output_dir = f'{grid_dir}/cloudy_output/'
 max_age = 7  # log(yr), maximum age of HII regions
 
 fixed_U = False  # use fixed ionisation parameter
-U_target = -2  # log ionisation parameter
+U_target = -2  # if fixed_U=True, log ionisation parameter
 
 # ---- COSMA parameters
 cosma_project = "cosma7"

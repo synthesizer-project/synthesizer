@@ -96,6 +96,7 @@ class Galaxy:
         # lum = self.stellar_particle_line_luminosities(grid)
         
         age_mask = self.stars.log10ages < grid.max_age
+        
         if np.sum(age_mask) > 0:
             weights_temp = self._calculate_weights(grid,
                     self.stars.log10metallicities[age_mask],
