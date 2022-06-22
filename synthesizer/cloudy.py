@@ -8,7 +8,7 @@ import subprocess
 import numpy as np
 from scipy import integrate
 
-from . import abundances
+from .abundances import abundances
 
 c = 2.9979E8
 
@@ -139,11 +139,14 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     # --- get metallicity
     Z = 10**grid.metallicities[iZ]
 
+    # ---- initialise abundances object
+    abund = abundances()
+
     # --- determine elemental abundances for given Z, CO, d2m, with depletion taken into account
-    a = abundances.abundances(Z, params['CO'], params['d2m'])
+    a = abund.abundances(Z, params['CO'], params['d2m'])
 
     # --- determine elemental abundances for given Z, CO, d2m, WITHOUT depletion taken into account
-    a_nodep =  abundances.abundances(Z, params['CO'], 0.0) # --- determine abundances for no depletion
+    a_nodep =  abund.abundances(Z, params['CO'], 0.0) # --- determine abundances for no depletion
 
 
     # ----- start CLOUDY input file (as a list)
@@ -158,8 +161,8 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     cinput.append(f'table star "model.mod" {grid.ages[ia]} {grid.metallicities[iZ]}\n')
 
     # --- Define the chemical composition
-    for ele in ['He'] + abundances.metals:
-        cinput.append('element abundance '+abundances.name[ele]+' '+str(a[ele])+'\n')
+    for ele in ['He'] + abund.metals:
+        cinput.append('element abundance '+abund.name[ele]+' '+str(a[ele])+'\n')
 
 
     # --- add graphite and silicate grains
@@ -194,7 +197,7 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     delta_C         = 10**a_nodep['C'] - 10**a['C']
     delta_PAH       = 0.01 * (10**a_nodep['C'])
     delta_graphite  = delta_C - delta_PAH
-    delta_Si        = 10**a_nodep['Si'] - 10**a_dep['Si']
+    delta_Si        = 10**a_nodep['Si'] - 10**a['Si']
     orion_C_abund   = -3.6259
     orion_Si_abund  = -4.5547
     PAH_abund       = -4.446
