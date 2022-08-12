@@ -1,21 +1,51 @@
 """
-Read BC03 ASCII files in to a single numpy array (age, Z, lambda)
-
-adapted from...
-
-https://bitbucket.org/rteyssie/ramses/src/ea56da02dc3c52ba2b92650a14c206a1547aee52/trunk/ramses/utils/py/sed_utils.py
-
+Download BC03 and convert to HDF5 synthesizer grid.
 """
 
 import numpy as np
+import os
 import sys
 import re
-
+import wget
 from utils import write_data_h5py, write_attribute
+import tarfile
+import glob
+import gzip
+import shutil
 
-# TODO: read in latest bc03-2016 *binary* files
-# example:
-# https://github.com/cmancone/easyGalaxy/blob/0608b17d84d00c2bdc069ebfb83024bf8d15e309/ezgal/utils.py#L382
+
+
+
+def download_data():
+
+    url = 'http://www.bruzual.org/bc03/Original_version_2003/bc03.models.padova_2000_chabrier_imf.tar.gz'
+    filename = wget.download(url)
+    return filename
+
+def untar_data():
+
+
+    input_dir = f'{synthesizer_data}/input_files/'
+    fn = 'bc03.models.padova_2000_chabrier_imf.tar.gz'
+
+    # --- untar main directory
+    tar = tarfile.open(fn)
+    tar.extractall(path = input_dir)
+    tar.close()
+    os.remove(fn)
+
+    # --- unzip the individual files that need reading
+    model_dir = f'{synthesizer_data}/input_files/bc03/models/Padova2000/chabrier'
+    files = glob.glob(f'{model_dir}/bc2003_hr_m*_chab_ssp.ised_ASCII.gz')
+
+    for file in files:
+        with gzip.open(file, 'rb') as f_in:
+            with open('.'.join(file.split('.')[:-1]), 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+
+
+
+
 
 def readBC03Array(file, lastLineFloat=None):
     """Read a record from bc03 ascii file. The record starts with the
@@ -89,6 +119,9 @@ def convertBC03(files=None):
     for iFile, fileName in enumerate(files):
         print('Converting file ', fileName)
         file = open(fileName, 'r')
+        # file = gzip.open(f'{fileName}.gz', 'rb')
+
+
         ages, lastLine = readBC03Array(file)  # Read age bins
         nAge = len(ages)
         print("Number of ages: %s" % nAge)
@@ -147,15 +180,15 @@ def convertBC03(files=None):
 
 
 
-def main():
+def make_grid():
     """ Main function to convert BC03 grids and
         produce grids used by synthesizer """
 
     # Define base path
-    basepath = sys.argv[1]+"/input_files/bc03/models/Padova2000/chabrier/"
+    basepath = synthesizer_data+"/input_files/bc03/models/Padova2000/chabrier/"
 
     # Define output
-    fname = sys.argv[1]+'/grids/bc03_chabrier03.h5'
+    fname = synthesizer_data+'/grids/bc03_chabrier03.h5'
 
     # Define files
     files = ['bc2003_hr_m122_chab_ssp.ised_ASCII',
@@ -175,30 +208,23 @@ def main():
     wl = out[3]                     # ?? (AA)
     nu = 3E8/(wl*1E-10)             # (Hz)
 
-    # print("sed shape", spec.shape)
-    # ignore zero age model
-    # ages = ages[1:]
-    # sed = sed[:,1:,:]
-
     spec *= (3.826e33)  # erg s^-1 AA^-1 Msol^-1
     spec *= wl/nu # erg s^-1 Hz^-1 Msol^-1
-
-
 
     write_data_h5py(fname, 'spectra/stellar', data=spec, overwrite=True)
     write_attribute(fname, 'spectra/stellar', 'Description',
                     'Three-dimensional spectra grid, [Z,Age,wavelength]')
     write_attribute(fname, 'spectra/stellar', 'Units', 'erg s^-1 Hz^-1')
 
-    write_data_h5py(fname, 'ages', data=ages, overwrite=True)
-    write_attribute(fname, 'ages', 'Description',
+    write_data_h5py(fname, 'log10ages', data=ages, overwrite=True)
+    write_attribute(fname, 'log10ages', 'Description',
             'Stellar population ages in log10 years')
-    write_attribute(fname, 'ages', 'Units', 'log10(yr)')
+    write_attribute(fname, 'log10ages', 'Units', 'log10(yr)')
 
-    write_data_h5py(fname, 'metallicities', data=metals, overwrite=True)
-    write_attribute(fname, 'metallicities', 'Description',
+    write_data_h5py(fname, 'log10Zs', data=metals, overwrite=True)
+    write_attribute(fname, 'log10Zs', 'Description',
             'raw abundances in log10')
-    write_attribute(fname, 'metallicities', 'Units', 'dimensionless [log10(Z)]')
+    write_attribute(fname, 'log10Zs', 'Units', 'dimensionless [log10(Z)]')
 
     write_data_h5py(fname, 'wavelength', data=wl, overwrite=True)
     write_attribute(fname, 'wavelength', 'Description',
@@ -208,5 +234,9 @@ def main():
 
 # Lets include a way to call this script not via an entry point
 if __name__ == "__main__":
-    print(sys.argv)
-    main()
+
+    synthesizer_data = "/Users/stephenwilkins/Dropbox/Research/data/synthesizer"
+
+    # download_data()
+    untar_data()
+    make_grid()
