@@ -237,6 +237,6 @@ if __name__ == "__main__":
 
     synthesizer_data = "/Users/stephenwilkins/Dropbox/Research/data/synthesizer"
 
-    # download_data()
+    download_data()
     untar_data()
     make_grid()

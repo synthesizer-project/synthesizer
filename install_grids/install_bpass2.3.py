@@ -28,8 +28,7 @@ def untar_data(model):
     tar = tarfile.open(f'{model}.tar.gz')
     tar.extractall(path = model_dir)
     tar.close()
-
-    # --- delete tar file
+    os.remove(f'{model}.tar.gz')
 
 
 
@@ -117,6 +116,6 @@ if __name__ == "__main__":
 
     for model in models:
 
-        # download_data(model)
-        # untar_data(model)
+        download_data(model)
+        untar_data(model)
         make_grid(model)
