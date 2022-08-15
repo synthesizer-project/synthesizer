@@ -1,3 +1,6 @@
+"""
+Download BPASS v2.2.1 and convert to HDF5 synthesizer grid.
+"""
 
 from hoki import load
 import numpy as np
@@ -11,7 +14,12 @@ synthesizer_data = "/Users/stephenwilkins/Dropbox/Research/data/synthesizer"
 
 model_url = {}
 model_url['bpass_v2.2.1_imf_chab100'] = "https://drive.google.com/file/d/1az7_hP3RDovr-BN9sXgDuaYqOZHHUeXD/view?usp=sharing"
-
+model_url['bpass_v2.2.1_imf_chab300'] = "https://drive.google.com/file/d/1JcUM-qyOQD16RdfWjhGKSTwdNfRUW4Xu/view?usp=sharing"
+# model_url[''] = ""
+# model_url[''] = ""
+# model_url[''] = ""
+# model_url[''] = ""
+# model_url[''] = ""
 
 
 def download_data(model):
