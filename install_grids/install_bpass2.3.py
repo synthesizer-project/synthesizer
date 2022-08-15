@@ -1,3 +1,8 @@
+"""
+Download BPASS v2.3 and convert to HDF5 synthesizer grid.
+NOTE: not yet working.
+"""
+
 
 from hoki import load
 import numpy as np
@@ -10,7 +15,11 @@ synthesizer_data = "/Users/stephenwilkins/Dropbox/Research/data/synthesizer"
 
 
 model_url = {}
-model_url['bpass_v2.2.1_imf_chab100'] = "https://drive.google.com/file/d/1az7_hP3RDovr-BN9sXgDuaYqOZHHUeXD/view?usp=sharing"
+model_url['bpass_v2.3.a+06'] = 'https://drive.google.com/file/d/1-H4aDw0JdKo9Sa0UCwFiUSyj1BlxqAx9/view?usp=sharing' # on SW's Google Drive
+model_url['bpass_v2.3.a+04'] = 'https://drive.google.com/file/d/1-Bgur9lrDXbMJp3tYQ0OJpZV2SfZC5KA/view?usp=sharing' # on SW's Google Drive
+model_url['bpass_v2.3.a+02'] = 'https://drive.google.com/file/d/1-A3WWl3mz3Sp8Ce7zzhRh67LtfdO-jGF/view?usp=sharing' # on SW's Google Drive
+model_url['bpass_v2.3.a+00'] = 'https://drive.google.com/file/d/1-7OICtuTblyUso_5sF4y03kGUjx9F9wz/view?usp=sharing' # on SW's Google Drive
+model_url['bpass_v2.3.a-02'] = 'https://drive.google.com/file/d/1-Jts1tLzXK6_QlF3_nzlf8YZz3U-5yyj/view?usp=sharing' # on SW's Google Drive
 
 
 
@@ -112,7 +121,7 @@ def make_grid(model):
 
 if __name__ == "__main__":
 
-    models = ['bpass_v2.2.1_imf_chab100']
+    models = ['bpass_v2.3.a-02','bpass_v2.3.a+00','bpass_v2.3.a+02','bpass_v2.3.a+04','bpass_v2.3.a+06']
 
     for model in models:
 
