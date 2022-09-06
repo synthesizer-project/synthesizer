@@ -83,34 +83,34 @@ def create_cloudy_binary(grid, params, verbose=False):
     # ---- remove .ascii file
     # os.remove(out_dir+model+'.ascii')
 
-    
-# def calculate_log10Q(grid, ia, iZ, **kwargs): 
-#     
+
+# def calculate_log10Q(grid, ia, iZ, **kwargs):
+#
 #     params = {'log10n_H': 2.5, # Hydrogen density
-#               'log10U_S_0': -2.0, # ionisation parameter at the reference metallicity and age 
+#               'log10U_S_0': -2.0, # ionisation parameter at the reference metallicity and age
 #               ## NOTE: this is not how other people handle this but I think it makes more sense
 #               'REF_log10Z': -2.0,
 #               'REF_log10age': 6.0
 #              }
-#     
+#
 #     for key, value in list(kwargs.items()):
 #         params[key] = value
-# 
+#
 #     # --- determine the metallicity and age indicies for the reference metallicity and age
 #     iZ_REF = (np.abs(grid.metallicities - (params['REF_log10Z']))).argmin()
 #     ia_REF = (np.abs(grid.ages - 10**(params['REF_log10age']))).argmin()
-# 
+#
 #     log10Q_REF = measure_log10Q(grid.wl, grid.spectra[iZ_REF, ia_REF])
-# 
+#
 #     # --- calculate the ionising photon luminosity for the target SED
 #     log10Q_orig = measure_log10Q(grid.wl, grid.spectra[iZ, ia])
-# 
+#
 #     # --- calculate the actual ionisation parameter for the target SED. Only when the target SED == reference SED will log10U_S = log10U_S_0
 #     log10U_S = params['log10U_S_0'] + (log10Q_orig - log10Q_REF)/3.
-# 
+#
 #     # --- now determine the actual ionising photon luminosity for the target SED. This is the normalising input to CLOUDY
 #     log10Q = determine_log10Q(log10U_S, params['log10n_H'])
-# 
+#
 #     return log10Q
 
 
@@ -120,7 +120,7 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
               'covering_factor': 1.0, # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
               'stop_T': 4000, # K
               'stop_efrac': -2,
-              'T_floor': 100, # K          
+              'T_floor': 100, # K
               'log10n_H': 2.5, # Hydrogen density
               'log10U_S_0': -2.0, # ionisation parameter at the reference metallicity and age ## NOTE: this is not how other people handle this but I think it makes more sense
               'CO': 0.0, #
@@ -217,7 +217,7 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     log10Q = np.log10(calculate_Q(10**log10U))
     cinput.append(f'Q(H) = {log10Q}\n')
     # # cinput.append(f'ionization parameter = {log10U} log\n')
-    
+
     # add background continuum
     if params['cosmic_rays']:
         cinput.append(f'cosmic rays, background\n')
@@ -271,11 +271,11 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
 # def calculate_Q(U_0, R_inner=0.01 * 3.086e18, n_h=100):
 #     """
 #     Q = U_0 * 4 * pi * R_inner^2 * n_H * c
-# 
+#
 #     U - units: dimensionless
 #     R_inner - units: cm
 #     n_h - units: cm^-3
-# 
+#
 #     returns Q - units: s^-1
 #     """
 #     return U_0 * 4 * np.pi * R_inner**2 * n_h * 2.99e10
@@ -333,11 +333,11 @@ def measure_Q(lam, L_AA, limit=100):
 # def calculate_U(Q, R_inner=0.01 * 3.086e18, n_h=100):
 #     """
 #     U = Q / (4 * pi * R_inner^2 * n_H * c)
-#     
+#
 #     Q - units: s^-1
 #     R_inner - units: cm
 #     n_h - units: cm^-3
-# 
+#
 #     returns U - units: dimensionless
 #     """
 #     return Q / (4 * np.pi * R_inner**2 * n_h * 2.99e10)
@@ -392,20 +392,20 @@ def determine_log10Q(log10U_S, log10n_H):
 
 
 # def create_CLOUDY_SED(lam, Lnu):
-# 
-# 
+#
+#
 #     nu = 3E8/(lam*1E-10)  # frequency in Hz
 #     nu_log10 = np.log10(nu)
-# 
+#
 #     Lnu_log10 = np.log10(Lnu+1E-99)
 #     Lnu_log10 -= np.max(Lnu_log10)
-# 
+#
 #     # --- reformat for CLOUDY
-# 
+#
 #     CLOUDY_SED = ['{'+'{0:.5f} {1:.5f}'.format(x,y)+'}' for x,y in zip(nu_log10[::2], Lnu_log10[::2])]
 #     CLOUDY_SED = CLOUDY_SED[:19000]
 #     CLOUDY_SED = CLOUDY_SED[::-1]
-# 
+#
 #     return CLOUDY_SED
 
 
@@ -496,12 +496,18 @@ def read_lines(output_dir, output_file, lines = []):
 
 
 
-def read_continuum(output_dir, output_file):
+def read_wavelength(filename):
+
+    """ return just wavelength grid from cloudy file """
+
+    return np.loadtxt(f'{filename}.cont', delimiter='\t', usecols = (0)).T
+
+def read_continuum(filename, return_dict = False):
 
     # ----- Open SED
 
     # 1 = incident, 2 = transmitted, 3 = nebular, 4 = total, 8 = contribution of lines to total
-    lam, incident, transmitted, nebular, total, linecont  = np.loadtxt(f'{output_dir}/{output_file}.cont', delimiter='\t', usecols = (0,1,2,3,4,8)).T 
+    lam, incident, transmitted, nebular, total, linecont  = np.loadtxt(f'{filename}.cont', delimiter='\t', usecols = (0,1,2,3,4,8)).T
 
     # --- frequency
     nu = 3E8/(lam*1E-10)
@@ -509,12 +515,15 @@ def read_continuum(output_dir, output_file):
     # --- nebular continuum is the total nebular emission (nebular) - the line continuum (linecont)
     nebular_continuum = nebular - linecont
 
-
-    for SED_type in ['incident', 'transmitted', 'nebular_continuum', 'total', 'linecont']:
-
-        locals()[SED_type] /= 10**7  #
-        locals()[SED_type] /= nu
+    spec_dict = {'lam': lam, 'nu': nu}
 
 
+    for spec_type in ['incident', 'transmitted', 'nebular', 'nebular_continuum', 'total', 'linecont']:
+        locals()[spec_type] /= 10**7  #
+        locals()[spec_type] /= nu
+        spec_dict[spec_type] = locals()[spec_type]
 
-    return lam, nu, incident, transmitted, nebular_continuum, total, linecont
+    if return_dict:
+        return spec_dict
+    else:
+        return lam, nu, incident, transmitted, nebular, nebular_continuum, total, linecont

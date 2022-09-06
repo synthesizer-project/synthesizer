@@ -54,3 +54,69 @@ if __name__ == '__main__':
     print("Array shapes (spectra, ages, metallicities, wavelength):\n",
           grid.spectra.shape, grid.ages.shape,
           grid.metallicities.shape, grid.wl.shape)
+
+
+
+
+
+
+# 
+# class Binned:
+#
+#     def get_nearest_index(self, value, array):
+#
+#         return (np.abs(array - value)).argmin()
+#
+#     def get_nearest(self, value, array):
+#
+#         idx = self.get_nearest_index(value, array)
+#
+#         return idx, array[idx]
+#
+#     def get_nearest_log10Z(self, log10Z):
+#
+#         return self.get_nearest(log10Z, self.grid['log10Z'])
+
+
+# class SPS(SPS_):
+#
+#     def __init__(self, grid, path_to_SPS_grid = '/data/SPS/nebular/3.0/'):
+#
+#         self.grid_name = grid.replace('/','-')
+#
+#         self.grid = pickle.load(open(flare.FLARE_dir + path_to_SPS_grid + grid + '/nebular.p','rb'), encoding='latin1')
+#
+#         self.lam = self.grid['lam']
+#
+#
+# class synthesizer(SPS_):
+#
+#     def __init__(self, grid, path_to_SPS_grid = '/Users/stephenwilkins/Dropbox/Research/data/synthesizer/grids'):
+#
+#         hf = h5py.File(f'{path_to_SPS_grid}/{grid}.h5','r')
+#
+#         self.grid_name = grid
+#
+#         self.grid = {}
+#         self.grid['lam'] = hf['wavelength'][()]
+#         self.lam = self.grid['lam']
+#         self.nu = 3E8/(self.lam*1E-10)
+#         self.grid['log10age'] = hf['log10ages'][()]
+#         self.grid['log10Z'] = hf['log10Zs'][()]
+#         self.grid['stellar'] = np.swapaxes(hf['spectra/stellar'][()], 0, 1)
+#
+# class synthesizer_old(SPS_):
+#
+#     def __init__(self, grid, path_to_SPS_grid = '/Users/stephenwilkins/Dropbox/Research/data/synthesizer/old'):
+#
+#         hf = h5py.File(f'{path_to_SPS_grid}/{grid}.h5','r')
+#
+#         self.grid_name = grid
+#
+#         self.grid = {}
+#         self.grid['lam'] = hf['wavelength'][()]
+#         self.lam = self.grid['lam']
+#         self.nu = 3E8/(self.lam*1E-10)
+#         self.grid['log10age'] = hf['ages'][()]
+#         self.grid['log10Z'] = hf['metallicities'][()]
+#         self.grid['stellar'] = np.swapaxes(hf['spectra'][()], 0, 1) * 1.1964952e40 * self.lam/self.nu # erg/s/Hz (1.1964952e40 is a magic number used by Chris)

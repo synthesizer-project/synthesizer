@@ -1,0 +1,106 @@
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+import cmasher as cmr
+
+from synthesizer.binned import sfzh
+from synthesizer.plt import single, single_histxy, mlabel
+
+
+
+
+def plot_sfh(x, sfh, log10 = False):
+
+    x_range = [x[0], x[-1]]
+
+    sfh_ = sfzh.Binned.sfh(x, sfh, log10 = log10)
+
+    print(sfh_)
+
+    fig, ax = single()
+
+    ax.fill_between(x, sfh_/np.max(sfh_), step='mid', color='k', alpha = 0.3)
+
+    # --- add SFR to top of the plot
+    x = np.linspace(*x_range, 1000)
+    if log10:
+        y = sfh.sfr(10**x)
+    else:
+        y = sfh.sfr(x)
+
+    ax.plot(x, y/np.max(y))
+
+    if log10:
+        ax.set_xlabel(mlabel('log_{10}(age/yr)'))
+    else:
+        ax.set_xlabel(mlabel('age/yr'))
+
+    ax.set_ylabel(mlabel('normalised\ SFR'))
+
+    ax.set_xlim(x_range)
+
+
+
+    plt.show()
+
+
+
+
+
+
+
+
+
+def plot_sfhs():
+
+    ages = np.arange(0, 2000, 1)
+
+    # sfh_p = [1E8] # [duration/yr]
+    # sfh = sfzh.SFH.Constant(*sfh_p) # constant star formation
+    # plot_sfh(ages, sfh, log10 = False)
+    #
+    # sfh_p = [1E8, 2E8] # [tau/yr, mag_age/yr]
+    # sfh = sfzh.SFH.TruncatedExponential(*sfh_p) # constant star formation
+    # plot_sfh(ages, sfh, log10 = False)
+
+    sfh_p = [700., 0.2, 1000] # [age_peak/yr, tau, max_age/yr]
+    sfh = sfzh.SFH.LogNormal(*sfh_p) # constant star formation
+    plot_sfh(ages, sfh, log10 = False)
+
+    print(sfh.sfr(10))
+
+
+def plot_sfzhs():
+
+
+    # --- define a age and metallicity grid. In practice these are pulled from the SPS model.
+    log10ages = np.arange(6., 10.5, 0.1)
+    log10metallicities = np.arange(-5., -1.5, 0.25)
+
+    # --- define the parameters of the star formation and metal enrichment histories
+    sfh_p = [1E9] # [duration/yr]
+    Z_p = [10**-2.5] # [Z]
+
+    # --- define the functional form of the star formation and metal enrichment histories
+    sfh = sfzh.SFH.Constant(*sfh_p) # constant star formation
+    Zh = sfzh.ZH.deltaConstant(*Z_p) #
+
+    SFZH = sfzh.Binned.sfzh(log10ages, 10**log10metallicities, sfh, Zh)
+    SFZH.plot()
+
+    sfh_p = [1E8, 2E8] # [tau/yr, mag_age/yr]
+    sfh = sfzh.SFH.TruncatedExponential(*sfh_p) # constant star formation
+    SFZH = sfzh.Binned.sfzh(log10ages, 10**log10metallicities, sfh, Zh)
+    SFZH.plot()
+
+    sfh_p = [1E8, 1.0, 1E9] # [age_peak/yr, tau/yr, max_age/yr]
+    sfh = sfzh.SFH.LogNormal(*sfh_p) # constant star formation
+    SFZH = sfzh.Binned.sfzh(log10ages, 10**log10metallicities, sfh, Zh)
+    SFZH.plot()
+
+
+if __name__ == '__main__':
+
+    # plot_sfhs()
+    plot_sfzhs()
