@@ -3,15 +3,31 @@
 from numpy import *
 import numpy as np
 
-# --- calculates the absorption due to the intergalactic medium using the Madau et al. formalism.
+# --- calculates the absorption due to the intergalactic medium using e.g. Madau et al. formalism.
 
-# --- you provide a wavelength (or wavelength grid) and redshift and the code returns the corresponding fraction of light which is absorbed.
+
+
+
+# --- there are alernatives to the Madau 96 formalism which we should add.
 
 
 
 
 
 def madau96(lambdas, z):
+
+	"""
+    Return the IGM absorption for the Madau96 model as a function of wavelength and redshift
+
+            Parameters:
+                    lambdas (ndarray): wavelength grid in \AA
+                    z (float): redshift
+
+            Returns:
+                    Expteff (ndarray): IGM transmission as a function of wavelength
+    """
+
+	# --- NB this was written by an undergraduate student ~10 years ago. Should be re-written.
 
 	LAMBDA= [1216.0,1026.0,973.0,950.0]
 	A=[0.0036,0.0017,0.0012,0.00093]

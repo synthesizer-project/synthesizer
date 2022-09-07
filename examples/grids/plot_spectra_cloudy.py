@@ -18,9 +18,6 @@ from synthesizer.grid_sw import Grid
 import flare.plt as fplt
 
 
-# -------------------------------------------------
-# --- define choise of SPS model and initial mass function (IMF)
-
 
 
 def plot_spectra(grid, log10Z = -2.0, log10age = 6.0, spec_names = None):
@@ -58,10 +55,15 @@ def plot_spectra(grid, log10Z = -2.0, log10age = 6.0, spec_names = None):
 
 if __name__ == '__main__':
 
-    log10Z = -2.
-    log10age = 6.0
+    # -------------------------------------------------
+    # --- define choise of SPS model and initial mass function (IMF)
 
-    sps_names = ['bpass-v2.2.1_chab100-bin_cloudy-v17.0_logUref-2']
+    sps_names = ['bpass-v2.2.1_chab100-bin', 'bpass-v2.2.1_chab100-bin_cloudy-v17.0_logUref-2']
+
+    log10Z = -2. # log10(metallicity)
+    log10age = 6.0 # log10(age/yr)
+
+
 
     for sps_name in sps_names:
 

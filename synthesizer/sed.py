@@ -6,16 +6,37 @@ import numpy as np
 
 from scipy.integrate import simps
 from scipy.stats import linregress
+from scipy import integrate
+
+from unyt import c, h
 
 from . import igm
 
-
-
-h = 6.626E-34*1E7 # erg/Hz
-c = 3.E8 #m/s
-
-
 class Sed:
+
+    """
+    A class representing a spectral energy distribution (SED).
+
+    Attributes
+    ----------
+    lam : ndarray
+        the wavelength grid in \AA
+    lam_m : ndarray
+        the wavelength grid in m
+    nu : ndarray
+        frequency in Hz
+    lnu: ndarray
+        the spectral luminosity density
+
+
+    Methods
+    -------
+    return_beta:
+        Calculate beta using two wavelength points
+    return_beta_spec:
+        Calculate beta using linear regression to the spectra over a wavelength range
+    """
+
 
     def __init__(self, lam, description = False):
 
@@ -23,9 +44,10 @@ class Sed:
 
         self.description = description
 
-        self.lam = lam # \AA
-        self.lnu = np.zeros(self.lam.shape) # luminosity ers/s/Hz
-        self.nu = 3E8/(self.lam/1E10) # Hz
+        self.lam = lam  # \AA
+        self.lam_m = lam * 1E10  # m
+        self.lnu = np.zeros(self.lam.shape)  # luminosity ers/s/Hz
+        self.nu = c.value/(self.lam_m)  # Hz
 
 
     def return_beta(self, wv = [1500., 2500.]):
@@ -45,12 +67,8 @@ class Sed:
 
         slope, intercept, r, p, se = linregress(np.log10(self.lam[s]), np.log10(self.lnu[s]))
 
-        return slope-2.0
+        return slope - 2.0
 
-
-    def get_Lnu(self, F): # broad band luminosity/erg/s/Hz
-
-        self.Lnu = {f: np.trapz(self.lnu * F[f].T, self.lam) / np.trapz(F[f].T, self.lam) for f in F['filters']}
 
 
     def get_fnu(self, cosmo, z, igm = igm.madau96):
@@ -59,38 +77,89 @@ class Sed:
         Calculate the observed frame spectral energy distribution in nJy
         """
 
-        self.lamz = self.lam * (1. + z)
-        self.fnu = 1E23 * 1E9 * self.lnu * (1.+z) / (4 * np.pi * cosmo.luminosity_distance(z).to('cm').value**2) # nJy
+        self.lamz = self.lam * (1. + z)  # observed frame wavelength
+        luminosity_distance = cosmo.luminosity_distance(z).to('cm').value  # the luminosity distance in cm
+        self.fnu = self.lnu * (1.+z) / (4 * np.pi * luminosity_distance**2)  # erg/s/Hz/cm2
+        self.fnu *= 1E23 # convert to Jy
+        self.fnu *= 1E9 # convert to nJy
 
         if igm:
             self.fnu *= igm(self.lamz, z)
 
 
-    def get_Fnu(self, F): # broad band flux/nJy
+    def get_broadband_fluxes(self, fc): # broad band flux/nJy
 
-        self.Fnu = {f: np.trapz(self.fnu * F[f].T, self.lamz) / np.trapz(F[f].T, self.lamz) for f in F['filters']}
-
-        self.Fnu_array = np.array([self.Fnu[f] for f in F['filters']])
-
-    def return_Fnu(self, F): # broad band flux/nJy
-
-        return {f: np.trapz(self.fnu * F[f].T, self.lamz) / np.trapz(F[f].T, self.lamz) for f in F['filters']}
-
-
-    def return_log10Q(self):
         """
-        measure the ionising photon luminosity
-        :return:
+        Calculate broadband luminosities using a FilterCollection object
+
+        arguments
+        fc: a FilterCollection object
         """
 
-        llam = self.lnu * c / (self.lam**2*1E-10) # erg s^-1 \AA^-1
-        nlam = (llam*self.lam*1E-10)/(h*c) # s^-1 \AA^-1
-        s = ((self.lam >= 0) & (self.lam < 912)).nonzero()[0]
-        Q = simps(nlam[s], self.lam[s])
+        self.broadband_fluxes = {}
 
-        return np.log10(Q)
+        for f in fc.filters:
+
+            # --- check whether the filter transmission curve wavelength grid and the spectral grid are the same array
+            if not np.array_equal(fc.filter[f].lam, self.lamz):
+                print('WARNING: filter wavelength grid is not the same as the SED wavelength grid.')
+
+            # --- calculate broadband fluxes by multiplying the observed spetra by the filter transmission curve and dividing by the normalisation
 
 
+            # --- all of these versions seem to work. I suspect the first one won't work for different wavelength grids.
+
+            # int_num = integrate.trapezoid(self.fnu * fc.filter[f].t) # numerator
+            # int_den = integrate.trapezoid(fc.filter[f].t) # denominator
+
+            int_num = integrate.trapezoid(self.fnu * fc.filter[f].t/self.nu, self.nu) # numerator
+            int_den = integrate.trapezoid(fc.filter[f].t/self.nu, self.nu) # denominator
+
+            # int_num = integrate.simpson(self.fnu * fc.filter[f].t/self.nu, self.nu) # numerator
+            # int_den = integrate.simpson(fc.filter[f].t/self.nu, self.nu) # denominator
+
+            self.broadband_fluxes[f] = int_num / int_den
+
+
+    # def return_log10Q(self):
+    #     """
+    #     measure the ionising photon luminosity
+    #     :return:
+    #     """
+    #
+    #     llam = self.lnu * c.value / (self.lam**2*1E-10)  # erg s^-1 \AA^-1
+    #     nlam = (llam*self.lam*1E-10) / (h.to('erg/Hz').value * c.value)  # s^-1 \AA^-1
+    #     s = ((self.lam >= 0) & (self.lam < 912)).nonzero()[0]
+    #     Q = simps(nlam[s], self.lam[s])
+    #
+    #     return np.log10(Q)
+
+
+
+
+
+def calculate_Q(lam, lnu):
+
+    """ calculate the ionising photon luminosity
+
+    arguments:
+    lam -- wavelength/\AA
+    lnu -- spectral luminosity density/erg/s/Hz
+    """
+
+    # --- check lam is increasing and if not reverse
+    if lam[1]<lam[0]:
+        lam = lam[::-1]
+
+    lam_m = lam * 1E-10 # m
+    lnu *= 1E-7  # convert to W s^-1 Hz^-1
+    llam = lnu * c.value / (lam * lam_m) # convert to l_lam (W s^-1 \AA^-1)
+    nlam = (llam * lam_m) / (h.value * c.value) # s^-1 \AA^-1
+
+    f = lambda l: np.interp(l, lam, nlam)
+    Q = integrate.quad(f, 10.0, 912.0)[0]
+
+    return Q
 
 
 
