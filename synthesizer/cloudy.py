@@ -10,7 +10,7 @@ from scipy import integrate
 
 from .abundances import abundances
 
-c = 2.9979E8
+from unyt import c
 
 
 def create_cloudy_binary(grid, params, verbose=False):
@@ -498,11 +498,16 @@ def read_lines(output_dir, output_file, lines = []):
 
 def read_wavelength(filename):
 
-    """ return just wavelength grid from cloudy file """
+    """ return just wavelength grid from cloudy file and reverse the order """
 
-    return np.loadtxt(f'{filename}.cont', delimiter='\t', usecols = (0)).T
+    lam = np.loadtxt(f'{filename}.cont', delimiter='\t', usecols = (0)).T
+    lam = lam[::-1]  # reverse order
+
+    return lam
 
 def read_continuum(filename, return_dict = False):
+
+    """ read a cloudy continuum file and convert spectra to erg/s/Hz """
 
     # ----- Open SED
 
@@ -510,7 +515,9 @@ def read_continuum(filename, return_dict = False):
     lam, incident, transmitted, nebular, total, linecont  = np.loadtxt(f'{filename}.cont', delimiter='\t', usecols = (0,1,2,3,4,8)).T
 
     # --- frequency
-    nu = 3E8/(lam*1E-10)
+    lam = lam[::-1] # reverse array
+    lam_m = lam * 1E-10 # m
+    nu = c.value / (lam_m)
 
     # --- nebular continuum is the total nebular emission (nebular) - the line continuum (linecont)
     nebular_continuum = nebular - linecont
@@ -519,9 +526,13 @@ def read_continuum(filename, return_dict = False):
 
 
     for spec_type in ['incident', 'transmitted', 'nebular', 'nebular_continuum', 'total', 'linecont']:
-        locals()[spec_type] /= 10**7  #
-        locals()[spec_type] /= nu
-        spec_dict[spec_type] = locals()[spec_type]
+
+        sed = locals()[spec_type]
+        sed = sed[::-1]  # reverse array
+        sed /= 10**7  # convert from W to erg
+        sed /= nu  # convert from nu l_nu to l_nu
+        spec_dict[spec_type] = sed
+
 
     if return_dict:
         return spec_dict

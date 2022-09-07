@@ -5,42 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 
-rcParams = {}
-rcParams['savefig.dpi'] = 300
-rcParams['path.simplify'] = True
-
-rcParams['font.family'] = 'sans-serif'
-rcParams['font.sans-serif'] = 'stixsans'
-rcParams['text.usetex'] = False
-rcParams['font.size'] = 9
-rcParams['mathtext.fontset'] = 'stixsans'
-
-rcParams['axes.linewidth'] = 0.5
-
-rcParams['xtick.major.size'] = 3
-rcParams['ytick.major.size'] = 3
-rcParams['xtick.minor.size'] = 1.5
-rcParams['ytick.minor.size'] = 1.5
-rcParams['xtick.labelsize'] = 7
-rcParams['ytick.labelsize'] = 7
-rcParams['ytick.direction'] = 'in'
-rcParams['xtick.direction'] = 'in'
-rcParams['ytick.minor.visible'] = True
-rcParams['xtick.minor.visible'] = True
-rcParams['xtick.major.width'] = 0.25
-rcParams['ytick.major.width'] = 0.25
-rcParams['xtick.minor.width'] = 0.25
-rcParams['ytick.minor.width'] = 0.25
-
-rcParams['grid.alpha'] = 0.1
-rcParams['grid.color'] = 'k'
-rcParams['grid.linestyle'] = '-'
-rcParams['grid.linewidth'] = 0.8
-
-rcParams['legend.frameon'] = False
-
-mpl.rcParams.update(rcParams)
-
+plt.style.use('http://stephenwilkins.co.uk/matplotlibrc.txt')
 
 def mlabel(l):
     return rf'$\rm {l}$'
