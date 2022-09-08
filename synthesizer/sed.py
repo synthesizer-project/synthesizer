@@ -8,7 +8,7 @@ from scipy.integrate import simps
 from scipy.stats import linregress
 from scipy import integrate
 
-from unyt import c, h
+from unyt import c, h, nJy
 
 from . import igm
 
@@ -118,7 +118,9 @@ class Sed:
             # int_num = integrate.simpson(self.fnu * fc.filter[f].t/self.nu, self.nu) # numerator
             # int_den = integrate.simpson(fc.filter[f].t/self.nu, self.nu) # denominator
 
-            self.broadband_fluxes[f] = int_num / int_den
+            self.broadband_fluxes[f] = int_num / int_den * nJy
+
+        return self.broadband_fluxes
 
 
     # def return_log10Q(self):
