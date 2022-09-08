@@ -5,6 +5,9 @@ import h5py
 import copy
 import numpy as np
 from scipy import integrate
+from unyt import yr
+
+
 
 import matplotlib.pyplot as plt
 import cmasher as cmr
@@ -12,7 +15,7 @@ import cmasher as cmr
 from . import dust_curves
 from .sed import Sed
 from .plt import single_histxy, mlabel
-
+from .stats import weighted_median, weighted_mean
 
 
 
@@ -221,6 +224,10 @@ class SEDGenerator():
 
 
 
+# def rebin_SFZH(sfzh, new_log10ages, new_metallicities):
+#
+#     """ take a BinnedSFZH object and rebin it on to a new grid. The context is taking a binned SFZH from e.g. a SAM and mapping it on to a new grid e.g. from a particular SPS model """
+
 
 
 
@@ -235,6 +242,7 @@ class BinnedSFZH:
 
     def __init__(self, log10ages, metallicities, sfzh, sfh_f = None, Zh_f = None):
         self.log10ages = log10ages
+        self.ages = 10**log10ages
         self.log10ages_lims = [self.log10ages[0], self.log10ages[-1]]
         self.metallicities = metallicities
         self.metallicities_lims = [self.metallicities[0], self.metallicities[-1]]
@@ -253,6 +261,36 @@ class BinnedSFZH:
             self.metallicity_grid = 'log10Z'
         else:
             self.metallicity_grid = None
+
+    def calculate_median_age(self):
+
+        """ calculate the median age """
+
+        return weighted_median(self.ages, self.sfh) * yr
+
+    def calculate_mean_age(self):
+
+        """ calculate the mean age """
+
+        return weighted_mean(self.ages, self.sfh) * yr
+
+
+    def calculate_mean_metallicity(self):
+
+        """ calculate the mean metallicity """
+
+        return weighted_mean(self.metallicities, self.Z)
+
+    def summary(self):
+
+        """ print basic summary of the binned star formation and metal enrichment history """
+
+        print('-'*10)
+        print('SUMMARY OF BINNED SFZH')
+        print(f'median age: {self.calculate_median_age().to("Myr"):.2f}')
+        print(f'mean age: {self.calculate_mean_age().to("Myr"):.2f}')
+        print(f'mean metallicity: {self.calculate_mean_metallicity():.4f}')
+
 
 
     def plot(self, show = True):
@@ -368,11 +406,16 @@ class ZH:
 
         """ return a single metallicity as a function of age. """
 
-        def __init__(self, Z_, log10 = False):
-            self.dist = 'delta'
+        def __init__(self, parameters):
 
-            self.Z_ = Z_
-            self.log10Z_ = np.log10(Z_)
+            self.dist = 'delta' # set distribution type
+            self.parameters = parameters
+            if 'Z' in parameters.keys():
+                self.Z_ = parameters['Z']
+                self.log10Z_ = np.log10(self.Z_)
+            elif 'log10Z' in parameters.keys():
+                self.log10Z_ = parameters['log10Z']
+                self.Z_ = 10**self.log10Z_
 
         def Z(self, age):
             return self.Z_
@@ -381,9 +424,12 @@ class ZH:
             return self.log10Z_
 
 
+
+
+
 class SFH:
 
-    """ A collection of classes describing the star formation history """
+    """ A collection of classes describing parametric star formation histories """
 
     class Common:
 
@@ -393,14 +439,67 @@ class SFH:
             elif type(age) == np.ndarray:
                 return np.array([self.sfr_(a) for a in age])
 
+        def calculate_sfh(self, t_range = [0, 1E10], dt = 1E6):
+
+            """ calcualte the age of a given star formation history """
+
+            t = np.arange(*t_range, dt)
+            sfh = self.sfr(t)
+            return t, sfh
+
+        def calculate_median_age(self, t_range = [0, 1E10], dt = 1E6):
+
+            """ calcualte the median age of a given star formation history """
+
+            t, sfh = self.calculate_sfh(t_range = t_range, dt = dt)
+
+            return weighted_median(t, sfh) * yr
+
+        def calculate_mean_age(self, t_range = [0, 1E10], dt = 1E6):
+
+            """ calcualte the median age of a given star formation history """
+
+            t, sfh = self.calculate_sfh(t_range = t_range, dt = dt)
+
+            return weighted_mean(t, sfh) * yr
+
+        def calcualte_moment(self, n):
+
+            """ calculate the n-th moment of the star formation history """
+
+            print('WARNING: not yet implemnted')
+            return
+
+
+        def summary(self):
+
+            """ print basic summary of the star formation history """
+
+            print('-'*10)
+            print('SUMMARY OF PARAMETERISED SFH')
+            print(self.__class__)
+            for parameter_name, parameter_value in self.parameters.items():
+                print(f'{parameter_name}: {parameter_value}')
+            print(f'median age: {self.calculate_median_age().to("Myr"):.2f}')
+            print(f'mean age: {self.calculate_mean_age().to("Myr"):.2f}')
+
+
+
 
     class Constant(Common):
 
-        def __init__(self, duration):
-            self.duration = duration
+        """
+        A constant star formation history
+            sfr = 1; t<=duration
+            sfr = 0; t>duration
+        """
+
+        def __init__(self, parameters):
+            self.parameters = parameters
+            self.duration = self.parameters['duration'].to('yr').value
 
         def sfr_(self, age):
-            if age < self.duration:
+            if age <= self.duration:
                 return 1.0
             else:
                 return 0.0
@@ -408,9 +507,13 @@ class SFH:
 
     class Exponential(Common):
 
-        def __init__(self, tau):
+        """
+        An exponential star formation history
+        """
 
-            self.tau = tau
+        def __init__(self, parameters):
+            self.parameters = parameters
+            self.tau, = self.parameters['tau'].to('yr').value
 
         def sfr_(self, age):
 
@@ -419,10 +522,15 @@ class SFH:
 
     class TruncatedExponential(Common):
 
-        def __init__(self, tau, max_age):
+        """
+        A truncated exponential star formation history
+        """
 
-            self.tau = tau
-            self.max_age = max_age
+        def __init__(self, parameters):
+            self.parameters = parameters
+            self.tau = self.parameters['tau'].to('yr').value
+            self.max_age = self.parameters['max_age'].to('yr').value
+
 
         def sfr_(self, age):
 
@@ -433,14 +541,18 @@ class SFH:
 
 
     class LogNormal(Common):
+        """
+        A log-normal star formation history
+        """
 
-        def __init__(self, peak_age, tau, max_age):
+        def __init__(self, parameters):
+            self.parameters = parameters
+            self.peak_age = self.parameters['peak_age'].to('yr').value
+            self.tau = self.parameters['tau']
+            self.max_age = self.parameters['max_age'].to('yr').value
 
-            self.max_age = max_age
-            self.peak_age = peak_age
-            self.tpeak = max_age-peak_age
-            self.tau = tau
-            self.T0 = np.log(self.tpeak)+tau**2
+            self.tpeak = self.max_age-self.peak_age
+            self.T0 = np.log(self.tpeak)+self.tau**2
 
 
         def sfr_(self, age):
