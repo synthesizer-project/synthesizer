@@ -13,7 +13,7 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from synthesizer.grid_sw import Grid
+from synthesizer.grid import SpectralGrid
 
 import flare.plt as fplt
 
@@ -40,7 +40,7 @@ def plot_spectra(grid, log10Z = -2.0, log10age = 6.0, spec_names = None):
     ax = fig.add_axes((left, bottom, width, height))
 
     for spec_name in spec_names:
-        Lnu = grid.spectra[spec_name][iZ, ia, :]
+        Lnu = grid.spectra[spec_name][ia, iZ, :]
         ax.plot(np.log10(grid.lam), np.log10(Lnu), lw=1, alpha = 0.8, label = spec_name)
 
 
@@ -67,7 +67,7 @@ if __name__ == '__main__':
 
     for sps_name in sps_names:
 
-        grid = Grid(sps_name)
+        grid = SpectralGrid(sps_name)
 
         # fig, ax = plot_spectra(grid, log10Z = log10Z, log10age = log10age, spec_names = ['linecont'])
         fig, ax = plot_spectra(grid, log10Z = log10Z, log10age = log10age)

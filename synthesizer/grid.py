@@ -1,11 +1,23 @@
 """
-Create grid in age / metallicity for a given SPS model and IMF
-(+ other parameters?)
+Create a Grid object
 """
+
+
+import os
 import numpy as np
+import h5py
 
 from synthesizer.utils import (load_arr, get_names_h5py)
 
+
+# Get sythesizer_data_dir
+sythesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
+
+if not sythesizer_data_dir:
+    print('WARNING: SYNTHESIZER_DATA environment variable not set. SpectralGrid may not work properly unless you provide the full path to the grid file (excluding the extension)')
+
+
+# --- note from Steve. I've superceded sps_grid with SpectralGrid below.
 
 class sps_grid:
 
@@ -59,64 +71,75 @@ if __name__ == '__main__':
 
 
 
+class SpectralGrid:
 
-# 
-# class Binned:
-#
-#     def get_nearest_index(self, value, array):
-#
-#         return (np.abs(array - value)).argmin()
-#
-#     def get_nearest(self, value, array):
-#
-#         idx = self.get_nearest_index(value, array)
-#
-#         return idx, array[idx]
-#
-#     def get_nearest_log10Z(self, log10Z):
-#
-#         return self.get_nearest(log10Z, self.grid['log10Z'])
+    """ This provides an object to hold the SPS / Cloudy grid for use by other parts of the code """
 
 
-# class SPS(SPS_):
-#
-#     def __init__(self, grid, path_to_SPS_grid = '/data/SPS/nebular/3.0/'):
-#
-#         self.grid_name = grid.replace('/','-')
-#
-#         self.grid = pickle.load(open(flare.FLARE_dir + path_to_SPS_grid + grid + '/nebular.p','rb'), encoding='latin1')
-#
-#         self.lam = self.grid['lam']
-#
-#
-# class synthesizer(SPS_):
-#
-#     def __init__(self, grid, path_to_SPS_grid = '/Users/stephenwilkins/Dropbox/Research/data/synthesizer/grids'):
-#
-#         hf = h5py.File(f'{path_to_SPS_grid}/{grid}.h5','r')
-#
-#         self.grid_name = grid
-#
-#         self.grid = {}
-#         self.grid['lam'] = hf['wavelength'][()]
-#         self.lam = self.grid['lam']
-#         self.nu = 3E8/(self.lam*1E-10)
-#         self.grid['log10age'] = hf['log10ages'][()]
-#         self.grid['log10Z'] = hf['log10Zs'][()]
-#         self.grid['stellar'] = np.swapaxes(hf['spectra/stellar'][()], 0, 1)
-#
-# class synthesizer_old(SPS_):
-#
-#     def __init__(self, grid, path_to_SPS_grid = '/Users/stephenwilkins/Dropbox/Research/data/synthesizer/old'):
-#
-#         hf = h5py.File(f'{path_to_SPS_grid}/{grid}.h5','r')
-#
-#         self.grid_name = grid
-#
-#         self.grid = {}
-#         self.grid['lam'] = hf['wavelength'][()]
-#         self.lam = self.grid['lam']
-#         self.nu = 3E8/(self.lam*1E-10)
-#         self.grid['log10age'] = hf['ages'][()]
-#         self.grid['log10Z'] = hf['metallicities'][()]
-#         self.grid['stellar'] = np.swapaxes(hf['spectra'][()], 0, 1) * 1.1964952e40 * self.lam/self.nu # erg/s/Hz (1.1964952e40 is a magic number used by Chris)
+    def __init__(self, grid_name):
+
+        if sythesizer_data_dir:
+            grid_filename = f'{sythesizer_data_dir}/grids/{grid_name}.h5'
+        else:
+            grid_filename = f'{grid_name}.h5'
+            grid_name = grid_filename.split('/')[-1]
+
+        hf = h5py.File(grid_filename,'r')
+
+        spectra = hf['spectra']
+
+        self.grid_name = grid_name
+
+        self.lam = spectra['wavelength'][()]
+        self.nu = 3E8/(self.lam*1E-10)
+        self.log10ages = hf['log10ages'][()]
+        self.ages = 10**self.log10ages
+        self.metallicities = hf['metallicities'][()]
+        self.log10metallicities = hf['log10metallicities'][()]
+        self.log10Zs = self.log10metallicities # alias
+
+        self.spectra = {}
+
+        self.spec_names = list(spectra.keys())
+        self.spec_names.remove('wavelength')
+
+        for spec_name in self.spec_names:
+            # self.spectra[spec_name] = np.swapaxes(hf['spectra/stellar'][()], 0, 1)
+            self.spectra[spec_name] = spectra[spec_name][()]
+
+            if spec_name == 'incident':
+                self.spectra['stellar'] = self.spectra[spec_name]
+
+        # --- if full cloudy grid available calculate some other spectra for convenience
+        if 'linecont' in self.spec_names:
+            self.spectra['total'] = self.spectra['transmitted'] + self.spectra['nebular'] # assumes fesc = 0
+            self.spectra['nebular_continuum'] = self.spectra['nebular'] - self.spectra['linecont']
+
+        print('available spectra:', list(self.spectra.keys()))
+
+
+    def get_nearest_index(self, value, array):
+
+        return (np.abs(array - value)).argmin()
+
+    def get_nearest(self, value, array):
+
+        idx = self.get_nearest_index(value, array)
+
+        return idx, array[idx]
+
+    def get_nearest_log10Z(self, log10metallicity):
+
+        return self.get_nearest(log10metallicity, self.log10metallicities)
+
+    def get_nearest_log10age(self, log10age):
+
+        return self.get_nearest(log10age, self.log10ages)
+
+
+    # def plot_seds(self, ):
+    #
+    #     """ makes a nice plot of the pure stellar """
+
+
+# class LineGrid:

@@ -13,7 +13,7 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from synthesizer.grid_sw import Grid
+from synthesizer.grid import SpectralGrid
 
 import flare.plt as fplt
 
@@ -50,7 +50,7 @@ def plot_spectra_age(grid, log10Z = -2.0, spec_name = 'stellar'):
     cax.set_xlabel(r'$\rm \log_{10}(age/yr)$')
 
     for ia, log10age in enumerate(grid.log10ages):
-        Lnu = grid.spectra[spec_name][iZ, ia, :]
+        Lnu = grid.spectra[spec_name][ia, iZ, :]
         ax.plot(np.log10(grid.lam), np.log10(Lnu), c = cmap(norm(log10age)), lw=1, alpha = 0.8)
 
     for wv in [912., 3646.]:
@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
     for sps_name in sps_names:
 
-        grid = Grid(sps_name)
+        grid = SpectralGrid(sps_name)
 
         fig, ax = plot_spectra_age(grid, log10Z = log10Z)
 
