@@ -139,6 +139,22 @@ class Sed:
 
 
 
+def convert_flam_to_fnu(lam, flam):
+
+    """ convert f_lam to f_nu
+
+    arguments:
+    lam -- wavelength/\AA
+    flam -- spectral luminosity density/erg/s/\AA
+    """
+
+    lam_m = lam * 1E-10
+
+    return flam * lam/(c.value/lam_m)
+
+
+
+
 
 def calculate_Q(lam, lnu):
 

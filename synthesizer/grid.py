@@ -86,6 +86,8 @@ class SpectralGrid:
 
         hf = h5py.File(grid_filename,'r')
 
+        hf.visit(print)
+
         spectra = hf['spectra']
 
         self.grid_name = grid_name

@@ -2,6 +2,34 @@ import h5py
 import numpy as np
 
 
+
+
+def add_log10Q(filename):
+
+
+    with h5py.File(filename, 'a') as hf:
+
+        log10metallicities = hf['log10metallicities'][()]
+        log10ages = hf['log10ages'][()]
+
+        nZ = len(log10metallicities)
+        na = len(log10ages)
+
+        lam = hf['spectra/wavelength'][()]
+        if 'log10Q' in hf.keys(): del hf['log10Q'] # delete log10Q if it already exists
+        hf['log10Q'] = np.zeros((na, nZ))
+
+        # ---- determine stellar log10Q
+
+        for iZ, log10Z  in enumerate(log10metallicities):
+            for ia, log10age in enumerate(log10ages):                
+                hf['log10Q'][ia, iZ] = np.log10(calculate_Q(lam, hf['spectra/stellar'][ia, iZ, :]))
+
+
+
+
+
+
 def write_data_h5py(filename, name, data, overwrite=False):
     check = check_h5py(filename, name)
 
