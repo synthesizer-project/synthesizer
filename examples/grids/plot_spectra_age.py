@@ -70,6 +70,7 @@ if __name__ == '__main__':
     log10Z = -2.
 
     sps_names = ['bpass-v2.2.1_chab100-bin', 'bpass-v2.2.1_chab100-bin_cloudy-v17.0_logUref-2']
+    sps_names = ['bc03_chabrier03']
 
     for sps_name in sps_names:
 

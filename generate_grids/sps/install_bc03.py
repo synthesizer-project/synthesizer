@@ -15,6 +15,8 @@ import shutil
 
 
 
+model_name = 'bc03_chabrier03'
+
 
 def download_data():
 
@@ -25,7 +27,7 @@ def download_data():
 def untar_data():
 
 
-    input_dir = f'{synthesizer_data}/input_files/'
+    input_dir = f'{synthesizer_data_dir}/input_files/'
     fn = 'bc03.models.padova_2000_chabrier_imf.tar.gz'
 
     # --- untar main directory
@@ -35,7 +37,7 @@ def untar_data():
     os.remove(fn)
 
     # --- unzip the individual files that need reading
-    model_dir = f'{synthesizer_data}/input_files/bc03/models/Padova2000/chabrier'
+    model_dir = f'{synthesizer_data_dir}/input_files/bc03/models/Padova2000/chabrier'
     files = glob.glob(f'{model_dir}/bc2003_hr_m*_chab_ssp.ised_ASCII.gz')
 
     for file in files:
@@ -185,10 +187,10 @@ def make_grid():
         produce grids used by synthesizer """
 
     # Define base path
-    basepath = synthesizer_data+"/input_files/bc03/models/Padova2000/chabrier/"
+    basepath = synthesizer_data_dir+"/input_files/bc03/models/Padova2000/chabrier/"
 
     # Define output
-    fname = synthesizer_data+'/grids/bc03_chabrier03.h5'
+    fname = f'{synthesizer_data_dir}/grids/{model_name}.h5'
 
     # Define files
     files = ['bc2003_hr_m122_chab_ssp.ised_ASCII',
@@ -202,41 +204,71 @@ def make_grid():
 
     zsol = 0.0127
 
-    spec = out[0]                   # Lsol / AA / Msol
-    metals = np.log(out[1])         # log(Z)
-    ages = np.log10(out[2])                   # np.log10(yr)
-    wl = out[3]                     # ?? (AA)
-    nu = 3E8/(wl*1E-10)             # (Hz)
+                    # Lsol / AA / Msol
+
+
+
+    metallicities = out[1]
+    log10metallicities = np.log10(metallicities)
+
+    ages = out[2]
+    log10ages = np.log10(ages)
+
+    lam = out[3]
+    nu = 3E8/(lam*1E-10)
+
+    spec = out[0]
+
+    spec = np.swapaxes(spec, 0,1) # make (age, metallicity, wavelength)
+
+    print(spec.shape)
+    print(metallicities.shape)
+    print(ages.shape)
+
+
 
     spec *= (3.826e33)  # erg s^-1 AA^-1 Msol^-1
-    spec *= wl/nu # erg s^-1 Hz^-1 Msol^-1
+    spec *= lam/nu # erg s^-1 Hz^-1 Msol^-1
 
-    write_data_h5py(fname, 'spectra/stellar', data=spec, overwrite=True)
-    write_attribute(fname, 'spectra/stellar', 'Description',
-                    'Three-dimensional spectra grid, [Z,Age,wavelength]')
-    write_attribute(fname, 'spectra/stellar', 'Units', 'erg s^-1 Hz^-1')
 
-    write_data_h5py(fname, 'log10ages', data=ages, overwrite=True)
+    write_data_h5py(fname, 'spectra/wavelength', data=lam, overwrite=True)
+    write_attribute(fname, 'spectra/wavelength', 'Description',
+            'Wavelength of the spectra grid')
+    write_attribute(fname, 'spectra/wavelength', 'Units', 'AA')
+
+    write_data_h5py(fname, 'ages', data=ages, overwrite=True)
+    write_attribute(fname, 'ages', 'Description',
+            'Stellar population ages years')
+    write_attribute(fname, 'ages', 'Units', 'yr')
+
+    write_data_h5py(fname, 'log10ages', data=log10ages, overwrite=True)
     write_attribute(fname, 'log10ages', 'Description',
             'Stellar population ages in log10 years')
     write_attribute(fname, 'log10ages', 'Units', 'log10(yr)')
 
-    write_data_h5py(fname, 'log10Zs', data=metals, overwrite=True)
-    write_attribute(fname, 'log10Zs', 'Description',
+    write_data_h5py(fname, 'metallicities', data=metallicities, overwrite=True)
+    write_attribute(fname, 'metallicities', 'Description',
+            'raw abundances')
+    write_attribute(fname, 'metallicities', 'Units', 'dimensionless [Z]')
+
+    write_data_h5py(fname, 'log10metallicities', data=log10metallicities, overwrite=True)
+    write_attribute(fname, 'log10metallicities', 'Description',
             'raw abundances in log10')
-    write_attribute(fname, 'log10Zs', 'Units', 'dimensionless [log10(Z)]')
+    write_attribute(fname, 'log10metallicities', 'Units', 'dimensionless [log10(Z)]')
 
-    write_data_h5py(fname, 'wavelength', data=wl, overwrite=True)
-    write_attribute(fname, 'wavelength', 'Description',
-            'Wavelength of the spectra grid')
-    write_attribute(fname, 'wavelength', 'Units', 'AA')
-
+    write_data_h5py(fname, 'spectra/stellar', data=spec, overwrite=True)
+    write_attribute(fname, 'spectra/stellar', 'Description',
+                    'Three-dimensional spectra grid, [age, metallicity, wavelength]')
+    write_attribute(fname, 'spectra/stellar', 'Units', 'erg s^-1 Hz^-1')
 
 # Lets include a way to call this script not via an entry point
 if __name__ == "__main__":
 
-    synthesizer_data = "/Users/stephenwilkins/Dropbox/Research/data/synthesizer"
+    synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
 
-    download_data()
-    untar_data()
+    # download_data()
+    # untar_data()
     make_grid()
+
+    # filename = f'{synthesizer_data_dir}/grids/{model_name}.h5'
+    # add_log10Q(filename)
