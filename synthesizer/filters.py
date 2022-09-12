@@ -18,15 +18,6 @@ class FilterCollection:
 
     """ Create a collection of filters. While this could be just a dictionary or list the class includes methods for also making plots. """
 
-    def __init__(self, fs, new_lam = False, read_from_SVO = True, local_filter_path = f'{this_dir}/data/filters'):
-
-        self.filter = {}
-        for f in fs:
-            F = Filter(f, new_lam = new_lam, read_from_SVO = read_from_SVO, local_filter_path = local_filter_path)
-            self.filter[F.filter_code] = F
-        self.filters = list(self.filter.keys())
-
-
     def transmission_curve_ax(self, ax, add_filter_label = True):
 
         """ add filter transmission curves to a give axes """
@@ -34,7 +25,7 @@ class FilterCollection:
         # --- add colours
 
         for filter_code, F in self.filter.items():
-            ax.plot(F.l, F.t)
+            ax.plot(F.lam, F.t)
 
             # --- add label with automatic placement
             #
@@ -64,61 +55,45 @@ class FilterCollection:
 
 
 
+class SVOFilterCollection(FilterCollection):
+
+    """ Create a collection of filters from SVO. While this could be just a dictionary or list the class includes methods for also making plots. """
+
+    def __init__(self, fs, new_lam = False):
+
+        self.filter = {}
+        for f in fs:
+            F = FilterFromSVO(f, new_lam = new_lam)
+            self.filter[F.filter_code] = F
+        self.filters = list(self.filter.keys())
+
+
+class TopHatFilterCollection(FilterCollection):
+
+    """ Create a collection of filters from SVO. While this could be just a dictionary or list the class includes methods for also making plots. """
+
+    def __init__(self, fs, new_lam = False):
+
+        self.filter = {}
+        for f in fs:
+            filter_code, kwargs = f
+            F = TopHatFilter(filter_code, **kwargs, new_lam = new_lam)
+            self.filter[F.filter_code] = F
+        self.filters = list(self.filter.keys())
+
+
+
+def UVJ(new_lam = None):
+
+    fs = [('U', {'lam_eff': 3650, 'lam_fwhm': 660}), ('V', {'lam_eff': 5510, 'lam_fwhm': 880}), ('J', {'lam_eff': 12200, 'lam_fwhm': 2130})]
+
+    return TopHatFilterCollection(fs, new_lam = new_lam)
+
+
+
+
+
 class Filter:
-
-    """
-    A class representing a filter.
-
-    Attributes
-    ----------
-    filter_code : str
-        filter code of the filter {observatory}/{instrument}.{filter}
-    f : str
-        filter code tuple (observatory, instrument, filter)
-
-
-    Methods
-    -------
-    pivwv:
-        Calculate pivot wavelength
-    """
-
-
-    def __init__(self, f, new_lam = False, read_from_SVO = True, local_filter_path = f'{this_dir}/data/filters'):
-
-
-        if type(f) == tuple:
-            self.f = f
-            self.observatory, self.instrument, self.filter = f
-            self.filter_code = f'{self.observatory}/{self.instrument}.{self.filter}'
-        else:
-            self.filter_code = f
-            self.observatory = f.split('/')[0]
-            self.instrument = f.split('/')[1].split('.')[0]
-            self.filter = f.split('.')[-1]
-            self.f = (self.observatory, self.instrument, self.filter)
-
-        if read_from_SVO:
-            """ read directly from the SVO archive """
-            svo_url = f'http://svo2.cab.inta-csic.es/theory/fps/getdata.php?format=ascii&id={self.observatory}/{self.instrument}.{self.filter}'
-            df = pd.read_csv(svo_url, sep = ' ')
-            self.original_lam = df.values[:,0] # original wavelength
-            self.original_t = df.values[:,1] # original transmission
-        else:
-            """ read from local files instead """
-            # l, t are the original wavelength and transmission grid
-            self.original_lam, self.original_t = np.loadtxt(f'{local_filter_path}/{self.filter_code}.dat').T
-
-        # self.original_t[self.original_t<0.05] = 0
-
-        # --- if a new wavelength grid is provided interpolate the transmission curve on to that grid
-        if isinstance(new_lam, np.ndarray):
-            self.lam = new_lam
-            self.t = np.interp(self.lam, self.original_lam, self.original_t, left = 0.0, right = 0.0) # setting left and right is necessary for when the filter transmission function is mapped to a new wavelength grid
-        else:
-            self.lam = self.original_lam
-            self.t = self.original_t
-
 
     #http://stsdas.stsci.edu/stsci_python_epydoc/SynphotManual.pdf   #got to page 42 (5.1)
 
@@ -183,3 +158,153 @@ class Filter:
         """ calculate the minimum and maximum wavelengths """
 
         return (self.min(), self.max())
+
+
+
+
+class FilterFromSVO(Filter):
+
+    """
+    A class representing a filter.
+
+    Attributes
+    ----------
+    filter_code : str
+        filter code of the filter {observatory}/{instrument}.{filter}
+    f : str
+        filter code tuple (observatory, instrument, filter)
+
+
+    Methods
+    -------
+    pivwv:
+        Calculate pivot wavelength
+    """
+
+
+    def __init__(self, f, new_lam = False):
+
+
+        if type(f) == tuple:
+            self.f = f
+            self.observatory, self.instrument, self.filter = f
+            self.filter_code = f'{self.observatory}/{self.instrument}.{self.filter}'
+        else:
+            self.filter_code = f
+            self.observatory = f.split('/')[0]
+            self.instrument = f.split('/')[1].split('.')[0]
+            self.filter = f.split('.')[-1]
+            self.f = (self.observatory, self.instrument, self.filter)
+
+
+        """ read directly from the SVO archive """
+        svo_url = f'http://svo2.cab.inta-csic.es/theory/fps/getdata.php?format=ascii&id={self.observatory}/{self.instrument}.{self.filter}'
+        df = pd.read_csv(svo_url, sep = ' ')
+        self.original_lam = df.values[:,0] # original wavelength
+        self.original_t = df.values[:,1] # original transmission
+
+        # self.original_t[self.original_t<0.05] = 0
+
+        # --- if a new wavelength grid is provided interpolate the transmission curve on to that grid
+        if isinstance(new_lam, np.ndarray):
+            self.lam = new_lam
+            self.t = np.interp(self.lam, self.original_lam, self.original_t, left = 0.0, right = 0.0) # setting left and right is necessary for when the filter transmission function is mapped to a new wavelength grid
+        else:
+            self.lam = self.original_lam
+            self.t = self.original_t
+
+
+# class FilterFromFile(Filter):
+#
+#     """
+#     A class representing a filter.
+#
+#     Attributes
+#     ----------
+#     filter_code : str
+#         filter code of the filter {observatory}/{instrument}.{filter}
+#     f : str
+#         filter code tuple (observatory, instrument, filter)
+#
+#
+#     Methods
+#     -------
+#     pivwv:
+#         Calculate pivot wavelength
+#     """
+#
+#
+#     def __init__(self, f, new_lam = False, read_from_SVO = True, local_filter_path = f'{this_dir}/data/filters'):
+#
+#
+#         if type(f) == tuple:
+#             self.f = f
+#             self.observatory, self.instrument, self.filter = f
+#             self.filter_code = f'{self.observatory}/{self.instrument}.{self.filter}'
+#         else:
+#             self.filter_code = f
+#             self.observatory = f.split('/')[0]
+#             self.instrument = f.split('/')[1].split('.')[0]
+#             self.filter = f.split('.')[-1]
+#             self.f = (self.observatory, self.instrument, self.filter)
+#
+#         """ read from local files instead """
+#         # l, t are the original wavelength and transmission grid
+#         self.original_lam, self.original_t = np.loadtxt(f'{local_filter_path}/{self.filter_code}.dat').T
+#
+#         # self.original_t[self.original_t<0.05] = 0
+#
+#         # --- if a new wavelength grid is provided interpolate the transmission curve on to that grid
+#         if isinstance(new_lam, np.ndarray):
+#             self.lam = new_lam
+#             self.t = np.interp(self.lam, self.original_lam, self.original_t, left = 0.0, right = 0.0) # setting left and right is necessary for when the filter transmission function is mapped to a new wavelength grid
+#         else:
+#             self.lam = self.original_lam
+#             self.t = self.original_t
+
+
+
+class TopHatFilter(Filter):
+
+    """
+    A class representing a filter.
+
+    Attributes
+    ----------
+    filter_code : str
+        filter code of the filter {observatory}/{instrument}.{filter}
+    f : str
+        filter code tuple (observatory, instrument, filter)
+
+
+    Methods
+    -------
+    pivwv:
+        Calculate pivot wavelength
+    """
+
+
+    def __init__(self, filter_code, lam_min = None, lam_max = None, lam_eff = None, lam_fwhm = None, new_lam = False):
+
+        self.filter_code = filter_code
+
+        self.lam_min = lam_min
+        self.lam_max = lam_max
+
+        if lam_eff:
+            self.lam_min = lam_eff - lam_fwhm/2.
+            self.lam_max = lam_eff + lam_fwhm/2.
+
+
+        # self.original_t[self.original_t<0.05] = 0
+
+        # --- if a new wavelength grid is provided interpolate the transmission curve on to that grid
+        if isinstance(new_lam, np.ndarray):
+            self.lam = new_lam
+        else:
+            self.lam = np.arange(np.max([0, self.lam_min-1000]), self.lam_max + 1000, 1)
+
+
+        self.t = np.zeros(len(self.lam))
+        s = (self.lam>self.lam_min)&(self.lam<=self.lam_max)
+        self.t[s] = 1.0

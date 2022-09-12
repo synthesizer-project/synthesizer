@@ -38,7 +38,7 @@ class Sed:
     """
 
 
-    def __init__(self, lam, description = False):
+    def __init__(self, lam, lnu = None, description = False):
 
         """ Initialise an empty spectral energy distribution object """
 
@@ -46,7 +46,12 @@ class Sed:
 
         self.lam = lam  # \AA
         self.lam_m = lam * 1E10  # m
-        self.lnu = np.zeros(self.lam.shape)  # luminosity ers/s/Hz
+
+        if lnu is None:
+            self.lnu = np.zeros(self.lam.shape)  # luminosity ers/s/Hz
+        else:
+            self.lnu = lnu
+
         self.nu = c.value/(self.lam_m)  # Hz
 
 
@@ -69,6 +74,16 @@ class Sed:
 
         return slope - 2.0
 
+
+
+    def get_fnu0(self):
+
+        """
+        Calculate a dummy observed frame spectral energy distribution. Useful when you want rest-frame quantities.
+        """
+
+        self.lamz = self.lam
+        self.fnu = self.lnu
 
 
     def get_fnu(self, cosmo, z, igm = igm.madau96):
@@ -121,6 +136,15 @@ class Sed:
             self.broadband_fluxes[f] = int_num / int_den * nJy
 
         return self.broadband_fluxes
+
+    def c(self, f1, f2):
+
+        """
+        Calculate broadband colours using the broad_band fluxes
+        """
+
+        return 2.5*np.log10(self.broadband_fluxes[f2]/self.broadband_fluxes[f1])
+
 
 
     # def return_log10Q(self):

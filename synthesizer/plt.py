@@ -44,7 +44,19 @@ def single_wcbar_right(hsize = 3.5):
 
     return fig, ax, cax
 
-
+# def single_wcbar_top(hsize = 3.5):
+#
+#     left  = 0.15
+#     height = 0.8
+#     bottom = 0.15
+#     width = 0.65
+#
+#     fig = plt.figure(figsize = (hsize, hsize*width/height))
+#
+#     ax = fig.add_axes((left, bottom, width, height))
+#     cax = fig.add_axes([left+width, bottom, 0.03, height])
+#
+#     return fig, ax, cax
 
 def single_histxy(hsize = 3.5, set_axis_off = True):
 
