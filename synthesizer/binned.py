@@ -463,7 +463,7 @@ class SFH:
 
             return weighted_mean(t, sfh) * yr
 
-        def calcualte_moment(self, n):
+        def calculate_moment(self, n):
 
             """ calculate the n-th moment of the star formation history """
 

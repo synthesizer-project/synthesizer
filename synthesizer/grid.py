@@ -6,9 +6,14 @@ Create a Grid object
 import os
 import numpy as np
 import h5py
+import cmasher as cmr
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
-from synthesizer.utils import (load_arr, get_names_h5py)
-
+from .utils import (load_arr, get_names_h5py)
+from .plt import single, mlabel
+from .sed import Sed
 
 # Get sythesizer_data_dir
 sythesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
@@ -76,7 +81,7 @@ class SpectralGrid:
     """ This provides an object to hold the SPS / Cloudy grid for use by other parts of the code """
 
 
-    def __init__(self, grid_name):
+    def __init__(self, grid_name, verbose = False):
 
         if sythesizer_data_dir:
             grid_filename = f'{sythesizer_data_dir}/grids/{grid_name}.h5'
@@ -85,8 +90,6 @@ class SpectralGrid:
             grid_name = grid_filename.split('/')[-1]
 
         hf = h5py.File(grid_filename,'r')
-
-        hf.visit(print)
 
         spectra = hf['spectra']
 
@@ -117,7 +120,11 @@ class SpectralGrid:
             self.spectra['total'] = self.spectra['transmitted'] + self.spectra['nebular'] # assumes fesc = 0
             self.spectra['nebular_continuum'] = self.spectra['nebular'] - self.spectra['linecont']
 
-        print('available spectra:', list(self.spectra.keys()))
+        if 'log10Q' in hf.keys():
+            self.log10Q = hf['log10Q'][()]
+            self.log10Q[self.log10Q!=self.log10Q] = -99.99
+
+        if verbose: print('available spectra:', list(self.spectra.keys()))
 
 
     def get_nearest_index(self, value, array):
@@ -139,9 +146,61 @@ class SpectralGrid:
         return self.get_nearest(log10age, self.log10ages)
 
 
+    def get_sed(self, ia, iZ, spec_name = 'stellar'):
+
+        return Sed(self.lam, lnu = self.spectra[spec_name][ia, iZ])
+
+
+
     # def plot_seds(self, ):
     #
     #     """ makes a nice plot of the pure stellar """
+
+
+    def plot_log10Q(self, hsize = 3.5, vsize = 2.5, cmap = cmr.sapphire, vmin = 42.5, vmax = 47.5, max_log10age = 9.):
+
+        left  = 0.2
+        height = 0.6
+        bottom = 0.15
+        width = 0.75
+
+        if not vsize:
+            vsize = hsize*width/height
+
+        fig = plt.figure(figsize = (hsize, vsize))
+
+        ax = fig.add_axes((left, bottom, width, height))
+        cax = fig.add_axes([left, bottom+height, width, 0.03])
+
+        y = np.arange(len(self.metallicities))
+
+        log10Q = self.log10Q
+
+        if max_log10age:
+            ia_max = self.get_nearest_index(max_log10age, self.log10ages)
+            log10Q = log10Q[:ia_max, :]
+        else:
+            ia_max = -1
+
+
+        ax.imshow(log10Q.T, origin = 'lower', extent = [self.log10ages[0], self.log10ages[ia_max], y[0]-0.5, y[-1]+0.5], cmap = cmap, aspect = 'auto', vmin = vmin, vmax = vmax) # this is technically incorrect because metallicity is not on a an actual grid.
+
+
+        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+        cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, orientation = 'horizontal') # add the colourbar
+
+        cax.xaxis.tick_top()
+        cax.xaxis.set_label_position('top')
+        cax.set_xlabel(r'$\rm log_{10}(\dot{n}_{LyC}/s^{-1})$')
+
+        ax.set_yticks(y, self.metallicities)
+
+        ax.minorticks_off()
+        ax.set_xlabel(mlabel('log_{10}(age/yr)'))
+        ax.set_ylabel(mlabel('Z'))
+
+        return fig, ax
+
 
 
 # class LineGrid:

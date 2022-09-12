@@ -69,7 +69,7 @@ if __name__ == '__main__':
     # --- calculate broadband luminosities
     filter_codes = [f'JWST/NIRCam.{f}' for f in ['F090W', 'F115W','F150W','F200W','F277W','F356W','F444W']] # define a list of filter codes
     filter_codes += [f'JWST/MIRI.{f}' for f in ['F770W']]
-    fc = FilterCollection(filter_codes, new_lam = sed.lamz)
+    fc = SVOFilterCollection(filter_codes, new_lam = sed.lamz)
 
 
     # --- measure broadband fluxes

@@ -1,6 +1,6 @@
 import h5py
 import numpy as np
-
+from synthesizer.sed import calculate_Q
 
 
 
@@ -22,7 +22,7 @@ def add_log10Q(filename):
         # ---- determine stellar log10Q
 
         for iZ, log10Z  in enumerate(log10metallicities):
-            for ia, log10age in enumerate(log10ages):                
+            for ia, log10age in enumerate(log10ages):
                 hf['log10Q'][ia, iZ] = np.log10(calculate_Q(lam, hf['spectra/stellar'][ia, iZ, :]))
 
 
