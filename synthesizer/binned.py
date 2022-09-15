@@ -64,6 +64,9 @@ class SEDGenerator():
 
         """ in the PACMAN model some fraction (fesc) of the pure stellar emission is assumed to completely escape the galaxy without reprocessing by gas or dust. The rest is assumed to be reprocessed by both gas and a screen of dust. """
 
+        self.parameters = {'fesc': fesc, 'fesc_LyA': fesc_LyA, 'tauV': tauV, 'dust_curve': dust_curve, 'dust_parameters': dust_parameters}
+
+
         self.spectra['escape'] = Sed(self.lam) # this is the starlight that escapes any reprocessing
         self.spectra['escape'].lnu = fesc * self.spectra['stellar'].lnu
 
@@ -312,7 +315,7 @@ class BinnedSFZH:
         # --- add SFR to top of the plot
         if self.sfh_f:
             x = np.linspace(*self.log10ages_lims, 1000)
-            y = sfh.sfr(10**x)
+            y = self.sfh_f.sfr(10**x)
             haxx.plot(x, y/np.max(y))
 
         haxy.set_xlim([0., 1.2])
@@ -392,7 +395,7 @@ def generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass = 1.):
     sfzh /= np.sum(sfzh)
     sfzh *= stellar_mass
 
-    return BinnedSFZH(log10ages, metallicities, sfzh)
+    return BinnedSFZH(log10ages, metallicities, sfzh, sfh_f = sfh, Zh_f = Zh)
 
 
 
@@ -408,6 +411,7 @@ class ZH:
 
         def __init__(self, parameters):
 
+            self.name = 'Constant'
             self.dist = 'delta' # set distribution type
             self.parameters = parameters
             if 'Z' in parameters.keys():
@@ -495,6 +499,7 @@ class SFH:
         """
 
         def __init__(self, parameters):
+            self.name = 'Constant'
             self.parameters = parameters
             self.duration = self.parameters['duration'].to('yr').value
 
@@ -512,6 +517,7 @@ class SFH:
         """
 
         def __init__(self, parameters):
+            self.name = 'Exponential'
             self.parameters = parameters
             self.tau, = self.parameters['tau'].to('yr').value
 
@@ -527,6 +533,7 @@ class SFH:
         """
 
         def __init__(self, parameters):
+            self.name = 'Truncated Exponential'
             self.parameters = parameters
             self.tau = self.parameters['tau'].to('yr').value
             self.max_age = self.parameters['max_age'].to('yr').value
@@ -546,6 +553,7 @@ class SFH:
         """
 
         def __init__(self, parameters):
+            self.name = 'Log Normal'
             self.parameters = parameters
             self.peak_age = self.parameters['peak_age'].to('yr').value
             self.tau = self.parameters['tau']

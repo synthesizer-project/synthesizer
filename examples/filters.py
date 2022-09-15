@@ -1,5 +1,4 @@
 
-
 from synthesizer.filters import FilterFromSVO, SVOFilterCollection, TopHatFilterCollection, UVJ
 
 

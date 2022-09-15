@@ -12,13 +12,14 @@ from astropy.table import Table
 
 
 
-def simple_UVJ():
+def simple_UVJ(target_metallicity = 0.01):
+
+    """ Calculate UVJ colours as a function of age for single metallicity """
 
     grid_name = 'bpass-v2.2.1-bin_chab100'
 
     grid = SpectralGrid(grid_name)
 
-    target_metallicity = 0.01
     iZ = grid.get_nearest_index(target_metallicity, grid.metallicities)
 
     fc = UVJ(new_lam = grid.lam)
@@ -77,7 +78,6 @@ def UVJ_metallicity():
 
     # --- make plot
 
-
     fig, axes = plt.subplots(2, 1, figsize = (3.5,4.5), sharex = True, sharey = True)
     plt.subplots_adjust(left=0.15, top=0.975, bottom=0.1, right=0.95, wspace=0.0, hspace=0.0)
 
@@ -101,5 +101,7 @@ def UVJ_metallicity():
 
 
 if __name__ == '__main__':
+
+    simple_UVJ()
 
     UVJ_metallicity()

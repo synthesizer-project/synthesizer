@@ -19,11 +19,13 @@ from synthesizer.grid import SpectralGrid
 if __name__ == '__main__':
 
 
-    sps_names = ['bpass-v2.3-bin-+00_chab300']
+    sps_names = ['bc03_chabrier03','maraston-rhb_salpeter']
 
     for sps_name in sps_names:
 
-        grid = SpectralGrid(sps_name)
+        grid = SpectralGrid(sps_name, verbose = True)
+
+        print(grid.log10Q)
 
         fig, ax = grid.plot_log10Q()
 
