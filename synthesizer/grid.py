@@ -103,6 +103,11 @@ class SpectralGrid:
         self.log10metallicities = hf['log10metallicities'][()]
         self.log10Zs = self.log10metallicities # alias
 
+        if verbose:
+            print(f'metallicities: {self.metallicities}')
+            print(f'ages: {self.ages}')
+            print(f'ages: {self.log10ages}')
+
         self.spectra = {}
 
         self.spec_names = list(spectra.keys())

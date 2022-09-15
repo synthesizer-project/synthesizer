@@ -1,0 +1,42 @@
+table SED "test.sed" 
+element abundance Helium -1.0850887559820324
+element abundance Lithium -11.0821815719765
+element abundance Beryllium -10.7521815719765
+element abundance Boron -9.432181571976502
+element abundance Carbon -3.7021815719765
+element abundance Nitrogen -4.3600705129311645
+element abundance Oxygen -3.4421815719765
+element abundance Fluorine -7.5721815719765
+element abundance Neon -4.2021815719765
+element abundance Argon -5.2021815719765
+element abundance Magnesium -4.5321815719765
+element abundance Aluminium -5.6821815719765
+element abundance Silicon -4.6221815719765
+element abundance Phosphorus -6.7221815719765
+element abundance Sulphur -5.0121815719765
+element abundance Chlorine -6.6321815719765
+element abundance Argon -5.7321815719765
+element abundance Potassium -7.1021815719765
+element abundance Calcium -5.7921815719765
+element abundance Scandium -8.9821815719765
+element abundance Titanium -7.1821815719765
+element abundance Vanadium -8.202181571976501
+element abundance Chromium -6.4921815719765
+element abundance Manganese -6.7021815719765
+element abundance Iron -4.6321815719765
+element abundance Cobalt -7.1421815719765
+element abundance Nickel -5.9121815719765
+element abundance Copper -7.9421815719765
+element abundance Zinc -7.5721815719765
+Q(H) = 49.22250264611322
+hden 2.0 log constant density
+radius -2 log parsecs
+sphere
+covering factor 1.0 linear
+iterate to convergence
+set temperature floor 100 linear
+stop temperature 4000K
+stop efrac -2
+save last continuum "test.cont" units Angstroms no clobber
+save last lines, array "test.lines" units Angstroms no clobber
+save overview  "test.ovr" last

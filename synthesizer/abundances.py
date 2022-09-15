@@ -1,9 +1,20 @@
 # This script is a modified version of
 # https://github.com/stephenmwilkins/SPS_tools/blob/master/SPS_tools/cloudy/abundances.py
 
+
+
+# A note on notation
+
+
+# [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
+
+# [alpha/Fe] = sum()
+
+
+
 import numpy as np
 
-class abundances:
+class Abundances:
 
     def __init__(self):
         # ---- initialise dictionaries
@@ -12,7 +23,8 @@ class abundances:
         self._solar_abundances()  # self.sol
         self._depsol()  # self.depsol
 
-        self.Z_sol = 0.01316
+        # self.Z_sol = 0.01316
+        self.Z_sol = 0.0134 # Asplund (2009) Solar - HOWEVER, running metallicity() on the solar abundances below yields 0.0135
 
         # Define some of the required elements that should be passed to cloudy,
         # the most abundant species and the ones we care more about
@@ -20,10 +32,13 @@ class abundances:
         self.metals = ['Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si',
                   'P', 'S', 'Cl', 'Ar', 'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni',
                   'Cu', 'Zn']
-        
-        self.all_elements = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 
-                             'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 
+
+        self.all_elements = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al',
+                             'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe',
                              'Co', 'Ni', 'Cu', 'Zn']
+
+
+        self.alpha_elements = ['O', 'Ne', 'Mg', 'Si', 'Ar', 'Ca', 'Ti'] # the alpha process elements
 
 
     def _element_names(self):
@@ -100,9 +115,9 @@ class abundances:
         # Elemental abundances
         # Asplund (2009) Solar, same as GASS (Grevesse et al. (2010)) in cloudy
         # https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/abstract
-        
+
         sol = {}
-        #These are log10(element/H) ratios
+        #These are log10(N_element/N_H) ratios
         sol['H']    = 0.0
         sol['He']   = -1.07
         sol['Li']   = -10.95
@@ -142,7 +157,7 @@ class abundances:
          # Gutkin+2016: https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract
          # Dopita+2013: https://ui.adsabs.harvard.edu/abs/2013ApJS..208...10D/abstract
          # Dopita+2006: https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract
-         
+
          depsol = {}
          # Depletion of 1 -> no depletion, while 0 -> fully depleted
          # Noble gases aren't depleted (eventhough there is some eveidence
@@ -178,14 +193,14 @@ class abundances:
          depsol['Cu']    = 0.1
          depsol['Zn']    = 0.25
          self.depsol = depsol
-         
+
 
     def metallicity(self, elements):
         """
         This function determines the mass fraction of the metals, or the metallicity
-    
+
         :param elements: a dictionary with the absolute elemental abundances
-    
+
         :return: A single number
         :rtype: float
         """
@@ -194,31 +209,31 @@ class abundances:
         return np.sum([self.A[i]*10**(elements[i]) for i in self.metals]) /\
                     np.sum([self.A[i]*10**(elements[i])\
                     for i in self.all_elements])
-    
-    
+
+
     def abundances(self, Z, CO=0.0, d2m=False, scaling='Dopita+2013'):
         """
         This function returns the elemental abundances after removing the depleted amount
-    
+
         :param Z: float, the total metallicity (includes depletion as well)
         :param CO: float, the abundance of Carbon in CO (not implemented)
         :param d2m: float(?), dust to metal ratio
         :param scaling: string
-    
+
         :return: dictionary with different elemental abundances as log10(element/H)
         :rtype: float
         """
         a = {}
-    
+
         a['H'] = 0.0
-    
+
         # New scaling applied to match the He abundance at Z_sol
         a['He'] = np.log10(0.0737 + 0.0114*(Z / self.Z_sol))
-    
+
         for i in self.metals:
             # Scale elemental abundances from solar abundances based on given metallicity
             a[i] = self.sol[i] + np.log10(Z / self.metallicity(self.sol))
-    
+
         if scaling == 'Dopita+2013':
             # Actually from Dopita+2006
             # Scaling applied to match with our solar metallicity, this done by
@@ -226,67 +241,144 @@ class abundances:
             Z_sol_Dopita = 0.016
             C_fac = self.Z_sol / 1.01973
             N_fac = self.Z_sol / 1.06774
-    
+
             a['C'] = np.log10(6e-5 * Z / C_fac + 2e-4 * (Z / C_fac)**2)
             a['N'] = np.log10(1.1e-5 * Z / N_fac + 4.9e-5 * (Z / N_fac)**2)
-    
+
         elif scaling == 'Wilkins+2020':
             a['N'] = -4.47 + np.log10(Z / self.Z_sol + (Z / self.Z_sol)**2)
-    
+
         # rescale abundances to recover correct Z
         cor = np.log10(Z / self.metallicity(a))
-    
+
         for i in self.metals: a[i] += cor
-    
+
         if d2m:
-    
+
             dep = self.depletions(d2m)
-    
+
             for i in self.metals: a[i] += np.log10(dep[i])
-    
+
         return a
-    
-    
+
+
+
+    def abundances_alpha(self, Z, alpha=0.0, CO=0.0, d2m=False, scaling='Dopita+2013'):
+        """
+        This function returns the elemental abundances after removing the depleted amount
+
+        :param Z: float, the total metallicity (includes depletion as well)
+        :param alpha: float, log10(alpha-enhancement factor)
+        :param CO: float, the abundance of Carbon in CO (not implemented)
+        :param d2m: float(?), dust to metal ratio
+        :param scaling: string
+
+        :return: dictionary with different elemental abundances as log10(element/H)
+        :rtype: float
+        """
+        a = {}
+
+        a['H'] = 0.0
+
+        # New scaling applied to match the He abundance at Z_sol
+        a['He'] = np.log10(0.0737 + 0.0114*(Z / self.Z_sol))
+
+        for e in self.metals:
+            # Scale elemental abundances from solar abundances based on given metallicity
+            a[e] = self.sol[e] + np.log10(Z / self.Z_sol)
+
+        for e in self.alpha_elements:
+            # Scale alpha-element abundances from solar abundances based on given metallicity
+            a[e] += alpha
+
+
+        if scaling == 'Dopita+2013':
+            # Actually from Dopita+2006
+            # Scaling applied to match with our solar metallicity, this done by
+            # solving the equation to get the adopted solar metallicity
+            Z_sol_Dopita = 0.016
+            C_fac = self.Z_sol / 1.01973
+            N_fac = self.Z_sol / 1.06774
+
+            a['C'] = np.log10(6e-5 * Z / C_fac + 2e-4 * (Z / C_fac)**2)
+            a['N'] = np.log10(1.1e-5 * Z / N_fac + 4.9e-5 * (Z / N_fac)**2)
+
+        elif scaling == 'Wilkins+2020':
+            a['N'] = -4.47 + np.log10(Z / self.Z_sol + (Z / self.Z_sol)**2)
+
+        # rescale abundances to recover correct Z
+        cor = np.log10(Z / self.metallicity(a))
+
+        for i in self.metals: a[i] += cor
+
+        if d2m:
+
+            dep = self.depletions(d2m)
+
+            for i in self.metals: a[i] += np.log10(dep[i])
+
+        return a
+
+
+
     def dust_to_metal(self, a, dep):
-    
+
         """
         This function returns the dust-to-metal ratio from the depleted amount of metals
-    
+
         :param a: a dictionary with the absolute elemental abundances
         :param dep: a dictionary with non-depleted fraction of the metals
-    
+
         :return: the dust-to-metal ratio
         :rtype: float
         """
         # TODO: rewrite this for improved clarity
-    
+
         return np.sum([self.A[i] * (1. - dep[i])*10**a[i] for i in self.metals]) /\
                 np.sum([self.A[i]*10**a[i] for i in self.metals])
-    
-    
+
+
     def depletions(self, d2m):
-    
+
         """
         This function returns the depletion after scaling using the solar abundances and
         depletion patterns from the dust-to-metal ratio.
-    
+
         :param d2m: float, dust-to-metal ratio
-    
+
         :return: a dictionary of depletion patterns
         :rtype: float
         """
-    
+
         dep = {}
-    
+
         for i in self.metals:
-    
+
             if self.depsol[i] != 1.0:
-                # A very crude interpolation, using no depletion, 
+                # A very crude interpolation, using no depletion,
                 # solar depletion patterns and fully depleted metal
                 # corresponding to 0, solar and 1 dust-to-metal ratio
-                dep[i] = np.interp(d2m, np.array([0.0, self.dust_to_metal(self.sol, self.depsol), 1.0]), 
+                dep[i] = np.interp(d2m, np.array([0.0, self.dust_to_metal(self.sol, self.depsol), 1.0]),
                                    np.array([1.0, self.depsol[i], 0.0]))
             else:
                 dep[i] = 1.0
-    
+
         return dep
+
+
+    def solar_relative_abundance(self, e, a, ref_element = 'H'):
+
+        """
+        This function returns an element's abundance relative to that in the Sun, i.e. [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
+        :param a: the element of interest
+        :param a: a dictionary with the absolute elemental abundances
+        """
+
+        return (a[e]-a[ref_element]) - (self.sol[e]-self.sol[ref_element])
+
+
+
+
+
+
+abundances = Abundances
