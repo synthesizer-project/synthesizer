@@ -13,43 +13,75 @@ from synthesizer.abundances_sw import Abundances
 from synthesizer.grid import SpectralGrid
 from synthesizer.cloudy_sw import create_cloudy_input
 
-from synthesizer.utils import read_params
+
+
+default_params = {
+
+    # --- sps parameters
+    'sps_grid' : 'bpass-v2.2.1-bin_chab-100',
+    'ia' : 0, # 1 Myr
+    'iZ' : 8, # Z = 0.01
+
+    # --- cloudy model
+    'cloudy_version' : 'c17.03',
+    'log10U' : -2,
+
+    # --- abundance parameters,  these are used, alongside the total metallicity (Z), to define the abundance pattern
+    'CO' : 0.0,
+    'd2m' : 0.3,
+    'alpha' : 0.0,
+    'scaling' : None,
+
+    # --- cloudy parameters
+    'log10radius': -2, # radius in log10 parsecs
+    'covering_factor': 1.0, # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
+    'stop_T': 4000, # K
+    'stop_efrac': -2,
+    'T_floor': 100, # K
+    'log10n_H': 2, # Hydrogen density
+    'z': 0.,
+    'CMB': False,
+    'cosmic_rays': False
+    }
+
+
+params = {
+    'log10U' : -1
+}
+
+
+model_name = '_'.join(['default']+[f'{k}-{v}' for k, v in params.items()])
+
+print(model_name)
+
+params =  default_params | params
+
+for k, v in params.items():
+    print(k, v)
 
 
 
-CO = 0.0
-d2m = 0.0
-alpha = 0.0
-scaling = 'Wilkins+2020'
-ia = 0
-iZ = 8
-log10U = -2.
-model_name = 'test'
-
-
-sps_grid = 'bpass-v2.2.1-bin_chab-100'
 
 
 # ---- load SPS grid
-grid = SpectralGrid(sps_grid)
-
-
+grid = SpectralGrid(params['sps_grid'])
 
 # --- get metallicity
-Z = grid.metallicities[iZ]
+Z = grid.metallicities[params['iZ']]
 
 # ---- initialise abundances object
-abundances = Abundances().generate_abundances(Z, alpha, CO, d2m, scaling = scaling) # abundances object
+abundances = Abundances().generate_abundances(Z, params['alpha'], params['CO'], params['d2m'], scaling = params['scaling']) # abundances object
 
 
 lam = grid.lam
-lnu = grid.spectra['stellar'][ia, iZ]
+lnu = grid.spectra['stellar'][params['ia'], params['iZ']]
 
-create_cloudy_input(model_name, lam, lnu, abundances, log10U)
+create_cloudy_input(model_name, lam, lnu, abundances, output_dir = './data/', **params)
 
 # --- define output filename
 
 
-cloudy_path = '/Users/stephenwilkins/Dropbox/Research/software/cloudy/c17.01/source/cloudy.exe'
+cloudy_path = f'/Users/stephenwilkins/Dropbox/Research/software/cloudy/{params["cloudy_version"]}/source/cloudy.exe'
 
+os.chdir('./data')
 os.system(f'{cloudy_path} -r {model_name}')

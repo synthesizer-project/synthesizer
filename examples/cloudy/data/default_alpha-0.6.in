@@ -1,0 +1,45 @@
+table SED "default_alpha-0.6.sed" 
+element abundance Helium -1.0850887559820324
+element abundance Lithium -11.932678906671544
+element abundance Beryllium -11.359074167816551
+element abundance Boron -10.305546416145487
+element abundance Carbon -4.353661581023506
+element abundance Nitrogen -4.8008615086525905
+element abundance Oxygen -3.4086411690200236
+element abundance Fluorine -8.329480238761256
+element abundance Neon -4.065969458250881
+element abundance Argon -5.990519588064472
+element abundance Magnesium -4.7539492776802765
+element abundance Aluminium -6.651501689817872
+element abundance Silicon -4.91968525117921
+element abundance Phosphorus -7.510519588064471
+element abundance Sulphur -4.875969458250881
+element abundance Chlorine -7.283661581023506
+element abundance Argon -5.595969458250881
+element abundance Potassium -7.8594802387612575
+element abundance Calcium -6.178422401229705
+element abundance Scandium -9.966397170501429
+element abundance Titanium -7.5633769229115515
+element abundance Vanadium -9.185388085733443
+element abundance Chromium -7.475388085733442
+element abundance Manganese -7.643160984437459
+element abundance Iron -5.611375030616197
+element abundance Cobalt -8.121375030616198
+element abundance Nickel -6.862403908183204
+element abundance Copper -8.839685251179208
+element abundance Zinc -8.360519588064472
+grains Orion graphite 0.09830251944394529 
+grains Orion silicate 0.7399345702202871 
+grains PAH 0.019055947241548892
+Q(H) = 49.22250264611322
+hden 2 log constant density
+radius -2 log parsecs
+sphere
+covering factor 1.0 linear
+iterate to convergence
+set temperature floor 100 linear
+stop temperature 4000K
+stop efrac -2
+save last continuum "default_alpha-0.6.cont" units Angstroms no clobber
+save last lines, array "default_alpha-0.6.lines" units Angstroms no clobber
+save overview  "default_alpha-0.6.ovr" last
