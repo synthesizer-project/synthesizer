@@ -44,7 +44,7 @@ class Abundances:
     name['O']   = 'Oxygen'
     name['F']   = 'Fluorine'
     name['Ne']  = 'Neon'
-    name['Na']  = 'Argon'
+    name['Na']  = 'Sodium'
     name['Mg']  = 'Magnesium'
     name['Al']  = 'Aluminium'
     name['Si']  = 'Silicon'
@@ -371,3 +371,54 @@ class AbundancePattern(Abundances):
         if show: plt.show()
 
         return fig, ax
+
+
+
+def plot_abundance_patterns(abundance_patterns, labels = None, show = True, ylim = None):
+
+    """ Plot multiple abundance patterns """
+
+
+    fig = plt.figure(figsize = (7., 4.))
+
+    left  = 0.15
+    height = 0.75
+    bottom = 0.2
+    width = 0.8
+
+    ax = fig.add_axes((left, bottom, width, height))
+
+    a = abundance_patterns[0]
+
+    colors = cmr.take_cmap_colors('cmr.bubblegum', len(a.all_elements))
+
+    if not labels: labels = range(len(abundance_patterns))
+
+    for a, label, ls, ms in zip(abundance_patterns, labels, ['-','--','-.',':'], ['o','s','D','d','^']):
+
+        i_ = range(len(a.all_elements))
+        a_ = []
+
+        for i,(e,c) in enumerate(zip(a.all_elements, colors)):
+            ax.scatter(i, a.a[e], color=c, s=40, zorder = 2, marker = ms)
+            a_.append(a.a[e])
+
+        ax.plot(i_,a_, lw = 2, ls = ls, c='0.5', label = rf'$\rm {label}$', zorder = 1)
+
+
+    for i,(e,c) in enumerate(zip(a.all_elements, colors)):
+        ax.axvline(i, alpha = 0.05, lw=1, c='k', zorder = 0)
+
+    if ylim:
+        ax.set_ylim(ylim)
+    else:
+        ax.set_ylim([-12., 0.1])
+
+    ax.legend()
+    ax.set_xticks(range(len(a.all_elements)), a.names, rotation = 90, fontsize = 6.)
+
+    ax.set_ylabel(r'$\rm X/H$')
+
+    if show: plt.show()
+
+    return fig, ax

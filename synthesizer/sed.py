@@ -176,7 +176,18 @@ def convert_flam_to_fnu(lam, flam):
 
     return flam * lam/(c.value/lam_m)
 
+def convert_fnu_to_flam(lam, fnu):
 
+    """ convert f_nu to f_lam
+
+    arguments:
+    lam -- wavelength/\AA
+    flam -- spectral luminosity density/erg/s/\AA
+    """
+
+    lam_m = lam * 1E-10
+
+    return fnu * (c.value/lam_m)/lam
 
 
 

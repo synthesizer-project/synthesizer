@@ -58,7 +58,7 @@ if __name__ == '__main__':
     # -------------------------------------------------
     # --- define choise of SPS model and initial mass function (IMF)
 
-    sps_names = ['bpass-v2.2.1_chab100-bin', 'bpass-v2.2.1_chab100-bin_cloudy-v17.0_logUref-2']
+    sps_names = ['bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2', 'bpass-v2.2.1-bin_chab-100_cloudy-v17.00_log10Uref-2']
 
     log10Z = -2. # log10(metallicity)
     log10age = 6.0 # log10(age/yr)

@@ -1,39 +1,36 @@
 
 
+from synthesizer.abundances_sw import Abundances, plot_abundance_patterns
 
-
-
-
-from synthesizer.abundances_sw import Abundances
+""" Demonstrate the use of the abundances module """
 
 
 
 abundances = Abundances()
 
-print(abundances.sol)
 
-Z = abundances.Z_sol
+# --- generate the default abundance pattern
+
+Z = 0.01
+CO = 0.0
+d2m = None
+scaling = None
 alpha = 0.0
-CO = 0.0
-d2m = None
-scaling = None
-
 
 a = abundances.generate_abundances(Z, alpha, CO, d2m, scaling = scaling) # generate AbundancePattern object
 
-print(a.solar_relative_abundance('O')) # [O/H], should be 0.0, comes out as -0.027
+# a.plot_abundances()
+
+# --- generate an alpha enhanced abundance pattern while keeping the same total metallicity default abundance pattern
+
+alpha = 0.6
+
+a_ae = abundances.generate_abundances(Z, alpha, CO, d2m, scaling = scaling) # generate AbundancePattern object
+
+print(a_ae.solar_relative_abundance('O', ref_element = 'Fe')) # [O/Fe], should be 0.4, comes out as 0.4
 
 
-Z = 0.0001
-alpha = 0.4
-CO = 0.0
-d2m = None
-scaling = None
-
-a = abundances.generate_abundances(Z, alpha, CO, d2m, scaling = scaling) # generate AbundancePattern object
+fig, ax = plot_abundance_patterns([a, a_ae], ['default', r'\alpha = 0.6'], show = True, ylim = [-7., -3.])
 
 
-print(a.solar_relative_abundance('O', ref_element = 'Fe')) # [O/Fe], should be 0.4, comes out as 0.4
-print(a.Z)
-
-a.plot_abundances()
+fig.savefig('abundance_comparison.pdf')

@@ -14,7 +14,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from synthesizer.grid import SpectralGrid
-
+from synthesizer.sed import convert_fnu_to_flam
 import flare.plt as fplt
 
 
@@ -68,9 +68,17 @@ def plot_spectra_age(grid, log10Z = -2.0, spec_name = 'stellar'):
 if __name__ == '__main__':
 
     log10Z = -2.
+    sps_names =[
+        # 'bpass-v2.2.1-bin_chab-100',
+        # 'fsps-v3.2_Chabrier03',
+        # 'bc03-2016-BaSeL_chabrier03',
+        'bc03-2016-Miles_chabrier03',
+        'bc03-2016-Stelib_chabrier03',
+        ]
 
-    sps_names = ['bpass-v2.2.1_chab100-bin', 'bpass-v2.2.1_chab100-bin_cloudy-v17.0_logUref-2', 'bc03_chabrier03']
-    sps_names = ['bpass-v2.3-bin-+00_chab300']
+
+
+
 
     for sps_name in sps_names:
 
