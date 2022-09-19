@@ -38,7 +38,7 @@ def create_cloudy_input(model_name, lam, lnu, abundances, output_dir = './', **k
     E = h*nu
     E_Ryd = E.to('Ry').value
 
-    E_Ryd[E_Ryd<0.0] = 1E-99 # get rid of negative models
+    E_Ryd[E_Ryd<=0.0] = 1E-10 # get rid of negative models
 
     np.savetxt(f'{output_dir}/{model_name}.sed', np.array([E_Ryd[::-1], lnu[::-1]]).T)
 
