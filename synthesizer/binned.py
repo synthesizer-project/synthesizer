@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import cmasher as cmr
 
 from . import dust_curves
-from .sed import Sed
+from .sed import Sed, convert_fnu_to_flam
 from .plt import single_histxy, mlabel
 from .stats import weighted_median, weighted_mean
 
@@ -207,6 +207,58 @@ class SEDGenerator():
         if show: plt.show()
 
         return fig, ax
+
+
+
+
+
+class LineGenerator:
+
+    """ Used to generate quantities for lines """
+
+    def __init__(self, grid, SFZH):
+
+        self.grid = grid
+        self.sfzh = SFZH.sfzh # add an extra dimension to the sfzh to allow the fast summation
+
+        self.lines = grid.lines
+        self.line_list = grid.line_list
+
+
+    def get_intrinsinc_quantities(self, line_id):
+
+        """ return intrinsic quantities (luminosity, EW) for a single line or line set """
+
+        if type(line_id) is str:
+            line_id = [line_id]
+
+        line_luminosity = 0.0
+        continuum_nu = []
+        wv = []
+
+        for line_id_ in line_id:
+            line = self.lines[line_id_]
+            wv.append(line.attrs['wavelength']) # \AA
+
+            line_luminosity +=  np.sum(line['luminosity'] * self.sfzh, axis = (0,1))
+            continuum_nu.append(np.sum(line['continuum'] * self.sfzh, axis = (0,1))) # continuum at line wavelength, erg/s/Hz
+
+        continuum_lam = convert_fnu_to_flam(np.mean(wv), np.mean(continuum_nu))  # continuum at line wavelength, erg/s/AA
+        ew = line_luminosity / continuum_lam # AA
+
+        return np.mean(wv), line_luminosity, ew
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
