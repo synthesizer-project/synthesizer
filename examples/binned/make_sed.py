@@ -4,7 +4,7 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-from synthesizer.filters import FilterCollection
+from synthesizer.filters import SVOFilterCollection
 from synthesizer.grid import SpectralGrid
 from synthesizer.binned import SFH, ZH, generate_sfzh, SEDGenerator
 from synthesizer.plt import single, single_histxy, mlabel
@@ -17,12 +17,12 @@ from astropy.cosmology import Planck18 as cosmo
 if __name__ == '__main__':
 
 
-    grid_name = 'bpass-v2.2.1_chab100-bin_cloudy-v17.0_logUref-2'
+    grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
 
     grid = SpectralGrid(grid_name)
 
     # --- define the parameters of the star formation and metal enrichment histories
-    sfh_p = {'duration': 100 * Myr }
+    sfh_p = {'duration': 10 * Myr }
     Z_p = {'log10Z': -2.0} # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = 1E8
 

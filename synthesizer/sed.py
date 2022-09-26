@@ -10,7 +10,7 @@ from scipy import integrate
 
 from unyt import c, h, nJy
 
-from . import igm
+from .igm import Inoue14
 
 class Sed:
 
@@ -86,7 +86,7 @@ class Sed:
         self.fnu = self.lnu
 
 
-    def get_fnu(self, cosmo, z, igm = igm.madau96):
+    def get_fnu(self, cosmo, z, igm = Inoue14()):
 
         """
         Calculate the observed frame spectral energy distribution in nJy
@@ -99,7 +99,7 @@ class Sed:
         self.fnu *= 1E9 # convert to nJy
 
         if igm:
-            self.fnu *= igm(self.lamz, z)
+            self.fnu *= igm.T(z, self.lamz)
 
 
     def get_broadband_fluxes(self, fc): # broad band flux/nJy
