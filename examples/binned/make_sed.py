@@ -9,7 +9,7 @@ from synthesizer.grid import SpectralGrid
 from synthesizer.binned import SFH, ZH, generate_sfzh, SEDGenerator
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr
-
+from synthesizer.igm import Madau96, Inoue14
 from astropy.cosmology import Planck18 as cosmo
 
 
@@ -62,9 +62,9 @@ if __name__ == '__main__':
 
     # --- now calculate the observed frame spectra
 
-    z = 4 # redshift
+    z = 10. # redshift
     sed = galaxy.spectra['total'] # choose total SED
-    sed.get_fnu(cosmo, z) # generate observed frame spectra
+    sed.get_fnu(cosmo, z, igm = Madau96()) # generate observed frame spectra
 
     # --- calculate broadband luminosities
     filter_codes = [f'JWST/NIRCam.{f}' for f in ['F090W', 'F115W','F150W','F200W','F277W','F356W','F444W']] # define a list of filter codes

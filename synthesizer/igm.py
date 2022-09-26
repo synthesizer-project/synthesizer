@@ -177,7 +177,13 @@ class Inoue14:
 
 	def T(self, z, lobs):
 
-	    return np.exp(-self.tau(z, lobs))
+		tau = self.tau(z, lobs)
+		t = np.exp(-tau)
+
+		t[t!=t] = 0.0 # squash NaNs
+		t[t>1] = 1
+
+		return t
 
 
 

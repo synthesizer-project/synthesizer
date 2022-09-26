@@ -8,7 +8,7 @@ from synthesizer.igm import Madau96, Inoue14
 from synthesizer.igm_old import madau96
 
 
-lam = np.arange(0, 12000)
+lam = np.arange(0, 50000)
 z = 7.
 
 
