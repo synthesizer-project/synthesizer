@@ -39,6 +39,7 @@ setup(
         "console_scripts": ["init_bc03=grids.grid_bc03:main",
                             "init_fsps=grids.grid_fsps:main"]
     },
+    include_package_data=True,
     cmdclass={'build_ext': build_ext},
     ext_modules=cythonize(extensions),
     include_dirs = [np.get_include()],
