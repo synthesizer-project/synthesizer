@@ -16,10 +16,10 @@ from .plt import single, mlabel
 from .sed import Sed, convert_fnu_to_flam
 
 
-# Get sythesizer_data_dir
-sythesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
+# Get synthesizer_data_dir
+synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
 
-if not sythesizer_data_dir:
+if not synthesizer_data_dir:
     print('WARNING: SYNTHESIZER_DATA environment variable not set. SpectralGrid may not work properly unless you provide the full path to the grid file (excluding the extension)')
 
 
@@ -104,8 +104,8 @@ class SpectralGrid(Grid):
 
     def __init__(self, grid_name, verbose = False):
 
-        if sythesizer_data_dir:
-            grid_filename = f'{sythesizer_data_dir}/grids/{grid_name}.h5'
+        if synthesizer_data_dir:
+            grid_filename = f'{synthesizer_data_dir}/grids/{grid_name}.h5'
         else:
             grid_filename = f'{grid_name}.h5'
             grid_name = grid_filename.split('/')[-1]
@@ -221,8 +221,8 @@ class LineGrid(Grid):
 
     def __init__(self, grid_name, verbose = False):
 
-        if sythesizer_data_dir:
-            grid_filename = f'{sythesizer_data_dir}/grids/{grid_name}.h5'
+        if synthesizer_data_dir:
+            grid_filename = f'{synthesizer_data_dir}/grids/{grid_name}.h5'
         else:
             grid_filename = f'{grid_name}.h5'
             grid_name = grid_filename.split('/')[-1]
