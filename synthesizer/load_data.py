@@ -12,12 +12,13 @@ def load_FLARES(f, region, tag):
         coods = hf[f'{region}/{tag}/Particle/S_Coordinates'][:].T
         mass = hf[f'{region}/{tag}/Particle/S_Mass'][:]  # 1e10 Msol
         imass = hf[f'{region}/{tag}/Particle/S_MassInitial'][:]  # 1e10 Msol
-        metals = hf[f'{region}/{tag}/Particle/S_Z'][:]
+        # metals = hf[f'{region}/{tag}/Particle/S_Z'][:]
+        metals = hf[f'{region}/{tag}/Particle/S_Z_smooth'][:]
+        s_oxygen = hf[f'{region}/{tag}/Particle/S_Abundance_Oxygen'][:]
+        s_hydrogen = hf[f'{region}/{tag}/Particle/S_Abundance_Hydrogen'][:]
         # ids = hf[f'{region}/{tag}/Particle/S_ID'][:]
         # index = hf[f'{region}/{tag}/Particle/S_Index'][:]
         # hf[f'{pre}/S_Vel']
-        # hf[f'{pre}/S_Z_smooth']
-
     
     # ages = np.log10(ages * 1e9)  # log10(yr)
     ages = (ages * 1e9)  # log10(yr)
@@ -30,6 +31,8 @@ def load_FLARES(f, region, tag):
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
         galaxies[i].load_stars(mass[b:e], ages[b:e], metals[b:e], 
+                               s_oxygen=s_oxygen[b:e], 
+                               s_hydrogen=s_hydrogen[b:e],                 
                                coordinates=coods[b:e, :],
                                initial_masses=imass[b:e])
 

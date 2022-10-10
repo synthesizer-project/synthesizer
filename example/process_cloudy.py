@@ -19,8 +19,6 @@ args = parser.parse_args()
 
 params = read_params(args.param_file)
 
-
-# params = __import__('parameters')
 _grid = grid.sps_grid(params.sps_grid)
 age_mask = _grid.ages <= 7
 Nage = np.sum(age_mask)
@@ -62,7 +60,6 @@ Nline = len(linelist)
 intrinsic_lines = []
 emergent_lines = []
 
-# for i, (iZ, ia, _U) in enumerate(parameters):
 for i, (iZ, ia) in enumerate(parameters):
     n_Lam, n_intrinsic, n_emergent = read_lines(params.cloudy_output_dir,
                                                 f'fsps_{i}', lines=linelist)
@@ -80,6 +77,7 @@ emergent_lines = emergent_lines.reshape((NZ, Nage, Nline))
 
 # --- apply grid weighting, save to new hdf5 file
 intrinsic_lines /= np.expand_dims(mass_ratio, axis=-1)
+emergent_lines /= np.expand_dims(mass_ratio, axis=-1)
 
 with h5py.File(params.sps_grid, 'a') as hf:
     hf.require_group('lines')
@@ -90,7 +88,8 @@ with h5py.File(params.sps_grid, 'a') as hf:
 for i,_line in enumerate(linelist):
     for _lines_arr,_type in zip([intrinsic_lines, emergent_lines],
                                 ['intrinsic','emergent']):
-        write_data_h5py(params.sps_grid, f'lines/{_type}/{_line}', data=_lines_arr[:,:,i], overwrite=True)
+        write_data_h5py(params.sps_grid, f'lines/{_type}/{_line}', 
+                        data=_lines_arr[:,:,i], overwrite=True)
         write_attribute(params.sps_grid, f'lines/{_type}', 'Description',
                         f'{_type} line luminosities (1 Msol) [Z,Age]')
         write_attribute(params.sps_grid, f'lines/{_type}', 'Units', 'erg s^-1')

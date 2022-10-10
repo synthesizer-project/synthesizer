@@ -26,6 +26,14 @@ class Stars(Particles):
         if 'initial_masses' in kwargs.keys():
             self.initial_masses = kwargs['initial_masses']
             self.attributes.append('initial_masses')
+        
+        if 's_oxygen' in kwargs.keys():
+            self.abundance_oxygen = kwargs['s_oxygen']
+            self.attributes.append('abundance_oxygen')
+        
+        if 's_hydrogen' in kwargs.keys():
+            self.abundance_hydrogen = kwargs['s_hydrogen']
+            self.attributes.append('abundance_hydrogen')
 
     def _power_law_sample(self, a, b, g, size=1):
         """
@@ -47,6 +55,9 @@ class Stars(Particles):
                     To force resample, set force_resample=True. Returning...")
             return None
 
+        if verbose:
+            print("masking resample stars")
+
         resample_idxs = np.where(self.ages < min_age)[0]
 
         if len(resample_idxs) == 0:
@@ -54,6 +65,9 @@ class Stars(Particles):
        
         new_ages = {}
         new_masses = {}
+        
+        if verbose:
+            print("loop through resample stars")
 
         for _idx in resample_idxs:
             rvs = self._power_law_sample(min_mass, max_mass,
@@ -82,20 +96,26 @@ class Stars(Particles):
         new_ages = np.hstack([new_ages[_idx] for _idx in resample_idxs])
         new_masses = np.hstack([new_masses[_idx] for _idx in resample_idxs])
        
-        # ---- concatenate new arrays to existing
+        if verbose:
+            print("concatenate new arrays to existing")
+
         for attr, new_arr in zip(['masses', 'ages'], 
                                  [new_masses, new_ages]):
             attr_array = getattr(self, attr)
             setattr(self, attr, np.append(attr_array, new_arr))
 
-        # ---- duplicate existing attributes
+        if verbose:
+            print("duplicate existing attributes")
+        
         gen = (attr for attr in self.attributes if attr not in ['masses', 'ages'])
         for attr in gen:
             attr_array = getattr(self, attr)[resample_idxs]
             setattr(self, attr, np.append(getattr(self, attr),
                                            np.repeat(attr_array, new_lens, axis=0)))
 
-        # ---- delete old particles 
+        if verbose:
+            print("delete old particles") 
+        
         for attr in self.attributes:
             attr_array = getattr(self, attr)
             attr_array = np.delete(attr_array, resample_idxs)

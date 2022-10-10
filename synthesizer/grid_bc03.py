@@ -17,6 +17,7 @@ from utils import write_data_h5py, write_attribute
 # example:
 # https://github.com/cmancone/easyGalaxy/blob/0608b17d84d00c2bdc069ebfb83024bf8d15e309/ezgal/utils.py#L382
 
+
 def readBC03Array(file, lastLineFloat=None):
     """Read a record from bc03 ascii file. The record starts with the
        number of elements N and is followed by N numbers. The record may
@@ -137,22 +138,19 @@ def convertBC03(files=None):
         print(' ')
         lastLine = None
 
-
     return (np.array(seds, dtype=np.float64),
             np.array(metalBins, dtype=np.float64),
             np.array(ageBins, dtype=np.float64),
             np.array(lambdaBins, dtype=np.float64))
 
 
-
-
-
-def main():
-    """ Main function to convert BC03 grids and
-        produce grids used by synthesizer """
-    
+def main(outfile='output/bc03.h5'):
+    """
+    Main function to convert BC03 grids and
+    produce grids used by synthesizer
+    """
     # Define base path
-    basepath = "input_files/bc03/bc03/models/Padova2000/"
+    basepath = "input_files/bc03/models/Padova2000/"
 
     # Define files
     files = ['bc2003_hr_m122_chab_ssp.ised_ASCII',
@@ -164,10 +162,10 @@ def main():
 
     out = convertBC03([basepath + s for s in files])
 
-    zsol = 0.0127
+    # zsol = 0.0127
 
     spec = out[0]                   # Lsol / AA
-    metals = np.log(out[1])         # log(Z)
+    metals = np.log10(out[1])         # log(Z)
     ages = out[2]                   # yr
     wl = out[3]                     # ?? (AA)
 
@@ -178,29 +176,29 @@ def main():
 
     spec *= (3.826e33 / 1.1964952e40)  # erg s^-1 cm^-2 AA^-1
 
-    fname = 'output/bc03.h5'
-    
-    write_data_h5py(fname, 'spectra', data=spec, overwrite=True)
-    write_attribute(fname, 'spectra', 'Description',
+    write_data_h5py(outfile, 'spectra', data=spec, overwrite=True)
+    write_attribute(outfile, 'spectra', 'Description',
                     'Three-dimensional spectra grid, [Z,Age,wavelength]')
-    write_attribute(fname, 'spectra', 'Units', 'erg s^-1 cm^2 AA^-1')
+    write_attribute(outfile, 'spectra', 'Units', 'erg s^-1 cm^2 AA^-1')
 
-    write_data_h5py(fname, 'ages', data=ages, overwrite=True)
-    write_attribute(fname, 'ages', 'Description', 
-            'Stellar population ages in log10 years')
-    write_attribute(fname, 'ages', 'Units', 'log10(yr)')
+    write_data_h5py(outfile, 'ages', data=ages, overwrite=True)
+    write_attribute(outfile, 'ages', 'Description',
+                    'Stellar population ages in log10 years')
+    write_attribute(outfile, 'ages', 'Units', 'log10(yr)')
 
-    write_data_h5py(fname, 'metallicities', data=metals, overwrite=True)
-    write_attribute(fname, 'metallicities', 'Description', 
-            'raw abundances in log10')
-    write_attribute(fname, 'metallicities', 'Units', 'dimensionless [log10(Z)]')
+    write_data_h5py(outfile, 'metallicities', data=metals, overwrite=True)
+    write_attribute(outfile, 'metallicities', 'Description',
+                    'raw abundances in log10')
+    write_attribute(outfile, 'metallicities', 'Units',
+                    'dimensionless [log10(Z)]')
 
-    write_data_h5py(fname, 'wavelength', data=wl, overwrite=True)
-    write_attribute(fname, 'wavelength', 'Description', 
-            'Wavelength of the spectra grid')
-    write_attribute(fname, 'wavelength', 'Units', 'AA')
+    write_data_h5py(outfile, 'wavelength', data=wl, overwrite=True)
+    write_attribute(outfile, 'wavelength', 'Description',
+                    'Wavelength of the spectra grid')
+    write_attribute(outfile, 'wavelength', 'Units', 'AA')
 
 
 # Lets include a way to call this script not via an entry point
 if __name__ == "__main__":
-    main()
+    outfile = sys.argv[1]
+    main(outfile)
