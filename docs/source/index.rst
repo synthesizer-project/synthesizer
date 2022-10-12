@@ -6,10 +6,29 @@
 Welcome to synthesizer's documentation!
 =======================================
 
+
+:Version: 0.1
+
+A flexible code for creating synthetic spectra.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
+   grid_generation
+   generating_spectra
+
+
+Contributors
+------------
+
+.. include:: ../../AUTHORS.rst
+
+
+License & Attribution
+---------------------
+
+spectacle is free software made available under the GNU 3 License. For details see the LICENSE.
 
 
 Indices and tables
