@@ -1,12 +1,14 @@
 """
 Download BC03 and convert to HDF5 synthesizer grid.
+
+TODO: data download does not currently work, directories need to be updated
 """
 
 import numpy as np
 import os
 import sys
 import re
-# import wget
+import wget
 from utils import write_data_h5py, write_attribute
 import tarfile
 import glob
@@ -16,10 +18,16 @@ import shutil
 from synthesizer.sed import calculate_Q
 
 
-model_name = 'bc03_chabrier03'
+def download_data(variant):
+
+    url = ("http://www.bruzual.org/bc03/Updated_version_2016/"
+            f"BC03_{variant.lower()}_chabrier.tgz")
+
+    filename = wget.download(url)
+    return filename
 
 
-def untar_data():
+def untar_data(synthesizer_data_dir):
     input_dir = f'{synthesizer_data_dir}/input_files/'
     fn = 'bc03.models.padova_2000_chabrier_imf.tar.gz'
 
@@ -167,7 +175,7 @@ def convertBC03(files=None):
             np.array(lambdaBins, dtype=np.float64))
 
 
-def make_grid(variant):
+def make_grid(variant, synthesizer_data_dir):
     """ Main function to convert BC03 grids and
         produce grids used by synthesizer """
 
@@ -185,6 +193,7 @@ def make_grid(variant):
     basepath = (f'{synthesizer_data_dir}/input_files/'
                 f'bc03-2016/{variant_dir}/Chabrier_IMF/')
 
+    
     model_name = f'bc03-2016-{variant}_chabrier03'
 
     # Define output
@@ -279,4 +288,4 @@ if __name__ == "__main__":
     synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
 
     for variant in ['Miles', 'Stelib']:  # 'BaSeL',
-        make_grid(variant)
+        make_grid(variant, synthesizer_data_dir)

@@ -15,8 +15,6 @@ import shutil
 
 from synthesizer.sed import calculate_Q
 
-model_name = 'bc03_chabrier03'
-
 def download_data():
 
     url = ("http://www.bruzual.org/bc03/Original_version_2003/"
@@ -189,6 +187,7 @@ def make_grid(synthesizer_data_dir):
     if not os.path.exists(f'{synthesizer_data_dir}/grids/'):
         os.makedirs(f'{synthesizer_data_dir}/grids/')
 
+    model_name = 'bc03_chabrier03'
     fname = f'{synthesizer_data_dir}/grids/{model_name}.h5'
 
     # Define files
