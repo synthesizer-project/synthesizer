@@ -6,7 +6,6 @@ from synthesizer.sed import calculate_Q
 
 def add_log10Q(filename):
 
-
     with h5py.File(filename, 'a') as hf:
 
         log10metallicities = hf['log10metallicities'][()]

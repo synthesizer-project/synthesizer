@@ -1,3 +1,4 @@
+import os
 import sys
 
 import numpy as np
@@ -68,5 +69,6 @@ def main(outfile='output/fsps.h5'):
 
 
 if __name__ == "__main__":
-    outfile = sys.argv[1]
+    synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
+    outfile = f'{synthesizer_data_dir}/grids/fsps.h5'
     main(outfile)
