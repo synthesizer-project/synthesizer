@@ -3,14 +3,14 @@ Given an SED (from an SPS model, for example), generate a cloudy atmosphere
 grid. Can optionally generate an array of input files for selected parameters.
 """
 
+import os
 import subprocess
 
 import numpy as np
+from unyt import c
 from scipy import integrate
 
 from .abundances import abundances
-
-from unyt import c
 
 
 def create_cloudy_binary(grid, params, verbose=False):
@@ -19,65 +19,71 @@ def create_cloudy_binary(grid, params, verbose=False):
 
     grid: synthesizer _grid_ object
     """
-    ages = 10**grid.ages
-    ages[ages == 0.0] = 1.
-    ages = np.log10(ages)
-
-    # test
 
     # # ---- TEMP check for negative values and amend
-    # # The BPASS binary sed has a couple of erroneous negative values, possibly due to interpolation errors
-    # # Here we set the Flux to the average of each neighbouring wavelength value
+    # # The BPASS binary sed has a couple of erroneous negative values,
+    # # possibly due to interpolation errors
+    # # Here we set the Flux to the average of each
+    # # neighbouring wavelength value
     #
     # mask = np.asarray(np.where(sed < 0.))
     # for i in range(mask.shape[1]):
-    #     sed[mask[0,i],mask[1,i],mask[2,i]] = sed[mask[0,i],mask[1,i],mask[2,i]-1]+sed[mask[0,i],mask[1,i],mask[2,i]+1]/2
+    #     sed[mask[0,i],mask[1,i],mask[2,i]] = \
+    #           sed[mask[0,i],mask[1,i],mask[2,i]-1]+sed[mask[0,i],mask[1,i],mask[2,i]+1]/2
 
-    if verbose: print('Writing .ascii')
+    if verbose:
+        print('Writing .ascii')
 
     output = []
     output.append("20060612\n")  # magic number
     output.append("2\n")  # ndim
     output.append("2\n")  # npar
 
-    ## First parameter MUST be log otherwise Cloudy throws a tantrum
+    # First parameter MUST be log otherwise Cloudy throws a tantrum
     output.append("age\n")  # label par 1
     output.append("logz\n")  # label par 2
 
-    output.append(str(grid.spectra.shape[0] * grid.spectra.shape[1])+"\n")  # nmod
-    output.append(str(len(grid.wl))+"\n")  # nfreq (nwavelength)
+    output.append(str(grid.spectra['stellar'].shape[0] *
+                      grid.spectra['stellar'].shape[1])+"\n")  # nmod
+    output.append(str(len(grid.lam))+"\n")  # nfreq (nwavelength)
     # output.append(str(len(frequency))+"\n")  # nfreq (nwavelength)
 
     output.append("lambda\n")  # type of independent variable (nu or lambda)
     output.append("1.0\n")  # conversion factor for independent variable
-    # output.append("F_nu\n")  # type of dependent variable (F_nu/H_nu or F_lambda/H_lambda)
+
+    # type of dependent variable (F_nu/H_nu or F_lambda/H_lambda)
+    # output.append("F_nu\n")
+
     # output.append("3.839e33\n")  # conversion factor for dependent variable
-    output.append("F_lambda\n")  # type of dependent variable (F_nu/H_nu or F_lambda/H_lambda)
+
+    # type of dependent variable (F_nu/H_nu or F_lambda/H_lambda)
+    output.append("F_lambda\n")
     output.append("1.0\n")  # conversion factor for dependent variable
 
-    for z in grid.metallicities:
-        for a in ages:  # available SED ages
-            output.append(str(a)+' '+str(z)+"\n")  # (npar x nmod) parameters
+    for a in grid.ages:  # available SED ages
+        for z in grid.metallicities:
+            output.append(f'{np.log10(a)} {z}\n')  # (npar x nmod) parameters
 
-    # output.append(' '.join(map(str,frequency))+"\n")  # the frequency(wavelength) grid, nfreq points
-    output.append(' '.join(map(str,grid.wl))+"\n")  # the frequency(wavelength) grid, nfreq points
-
-
-    for i,z in enumerate(grid.metallicities):
-        for j,a in enumerate(ages):
-            output.append(' '.join(map(str,grid.spectra[i,j]))+"\n")
+    # the frequency(wavelength) grid, nfreq points
+    output.append(' '.join(map(str, grid.lam))+"\n")
 
 
-    target = open('model.ascii','w')
-    target.writelines(output)
-    target.close()
+    for i, a in enumerate(grid.ages):
+        for j, z in enumerate(grid.metallicities):
+            output.append(' '.join(map(str,
+                                       grid.spectra['stellar'][i, j]))+"\n")
+
+    with open('model.ascii', 'w') as target:
+        target.writelines(output)
 
     # ---- compile ascii file
     print('Compiling Cloudy atmosphere file (.ascii)')
-    subprocess.call(f'echo -e \'compile stars \"model.ascii\"\' | {params.cloudy_dir}/source/cloudy.exe', shell=True)
+    subprocess.call(('echo -e \'compile stars \"model.ascii\"\''
+                    f'| {params.cloudy_dir}/source/cloudy.exe'), shell=True)
 
     # ---- copy .mod file to cloudy data directory
-    print(f'Copying compiled atmosphere to Cloudy directory, {params.cloudy_dir}')
+    print(('Copying compiled atmosphere to Cloudy directory, '
+           f'{params.cloudy_dir}'))
     subprocess.call(f'cp model.mod {params.cloudy_dir}/data/.', shell=True)
 
     # ---- remove .ascii file
@@ -137,7 +143,7 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     # CLOUDY_SED = create_CLOUDY_SED(grid.wl, grid.spectra[iZ, ia])
 
     # --- get metallicity
-    Z = 10**grid.metallicities[iZ]
+    Z = grid.metallicities[iZ]
 
     # ---- initialise abundances object
     abund = abundances()
@@ -158,7 +164,7 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     # cinput.append('print line precision 6\n')
     # cinput.append('table star "model.mod" '+str(grid.ages[ia])+' '+str(grid.metallicity[iZ])+'\n')
     # cinput.append(f'table star "model.mod" {grid.metallicity[iZ]} {grid.ages[ia]}\n')
-    cinput.append(f'table star "model.mod" {grid.ages[ia]} {grid.metallicities[iZ]}\n')
+    cinput.append(f'table star "model.mod" {np.log10(grid.ages[ia])} {grid.metallicities[iZ]}\n')
 
     # --- Define the chemical composition
     for ele in ['He'] + abund.metals:
@@ -343,11 +349,8 @@ def measure_Q(lam, L_AA, limit=100):
 #     return Q / (4 * np.pi * R_inner**2 * n_h * 2.99e10)
 
 
-
-
-
-
-def write_submission_script_cosma(N, input_prefix, params):#cosma_project, cosma_account, input_file_dir='grids/cloudy_output/'):
+def write_submission_script_cosma(N, input_prefix, params, output_dir):
+    #cosma_project, cosma_account, input_file_dir='grids/cloudy_output/'):
 
     output = []
     output.append(f'#!/bin/bash -l\n')
@@ -364,14 +367,9 @@ def write_submission_script_cosma(N, input_prefix, params):#cosma_project, cosma
     # output.append(f'#SBATCH --mail-user=<email address>
     output.append(f'{params.cloudy_dir}/source/cloudy.exe -r {input_prefix}_$SLURM_ARRAY_TASK_ID\n')
 
-    # --- write input file
-    open(f'{params.cloudy_output_dir}/{input_prefix}_run.job','w').writelines(output)
+    open(f'{output_dir}/{input_prefix}_run.job','w').writelines(output)
 
     return
-
-
-
-
 
 
 def determine_log10Q(log10U_S, log10n_H):

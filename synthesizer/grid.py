@@ -109,20 +109,23 @@ class SpectralGrid(Grid):
         else:
             grid_filename = f'{grid_name}.h5'
             grid_name = grid_filename.split('/')[-1]
-
-        hf = h5py.File(grid_filename,'r')
-
-        spectra = hf['spectra']
-
+        
         self.grid_name = grid_name
 
-        self.lam = spectra['wavelength'][()]
-        self.nu = 3E8/(self.lam*1E-10)
-        self.log10ages = hf['log10ages'][()]
-        self.ages = 10**self.log10ages
-        self.metallicities = hf['metallicities'][()]
-        self.log10metallicities = hf['log10metallicities'][()]
-        self.log10Zs = self.log10metallicities # alias
+        with h5py.File(grid_filename, 'r') as hf:
+            self.spec_names = list(hf['spectra'].keys())
+            self.spec_names.remove('wavelength')
+            self.lam = hf['spectra/wavelength'][:]
+            self.nu = 3E8/(self.lam*1E-10)
+            self.log10ages = hf['log10ages'][:]
+            self.ages = 10**self.log10ages
+            self.metallicities = hf['metallicities'][:]
+            self.log10metallicities = hf['log10metallicities'][:]
+            self.log10Zs = self.log10metallicities # alias
+        
+            if 'log10Q' in hf.keys():
+                self.log10Q = hf['log10Q'][:]
+                self.log10Q[self.log10Q!=self.log10Q] = -99.99
 
         if verbose:
             print(f'metallicities: {self.metallicities}')
@@ -131,24 +134,23 @@ class SpectralGrid(Grid):
 
         self.spectra = {}
 
-        self.spec_names = list(spectra.keys())
-        self.spec_names.remove('wavelength')
+
 
         for spec_name in self.spec_names:
-            # self.spectra[spec_name] = np.swapaxes(hf['spectra/stellar'][()], 0, 1)
-            self.spectra[spec_name] = spectra[spec_name][()]
+
+            with h5py.File(grid_filename, 'r') as hf:
+                # self.spectra[spec_name] = np.swapaxes(hf['spectra/stellar'][()], 0, 1)
+                self.spectra[spec_name] = hf['spectra'][spec_name][:]
 
             if spec_name == 'incident':
                 self.spectra['stellar'] = self.spectra[spec_name]
+
+
 
         # --- if full cloudy grid available calculate some other spectra for convenience
         if 'linecont' in self.spec_names:
             self.spectra['total'] = self.spectra['transmitted'] + self.spectra['nebular'] # assumes fesc = 0
             self.spectra['nebular_continuum'] = self.spectra['nebular'] - self.spectra['linecont']
-
-        if 'log10Q' in hf.keys():
-            self.log10Q = hf['log10Q'][()]
-            self.log10Q[self.log10Q!=self.log10Q] = -99.99
 
         if verbose: print('available spectra:', list(self.spectra.keys()))
 
@@ -226,19 +228,17 @@ class LineGrid(Grid):
         else:
             grid_filename = f'{grid_name}.h5'
             grid_name = grid_filename.split('/')[-1]
-
-        hf = h5py.File(grid_filename,'r')
-
-        self.lines = hf['lines']
-        self.line_list = self.lines.attrs['lines']
-
+        
         self.grid_name = grid_name
 
-        self.log10ages = hf['log10ages'][()]
-        self.ages = 10**self.log10ages
-        self.metallicities = hf['metallicities'][()]
-        self.log10metallicities = hf['log10metallicities'][()]
-        self.log10Zs = self.log10metallicities # alias
+        with h5py.File(grid_filename,'r') as hf:
+            self.lines = hf['lines']
+            self.line_list = self.lines.attrs['lines']
+            self.log10ages = hf['log10ages'][()]
+            self.ages = 10**self.log10ages
+            self.metallicities = hf['metallicities'][()]
+            self.log10metallicities = hf['log10metallicities'][()]
+            self.log10Zs = self.log10metallicities # alias
 
         self.na = len(self.ages)
         self.nZ = len(self.metallicities)
