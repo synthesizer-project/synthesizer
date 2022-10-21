@@ -2,30 +2,19 @@
 Create a Grid object
 """
 
-
-import os
 import numpy as np
 import h5py
 import cmasher as cmr
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 
-from .utils import (load_arr, get_names_h5py)
-from .plt import single, mlabel
+from .plt import mlabel
 from .sed import Sed, convert_fnu_to_flam
 
 
-# Get synthesizer_data_dir
-synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
-
-if not synthesizer_data_dir:
-    print('WARNING: SYNTHESIZER_DATA environment variable not set. SpectralGrid may not work properly unless you provide the full path to the grid file (excluding the extension)')
-
-
-# --- info of the available grids
-
 def parse_grid_id(grid_id):
+    """
+    TODO: what does this method actually do?
+    """
 
     if len(grid_id.split('_')) == 2:
         sps_model_, imf_ = grid_id.split('_')
@@ -54,8 +43,7 @@ def parse_grid_id(grid_id):
         imf = imf_.split('-')[0]
         imf_hmc = imf_.split('-')[1]
 
-
-    if imf in ['chab', 'chabrier03','Chabrier03']:
+    if imf in ['chab', 'chabrier03', 'Chabrier03']:
         imf = 'Chabrier (2003)'
     if imf in ['kroupa']:
         imf = 'Kroupa (2003)'
@@ -64,17 +52,14 @@ def parse_grid_id(grid_id):
     if imf.isnumeric():
         imf = rf'$\alpha={float(imf)/100}$'
 
-
-    return {'sps_model': sps_model, 'sps_model_version': sps_model_version, 'imf': imf, 'imf_hmc': imf_hmc}
-
-
-
-
+    return {'sps_model': sps_model, 'sps_model_version': sps_model_version,
+            'imf': imf, 'imf_hmc': imf_hmc}
 
 
 class Grid:
-
-    """ holds useful functions for operating on grids """
+    """
+    Base class containing useful functions for operating on grids
+    """
 
     def get_nearest_index(self, value, array):
 
@@ -95,37 +80,38 @@ class Grid:
         return self.get_nearest(log10age, self.log10ages)
 
 
-
-
 class SpectralGrid(Grid):
+    """
+    This provides an object to hold the SPS / Cloudy grid
+    for use by other parts of the code
+    """
 
-    """ This provides an object to hold the SPS / Cloudy grid for use by other parts of the code """
+    def __init__(self, grid_name, verbose=False):
 
+        # if synthesizer_data_dir:
+        #     grid_filename = f'{synthesizer_data_dir}/grids/{grid_name}.h5'
+        # else:
+        #     grid_filename = f'{grid_name}.h5'
+        #     grid_name = grid_filename.split('/')[-1]
 
-    def __init__(self, grid_name, verbose = False):
-
-        if synthesizer_data_dir:
-            grid_filename = f'{synthesizer_data_dir}/grids/{grid_name}.h5'
-        else:
-            grid_filename = f'{grid_name}.h5'
-            grid_name = grid_filename.split('/')[-1]
-        
         self.grid_name = grid_name
 
-        with h5py.File(grid_filename, 'r') as hf:
+        with h5py.File(self.grid_name, 'r') as hf:
             self.spec_names = list(hf['spectra'].keys())
             self.spec_names.remove('wavelength')
+
             self.lam = hf['spectra/wavelength'][:]
             self.nu = 3E8/(self.lam*1E-10)
+
             self.log10ages = hf['log10ages'][:]
             self.ages = 10**self.log10ages
             self.metallicities = hf['metallicities'][:]
             self.log10metallicities = hf['log10metallicities'][:]
-            self.log10Zs = self.log10metallicities # alias
-        
+            self.log10Zs = self.log10metallicities  # alias
+
             if 'log10Q' in hf.keys():
                 self.log10Q = hf['log10Q'][:]
-                self.log10Q[self.log10Q!=self.log10Q] = -99.99
+                self.log10Q[self.log10Q != self.log10Q] = -99.99
 
         if verbose:
             print(f'metallicities: {self.metallicities}')
@@ -134,44 +120,35 @@ class SpectralGrid(Grid):
 
         self.spectra = {}
 
-
-
         for spec_name in self.spec_names:
 
-            with h5py.File(grid_filename, 'r') as hf:
-                # self.spectra[spec_name] = np.swapaxes(hf['spectra/stellar'][()], 0, 1)
+            with h5py.File(self.grid_name, 'r') as hf:
                 self.spectra[spec_name] = hf['spectra'][spec_name][:]
 
             if spec_name == 'incident':
                 self.spectra['stellar'] = self.spectra[spec_name]
 
-
-
-        # --- if full cloudy grid available calculate some other spectra for convenience
+        """ if full cloudy grid available calculate
+        some other spectra for convenience """
         if 'linecont' in self.spec_names:
-            self.spectra['total'] = self.spectra['transmitted'] + self.spectra['nebular'] # assumes fesc = 0
-            self.spectra['nebular_continuum'] = self.spectra['nebular'] - self.spectra['linecont']
 
-        if verbose: print('available spectra:', list(self.spectra.keys()))
+            self.spectra['total'] = self.spectra['transmitted'] +\
+                    self.spectra['nebular']  #  assumes fesc = 0
 
+            self.spectra['nebular_continuum'] = self.spectra['nebular'] -\
+                self.spectra['linecont']
 
+        if verbose:
+            print('available spectra:', list(self.spectra.keys()))
 
+    def get_sed(self, ia, iZ, spec_name='stellar'):
 
+        return Sed(self.lam, lnu=self.spectra[spec_name][ia, iZ])
 
-    def get_sed(self, ia, iZ, spec_name = 'stellar'):
+    def plot_log10Q(self, hsize=3.5, vsize=2.5, cmap=cmr.sapphire,
+                    vmin=42.5, vmax=47.5, max_log10age=9.):
 
-        return Sed(self.lam, lnu = self.spectra[spec_name][ia, iZ])
-
-
-
-    # def plot_seds(self, ):
-    #
-    #     """ makes a nice plot of the pure stellar """
-
-
-    def plot_log10Q(self, hsize = 3.5, vsize = 2.5, cmap = cmr.sapphire, vmin = 42.5, vmax = 47.5, max_log10age = 9.):
-
-        left  = 0.2
+        left = 0.2
         height = 0.6
         bottom = 0.15
         width = 0.75
@@ -179,7 +156,7 @@ class SpectralGrid(Grid):
         if not vsize:
             vsize = hsize*width/height
 
-        fig = plt.figure(figsize = (hsize, vsize))
+        fig = plt.figure(figsize=(hsize, vsize))
 
         ax = fig.add_axes((left, bottom, width, height))
         cax = fig.add_axes([left, bottom+height, width, 0.03])
@@ -194,12 +171,11 @@ class SpectralGrid(Grid):
         else:
             ia_max = -1
 
-
-        ax.imshow(log10Q.T, origin = 'lower', extent = [self.log10ages[0], self.log10ages[ia_max], y[0]-0.5, y[-1]+0.5], cmap = cmap, aspect = 'auto', vmin = vmin, vmax = vmax) # this is technically incorrect because metallicity is not on a an actual grid.
-
-
-        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
-        cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, orientation = 'horizontal') # add the colourbar
+        """ this is technically incorrect because metallicity
+        is not on an actual grid."""
+        ax.imshow(log10Q.T, origin='lower', extent=[self.log10ages[0],
+                  self.log10ages[ia_max], y[0]-0.5, y[-1]+0.5], cmap=cmap,
+                  aspect='auto', vmin=vmin, vmax=vmax)
 
         cax.xaxis.tick_top()
         cax.xaxis.set_label_position('top')
@@ -212,8 +188,6 @@ class SpectralGrid(Grid):
         ax.set_ylabel(mlabel('Z'))
 
         return fig, ax
-
-
 
 
 class LineGrid(Grid):

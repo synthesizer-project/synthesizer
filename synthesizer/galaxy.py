@@ -47,7 +47,7 @@ class Galaxy:
                 self.stars.log10ages,
                 self.stars.initial_masses)
 
-        _spec = np.sum(grid.spectra * weights_temp[:,:,None], axis=(0,1))
+        _spec = np.sum(grid.spectra['stellar'] * weights_temp[:,:,None], axis=(0,1))
         
         # lum = self.stellar_particle_spectra(grid)
         # _spec = np.sum(lum, axis=0)
@@ -125,13 +125,13 @@ class Galaxy:
 
         Will calculate for particles individually
         """
-        in_arr = np.array([metals, ages, imasses], dtype=np.float64).T
+        in_arr = np.array([ages, metals, imasses], dtype=np.float64).T
         if (not hasattr(metals, '__len__')):  # check it's an array
             in_arr = in_arr[None, :]  # update dimensions if scalar
         
         if young_stars:  # filter grid object 
-            return calculate_weights(grid.metallicities, 
-                                     grid.ages[grid.ages <= grid.max_age], in_arr)
+            return calculate_weights(grid.ages[grid.ages <= grid.max_age], 
+                                     grid.metallicities, in_arr)
         else:
-            return calculate_weights(grid.metallicities, grid.ages, in_arr)
+            return calculate_weights(grid.ages, grid.metallicities, in_arr)
 
