@@ -86,7 +86,7 @@ class SpectralGrid(Grid):
     for use by other parts of the code
     """
 
-    def __init__(self, grid_name, verbose=False):
+    def __init__(self, grid_name, verbose=False, grid_dir=None):
 
         # if synthesizer_data_dir:
         #     grid_filename = f'{synthesizer_data_dir}/grids/{grid_name}.h5'
@@ -94,9 +94,10 @@ class SpectralGrid(Grid):
         #     grid_filename = f'{grid_name}.h5'
         #     grid_name = grid_filename.split('/')[-1]
 
+        self.grid_dir = grid_dir
         self.grid_name = grid_name
 
-        with h5py.File(self.grid_name, 'r') as hf:
+        with h5py.File(f'{self.grid_dir}/grids/{self.grid_name}.h5', 'r') as hf:
             self.spec_names = list(hf['spectra'].keys())
             self.spec_names.remove('wavelength')
 
@@ -122,7 +123,7 @@ class SpectralGrid(Grid):
 
         for spec_name in self.spec_names:
 
-            with h5py.File(self.grid_name, 'r') as hf:
+            with h5py.File(f'{self.grid_dir}/grids/{self.grid_name}.h5', 'r') as hf:
                 self.spectra[spec_name] = hf['spectra'][spec_name][:]
 
             if spec_name == 'incident':
@@ -202,7 +203,7 @@ class LineGrid(Grid):
         else:
             grid_filename = f'{grid_name}.h5'
             grid_name = grid_filename.split('/')[-1]
-        
+
         self.grid_name = grid_name
 
         with h5py.File(grid_filename,'r') as hf:

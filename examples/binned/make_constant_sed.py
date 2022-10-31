@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 
 from synthesizer.filters import SVOFilterCollection
 from synthesizer.grid import SpectralGrid
-from synthesizer.binned import SFH, ZH, generate_sfzh, SEDGenerator
+from synthesizer.binned.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.binned.galaxy import SEDGenerator
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr
 
@@ -19,10 +20,10 @@ from astropy.cosmology import Planck18 as cosmo
 
 if __name__ == '__main__':
 
-
+    grid_dir = '/Users/stephenwilkins/Dropbox/Research/data/synthesizer'
     grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
 
-    grid = SpectralGrid(grid_name)
+    grid = SpectralGrid(grid_name, grid_dir = grid_dir)
 
     fig, ax = single()
 
