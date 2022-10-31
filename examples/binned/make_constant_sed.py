@@ -17,13 +17,11 @@ from unyt import yr, Myr
 from astropy.cosmology import Planck18 as cosmo
 
 
-
 if __name__ == '__main__':
 
-    grid_dir = '/Users/stephenwilkins/Dropbox/Research/data/synthesizer'
     grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
 
-    grid = SpectralGrid(grid_name, grid_dir = grid_dir)
+    grid = SpectralGrid(grid_name)
 
     fig, ax = single()
 

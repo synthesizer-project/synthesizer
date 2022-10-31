@@ -9,19 +9,17 @@ from synthesizer.binned.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.plt import single, single_histxy, mlabel
 
 
-
-
-def plot_sfh(x, sfh, log10 = False):
+def plot_sfh(x, sfh, log10=False):
 
     x_range = [x[0], x[-1]]
 
-    sfh_ = sfzh.Binned.sfh(x, sfh, log10 = log10)
+    sfh_ = sfzh.Binned.sfh(x, sfh, log10=log10)
 
     print(sfh_)
 
     fig, ax = single()
 
-    ax.fill_between(x, sfh_/np.max(sfh_), step='mid', color='k', alpha = 0.3)
+    ax.fill_between(x, sfh_/np.max(sfh_), step='mid', color='k', alpha=0.3)
 
     # --- add SFR to top of the plot
     x = np.linspace(*x_range, 1000)
@@ -41,16 +39,7 @@ def plot_sfh(x, sfh, log10 = False):
 
     ax.set_xlim(x_range)
 
-
-
     plt.show()
-
-
-
-
-
-
-
 
 
 def plot_sfhs():
@@ -65,15 +54,14 @@ def plot_sfhs():
     # sfh = sfzh.SFH.TruncatedExponential(*sfh_p) # constant star formation
     # plot_sfh(ages, sfh, log10 = False)
 
-    sfh_p = [700., 0.2, 1000] # [age_peak/yr, tau, max_age/yr]
-    sfh = sfzh.SFH.LogNormal(*sfh_p) # constant star formation
-    plot_sfh(ages, sfh, log10 = False)
+    sfh_p = [700., 0.2, 1000]  # [age_peak/yr, tau, max_age/yr]
+    sfh = sfzh.SFH.LogNormal(*sfh_p)  # constant star formation
+    plot_sfh(ages, sfh, log10=False)
 
     print(sfh.sfr(10))
 
 
 def plot_sfzhs():
-
 
     # --- define a age and metallicity grid. In practice these are pulled from the SPS model.
     log10ages = np.arange(6., 10.5, 0.1)
@@ -82,21 +70,17 @@ def plot_sfzhs():
 
     # --- define the parameters of the star formation and metal enrichment histories
 
-    Z_p = {'log10Z': -2.5} # can also use linear metallicity e.g. {'Z': 0.01}
-    Zh = ZH.deltaConstant(Z_p) #
+    Z_p = {'log10Z': -2.5}  # can also use linear metallicity e.g. {'Z': 0.01}
+    Zh = ZH.deltaConstant(Z_p)
 
-
-
-
-    sfh_p = {'duration': 100 * Myr }
-    sfh = SFH.Constant(sfh_p) # constant star formation
-    sfh.summary() # print summary of the star formation history
+    sfh_p = {'duration': 100 * Myr}
+    sfh = SFH.Constant(sfh_p)  # constant star formation
+    sfh.summary()  # print summary of the star formation history
     sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
     sfzh.summary()
     sfzh.plot()
 
     print(sfzh.sfh_f.name, sfzh.sfh_f.parameters)
-
 
     # sfzh = generate_instant_sfzh(log10ages, metallicities, sfh, Zh)
     # sfzh.summary()
