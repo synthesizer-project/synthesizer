@@ -91,7 +91,6 @@ class SpectralGrid(Grid):
     def __init__(self, grid_name, grid_dir=None, verbose=False):
 
         if not grid_dir:
-
             grid_dir = os.path.join(os.path.dirname(filepath), 'data/grids')
 
         print(grid_dir)
