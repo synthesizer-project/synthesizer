@@ -7,6 +7,7 @@ import os
 import sys
 import re
 import wget
+import argparse
 from utils import write_data_h5py, write_attribute
 import tarfile
 import glob
@@ -268,7 +269,11 @@ def make_grid(synthesizer_data_dir):
 
 if __name__ == "__main__":
 
-    synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
+    parser = argparse.ArgumentParser(description='Install the BC03 grid to the specified directory.')
+    parser.add_argument("-dir", "--directory", type=str, required=True)
+    args = parser.parse_args()
+
+    synthesizer_data_dir = args.directory
 
     download_data()
     untar_data(synthesizer_data_dir)
