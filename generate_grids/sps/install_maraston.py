@@ -7,6 +7,7 @@ import os
 import sys
 import re
 import wget
+import argparse
 from utils import write_data_h5py, write_attribute
 import tarfile
 import glob
@@ -16,10 +17,6 @@ import shutil
 from synthesizer.sed import convert_flam_to_fnu
 
 from pathlib import Path
-
-
-
-
 
 
 
@@ -129,7 +126,11 @@ def make_grid():
 # Lets include a way to call this script not via an entry point
 if __name__ == "__main__":
 
-    synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA') # this is the place to store the data
+    parser = argparse.ArgumentParser(description='Install the Maraston05 grid to the specified directory.')
+    parser.add_argument("-dir", "--directory", type=str, required=True)
+    args = parser.parse_args()
+
+    synthesizer_data_dir = args.directory
 
     model_name = 'maraston'
 
