@@ -2,18 +2,20 @@
 Create a Grid object
 """
 
+import os
 import numpy as np
 import h5py
 import cmasher as cmr
 import matplotlib.pyplot as plt
 
+from . import __file__ as filepath
 from .plt import mlabel
 from .sed import Sed, convert_fnu_to_flam
 
 
 def parse_grid_id(grid_id):
     """
-    TODO: what does this method actually do?
+    This is used for parsing a grid ID to return the SPS model, version, and IMF 
     """
 
     if len(grid_id.split('_')) == 2:
@@ -86,7 +88,13 @@ class SpectralGrid(Grid):
     for use by other parts of the code
     """
 
-    def __init__(self, grid_name, verbose=False):
+    def __init__(self, grid_name, grid_dir=None, verbose=False):
+
+        if not grid_dir:
+
+            grid_dir = os.path.join(os.path.dirname(filepath), 'data/grids')
+
+        print(grid_dir)
 
         # if synthesizer_data_dir:
         #     grid_filename = f'{synthesizer_data_dir}/grids/{grid_name}.h5'
@@ -94,9 +102,10 @@ class SpectralGrid(Grid):
         #     grid_filename = f'{grid_name}.h5'
         #     grid_name = grid_filename.split('/')[-1]
 
+        self.grid_dir = grid_dir
         self.grid_name = grid_name
 
-        with h5py.File(self.grid_name, 'r') as hf:
+        with h5py.File(f'{self.grid_dir}/{self.grid_name}.h5', 'r') as hf:
             self.spec_names = list(hf['spectra'].keys())
             self.spec_names.remove('wavelength')
 
@@ -122,7 +131,7 @@ class SpectralGrid(Grid):
 
         for spec_name in self.spec_names:
 
-            with h5py.File(self.grid_name, 'r') as hf:
+            with h5py.File(f'{self.grid_dir}/{self.grid_name}.h5', 'r') as hf:
                 self.spectra[spec_name] = hf['spectra'][spec_name][:]
 
             if spec_name == 'incident':
@@ -133,7 +142,7 @@ class SpectralGrid(Grid):
         if 'linecont' in self.spec_names:
 
             self.spectra['total'] = self.spectra['transmitted'] +\
-                    self.spectra['nebular']  #  assumes fesc = 0
+                self.spectra['nebular']  #  assumes fesc = 0
 
             self.spectra['nebular_continuum'] = self.spectra['nebular'] -\
                 self.spectra['linecont']
@@ -194,25 +203,24 @@ class LineGrid(Grid):
 
     """ This provides an object to hold the SPS / Cloudy grid for use by other parts of the code """
 
-
-    def __init__(self, grid_name, verbose = False):
+    def __init__(self, grid_name, verbose=False):
 
         if synthesizer_data_dir:
             grid_filename = f'{synthesizer_data_dir}/grids/{grid_name}.h5'
         else:
             grid_filename = f'{grid_name}.h5'
             grid_name = grid_filename.split('/')[-1]
-        
+
         self.grid_name = grid_name
 
-        with h5py.File(grid_filename,'r') as hf:
+        with h5py.File(grid_filename, 'r') as hf:
             self.lines = hf['lines']
             self.line_list = self.lines.attrs['lines']
             self.log10ages = hf['log10ages'][()]
             self.ages = 10**self.log10ages
             self.metallicities = hf['metallicities'][()]
             self.log10metallicities = hf['log10metallicities'][()]
-            self.log10Zs = self.log10metallicities # alias
+            self.log10Zs = self.log10metallicities  # alias
 
         self.na = len(self.ages)
         self.nZ = len(self.metallicities)
@@ -223,9 +231,7 @@ class LineGrid(Grid):
             print(f'ages: {self.log10ages}')
             print(f'available lines: {self.line_list}')
 
-
     def get_line_info(self, line_id, ia, iZ):
-
         """ return the equivalent width of a given line and age, metalliciy """
 
         if type(line_id) is str:
@@ -237,11 +243,13 @@ class LineGrid(Grid):
 
         for line_id_ in line_id:
             line = self.lines[line_id_]
-            wv.append(line.attrs['wavelength']) # \AA
-            line_luminosity += line['luminosity'][ia, iZ] # line luminosity, erg/s
-            continuum_nu.append(line['continuum'][ia, iZ]) # continuum at line wavelength, erg/s/Hz
+            wv.append(line.attrs['wavelength'])  # \AA
+            line_luminosity += line['luminosity'][ia, iZ]  # line luminosity, erg/s
+            #  continuum at line wavelength, erg/s/Hz
+            continuum_nu.append(line['continuum'][ia, iZ])
 
-        continuum_lam = convert_fnu_to_flam(np.mean(wv), np.mean(continuum_nu))  # continuum at line wavelength, erg/s/AA
-        ew = line_luminosity / continuum_lam # AA
+        continuum_lam = convert_fnu_to_flam(np.mean(wv), np.mean(
+            continuum_nu))  # continuum at line wavelength, erg/s/AA
+        ew = line_luminosity / continuum_lam  # AA
 
         return np.mean(wv), line_luminosity, ew
