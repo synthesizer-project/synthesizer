@@ -22,7 +22,7 @@ def load_CAMELS_SIMBA(_dir='.', snap='033'):
     s_oxygen = _metals[:,4]
     s_hydrogen = 1 - np.sum(_metals[:,1:], axis=1)
     metals = _metals[:,0]
-    
+
     # convert formation times to ages
     cosmo = FlatLambdaCDM(H0=h*100, Om0=Om0)
     universe_age = cosmo.age(1./ scale_factor - 1)
@@ -62,7 +62,7 @@ def load_FLARES(f, region, tag):
         # ids = hf[f'{region}/{tag}/Particle/S_ID'][:]
         # index = hf[f'{region}/{tag}/Particle/S_Index'][:]
         # hf[f'{pre}/S_Vel']
-    
+
     ages = (ages * 1e9)  # yr
     mass = mass * 1e10  # Msol
     imass = imass * 1e10  # Msol
@@ -72,9 +72,9 @@ def load_FLARES(f, region, tag):
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
-        galaxies[i].load_stars(mass[b:e], ages[b:e], metals[b:e], 
-                               s_oxygen=s_oxygen[b:e], 
-                               s_hydrogen=s_hydrogen[b:e],                 
+        galaxies[i].load_stars(mass[b:e], ages[b:e], metals[b:e],
+                               s_oxygen=s_oxygen[b:e],
+                               s_hydrogen=s_hydrogen[b:e],
                                coordinates=coods[b:e, :],
                                initial_masses=imass[b:e])
 
