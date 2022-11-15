@@ -15,6 +15,7 @@ import gzip
 import shutil
 
 from synthesizer.sed import convert_flam_to_fnu
+from synthesizer.sed import calculate_Q
 
 from pathlib import Path
 
@@ -24,7 +25,7 @@ from pathlib import Path
 # --- these could be replaced by our own mirror
 
 
-def download_data():
+def download_data(input_dir):
 
     filename = wget.download(original_data_url[imf]) # download the original data to the working directory
 
@@ -145,7 +146,7 @@ if __name__ == "__main__":
 
     for imf in imfs: #,
 
-        # download_data()
+        download_data(input_dir)
 
         for hr_morphology in ['rhb']:
 
