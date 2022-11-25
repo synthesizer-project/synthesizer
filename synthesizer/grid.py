@@ -6,6 +6,8 @@ import os
 import numpy as np
 import h5py
 import cmasher as cmr
+import matplotlib as mpl
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 
 from . import __file__ as filepath
@@ -15,7 +17,7 @@ from .sed import Sed, convert_fnu_to_flam
 
 def parse_grid_id(grid_id):
     """
-    This is used for parsing a grid ID to return the SPS model, version, and IMF 
+    This is used for parsing a grid ID to return the SPS model, version, and IMF
     """
 
     if len(grid_id.split('_')) == 2:
@@ -93,18 +95,11 @@ class SpectralGrid(Grid):
         if not grid_dir:
             grid_dir = os.path.join(os.path.dirname(filepath), 'data/grids')
 
-        print(grid_dir)
-
-        # if synthesizer_data_dir:
-        #     grid_filename = f'{synthesizer_data_dir}/grids/{grid_name}.h5'
-        # else:
-        #     grid_filename = f'{grid_name}.h5'
-        #     grid_name = grid_filename.split('/')[-1]
-
         self.grid_dir = grid_dir
         self.grid_name = grid_name
+        self.grid_filename = f'{self.grid_dir}/{self.grid_name}.h5'
 
-        with h5py.File(f'{self.grid_dir}/{self.grid_name}.h5', 'r') as hf:
+        with h5py.File(self.grid_filename, 'r') as hf:
             self.spec_names = list(hf['spectra'].keys())
             self.spec_names.remove('wavelength')
 
@@ -157,7 +152,7 @@ class SpectralGrid(Grid):
                     vmin=42.5, vmax=47.5, max_log10age=9.):
 
         left = 0.2
-        height = 0.6
+        height = 0.65
         bottom = 0.15
         width = 0.75
 
@@ -167,7 +162,7 @@ class SpectralGrid(Grid):
         fig = plt.figure(figsize=(hsize, vsize))
 
         ax = fig.add_axes((left, bottom, width, height))
-        cax = fig.add_axes([left, bottom+height, width, 0.03])
+        cax = fig.add_axes([left, bottom+height+0.01, width, 0.05])
 
         y = np.arange(len(self.metallicities))
 
@@ -185,12 +180,17 @@ class SpectralGrid(Grid):
                   self.log10ages[ia_max], y[0]-0.5, y[-1]+0.5], cmap=cmap,
                   aspect='auto', vmin=vmin, vmax=vmax)
 
+        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+        cmapper = cm.ScalarMappable(norm=norm, cmap=cmap)
+        cmapper.set_array([])
+
+        fig.colorbar(cmapper, cax=cax, orientation='horizontal')
         cax.xaxis.tick_top()
         cax.xaxis.set_label_position('top')
-        cax.set_xlabel(r'$\rm log_{10}(\dot{n}_{LyC}/s^{-1})$')
+        cax.set_xlabel(r'$\rm log_{10}(\dot{n}_{LyC}/s^{-1}\ M_{\odot}^{-1})$')
+        cax.set_yticks([])
 
         ax.set_yticks(y, self.metallicities)
-
         ax.minorticks_off()
         ax.set_xlabel(mlabel('log_{10}(age/yr)'))
         ax.set_ylabel(mlabel('Z'))
@@ -202,24 +202,30 @@ class LineGrid(Grid):
 
     """ This provides an object to hold the SPS / Cloudy grid for use by other parts of the code """
 
-    def __init__(self, grid_name, verbose=False):
+    def __init__(self, grid_name, grid_dir=None, verbose=False):
 
-        if synthesizer_data_dir:
-            grid_filename = f'{synthesizer_data_dir}/grids/{grid_name}.h5'
-        else:
-            grid_filename = f'{grid_name}.h5'
-            grid_name = grid_filename.split('/')[-1]
+        if not grid_dir:
+            grid_dir = os.path.join(os.path.dirname(filepath), 'data/grids')
 
+        self.grid_dir = grid_dir
         self.grid_name = grid_name
+        self.grid_filename = f'{self.grid_dir}/{self.grid_name}.h5'
 
-        with h5py.File(grid_filename, 'r') as hf:
-            self.lines = hf['lines']
-            self.line_list = self.lines.attrs['lines']
-            self.log10ages = hf['log10ages'][()]
-            self.ages = 10**self.log10ages
-            self.metallicities = hf['metallicities'][()]
-            self.log10metallicities = hf['log10metallicities'][()]
-            self.log10Zs = self.log10metallicities  # alias
+        # with h5py.File(self.grid_filename, 'r') as hf:  # in this context this doesn't work since the HDF5 file needs to remain open for use.
+
+        hf = h5py.File(self.grid_filename, 'r')
+
+        self.lines = hf['lines']
+        self.line_list = self.lines.attrs['lines']
+        self.log10ages = hf['log10ages'][()]
+        self.ages = 10**self.log10ages
+        self.metallicities = hf['metallicities'][()]
+        self.log10metallicities = hf['log10metallicities'][()]
+        self.log10Zs = self.log10metallicities  # alias
+
+        if 'log10Q' in hf.keys():
+            self.log10Q = hf['log10Q'][:]
+            self.log10Q[self.log10Q != self.log10Q] = -99.99
 
         self.na = len(self.ages)
         self.nZ = len(self.metallicities)
