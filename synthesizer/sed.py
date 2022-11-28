@@ -4,6 +4,7 @@ from scipy.integrate import simps
 from scipy.stats import linregress
 from scipy import integrate
 
+import unyt
 from unyt import c, h, nJy, erg, s, Hz
 
 from .igm import Inoue14
@@ -239,3 +240,20 @@ def rebin(l, f, n):  # rebin SED [currently destroys original]
     nf = np.sum(f.reshape(n_len, n), axis=1)/n
 
     return nl, nf
+
+
+def fnu_to_m(fnu):
+    """ Convert fnu to AB magnitude. If unyt quantity convert to nJy else assume it's in nJy """
+
+    if type(fnu) == unyt.array.unyt_quantity:
+        fnu_ = fnu.to('nJy').value
+    else:
+        fnu_ = fnu
+
+    return -2.5*np.log10(fnu_/1E9) + 8.9  # -- assumes flux in nJy
+
+
+def m_to_fnu(m):
+    """ Convert AB magnitude to fnu """
+
+    return 1E9 * 10**(-0.4*(m - 8.9)) * nJy  # -- flux returned nJy
