@@ -9,5 +9,4 @@ pyparsing==3.0.9
 PyYAML==6.0
 scipy==1.9.3
 sympy==1.11.1
-synthesizer==0.1.0
 unyt==2.9.2
