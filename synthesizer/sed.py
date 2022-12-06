@@ -5,7 +5,7 @@ from scipy.stats import linregress
 from scipy import integrate
 
 import unyt
-from unyt import c, h, nJy, erg, s, Hz
+from unyt import c, h, nJy, erg, s, Hz, pc, W
 
 from .igm import Inoue14
 
@@ -257,3 +257,24 @@ def m_to_fnu(m):
     """ Convert AB magnitude to fnu """
 
     return 1E9 * 10**(-0.4*(m - 8.9)) * nJy  # -- flux returned nJy
+
+
+class constants:
+    tenpc = 10*pc  # ten parsecs
+    # the surface area (in cm) at 10 pc. I HATE the magnitude system
+    geo = 4*np.pi*(tenpc.to('cm').value)**2
+
+
+def M_to_Lnu(M):
+    """ Convert absolute magnitude (M) to L_nu """
+    return 10**(-0.4*(M+48.6)) * constants.geo * erg/s/Hz
+
+
+def Lnu_to_M(Lnu_):
+    """ Convert L_nu to absolute magnitude (M). If no unit provided assumes erg/s/Hz. """
+    if type(Lnu_) == unyt.array.unyt_quantity:
+        Lnu = Lnu_.to('erg/s/Hz').value
+    else:
+        Lnu = Lnu_
+
+    return -2.5*np.log10(Lnu/constants.geo)-48.6
