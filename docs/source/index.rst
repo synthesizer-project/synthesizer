@@ -15,6 +15,8 @@ A flexible code for creating (and fitting) synthetic spectra.
    installation
    grid_generation
    filters
+   abundances
+   igm
    generating_spectra
 
 
