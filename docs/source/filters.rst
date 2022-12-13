@@ -1,5 +1,5 @@
 Filters
-#######
+*******
 
 Synthesizer allows us to define filters quite flexibly.
 The `filters.py` example in the `examples` directory demonstrates this.
