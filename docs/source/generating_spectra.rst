@@ -25,6 +25,8 @@ The script ``camels.py`` contains an example of loading this data and generating
 First we load some modules::
     
     import numpy as np
+    import matplotlib.pyplot as plt
+
     from synthesizer import grid
     from synthesizer.load_data import load_CAMELS_SIMBA
 

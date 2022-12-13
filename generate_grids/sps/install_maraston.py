@@ -7,6 +7,7 @@ import os
 import sys
 import re
 import wget
+import argparse
 from utils import write_data_h5py, write_attribute
 import tarfile
 import glob
@@ -14,12 +15,9 @@ import gzip
 import shutil
 
 from synthesizer.sed import convert_flam_to_fnu
+from synthesizer.sed import calculate_Q
 
 from pathlib import Path
-
-
-
-
 
 
 
@@ -27,7 +25,7 @@ from pathlib import Path
 # --- these could be replaced by our own mirror
 
 
-def download_data():
+def download_data(input_dir):
 
     filename = wget.download(original_data_url[imf]) # download the original data to the working directory
 
@@ -129,7 +127,11 @@ def make_grid():
 # Lets include a way to call this script not via an entry point
 if __name__ == "__main__":
 
-    synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA') # this is the place to store the data
+    parser = argparse.ArgumentParser(description='Install the Maraston05 grid to the specified directory.')
+    parser.add_argument("-dir", "--directory", type=str, required=True)
+    args = parser.parse_args()
+
+    synthesizer_data_dir = args.directory
 
     model_name = 'maraston'
 
@@ -144,7 +146,7 @@ if __name__ == "__main__":
 
     for imf in imfs: #,
 
-        # download_data()
+        download_data(input_dir)
 
         for hr_morphology in ['rhb']:
 

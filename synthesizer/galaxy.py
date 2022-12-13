@@ -22,7 +22,7 @@ class Galaxy:
         lum (array) spectrum for each particle, (N_part, wl)
         """
         lum = np.zeros((len(self.stars.initial_masses),
-                        grid.spectra.shape[-1]))
+                        grid.spectra['stellar'].shape[-1]))
 
         for i, (mass, age, metal) in enumerate(zip(
                 self.stars.initial_masses,
@@ -30,7 +30,7 @@ class Galaxy:
                 self.stars.log10metallicities)):
 
             weights_temp = self._calculate_weights(grid, metal, age, mass)
-            lum[i] = np.sum(grid.spectra * weights_temp[:, :, None],
+            lum[i] = np.sum(grid.spectra['stellar'] * weights_temp[:, :, None],
                             axis=(0, 1))
 
         return lum
@@ -138,7 +138,7 @@ class Galaxy:
             in_arr = in_arr[None, :]  # update dimensions if scalar
 
         if young_stars:  # filter grid object
-            return calculate_weights(grid.ages[grid.ages <= grid.max_age],
-                                     grid.metallicities, in_arr)
+            return calculate_weights(grid.log10ages[grid.ages <= grid.max_age],
+                                     grid.log10metallicities, in_arr)
         else:
-            return calculate_weights(grid.ages, grid.metallicities, in_arr)
+            return calculate_weights(grid.log10ages, grid.log10metallicities, in_arr)

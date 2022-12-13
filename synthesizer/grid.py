@@ -147,7 +147,8 @@ class SpectralGrid(Grid):
     def get_sed(self, ia, iZ, spec_name='stellar'):
 
         return Sed(self.lam, lnu=self.spectra[spec_name][ia, iZ])
-
+    
+    # TODO: move to plotting script to remove cmasher dependency
     def plot_log10Q(self, hsize=3.5, vsize=2.5, cmap=cmr.sapphire,
                     vmin=42.5, vmax=47.5, max_log10age=9.):
 
