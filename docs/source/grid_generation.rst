@@ -1,6 +1,8 @@
 Grid Generation
 ***************
 
+*Warning:* for advanced users only. You can download pre-made grids from dropbox `here <https://www.dropbox.com/sh/ipo6pox1sigjnqt/AADXfPvu7NbiWYiSGiooC_L0a?dl=0>`_.
+
 Any SPS model can be used to generate an age-metallicity grid. We provide scripts for generating grids for the following:
 
 * FSPS 
