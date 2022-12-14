@@ -10,7 +10,7 @@ Example 1: galaxies in a cosmological simulation
 Download data
 -------------
 
-First we need some example simulation data. The ``download_camels.sh`` script will download data from the `CAMELS simulations https://www.camel-simulations.org/`_, a series of small volume simulations using the Simba and Illustris simulation codes.
+First we need some example simulation data. The ``download_camels.sh`` script will download data from the `CAMELS simulations <https://www.camel-simulations.org/>`_, a series of small volume simulations using the Simba and Illustris simulation codes.
 
 ``./download_camels.sh data/ 033``
 

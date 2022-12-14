@@ -13,11 +13,13 @@ A flexible code for creating (and fitting) synthetic spectra.
    :caption: Contents:
 
    installation
-   grid_generation
+   grids
    filters
    abundances
    igm
-   generating_spectra
+   parametric
+   cosmo
+   grid_generation
 
 
 Contributors
