@@ -349,28 +349,6 @@ def measure_Q(lam, L_AA, limit=100):
 #     return Q / (4 * np.pi * R_inner**2 * n_h * 2.99e10)
 
 
-def write_submission_script_cosma(N, input_prefix, params, output_dir):
-    #cosma_project, cosma_account, input_file_dir='grids/cloudy_output/'):
-
-    output = []
-    output.append(f'#!/bin/bash -l\n')
-    output.append(f'#SBATCH --ntasks 1\n')
-    output.append(f'#SBATCH -J job_name\n')
-    output.append(f'#SBATCH --array=0-{N}\n')
-    # output.append(f'#SBATCH -o standard_output_file.%A.%a.out
-    # output.append(f'#SBATCH -e standard_error_file.%A.%a.err
-    output.append(f'#SBATCH -p {params.cosma_project}\n')
-    output.append(f'#SBATCH -A {params.cosma_account}\n')
-    output.append(f'#SBATCH --exclusive\n')
-    output.append(f'#SBATCH -t 00:15:00\n\n')
-    # output.append(f'#SBATCH --mail-type=END # notifications for job done &
-    # output.append(f'#SBATCH --mail-user=<email address>
-    output.append(f'{params.cloudy_dir}/source/cloudy.exe -r {input_prefix}_$SLURM_ARRAY_TASK_ID\n')
-
-    open(f'{output_dir}/{input_prefix}_run.job','w').writelines(output)
-
-    return
-
 
 def determine_log10Q(log10U_S, log10n_H):
 

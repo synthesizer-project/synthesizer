@@ -14,12 +14,13 @@ from synthesizer.cloudy import (create_cloudy_binary, write_cloudy_input,
 from synthesizer.utils import read_params
 
 parser = argparse.ArgumentParser()
+arser.add_argument("-dir", "--directory", type=str, required=True)
 parser.add_argument("param_file", help="parameter file", type=str)
 args = parser.parse_args()
 
 params = read_params(args.param_file)
 
-synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
+# synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
 output_dir = f'{synthesizer_data_dir}/cloudy_output/'
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
