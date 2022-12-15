@@ -101,7 +101,7 @@ class Sed:
             int_num = integrate.trapezoid(self.lnu * fc.filter[f].t/self.nu, self.nu)  # numerator
             int_den = integrate.trapezoid(fc.filter[f].t/self.nu, self.nu)  # denominator
 
-            self.get_broadband_luminosities[f] = (int_num / int_den) * erg/s/Hz
+            self.broadband_luminosities[f] = (int_num / int_den) * erg/s/Hz
 
         return self.broadband_luminosities
 
