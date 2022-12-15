@@ -6,6 +6,8 @@ There are 3 versions implemented:
     3. Pop III, Kroupa IMF - A zero-metallicity population with a normal IMF (universal Kroupa 2001 IMF in the intervval 0.1-100 Msolar), based on a rescaled SSP from Schaerer et al. (2002, A&A, 382, 28)
 
 We also just pick the instantaneous burst model with the 3 different gas covering factor of 0 (no nebular contribution), 0.5, 1 (maximal nebular contribution)
+
+Thus this differs from rest of the implementation. Not sure if the pure stellar spectrum then can be rerun through cloudy
 """
 
 import numpy as np
@@ -55,7 +57,7 @@ def convertPOPIII(synthesizer_data_dir, ver, fcov):
 
     #Get age values
     ages    = re.findall(r'Age\s(.*?)\n', text)
-    ageBins = np.array([float(re.findall('-?\ *[0-9]+\.?[0-9]*(?:[Ee]\ *-?\ *[0-9]+)?', ages[ii])[0]) for ii in range(len(ages))])
+    ageBins = np.array([float(re.findall(' [+\-]?[^\w]?(?:0|[1-9]\d*)(?:\.\d*)?(?:[eE][+\-]?\d+)', ages[ii])[0]) for ii in range(len(ages))])
 
     #Get the number of wavelength points: lam_num
     lam_num = np.array(re.findall(r'points:(.*?)\n', text), dtype=int)
@@ -103,7 +105,7 @@ def make_grid(synthesizer_data_dir, ver, fcov):
     if not os.path.exists(f'{synthesizer_data_dir}/grids/'):
         os.makedirs(f'{synthesizer_data_dir}/grids/')
 
-    model_name = F'popIII{ver}'
+    model_name = F'popIII{ver}_fcov_{fcov}'
     fname = f'{synthesizer_data_dir}/grids/{model_name}.h5'
 
     # Get spectra and attributes
@@ -164,12 +166,18 @@ def make_grid(synthesizer_data_dir, ver, fcov):
                     'Wavelength of the spectra grid')
     write_attribute(fname, 'spectra/wavelength', 'Units', 'AA')
 
-    write_data_h5py(fname, 'spectra/stellar', data=spec, overwrite=True)
-    write_attribute(fname, 'spectra/stellar', 'Description',
-                    """Three-dimensional spectra grid, [age, metallicity
-                    , wavelength]""")
-    write_attribute(fname, 'spectra/stellar', 'Units', 'erg s^-1 Hz^-1')
-
+    if fcov=='0':
+        write_data_h5py(fname, 'spectra/stellar', data=spec, overwrite=True)
+        write_attribute(fname, 'spectra/stellar', 'Description',
+                        """Three-dimensional spectra grid, [age, metallicity
+                        , wavelength]""")
+        write_attribute(fname, 'spectra/stellar', 'Units', 'erg s^-1 Hz^-1')
+    else:
+        write_data_h5py(fname, 'spectra/nebular', data=spec, overwrite=True)
+        write_attribute(fname, 'spectra/nebular', 'Description',
+                        """Three-dimensional spectra grid, [age, metallicity
+                        , wavelength]""")
+        write_attribute(fname, 'spectra/nebular', 'Units', 'erg s^-1 Hz^-1')
 
 if __name__ == "__main__":
 
@@ -184,5 +192,6 @@ if __name__ == "__main__":
     # different gas covering fractions for nebular emission model
     fcovs = np.array(['0', '0.5', '1'])
 
-    for ver, fcov in zip(vers, fcovs):
-        make_grid(synthesizer_data_dir, ver, fcov)
+    for ver in vers:
+        for fcov in fcovs:
+            make_grid(synthesizer_data_dir, ver, fcov)
