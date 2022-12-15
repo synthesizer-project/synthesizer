@@ -6,17 +6,20 @@
 Welcome to synthesizer's documentation!
 =======================================
 
-
-:Version: 0.1
-
-A flexible code for creating synthetic spectra.
+A flexible code for creating (and fitting) synthetic spectra.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
+   installation
+   grids
+   filters
+   abundances
+   igm
+   parametric
+   cosmo
    grid_generation
-   generating_spectra
 
 
 Contributors
