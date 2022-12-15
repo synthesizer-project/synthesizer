@@ -1,10 +1,6 @@
 import numpy as np
 from numpy import genfromtxt
-import os
-this_dir, this_filename = os.path.split(__file__)
-
 import matplotlib.pyplot as plt
-import cmasher as cmr
 
 class FilterCollection:
 
@@ -206,56 +202,6 @@ class FilterFromSVO(Filter):
         else:
             self.lam = self.original_lam
             self.t = self.original_t
-
-
-# class FilterFromFile(Filter):
-#
-#     """
-#     A class representing a filter.
-#
-#     Attributes
-#     ----------
-#     filter_code : str
-#         filter code of the filter {observatory}/{instrument}.{filter}
-#     f : str
-#         filter code tuple (observatory, instrument, filter)
-#
-#
-#     Methods
-#     -------
-#     pivwv:
-#         Calculate pivot wavelength
-#     """
-#
-#
-#     def __init__(self, f, new_lam = False, read_from_SVO = True, local_filter_path = f'{this_dir}/data/filters'):
-#
-#
-#         if type(f) == tuple:
-#             self.f = f
-#             self.observatory, self.instrument, self.filter = f
-#             self.filter_code = f'{self.observatory}/{self.instrument}.{self.filter}'
-#         else:
-#             self.filter_code = f
-#             self.observatory = f.split('/')[0]
-#             self.instrument = f.split('/')[1].split('.')[0]
-#             self.filter = f.split('.')[-1]
-#             self.f = (self.observatory, self.instrument, self.filter)
-#
-#         """ read from local files instead """
-#         # l, t are the original wavelength and transmission grid
-#         self.original_lam, self.original_t = np.loadtxt(f'{local_filter_path}/{self.filter_code}.dat').T
-#
-#         # self.original_t[self.original_t<0.05] = 0
-#
-#         # --- if a new wavelength grid is provided interpolate the transmission curve on to that grid
-#         if isinstance(new_lam, np.ndarray):
-#             self.lam = new_lam
-#             self.t = np.interp(self.lam, self.original_lam, self.original_t, left = 0.0, right = 0.0) # setting left and right is necessary for when the filter transmission function is mapped to a new wavelength grid
-#         else:
-#             self.lam = self.original_lam
-#             self.t = self.original_t
-
 
 
 class TopHatFilter(Filter):
