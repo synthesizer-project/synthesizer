@@ -2,7 +2,7 @@ import numpy as np
 
 from weights import calculate_weights
 from .stars import Stars
-
+from .sed import Sed
 
 class Galaxy:
     def __init__(self):
@@ -51,6 +51,9 @@ class Galaxy:
 
         _spec = np.sum(grid.spectra['stellar'] * weights_temp[:, :, None],
                        axis=(0, 1))
+
+        # assign to sed object
+        _spec = Sed(grid.lam, _spec)
 
         # lum = self.stellar_particle_spectra(grid)
         # _spec = np.sum(lum, axis=0)
