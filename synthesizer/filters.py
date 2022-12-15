@@ -1,18 +1,10 @@
-
-
-
 import numpy as np
-
+from numpy import genfromtxt
 import os
 this_dir, this_filename = os.path.split(__file__)
 
-import pandas as pd
-
 import matplotlib.pyplot as plt
 import cmasher as cmr
-
-
-
 
 class FilterCollection:
 
@@ -198,10 +190,12 @@ class FilterFromSVO(Filter):
 
 
         """ read directly from the SVO archive """
-        svo_url = f'http://svo2.cab.inta-csic.es/theory/fps/getdata.php?format=ascii&id={self.observatory}/{self.instrument}.{self.filter}'
-        df = pd.read_csv(svo_url, sep = ' ')
-        self.original_lam = df.values[:,0] # original wavelength
-        self.original_t = df.values[:,1] # original transmission
+        svo_url = (f'http://svo2.cab.inta-csic.es/theory/'
+                   f'fps/getdata.php?format=ascii&id={self.observatory}'
+                   f'/{self.instrument}.{self.filter}')
+        df = genfromtxt(svo_url, delimiter=' ')
+        self.original_lam = df[:,0]  # original wavelength
+        self.original_t = df[:,1]  # original transmission
 
         # self.original_t[self.original_t<0.05] = 0
 
