@@ -92,7 +92,7 @@ class Sed:
         fc: a FilterCollection object
         """
 
-        self.get_broadband_luminosities = {}
+        self.broadband_luminosities = {}
 
         for f in fc.filters:
 
@@ -103,7 +103,7 @@ class Sed:
 
             self.get_broadband_luminosities[f] = (int_num / int_den) * erg/s/Hz
 
-        return self.get_broadband_luminosities
+        return self.broadband_luminosities
 
     def get_fnu0(self):
         """
