@@ -108,13 +108,22 @@ class SpectralGrid(Grid):
 
             self.log10ages = hf['log10ages'][:]
             self.ages = 10**self.log10ages
-            self.metallicities = hf['metallicities'][:]
             self.log10metallicities = hf['log10metallicities'][:]
+            self.metallicities = 10**self.log10metallicities
+
+            # TODO: why do we need this?
             self.log10Zs = self.log10metallicities  # alias
 
             if 'log10Q' in hf.keys():
                 self.log10Q = hf['log10Q'][:]
                 self.log10Q[self.log10Q != self.log10Q] = -99.99
+            
+            if 'lines' in hf.keys():
+                self.line_list = hf['lines'].attrs['lines']
+                self.lines = {}
+                self.lines['luminosity'] = {line: None for line in self.line_list}
+                self.lines['continuum'] = {line: None for line in self.line_list}
+                self.lines['wavelength'] = {line: None for line in self.line_list}
 
         if verbose:
             print(f'metallicities: {self.metallicities}')
@@ -198,47 +207,51 @@ class SpectralGrid(Grid):
 
         return fig, ax
 
+    def fetch_line(self, line_id, save=True):
+        """
+        Fetch line information from the grid HDF5 file
 
-class LineGrid(Grid):
+        Parameters:
+        line_id (str): unique line identifier
 
-    """ This provides an object to hold the SPS / Cloudy grid for use by other parts of the code """
+        Returns:
+        luminosity (ndarray)
+        continuum (ndarray)
+        wavelength (float)
+        """
+        
+        with h5py.File(self.grid_filename, 'r') as hf:
+            luminosity = hf[f'lines/{line_id}/luminosity'][:]
+            continuum = hf[f'lines/{line_id}/continuum'][:]
+            wavelength = hf[f'lines/{line_id}'].attrs['wavelength']
+           
+        if save:
+            self.lines['luminosity'][line_id] = luminosity
+            self.lines['continuum'][line_id] = continuum
+            self.lines['wavelength'][line_id] = wavelength
+        
+        return {'luminosity': luminosity, 
+                'continuum': continuum, 
+                'wavelength': wavelength}
 
-    def __init__(self, grid_name, grid_dir=None, verbose=False):
+    def get_line_info(self, line_id, ia, iZ, save_line_info=True):
+        """ 
+        return the equivalent width of a line for a given age and metalliciy
 
-        if not grid_dir:
-            grid_dir = os.path.join(os.path.dirname(filepath), 'data/grids')
+        Parameters:
 
-        self.grid_dir = grid_dir
-        self.grid_name = grid_name
-        self.grid_filename = f'{self.grid_dir}/{self.grid_name}.h5'
+        line_id (str): unique line identification string
+        ia (int): age index
+        iZ (int): metallicity index
+        save_line_info (bool): if fetch_line required, determines whether we save 
+                               the line properties to the grid object (True), or 
+                               load them on the fly (False)
 
-        # with h5py.File(self.grid_filename, 'r') as hf:  # in this context this doesn't work since the HDF5 file needs to remain open for use.
-
-        hf = h5py.File(self.grid_filename, 'r')
-
-        self.lines = hf['lines']
-        self.line_list = self.lines.attrs['lines']
-        self.log10ages = hf['log10ages'][()]
-        self.ages = 10**self.log10ages
-        self.metallicities = hf['metallicities'][()]
-        self.log10metallicities = hf['log10metallicities'][()]
-        self.log10Zs = self.log10metallicities  # alias
-
-        if 'log10Q' in hf.keys():
-            self.log10Q = hf['log10Q'][:]
-            self.log10Q[self.log10Q != self.log10Q] = -99.99
-
-        self.na = len(self.ages)
-        self.nZ = len(self.metallicities)
-
-        if verbose:
-            print(f'metallicities: {self.metallicities}')
-            print(f'ages: {self.ages}')
-            print(f'ages: {self.log10ages}')
-            print(f'available lines: {self.line_list}')
-
-    def get_line_info(self, line_id, ia, iZ):
-        """ return the equivalent width of a given line and age, metalliciy """
+        Returns:
+        wavelength (float)
+        line_luminosity (float)
+        ew (float): line equivalent width
+        """
 
         if type(line_id) is str:
             line_id = [line_id]
@@ -247,15 +260,27 @@ class LineGrid(Grid):
         continuum_nu = []
         wv = []
 
-        for line_id_ in line_id:
-            line = self.lines[line_id_]
-            wv.append(line.attrs['wavelength'])  # \AA
-            line_luminosity += line['luminosity'][ia, iZ]  # line luminosity, erg/s
+        for _lid in line_id:
+            
+            # check if we're loading on the fly
+            if (self.lines['luminosity'][_lid] is None):
+                _line = self.fetch_line(_lid, save=save_line_info)
+                luminosity, continuum, wavelength = [_line[key] for key in _line.keys()]
+            else:
+                wavelength = self.lines['wavelength'][_lid]
+                luminosity = self.lines['luminosity'][_lid]
+                continuum = self.lines['continuum'][_lid]
+
+            wv.append(wavelength)  # \AA
+            line_luminosity += luminosity[ia, iZ]  # line luminosity, erg/s
+            
             #  continuum at line wavelength, erg/s/Hz
-            continuum_nu.append(line['continuum'][ia, iZ])
+            continuum_nu.append(continuum[ia, iZ])
 
         continuum_lam = convert_fnu_to_flam(np.mean(wv), np.mean(
             continuum_nu))  # continuum at line wavelength, erg/s/AA
         ew = line_luminosity / continuum_lam  # AA
 
-        return np.mean(wv), line_luminosity, ew
+        return {'wavelength': np.mean(wv), 
+                'luminosity': line_luminosity, 
+                'equivalent_width': ew}
