@@ -116,6 +116,11 @@ class SpectralGrid(Grid):
                 self.log10Q = hf['log10Q'][:]
                 self.log10Q[self.log10Q != self.log10Q] = -99.99
 
+            self.units = {}
+            self.units['log10ages'] = hf['log10ages'].attrs['Units'] 
+            self.units['log10metallicities'] = hf['log10ages'].attrs['Units'] 
+            self.units['lam'] = hf['spectra/wavelength'].attrs['Units']
+
         if verbose:
             print(f'metallicities: {self.metallicities}')
             print(f'ages: {self.ages}')
@@ -127,9 +132,11 @@ class SpectralGrid(Grid):
 
             with h5py.File(f'{self.grid_dir}/{self.grid_name}.h5', 'r') as hf:
                 self.spectra[spec_name] = hf['spectra'][spec_name][:]
+                self.units[f'spectra/{spec_name}'] = hf['spectra'][spec_name].attrs['Units']
 
             if spec_name == 'incident':
                 self.spectra['stellar'] = self.spectra[spec_name]
+                self.units[f'spectra/stellar'] = hf['spectra'][spec_name].attrs['Units']
 
         """ if full cloudy grid available calculate
         some other spectra for convenience """
