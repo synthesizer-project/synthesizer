@@ -126,7 +126,7 @@ def make_grid(synthesizer_data_dir, ver, fcov):
     if not os.path.exists(f'{synthesizer_data_dir}/grids/'):
         os.makedirs(f'{synthesizer_data_dir}/grids/')
 
-    model_name = F'popIII{ver}_fcov_{fcov}'
+    model_name = F'yggdrasil{ver}_fcov_{fcov}'
     fname = f'{synthesizer_data_dir}/grids/{model_name}.h5'
 
     # Get spectra and attributes
