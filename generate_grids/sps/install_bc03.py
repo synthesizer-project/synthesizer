@@ -229,20 +229,20 @@ def make_grid(synthesizer_data_dir):
             # --- calcualte ionising photon luminosity
             log10Q[ia, iZ] = np.log10(calculate_Q(lam, spec[ia, iZ, :]))
 
-    write_data_h5py(fname, 'ages', data=ages, overwrite=True)
-    write_attribute(fname, 'ages', 'Description',
-                    'Stellar population ages years')
-    write_attribute(fname, 'ages', 'Units', 'yr')
+    # write_data_h5py(fname, 'ages', data=ages, overwrite=True)
+    # write_attribute(fname, 'ages', 'Description',
+    #                 'Stellar population ages years')
+    # write_attribute(fname, 'ages', 'Units', 'yr')
 
     write_data_h5py(fname, 'log10ages', data=log10ages, overwrite=True)
     write_attribute(fname, 'log10ages', 'Description',
                     'Stellar population ages in log10 years')
     write_attribute(fname, 'log10ages', 'Units', 'log10(yr)')
 
-    write_data_h5py(fname, 'metallicities', data=metallicities, overwrite=True)
-    write_attribute(fname, 'metallicities', 'Description',
-                    'raw abundances')
-    write_attribute(fname, 'metallicities', 'Units', 'dimensionless [Z]')
+    # write_data_h5py(fname, 'metallicities', data=metallicities, overwrite=True)
+    # write_attribute(fname, 'metallicities', 'Description',
+    #                 'raw abundances')
+    # write_attribute(fname, 'metallicities', 'Units', 'dimensionless [Z]')
 
     write_data_h5py(fname, 'log10metallicities', data=log10metallicities,
                     overwrite=True)

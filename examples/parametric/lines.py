@@ -1,17 +1,3 @@
-
-
-# Create a model SED
-
-
-import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import cmasher as cmr
-
-import sys
-import os
-
 from synthesizer.grid import LineGrid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.parametric.galaxy import LineGenerator
@@ -23,15 +9,17 @@ if __name__ == '__main__':
     # -------------------------------------------------
     # --- calcualte the EW for a given line as a function of age
 
+    grid_dir = '/example/grid_directory/synthesizer_data/grids/'
     model = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
-    model = 'bpass-v2.2.1-bin_chab-300_cloudy-v17.03_log10Uref-2'
+    # model = 'bpass-v2.2.1-bin_chab-300_cloudy-v17.03_log10Uref-2'
+    
+    grid = LineGrid(model, grid_dir=grid_dir)
+
     target_Z = 0.01  # target metallicity
 
     line_id = 'HI6563'
     line_id = ('HI6563')
     line_id = ('HI4861', 'OIII4959', 'OIII5007')
-
-    grid = LineGrid(model)
 
     # --- define the parameters of the star formation and metal enrichment histories
     sfh_p = {'duration': 100 * Myr}

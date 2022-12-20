@@ -90,7 +90,7 @@ class kernel():
 
 def uniform(r):
     if r < 1.:
-        self.f = 1./((4./3.)*np.pi)
+        return 1./((4./3.)*np.pi)
     else:
         return 0.
 
