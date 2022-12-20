@@ -51,13 +51,13 @@ def main(outfile='output/fsps.h5'):
                     'Three-dimensional spectra grid, [Z,Age,wavelength]')
     write_attribute(outfile, 'spectra', 'Units', 'erg s^-1 cm^2 AA^-1')
 
-    write_data_h5py(outfile, 'ages', data=age, overwrite=True)
-    write_attribute(outfile, 'ages', 'Description',
+    write_data_h5py(outfile, 'log10ages', data=age, overwrite=True)
+    write_attribute(outfile, 'log10ages', 'Description',
                     'Stellar population ages in log10 years')
     write_attribute(outfile, 'ages', 'Units', 'log10(yr)')
 
-    write_data_h5py(outfile, 'metallicities', data=Z, overwrite=True)
-    write_attribute(outfile, 'metallicities', 'Description',
+    write_data_h5py(outfile, 'log10metallicities', data=Z, overwrite=True)
+    write_attribute(outfile, 'log10metallicities', 'Description',
                     'raw abundances in log10')
     write_attribute(outfile, 'metallicities', 'Units',
                     'dimensionless [log10(Z)]')

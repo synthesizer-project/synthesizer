@@ -37,9 +37,9 @@ We first import the SpectralGrid class::
 
 This takes a grid name, and optionally a grid directory::
 
-   grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
+   grid_name = 'bc03_chabrier03_cloudy-v17.03_log10Uref-2.h5'
    grid_dir = '/our/synthesizer/data_directory/synthesizer_data/'
-   grid = SpectralGrid(grid_name, grid_directory=grid_dir)
+   grid = SpectralGrid(grid_name, grid_dir=grid_dir)
 
 The `grid` object contains a lot of functionality for manipulating and using grids.
 
