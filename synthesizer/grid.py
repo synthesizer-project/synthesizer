@@ -17,7 +17,8 @@ from .sed import Sed, convert_fnu_to_flam
 
 def parse_grid_id(grid_id):
     """
-    This is used for parsing a grid ID to return the SPS model, version, and IMF
+    This is used for parsing a grid ID to return the SPS model,
+    version, and IMF
     """
 
     if len(grid_id.split('_')) == 2:
@@ -60,31 +61,7 @@ def parse_grid_id(grid_id):
             'imf': imf, 'imf_hmc': imf_hmc}
 
 
-class Grid:
-    """
-    Base class containing useful functions for operating on grids
-    """
-
-    def get_nearest_index(self, value, array):
-
-        return (np.abs(array - value)).argmin()
-
-    def get_nearest(self, value, array):
-
-        idx = self.get_nearest_index(value, array)
-
-        return idx, array[idx]
-
-    def get_nearest_log10Z(self, log10metallicity):
-
-        return self.get_nearest(log10metallicity, self.log10metallicities)
-
-    def get_nearest_log10age(self, log10age):
-
-        return self.get_nearest(log10age, self.log10ages)
-
-
-class SpectralGrid(Grid):
+class SpectralGrid():
     """
     This provides an object to hold the SPS / Cloudy grid
     for use by other parts of the code
@@ -117,13 +94,16 @@ class SpectralGrid(Grid):
             if 'log10Q' in hf.keys():
                 self.log10Q = hf['log10Q'][:]
                 self.log10Q[self.log10Q != self.log10Q] = -99.99
-            
+
             if 'lines' in hf.keys():
                 self.line_list = hf['lines'].attrs['lines']
                 self.lines = {}
-                self.lines['luminosity'] = {line: None for line in self.line_list}
-                self.lines['continuum'] = {line: None for line in self.line_list}
-                self.lines['wavelength'] = {line: None for line in self.line_list}
+                self.lines['luminosity'] = {line: None for line
+                                            in self.line_list}
+                self.lines['continuum'] = {line: None for line
+                                           in self.line_list}
+                self.lines['wavelength'] = {line: None for line
+                                            in self.line_list}
 
         if verbose:
             print(f'metallicities: {self.metallicities}')
@@ -153,10 +133,28 @@ class SpectralGrid(Grid):
         if verbose:
             print('available spectra:', list(self.spectra.keys()))
 
+    def get_nearest_index(self, value, array):
+
+        return (np.abs(array - value)).argmin()
+
+    def get_nearest(self, value, array):
+
+        idx = self.get_nearest_index(value, array)
+
+        return idx, array[idx]
+
+    def get_nearest_log10Z(self, log10metallicity):
+
+        return self.get_nearest(log10metallicity, self.log10metallicities)
+
+    def get_nearest_log10age(self, log10age):
+
+        return self.get_nearest(log10age, self.log10ages)
+
     def get_sed(self, ia, iZ, spec_name='stellar'):
 
         return Sed(self.lam, lnu=self.spectra[spec_name][ia, iZ])
-    
+
     # TODO: move to plotting script to remove cmasher dependency
     def plot_log10Q(self, hsize=3.5, vsize=2.5, cmap=cmr.sapphire,
                     vmin=42.5, vmax=47.5, max_log10age=9.):
@@ -219,23 +217,23 @@ class SpectralGrid(Grid):
         continuum (ndarray)
         wavelength (float)
         """
-        
+
         with h5py.File(self.grid_filename, 'r') as hf:
             luminosity = hf[f'lines/{line_id}/luminosity'][:]
             continuum = hf[f'lines/{line_id}/continuum'][:]
             wavelength = hf[f'lines/{line_id}'].attrs['wavelength']
-           
+
         if save:
             self.lines['luminosity'][line_id] = luminosity
             self.lines['continuum'][line_id] = continuum
             self.lines['wavelength'][line_id] = wavelength
-        
-        return {'luminosity': luminosity, 
-                'continuum': continuum, 
+
+        return {'luminosity': luminosity,
+                'continuum': continuum,
                 'wavelength': wavelength}
 
     def get_line_info(self, line_id, ia, iZ, save_line_info=True):
-        """ 
+        """
         return the equivalent width of a line for a given age and metalliciy
 
         Parameters:
@@ -243,9 +241,9 @@ class SpectralGrid(Grid):
         line_id (str): unique line identification string
         ia (int): age index
         iZ (int): metallicity index
-        save_line_info (bool): if fetch_line required, determines whether we save 
-                               the line properties to the grid object (True), or 
-                               load them on the fly (False)
+        save_line_info (bool): if fetch_line required, determines whether
+                               we save the line properties to the grid
+                               object (True), or load them on the fly (False)
 
         Returns:
         wavelength (float)
@@ -261,11 +259,11 @@ class SpectralGrid(Grid):
         wv = []
 
         for _lid in line_id:
-            
             # check if we're loading on the fly
             if (self.lines['luminosity'][_lid] is None):
                 _line = self.fetch_line(_lid, save=save_line_info)
-                luminosity, continuum, wavelength = [_line[key] for key in _line.keys()]
+                luminosity, continuum, wavelength = [_line[key] for key
+                                                     in _line.keys()]
             else:
                 wavelength = self.lines['wavelength'][_lid]
                 luminosity = self.lines['luminosity'][_lid]
@@ -273,7 +271,7 @@ class SpectralGrid(Grid):
 
             wv.append(wavelength)  # \AA
             line_luminosity += luminosity[ia, iZ]  # line luminosity, erg/s
-            
+
             #  continuum at line wavelength, erg/s/Hz
             continuum_nu.append(continuum[ia, iZ])
 
@@ -281,6 +279,6 @@ class SpectralGrid(Grid):
             continuum_nu))  # continuum at line wavelength, erg/s/AA
         ew = line_luminosity / continuum_lam  # AA
 
-        return {'wavelength': np.mean(wv), 
-                'luminosity': line_luminosity, 
+        return {'wavelength': np.mean(wv),
+                'luminosity': line_luminosity,
                 'equivalent_width': ew}
