@@ -6,9 +6,10 @@
 Synthesizer is a python package for generating synthetic astrophysical spectra. It is intended to be modular, flexible and fast.
 
 Here are just some examples of what synthesizer can do:
-- generate spcetra for parametric star and metal enrichment histories
-- generate spectra for galaxies from hydrodynamic cosmological simulations
-- measure spectral diagnostics for a given spectra
+- generate spectra for parametric star formation and metal enrichment histories
+- generate spectra for galaxies from particle-based cosmological hydrodynamic simulations
+- measure spectral diagnostics for given spectra
+- easily compare stellar population synthesis models
 - apply screen dust models to intrinsic spectra
 
 Read the documentation [here](https://synthesizer-docs.readthedocs.io/en/latest/).
