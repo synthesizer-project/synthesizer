@@ -1,30 +1,42 @@
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
 from synthesizer import grid
+from synthesizer.sed import Sed
 from synthesizer.load_data import load_CAMELS_SIMBA
+from synthesizer.filters import UVJ
 
-## first load a spectral grid
-_grid = grid.SpectralGrid('bc03_chabrier03', grid_dir=f'/an/example/grid/synthesizer_data/grids/')
+
+grid_dir = str(sys.argv[1])
+
+# first load a spectral grid
+_grid = grid.SpectralGrid('bc03_chabrier03', grid_dir=grid_dir)
 
 # now load some example CAMELS data using the dedicated data loader
 gals = load_CAMELS_SIMBA('data/', snap='033')
 
-# calculate the spectra for a single galaxy
+""" calculate the spectra for a single galaxy
+    here we set the `sed_object` flag to automatically assign
+    to an sed object """
 _g = gals[0]
-_spec = _g.integrated_stellar_spectrum(_grid)
+_spec = _g.integrated_stellar_spectrum(_grid, sed_object=True)
 
 plt.loglog(_grid.lam, _spec.lnu)
 plt.show()
 
-# multiple galaxies
-_specs = np.vstack([_g.integrated_stellar_spectrum(_grid).lnu for _g in gals[:10]])
+""" multiple galaxies
+    Here we leave the `sed_object` flag as the default (False), 
+    and combine into a single sed object afterwards """
+_specs = np.vstack([_g.integrated_stellar_spectrum(_grid)
+                    for _g in gals[:10]])
 
-plt.loglog(_grid.lam, _specs.T)
+_specs = Sed(lam=_grid.lam, lnu=_specs)
+
+plt.loglog(_grid.lam, _specs.lnu.T)
 plt.show()
 
-# calculate broadband luminosities
-from synthesizer.filters import UVJ
+""" calculate broadband luminosities """
 
 # first get rest frame 'flux'
 _spec.get_fnu0()
@@ -35,20 +47,23 @@ fc = UVJ(new_lam=_grid.lam)
 _UVJ = _spec.get_broadband_fluxes(fc)
 print(_UVJ)
 
-# do for multiple, plot UVJ diagram
-_specs = [_g.integrated_stellar_spectrum(_grid) \
-                for _g in gals]
+""" do for multiple, plot UVJ diagram """
 
-[_s.get_fnu0() for _s in _specs]
+# first filter by stellar mass
+mstar = np.log10(np.array([np.sum(_g.stars.masses) for _g in gals]) * 1e10)
+mask = np.where(mstar > 8)[0]
 
-_UVJ = [_s.get_broadband_fluxes(fc) for _s in _specs]
+_specs = np.vstack([gals[_g].integrated_stellar_spectrum(_grid)
+                    for _g in mask])
 
-UV = [(_uvj['U'] / _uvj['V']).value for _uvj in _UVJ]
-VJ = [(_uvj['V'] / _uvj['J']).value for _uvj in _UVJ]
+_specs = Sed(lam=_grid.lam, lnu=_specs)
+_specs.get_fnu0()
+_UVJ = _specs.get_broadband_fluxes(fc)
+
+UV = _UVJ['U'] / _UVJ['V']
+VJ = _UVJ['V'] / _UVJ['J']
 
 plt.scatter(VJ, UV)
 plt.xlabel('VJ')
 plt.ylabel('UV')
 plt.show()
-
-
