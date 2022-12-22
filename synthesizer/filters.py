@@ -1,5 +1,6 @@
 import numpy as np
-from numpy import genfromtxt
+import urllib
+
 import matplotlib.pyplot as plt
 
 
@@ -16,7 +17,7 @@ class FilterCollection:
         # --- add colours
 
         for filter_code, F in self.filter.items():
-            ax.plot(F.lam, F.t)
+            ax.plot(F.lam, F.t, label=filter_code)
 
             # --- add label with automatic placement
             #
@@ -206,10 +207,16 @@ class FilterFromSVO(Filter):
             self.f = (self.observatory, self.instrument, self.filter)
 
         """ read directly from the SVO archive """
-        svo_url = (f'http://svo2.cab.inta-csic.es/theory/'
-                   f'fps/getdata.php?format=ascii&id={self.observatory}'
-                   f'/{self.instrument}.{self.filter}')
-        df = genfromtxt(svo_url, delimiter=' ')
+        self.svo_url = (f'http://svo2.cab.inta-csic.es/theory/'
+                        f'fps/getdata.php?format=ascii&id={self.observatory}'
+                        f'/{self.instrument}.{self.filter}')
+        with urllib.request.urlopen(self.svo_url) as f:
+            df = np.loadtxt(f)
+
+        if df.size == 0:
+            raise ValueError(('Returned empty array, '
+                              'likely the filter was not found'))
+
         self.original_lam = df[:, 0]  # original wavelength
         self.original_t = df[:, 1]  # original transmission
 
