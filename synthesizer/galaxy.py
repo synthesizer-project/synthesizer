@@ -35,7 +35,7 @@ class Galaxy:
 
         return lum
 
-    def integrated_stellar_spectrum(self, grid, save=False):
+    def integrated_stellar_spectrum(self, grid, save=False, sed_object=False):
         """
         Calculate integrated spectrum for whole galaxy
 
@@ -43,6 +43,8 @@ class Galaxy:
         grid: grid object
         save (bool, False): determines if spectra saved to galaxy object
                             if False, method returns spectrum as array
+        sed_object (bool, False): determines whether to save the resulting 
+                                  spectra to an `Sed` object
         """
         weights_temp = self._calculate_weights(grid,
                                                self.stars.log10metallicities,
@@ -52,8 +54,9 @@ class Galaxy:
         _spec = np.sum(grid.spectra['stellar'] * weights_temp[:, :, None],
                        axis=(0, 1))
 
-        # assign to sed object
-        _spec = Sed(grid.lam, _spec)
+        if sed_object:
+            # assign to sed object
+            _spec = Sed(grid.lam, _spec)
 
         # lum = self.stellar_particle_spectra(grid)
         # _spec = np.sum(lum, axis=0)
