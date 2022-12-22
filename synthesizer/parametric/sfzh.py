@@ -195,7 +195,7 @@ class SFH:
     class Common:
 
         def sfr(self, age):
-            if type(age) == float:
+            if type(age) == np.float64:
                 return self.sfr_(age)
             elif type(age) == np.ndarray:
                 return np.array([self.sfr_(a) for a in age])
