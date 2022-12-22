@@ -50,6 +50,9 @@ class Sed:
 
         self.nu = c.value/(self.lam_m)  # Hz
 
+        self.lamz = None
+        self.fnu = None
+
     @property
     def _spec_dims(self):
         return np.ndim(self.lnu)
@@ -161,6 +164,11 @@ class Sed:
         arguments
         fc: a FilterCollection object
         """
+
+        if (self.lamz is None) | (self.fnu is None):
+            return ValueError(('Fluxes not calculated, run `get_fnu` or '
+                               '`get_fnu0` for observer frame or rest-frame '
+                               'fluxes, respectively'))
 
         self.broadband_fluxes = {}
 
