@@ -18,7 +18,7 @@ class Sed:
     Attributes
     ----------
     lam : ndarray
-        the wavelength grid in \AA
+        the wavelength grid in Angstroms
     lam_m : ndarray
         the wavelength grid in m
     nu : ndarray
@@ -186,8 +186,8 @@ def convert_flam_to_fnu(lam, flam):
     """ convert f_lam to f_nu
 
     arguments:
-    lam -- wavelength/\AA
-    flam -- spectral luminosity density/erg/s/\AA
+    lam -- wavelength / \\AA
+    flam -- spectral luminosity density/erg/s/\\AA
     """
 
     lam_m = lam * 1E-10
@@ -199,8 +199,8 @@ def convert_fnu_to_flam(lam, fnu):
     """ convert f_nu to f_lam
 
     arguments:
-    lam -- wavelength/\AA
-    flam -- spectral luminosity density/erg/s/\AA
+    lam -- wavelength/\\AA
+    flam -- spectral luminosity density/erg/s/\\AA
     """
 
     lam_m = lam * 1E-10
@@ -212,7 +212,7 @@ def calculate_Q(lam, lnu):
     """ calculate the ionising photon luminosity
 
     arguments:
-    lam -- wavelength/\AA
+    lam -- wavelength / \\AA
     lnu -- spectral luminosity density/erg/s/Hz
     """
 
