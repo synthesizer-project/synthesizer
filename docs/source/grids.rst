@@ -8,8 +8,6 @@ Most users will use pre-computed grids, available from dropbox `here <https://ww
 
 For advanced users, Synthesizer contains scripts for creating your own grids from popular SPS codes, and running these through CLOUDY. These are contained within the `generate_grids` directory of synthesizer. You will need a working installation of synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. CLOUDY, python-FSPS). Please reach out to us if you have questions about the pre-computed grids or grid creation.
 
-Grids come in two types: spectral grids, and line grids.
-
 
 The Grid Directory
 ==================
@@ -26,12 +24,13 @@ Pre-computed grids can be downloaded `here <https://www.dropbox.com/sh/ipo6pox1s
 * bc03_chabrier03_cloudy-v17.03_log10Uref-2.h5
 * bc03_chabrier03.h5
 
-If you wish, you can set this grid directory as an environment variable #TODO
+If you wish, you can set this grid directory as an environment variable.
 
-Loading Spectral Grids
-======================
 
-We first import the SpectralGrid class::
+Loading Grids
+=============
+
+We first import the ``SpectralGrid`` class::
 
    from synthesizer.grid import SpectralGrid
 
@@ -41,11 +40,5 @@ This takes a grid name, and optionally a grid directory::
    grid_dir = '/our/synthesizer/data_directory/synthesizer_data/'
    grid = SpectralGrid(grid_name, grid_dir=grid_dir)
 
-The `grid` object contains a lot of functionality for manipulating and using grids.
-
-
-Loading Line Grids
-==================
-
-#TODO.
+The ``grid`` object contains a lot of functionality for manipulating and using grids.
 

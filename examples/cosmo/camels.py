@@ -22,8 +22,11 @@ gals = load_CAMELS_SIMBA('data/', snap='033')
 _g = gals[0]
 _spec = _g.integrated_stellar_spectrum(_grid, sed_object=True)
 
-plt.loglog(_grid.lam, _spec.lnu)
-plt.show()
+plt.loglog(_spec.lam, _spec.lnu)
+plt.xlabel('$\lambda \,/\, \\AA$')
+plt.ylabel('$L_{\\nu} \,/\, \mathrm{erg \; s^{-1} \; Hz^{-1}}$')
+# plt.show()
+plt.savefig('../../docs/source/images/camels_single_spec.png', dpi=200); plt.close()
 
 """ multiple galaxies
     Here we leave the `sed_object` flag as the default (False), 
@@ -34,7 +37,10 @@ _specs = np.vstack([_g.integrated_stellar_spectrum(_grid)
 _specs = Sed(lam=_grid.lam, lnu=_specs)
 
 plt.loglog(_grid.lam, _specs.lnu.T)
-plt.show()
+plt.xlabel('$\lambda \,/\, \\AA$')
+plt.ylabel('$L_{\\nu} \,/\, \mathrm{erg \; s^{-1} \; Hz^{-1}}$')
+# plt.show()
+plt.savefig('../../docs/source/images/camels_multiple_spec.png', dpi=200); plt.close()
 
 """ calculate broadband luminosities """
 
@@ -63,7 +69,8 @@ _UVJ = _specs.get_broadband_fluxes(fc)
 UV = _UVJ['U'] / _UVJ['V']
 VJ = _UVJ['V'] / _UVJ['J']
 
-plt.scatter(VJ, UV)
+plt.scatter(VJ, UV, c=mstar[mask], s=4)
 plt.xlabel('VJ')
 plt.ylabel('UV')
-plt.show()
+# plt.show()
+plt.savefig('../../docs/source/images/camels_UVJ.png', dpi=200); plt.close()
