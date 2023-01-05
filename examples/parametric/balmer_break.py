@@ -34,7 +34,7 @@ if __name__ == '__main__':
         model_info = parse_grid_id(model)
         print(model_info)
 
-        grid = SpectralGrid(model, grid_dir=grid_dir)
+        grid = Grid(model, grid_dir=grid_dir)
 
         log10durations = np.arange(0., 3.1, 0.1)
 

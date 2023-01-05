@@ -9,7 +9,7 @@ import cmasher as cmr
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from synthesizer.sed import convert_fnu_to_flam
-from synthesizer.grid import SpectralGrid
+from synthesizer.grid import Grid
 
 
 # -------------------------------------------------
@@ -68,7 +68,7 @@ if __name__ == '__main__':
 
     for sps_name in sps_names:
         for _fcov in fcov:
-            grid = SpectralGrid(f'{sps_name}{_fcov}')
+            grid = Grid(f'{sps_name}{_fcov}')
 
             fig, ax = plot_spectra_age(grid, log10Z=log10Z)
             plt.show()
