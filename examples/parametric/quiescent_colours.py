@@ -5,7 +5,7 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 
 from synthesizer.filters import UVJ
-from synthesizer.grid import SpectralGrid
+from synthesizer.grid import Grid
 
 from astropy.table import Table
 
@@ -15,7 +15,7 @@ def simple_UVJ(target_metallicity=0.01):
 
     grid_name = 'bpass-v2.2.1-bin_chab-100'
 
-    grid = SpectralGrid(grid_name)
+    grid = Grid(grid_name)
 
     iZ = grid.get_nearest_index(target_metallicity, grid.metallicities)
 
@@ -42,7 +42,7 @@ def UVJ_metallicity():
 
     grid_name = 'bpass-v2.2.1-bin_chab-100'
 
-    grid = SpectralGrid(grid_name)
+    grid = Grid(grid_name)
 
     fc = UVJ(new_lam=grid.lam)
 
