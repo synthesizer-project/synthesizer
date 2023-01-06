@@ -5,7 +5,7 @@ import h5py
 import copy
 import numpy as np
 from scipy import integrate
-from unyt import yr
+from unyt import yr, erg, Hz, s, cm, angstrom
 
 
 import matplotlib.pyplot as plt
@@ -220,30 +220,41 @@ class LineGenerator(GenericGenerator):
         self.lines = grid.lines
         self.line_list = grid.line_list
 
-    def get_intrinsinc_quantities(self, line_id):
+    def get_intrinsinc_quantities(self, line_id, quantity = False):
         """ return intrinsic quantities (luminosity, EW) for a single line or line set """
 
         if type(line_id) is str:
             line_id = [line_id]
 
-        line_luminosity = 0.0
-        continuum_nu = []
-        wv = []
+        luminosity = 0.0
+        continuum_ = []
+        wavelength_ = []
 
         for line_id_ in line_id:
             line = self.lines[line_id_]
 
-            wv.append(line.attrs['wavelength'])  # \AA
+            wavelength_.append(line['wavelength'])  # \AA
+            continuum_.append(np.sum(line['continuum'] * self.sfzh, axis=(0, 1))) #  continuum at line wavelength, erg/s/Hz
+            luminosity += np.sum(line['luminosity'] * self.sfzh, axis=(0, 1))
 
-            line_luminosity += np.sum(line['luminosity'] * self.sfzh, axis=(0, 1))
-            #  continuum at line wavelength, erg/s/Hz
-            continuum_nu.append(np.sum(line['continuum'] * self.sfzh, axis=(0, 1)))
 
-        continuum_lam = convert_fnu_to_flam(np.mean(wv), np.mean(
-            continuum_nu))  # continuum at line wavelength, erg/s/AA
-        ew = line_luminosity / continuum_lam  # AA
+        continuum = np.mean(continuum_) # mean continuum value
+        wavelength = np.mean(wavelength_) # mean wavelength of the line
+        continuum_lam = convert_fnu_to_flam(wavelength, continuum)  # continuum at line wavelength, erg/s/AA
+        ew = luminosity / continuum_lam  # AA
 
-        return np.mean(wv), line_luminosity, ew
+        if quantity:
+            return {'luminosity': luminosity * erg/s,
+                    'continuum': continuum * erg/s/Hz,
+                    'continuum_lam': continuum_lam * erg/s/angstrom,
+                    'wavelength': wavelength * angstrom,
+                    'ew': ew * angstrom}
+        else:
+            return {'luminosity': luminosity,
+                    'continuum': continuum,
+                    'continuum_lam': continuum_lam,
+                    'wavelength': wavelength,
+                    'ew': ew}
 
 
 # def rebin_SFZH(sfzh, new_log10ages, new_metallicities):

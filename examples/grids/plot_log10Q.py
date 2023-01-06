@@ -4,7 +4,7 @@ Create a model SED
 
 import matplotlib.pyplot as plt
 
-from synthesizer.grid import SpectralGrid
+from synthesizer.grid import Grid
 
 if __name__ == '__main__':
 
@@ -12,7 +12,7 @@ if __name__ == '__main__':
 
     for sps_name in sps_names:
 
-        grid = SpectralGrid(sps_name, verbose = True)
+        grid = Grid(sps_name, verbose = True)
 
         print(grid.log10Q)
 
@@ -20,4 +20,4 @@ if __name__ == '__main__':
 
         plt.show()
 
-        fig.savefig(f'figs/log10Q_{sps_name}.pdf')
+        # fig.savefig(f'figs/log10Q_{sps_name}.pdf')

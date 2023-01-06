@@ -2,15 +2,16 @@ import sys
 import numpy as np
 
 from synthesizer.sed import Sed
-from synthesizer.grid import SpectralGrid
+from synthesizer.grid import Grid
 from synthesizer.filters import SVOFilterCollection
 
 
-grid_dir = '/cosma7/data/dp004/dc-love2/codes/synthesizer_data/grids/'
+# grid_dir = '/cosma7/data/dp004/dc-love2/codes/synthesizer_data/grids/'
 # grid_dir = str(sys.argv[1])
+grid_dir = None
 
 model = 'bc03_chabrier03'
-grid = SpectralGrid(model, grid_dir=grid_dir)
+grid = Grid(model, grid_dir=grid_dir)
 
 lam = grid.lam
 spec = grid.spectra['stellar'][0,0]
