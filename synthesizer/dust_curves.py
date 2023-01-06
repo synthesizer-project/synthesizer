@@ -23,6 +23,10 @@ class power_law():
 
         return (lam/5500.)**self.params['slope']
 
+    def T(self, lam):
+
+        return np.exp(-self.tau(lam))
+
 
 class MW_N18():
 
