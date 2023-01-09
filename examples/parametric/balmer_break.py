@@ -1,7 +1,7 @@
 import numpy as np
 from synthesizer.plt import single
 from synthesizer.filters import TopHatFilterCollection
-from synthesizer.grid import SpectralGrid, parse_grid_id
+from synthesizer.grid import Grid, parse_grid_id
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh, generate_instant_sfzh
 from synthesizer.parametric.galaxy import SEDGenerator
 from unyt import yr, Myr
@@ -34,7 +34,7 @@ if __name__ == '__main__':
         model_info = parse_grid_id(model)
         print(model_info)
 
-        grid = SpectralGrid(model, grid_dir=grid_dir)
+        grid = Grid(model, grid_dir=grid_dir)
 
         log10durations = np.arange(0., 3.1, 0.1)
 

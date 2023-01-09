@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from synthesizer.filters import SVOFilterCollection
-from synthesizer.grid import SpectralGrid
+from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.parametric.galaxy import SEDGenerator
 from synthesizer.plt import single, single_histxy, mlabel
@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
     grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
 
-    grid = SpectralGrid(grid_name)
+    grid = Grid(grid_name)
 
     fig, ax = single()
 

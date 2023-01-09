@@ -5,7 +5,7 @@
 
 import flare.plt as fplt
 from synthesizer.sed import convert_fnu_to_flam
-from synthesizer.grid import SpectralGrid
+from synthesizer.grid import Grid
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -79,8 +79,9 @@ if __name__ == '__main__':
 
     for sps_name in sps_names:
 
-        grid = SpectralGrid(sps_name)
+        grid = Grid(sps_name)
 
         fig, ax = plot_spectra_age(grid, log10Z=log10Z)
 
-        fig.savefig(f'figs/spectra_age_{sps_name}.pdf')
+        plt.show()
+        # fig.savefig(f'figs/spectra_age_{sps_name}.pdf')

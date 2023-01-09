@@ -195,10 +195,13 @@ class SFH:
     class Common:
 
         def sfr(self, age):
-            if type(age) == np.float64:
-                return self.sfr_(age)
-            elif type(age) == np.ndarray:
+
+            if isinstance(age, np.ndarray) | isinstance(age, list):
                 return np.array([self.sfr_(a) for a in age])
+            else:
+                return self.sfr_(age)
+
+
 
         def calculate_sfh(self, t_range=[0, 1E10], dt=1E6):
             """ calcualte the age of a given star formation history """

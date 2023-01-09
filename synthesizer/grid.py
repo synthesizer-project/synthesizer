@@ -61,20 +61,28 @@ def parse_grid_id(grid_id):
             'imf': imf, 'imf_hmc': imf_hmc}
 
 
-class SpectralGrid():
+class Grid():
     """
     This provides an object to hold the SPS / Cloudy grid
     for use by other parts of the code
     """
 
-    def __init__(self, grid_name, grid_dir=None, verbose=False):
+    def __init__(self, grid_name, grid_dir=None, verbose=False, read_spectra=True, read_lines=False):
 
         if not grid_dir:
             grid_dir = os.path.join(os.path.dirname(filepath), 'data/grids')
 
+
+
         self.grid_dir = grid_dir
         self.grid_name = grid_name
         self.grid_filename = f'{self.grid_dir}/{self.grid_name}.h5'
+
+        self.spectra = None
+        self.lines = None
+
+        if isinstance(read_lines, np.ndarray):
+            read_lines = list(read_lines)
 
         with h5py.File(self.grid_filename, 'r') as hf:
             self.spec_names = list(hf['spectra'].keys())
@@ -95,16 +103,6 @@ class SpectralGrid():
                 self.log10Q = hf['log10Q'][:]
                 self.log10Q[self.log10Q != self.log10Q] = -99.99
 
-            if 'lines' in hf.keys():
-                self.line_list = hf['lines'].attrs['lines']
-                self.lines = {}
-                self.lines['luminosity'] = {line: None for line
-                                            in self.line_list}
-                self.lines['continuum'] = {line: None for line
-                                           in self.line_list}
-                self.lines['wavelength'] = {line: None for line
-                                            in self.line_list}
-
             # self.units = {}
             # self.units['log10ages'] = hf['log10ages'].attrs['Units']
             # self.units['log10metallicities'] = hf['log10ages'].attrs['Units']
@@ -115,30 +113,54 @@ class SpectralGrid():
             print(f'ages: {self.ages}')
             print(f'ages: {self.log10ages}')
 
-        self.spectra = {}
 
-        for spec_name in self.spec_names:
+        if read_spectra:
+
+            self.spectra = {}
+
+            for spec_name in self.spec_names:
+
+                with h5py.File(f'{self.grid_dir}/{self.grid_name}.h5', 'r') as hf:
+                    self.spectra[spec_name] = hf['spectra'][spec_name][:]
+                    # self.units[f'spectra/{spec_name}'] = hf['spectra'][spec_name].attrs['Units']
+
+                if spec_name == 'incident':
+                    self.spectra['stellar'] = self.spectra[spec_name]
+                    # self.units[f'spectra/stellar'] = hf['spectra'][spec_name].attrs['Units']
+
+            """ if full cloudy grid available calculate
+            some other spectra for convenience """
+            if 'linecont' in self.spec_names:
+
+                self.spectra['total'] = self.spectra['transmitted'] +\
+                    self.spectra['nebular']  #  assumes fesc = 0
+
+                self.spectra['nebular_continuum'] = self.spectra['nebular'] -\
+                    self.spectra['linecont']
+
+            if verbose:
+                print('available spectra:', list(self.spectra.keys()))
+
+
+        if read_lines:
+
+            self.lines = {}
+
+            if isinstance(read_lines, list):
+                self.line_list = read_lines
+            else:
+                self.line_list = hf['lines'].attrs['lines']
 
             with h5py.File(f'{self.grid_dir}/{self.grid_name}.h5', 'r') as hf:
-                self.spectra[spec_name] = hf['spectra'][spec_name][:]
-                # self.units[f'spectra/{spec_name}'] = hf['spectra'][spec_name].attrs['Units']
 
-            if spec_name == 'incident':
-                self.spectra['stellar'] = self.spectra[spec_name]
-                # self.units[f'spectra/stellar'] = hf['spectra'][spec_name].attrs['Units']
+                for line in self.line_list:
 
-        """ if full cloudy grid available calculate
-        some other spectra for convenience """
-        if 'linecont' in self.spec_names:
+                    self.lines[line] = {}
+                    self.lines[line]['wavelength'] =  hf['lines'][line].attrs['wavelength'] # angstrom
+                    self.lines[line]['luminosity'] = hf['lines'][line]['luminosity'][:]
+                    self.lines[line]['continuum'] = hf['lines'][line]['continuum'][:]
 
-            self.spectra['total'] = self.spectra['transmitted'] +\
-                self.spectra['nebular']  #  assumes fesc = 0
 
-            self.spectra['nebular_continuum'] = self.spectra['nebular'] -\
-                self.spectra['linecont']
-
-        if verbose:
-            print('available spectra:', list(self.spectra.keys()))
 
     def get_nearest_index(self, value, array):
 
@@ -212,13 +234,15 @@ class SpectralGrid():
 
         return fig, ax
 
+
+
+    # I'm not convinced this is necessary anymore
+
     def fetch_line(self, line_id, save=True):
         """
         Fetch line information from the grid HDF5 file
-
         Parameters:
         line_id (str): unique line identifier
-
         Returns:
         luminosity (ndarray)
         continuum (ndarray)
@@ -231,21 +255,25 @@ class SpectralGrid():
             wavelength = hf[f'lines/{line_id}'].attrs['wavelength']
 
         if save:
-            self.lines['luminosity'][line_id] = luminosity
-            self.lines['continuum'][line_id] = continuum
-            self.lines['wavelength'][line_id] = wavelength
+            self.lines[line_id] = {}
+            self.lines[line_id]['luminosity'] = luminosity
+            self.lines[line_id]['continuum'] = continuum
+            self.lines[line_id]['wavelength'] = wavelength
 
         return {'luminosity': luminosity,
                 'continuum': continuum,
                 'wavelength': wavelength}
 
-    def get_line_info(self, line_id, ia, iZ, save_line_info=True):
+
+
+
+    def get_line_info(self, line_id, ia, iZ):
         """
-        return the equivalent width of a line for a given age and metalliciy
+        return the equivalent width of a line (or line combination) for a given age and metalliciy
 
         Parameters:
 
-        line_id (str): unique line identification string
+        line_id (list or str): unique line identification string
         ia (int): age index
         iZ (int): metallicity index
         save_line_info (bool): if fetch_line required, determines whether
@@ -266,15 +294,12 @@ class SpectralGrid():
         wv = []
 
         for _lid in line_id:
-            # check if we're loading on the fly
-            if (self.lines['luminosity'][_lid] is None):
-                _line = self.fetch_line(_lid, save=save_line_info)
-                luminosity, continuum, wavelength = [_line[key] for key
-                                                     in _line.keys()]
-            else:
-                wavelength = self.lines['wavelength'][_lid]
-                luminosity = self.lines['luminosity'][_lid]
-                continuum = self.lines['continuum'][_lid]
+
+            line = self.lines[_lid]
+
+            wavelength = line['wavelength']
+            luminosity = line['luminosity']
+            continuum = line['continuum']
 
             wv.append(wavelength)  # \AA
             line_luminosity += luminosity[ia, iZ]  # line luminosity, erg/s
@@ -286,6 +311,7 @@ class SpectralGrid():
             continuum_nu))  # continuum at line wavelength, erg/s/AA
         ew = line_luminosity / continuum_lam  # AA
 
-        return {'wavelength': np.mean(wv),
+        return {'name': ','.join(line_id),
+                'wavelength': np.mean(wv),
                 'luminosity': line_luminosity,
                 'equivalent_width': ew}

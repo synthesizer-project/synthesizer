@@ -13,7 +13,7 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from synthesizer.grid import SpectralGrid
+from synthesizer.grid import Grid
 
 import flare.plt as fplt
 
@@ -40,8 +40,8 @@ if __name__ == '__main__':
     spec_names = ['total']
 
 
-    grid1 = SpectralGrid(sps_names[0])
-    grid2 = SpectralGrid(sps_names[1])
+    grid1 = Grid(sps_names[0])
+    grid2 = Grid(sps_names[1])
 
 
     iZ, log10Z = grid1.get_nearest_log10Z(log10Z)
