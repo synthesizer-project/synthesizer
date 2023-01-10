@@ -1,4 +1,4 @@
-from ..stars import Stars
+from .stars import Stars
 from ..sed import Sed
 from ..dust import power_law
 from .. import exceptions
@@ -21,9 +21,9 @@ class Galaxy:
 
     # this should be able to take a pre-existing stars object!
 
-    def load_stars(self, masses, ages, metals, **kwargs):
-        self.stars = Stars(masses, ages, metals, **kwargs)
-        self.nparticles = len(masses)
+    def load_stars(self, initial_masses, ages, metals, **kwargs):
+        self.stars = Stars(initial_masses, ages, metals, **kwargs)
+        self.nparticles = len(initial_masses)
 
     # def load_gas(self, masses, metals, **kwargs):
     #
@@ -65,7 +65,7 @@ class Galaxy:
             weights_temp = self._calculate_weights(grid,
                                                    self.stars.log10metallicities[s],
                                                    self.stars.log10ages[s],
-                                                   self.stars.masses[s])
+                                                   self.stars.initial_masses[s])
 
             stellar_lum = np.sum(grid.spectra['stellar'] * weights_temp[:, :, None],
                                  axis=(0, 1))
@@ -99,7 +99,7 @@ class Galaxy:
                                             grid.spectra['stellar'].shape[-1]))
 
             for i, (mass, age, metal) in enumerate(zip(
-                    self.stars.masses[s],
+                    self.stars.initial_masses[s],
                     self.stars.log10ages[s],
                     self.stars.log10metallicities[s])):
 

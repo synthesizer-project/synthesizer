@@ -3,22 +3,22 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from synthesizer.grid import SpectralGrid
-from synthesizer.stars import Stars
+from synthesizer.grid import Grid
+from synthesizer.particle.stars import Stars
 from synthesizer.particle.galaxy import Galaxy
 
 
-masses = np.array([1.]*5)/5
+initial_masses = np.array([1.]*5)/5
 ages = np.array([1E6, 1E7, 1E8, 1E9, 1E10])
 metallicities = np.array([0.01]*5)
 tauVs = np.array([0.5]*5)
 
 grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
 
-grid = SpectralGrid(grid_name)
+grid = Grid(grid_name)
 
 galaxy = Galaxy()
-galaxy.load_stars(masses, ages, metallicities)
+galaxy.load_stars(initial_masses, ages, metallicities)
 
 
 # --- this generates stellar and intrinsic spectra
