@@ -11,6 +11,10 @@ class Stars(Particles):
         self.ages = ages
         self.metallicities = metallicities
 
+        self.tauV = None  # V-band dust optical depth
+        self.alpha = None  # alpha-enhancement [alpha/Fe]
+        self.a3 = None
+
         self.log10ages = np.log10(self.ages)
         self.log10metallicities = np.log10(self.metallicities)
 
@@ -23,6 +27,10 @@ class Stars(Particles):
             self.coordinates = kwargs['coordinates']
             self.attributes.append('coordinates')
 
+        if 'initial_masses' in kwargs.keys():
+            self.initial_masses = kwargs['initial_masses']
+            self.attributes.append('initial_masses')
+        
         if 'velocities' in kwargs.keys():
             self.velocities = kwargs['velocities']
             self.attributes.append('velocities')
@@ -119,7 +127,7 @@ class Stars(Particles):
         for attr in gen:
             attr_array = getattr(self, attr)[resample_idxs]
             setattr(self, attr, np.append(getattr(self, attr),
-                                           np.repeat(attr_array, new_lens, axis=0)))
+                                          np.repeat(attr_array, new_lens, axis=0)))
 
         if verbose:
             print("delete old particles")
@@ -128,7 +136,6 @@ class Stars(Particles):
             attr_array = getattr(self, attr)
             attr_array = np.delete(attr_array, resample_idxs)
             setattr(self, attr, attr_array)
-
 
         # ---- recalculate log attributes
         self.log10ages = np.log10(self.ages)

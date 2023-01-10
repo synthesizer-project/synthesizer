@@ -103,13 +103,10 @@ class Grid():
                 self.log10Q = hf['log10Q'][:]
                 self.log10Q[self.log10Q != self.log10Q] = -99.99
 
-
-
             # self.units = {}
             # self.units['log10ages'] = hf['log10ages'].attrs['Units']
             # self.units['log10metallicities'] = hf['log10ages'].attrs['Units']
             # self.units['lam'] = hf['spectra/wavelength'].attrs['Units']
-
 
         if verbose:
             print(f'metallicities: {self.metallicities}')
