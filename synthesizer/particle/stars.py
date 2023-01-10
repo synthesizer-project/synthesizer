@@ -6,8 +6,8 @@ from .particles import Particles
 
 
 class Stars(Particles):
-    def __init__(self, masses, ages, metallicities, **kwargs):
-        self.masses = masses
+    def __init__(self, initial_masses, ages, metallicities, **kwargs):
+        self.initial_masses = initial_masses
         self.ages = ages
         self.metallicities = metallicities
 
@@ -20,7 +20,7 @@ class Stars(Particles):
 
         self.resampled = False
 
-        self.attributes = ['masses', 'ages', 'metallicities',
+        self.attributes = ['initial_masses', 'ages', 'metallicities',
                            'log10ages', 'log10metallicities']
 
         if 'coordinates' in kwargs.keys():
@@ -30,6 +30,18 @@ class Stars(Particles):
         if 'initial_masses' in kwargs.keys():
             self.initial_masses = kwargs['initial_masses']
             self.attributes.append('initial_masses')
+        
+        if 'velocities' in kwargs.keys():
+            self.velocities = kwargs['velocities']
+            self.attributes.append('velocities')
+
+        if 'current_masses' in kwargs.keys():
+            self.current_masses = kwargs['current_masses']
+            self.attributes.append('current_masses')
+
+        if 'alpha' in kwargs.keys():
+            self.abundance_oxygen = kwargs['alpha']
+            self.attributes.append('alpha')
 
         if 's_oxygen' in kwargs.keys():
             self.abundance_oxygen = kwargs['s_oxygen']
