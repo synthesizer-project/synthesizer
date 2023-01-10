@@ -136,3 +136,31 @@ class Stars(Particles):
 
         # ---- set resampled flag
         self.resampled = True
+
+
+
+
+
+
+def sample_sfhz(sfzh, N, initial_mass = 1.):
+
+    """ Sample a binned star formation and metal enrichment history and return a star particle object """
+
+    hist = sfzh.sfzh/np.sum(sfzh.sfzh)
+
+    x_bin_midpoints = sfzh.log10ages
+    y_bin_midpoints = sfzh.log10metallicities
+
+    cdf = np.cumsum(hist.flatten())
+    cdf = cdf / cdf[-1]
+
+    values = np.random.rand(N)
+    value_bins = np.searchsorted(cdf, values)
+    x_idx, y_idx = np.unravel_index(value_bins,
+                                    (len(x_bin_midpoints),
+                                     len(y_bin_midpoints)))
+    random_from_cdf = np.column_stack((x_bin_midpoints[x_idx],
+                                       y_bin_midpoints[y_idx]))
+    log10ages, log10metallicities = random_from_cdf.T
+
+    return Stars(initial_mass*np.ones(N), 10**log10ages, 10**log10metallicities)
