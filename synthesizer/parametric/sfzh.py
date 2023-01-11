@@ -201,8 +201,6 @@ class SFH:
             else:
                 return self.sfr_(age)
 
-
-
         def calculate_sfh(self, t_range=[0, 1E10], dt=1E6):
             """ calcualte the age of a given star formation history """
 

@@ -11,7 +11,6 @@ class FilterCollection:
     """
 
     def transmission_curve_ax(self, ax, add_filter_label=True):
-
         """ add filter transmission curves to a give axes """
 
         # --- add colours
@@ -26,7 +25,6 @@ class FilterCollection:
         ax.set_ylabel(r'$\rm T_{\lambda}$')
 
     def plot_transmission_curves(self, show=True):
-
         """ Create a filter transmission curve plot """
 
         fig = plt.figure(figsize=(5., 3.5))
@@ -93,7 +91,6 @@ class Filter:
     """
 
     def pivwv(self):  # -- calculate pivot wavelength using original l, t
-
         """ calculate the pivot wavelength """
 
         return np.sqrt(np.trapz(self.original_lam * self.original_t,
@@ -167,7 +164,6 @@ class Filter:
         return self.original_lam[self.original_t > 1E-2][0]
 
     def mnmx(self):
-
         """ calculate the minimum and maximum wavelengths """
 
         return (self.min(), self.max())

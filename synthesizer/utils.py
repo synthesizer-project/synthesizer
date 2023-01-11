@@ -69,6 +69,17 @@ def load_arr(name, filename):
     return arr
 
 
+def read_params(param_file):
+    """
+    Args:
+    param_file (str) location of parameter file
+
+    Returns:
+    parameters (object)
+    """
+    return __import__(param_file)
+
+
 class Singleton(type):
     """ A metaclass used to ensure singleton behaviour, i.e. there can only
         ever be a single instance of a class in a namespace.
@@ -89,14 +100,3 @@ class Singleton(type):
             cls._instances[cls] = super(Singleton, cls).__call__(*args,
                                                                  **kwargs)
         return cls._instances[cls]
-
-
-def read_params(param_file):
-    """
-    Args:
-    param_file (str) location of parameter file
-
-    Returns:
-    parameters (object)
-    """
-    return __import__(param_file)

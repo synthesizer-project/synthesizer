@@ -72,8 +72,6 @@ class Grid():
         if not grid_dir:
             grid_dir = os.path.join(os.path.dirname(filepath), 'data/grids')
 
-
-
         self.grid_dir = grid_dir
         self.grid_name = grid_name
         self.grid_filename = f'{self.grid_dir}/{self.grid_name}.h5'
@@ -113,7 +111,6 @@ class Grid():
             print(f'ages: {self.ages}')
             print(f'ages: {self.log10ages}')
 
-
         if read_spectra:
 
             self.spectra = {}
@@ -141,7 +138,6 @@ class Grid():
             if verbose:
                 print('available spectra:', list(self.spectra.keys()))
 
-
         if read_lines:
 
             self.lines = {}
@@ -156,11 +152,9 @@ class Grid():
                 for line in self.line_list:
 
                     self.lines[line] = {}
-                    self.lines[line]['wavelength'] =  hf['lines'][line].attrs['wavelength'] # angstrom
+                    self.lines[line]['wavelength'] = hf['lines'][line].attrs['wavelength']  # angstrom
                     self.lines[line]['luminosity'] = hf['lines'][line]['luminosity'][:]
                     self.lines[line]['continuum'] = hf['lines'][line]['continuum'][:]
-
-
 
     def get_nearest_index(self, value, array):
 
@@ -234,8 +228,6 @@ class Grid():
 
         return fig, ax
 
-
-
     # I'm not convinced this is necessary anymore
 
     def fetch_line(self, line_id, save=True):
@@ -263,9 +255,6 @@ class Grid():
         return {'luminosity': luminosity,
                 'continuum': continuum,
                 'wavelength': wavelength}
-
-
-
 
     def get_line_info(self, line_id, ia, iZ):
         """

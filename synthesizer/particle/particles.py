@@ -9,19 +9,17 @@ class Particles:
         self.coods = coods
 
 
-
 class CoordinateGenerator:
 
-    def generate_3D_gaussian(N, mean = np.zeros(3), cov = None):
+    def generate_3D_gaussian(N, mean=np.zeros(3), cov=None):
 
         if not cov:
-            cov = np.zeros((3,3))
+            cov = np.zeros((3, 3))
             np.fill_diagonal(cov, 1.)
 
         """ Generate a random collection of particle coordinates assuming a 3D gaussian """
 
         return multivariate_normal(mean, cov, N)
-
 
     # def generate_2D_Sersic(N):
     #
