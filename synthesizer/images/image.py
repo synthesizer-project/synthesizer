@@ -58,7 +58,7 @@ class Observation:
         self._check_args(fov, npix, stars, positions)
 
         # Image metadata
-        self.resulution = resolution
+        self.resolution = resolution
         self.fov = fov
         self.npix = npix
 
@@ -278,7 +278,8 @@ class Image(Observation):
 
         # Set up img arrays. When multiple filters are provided we need a dict.
         self.img = np.zeros((self.npix, self.npix), dtype=np.float64)
-        self.imgs = {f: np.zeros((self.npix, self.npix), dtype=np.float64)
+        self.imgs = {f.filter_code:
+                     np.zeros((self.npix, self.npix), dtype=np.float64)
                      for f in filters}
 
     def _check_args(self, sed, pixel_values, filters):
@@ -390,7 +391,7 @@ class Image(Observation):
         for f in self.filters:
 
             # Apply this filter to the IFU
-            self.imgs[f] = self.apply_filter(f)
+            self.imgs[f.filter_code] = self.apply_filter(f)
 
         return self.imgs
 
