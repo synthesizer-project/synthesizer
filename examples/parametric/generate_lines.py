@@ -1,6 +1,6 @@
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.parametric.galaxy import LineGenerator
+from synthesizer.parametric.galaxy import Galaxy
 from unyt import yr, Myr
 
 
@@ -14,9 +14,9 @@ if __name__ == '__main__':
     model = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
     # model = 'bpass-v2.2.1-bin_chab-300_cloudy-v17.03_log10Uref-2'
 
-    line = ['HI4861', 'OIII4959', 'OIII5007']
+    line_id = ['HI4861', 'OIII4959', 'OIII5007']
 
-    grid = Grid(model, grid_dir=grid_dir, read_spectra = False, read_lines = line)
+    grid = Grid(model, grid_dir=grid_dir, read_spectra = False, read_lines = line_id)
 
 
 
@@ -31,6 +31,9 @@ if __name__ == '__main__':
     # --- get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
     sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh)
 
-    galaxy = LineGenerator(grid, sfzh)
+    galaxy = Galaxy(sfzh)
 
-    print(galaxy.get_intrinsinc_quantities(line))
+
+    line = galaxy.get_intrinsic_line(grid, line_id)
+
+    line.summary()
