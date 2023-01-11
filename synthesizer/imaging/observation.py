@@ -151,7 +151,7 @@ class ParticleObservation(Observation):
     #              "img"]
 
     def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
-                 survey=None, positions=None):
+                 survey=None, positions=None, centre=None):
         """
         Intialise the Observation.
 
@@ -193,19 +193,28 @@ class ParticleObservation(Observation):
             self.sim_coords = positions
             self.shifted_sim_pos = positions
 
-        # How many particle are there?
-        self.npart = self.sim_coords.shape[0]
+        # If the positions are not already centred centre them
+        self.centre = centre
+        self._centre_coords()
 
-        # Are the positions centered?
-        if np.min(self.sim_coords) != 0:
-
-            # If so compute that offset and shift particles to start at 0
-            self.pos_offset = np.min(self.sim_coords, axis=0)
-            self.shifted_sim_pos -= self.pos_offset
+        # Shift positions to start at 0
+        self.shifted_sim_pos += self.fov / 2
 
         # Run instantiation methods
         self.pix_pos = np.zeros(self.sim_coords.shape, dtype=np.int32)
         self._get_pixel_pos()
+
+        # # Remove particles outside the FOV
+        # xokinds = np.logical_and(self.pix_pos[:, 0] > 0,
+        #                          self.pix_pos[:, 0] < self.npix)
+        # yokinds = np.logical_and(self.pix_pos[:, 1] > 0,
+        #                          self.pix_pos[:, 1] < self.npix)
+        # self.particles_in_fov = np.logical_and(xokinds, yokinds)
+        # self.pix_pos = self.pix_pos[self.particles_in_fov, :]
+        # self.sim_coords = self.sim_coords[self.particles_in_fov]
+
+        # How many particle are there?
+        self.npart = self.sim_coords.shape[0]
 
     def _check_args(self, stars, positions):
         """
@@ -247,9 +256,22 @@ class ParticleObservation(Observation):
         # TODO: Can threadpool this.
 
         # Convert sim positions to pixel positions
-        self.pix_pos[:, 0] = self.shifted_sim_pos[:, 0] / self.width
-        self.pix_pos[:, 1] = self.shifted_sim_pos[:, 1] / self.width
-        self.pix_pos[:, 2] = self.shifted_sim_pos[:, 2] / self.width
+        self.pix_pos[:, 0] = self.shifted_sim_pos[:, 0] / self.resolution
+        self.pix_pos[:, 1] = self.shifted_sim_pos[:, 1] / self.resolution
+        self.pix_pos[:, 2] = self.shifted_sim_pos[:, 2] / self.resolution
+
+    def _centre_coords(self):
+        """
+        Centre coordinates on the geometric mean or centre.
+        """
+
+        # Calculate the centre if necessary
+        if self.centre is None:
+            self.centre = np.mean(self.sim_coords, axis=0)
+
+        # Centre the coordinates
+        self.sim_coords -= self.centre
+        self.shifted_sim_pos -= self.centre
 
 
 class ParametricObservation(Observation):
