@@ -2,7 +2,6 @@ from .stars import Stars
 from ..sed import Sed
 from ..dust import power_law
 from .. import exceptions
-# import pyximport; pyximport.install()
 from ..weights import calculate_weights
 import numpy as np
 
