@@ -8,7 +8,7 @@ import numpy as np
 
 
 class Galaxy(BaseGalaxy):
-    def __init__(self, stars = None, gas = None):
+    def __init__(self, stars=None, gas=None):
         self.name = 'galaxy'
 
         self.stellar_lum = None
@@ -19,7 +19,7 @@ class Galaxy(BaseGalaxy):
         self.spectra = {}  # integrated spectra dictionary
         self.spectra_array = {}  # spectra arrays dictionary
 
-        self.stars = stars # a star object
+        self.stars = stars  # a star object
         self.gas = gas
 
         if self.stars:
@@ -64,7 +64,6 @@ class Galaxy(BaseGalaxy):
         else:
             s = np.ones(self.nparticles, dtype=bool)
 
-
         # just calculate integrared spectra
         if integrated:
 
@@ -79,7 +78,7 @@ class Galaxy(BaseGalaxy):
             if 'total' in list(grid.spectra.keys()):  # perhaps should also check that fesc is not false
 
                 intrinsic_lum = np.sum((1.-fesc) * grid.spectra['total'] * weights_temp[:, :, None],
-                                        axis=(0, 1))
+                                       axis=(0, 1))
 
             else:
 
@@ -130,7 +129,8 @@ class Galaxy(BaseGalaxy):
                 # --- these quantities are actually repeated, in the context of an SED object below.
                 self.stellar_lum_array = stellar_lum_array
                 self.intrinsic_lum_array = intrinsic_lum_array
-                self.stellar_lum = np.sum(stellar_lum_array, axis=0)  # --- create integrated stellar SED
+                # --- create integrated stellar SED
+                self.stellar_lum = np.sum(stellar_lum_array, axis=0)
                 # --- create integrated intrinsic SED
                 self.intrinsic_lum = np.sum(intrinsic_lum_array, axis=0)
 
@@ -143,7 +143,6 @@ class Galaxy(BaseGalaxy):
                 self.lam = grid.lam
 
             return grid.lam, stellar_lum_array, intrinsic_lum_array
-
 
     def get_screen(self, tauV, dust_curve=power_law({'slope': -1.}), integrated=True):
         """
@@ -182,8 +181,6 @@ class Galaxy(BaseGalaxy):
             grid, update=False, young=1E7, integrated=integrated)  # this does not return an Sed object
         _, stellar_sed_old, intrinsic_sed_old = self.generate_intrinsic_spectra(
             grid, update=False, old=1E7, integrated=integrated)  # this does not return an Sed object
-
-
 
         if save_young_and_old:
 
@@ -248,7 +245,7 @@ class Galaxy(BaseGalaxy):
 
         sed = self.intrinsic_lum_array * T  # these two should have the same shape so should work?
         self.spectra_array['attenuated'] = Sed(self.lam, sed)
-        self.spectra['attenuated'] = Sed(self.lam, np.sum(sed, axis = 0))
+        self.spectra['attenuated'] = Sed(self.lam, np.sum(sed, axis=0))
 
         if integrated:
             return self.spectra['attenuated']

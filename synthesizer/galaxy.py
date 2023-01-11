@@ -4,17 +4,14 @@ import matplotlib.pyplot as plt
 import cmasher as cmr
 
 
-
 class BaseGalaxy:
 
     """ a base galaxy class """
-
 
     def T(self):
         """ Calcualte transmission as a function of wavelength """
 
         return self.spectra['attenuated'].lam, self.spectra['attenuated'].lnu/self.spectra['intrinsic'].lnu
-
 
     def Al(self):
         """ Calcualte attenuation as a function of wavelength """

@@ -9,42 +9,42 @@ from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 # TODO: need new binning method for SFH class
 
 # def plot_sfh(x, sfh, log10=False):
-# 
+#
 #     x_range = [x[0], x[-1]]
-# 
+#
 #     # sfh_ = sfzh.Binned.sfh(x, sfh, log10=log10)
 #     # print(sfh_)
-# 
+#
 #     fig, ax = single()
-# 
+#
 #     # ax.fill_between(x, sfh_/np.max(sfh_), step='mid', color='k', alpha=0.3)
 #     ax.fill_between(x, sfh / np.max(sfh), step='mid', color='k', alpha=0.3)
-# 
+#
 #     # --- add SFR to top of the plot
 #     x = np.linspace(*x_range, 1000)
 #     if log10:
 #         y = sfh.sfr(10**x)
 #     else:
 #         y = sfh.sfr(x)
-# 
+#
 #     ax.plot(x, y/np.max(y))
-# 
+#
 #     if log10:
 #         ax.set_xlabel(mlabel('log_{10}(age/yr)'))
 #     else:
 #         ax.set_xlabel(mlabel('age/yr'))
-# 
+#
 #     ax.set_ylabel(mlabel('normalised\ SFR'))
-# 
+#
 #     ax.set_xlim(x_range)
-# 
+#
 #     plt.show()
-# 
-# 
+#
+#
 # def plot_sfhs():
-# 
+#
 #     ages = np.arange(0, 2000, 1)
-# 
+#
 #     # sfh_p = [1E8] # [duration/yr]
 #     # sfh = sfzh.SFH.Constant(*sfh_p) # constant star formation
 #     # plot_sfh(ages, sfh, log10 = False)
@@ -52,11 +52,11 @@ from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 #     # sfh_p = [1E8, 2E8] # [tau/yr, mag_age/yr]
 #     # sfh = sfzh.SFH.TruncatedExponential(*sfh_p) # constant star formation
 #     # plot_sfh(ages, sfh, log10 = False)
-# 
+#
 #     sfh_p = {'peak_age': 700. * yr, 'tau': 0.2, 'max_age': 1000 * yr}
 #     sfh = SFH.LogNormal(sfh_p)  # constant star formation
 #     plot_sfh(ages, sfh, log10=False)
-# 
+#
 #     print(sfh.sfr(10))
 
 

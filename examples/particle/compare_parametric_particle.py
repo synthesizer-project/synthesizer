@@ -33,31 +33,30 @@ sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh)
 parametric_galaxy = ParametricGalaxy(grid, sfzh)
 
 sed = parametric_galaxy.spectra['stellar']
-plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label = 'parametric', lw = 4, c='k', alpha = 0.3)
+plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label='parametric', lw=4, c='k', alpha=0.3)
 
 
 # --------------------------------------------
 # CREATE PARTICLE SED
 
-for N in [1,10,100,1000]:
+for N in [1, 10, 100, 1000]:
 
     # --- create stars object
     stars = sample_sfhz(sfzh, N)
-    stars.renormalise_mass(1.) # ensure that the total mass = 1 irrespective of N. This can be also acheived by setting the mass of the star particles in sample_sfhz but this will be easier most of the time.
+    # ensure that the total mass = 1 irrespective of N. This can be also acheived by setting the mass of the star particles in sample_sfhz but this will be easier most of the time.
+    stars.renormalise_mass(1.)
 
     # --- create galaxy object
-    particle_galaxy = ParticleGalaxy(stars = stars)
-
+    particle_galaxy = ParticleGalaxy(stars=stars)
 
     # --- this generates stellar and intrinsic spectra
-    particle_galaxy.generate_intrinsic_spectra(grid, fesc=0.0, integrated = True)
+    particle_galaxy.generate_intrinsic_spectra(grid, fesc=0.0, integrated=True)
 
     sed = particle_galaxy.spectra['stellar']
-    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label = f'particle (N={N})')
-
+    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=f'particle (N={N})')
 
 
 plt.legend()
-plt.xlim([2,5])
-plt.ylim([10,22])
+plt.xlim([2, 5])
+plt.ylim([10, 22])
 plt.show()

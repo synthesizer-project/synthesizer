@@ -1,6 +1,5 @@
 
 
-
 class InconsistentParameter(Exception):
     def __init__(self, *args):
         """

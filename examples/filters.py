@@ -1,5 +1,5 @@
 from synthesizer.filters import FilterFromSVO, SVOFilterCollection,\
-                                TopHatFilterCollection, UVJ
+    TopHatFilterCollection, UVJ
 
 # define individual filters
 filt = FilterFromSVO('JWST/NIRCam.F200W')  # use filter code

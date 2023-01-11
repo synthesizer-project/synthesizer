@@ -15,34 +15,27 @@ from ..plt import single_histxy, mlabel
 from ..stats import weighted_median, weighted_mean
 
 
-
 class Galaxy(BaseGalaxy):
 
     def __init__(self, SFZH):
 
-
         self.sfzh = SFZH.sfzh
-        self.sfzh_ = np.expand_dims(self.sfzh, axis=2) # add an extra dimension to the sfzh to allow the fast summation
-        self.spectra = {} # dictionary holding spectra
-        self.lines = {} # dictionary holding lines
-
+        # add an extra dimension to the sfzh to allow the fast summation
+        self.sfzh_ = np.expand_dims(self.sfzh, axis=2)
+        self.spectra = {}  # dictionary holding spectra
+        self.lines = {}  # dictionary holding lines
 
     def get_Q(self, grid):
         """ return the ionising photon luminosity (log10Q) for a given SFZH. """
 
         return np.sum(10**self.grid.log10Q * self.sfzh, axis=(0, 1))
 
-
-
-
     def generate_lnu(self, grid, spectra_name):
 
-        return np.sum(grid.spectra[spectra_name] * self.sfzh_, axis=(0, 1))  # calculate pure stellar emission
+        # calculate pure stellar emission
+        return np.sum(grid.spectra[spectra_name] * self.sfzh_, axis=(0, 1))
 
-
-
-    def get_stellar_spectra(self, grid, update = True):
-
+    def get_stellar_spectra(self, grid, update=True):
         """ generate the pure stellar spectra using the provided grid"""
 
         lnu = self.generate_lnu(grid, 'stellar')
@@ -54,8 +47,7 @@ class Galaxy(BaseGalaxy):
 
         return sed
 
-
-    def get_nebular_spectra(self, grid, fesc = 0.0, update = True):
+    def get_nebular_spectra(self, grid, fesc=0.0, update=True):
 
         lnu = self.generate_lnu(grid, 'nebular')
 
@@ -68,13 +60,11 @@ class Galaxy(BaseGalaxy):
 
         return sed
 
-
-    def get_intrinsic_spectra(self, grid, fesc = 0.0, update = True):
-
+    def get_intrinsic_spectra(self, grid, fesc=0.0, update=True):
         """ this generates the intrinsic spectra, i.e. not including dust but including nebular emission. It also generates the stellar and nebular spectra too. """
 
-        stellar = self.get_stellar_spectra(grid, update = update)
-        nebular = self.get_nebular_spectra(grid, fesc, update = update)
+        stellar = self.get_stellar_spectra(grid, update=update)
+        nebular = self.get_nebular_spectra(grid, fesc, update=update)
 
         sed = Sed(grid.lam, stellar.lnu + nebular.lnu)
 
@@ -83,16 +73,13 @@ class Galaxy(BaseGalaxy):
 
         return sed
 
-
-
-    def get_screen_spectra(self, grid, tauV=None, fesc=0.0, dust_curve = power_law({'slope': -1.}), update = True):
-
+    def get_screen_spectra(self, grid, tauV=None, fesc=0.0, dust_curve=power_law({'slope': -1.}), update=True):
         """
         Similar to get_intrinsic_spectra but applies a dust screen
         """
 
         # --- begin by calculating intrinsic spectra
-        intrinsic = self.get_intrinsic_spectra(grid, fesc, update = update)
+        intrinsic = self.get_intrinsic_spectra(grid, fesc, update=update)
 
         if tauV:
             T = np.exp(-tauV) * dust_curve.T(grid.lam)
@@ -106,17 +93,11 @@ class Galaxy(BaseGalaxy):
 
         return sed
 
-
-
-
-
-    def get_pacman_spectra(self, grid, fesc=0.0, fesc_LyA=1.0, tauV=None, dust_curve = power_law({'slope': -1.}), update = True):
-
+    def get_pacman_spectra(self, grid, fesc=0.0, fesc_LyA=1.0, tauV=None, dust_curve=power_law({'slope': -1.}), update=True):
         """ in the PACMAN model some fraction (fesc) of the pure stellar emission is assumed to completely escape the galaxy without reprocessing by gas or dust. The rest is assumed to be reprocessed by both gas and a screen of dust. """
 
-
         # --- begin by generating the pure stellar spectra
-        stellar = self.get_stellar_spectra(grid, update = update)
+        stellar = self.get_stellar_spectra(grid, update=update)
 
         # --- this is the starlight that escapes any reprocessing
         self.spectra['escape'] = Sed(grid.lam, fesc * stellar.lnu)
@@ -158,19 +139,12 @@ class Galaxy(BaseGalaxy):
 
         return self.spectra['total']
 
-
     def get_CF00_spectra(tauV, p={}):
         """ add Charlot \& Fall (2000) dust """
 
         print('WARNING: not yet implemented')
 
-
-
-
-
-
-    def get_intrinsic_line(self, grid, line_id, quantity = False, update = True):
-
+    def get_intrinsic_line(self, grid, line_id, quantity=False, update=True):
         """ return intrinsic quantities (luminosity, EW) for a single line or line set """
 
         if type(line_id) is str:
@@ -184,7 +158,8 @@ class Galaxy(BaseGalaxy):
             grid_line = grid.lines[line_id_]
 
             wavelength_.append(grid_line['wavelength'])  # \AA
-            continuum_.append(np.sum(grid_line['continuum'] * self.sfzh, axis=(0, 1))) #  continuum at line wavelength, erg/s/Hz
+            #  continuum at line wavelength, erg/s/Hz
+            continuum_.append(np.sum(grid_line['continuum'] * self.sfzh, axis=(0, 1)))
             luminosity_.append(np.sum(grid_line['luminosity'] * self.sfzh, axis=(0, 1)))
 
         # --- create line object
@@ -195,7 +170,6 @@ class Galaxy(BaseGalaxy):
             self.lines[line.id] = line
 
         return line
-
 
     # def get_intrinsic_line(self, tauV):
     #

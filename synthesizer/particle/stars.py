@@ -15,8 +15,6 @@ class Stars(Particles):
 
         self.nparticles = len(self.initial_masses)
 
-
-
         self.tauV = None  # V-band dust optical depth
         self.alpha = None  # alpha-enhancement [alpha/Fe]
         self.a3 = None
@@ -57,13 +55,10 @@ class Stars(Particles):
             self.abundance_hydrogen = kwargs['s_hydrogen']
             self.attributes.append('abundance_hydrogen')
 
-
     def renormalise_mass(self, stellar_mass):
-
         """ renormalise the total mass to the given values """
 
         self.initial_masses *= stellar_mass/np.sum(self.initial_masses)
-
 
     def summary(self):
         """
@@ -76,14 +71,12 @@ class Stars(Particles):
         print(f'log10(total mass formed/Msol): {np.log10(np.sum(self.initial_masses)):.2f}')
         print(f'median(age/Myr): {np.median(self.ages)/1E6:.1f}')
 
-
     def add_attribute(self, attribute_name, attribute):
         """
         add an arbitrary attribute
         """
         self.attributes.append(attribute_name)
         self.locals[attribute_name] = attribute
-
 
     def _power_law_sample(self, a, b, g, size=1):
         """
@@ -179,12 +172,7 @@ class Stars(Particles):
         self.resampled = True
 
 
-
-
-
-
-def sample_sfhz(sfzh, N, initial_mass = 1.):
-
+def sample_sfhz(sfzh, N, initial_mass=1.):
     """ Sample a binned star formation and metal enrichment history and return a star particle object """
 
     hist = sfzh.sfzh/np.sum(sfzh.sfzh)

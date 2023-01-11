@@ -7,9 +7,7 @@ from numpy import histogram2d
 
 class ImageGenerator:
 
-
-    def generate_histogram(coordinates, axes = (0,1), weights = None, size = None, size_pixels = None, pixel_scale = None):
-
+    def generate_histogram(coordinates, axes=(0, 1), weights=None, size=None, size_pixels=None, pixel_scale=None):
         """ Generate a simple 2D histogram image """
 
         x = coordinates[:, axes[0]]
@@ -32,5 +30,4 @@ class ImageGenerator:
 
             print('WARNING: need some size/pixel scale information')
 
-
-        return Image(*histogram2d(x, y, bins = [xedges, yedges], weights = weights))
+        return Image(*histogram2d(x, y, bins=[xedges, yedges], weights=weights))

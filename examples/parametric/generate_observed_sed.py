@@ -35,8 +35,7 @@ if __name__ == '__main__':
     galaxy = Galaxy(sfzh)
 
     # # --- pacman model (complex)
-    sed = galaxy.get_pacman_spectra(grid, fesc = 0.5, fesc_LyA = 0.5, tauV = 0.1)
-
+    sed = galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1)
 
     # --- now calculate the observed frame spectra
 

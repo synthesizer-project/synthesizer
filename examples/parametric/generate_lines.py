@@ -16,9 +16,7 @@ if __name__ == '__main__':
 
     line_id = ['HI4861', 'OIII4959', 'OIII5007']
 
-    grid = Grid(model, grid_dir=grid_dir, read_spectra = False, read_lines = line_id)
-
-
+    grid = Grid(model, grid_dir=grid_dir, read_spectra=False, read_lines=line_id)
 
     # --- define the parameters of the star formation and metal enrichment histories
     sfh_p = {'duration': 100 * Myr}
@@ -32,7 +30,6 @@ if __name__ == '__main__':
     sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh)
 
     galaxy = Galaxy(sfzh)
-
 
     line = galaxy.get_intrinsic_line(grid, line_id)
 

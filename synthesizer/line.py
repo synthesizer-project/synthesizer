@@ -1,13 +1,12 @@
 
 
-
-
 import numpy as np
 
 import unyt
 from unyt import c, h, nJy, erg, s, Hz, pc
 
 from .sed import convert_fnu_to_flam
+
 
 class Line:
 
@@ -31,11 +30,12 @@ class Line:
         self.continuum_ = continuum_
 
         self.id = ','.join(id_)
-        self.continuum = np.mean(continuum_) # mean continuum value
-        self.wavelength = np.mean(wavelength_) # mean wavelength of the line
-        self.luminosity = np.sum(luminosity_) # total luminosity of the line
+        self.continuum = np.mean(continuum_)  #  mean continuum value
+        self.wavelength = np.mean(wavelength_)  # mean wavelength of the line
+        self.luminosity = np.sum(luminosity_)  # total luminosity of the line
 
-        self.continuum_lam = convert_fnu_to_flam(self.wavelength, self.continuum)  # continuum at line wavelength, erg/s/AA
+        # continuum at line wavelength, erg/s/AA
+        self.continuum_lam = convert_fnu_to_flam(self.wavelength, self.continuum)
         self.ew = self.luminosity / self.continuum_lam  # AA
 
     def summary(self):

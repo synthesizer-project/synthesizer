@@ -55,11 +55,9 @@ if __name__ == '__main__':
     # galaxy.plot_spectra()
 
     # # --- pacman model (complex)
-    galaxy.get_pacman_spectra(grid, fesc = 0.5, fesc_LyA = 0.5, tauV = 0.1)
+    galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1)
     galaxy.plot_spectra()
 
     # # --- CF00 model NOT YET IMPLEMENTED
     # galaxy.get_pacman_spectra(grid, tauV = 0.1, fesc = 0.5)
     # galaxy.plot_spectra()
-
-    

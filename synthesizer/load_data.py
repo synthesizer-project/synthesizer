@@ -19,20 +19,20 @@ def load_CAMELS_SIMBA(_dir='.', snap='033'):
         Om0 = hf['Header'].attrs[u'Omega0']
         h = hf['Header'].attrs[u'HubbleParam']
 
-    s_oxygen = _metals[:,4]
-    s_hydrogen = 1 - np.sum(_metals[:,1:], axis=1)
-    metals = _metals[:,0]
+    s_oxygen = _metals[:, 4]
+    s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
+    metals = _metals[:, 0]
 
     # convert formation times to ages
     cosmo = FlatLambdaCDM(H0=h*100, Om0=Om0)
-    universe_age = cosmo.age(1./ scale_factor - 1)
+    universe_age = cosmo.age(1. / scale_factor - 1)
     _ages = cosmo.age(1./form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
     with h5py.File(f'{_dir}/fof_subhalo_tab_{snap}.hdf5', 'r') as hf:
         lens = hf['Subhalo/SubhaloLenType'][:]
 
-    begin, end = get_len(lens[:,4])
+    begin, end = get_len(lens[:, 4])
 
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
@@ -45,7 +45,6 @@ def load_CAMELS_SIMBA(_dir='.', snap='033'):
                                initial_masses=masses[b:e])
 
     return galaxies
-
 
 
 def load_FLARES(f, region, tag):

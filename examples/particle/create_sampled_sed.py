@@ -13,10 +13,6 @@ from synthesizer.particle.stars import Stars
 from synthesizer.particle.galaxy import Galaxy
 
 
-
-
-
-
 # --- define the grid (normally this would be defined by an SPS grid)
 log10ages = np.arange(6., 10.5, 0.1)
 metallicities = 10**np.arange(-5., -1.5, 0.1)
@@ -35,9 +31,9 @@ sfzh.summary()
 
 # --- create stars object
 
-N = 100 # number of particles for sampling
+N = 100  # number of particles for sampling
 stars = sample_sfhz(sfzh, N)
-stars.summary() # print summary
+stars.summary()  # print summary
 
 
 # --- open grid
@@ -47,11 +43,12 @@ grid = Grid(grid_name)
 
 # --- create galaxy object
 
-galaxy = Galaxy(stars = stars)
+galaxy = Galaxy(stars=stars)
 
 # --- this generates stellar and intrinsic spectra
 # galaxy.generate_intrinsic_spectra(grid, fesc=0.0) # calculate only integrated SEDs
-galaxy.generate_intrinsic_spectra(grid, fesc=0.0, integrated = False) # calculates for every star particle, slow but necessary for LOS.
+# calculates for every star particle, slow but necessary for LOS.
+galaxy.generate_intrinsic_spectra(grid, fesc=0.0, integrated=False)
 
 # --- generate dust screen
 # galaxy.get_screen(0.5) # tauV
@@ -61,12 +58,12 @@ galaxy.generate_intrinsic_spectra(grid, fesc=0.0, integrated = False) # calculat
 
 # --- generate for los model
 tauVs = np.ones(N) * 0.5
-galaxy.get_los(tauVs) # grid, tauV_BC, tauV_ISM
+galaxy.get_los(tauVs)  # grid, tauV_BC, tauV_ISM
 
 for sed_type, sed in galaxy.spectra.items():
-    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label = sed_type)
+    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=sed_type)
 
 plt.legend()
-plt.xlim([2,5])
-plt.ylim([10,22])
+plt.xlim([2, 5])
+plt.ylim([10, 22])
 plt.show()

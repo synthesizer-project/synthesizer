@@ -30,10 +30,10 @@ def calculate_weights(np.ndarray[dtype_s, ndim=1] z,
     cdef int ihigh, ilow, lenz, lena
     cdef dtype_s ifrac, jfrac, metal, age, mass, mfrac
     # cdef float mfrac
-    
+
     lenz = len(z)
     lena = len(a)
-    
+
     cdef np.ndarray[dtype_s,ndim=2] w_init = np.zeros((lenz,lena))#, dtype=np.float32)
     cdef double[:,:] w = w_init
 
@@ -50,7 +50,7 @@ def calculate_weights(np.ndarray[dtype_s, ndim=1] z,
 
     if a[0] > a[1]:
         raise ValueError('Age array not sorted ascendingly')
-        
+
 
     for p in range(0, len(particle)):
         #metal, age, mass = particle[p]
@@ -91,8 +91,8 @@ def calculate_weights(np.ndarray[dtype_s, ndim=1] z,
         # ensure we're not adding weights more than once when outside range
         if (jlow != jhigh):
             w[ilow,jhigh] = w[ilow,jhigh] + mfrac * jfrac
-        if (ilow != ihigh):  
-            mfrac = particle[p][2] * ifrac 
+        if (ilow != ihigh):
+            mfrac = particle[p][2] * ifrac
             w[ihigh,jlow] = w[ihigh,jlow] + mfrac * (1.-jfrac)
             if (jlow != jhigh):
                 w[ihigh,jhigh] = w[ihigh,jhigh] + mfrac * jfrac
