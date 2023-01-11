@@ -5,7 +5,7 @@ from .. import exceptions
 # import pyximport; pyximport.install()
 from ..weights import calculate_weights
 import numpy as np
-from ..imaging.images import particleImage
+from ..imaging.images import ParticleImage
 
 
 class Galaxy:
