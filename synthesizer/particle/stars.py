@@ -11,6 +11,12 @@ class Stars(Particles):
         self.ages = ages
         self.metallicities = metallicities
 
+        # --- need to add check for particle array length
+
+        self.nparticles = len(self.initial_masses)
+
+
+
         self.tauV = None  # V-band dust optical depth
         self.alpha = None  # alpha-enhancement [alpha/Fe]
         self.a3 = None
@@ -30,7 +36,7 @@ class Stars(Particles):
         if 'initial_masses' in kwargs.keys():
             self.initial_masses = kwargs['initial_masses']
             self.attributes.append('initial_masses')
-        
+
         if 'velocities' in kwargs.keys():
             self.velocities = kwargs['velocities']
             self.attributes.append('velocities')
@@ -50,6 +56,34 @@ class Stars(Particles):
         if 's_hydrogen' in kwargs.keys():
             self.abundance_hydrogen = kwargs['s_hydrogen']
             self.attributes.append('abundance_hydrogen')
+
+
+    def renormalise_mass(self, stellar_mass):
+
+        """ renormalise the total mass to the given values """
+
+        self.initial_masses *= stellar_mass/np.sum(self.initial_masses)
+
+
+    def summary(self):
+        """
+        print summary
+        """
+
+        print('-'*10)
+        print('SUMMARY OF STAR PARTICLES')
+        print('attributes:', self.attributes)
+        print(f'log10(total mass formed/Msol): {np.log10(np.sum(self.initial_masses)):.2f}')
+        print(f'median(age/Myr): {np.median(self.ages)/1E6:.1f}')
+
+
+    def add_attribute(self, attribute_name, attribute):
+        """
+        add an arbitrary attribute
+        """
+        self.attributes.append(attribute_name)
+        self.locals[attribute_name] = attribute
+
 
     def _power_law_sample(self, a, b, g, size=1):
         """

@@ -8,7 +8,7 @@ import numpy as np
 
 
 class Galaxy:
-    def __init__(self):
+    def __init__(self, stars = None, gas = None):
         self.name = 'galaxy'
 
         self.stellar_lum = None
@@ -18,6 +18,12 @@ class Galaxy:
 
         self.spectra = {}  # integrated spectra dictionary
         self.spectra_array = {}  # spectra arrays dictionary
+
+        self.stars = stars # a star object
+        self.gas = gas
+
+        if self.stars:
+            self.nparticles = stars.nparticles
 
     # this should be able to take a pre-existing stars object!
 

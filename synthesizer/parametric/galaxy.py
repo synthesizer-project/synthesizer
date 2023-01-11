@@ -11,7 +11,7 @@ from unyt import yr, erg, Hz, s, cm, angstrom
 import matplotlib.pyplot as plt
 import cmasher as cmr
 
-from .. import dust_curves
+from .. import dust
 from ..sed import Sed, convert_fnu_to_flam
 from ..plt import single_histxy, mlabel
 from ..stats import weighted_median, weighted_mean
