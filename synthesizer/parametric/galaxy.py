@@ -276,7 +276,7 @@ class Galaxy():
 
         # --- create line object
 
-        line = Line(line_id, wavelength_, continuum_, luminosity_)
+        line = Line(line_id, wavelength_, luminosity_, continuum_)
 
         if update:
             self.lines[line.id] = line
