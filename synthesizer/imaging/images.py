@@ -4,7 +4,7 @@ import math
 import numpy as np
 import synthesizer.exceptions as exceptions
 from synthesizer.imaging.observations import Observation, ParticleObservation, ParametricObservation
-from synthesizer.imaging.spectral_cubes import ParticleSpectralCube. ParametricSpectralCube
+from synthesizer.imaging.spectral_cubes import ParticleSpectralCube, ParametricSpectralCube
 
 
 class Image(Observation):
