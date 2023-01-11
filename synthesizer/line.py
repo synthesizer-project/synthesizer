@@ -35,12 +35,13 @@ class Line:
         self.wavelength = np.mean(wavelength_) # mean wavelength of the line
         self.luminosity = np.sum(luminosity_) # total luminosity of the line
 
-        continuum_lam = convert_fnu_to_flam(self.wavelength, self.continuum)  # continuum at line wavelength, erg/s/AA
-        self.ew = self.luminosity / continuum_lam  # AA
-        print(self.ew)
+        self.continuum_lam = convert_fnu_to_flam(self.wavelength, self.continuum)  # continuum at line wavelength, erg/s/AA
+        self.ew = self.luminosity / self.continuum_lam  # AA
 
     def summary(self):
 
         print('-'*5, self.id)
+        print(f'log10(continuum/erg/s/\AA): {np.log10(self.continuum_lam):.2f}')
+        print(f'log10(continuum/erg/s/Hz): {np.log10(self.continuum):.2f}')
         print(f'log10(luminosity/erg/s): {np.log10(self.luminosity):.2f}')
-        print(f'EW/AA: {self.ew:.0f}')
+        print(f'EW/\AA: {self.ew:.0f}')
