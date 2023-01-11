@@ -86,7 +86,7 @@ class Observation:
         self.npart = self.sim_coords.shape[0]
 
         # Are the positions centered?
-        if np.min(self.sim_coords) < 0:
+        if np.min(self.sim_coords) != 0:
 
             # If so compute that offset and shift particles to start at 0
             self.pos_offset = np.min(self.sim_coords, axis=0)
@@ -94,7 +94,7 @@ class Observation:
 
         # Run instantiation methods
         self.pix_pos = np.zeros(self.sim_coords.shape, dtype=np.int32)
-        self.get_pixel_pos()
+        self._get_pixel_pos()
 
         # # Include noise related attributes
         # self.pixel_noise = pixel_noise

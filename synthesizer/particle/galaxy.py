@@ -5,6 +5,7 @@ from .. import exceptions
 # import pyximport; pyximport.install()
 from ..weights import calculate_weights
 import numpy as np
+from ..imaging.images import particleImage
 
 
 class Galaxy:
@@ -58,7 +59,6 @@ class Galaxy:
         else:
             s = np.ones(self.nparticles, dtype=bool)
 
-
         # just calculate integrared spectra
         if integrated:
 
@@ -70,10 +70,11 @@ class Galaxy:
             stellar_lum = np.sum(grid.spectra['stellar'] * weights_temp[:, :, None],
                                  axis=(0, 1))
 
-            if 'total' in list(grid.spectra.keys()):  # perhaps should also check that fesc is not false
+            # perhaps should also check that fesc is not false
+            if 'total' in list(grid.spectra.keys()):
 
                 intrinsic_lum = np.sum((1.-fesc) * grid.spectra['total'] * weights_temp[:, :, None],
-                                        axis=(0, 1))
+                                       axis=(0, 1))
 
             else:
 
@@ -108,7 +109,8 @@ class Galaxy:
                 stellar_lum_array[i] = np.sum(grid.spectra['stellar'] * weights_temp[:, :, None],
                                               axis=(0, 1))
 
-                if 'total' in list(grid.spectra.keys()):  # perhaps should also check that fesc is not false
+                # perhaps should also check that fesc is not false
+                if 'total' in list(grid.spectra.keys()):
 
                     # --- I'm not sure this will actually work if fesc is an array
                     intrinsic_lum_array[i] = np.sum((1.-fesc) * grid.spectra['total'] * weights_temp[:, :, None],
@@ -124,20 +126,22 @@ class Galaxy:
                 # --- these quantities are actually repeated, in the context of an SED object below.
                 self.stellar_lum_array = stellar_lum_array
                 self.intrinsic_lum_array = intrinsic_lum_array
-                self.stellar_lum = np.sum(stellar_lum_array, axis=0)  # --- create integrated stellar SED
+                # --- create integrated stellar SED
+                self.stellar_lum = np.sum(stellar_lum_array, axis=0)
                 # --- create integrated intrinsic SED
                 self.intrinsic_lum = np.sum(intrinsic_lum_array, axis=0)
 
                 # --- repititon of above, may want to consolidate
                 self.spectra['stellar'] = Sed(grid.lam, self.stellar_lum)
-                self.spectra_array['stellar'] = Sed(grid.lam, self.stellar_lum_array)
+                self.spectra_array['stellar'] = Sed(
+                    grid.lam, self.stellar_lum_array)
                 self.spectra['intrinsic'] = Sed(grid.lam, self.intrinsic_lum)
-                self.spectra_array['intrinsic'] = Sed(grid.lam, self.intrinsic_lum_array)
+                self.spectra_array['intrinsic'] = Sed(
+                    grid.lam, self.intrinsic_lum_array)
 
                 self.lam = grid.lam
 
             return grid.lam, stellar_lum_array, intrinsic_lum_array
-
 
     def get_screen(self, tauV, dust_curve=power_law({'slope': -1.}), integrated=True):
         """
@@ -177,21 +181,25 @@ class Galaxy:
         _, stellar_sed_old, intrinsic_sed_old = self.generate_intrinsic_spectra(
             grid, update=False, old=1E7, integrated=integrated)  # this does not return an Sed object
 
-
-
         if save_young_and_old:
 
             if integrated:
 
-                self.spectra['intrinsic_young'] = Sed(self.lam, intrinsic_sed_young)
-                self.spectra['intrinsic_old'] = Sed(self.lam, intrinsic_sed_old)
+                self.spectra['intrinsic_young'] = Sed(
+                    self.lam, intrinsic_sed_young)
+                self.spectra['intrinsic_old'] = Sed(
+                    self.lam, intrinsic_sed_old)
 
             else:
 
-                self.spectra_array['intrinsic_young'] = Sed(self.lam, intrinsic_sed_young)
-                self.spectra_array['intrinsic_old'] = Sed(self.lam, intrinsic_sed_old)
-                self.spectra['intrinsic_young'] = Sed(self.lam, np.sum(intrinsic_sed_young))
-                self.spectra['intrinsic_old'] = Sed(self.lam, np.sum(intrinsic_sed_old))
+                self.spectra_array['intrinsic_young'] = Sed(
+                    self.lam, intrinsic_sed_young)
+                self.spectra_array['intrinsic_old'] = Sed(
+                    self.lam, intrinsic_sed_old)
+                self.spectra['intrinsic_young'] = Sed(
+                    self.lam, np.sum(intrinsic_sed_young))
+                self.spectra['intrinsic_old'] = Sed(
+                    self.lam, np.sum(intrinsic_sed_old))
 
         T_ISM = np.exp(-tauV_ISM) * power_law({'slope': alpha_ISM}).T(self.lam)
         T_BC = np.exp(-tauV_BC) * power_law({'slope': alpha_BC}).T(self.lam)
@@ -211,9 +219,11 @@ class Galaxy:
 
             else:
 
-                self.spectra_array['attenuated_young'] = Sed(self.lam, sed_young)
+                self.spectra_array['attenuated_young'] = Sed(
+                    self.lam, sed_young)
                 self.spectra_array['attenuated_old'] = Sed(self.lam, sed_old)
-                self.spectra['attenuated_young'] = Sed(self.lam, np.sum(sed_young))
+                self.spectra['attenuated_young'] = Sed(
+                    self.lam, np.sum(sed_young))
                 self.spectra['attenuated_old'] = Sed(self.lam, np.sum(sed_old))
 
         # --- total SED
@@ -240,9 +250,10 @@ class Galaxy:
         # if not self.intrinsic_lum_array:
         #     print('Must generate spectra for individual star particles')
 
-        sed = self.intrinsic_lum_array * T  # these two should have the same shape so should work?
+        # these two should have the same shape so should work?
+        sed = self.intrinsic_lum_array * T
         self.spectra_array['attenuated'] = Sed(self.lam, sed)
-        self.spectra['attenuated'] = Sed(self.lam, np.sum(sed, axis = 0))
+        self.spectra['attenuated'] = Sed(self.lam, np.sum(sed, axis=0))
 
         if integrated:
             return self.spectra['attenuated']
@@ -332,3 +343,30 @@ class Galaxy:
                                      grid.log10metallicities, in_arr)
         else:
             return calculate_weights(grid.log10ages, grid.log10metallicities, in_arr)
+
+    def create_stellarmass_hist(self, resolution, npix=None, fov=None):
+        """
+        Calculate a 2D histogram of the galaxies mass distribution.
+
+
+        Parameters
+        ----------
+        resolution : float
+           The size of a pixel.
+        npix : int
+            The number of pixels along an axis.
+        fov : float
+            The width of the image in image coordinates.
+
+        Returns
+        -------
+        Image : array-like
+            A 2D array containing the image.
+
+        """
+
+        # Instantiate the Image object.
+        img = ParticleImage(resolution, npix, fov, stars=self.stars,
+                            pixel_values=self.stars.initial_masses)
+
+        return img.get_hist_img()
