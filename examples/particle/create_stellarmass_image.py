@@ -11,7 +11,6 @@ from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
-from synthesizer.observations import get_idx
 
 
 # --- define the grid (normally this would be defined by an SPS grid)
