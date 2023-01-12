@@ -27,12 +27,10 @@ sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 # --- create stars object
 
 N = 1000  # number of particles for sampling
-stars = sample_sfhz(sfzh, N)
 
 coords = CoordinateGenerator.generate_3D_gaussian(N)
-stars.add_attribute('coordinates', coords)
-
-stars.summary()  # print summary
+stars = sample_sfhz(sfzh, N, coordinates=coords)
+print(stars)
 
 
 # --- open grid
