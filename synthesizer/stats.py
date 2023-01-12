@@ -38,7 +38,7 @@ def weighted_median(data, weights):
     return w_median
 
 
-#Weighted quantiles
+# Weighted quantiles
 def weighted_quantile(values, quantiles, sample_weight=None,
                       values_sorted=False, old_style=False):
     """
@@ -71,7 +71,6 @@ def weighted_quantile(values, quantiles, sample_weight=None,
         values = values[sorter]
         sample_weight = sample_weight[sorter]
 
-
     weighted_quantiles = np.cumsum(sample_weight) - 0.5 * sample_weight
     if old_style:
         # To be convenient with numpy.percentile
@@ -82,33 +81,31 @@ def weighted_quantile(values, quantiles, sample_weight=None,
     return np.interp(quantiles, weighted_quantiles, values)
 
 
-
-def binned_weighted_quantile(x,y,weights,bins,quantiles):
+def binned_weighted_quantile(x, y, weights, bins, quantiles):
 
     # if ~isinstance(quantiles,list):
     #     quantiles = [quantiles]
 
-    out = np.full((len(bins)-1,len(quantiles)),np.nan)
-    for i,(b1,b2) in enumerate(zip(bins[:-1],bins[1:])):
+    out = np.full((len(bins)-1, len(quantiles)), np.nan)
+    for i, (b1, b2) in enumerate(zip(bins[:-1], bins[1:])):
         mask = (x >= b1) & (x < b2)
         if np.sum(mask) > 0:
-            out[i,:] = weighted_quantile(y[mask],quantiles,sample_weight=weights[mask])
+            out[i, :] = weighted_quantile(y[mask], quantiles, sample_weight=weights[mask])
 
     return np.squeeze(out)
 
 
-
 def n_weighted_moment(values, weights, n):
 
-    assert n>0 & (values.shape == weights.shape)
-    w_avg = np.average(values, weights = weights)
+    assert n > 0 & (values.shape == weights.shape)
+    w_avg = np.average(values, weights=weights)
     w_var = np.sum(weights * (values - w_avg)**2)/np.sum(weights)
 
-    if n==1:
+    if n == 1:
         return w_avg
-    elif n==2:
+    elif n == 2:
         return w_var
     else:
         w_std = np.sqrt(w_var)
         return np.sum(weights * ((values - w_avg)/w_std)**n)/np.sum(weights)
-              #Same as np.average(((values - w_avg)/w_std)**n, weights=weights)
+        # Same as np.average(((values - w_avg)/w_std)**n, weights=weights)

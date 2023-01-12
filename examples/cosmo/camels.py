@@ -7,11 +7,13 @@ from synthesizer.sed import Sed
 from synthesizer.load_data import load_CAMELS_SIMBA
 from synthesizer.filters import UVJ
 
-
-grid_dir = str(sys.argv[1])
+if len(sys.argv) > 1:
+    grid_dir = str(sys.argv[1])
+else:
+    grid_dir = None
 
 # first load a spectral grid
-_grid = grid.SpectralGrid('bc03_chabrier03', grid_dir=grid_dir)
+_grid = grid.Grid('bc03_chabrier03', grid_dir=grid_dir)
 
 # now load some example CAMELS data using the dedicated data loader
 gals = load_CAMELS_SIMBA('data/', snap='033')

@@ -5,10 +5,10 @@ from synthesizer.sed import Sed
 from synthesizer.grid import Grid
 from synthesizer.filters import SVOFilterCollection
 
-
-# grid_dir = '/cosma7/data/dp004/dc-love2/codes/synthesizer_data/grids/'
-# grid_dir = str(sys.argv[1])
-grid_dir = None
+if len(sys.argv) > 1:
+    grid_dir = str(sys.argv[1])
+else:
+    grid_dir = None
 
 model = 'bc03_chabrier03'
 grid = Grid(model, grid_dir=grid_dir)
