@@ -362,7 +362,7 @@ def sample_sfhz(sfzh, n, initial_mass=1):
     log10ages, log10metallicities = random_from_cdf.T
 
     # Instantiate Stars object
-    stars = Stars(initial_mass * np.ones(N), 10 ** log10ages,
+    stars = Stars(initial_mass * np.ones(n), 10 ** log10ages,
                   10 ** log10metallicities)
 
     return stars
