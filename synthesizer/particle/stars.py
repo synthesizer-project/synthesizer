@@ -60,11 +60,10 @@ class Stars(Particles):
 
         self.initial_masses *= stellar_mass/np.sum(self.initial_masses)
 
-    def summary(self):
+    def __str__(self):
         """
         print summary
         """
-
         print('-'*10)
         print('SUMMARY OF STAR PARTICLES')
         print('attributes:', self.attributes)

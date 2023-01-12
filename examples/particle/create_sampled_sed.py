@@ -10,7 +10,7 @@ from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
-from synthesizer.particle.galaxy import Galaxy
+from synthesizer.galaxy.particle import ParticleGalaxy
 
 
 # --- define the grid (normally this would be defined by an SPS grid)
@@ -33,7 +33,6 @@ sfzh.summary()
 
 N = 100  # number of particles for sampling
 stars = sample_sfhz(sfzh, N)
-stars.summary()  # print summary
 
 
 # --- open grid
@@ -43,7 +42,7 @@ grid = Grid(grid_name)
 
 # --- create galaxy object
 
-galaxy = Galaxy(stars=stars)
+galaxy = ParticleGalaxy(stars=stars)
 
 # --- this generates stellar and intrinsic spectra
 # galaxy.generate_intrinsic_spectra(grid, fesc=0.0) # calculate only integrated SEDs

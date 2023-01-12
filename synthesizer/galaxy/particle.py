@@ -1,13 +1,13 @@
-from .stars import Stars
+from ..particle.stars import Stars
 from ..sed import Sed
 from ..dust import power_law
-from ..galaxy import BaseGalaxy
+from .galaxy import BaseGalaxy
 from .. import exceptions
 from ..weights import calculate_weights
 import numpy as np
 
 
-class Galaxy(BaseGalaxy):
+class ParticleGalaxy(BaseGalaxy):
     def __init__(self, stars=None, gas=None):
         self.name = 'galaxy'
 

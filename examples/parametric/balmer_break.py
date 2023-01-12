@@ -3,7 +3,7 @@ from synthesizer.plt import single
 from synthesizer.filters import TopHatFilterCollection
 from synthesizer.grid import Grid, parse_grid_id
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh, generate_instant_sfzh
-from synthesizer.parametric.galaxy import Galaxy
+from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
 from unyt import yr, Myr
 
 
@@ -13,6 +13,7 @@ if __name__ == '__main__':
     # --- calcualte the EW for a given line as a function of age
 
     grid_dir = '/example/grid_directory/synthesizer_data/grid/'
+    grid_dir = None
 
     models = [
         'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2',

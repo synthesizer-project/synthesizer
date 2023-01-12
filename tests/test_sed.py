@@ -15,4 +15,3 @@ def empty_sed():
 def test_sed_empty(empty_sed):
     all_zeros = not np.any(empty_sed.lnu)
     assert all_zeros
-
