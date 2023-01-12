@@ -22,11 +22,11 @@ class Stars(Particles):
     contain. It inherits from the base Particles class holding attributes and
     methods common to all particle types.
 
-    The Stars class can be handed to methods elsewhere to pass ingormation need
+    The Stars class can be handed to methods elsewhere to pass information
     about the stars needed in other computations. A galaxy object should have a
-    link to the stars object containing its stars for example.
+    link to the stars object containing its stars, for example.
 
-    Note that due to the many possible operations this class has a large number
+    Note that due to the many possible operations, this class has a large number
     of optional attributes which are set to None if not provided.
 
     Attributes
@@ -62,9 +62,9 @@ class Stars(Particles):
         The smoothing lengths (describing the sph kernel) of each stellar
         particle in simulation length units.
     s_oxygen : array-like (float)
-        ???
+        fractional oxygen abundance
     s_hydrogen : array-like (float)
-        ???
+        fractional hydrogen abundance
     """
 
     # Define the allowed attributes
@@ -76,9 +76,8 @@ class Stars(Particles):
 
     def __init__(self, initial_masses, ages, metallicities, **kwargs):
         """
-        Intialise the Stars instance. The first 3 arguments are always required
-        with all other attributes optional based on what funcitonality is
-        currently being utilised.
+        Intialise the Stars instance. The first 3 arguments are always required.
+        All other attributes are optional.
         """
 
         # Set always required stellar particle properties
@@ -185,16 +184,14 @@ class Stars(Particles):
                              power_law_index=-1.3, n_samples=1e3,
                              force_resample=False, verbose=False):
         """
-        Resample young stellar particles into HII regions, with a
+        Resample young stellar particles into individual HII regions, with a
         power law distribution of masses. A young stellar particle is a
         stellar particle with an age < min_age (defined in Myr?).
 
-        This function overwrites the propertys stored in attributes with the
+        This function overwrites the properties stored in attributes with the
         resampled properties.
 
         Currently resampling and imaging are not supported. An error is thrown.
-
-        Why do you resample?
 
         Parameters
         ----------
