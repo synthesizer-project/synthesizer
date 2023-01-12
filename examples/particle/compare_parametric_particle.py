@@ -8,10 +8,10 @@ from unyt import yr, Myr
 
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.parametric.galaxy import SEDGenerator as ParametricGalaxy
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
-from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
+from synthesizer.galaxy.parametric import ParametricGalaxy
+from synthesizer.galaxy.particle import ParticleGalaxy
 
 
 # --- initialise the SPS grid
@@ -30,8 +30,8 @@ sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh)
 # --------------------------------------------
 # CREATE PARAMETRIC SED
 
-parametric_galaxy = ParametricGalaxy(grid, sfzh)
-
+parametric_galaxy = ParametricGalaxy(sfzh)
+parametric_galaxy.get_stellar_spectra(grid)
 sed = parametric_galaxy.spectra['stellar']
 plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label='parametric', lw=4, c='k', alpha=0.3)
 

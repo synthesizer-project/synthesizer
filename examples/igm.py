@@ -3,7 +3,7 @@ import numpy as np
 
 import cmasher as cmr
 
-from synthesizer.igm import Madau96, Inoue14
+from synthesizer.sed.igm import Madau96, Inoue14
 
 
 lam = np.arange(0, 20000)

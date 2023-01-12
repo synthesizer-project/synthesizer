@@ -1,6 +1,6 @@
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.parametric.galaxy import Galaxy
+from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
 from unyt import yr, Myr
 
 
