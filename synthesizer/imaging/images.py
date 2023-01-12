@@ -25,6 +25,10 @@ class Image(Observation):
     def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
                  filters=(), survey=None):
 
+        # Sanitize inputs
+        if filters is None:
+            filters = ()
+
         # Initilise the parent class
         Observation.__init__(self, resolution, npix, fov, sed, stars, survey)
 
