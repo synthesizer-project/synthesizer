@@ -29,7 +29,8 @@ sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 N = 1000  # number of particles for sampling
 
 coords = CoordinateGenerator.generate_3D_gaussian(N)
-stars = sample_sfhz(sfzh, N, coordinates=coords)
+stars = sample_sfhz(sfzh, N)
+stars.coordinates = coords
 print(stars)
 
 
