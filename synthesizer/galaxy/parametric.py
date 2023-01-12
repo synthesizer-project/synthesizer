@@ -7,15 +7,15 @@ import numpy as np
 from scipy import integrate
 from unyt import yr, erg, Hz, s, cm, angstrom
 
-from ..galaxy import BaseGalaxy
+from .galaxy import BaseGalaxy
 from ..dust import power_law
-from ..sed import Sed, convert_fnu_to_flam
+from ..sed.sed import Sed, convert_fnu_to_flam
 from ..line import Line
 from ..plt import single_histxy, mlabel
 from ..stats import weighted_median, weighted_mean
 
 
-class Galaxy(BaseGalaxy):
+class ParametricGalaxy(BaseGalaxy):
 
     def __init__(self, SFZH):
 

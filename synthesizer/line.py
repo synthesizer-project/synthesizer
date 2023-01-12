@@ -5,7 +5,7 @@ import numpy as np
 import unyt
 from unyt import c, h, nJy, erg, s, Hz, pc
 
-from .sed import convert_fnu_to_flam
+from .sed.sed import convert_fnu_to_flam
 
 
 class Line:
