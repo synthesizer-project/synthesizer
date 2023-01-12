@@ -67,6 +67,15 @@ class Observation:
         self.stars = stars
         self.survey = survey
 
+        # Ensure we haven't been handed a resampled set of stars
+        if self.stars is not None:
+            if self.stars.resampled:
+                raise exceptions.UnimplementedFunctionality(
+                    "Functionality to make images from resampled stellar "
+                    "distributions is currently unsupported. Contact the "
+                    "authors if you wish to contribute this behaviour."
+                )
+
         # Handle the different input cases
         if npix is None:
             self._compute_npix()
