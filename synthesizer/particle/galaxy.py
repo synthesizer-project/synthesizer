@@ -348,7 +348,8 @@ class Galaxy(BaseGalaxy):
             return calculate_weights(grid.log10ages[grid.ages <= grid.max_age],
                                      grid.log10metallicities, in_arr)
         else:
-            return calculate_weights(grid.log10ages, grid.log10metallicities, in_arr)
+            return calculate_weights(grid.log10ages, grid.log10metallicities,
+                                     in_arr)
 
     def create_stellarmass_hist(self, resolution, npix=None, fov=None):
         """

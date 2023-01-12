@@ -143,6 +143,7 @@ class ParticleImage(ParticleObservation, Image):
         """
 
         # Handle the possible cases (multiple filters or single image)
+        print(self.pixel_values)
         if self.pixel_values is not None:
 
             return self._get_hist_img_single_filter()
