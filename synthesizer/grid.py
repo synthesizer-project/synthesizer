@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from . import __file__ as filepath
 from .plt import mlabel
-from .sed.sed import Sed, convert_fnu_to_flam
+from .sed import Sed, convert_fnu_to_flam
 
 
 def parse_grid_id(grid_id):

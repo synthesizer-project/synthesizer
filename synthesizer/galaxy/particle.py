@@ -1,5 +1,5 @@
 from ..particle.stars import Stars
-from ..sed.sed import Sed
+from ..sed import Sed
 from ..dust import power_law
 from .galaxy import BaseGalaxy
 from .. import exceptions

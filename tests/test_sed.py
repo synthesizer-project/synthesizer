@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-from synthesizer.sed.sed import Sed
+from synthesizer.sed import Sed
 
 
 @pytest.fixture
