@@ -147,17 +147,16 @@ class ParticleImage(ParticleObservation, Image):
 
             return self._get_hist_img_single_filter()
 
-        else:
-            # Calculate IFU "image"
-            self.ifu = self._ifu_obj.get_hist_ifu()
+        # Calculate IFU "image"
+        self.ifu = self._ifu_obj.get_hist_ifu()
 
-            # Otherwise, we need to loop over filters and return a dictionary
-            for f in self.filters:
+        # Otherwise, we need to loop over filters and return a dictionary
+        for f in self.filters:
 
-                # Apply this filter to the IFU
-                self.imgs[f.filter_code] = self.apply_filter(f)
+            # Apply this filter to the IFU
+            self.imgs[f.filter_code] = self.apply_filter(f)
 
-            return self.imgs
+        return self.imgs
 
     def get_smoothed_img(self):
         pass

@@ -47,7 +47,7 @@ galaxy = Galaxy(stars=stars)
 resolution = 0.1
 
 img = galaxy.create_stellarmass_hist(resolution, npix=100)
-
+print(img)
 plt.imshow(img)
 plt.savefig("stellmass_test.png")
 
