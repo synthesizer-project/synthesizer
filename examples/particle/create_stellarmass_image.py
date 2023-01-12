@@ -46,7 +46,10 @@ galaxy = Galaxy(stars=stars)
 # Define image propertys
 resolution = 0.1
 
-cube = galaxy.create_stellarmass_hist(resolution, npix=100)
+img = galaxy.create_stellarmass_hist(resolution, npix=100)
+
+plt.imshow(img)
+plt.savefig("stellmass_test.png")
 
 # image = cube.create_image(500) # create an image at wavelength = lam[500]
 # image.make_image_plot(show=True)
