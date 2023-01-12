@@ -26,7 +26,7 @@ class Image(Observation):
                  filters=(), survey=None):
 
         # Initilise the parent class
-        super().__init__(resolution, npix, fov, sed, stars, survey)
+        Observation.__init__(self, resolution, npix, fov, sed, stars, survey)
 
         # Set up filter objects
         self.filters = filters
@@ -70,7 +70,9 @@ class ParticleImage(ParticleObservation, Image):
                  filters=(), survey=None, positions=None, pixel_values=None):
 
         # Initilise the parent classes
-        super().__init__(resolution, npix, fov, sed, stars, survey, positions)
+        ParticleObservation.__init__(self, resolution, npix, fov, sed, stars,
+                                     survey, positions)
+        Image.__init__(self, resolution, npix, fov, sed, stars, survey)
 
         # If we have a list of filters make an IFU
         self._ifu_obj = None
@@ -170,12 +172,12 @@ class ParametricImage(ParametricObservation, Image):
     """
 
     def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
-                 filters=(), survey=None, positions=None, pixel_values=None):
+                 filters=(), survey=None, positions=None):
 
         # Initilise the parent classes
-        ParametricObservation.__init__(resolution, npix, fov, sed, stars,
+        ParametricObservation.__init__(self, resolution, npix, fov, sed, stars,
                                        survey)
-        Image.__init__(resolution, npix, fov, sed, stars, survey)
+        Image.__init__(self, resolution, npix, fov, sed, stars, survey)
 
         # If we have a list of filters make an IFU
         self._ifu_obj = None

@@ -191,7 +191,7 @@ class ParticleObservation(Observation):
         self._check_args(stars, positions)
 
         # Initilise the parent class
-        Observation.__init__(resolution, npix, fov, sed, stars, survey)
+        Observation.__init__(self, resolution, npix, fov, sed, stars, survey)
 
         # Handle the particle positions
         if stars is not None:
@@ -325,4 +325,4 @@ class ParametricObservation(Observation):
         """
 
         # Initilise the parent class
-        Observation.__init__(resolution, npix, fov, sed, stars, survey)
+       Observation.__init__(self, resolution, npix, fov, sed, stars, survey)

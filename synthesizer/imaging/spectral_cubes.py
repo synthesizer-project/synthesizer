@@ -24,7 +24,7 @@ class SpectralCube(Observation):
                  survey=None):
 
         # Initilise the parent class
-        Observation.__init__(resolution, npix, fov, sed, stars, survey)
+        Observation.__init__(self, resolution, npix, fov, sed, stars, survey)
 
         # Set up the data cube dimensions
         self.nwlengths = sed.lam.size
@@ -62,8 +62,9 @@ class ParticleSpectralCube(ParticleObservation, SpectralCube):
 
         # Initilise the parent class
         ParticleObservation.__init__(
-            resolution, npix, fov, sed, stars, survey, positions)
-        SpectralCube.__init__(resolution, npix, fov, sed, stars, survey)
+            self, resolution, npix, fov, sed, stars, survey, positions
+        )
+        SpectralCube.__init__(self, resolution, npix, fov, sed, stars, survey)
 
     def get_hist_ifu(self):
         """
@@ -115,6 +116,7 @@ class ParametricSpectralCube(ParametricObservation, SpectralCube):
                  survey=None):
 
         # Initilise the parent class
-        ParticleObservation.__init__(
-            resolution, npix, fov, sed, stars, survey, positions=None)
-        SpectralCube.__init__(resolution, npix, fov, sed, stars, survey)
+        ParametricObservation.__init__(
+            self, resolution, npix, fov, sed, stars, survey
+        )
+        SpectralCube.__init__(self, resolution, npix, fov, sed, stars, survey)
