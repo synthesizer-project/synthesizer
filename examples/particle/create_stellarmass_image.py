@@ -34,10 +34,10 @@ stars.coordinates = coords
 print(stars)
 
 
-# --- open grid
+# # --- open grid
 
-grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
-grid = Grid(grid_name)
+# grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
+# grid = Grid(grid_name)
 
 # --- create galaxy object
 
