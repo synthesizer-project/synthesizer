@@ -195,8 +195,8 @@ class ParticleObservation(Observation):
 
         # Handle the particle positions
         if stars is not None:
-            self.sim_coords = stars.coods
-            self.shifted_sim_pos = stars.coods
+            self.sim_coords = stars.coordinates
+            self.shifted_sim_pos = stars.coordinates
 
         else:
             self.sim_coords = positions
