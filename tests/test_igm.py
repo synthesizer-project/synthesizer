@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-from synthesizer.igm import Inoue14, Madau96
+from synthesizer.sed.igm import Inoue14, Madau96
 
 
 @pytest.fixture
