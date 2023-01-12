@@ -109,11 +109,10 @@ class ParticleImage(ParticleObservation, Image):
         InconsistentArguments
            Errors when an incorrect combination of arguments is passed.
         """
-        print(self.pix_pos)
-        print(self.fov, self.npix, self.npart)
+
         self.img = np.histogram2d(self.pix_pos[:, 0], self.pix_pos[:, 1],
                                   bins=self.npix,
-                                  range=((0, self.fov), (0, self.fov)),
+                                  range=((0, self.npix), (0, self.npix)),
                                   weights=self.pixel_values)[0]
 
         return self.img
