@@ -3,8 +3,10 @@
 import math
 import numpy as np
 import synthesizer.exceptions as exceptions
-from synthesizer.imaging.observation import Observation, ParticleObservation, ParametricObservation
-from synthesizer.imaging.spectral_cubes import ParticleSpectralCube, ParametricSpectralCube
+from synthesizer.imaging.observation import (Observation, ParticleObservation,
+                                             ParametricObservation)
+from synthesizer.imaging.spectral_cubes import (ParticleSpectralCube,
+                                                ParametricSpectralCube)
 
 
 class Image(Observation):
@@ -24,17 +26,10 @@ class Image(Observation):
                  filters=(), survey=None):
 
         # Initilise the parent class
-        Observation.__init__(resolution, npix, fov, sed, stars, survey)
+        super().__init__(resolution, npix, fov, sed, stars, survey)
 
         # Set up filter objects
         self.filters = filters
-
-        # If we have a list of filters make an IFU
-        self._ifu_obj = None
-        self.ifu = None
-        if len(filters) > 0:
-            self._ifu_obj = SpectralCube(sed, resolution, npix, fov, stars,
-                                         survey, positions)
 
         # Set up img arrays. When multiple filters are provided we need a dict.
         self.img = np.zeros((self.npix, self.npix), dtype=np.float64)
@@ -75,9 +70,14 @@ class ParticleImage(ParticleObservation, Image):
                  filters=(), survey=None, positions=None, pixel_values=None):
 
         # Initilise the parent classes
-        ParticleObservation.__init__(resolution, npix, fov, sed, stars, survey,
-                                     positions)
-        Image.__init__(resolution, npix, fov, sed, stars, survey)
+        super().__init__(resolution, npix, fov, sed, stars, survey, positions)
+
+        # If we have a list of filters make an IFU
+        self._ifu_obj = None
+        self.ifu = None
+        if len(filters) > 0:
+            self._ifu_obj = ParticleSpectralCube(sed, resolution, npix, fov,
+                                                 stars, survey, positions)
 
         # Set up pixel values
         self.pixel_values = pixel_values
@@ -176,3 +176,10 @@ class ParametricImage(ParametricObservation, Image):
         ParametricObservation.__init__(resolution, npix, fov, sed, stars,
                                        survey)
         Image.__init__(resolution, npix, fov, sed, stars, survey)
+
+        # If we have a list of filters make an IFU
+        self._ifu_obj = None
+        self.ifu = None
+        if len(filters) > 0:
+            self._ifu_obj = ParametricSpectralCube(sed, resolution, npix, fov,
+                                                   stars, survey, positions)
