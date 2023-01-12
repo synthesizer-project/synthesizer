@@ -150,35 +150,35 @@ class Stars(Particles):
 
         return pstr
 
-    def _power_law_sample(self, a, b, g, size=1):
+    def _power_law_sample(self, low_lim, upp_lim, g, size=1):
         """
+        Sample from a power law over an interval not containing zero.
+        
         Power-law gen for pdf(x) propto x^{g-1} for a<=x<=b
-
-        TODO: What is going on here?
 
         Parameters
         ----------
-        a : float
-            ???
-        b : float
-            ???
+        low_lim : float
+            lower bound
+        upp_lim : float
+            upper bound
         g : float
-            ???
+            power law index
         size : int
-            Size of desired output array?
+            number of samples
 
         Returns
         -------
-        float
-             What is it?
+        array-like (float)
+             desired samples
         """
 
         # Get a random sample
         rand = np.random.random(size=size)
 
-        a_g, b_g = a ** g, b ** g
+        low_lim_g, upp_lim_g = low_lim ** g, low_lim ** g
 
-        return (a_g + (b_g - a_g) * rand) ** (1 / g)
+        return (low_lim_g + (upp_lim_g - low_lim_g) * rand) ** (1 / g)
 
     def resample_young_stars(self, min_age=1e8, min_mass=700, max_mass=1e6,
                              power_law_index=-1.3, n_samples=1e3,
