@@ -184,4 +184,4 @@ class ParametricImage(ParametricObservation, Image):
         self.ifu = None
         if len(filters) > 0:
             self._ifu_obj = ParametricSpectralCube(sed, resolution, npix, fov,
-                                                   stars, survey, positions)
+                                                   stars, survey)

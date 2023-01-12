@@ -325,4 +325,4 @@ class ParametricObservation(Observation):
         """
 
         # Initilise the parent class
-       Observation.__init__(self, resolution, npix, fov, sed, stars, survey)
+        Observation.__init__(self, resolution, npix, fov, sed, stars, survey)
