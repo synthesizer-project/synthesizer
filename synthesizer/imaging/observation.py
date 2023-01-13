@@ -23,7 +23,7 @@ class Observation:
     #              "shifted_sim_pos", "part_val", "pix_pos", "pos_offset",
     #              "img"]
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
+    def __init__(self, resolution, npix=None, fov=None, sed=None,
                  survey=None):
         """
         Intialise the Observation.
@@ -64,17 +64,7 @@ class Observation:
 
         # Attributes containing data
         self.sed = sed
-        self.stars = stars
         self.survey = survey
-
-        # Ensure we haven't been handed a resampled set of stars
-        if self.stars is not None:
-            if self.stars.resampled:
-                raise exceptions.UnimplementedFunctionality(
-                    "Functionality to make images from resampled stellar "
-                    "distributions is currently unsupported. Contact the "
-                    "authors if you wish to contribute this behaviour."
-                )
 
         # Handle the different input cases
         if npix is None:
@@ -191,7 +181,10 @@ class ParticleObservation(Observation):
         self._check_args(stars, positions)
 
         # Initilise the parent class
-        Observation.__init__(self, resolution, npix, fov, sed, stars, survey)
+        Observation.__init__(self, resolution, npix, fov, sed, survey)
+
+        # Intialise stars attribute
+        self.stars = stars
 
         # Handle the particle positions
         if stars is not None:
@@ -250,6 +243,15 @@ class ParticleObservation(Observation):
         InconsistentArguments
            Errors when an incorrect combination of arguments is passed.
         """
+
+        # Ensure we haven't been handed a resampled set of stars
+        if self.stars is not None:
+            if self.stars.resampled:
+                raise exceptions.UnimplementedFunctionality(
+                    "Functionality to make images from resampled stellar "
+                    "distributions is currently unsupported. Contact the "
+                    "authors if you wish to contribute this behaviour."
+                )
 
         # Missing positions
         if stars is None and positions is None:
