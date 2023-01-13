@@ -32,6 +32,10 @@ class Image(Observation):
         # Initilise the parent class
         Observation.__init__(self, resolution, npix, fov, sed, stars, survey)
 
+        # Intialise IFU attributes
+        self._ifu_obj = None
+        self.ifu = None
+
         # Set up filter objects
         self.filters = filters
 
@@ -42,7 +46,34 @@ class Image(Observation):
                      for f in filters}
 
     def apply_filter(self, f):
-        pass
+        """
+        Applies a filters transmission curve defined by a Filter object to an
+        IFU to get a single band image.
+
+        Constructing an IFU first and applying the filter to the image will
+        always be faster than calculating particle photometry and making
+        multiple images when there are multiple bands. This way the image is
+        made once as an IFU and the filter application which is much faster
+        is done for each band.
+
+        Parameters
+        ----------
+        f : obj (Filter)
+            The Filter object containing all filter information.
+
+        Returns
+        -------
+        img : array-like (float)
+             A single band image in this filter with shape (npix, npix).
+        """
+
+        # Multiply the IFU by the filter transmission curve
+        transmitted = self.ifu * f.t
+
+        # Sum over the final axis to "collect" transmission in this filer
+        img = np.sum(transmitted, axis=-1)
+
+        return img
 
     def get_psfed_img_single_filter(self):
         pass
@@ -79,8 +110,6 @@ class ParticleImage(ParticleObservation, Image):
         Image.__init__(self, resolution, npix, fov, sed, stars, survey)
 
         # If we have a list of filters make an IFU
-        self._ifu_obj = None
-        self.ifu = None
         if len(filters) > 0:
             self._ifu_obj = ParticleSpectralCube(sed, resolution, npix, fov,
                                                  stars, survey, positions)
@@ -184,8 +213,6 @@ class ParametricImage(ParametricObservation, Image):
         Image.__init__(self, resolution, npix, fov, sed, stars, survey)
 
         # If we have a list of filters make an IFU
-        self._ifu_obj = None
-        self.ifu = None
         if len(filters) > 0:
             self._ifu_obj = ParametricSpectralCube(sed, resolution, npix, fov,
                                                    stars, survey)
