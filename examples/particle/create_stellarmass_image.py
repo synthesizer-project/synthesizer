@@ -1,5 +1,8 @@
-# --- this example generates a sample of star particles from a 2D SFZH and then generates a spectral cube.
+"""
+This example generates a sample of star particles from a 2D SFZH and then
+generates an image of the mass distribution.
 
+"""
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,7 +16,7 @@ from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 
 
-# --- define the grid (normally this would be defined by an SPS grid)
+# Define the grid (normally this would be defined by an SPS grid)
 log10ages = np.arange(6., 10.5, 0.1)
 metallicities = 10**np.arange(-5., -1.5, 0.1)
 Z_p = {'Z': 0.01}
@@ -23,38 +26,22 @@ sfh = SFH.Constant(sfh_p)  # constant star formation
 sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 
 
-# -----------------------------v
-# --- create stars object
-
-N = 1000  # number of particles for sampling
-
+# Create stars object
+N = 10000  # number of particles for sampling
 coords = CoordinateGenerator.generate_3D_gaussian(N)
 stars = sample_sfhz(sfzh, N)
 stars.coordinates = coords
 print(stars)
 
-
-# # --- open grid
-
-# grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
-# grid = Grid(grid_name)
-
-# --- create galaxy object
-
+# Create galaxy object
 galaxy = Galaxy(stars=stars)
 
 # Define image propertys
-resolution = 0.1
+resolution = 0.05
 
+# Get the image
 img = galaxy.create_stellarmass_hist(resolution, npix=100)
-print(img)
+
+# Plot the image
 plt.imshow(img)
 plt.savefig("stellmass_test.png")
-
-# image = cube.create_image(500) # create an image at wavelength = lam[500]
-# image.make_image_plot(show=True)
-
-# image = cube.create_image(1500.) # create an image at the wavelength closest to 1500\AA. I think it would be better to use quantities here
-# image.make_image_plot(show=True)
-
-# cube.animate() # create animation of the spectral grid
