@@ -29,11 +29,41 @@ class FilterCollection:
         # Do we resample in wavelength?
         self.new_lam = new_lam
 
+        # Atrributes to enable looping
+        self.current_ind = 0
+        self.nfilters = len(filter_codes)
+
     def __len__(self):
         """
         Overload the len operator to return how many filters there are.
         """
         return len(self.filters)
+    
+    def __iter__(self):
+        """
+        Overload iteration to allow simple looping over filter objects,
+        combined with __next__ this enables for f in FilterCollection syntax
+        """
+        return self
+
+    def __next__(self):
+        """
+        Overload iteration to allow simple looping over filter objects,
+        combined with __iter__ this enables for f in FilterCollection syntax
+        """
+
+        # Check we haven't finished
+        if self.current_ind >= self.nfilters:
+            self.current_ind = 0
+            raise StopIteration
+        else:
+            # Increment index
+            self.current_ind += 1
+
+            # Return the filter
+            return self.filters[self.current_ind - 1]
+            
+        
 
     def transmission_curve_ax(self, ax, add_filter_label=True):
         """ add filter transmission curves to a give axes """
@@ -78,19 +108,20 @@ class SVOFilterCollection(FilterCollection):
     def __init__(self, filter_codes, new_lam=False):
 
         # Initialise parent
-        FilterCollection.__init__(self, filter_codes, new_lam)
+        FilterCollection.__init__(self, filter_codes=filter_codes,
+                                  new_lam=new_lam)
 
         # Loop over filter codes getting each filter
         for f in self.filter_codes:
 
             # Get filter from SVO
             F = FilterFromSVO(f, new_lam=self.new_lam)
-
+            
             # Store the filter
             self.filters[F.filter_code] = F
 
         # Convert dictionary to a list
-        self.filters = list(self.filters.keys())
+        self.filters = list(self.filters.values())
 
 
 class TopHatFilterCollection(FilterCollection):
@@ -117,7 +148,7 @@ class TopHatFilterCollection(FilterCollection):
             self.filters[F.filter_code] = F
 
         # Convert dictionary to a list
-        self.filters = list(self.filter.keys())
+        self.filters = list(self.filters.values())
 
 
 def UVJ(new_lam=None):
