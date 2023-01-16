@@ -140,10 +140,14 @@ class Sed:
         self.lamz = self.lam
         self.fnu = self.lnu
 
-    def get_fnu(self, cosmo, z, igm=Inoue14()):
+    def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution in nJy
         """
+
+        # Define default igm if none has been given
+        if igm is None:
+            igm = Inoue14()
 
         self.lamz = self.lam * (1. + z)  # observed frame wavelength
         luminosity_distance = cosmo.luminosity_distance(
