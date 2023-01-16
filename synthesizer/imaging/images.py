@@ -450,4 +450,4 @@ class ParametricImage(ParametricObservation, Image):
         # If we have a list of filters make an IFU
         if len(filters) > 0:
             self._ifu_obj = ParametricSpectralCube(sed, resolution, npix, fov,
-                                                   stars, survey)
+                                                   survey)
