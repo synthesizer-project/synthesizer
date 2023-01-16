@@ -55,7 +55,7 @@ class Observation:
         """
 
         # Check what we've been given
-        self._check_args(fov, npix)
+        self._check_obs_args(fov, npix)
 
         # Image metadata
         self.resolution = resolution
@@ -78,7 +78,7 @@ class Observation:
         # # Set up noisy img
         # self.noisy_img = np.zeros(self.res, dtype=np.float64)
 
-    def _check_args(self, fov, npix):
+    def _check_obs_args(self, fov, npix):
         """
         Ensures we have a valid combination of inputs.
 
@@ -178,18 +178,19 @@ class ParticleObservation(Observation):
         """
 
         # Check what we've been given
-        self._check_args(stars, positions)
+        self._check_part_args(stars, positions)
 
         # Initilise the parent class
-        Observation.__init__(self, resolution, npix, fov, sed, survey)
+        Observation.__init__(self, resolution=resolution, npix=npix, fov=fov,
+                             sed=sed, survey=survey)
 
-        # Intialise stars attribute
+        # Initialise stars attribute
         self.stars = stars
 
         # Handle the particle positions
-        if stars is not None:
-            self.sim_coords = stars.coordinates
-            self.shifted_sim_pos = stars.coordinates
+        if self.stars is not None:
+            self.sim_coords = np.copy(self.stars.coordinates)
+            self.shifted_sim_pos = np.copy(self.stars.coordinates)
 
         else:
             self.sim_coords = positions
@@ -206,19 +207,10 @@ class ParticleObservation(Observation):
         self.pix_pos = np.zeros(self.sim_coords.shape, dtype=np.int32)
         self._get_pixel_pos()
 
-        # # Remove particles outside the FOV
-        # xokinds = np.logical_and(self.pix_pos[:, 0] > 0,
-        #                          self.pix_pos[:, 0] < self.npix)
-        # yokinds = np.logical_and(self.pix_pos[:, 1] > 0,
-        #                          self.pix_pos[:, 1] < self.npix)
-        # self.particles_in_fov = np.logical_and(xokinds, yokinds)
-        # self.pix_pos = self.pix_pos[self.particles_in_fov, :]
-        # self.sim_coords = self.sim_coords[self.particles_in_fov]
-
         # How many particle are there?
         self.npart = self.sim_coords.shape[0]
 
-    def _check_args(self, stars, positions):
+    def _check_part_args(self, stars, positions):
         """
         Ensures we have a valid combination of inputs.
 
@@ -245,8 +237,8 @@ class ParticleObservation(Observation):
         """
 
         # Ensure we haven't been handed a resampled set of stars
-        if self.stars is not None:
-            if self.stars.resampled:
+        if stars is not None:
+            if stars.resampled:
                 raise exceptions.UnimplementedFunctionality(
                     "Functionality to make images from resampled stellar "
                     "distributions is currently unsupported. Contact the "
