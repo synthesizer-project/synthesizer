@@ -42,7 +42,7 @@ if __name__ == '__main__':
     sfh = SFH.Constant(sfh_p)  # constant star formation
     sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 
-    Print("SFHZ sampled, took:", time.time() - start)
+    print("SFHZ sampled, took:", time.time() - start)
 
     stars_start = time.time()
 
