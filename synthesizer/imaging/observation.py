@@ -7,21 +7,40 @@ import synthesizer.exceptions as exceptions
 
 class Observation:
     """
-    The parent class used for creation of 2D images and IFUs (data cubes)
+    The parent class for all "observations". These include:
+    - Flux/rest frame luminosity images in photometric bands.
+    - Images of underlying properties such as SFR, stellar mass, etc.
+    - Data cubes (IFUs) containing spatially resolved spectra.
+
+    This parent contains the attributes and methods common to all observation
+    types to reduce boilerplate.
 
     Attributes
     ----------
+    resolution : float
+        The size a pixel.
+    npix : int
+        The number of pixels along an axis of the image or number of spaxels
+        in the image plane of the IFU. 
+    fov : float
+        The width of the image/ifu. If coordinates are being used to make the
+        image this should have the same units as those coordinates.
+    sed : obj (SED)
+        An sed object containing the spectra for this observation.
+    survey : obj (Survey)
+        WorkInProgress
 
-
-    Methods
-    -------
+    Raises
+    ----------
+    InconsistentArguments
+        If an incompatible combination of arguments is provided an error is
+        raised.
 
     """
 
-    # # Define slots to reduce memory overhead of this class
-    # __slots__ = ["res", "width", "img_sum", "npart", "sim_pos",
-    #              "shifted_sim_pos", "part_val", "pix_pos", "pos_offset",
-    #              "img"]
+    # Define slots to reduce memory overhead of this class and limit the
+    # possible attributes.
+    __slots__ = ["resolution", "fov", "npix", "sed", "survey"]
 
     def __init__(self, resolution, npix=None, fov=None, sed=None,
                  survey=None):
@@ -30,28 +49,23 @@ class Observation:
 
         Parameters
         ----------
-        sed : SED object
-           An sed object to make the image.
-        fov : float
-            The width of the image.
+        resolution : float
+            The size a pixel.
         npix : int
-            The number of pixels in the image.
-        stars : Stars object
-            The object containing the stars to be placed in a image.
-        positons : array-like (float)
-            The position in the image of pixel values.
-
-        Returns
-        -------
-        string
-           a value in a string
+            The number of pixels along an axis of the image or number of
+            spaxels in the image plane of the IFU. 
+        fov : float
+            The width of the image/ifu. If coordinates are being used to make
+            the image this should have the same units as those coordinates.
+        sed : obj (SED)
+            An sed object containing the spectra for this observation.
+        survey : obj (Survey)
+            WorkInProgress
 
         Raises
         ------
-        KeyError
-           when a key error
-        OtherError
-           when an other error
+        InconsistentArguments
+           Errors when an incorrect combination of arguments is passed.
         """
 
         # Check what we've been given
@@ -89,15 +103,7 @@ class Observation:
             The width of the image.
         npix : int
             The number of pixels in the image.
-        stars : Stars object
-            The object containing the stars to be placed in a image.
-        positons : array-like (float)
-            The position in the image of pixel values.
-
-        Returns
-        -------
-        None
-
+        
         Raises
         ------
         InconsistentArguments
@@ -114,6 +120,9 @@ class Observation:
         """
         Compute the number of pixels in the FOV, ensuring the FOV is an
         integer number of pixels.
+
+        There are multiple ways to define the dimensions of an image, this
+        handles the case where the resolution and FOV is given.
         """
 
         # Compute how many pixels fall in the FOV
@@ -125,6 +134,9 @@ class Observation:
     def _compute_fov(self):
         """
         Compute the FOV, based on the number of pixels.
+
+        There are multiple ways to define the dimensions of an image, this
+        handles the case where the resolution and number of pixels is given.
         """
 
         # Redefine the FOV based on npix
@@ -133,52 +145,75 @@ class Observation:
 
 class ParticleObservation(Observation):
     """
-    The parent class used for creation of 2D images and IFUs (data cubes)
+    The parent class for all "observations". These include:
+    - Flux/rest frame luminosity images in photometric bands.
+    - Images of underlying properties such as SFR, stellar mass, etc.
+    - Data cubes (IFUs) containing spatially resolved spectra.
+
+    This parent contains the attributes and methods common to all observation
+    types to reduce boilerplate.
 
     Attributes
     ----------
+    stars : obj (Stars)
+        The object containing the stars to be placed in a image.
+    coords : array-like (float)
+        The position of particles to be sorted into the image.
+    centre : array-like (float)
+        The coordinates around which the image will be centered.
+    pix_pos : array-like (float)
+        The integer coordinates of particles in pixel units.
+    npart : int
+        The number of stellar particles.
 
-
-    Methods
-    -------
+    Raises
+    ----------
+    InconsistentArguments
+        If an incompatible combination of arguments is provided an error is
+        raised.
 
     """
 
-    # # Define slots to reduce memory overhead of this class
-    # __slots__ = ["res", "width", "img_sum", "npart", "sim_pos",
-    #              "shifted_sim_pos", "part_val", "pix_pos", "pos_offset",
-    #              "img"]
+    # Define slots to reduce memory overhead of this class
+    __slots__ = ["stars", "coords", "centre", "pix_pos", "npart"]
 
     def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
                  survey=None, positions=None, centre=None):
         """
-        Intialise the Observation.
+        Intialise the ParticleObservation.
 
         Parameters
         ----------
-        sed : SED object
-           An sed object to make the image.
-        fov : float
-            The width of the image.
+        resolution : float
+            The size a pixel.
         npix : int
-            The number of pixels in the image.
-        stars : Stars object
+            The number of pixels along an axis of the image or number of
+            spaxels in the image plane of the IFU. 
+        fov : float
+            The width of the image/ifu. If coordinates are being used to make
+            the image this should have the same units as those coordinates.
+        sed : obj (SED)
+            An sed object containing the spectra for this observation.
+        stars : obj (Stars)
             The object containing the stars to be placed in a image.
+        survey : obj (Survey)
+            WorkInProgress
         positons : array-like (float)
-            The position in the image of pixel values.
-
-        Returns
-        -------
-        None
+            The position of particles to be sorted into the image.
+        centre : array-like (float)
+            The coordinates around which the image will be centered. The if one
+            is not provided then the geometric centre is calculated and used.
 
         Raises
         ------
-        None
+        InconsistentArguments
+            If an incompatible combination of arguments is provided an error is
+            raised.
 
         """
 
         # Check what we've been given
-        self._check_part_args(stars, positions)
+        self._check_part_args(stars, positions, centre)
 
         # Initilise the parent class
         Observation.__init__(self, resolution=resolution, npix=npix, fov=fov,
@@ -187,53 +222,47 @@ class ParticleObservation(Observation):
         # Initialise stars attribute
         self.stars = stars
 
-        # Handle the particle positions
+        # Handle the particle positions, here we make a copy to avoid changing
+        # the original values
         if self.stars is not None:
-            self.sim_coords = np.copy(self.stars.coordinates)
-            self.shifted_sim_pos = np.copy(self.stars.coordinates)
-
+            self.coords = np.copy(self.stars.coordinates)
         else:
-            self.sim_coords = positions
-            self.shifted_sim_pos = positions
+            self.coords = np.copy(positions)
 
         # If the positions are not already centred centre them
         self.centre = centre
         self._centre_coords()
 
         # Shift positions to start at 0
-        self.shifted_sim_pos += self.fov / 2
+        self.coords += self.fov / 2
 
         # Run instantiation methods
-        self.pix_pos = np.zeros(self.sim_coords.shape, dtype=np.int32)
+        self.pix_pos = np.zeros(self.coords.shape, dtype=np.int32)
         self._get_pixel_pos()
 
         # How many particle are there?
-        self.npart = self.sim_coords.shape[0]
+        self.npart = self.coords.shape[0]
 
-    def _check_part_args(self, stars, positions):
+    def _check_part_args(self, stars, positions, centre):
         """
         Ensures we have a valid combination of inputs.
 
-
         Parameters
         ----------
-        fov : float
-            The width of the image.
-        npix : int
-            The number of pixels in the image.
-        stars : Stars object
+        stars : obj (Stars)
             The object containing the stars to be placed in a image.
         positons : array-like (float)
-            The position in the image of pixel values.
-
-        Returns
-        -------
-        None
+            The position of particles to be sorted into the image.
+        centre : array-like (float)
+            The coordinates around which the image will be centered.
 
         Raises
         ------
         InconsistentArguments
            Errors when an incorrect combination of arguments is passed.
+        InconsistentCoordinates
+           If the centre does not lie within the range of coordinates an error
+           is raised.
         """
 
         # Ensure we haven't been handed a resampled set of stars
@@ -251,70 +280,90 @@ class ParticleObservation(Observation):
                 "Either stars or positions must be specified!"
             )
 
-    def _get_pixel_pos(self):
-        """
-        Convert particle positions to the pixel reference frame.
-        """
-
-        # TODO: Can threadpool this.
-
-        # Convert sim positions to pixel positions
-        self.pix_pos[:, 0] = self.shifted_sim_pos[:, 0] / self.resolution
-        self.pix_pos[:, 1] = self.shifted_sim_pos[:, 1] / self.resolution
-        self.pix_pos[:, 2] = self.shifted_sim_pos[:, 2] / self.resolution
+        # The passed centre does not lie within the range of positions
+        if centre is not None:
+            if stars is None:
+                pos = positions
+            else:
+                pos = stars.coordinates
+                if (centre[0] < np.min(pos[:, 0]) or
+                    centre[0] > np.max(pos[:, 0]) or
+                    centre[1] < np.min(pos[:, 1]) or
+                    centre[1] > np.max(pos[:, 1]) or
+                    centre[2] < np.min(pos[:, 2]) or
+                    centre[2] > np.max(pos[:, 2])):
+                    raise exceptions.InconsistentCoordinates(
+                        "The centre lies outside of the coordinate range. "
+                        "Are they already centred?"
+                    )
 
     def _centre_coords(self):
         """
-        Centre coordinates on the geometric mean or centre.
+        Centre coordinates on the geometric mean or the user provided centre
         """
 
         # Calculate the centre if necessary
         if self.centre is None:
-            self.centre = np.mean(self.sim_coords, axis=0)
+            self.centre = np.mean(self.coords, axis=0)
 
         # Centre the coordinates
-        self.sim_coords -= self.centre
-        self.shifted_sim_pos -= self.centre
+        self.coords -= self.centre
+
+    def _get_pixel_pos(self):
+        """
+        Convert particle positions to interger pixel coordinates.
+
+        These later help speed up sorting particles into pixels since their
+        index is precomputed here.
+        """
+
+        # Convert sim positions to pixel positions
+        self.pix_pos[:, 0] = self.coords[:, 0] / self.resolution
+        self.pix_pos[:, 1] = self.coords[:, 1] / self.resolution
+        self.pix_pos[:, 2] = self.coords[:, 2] / self.resolution
 
 
 class ParametricObservation(Observation):
     """
-    The parent class used for creation of 2D images and IFUs (data cubes)
+    The parent class for all parametric "observations". These include:
+    - Flux/rest frame luminosity images in photometric bands.
+    - Images of underlying properties such as SFR, stellar mass, etc.
+    - Data cubes (IFUs) containing spatially resolved spectra.
+
+    This parent contains all functionality needed for parametric observations.
+
+    WorkInProgress
 
     Attributes
     ----------
 
-
-    Methods
-    -------
+    Raises
+    ----------
+    InconsistentArguments
+        If an incompatible combination of arguments is provided an error is
+        raised.
 
     """
 
     def __init__(self, resolution, npix=None, fov=None, sed=None,
                  survey=None):
         """
-        Intialise the Observation.
+        Intialise the ParametricObservation.
 
         Parameters
         ----------
-        sed : SED object
-           An sed object to make the image.
-        fov : float
-            The width of the image.
+        resolution : float
+            The size a pixel.
         npix : int
-            The number of pixels in the image.
-        stars : Stars object
-            The object containing the stars to be placed in a image.
-        positons : array-like (float)
-            The position in the image of pixel values.
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        None
+            The number of pixels along an axis of the image or number of
+            spaxels in the image plane of the IFU. 
+        fov : float
+            The width of the image/ifu. If coordinates are being used to make
+            the image this should have the same units as those coordinates.
+        sed : obj (SED)
+            An sed object containing the spectra for this observation.
+        survey : obj (Survey)
+            WorkInProgress
 
         """
 

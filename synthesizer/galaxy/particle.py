@@ -430,7 +430,7 @@ class ParticleGalaxy(BaseGalaxy):
 
     def create_stellarmass_hist(self, resolution, npix=None, fov=None):
         """
-        Calculate a 2D histogram of the galaxies mass distribution.
+        Calculate a 2D histogram of the galaxy's mass distribution.
 
         NOTE: Either npix or fov must be defined.
 
@@ -463,9 +463,9 @@ class ParticleGalaxy(BaseGalaxy):
         """
         Makes images, either one or one per filter. This is a generic method
         that will make every sort of image using every possible combination of
-        arguments allowed by the ParticleImage class. These methods include:
-
-        ...
+        arguments allowed by the ParticleImage class. These methods can be
+        either a simple histogram or smoothing particles over a kernel. Either
+        of these operations can be done with or without a PSF and noise.
 
         NOTE: Either npix or fov must be defined.
 
@@ -477,6 +477,40 @@ class ParticleGalaxy(BaseGalaxy):
             The number of pixels along an axis.
         fov : float
             The width of the image in image coordinates.
+        img_type : str
+            The type of image to be made, either "hist" -> a histogram, or
+            "smoothed" -> particles smoothed over a kernel.
+        sed : obj (SED)
+            An sed object containing the spectra for this image.
+        survey : obj (Survey)
+            WorkInProgress
+        filters : obj (FilterCollection)
+            An imutable collection of Filter objects. If provided images are made
+            for each filter.
+        pixel_values : array-like (float)
+            The values to be sorted/smoothed into pixels. Only needed if an sed
+            and filters are not used.
+        with_psf : bool
+            Are we applying a PSF? PLACEHOLDER
+        with_noise : bool
+            Are we adding noise? PLACEHOLDER
+        kernel_func : function
+            A function describing the smoothing kernel that returns a single
+            number between 0 and 1. This function can be imported from the
+            options in kernel_functions.py or can be user defined. If user
+            defined the function must return the kernel value corredsponding
+            to the position of a particle with smoothing length h at distance
+            r from the centre of the kernel (r/h). 
+        rest_frame : bool
+            Are we making an observation in the rest frame?
+        redshift : float
+            The redshift of the observation. Used when converting rest frame
+            luminosity to flux.
+        cosmo : obj (astropy.cosmology)
+            A cosmology object from astropy, used for cosmological calculations
+            when converting rest frame luminosity to flux.
+        igm : obj (Inoue14/Madau96)
+            Object containing the absorbtion due to an intergalactic medium.
 
         Returns
         -------
