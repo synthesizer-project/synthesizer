@@ -1,1 +1,2 @@
-b
+class Survey:
+    pass
