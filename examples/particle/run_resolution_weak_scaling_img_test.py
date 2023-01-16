@@ -25,8 +25,7 @@ np.random.seed(42)
 
 # Define the grid
 grid_name = 'bc03_chabrier03_cloudy-v17.03_log10Uref-2'
-grid_dir = '/Users/willroper/Documents/University/Synthesizer/synthesizer_data/grids/'
-grid = Grid(grid_name, grid_dir=grid_dir)
+grid = Grid(grid_name)
 
 # Define the grid (normally this would be defined by an SPS grid)
 log10ages = np.arange(6., 10.5, 0.1)
