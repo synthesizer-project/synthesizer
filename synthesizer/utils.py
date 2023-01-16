@@ -45,6 +45,7 @@ def write_attribute(filename, obj, key, value):
         dset = h5file[obj]
         dset.attrs[key] = value
 
+
 def get_names_h5py(filename, group):
     """
     Return list of the names of objects inside a group
@@ -66,6 +67,7 @@ def load_arr(name, filename):
         arr = np.array(f.get(name))
 
     return arr
+
 
 def read_params(param_file):
     """

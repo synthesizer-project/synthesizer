@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from synthesizer.filters import SVOFilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.parametric.galaxy import SEDGenerator
+from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr
 from synthesizer.igm import Madau96, Inoue14
@@ -31,33 +31,15 @@ if __name__ == '__main__':
     # --- get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
     sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh, stellar_mass=stellar_mass)
 
-    galaxy = SEDGenerator(grid, sfzh)
+    # --- create a galaxy object
+    galaxy = Galaxy(sfzh)
 
-    # # --- simple dust and gas screen
-    # galaxy.screen(tauV = 0.1)
-    # galaxy.plot_spectra()
-
-    # # --- should be identical to above
-    # galaxy.pacman(tauV = 0.1)
-    # galaxy.plot_spectra()
-
-    # # --- half of light escapes without nebular reprocessing
-    # galaxy.pacman(fesc = 0.5)
-    # galaxy.plot_spectra()
-
-    # --- no Lyman-alpha escapes
-    # galaxy.pacman(fesc = 0.0, fesc_LyA = 0.0)
-    # galaxy.plot_spectra()
-    # galaxy.plot_spectra(spectra_to_plot = ['total'])
-
-    # --- everything
-    galaxy.pacman(fesc=0.5, fesc_LyA=0.5, tauV=0.2)
-    # galaxy.plot_spectra()
+    # # --- pacman model (complex)
+    sed = galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1)
 
     # --- now calculate the observed frame spectra
 
     z = 10.  # redshift
-    sed = galaxy.spectra['total']  # choose total SED
     sed.get_fnu(cosmo, z, igm=Madau96())  # generate observed frame spectra
 
     # --- calculate broadband luminosities

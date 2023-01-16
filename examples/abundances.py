@@ -33,4 +33,3 @@ print(a_ae.solar_relative_abundance('O', ref_element='Fe'))
 
 plot_abundance_patterns([a, a_ae], ['default', r'\alpha = 0.6'],
                         show=True, ylim=[-7., -3.])
-

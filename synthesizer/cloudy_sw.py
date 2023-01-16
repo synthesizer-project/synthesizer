@@ -9,36 +9,32 @@ from scipy import integrate
 from unyt import c, h, angstrom
 
 
-
-
-
-
-def create_cloudy_input(model_name, lam, lnu, abundances, output_dir = './', **kwargs):
+def create_cloudy_input(model_name, lam, lnu, abundances, output_dir='./', **kwargs):
 
     params = {
         'log10U': -2,
-        'log10radius': -2, # radius in log10 parsecs
-        'covering_factor': 1.0, # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
-        'stop_T': 4000, # K
+        'log10radius': -2,  # radius in log10 parsecs
+        # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
+        'covering_factor': 1.0,
+        'stop_T': 4000,  # K
         'stop_efrac': -2,
-        'T_floor': 100, # K
-        'log10n_H': 2.5, # Hydrogen density
+        'T_floor': 100,  # K
+        'log10n_H': 2.5,  # Hydrogen density
         'z': 0.,
         'CMB': False,
         'cosmic_rays': False
-            }
+    }
 
     for key, value in list(kwargs.items()):
         params[key] = value
 
     log10U = params['log10U']
 
-
     nu = c/(lam * angstrom)
     E = h*nu
     E_Ryd = E.to('Ry').value
 
-    lnu[lnu<=0.0] = 1E-10 # get rid of negative models
+    lnu[lnu <= 0.0] = 1E-10  #  get rid of negative models
 
     np.savetxt(f'{output_dir}/{model_name}.sed', np.array([E_Ryd[::-1], lnu[::-1]]).T)
 
@@ -50,7 +46,6 @@ def create_cloudy_input(model_name, lam, lnu, abundances, output_dir = './', **k
     # --- Define the chemical composition
     for ele in ['He'] + abundances.metals:
         cinput.append('element abundance '+abundances.name[ele]+' '+str(abundances.a[ele])+'\n')
-
 
     # --- add graphite and silicate grains
     # This old version does not actually conserve mass as the command abundances
@@ -81,18 +76,17 @@ def create_cloudy_input(model_name, lam, lnu, abundances, output_dir = './', **k
     from Galliano+2008 (https://iopscience.iop.org/article/10.1086/523621, y = 4.17*Z_gas_sol - 7.085),
     which will again introduce issues on mass conservation."""
 
-
-    if abundances.params['d2m']>0:
-        delta_C         = 10**abundances.a_nodep['C'] - 10**abundances.a['C']
-        delta_PAH       = 0.01 * (10**abundances.a_nodep['C'])
-        delta_graphite  = delta_C - delta_PAH
-        delta_Si        = 10**abundances.a_nodep['Si'] - 10**abundances.a['Si']
-        orion_C_abund   = -3.6259
-        orion_Si_abund  = -4.5547
-        PAH_abund       = -4.446
-        f_graphite  = delta_graphite/(10**(orion_C_abund))
-        f_Si        = delta_Si/(10**(orion_Si_abund))
-        f_pah       = delta_PAH/(10**(PAH_abund))
+    if abundances.params['d2m'] > 0:
+        delta_C = 10**abundances.a_nodep['C'] - 10**abundances.a['C']
+        delta_PAH = 0.01 * (10**abundances.a_nodep['C'])
+        delta_graphite = delta_C - delta_PAH
+        delta_Si = 10**abundances.a_nodep['Si'] - 10**abundances.a['Si']
+        orion_C_abund = -3.6259
+        orion_Si_abund = -4.5547
+        PAH_abund = -4.446
+        f_graphite = delta_graphite/(10**(orion_C_abund))
+        f_Si = delta_Si/(10**(orion_Si_abund))
+        f_pah = delta_PAH/(10**(PAH_abund))
         command = F'grains Orion graphite {f_graphite} \ngrains Orion silicate {f_Si} \ngrains PAH {f_pah}'
         cinput.append(command+'\n')
     else:
@@ -130,10 +124,9 @@ def create_cloudy_input(model_name, lam, lnu, abundances, output_dir = './', **k
     cinput.append(f'save overview  "{model_name}.ovr" last\n')
 
     # --- save input file
-    open(f'{output_dir}/{model_name}.in','w').writelines(cinput)
+    open(f'{output_dir}/{model_name}.in', 'w').writelines(cinput)
 
     return cinput
-
 
 
 def calculate_Q_from_U(U_avg, n_h):
@@ -145,50 +138,43 @@ def calculate_Q_from_U(U_avg, n_h):
     Returns
     Q - units: s^-1
     """
-    alpha_B = 2.59e-13 # cm^3 s^-1
-    c_cm = 2.99e8 * 100 # cm s^-1
+    alpha_B = 2.59e-13  # cm^3 s^-1
+    c_cm = 2.99e8 * 100  # cm s^-1
     epsilon = 1.
 
     return ((U_avg * c_cm)**3 / alpha_B**2) *\
-            ((4 * np.pi) / (3 * epsilon**2 * n_h))
-
-
-
-
+        ((4 * np.pi) / (3 * epsilon**2 * n_h))
 
 
 default_lines = [
-    'MgII2803','MgII2796',
-    'ArIII7136','ArIII7751','ArIV4711','ArIV4740',
-    'NeIII3869','NeIII3967',
-    'FeIV3095','FeIV2836','FeIV2829',
-    'CII2325','CII2327','CIII1909','CIII1907','CIV1551','CIV1548','C-1335',
-    'OII2470','OII3729','OII3726','OIII4959','OIII5007','OIII2321','OIII4363',
-    'OIII1661','OIII1666',
-    'SiIII1892','SiIII1883','SiIII1206','SiIV1394','SiIV1403',
+    'MgII2803', 'MgII2796',
+    'ArIII7136', 'ArIII7751', 'ArIV4711', 'ArIV4740',
+    'NeIII3869', 'NeIII3967',
+    'FeIV3095', 'FeIV2836', 'FeIV2829',
+    'CII2325', 'CII2327', 'CIII1909', 'CIII1907', 'CIV1551', 'CIV1548', 'C-1335',
+    'OII2470', 'OII3729', 'OII3726', 'OIII4959', 'OIII5007', 'OIII2321', 'OIII4363',
+    'OIII1661', 'OIII1666',
+    'SiIII1892', 'SiIII1883', 'SiIII1206', 'SiIV1394', 'SiIV1403',
     'NII6583',
-    'SII6731','SII6716','SIII9069','SIII9531','SIII3722','SIII6312',
-    'HeII1640','HeI10830','HeI3889','HeI3188','HeI2945','HeI2829','HeI20581',
-    'HeI5016','HeI3965','HeI7065','HeI5876','HeI4471','HeI4026','HeI3820',
-    'HeI3705','HeI6678','HeI4922','HeI18685',
-    'HI1216','HI1026','HI6563','HI4861','HI4340','HI4102','HI3970','HI3889',
-    'HI3835','HI3798','HI3771','HI3750','HI3734','HI3722','HI3712','HI3704',
-    'HI3697','HI3692','HI3687','HI3683','HI3679','HI3671','HI3669','HI18751',
-    'HI12818','HI10938','HI10049','HI9546','HI9229','HI9015','HI8863','HI8750',
-    'HI8665','HI8323','HI26251','HI21655','HI19445','HI18174',
-    ]
-
+    'SII6731', 'SII6716', 'SIII9069', 'SIII9531', 'SIII3722', 'SIII6312',
+    'HeII1640', 'HeI10830', 'HeI3889', 'HeI3188', 'HeI2945', 'HeI2829', 'HeI20581',
+    'HeI5016', 'HeI3965', 'HeI7065', 'HeI5876', 'HeI4471', 'HeI4026', 'HeI3820',
+    'HeI3705', 'HeI6678', 'HeI4922', 'HeI18685',
+    'HI1216', 'HI1026', 'HI6563', 'HI4861', 'HI4340', 'HI4102', 'HI3970', 'HI3889',
+    'HI3835', 'HI3798', 'HI3771', 'HI3750', 'HI3734', 'HI3722', 'HI3712', 'HI3704',
+    'HI3697', 'HI3692', 'HI3687', 'HI3683', 'HI3679', 'HI3671', 'HI3669', 'HI18751',
+    'HI12818', 'HI10938', 'HI10049', 'HI9546', 'HI9229', 'HI9015', 'HI8863', 'HI8750',
+    'HI8665', 'HI8323', 'HI26251', 'HI21655', 'HI19445', 'HI18174',
+]
 
 
 class Line:
-    wv = None # wavelength
-    intrinsic = None # intrinsic luminosity
-    emergent = None # emergent luminosity
-
+    wv = None  # wavelength
+    intrinsic = None  #  intrinsic luminosity
+    emergent = None  # emergent luminosity
 
 
 def get_new_id(wv, cloudy_id):
-
     """ convert the cloudy ID into a new form ID """
 
     wv = int(np.round(wv, 0))
@@ -199,42 +185,56 @@ def get_new_id(wv, cloudy_id):
 
     i = li[1]
     j = '-'
-    if i == '1': j = 'I'
-    if i == '2': j = 'II'
-    if i == 'II': j = 'II'
-    if i == '3': j = 'III'
-    if i == '4': j = 'IV'
-    if i == '5': j = 'V'
-    if i == '6': j = 'VI'
-    if i == '7': j = 'VII'
-    if i == '8': j = 'VIII'
-    if i == '9': j = 'IX'
-    if i == '10': j = 'X'
-    if i == '11': j = 'XI'
-    if i == '12': j = 'XII'
-    if i == '13': j = 'XIII'
-    if i == '14': j = 'XIV'
+    if i == '1':
+        j = 'I'
+    if i == '2':
+        j = 'II'
+    if i == 'II':
+        j = 'II'
+    if i == '3':
+        j = 'III'
+    if i == '4':
+        j = 'IV'
+    if i == '5':
+        j = 'V'
+    if i == '6':
+        j = 'VI'
+    if i == '7':
+        j = 'VII'
+    if i == '8':
+        j = 'VIII'
+    if i == '9':
+        j = 'IX'
+    if i == '10':
+        j = 'X'
+    if i == '11':
+        j = 'XI'
+    if i == '12':
+        j = 'XII'
+    if i == '13':
+        j = 'XIII'
+    if i == '14':
+        j = 'XIV'
 
     return e+j+str(wv)
 
 
-
-def read_lines(filename, line_ids = None):
+def read_lines(filename, line_ids=None):
 
     if not line_ids:
         line_ids = default_lines
 
-
-    wavelengths, cloudy_line_ids, intrinsic, emergent = np.loadtxt(f'{filename}.lines', dtype = str, delimiter='\t', usecols = (0,1,2,3)).T
+    wavelengths, cloudy_line_ids, intrinsic, emergent = np.loadtxt(
+        f'{filename}.lines', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
 
     wavelengths = wavelengths.astype(float)
-    intrinsic = intrinsic.astype(float) - 7. # erg s^{-1} magic number
-    emergent = emergent.astype(float) - 7. # erg s^{-1} magic number
+    intrinsic = intrinsic.astype(float) - 7.  # erg s^{-1} magic number
+    emergent = emergent.astype(float) - 7.  # erg s^{-1} magic number
 
-    new_line_ids = np.array([get_new_id(wv, cloudy_line_id) for wv, cloudy_line_id in zip(wavelengths, cloudy_line_ids)])
+    new_line_ids = np.array([get_new_id(wv, cloudy_line_id)
+                            for wv, cloudy_line_id in zip(wavelengths, cloudy_line_ids)])
 
-    lines = {} # dictionary holding the output of the lines
-
+    lines = {}  # dictionary holding the output of the lines
 
     # for line_id in line_ids:
     #
@@ -274,22 +274,21 @@ def read_lines(filename, line_ids = None):
     return np.array(line_ids)[inds], np.array(wavelenths_)[inds], np.array(intrinsic_)[inds], np.array(emergent_)[inds]
 
 
-
-
-def make_linecont(filename, wavelength_grid, line_ids = None):
-
+def make_linecont(filename, wavelength_grid, line_ids=None):
     """ make linecont from lines (hopefully the same as that from the continuum)"""
 
     if not line_ids:
         line_ids = default_lines
 
-    line_wavelengths, cloudy_line_ids, intrinsic, emergent = np.loadtxt(f'{filename}.lines', dtype = str, delimiter='\t', usecols = (0,1,2,3)).T
+    line_wavelengths, cloudy_line_ids, intrinsic, emergent = np.loadtxt(
+        f'{filename}.lines', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
 
     line_wavelengths = line_wavelengths.astype(float)
-    intrinsic = intrinsic.astype(float) # correct for size of cluster # erg s^-1
-    emergent = emergent.astype(float) # correct for size of cluster # erg s^-1
+    intrinsic = intrinsic.astype(float)  # correct for size of cluster # erg s^-1
+    emergent = emergent.astype(float)  # correct for size of cluster # erg s^-1
 
-    new_line_ids = np.array([get_new_id(wv, cloudy_line_id) for wv, cloudy_line_id in zip(line_wavelengths, cloudy_line_ids)])
+    new_line_ids = np.array([get_new_id(wv, cloudy_line_id)
+                            for wv, cloudy_line_id in zip(line_wavelengths, cloudy_line_ids)])
 
     line_spectra = np.zeros(len(wavelength_grid)) + 1E-100
 
@@ -307,39 +306,33 @@ def make_linecont(filename, wavelength_grid, line_ids = None):
     return line_spectra
 
 
-
-
-
-
-
 def read_wavelength(filename):
-
     """ return just wavelength grid from cloudy file and reverse the order """
 
-    lam = np.loadtxt(f'{filename}.cont', delimiter='\t', usecols = (0)).T
+    lam = np.loadtxt(f'{filename}.cont', delimiter='\t', usecols=(0)).T
     lam = lam[::-1]  # reverse order
 
     return lam
 
-def read_continuum(filename, return_dict = False):
 
+def read_continuum(filename, return_dict=False):
     """ read a cloudy continuum file and convert spectra to erg/s/Hz """
 
     # ----- Open SED
 
     # 1 = incident, 2 = transmitted, 3 = nebular, 4 = total, 8 = contribution of lines to total
-    lam, incident, transmitted, nebular, total, linecont  = np.loadtxt(f'{filename}.cont', delimiter='\t', usecols = (0,1,2,3,4,8)).T
+    lam, incident, transmitted, nebular, total, linecont = np.loadtxt(
+        f'{filename}.cont', delimiter='\t', usecols=(0, 1, 2, 3, 4, 8)).T
 
     # --- frequency
-    lam = lam[::-1] # reverse array
-    lam_m = lam * 1E-10 # m
+    lam = lam[::-1]  # reverse array
+    lam_m = lam * 1E-10  # m
     nu = c.value / (lam_m)
 
     # --- nebular continuum is the total nebular emission (nebular) - the line continuum (linecont)
     nebular_continuum = nebular - linecont
 
     spec_dict = {'lam': lam, 'nu': nu}
-
 
     for spec_type in ['incident', 'transmitted', 'nebular', 'nebular_continuum', 'total', 'linecont']:
 
@@ -348,7 +341,6 @@ def read_continuum(filename, return_dict = False):
         sed /= 10**7  # convert from W to erg
         sed /= nu  # convert from nu l_nu to l_nu
         spec_dict[spec_type] = sed
-
 
     if return_dict:
         return spec_dict

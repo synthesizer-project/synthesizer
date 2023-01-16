@@ -32,9 +32,7 @@ Contributors
 
    installation
    grids
-   filters
-   abundances
-   igm
    parametric
    cosmo
+   miscellany
    grid_generation
