@@ -22,135 +22,137 @@ from astropy.cosmology import Planck18 as cosmo
 plt.rcParams['font.family'] = 'DeJavu Serif'
 plt.rcParams['font.serif'] = ['Times New Roman']
 
-# Set the seed
-np.random.seed(42)
+if __name__ == '__main__':
 
-start = time.time()
+    # Set the seed
+    np.random.seed(42)
 
-# Define the grid
-grid_name = 'bc03_chabrier03_cloudy-v17.03_log10Uref-2'
-grid = Grid(grid_name)
+    start = time.time()
 
-# Define the grid (normally this would be defined by an SPS grid)
-log10ages = np.arange(6., 10.5, 0.1)
-metallicities = 10**np.arange(-5., -1.5, 0.1)
-Z_p = {'Z': 0.01}
-Zh = ZH.deltaConstant(Z_p)
-sfh_p = {'duration': 100 * Myr}
-sfh = SFH.Constant(sfh_p)  # constant star formation
-sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
+    # Define the grid
+    grid_name = 'bc03_chabrier03_cloudy-v17.03_log10Uref-2'
+    grid = Grid(grid_name)
 
-print("SFHZ sampled, took:", time.time() - start)
+    # Define the grid (normally this would be defined by an SPS grid)
+    log10ages = np.arange(6., 10.5, 0.1)
+    metallicities = 10**np.arange(-5., -1.5, 0.1)
+    Z_p = {'Z': 0.01}
+    Zh = ZH.deltaConstant(Z_p)
+    sfh_p = {'duration': 100 * Myr}
+    sfh = SFH.Constant(sfh_p)  # constant star formation
+    sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 
-stars_start = time.time()
+    Print("SFHZ sampled, took:", time.time() - start)
 
-# Create stars object
-n = 10000  # number of particles for sampling
-coords = CoordinateGenerator.generate_3D_gaussian(n)
-stars = sample_sfhz(sfzh, n)
-stars.coordinates = coords
-cent = np.mean(coords, axis=0)  # define geometric centre
-rs = np.sqrt((coords[:, 0] - cent[0]) ** 2
-             + (coords[:, 1] - cent[1]) ** 2
-             + (coords[:, 2] - cent[2]) ** 2)  # calculate radii
-rs[rs < 0.1] = 0.4  # Set a lower bound on the "smoothing length"
-stars.smoothing_lengths = rs / 4  # convert radii into smoothing lengths
-print(stars)
+    stars_start = time.time()
 
-# Compute width of stellar distribution
-width = np.max(coords) - np.min(coords)
+    # Create stars object
+    n = 10000  # number of particles for sampling
+    coords = CoordinateGenerator.generate_3D_gaussian(n)
+    stars = sample_sfhz(sfzh, n)
+    stars.coordinates = coords
+    cent = np.mean(coords, axis=0)  # define geometric centre
+    rs = np.sqrt((coords[:, 0] - cent[0]) ** 2
+                 + (coords[:, 1] - cent[1]) ** 2
+                 + (coords[:, 2] - cent[2]) ** 2)  # calculate radii
+    rs[rs < 0.1] = 0.4  # Set a lower bound on the "smoothing length"
+    stars.smoothing_lengths = rs / 4  # convert radii into smoothing lengths
+    print(stars)
 
-print("Stars created, took:", time.time() - stars_start)
+    # Compute width of stellar distribution
+    width = np.max(coords) - np.min(coords)
 
-galaxy_start = time.time()
+    print("Stars created, took:", time.time() - stars_start)
 
-# Create galaxy object
-galaxy = Galaxy(stars=stars)
+    galaxy_start = time.time()
 
-print("Galaxy created, took:", time.time() - galaxy_start)
+    # Create galaxy object
+    galaxy = Galaxy(stars=stars)
 
-spectra_start = time.time()
+    print("Galaxy created, took:", time.time() - galaxy_start)
 
-# Calculate the stars SEDs
-galaxy.generate_intrinsic_spectra(grid, update=True, integrated=False)
+    spectra_start = time.time()
 
-print("Spectra created, took:", time.time() - spectra_start)
+    # Calculate the stars SEDs
+    galaxy.generate_intrinsic_spectra(grid, update=True, integrated=False)
 
-filter_start = time.time()
+    print("Spectra created, took:", time.time() - spectra_start)
 
-# Define filter list
-filter_codes = ["JWST/NIRCam.F090W", "JWST/NIRCam.F150W", "JWST/NIRCam.F200W",
-                "JWST/NIRCam.F444W", "JWST/MIRI.F1000W", "JWST/MIRI.F1500W"]
+    filter_start = time.time()
 
-# Set up filter object
-filters = Filters(filter_codes, new_lam=grid.lam)
+    # Define filter list
+    filter_codes = ["JWST/NIRCam.F090W", "JWST/NIRCam.F150W", "JWST/NIRCam.F200W",
+                    "JWST/NIRCam.F444W", "JWST/MIRI.F1000W", "JWST/MIRI.F1500W"]
 
-print("Filters created, took:", time.time() - filter_start)
+    # Set up filter object
+    filters = Filters(filter_codes, new_lam=grid.lam)
 
-img_start = time.time()
+    print("Filters created, took:", time.time() - filter_start)
 
-# Define image propertys
-resolution = (width + 1) / 100
-redshift = 1
+    img_start = time.time()
 
-# Get the image
-hist_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
-                             img_type="hist",
-                             sed=galaxy.spectra_array["intrinsic"],
-                             survey=None, filters=filters, pixel_values=None,
-                             with_psf=False, with_noise=False,
-                             kernel_func=quintic, rest_frame=False,
-                             redshift=redshift, cosmo=cosmo, igm=None)
+    # Define image propertys
+    resolution = (width + 1) / 100
+    redshift = 1
 
-print("Histogram images made, took:", time.time() - img_start)
-img_start = time.time()
+    # Get the image
+    hist_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
+                                 img_type="hist",
+                                 sed=galaxy.spectra_array["intrinsic"],
+                                 survey=None, filters=filters, pixel_values=None,
+                                 with_psf=False, with_noise=False,
+                                 kernel_func=quintic, rest_frame=False,
+                                 redshift=redshift, cosmo=cosmo, igm=None)
 
-# Get the image
-smooth_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
-                               img_type="smoothed",
-                               sed=galaxy.spectra_array["intrinsic"],
-                               survey=None, filters=filters, pixel_values=None,
-                               with_psf=False, with_noise=False,
-                               kernel_func=quintic, rest_frame=False,
-                               redshift=redshift, cosmo=cosmo, igm=None)
+    print("Histogram images made, took:", time.time() - img_start)
+    img_start = time.time()
 
-print("Smoothed images made, took:", time.time() - img_start)
+    # Get the image
+    smooth_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
+                                   img_type="smoothed",
+                                   sed=galaxy.spectra_array["intrinsic"],
+                                   survey=None, filters=filters, pixel_values=None,
+                                   with_psf=False, with_noise=False,
+                                   kernel_func=quintic, rest_frame=False,
+                                   redshift=redshift, cosmo=cosmo, igm=None)
 
-hist_imgs = hist_img.imgs
-smooth_imgs = smooth_img.imgs
+    print("Smoothed images made, took:", time.time() - img_start)
 
-print("Sucessfuly made images for:", [key for key in hist_imgs])
+    hist_imgs = hist_img.imgs
+    smooth_imgs = smooth_img.imgs
 
-print("Total runtime (not including plotting):", time.time() - start)
+    print("Sucessfuly made images for:", [key for key in hist_imgs])
 
-# Set up plot
-fig = plt.figure(figsize=(4 * len(filters), 4 * 2))
-gs = gridspec.GridSpec(2, len(filters))
+    print("Total runtime (not including plotting):", time.time() - start)
 
-# Create top row
-axes = []
-for i in range(len(filters)):
-    axes.append(fig.add_subplot(gs[0, i]))
+    # Set up plot
+    fig = plt.figure(figsize=(4 * len(filters), 4 * 2))
+    gs = gridspec.GridSpec(2, len(filters))
 
-# Loop over images plotting them
-for ax, fcode in zip(axes, filter_codes):
-    ax.imshow(hist_imgs[fcode])
-    ax.set_title(fcode)
+    # Create top row
+    axes = []
+    for i in range(len(filters)):
+        axes.append(fig.add_subplot(gs[0, i]))
 
-# Set y axis label on left most plot
-axes[0].set_ylabel("Histogram")
+    # Loop over images plotting them
+    for ax, fcode in zip(axes, filter_codes):
+        ax.imshow(hist_imgs[fcode])
+        ax.set_title(fcode)
 
-# Create bottom row
-axes = []
-for i in range(len(filters)):
-    axes.append(fig.add_subplot(gs[1, i]))
+    # Set y axis label on left most plot
+    axes[0].set_ylabel("Histogram")
 
-# Loop over images plotting them
-for ax, fcode in zip(axes, filter_codes):
-    ax.imshow(smooth_imgs[fcode])
-    
-# Set y axis label on left most plot
-axes[0].set_ylabel("Smoothed")
-    
-# Plot the image
-plt.savefig("../flux_in_filters_test.png", bbox_inches="tight", dpi=300)
+    # Create bottom row
+    axes = []
+    for i in range(len(filters)):
+        axes.append(fig.add_subplot(gs[1, i]))
+
+    # Loop over images plotting them
+    for ax, fcode in zip(axes, filter_codes):
+        ax.imshow(smooth_imgs[fcode])
+
+    # Set y axis label on left most plot
+    axes[0].set_ylabel("Smoothed")
+
+    # Plot the image
+    plt.savefig("../flux_in_filters_test.png", bbox_inches="tight", dpi=300)

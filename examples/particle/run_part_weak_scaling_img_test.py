@@ -21,125 +21,129 @@ from synthesizer.kernel_functions import quintic
 plt.rcParams['font.family'] = 'DeJavu Serif'
 plt.rcParams['font.serif'] = ['Times New Roman']
 
-# Set the seed
-np.random.seed(42)
+if __name__ == '__main__':
 
-start = time.time()
+    # Set the seed
+    np.random.seed(42)
 
-# Define the grid
-grid_name = 'bc03_chabrier03_cloudy-v17.03_log10Uref-2'
-grid = Grid(grid_name)
+    start = time.time()
 
-# Define the grid (normally this would be defined by an SPS grid)
-log10ages = np.arange(6., 10.5, 0.1)
-metallicities = 10**np.arange(-5., -1.5, 0.1)
-Z_p = {'Z': 0.01}
-Zh = ZH.deltaConstant(Z_p)
-sfh_p = {'duration': 100 * Myr}
-sfh = SFH.Constant(sfh_p)  # constant star formation
-sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
+    # Define the grid
+    grid_name = 'bc03_chabrier03_cloudy-v17.03_log10Uref-2'
+    grid = Grid(grid_name)
 
-filter_start = time.time()
+    # Define the grid (normally this would be defined by an SPS grid)
+    log10ages = np.arange(6., 10.5, 0.1)
+    metallicities = 10**np.arange(-5., -1.5, 0.1)
+    Z_p = {'Z': 0.01}
+    Zh = ZH.deltaConstant(Z_p)
+    sfh_p = {'duration': 100 * Myr}
+    sfh = SFH.Constant(sfh_p)  # constant star formation
+    sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 
-# Define filter list
-filter_codes = ["JWST/NIRCam.F150W", "JWST/NIRCam.F200W",
-                "JWST/NIRCam.F444W", "JWST/MIRI.F1000W",
-                "JWST/MIRI.F1500W"]
+    filter_start = time.time()
 
-# Set up filter object
-filters = Filters(filter_codes, new_lam=grid.lam)
+    # Define filter list
+    filter_codes = ["JWST/NIRCam.F150W", "JWST/NIRCam.F200W",
+                    "JWST/NIRCam.F444W", "JWST/MIRI.F1000W",
+                    "JWST/MIRI.F1500W"]
 
-print("Filters created, took:", time.time() - filter_start)
+    # Set up filter object
+    filters = Filters(filter_codes, new_lam=grid.lam)
 
-# Create list of particle numbers
-ns = [20, 50, 100, 500, 1000, 2000, 5000, 10000, 50000, 100000]
+    print("Filters created, took:", time.time() - filter_start)
 
-# Create arrays to store runtimes
-create_stars = np.zeros(len(ns))
-create_gals = np.zeros(len(ns))
-create_spec = np.zeros(len(ns))
-create_hist = np.zeros(len(ns))
-create_smooth = np.zeros(len(ns))
+    # Create list of particle numbers
+    ns = [20, 50, 100, 500, 1000, 2000, 5000, 10000, 50000, 100000]
 
-# Loop over particle numbers
-for ind, n in enumerate(ns):
+    # Create arrays to store runtimes
+    create_stars = np.zeros(len(ns))
+    create_gals = np.zeros(len(ns))
+    create_spec = np.zeros(len(ns))
+    create_hist = np.zeros(len(ns))
+    create_smooth = np.zeros(len(ns))
 
-    stars_start = time.time()
+    # Loop over particle numbers
+    for ind, n in enumerate(ns):
 
-    # Create stars object
-    coords = CoordinateGenerator.generate_3D_gaussian(n)
-    stars = sample_sfhz(sfzh, n)
-    stars.coordinates = coords
-    stars.smoothing_lengths = np.ones(n) / 4
+        stars_start = time.time()
 
-    # Compute width of stellar distribution
-    width = np.max(coords) - np.min(coords)
+        # Create stars object
+        coords = CoordinateGenerator.generate_3D_gaussian(n)
+        stars = sample_sfhz(sfzh, n)
+        stars.coordinates = coords
+        stars.smoothing_lengths = np.ones(n) / 4
 
-    create_stars[ind] = time.time() - stars_start
+        # Compute width of stellar distribution
+        width = np.max(coords) - np.min(coords)
 
-    galaxy_start = time.time()
+        create_stars[ind] = time.time() - stars_start
 
-    # Create galaxy object
-    galaxy = Galaxy(stars=stars)
-    
-    create_gals[ind] = time.time() - galaxy_start
+        galaxy_start = time.time()
 
-    spectra_start = time.time()
+        # Create galaxy object
+        galaxy = Galaxy(stars=stars)
 
-    # Calculate the stars SEDs
-    galaxy.generate_intrinsic_spectra(grid, update=True, integrated=False)
+        create_gals[ind] = time.time() - galaxy_start
 
-    create_spec[ind] = time.time() - spectra_start
+        spectra_start = time.time()
 
-    # Define image propertys
-    resolution = (width + 1) / 100
+        # Calculate the stars SEDs
+        galaxy.generate_intrinsic_spectra(grid, update=True, integrated=False)
 
-    img_start = time.time()
+        create_spec[ind] = time.time() - spectra_start
 
-    # Get the image
-    hist_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
-                                 img_type="hist",
-                                 sed=galaxy.spectra_array["intrinsic"],
-                                 survey=None, filters=filters, pixel_values=None,
-                                 with_psf=False, with_noise=False,
-                                 kernel_func=quintic, rest_frame=True,
-                                 redshift=None, cosmo=None, igm=None)
+        # Define image propertys
+        resolution = (width + 1) / 100
 
-    create_hist[ind] = time.time() - img_start
-    img_start = time.time()
+        img_start = time.time()
 
-    # Get the image
-    smooth_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
-                                   img_type="smoothed",
-                                   sed=galaxy.spectra_array["intrinsic"],
-                                   survey=None, filters=filters, pixel_values=None,
-                                   with_psf=False, with_noise=False,
-                                   kernel_func=quintic, rest_frame=True,
-                                   redshift=None, cosmo=None, igm=None)
+        # Get the image
+        hist_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
+                                     img_type="hist",
+                                     sed=galaxy.spectra_array["intrinsic"],
+                                     survey=None, filters=filters,
+                                     pixel_values=None,
+                                     with_psf=False, with_noise=False,
+                                     kernel_func=quintic, rest_frame=True,
+                                     redshift=None, cosmo=None, igm=None)
 
-    create_smooth[ind] = time.time() - img_start
+        create_hist[ind] = time.time() - img_start
+        img_start = time.time()
 
-    print("Finished N_filters=%d" % n)
-    gc.collect()
+        # Get the image
+        smooth_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
+                                       img_type="smoothed",
+                                       sed=galaxy.spectra_array["intrinsic"],
+                                       survey=None, filters=filters,
+                                       pixel_values=None,
+                                       with_psf=False, with_noise=False,
+                                       kernel_func=quintic, rest_frame=True,
+                                       redshift=None, cosmo=None, igm=None)
 
-# Set up plot
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.grid(True)
+        create_smooth[ind] = time.time() - img_start
 
-# Plot each timed section
-for arr, lab in zip([create_stars, create_gals, create_spec,
-                     create_hist, create_smooth],
-                    ["Stars", "Galaxy", "SED",
-                     "Image (hist)", "Image (smoothed)"]):
-    ax.loglog(ns, arr, label=lab)
+        print("Finished N_filters=%d" % n)
+        gc.collect()
 
-# Label axes
-ax.set_ylabel("Wallclock / [s]")
-ax.set_xlabel("$N_\star$")
+    # Set up plot
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.grid(True)
 
-ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
-          fancybox=True, shadow=True, ncol=5)
-    
-# Plot the image
-plt.savefig("../particle_scaling_test.png", bbox_inches="tight", dpi=300)
+    # Plot each timed section
+    for arr, lab in zip([create_stars, create_gals, create_spec,
+                         create_hist, create_smooth],
+                        ["Stars", "Galaxy", "SED",
+                         "Image (hist)", "Image (smoothed)"]):
+        ax.loglog(ns, arr, label=lab)
+
+    # Label axes
+    ax.set_ylabel("Wallclock / [s]")
+    ax.set_xlabel("$N_\star$")
+
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
+              fancybox=True, shadow=True, ncol=5)
+
+    # Plot the image
+    plt.savefig("../particle_scaling_test.png", bbox_inches="tight", dpi=300)
