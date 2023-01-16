@@ -1,15 +1,11 @@
 
 
 class InconsistentParameter(Exception):
-    """ Generic exception class for inconsistent parameters.
+    """
+    Generic exception class for inconsistent parameters.
     """
 
     def __init__(self, *args):
-        """
-        Exception raised for inconsistent parameter choice
-        :param expression:
-        :param message:
-        """
         if args:
             self.message = args[0]
         else:
@@ -22,15 +18,11 @@ class InconsistentParameter(Exception):
 
 
 class InconsistentArguments(Exception):
-    """ Generic exception class for inconsistent combinations of arguments.
+    """
+    Generic exception class for inconsistent combinations of arguments.
     """
 
     def __init__(self, *args):
-        """
-        Exception raised for inconsistent argument choice
-        :param expression:
-        :param message:
-        """
         if args:
             self.message = args[0]
         else:
@@ -43,15 +35,11 @@ class InconsistentArguments(Exception):
 
 
 class UnimplementedFunctionality(Exception):
-    """ Generic exception class for functionality not yet implemented.
+    """
+    Generic exception class for functionality not yet implemented.
     """
 
     def __init__(self, *args):
-        """
-        Exception raised for inconsistent argument choice
-        :param expression:
-        :param message:
-        """
         if args:
             self.message = args[0]
         else:
@@ -64,15 +52,11 @@ class UnimplementedFunctionality(Exception):
 
 
 class UnknownImageType(Exception):
-    """ Generic exception class for functionality not yet implemented.
+    """
+    Generic exception class for functionality not yet implemented.
     """
 
     def __init__(self, *args):
-        """
-        Exception raised for inconsistent argument choice
-        :param expression:
-        :param message:
-        """
         if args:
             self.message = args[0]
         else:
@@ -80,12 +64,10 @@ class UnknownImageType(Exception):
 
 
 class InconsistentAddition(Exception):
+    """
+    Generic exception class for when adding two objects is impossible.
+    """
     def __init__(self, *args):
-        """
-        Exception raised for inconsistent adding (a+b=c)
-        :param expression:
-        :param message:
-        """
         if args:
             self.message = args[0]
         else:
@@ -96,3 +78,20 @@ class InconsistentAddition(Exception):
             return '{0} '.format(self.message)
         else:
             return 'Unable to add'
+
+
+class InconsistentCoordinates(Exception):
+    """
+    Generic exception class for when coordinates are inconsistent.
+    """
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'Coordinates are inconsistent'
