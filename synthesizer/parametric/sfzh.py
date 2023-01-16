@@ -11,6 +11,7 @@ from unyt import yr
 import matplotlib.pyplot as plt
 import cmasher as cmr
 
+from .. import exceptions
 from ..stats import weighted_median, weighted_mean
 from ..plt import single_histxy, mlabel
 
@@ -56,14 +57,30 @@ class BinnedSFZH:
 
         return weighted_mean(self.metallicities, self.Z)
 
-    def summary(self):
+    def __str__(self):
         """ print basic summary of the binned star formation and metal enrichment history """
 
-        print('-'*10)
-        print('SUMMARY OF BINNED SFZH')
-        print(f'median age: {self.calculate_median_age().to("Myr"):.2f}')
-        print(f'mean age: {self.calculate_mean_age().to("Myr"):.2f}')
-        print(f'mean metallicity: {self.calculate_mean_metallicity():.4f}')
+        pstr = ''
+        pstr += '-'*10 + "\n"
+        pstr += 'SUMMARY OF BINNED SFZH' + "\n"
+        pstr += f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
+        pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
+        pstr += f'mean metallicity: {self.calculate_mean_metallicity():.4f}' + "\n"
+        pstr += '-'*10 + "\n"
+        return pstr
+
+    def __add__(self, second_sfzh):
+        """ Add two SFZH histories together """
+
+        if second_sfzh.sfzh.shape == self.sfzh.shape:
+
+            new_sfzh = self.sfzh + second_sfzh.sfzh
+
+            return BinnedSFZH(self.log10ages, self.metallicities, new_sfzh)
+
+        else:
+
+            exceptions.InconsistentAddition('SFZH must be the same shape')
 
     def plot(self, show=True):
         """ Make a nice plots of the binned SZFH """
@@ -165,7 +182,21 @@ class ZH:
 
     """ A collection of classes describing the metallicity history (and distribution) """
 
-    class deltaConstant:
+    class Common:
+
+        def __str__(self):
+            """ print basic summary of the parameterised star formation history """
+
+            pstr = ''
+            pstr += '-'*10 + "\n"
+            pstr += 'SUMMARY OF PARAMETERISED METAL ENRICHMENT HISTORY' + "\n"
+            pstr += str(self.__class__) + "\n"
+            for parameter_name, parameter_value in self.parameters.items():
+                pstr += f'{parameter_name}: {parameter_value}' + "\n"
+            pstr += '-'*10 + "\n"
+            return pstr
+
+    class deltaConstant(Common):
 
         """ return a single metallicity as a function of age. """
 
@@ -228,16 +259,19 @@ class SFH:
             print('WARNING: not yet implemnted')
             return
 
-        def summary(self):
-            """ print basic summary of the star formation history """
+        def __str__(self):
+            """ print basic summary of the parameterised star formation history """
 
-            print('-'*10)
-            print('SUMMARY OF PARAMETERISED SFH')
-            print(self.__class__)
+            pstr = ''
+            pstr += '-'*10 + "\n"
+            pstr += 'SUMMARY OF PARAMETERISED STAR FORMATION HISTORY' + "\n"
+            pstr += str(self.__class__) + "\n"
             for parameter_name, parameter_value in self.parameters.items():
-                print(f'{parameter_name}: {parameter_value}')
-            print(f'median age: {self.calculate_median_age().to("Myr"):.2f}')
-            print(f'mean age: {self.calculate_mean_age().to("Myr"):.2f}')
+                pstr += f'{parameter_name}: {parameter_value}' + "\n"
+            pstr += f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
+            pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
+            pstr += '-'*10 + "\n"
+            return pstr
 
     class Constant(Common):
 
