@@ -63,8 +63,6 @@ class FilterCollection:
             # Return the filter
             return self.filters[self.current_ind - 1]
             
-        
-
     def transmission_curve_ax(self, ax, add_filter_label=True):
         """ add filter transmission curves to a give axes """
 
