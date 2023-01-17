@@ -11,6 +11,6 @@ scipy==1.9.3
 sympy==1.11.1
 unyt==2.9.2
 cmasher==1.6.3
-dust_attenuation==0.5
-dust_extinction==0.5.dev7+g96cd27d
-numba==0.55.1
+numba==0.56.4
+git+https://github.com/karllark/dust_attenuation.git@v0.5.dev
+dust_extinction==1.1
