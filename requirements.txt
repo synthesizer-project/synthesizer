@@ -13,3 +13,4 @@ unyt==2.9.2
 cmasher==1.6.3
 dust_attenuation==0.5
 dust_extinction==0.5
+numba==0.55.1
