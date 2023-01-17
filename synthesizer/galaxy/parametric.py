@@ -18,7 +18,18 @@ from ..stats import weighted_median, weighted_mean
 
 class ParametricGalaxy(BaseGalaxy):
 
+    """A class defining parametric galaxy objects 
+
+    """
+
     def __init__(self, sfzh):
+        """__init__ method for ParametricGalaxy
+
+        Parameters
+        ----------
+        sfzh : obj
+            instance of the BinnedSFZH class containing the star formation and metal enrichment history.
+        """
 
         self.sfzh = sfzh
         # add an extra dimension to the sfzh to allow the fast summation
@@ -28,7 +39,15 @@ class ParametricGalaxy(BaseGalaxy):
         self.images = {}  # dictionary holding images
 
     def __str__(self):
-        """ print basic summary of the galaxy """
+        """Function to print a basic summary of the Galaxy object.
+
+        Returns a string containing the total mass formed and lists of the available SEDs, lines, and images.
+
+        Returns
+        -------
+        str
+            Summary string containing the total mass formed and lists of the available SEDs, lines, and images.
+        """
 
         pstr = ''
         pstr += '-'*10 + "\n"
@@ -42,12 +61,25 @@ class ParametricGalaxy(BaseGalaxy):
         return pstr
 
     def __add__(self, second_galaxy):
-        """ Add two galaxies together """
+        """Allows two Galaxy objects to be added together.
+
+        Parameters
+        ----------
+        second_galaxy : ParametricGalaxy
+            A second ParametricGalaxy to be added to this one.
+
+        NOTE: functionality for adding lines and images not yet implemented.
+
+        Returns
+        -------
+        ParametricGalaxy
+            New ParametricGalaxy object containing summed SFZHs, SEDs, lines, and images.
+        """
 
         new_sfzh = self.sfzh + second_galaxy.sfzh
         new_galaxy = ParametricGalaxy(new_sfzh)
 
-        # --- add together spectra
+        # add together spectra
         for spec_name, spectra in self.spectra.items():
             if spec_name in second_galaxy.spectra.keys():
                 new_galaxy.spectra[spec_name] = spectra + second_galaxy.spectra[spec_name]
@@ -55,14 +87,14 @@ class ParametricGalaxy(BaseGalaxy):
                 exceptions.InconsistentAddition(
                     'Both galaxies must contain the same spectra to be added together')
 
-        # --- add together lines
+        # add together lines
         # for line_name, line in self.spectra.items():
         #     if spec_name in second_galaxy.spectra.keys():
         #         new_galaxy.lines[line_name] = line + second_galaxy.lines[line_name]
         #     else:
         #         exceptions.InconsistentAddition('Both galaxies must contain the same emission line quantities to be added together')
 
-        # --- add together images
+        # add together images
         # for img_name, image in self.images.items():
         #     if img_name in second_galaxy.images.keys():
         #         new_galaxy.images[img_name] = image + second_galaxy.image[img_name]
