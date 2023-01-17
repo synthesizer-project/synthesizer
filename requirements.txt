@@ -11,3 +11,5 @@ scipy==1.9.3
 sympy==1.11.1
 unyt==2.9.2
 cmasher==1.6.3
+dust_attenuation==0.5
+dust_extinction==0.5
