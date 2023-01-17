@@ -10,12 +10,12 @@ if len(sys.argv) > 1:
 else:
     grid_dir = None
 
-model = 'bc03_chabrier03'
+model = 'test'
 grid = Grid(model, grid_dir=grid_dir)
 
 lam = grid.lam
-spec = grid.spectra['stellar'][0,0]
-spec_2d = grid.spectra['stellar'][0,:10]
+spec = grid.spectra['stellar'][0, 0]
+spec_2d = grid.spectra['stellar'][0, :10]
 
 _sed = Sed(lam=lam, lnu=spec)
 _sed_2d = Sed(lam=lam, lnu=spec_2d)
