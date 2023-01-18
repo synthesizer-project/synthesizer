@@ -143,6 +143,7 @@ class Stars(Particles):
         # Add the content of the summary to the string to be printed
         pstr += "-"*10 + "\n"
         pstr += "SUMMARY OF STAR PARTICLES" + "\n"
+        pstr += f"N_stars: {self.nparticles}" + "\n"
         pstr += "log10(total mass formed/Msol): "
         pstr += f"{np.log10(np.sum(self.initial_masses)): .2f}" + "\n"
         pstr += f"median(age/Myr): {np.median(self.ages)/1E6:.1f}" + "\n"
