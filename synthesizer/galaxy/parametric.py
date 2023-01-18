@@ -18,7 +18,7 @@ from ..stats import weighted_median, weighted_mean
 
 class ParametricGalaxy(BaseGalaxy):
 
-    """A class defining parametric galaxy objects 
+    """A class defining parametric galaxy objects
 
     """
 

@@ -15,6 +15,37 @@ from .plt import mlabel
 from .sed import Sed, convert_fnu_to_flam
 
 
+from collections.abc import Iterable
+
+
+def flatten_list(list_to_flatten):
+    """Flatten a mixed list of lists and strings and remove duplicates
+
+    Flattens a mixed list of lists and strings. Used when converting a desired line list which may contain single lines and doublets.
+
+    Parameters
+    ----------
+    list : list
+        list containing lists and/or strings and integers
+
+
+    Returns
+    -------
+    list
+        flattend list
+    """
+
+    flattend_list = []
+    for l in list_to_flatten:
+        if isinstance(l, list) or isinstance(l, tuple):
+            for ll in l:
+                flattend_list.append(ll)
+        else:
+            flattend_list.append(l)
+
+    return list(set(flattend_list))
+
+
 def parse_grid_id(grid_id):
     """
     This is used for parsing a grid ID to return the SPS model,
@@ -63,8 +94,15 @@ def parse_grid_id(grid_id):
 
 class Grid():
     """
-    This provides an object to hold the SPS / Cloudy grid
-    for use by other parts of the code
+    The Grid class, containing attributes and methods for reading and manipulating spectral grids
+
+    Attributes
+    ----------
+
+
+    Methods
+    -------
+
     """
 
     def __init__(self, grid_name, grid_dir=None, verbose=False, read_spectra=True, read_lines=False):
@@ -79,8 +117,9 @@ class Grid():
         self.spectra = None
         self.lines = None
 
-        if isinstance(read_lines, np.ndarray):
-            read_lines = list(read_lines)
+        # convert line list into flattend list and remove duplicates
+        if isinstance(read_lines, list):
+            read_lines = flatten_list(read_lines)
 
         with h5py.File(self.grid_filename, 'r') as hf:
             self.spec_names = list(hf['spectra'].keys())
@@ -105,11 +144,6 @@ class Grid():
             # self.units['log10ages'] = hf['log10ages'].attrs['Units']
             # self.units['log10metallicities'] = hf['log10ages'].attrs['Units']
             # self.units['lam'] = hf['spectra/wavelength'].attrs['Units']
-
-        if verbose:
-            print(f'metallicities: {self.metallicities}')
-            print(f'ages: {self.ages}')
-            print(f'ages: {self.log10ages}')
 
         if read_spectra:
 
@@ -157,10 +191,42 @@ class Grid():
                     self.lines[line]['continuum'] = hf['lines'][line]['continuum'][:]
 
     def get_nearest_index(self, value, array):
+        """
+        Simple function for calculating the closest index in an array for a given value
+
+        Parameters
+        ----------
+        value : float
+            The target value
+
+        array : nn.ndarray
+            The array to search
+
+        Returns
+        -------
+        int
+             The index of the closet point in the grid (array)
+        """
 
         return (np.abs(array - value)).argmin()
 
     def get_nearest(self, value, array):
+        """
+        Simple function for calculating the closest index in an array for a given value
+
+        Parameters
+        ----------
+        value : float
+            The target value
+
+        array : nn.ndarray
+            The array to search
+
+        Returns
+        -------
+        int
+             The index of the closet point in the grid (array)
+        """
 
         idx = self.get_nearest_index(value, array)
 
@@ -175,6 +241,22 @@ class Grid():
         return self.get_nearest(log10age, self.log10ages)
 
     def get_sed(self, ia, iZ, spec_name='stellar'):
+        """
+        Simple function for calculating the closest index in an array for a given value
+
+        Parameters
+        ----------
+        ia : int
+            the age grid point
+
+        iZ : int
+            the metallicity grid point
+
+        Returns
+        -------
+        obj (Sed)
+             An Sed object at the defined grid point
+        """
 
         return Sed(self.lam, lnu=self.spectra[spec_name][ia, iZ])
 

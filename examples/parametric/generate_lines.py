@@ -6,17 +6,17 @@ from unyt import yr, Myr
 
 if __name__ == '__main__':
 
-    # -------------------------------------------------
-    # --- calcualte the EW for a given line as a function of age
+    """Example for generating a line object containing the luminosities, equivalent widths and other properties of lines.
 
+    """
+
+    # list of lines. Lines in nested lists (or tuples) denote doublets for which the combined line properties are calculated
+    lines = ['HI4861', 'OIII4959', 'OIII5007', ['OIII4959', 'OIII5007']]
+
+    # open test grid though without reading spectra BUT reading the required lines
     grid_dir = '../../tests/test_grid'
     grid_name = 'test_grid'
-
-    grid = Grid(grid_name, grid_dir=grid_dir)
-
-    line_id = ['HI4861', 'OIII4959', 'OIII5007']
-
-    grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=line_id)
+    grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=lines)
 
     # --- define the parameters of the star formation and metal enrichment histories
     sfh_p = {'duration': 100 * Myr}
@@ -29,8 +29,10 @@ if __name__ == '__main__':
     # --- get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
     sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh)
 
+    # --- create the Galaxy object
     galaxy = Galaxy(sfzh)
 
-    line = galaxy.get_intrinsic_line(grid, line_id)
+    # --- create the Lines object
+    lines = galaxy.get_intrinsic_line(grid, line_id)
 
-    line.summary()
+    print(lines)
