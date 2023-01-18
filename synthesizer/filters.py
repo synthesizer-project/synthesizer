@@ -8,14 +8,67 @@ class FilterCollection:
     """
     Create a collection of filters. While this could be just a dictionary
     or list the class includes methods for also making plots.
+
+    Attributes
+    ----------
     """
 
+    def __init__(self, filter_codes, new_lam=False):
+        """
+        Intialise the Stars instance. The first 3 arguments are always required
+        with all other attributes optional based on what funcitonality is
+        currently being utilised.
+        """
+
+        # The dictionary that contains the filters
+        self.filters = {}
+
+        # A list of filter codes
+        self.filter_codes = filter_codes
+
+        # Do we resample in wavelength?
+        self.new_lam = new_lam
+
+        # Atrributes to enable looping
+        self.current_ind = 0
+        self.nfilters = len(filter_codes)
+
+    def __len__(self):
+        """
+        Overload the len operator to return how many filters there are.
+        """
+        return len(self.filters)
+    
+    def __iter__(self):
+        """
+        Overload iteration to allow simple looping over filter objects,
+        combined with __next__ this enables for f in FilterCollection syntax
+        """
+        return self
+
+    def __next__(self):
+        """
+        Overload iteration to allow simple looping over filter objects,
+        combined with __iter__ this enables for f in FilterCollection syntax
+        """
+
+        # Check we haven't finished
+        if self.current_ind >= self.nfilters:
+            self.current_ind = 0
+            raise StopIteration
+        else:
+            # Increment index
+            self.current_ind += 1
+
+            # Return the filter
+            return self.filters[self.current_ind - 1]
+            
     def transmission_curve_ax(self, ax, add_filter_label=True):
         """ add filter transmission curves to a give axes """
 
         # --- add colours
 
-        for filter_code, F in self.filter.items():
+        for filter_code, F in self.filters.items():
             ax.plot(F.lam, F.t, label=filter_code)
 
             # --- add label with automatic placement
@@ -50,13 +103,23 @@ class SVOFilterCollection(FilterCollection):
     a dictionary or list the class includes methods for also making plots.
     """
 
-    def __init__(self, fs, new_lam=False):
+    def __init__(self, filter_codes, new_lam=False):
 
-        self.filter = {}
-        for f in fs:
-            F = FilterFromSVO(f, new_lam=new_lam)
-            self.filter[F.filter_code] = F
-        self.filters = list(self.filter.keys())
+        # Initialise parent
+        FilterCollection.__init__(self, filter_codes=filter_codes,
+                                  new_lam=new_lam)
+
+        # Loop over filter codes getting each filter
+        for f in self.filter_codes:
+
+            # Get filter from SVO
+            F = FilterFromSVO(f, new_lam=self.new_lam)
+            
+            # Store the filter
+            self.filters[F.filter_code] = F
+
+        # Convert dictionary to a list
+        self.filters = list(self.filters.values())
 
 
 class TopHatFilterCollection(FilterCollection):
@@ -65,23 +128,37 @@ class TopHatFilterCollection(FilterCollection):
     just a dictionary or list the class includes methods for also making plots.
     """
 
-    def __init__(self, fs, new_lam=False):
+    def __init__(self, filter_codes, new_lam=False):
 
-        self.filter = {}
-        for f in fs:
+        # Initialise parent
+        FilterCollection.__init__(self, filter_codes, new_lam)
+
+        # Loop over filter codes
+        for f in self.filter_codes:
+
+            # Extract extra infromation
             filter_code, kwargs = f
+
+            # Make filter
             F = TopHatFilter(filter_code, **kwargs, new_lam=new_lam)
-            self.filter[F.filter_code] = F
-        self.filters = list(self.filter.keys())
+
+            # Store the filter
+            self.filters[F.filter_code] = F
+
+        # Convert dictionary to a list
+        self.filters = list(self.filters.values())
 
 
 def UVJ(new_lam=None):
+    """
+    Helper function to produce a FilterCollection containing UVJ tophat filters.
+    """
 
-    fs = [('U', {'lam_eff': 3650, 'lam_fwhm': 660}),
-          ('V', {'lam_eff': 5510, 'lam_fwhm': 880}),
-          ('J', {'lam_eff': 12200, 'lam_fwhm': 2130})]
+    filter_codes = [('U', {'lam_eff': 3650, 'lam_fwhm': 660}),
+                    ('V', {'lam_eff': 5510, 'lam_fwhm': 880}),
+                    ('J', {'lam_eff': 12200, 'lam_fwhm': 2130})]
 
-    return TopHatFilterCollection(fs, new_lam=new_lam)
+    return TopHatFilterCollection(filter_codes, new_lam=new_lam)
 
 
 class Filter:

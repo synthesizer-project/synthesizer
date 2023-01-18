@@ -1,3 +1,4 @@
+import synthesizer.exceptions as exceptions
 from ..particle.stars import Stars
 from ..sed import Sed
 from ..dust import power_law
@@ -5,6 +6,7 @@ from .galaxy import BaseGalaxy
 from .. import exceptions
 from ..weights import calculate_weights
 import numpy as np
+from ..imaging.images import ParticleImage
 
 
 class ParticleGalaxy(BaseGalaxy):
@@ -100,7 +102,7 @@ class ParticleGalaxy(BaseGalaxy):
         else:
             s = np.ones(self.nparticles, dtype=bool)
 
-        # JCalculate integrared spectra
+        # Calculate integrared spectra
         if integrated:
 
             # Calculate the grid weights for all stellar particles
@@ -163,6 +165,7 @@ class ParticleGalaxy(BaseGalaxy):
 
                 # Calculate the grid weights for this particle
                 weights_temp = self._calculate_weights(grid, metal, age, mass)
+                non0_inds = np.where(weights_temp > 0)
 
                  # Get the mask for grid cells we need to sum
                 non0_inds = np.where(weights_temp > 0)
@@ -172,7 +175,7 @@ class ParticleGalaxy(BaseGalaxy):
                     grid.spectra['stellar'][non0_inds[0], non0_inds[1], :]
                     * weights_temp[non0_inds[0], non0_inds[1], None], axis=0
                 )
-
+                
                 # TODO: perhaps should also check that fesc is not false
                 if 'total' in list(grid.spectra.keys()):
 
@@ -186,7 +189,6 @@ class ParticleGalaxy(BaseGalaxy):
                     )
 
                 else:
-
                     # If no nebular emission the intrinsic emission is simply
                     # the stellar emission
                     intrinsic_lum_array[i] = stellar_lum_array[i]
@@ -220,9 +222,11 @@ class ParticleGalaxy(BaseGalaxy):
 
             return grid.lam, stellar_lum_array, intrinsic_lum_array
 
-    def get_screen(self, tauV, dust_curve=power_law({'slope': -1.}), integrated=True):
+    def get_screen(self, tauV, dust_curve=power_law({'slope': -1.}),
+                   integrated=True):
         """
-        Get Sed object for intrinsic spectrum of individual star particles or entire galaxy
+        Get Sed object for intrinsic spectrum of individual star particles or
+        entire galaxy
         Args
         tauV: numerical value of dust attenuation in the V-band
         dust_curve: instance of dust class
@@ -230,7 +234,8 @@ class ParticleGalaxy(BaseGalaxy):
 
         T = np.exp(-tauV) * dust_curve.T(self.lam)
 
-        # --- always calculate the integrated spectra since this is low overhead compared to doing the sed_array
+        # --- always calculate the integrated spectra since this is low overhead
+        # compared to doing the sed_array
         sed = Sed(self.lam, self.intrinsic_lum * T)
         self.spectra['attenuated'] = sed
         # self.spectra['T'] = T
@@ -242,7 +247,8 @@ class ParticleGalaxy(BaseGalaxy):
             self.spectra_array['attenuated'] = sed_array
             return sed_array
 
-    def get_CF00(self, grid, tauV_ISM, tauV_BC, alpha_ISM=-0.7, alpha_BC=-1.3, integrated=True, save_young_and_old=False):
+    def get_CF00(self, grid, tauV_ISM, tauV_BC, alpha_ISM=-0.7, alpha_BC=-1.3,
+                 integrated=True, save_young_and_old=False):
         """
         Get Sed object for intrinsic spectrum of individual star particles or entire galaxy
         Args
@@ -262,15 +268,21 @@ class ParticleGalaxy(BaseGalaxy):
 
             if integrated:
 
-                self.spectra['intrinsic_young'] = Sed(self.lam, intrinsic_sed_young)
-                self.spectra['intrinsic_old'] = Sed(self.lam, intrinsic_sed_old)
+                self.spectra['intrinsic_young'] = Sed(
+                    self.lam, intrinsic_sed_young)
+                self.spectra['intrinsic_old'] = Sed(
+                    self.lam, intrinsic_sed_old)
 
             else:
 
-                self.spectra_array['intrinsic_young'] = Sed(self.lam, intrinsic_sed_young)
-                self.spectra_array['intrinsic_old'] = Sed(self.lam, intrinsic_sed_old)
-                self.spectra['intrinsic_young'] = Sed(self.lam, np.sum(intrinsic_sed_young))
-                self.spectra['intrinsic_old'] = Sed(self.lam, np.sum(intrinsic_sed_old))
+                self.spectra_array['intrinsic_young'] = Sed(
+                    self.lam, intrinsic_sed_young)
+                self.spectra_array['intrinsic_old'] = Sed(
+                    self.lam, intrinsic_sed_old)
+                self.spectra['intrinsic_young'] = Sed(
+                    self.lam, np.sum(intrinsic_sed_young))
+                self.spectra['intrinsic_old'] = Sed(
+                    self.lam, np.sum(intrinsic_sed_old))
 
         T_ISM = np.exp(-tauV_ISM) * power_law({'slope': alpha_ISM}).T(self.lam)
         T_BC = np.exp(-tauV_BC) * power_law({'slope': alpha_BC}).T(self.lam)
@@ -290,9 +302,11 @@ class ParticleGalaxy(BaseGalaxy):
 
             else:
 
-                self.spectra_array['attenuated_young'] = Sed(self.lam, sed_young)
+                self.spectra_array['attenuated_young'] = Sed(
+                    self.lam, sed_young)
                 self.spectra_array['attenuated_old'] = Sed(self.lam, sed_old)
-                self.spectra['attenuated_young'] = Sed(self.lam, np.sum(sed_young))
+                self.spectra['attenuated_young'] = Sed(
+                    self.lam, np.sum(sed_young))
                 self.spectra['attenuated_old'] = Sed(self.lam, np.sum(sed_old))
 
         # --- total SED
@@ -319,7 +333,8 @@ class ParticleGalaxy(BaseGalaxy):
         # if not self.intrinsic_lum_array:
         #     print('Must generate spectra for individual star particles')
 
-        sed = self.intrinsic_lum_array * T  # these two should have the same shape so should work?
+        # these two should have the same shape so should work?
+        sed = self.intrinsic_lum_array * T
         self.spectra_array['attenuated'] = Sed(self.lam, sed)
         self.spectra['attenuated'] = Sed(self.lam, np.sum(sed, axis=0))
 
@@ -410,4 +425,147 @@ class ParticleGalaxy(BaseGalaxy):
             return calculate_weights(grid.log10ages[grid.ages <= grid.max_age],
                                      grid.log10metallicities, in_arr)
         else:
-            return calculate_weights(grid.log10ages, grid.log10metallicities, in_arr)
+            return calculate_weights(grid.log10ages, grid.log10metallicities,
+                                     in_arr)
+
+    def create_stellarmass_hist(self, resolution, npix=None, fov=None):
+        """
+        Calculate a 2D histogram of the galaxy's mass distribution.
+
+        NOTE: Either npix or fov must be defined.
+
+        Parameters
+        ----------
+        resolution : float
+           The size of a pixel.
+        npix : int
+            The number of pixels along an axis.
+        fov : float
+            The width of the image in image coordinates.
+
+        Returns
+        -------
+        Image : array-like
+            A 2D array containing the image.
+
+        """
+
+        # Instantiate the Image object.
+        img = ParticleImage(resolution, npix, fov, stars=self.stars,
+                            pixel_values=self.stars.initial_masses)
+
+        return img.get_hist_img()
+
+    def make_image(self, resolution, npix=None, fov=None, img_type="hist",
+                   sed=None, survey=None, filters=(), pixel_values=None,
+                   with_psf=False,  with_noise=False, kernel_func=None,
+                   rest_frame=True, redshift=None, cosmo=None, igm=None):
+        """
+        Makes images, either one or one per filter. This is a generic method
+        that will make every sort of image using every possible combination of
+        arguments allowed by the ParticleImage class. These methods can be
+        either a simple histogram or smoothing particles over a kernel. Either
+        of these operations can be done with or without a PSF and noise.
+
+        NOTE: Either npix or fov must be defined.
+
+        Parameters
+        ----------
+        resolution : float
+           The size of a pixel.
+        npix : int
+            The number of pixels along an axis.
+        fov : float
+            The width of the image in image coordinates.
+        img_type : str
+            The type of image to be made, either "hist" -> a histogram, or
+            "smoothed" -> particles smoothed over a kernel.
+        sed : obj (SED)
+            An sed object containing the spectra for this image.
+        survey : obj (Survey)
+            WorkInProgress
+        filters : obj (FilterCollection)
+            An imutable collection of Filter objects. If provided images are made
+            for each filter.
+        pixel_values : array-like (float)
+            The values to be sorted/smoothed into pixels. Only needed if an sed
+            and filters are not used.
+        with_psf : bool
+            Are we applying a PSF? PLACEHOLDER
+        with_noise : bool
+            Are we adding noise? PLACEHOLDER
+        kernel_func : function
+            A function describing the smoothing kernel that returns a single
+            number between 0 and 1. This function can be imported from the
+            options in kernel_functions.py or can be user defined. If user
+            defined the function must return the kernel value corredsponding
+            to the position of a particle with smoothing length h at distance
+            r from the centre of the kernel (r/h). 
+        rest_frame : bool
+            Are we making an observation in the rest frame?
+        redshift : float
+            The redshift of the observation. Used when converting rest frame
+            luminosity to flux.
+        cosmo : obj (astropy.cosmology)
+            A cosmology object from astropy, used for cosmological calculations
+            when converting rest frame luminosity to flux.
+        igm : obj (Inoue14/Madau96)
+            Object containing the absorbtion due to an intergalactic medium.
+
+        Returns
+        -------
+        Image : array-like
+            A 2D array containing the image.
+
+        """
+
+        # Instantiate the Image object.
+        img = ParticleImage(resolution=resolution, npix=npix, fov=fov, sed=sed,
+                            stars=self.stars, survey=survey, filters=filters,
+                            pixel_values=pixel_values, rest_frame=True,
+                            redshift=None, cosmo=None, igm=None)
+        
+        # Make the image, handling incorrect image types
+        if img_type == "hist" and not with_psf and not with_noise:
+            
+            # Compute image
+            img.get_hist_img()
+
+            return img
+        
+        elif img_type == "hist" and with_psf and not with_noise:
+            raise exceptions.UnimplementedFunctionality(
+                "PSF functionality coming soon."
+            )
+        elif img_type == "hist" and not with_psf and with_noise:
+            raise exceptions.UnimplementedFunctionality(
+                "Noise functionality coming soon."
+            )
+        elif img_type == "hist" and with_psf and with_noise:
+            raise exceptions.UnimplementedFunctionality(
+                "PSF and noise functionality coming soon."
+            )
+        elif img_type == "smoothed" and not with_psf and not with_noise:
+            
+            # Compute image
+            img.get_smoothed_img(kernel_func)
+
+            return img
+        
+        elif img_type == "smoothed" and with_psf and not with_noise:
+            raise exceptions.UnimplementedFunctionality(
+                "Smothed functionality coming soon."
+            )
+        elif img_type == "smoothed" and not with_psf and with_noise:
+            raise exceptions.UnimplementedFunctionality(
+                "Smothed functionality coming soon."
+            )
+        elif img_type == "smoothed" and with_psf and with_noise:
+            raise exceptions.UnimplementedFunctionality(
+                "Smothed functionality coming soon."
+            )
+        else:
+            raise exceptions.UnknownImageType(
+                "Unknown img_type %s. (Options are 'hist' or 'smoothed')"
+            )
+            
