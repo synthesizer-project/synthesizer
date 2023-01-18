@@ -141,13 +141,13 @@ def generate_sfh(ages, sfh_, log10=False):
     return SFH
 
 
-def generate_instant_sfzh(log10ages, metallicities, log10age, metallicity):
+def generate_instant_sfzh(log10ages, metallicities, log10age, metallicity, stellar_mass=1):
     """ simply returns the SFZH where only bin is populated corresponding to the age and metallicity """
 
     sfzh = np.zeros((len(log10ages), len(metallicities)))
     ia = (np.abs(log10ages - log10age)).argmin()
     iZ = (np.abs(metallicities - metallicity)).argmin()
-    sfzh[ia, iZ] = 1
+    sfzh[ia, iZ] = stellar_mass
 
     return BinnedSFZH(log10ages, metallicities, sfzh)
 

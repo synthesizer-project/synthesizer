@@ -25,6 +25,8 @@ if __name__ == '__main__':
 
     # --- define the functional form of the star formation and metal enrichment histories
     sfh = SFH.Constant(sfh_p)  # constant star formation
+    print(sfh)  # print sfh summary
+
     Zh = ZH.deltaConstant(Z_p)  # constant metallicity
 
     # --- get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
@@ -60,3 +62,5 @@ if __name__ == '__main__':
     # # --- CF00 model NOT YET IMPLEMENTED
     # galaxy.get_pacman_spectra(grid, tauV = 0.1, fesc = 0.5)
     # galaxy.plot_spectra()
+
+    print(galaxy)
