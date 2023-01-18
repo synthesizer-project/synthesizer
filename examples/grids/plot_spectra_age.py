@@ -66,22 +66,12 @@ def plot_spectra_age(grid, log10Z=-2.0, spec_name='stellar'):
 
 if __name__ == '__main__':
 
+    grid_dir = '../../tests/test_grid'
+    grid_name = 'test_grid'
+
+    grid = Grid(grid_name, grid_dir=grid_dir)
     log10Z = -2.
-    sps_names = [
-        # 'bpass-v2.2.1-bin_chab-100',
-        # 'fsps-v3.2_Chabrier03',
-        # 'bc03-2016-BaSeL_chabrier03',
-        # 'bc03-2016-Miles_chabrier03',
-        # 'bc03-2016-Stelib_chabrier03',
-        f'fsps-v3.2_imf3:2.3',
-        # f'fsps-v3.2_Salpeter',
-    ]
 
-    for sps_name in sps_names:
-
-        grid = Grid(sps_name)
-
-        fig, ax = plot_spectra_age(grid, log10Z=log10Z)
-
-        plt.show()
-        # fig.savefig(f'figs/spectra_age_{sps_name}.pdf')
+    fig, ax = plot_spectra_age(grid, log10Z=log10Z)
+    plt.show()
+    # fig.savefig(f'figs/spectra_age_{sps_name}.pdf')
