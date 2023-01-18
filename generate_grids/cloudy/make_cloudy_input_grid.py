@@ -53,7 +53,7 @@ def load_cloudy_parameters(param_file='default_param.yaml',
                 output_cloudy_params.append(cloudy_params)
 
                 # replace negative '-' with m
-                out_str = f'{k}{_v.replace("-", "m")}'
+                out_str = f'{k}{str(_v).replace("-", "m")}'
 
                 # save to list of output strings
                 output_cloudy_names.append(out_str)
@@ -88,8 +88,6 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
     nZ = len(grid.metallicities)
     n = na * nZ
 
-    i = 1
-
     for iZ in range(nZ):
 
         # --- get metallicity
@@ -119,17 +117,13 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
 
             cloudy_params['log10U'] = log10U
 
-            # TODO: currently this writes out the input script *twice*,
-            # once in `create_cloudy_input` as ia_iZ.in, and once again 
-            # below as i.in. Unnecessary
             cinput = create_cloudy_input(
                 model_name, lam, lnu, abundances, output_dir=output_dir, 
                 **cloudy_params)
 
-            # --- write input file
-            open(f'{output_dir}/{i}.in', 'w').writelines(cinput)
-
-            i += 1
+            # write filename out
+            with open(f"{output_dir}/input_names.txt", "a") as myfile:
+                myfile.write(f'{model_name}\n')
 
     yaml.dump(cloudy_params, open(f'{output_dir}/params.yaml', 'w'))
 

@@ -32,8 +32,14 @@ def apollo_submission_script(synthesizer_data_dir, cloudy):
 # should set up the environment for your program, copy around any data that
 # needs to be copied, and then execute the program
 ######################################################################
-${cloudy} -r $SGE_TASK_ID
-    """
+
+# increment array task ID so not zero indexed
+let index=$SGE_TASK_ID+1
+
+# access line at index from input_names file
+id=$(sed "${{index}}q;d" input_names.txt)
+${cloudy} -r $id
+"""
 
     open(f'{synthesizer_data_dir}/run_grid.job', 'w').write(apollo_job_script)
     print(synthesizer_data_dir)
@@ -56,27 +62,17 @@ def cosma7_submission_script(N, output_dir, cloudy,
     output.append(f'#SBATCH -t 00:15:00\n\n')
     # output.append(f'#SBATCH --mail-type=END # notifications for job done &
     # output.append(f'#SBATCH --mail-user=<email address>
-    output.append(f'{cloudy} -r $SLURM_ARRAY_TASK_ID\n')
 
-    open(f'{output_dir}/{input_prefix}_run.job','w').writelines(output)
+    # increment array task ID so not zero indexed
+    output.append('let index=$SLURM_ARRAY_TASK_ID+1\n')
+
+    # access line at index from input_names file
+    output.append('id=$(sed "${index}q;d" input_names.txt)\n')
+
+    # run CLOUDY for the given model {ia}_{iZ}.in
+    output.append(f'${cloudy} -r $id\n')
+
+    open(f'{output_dir}/run.job','w').writelines(output)
 
     return
 
-
-# if __name__ == "__main__":
-# 
-#     parser = argparse.ArgumentParser(description='Write submission script for various machines.')
-#     parser.add_argument("-dir", "--directory", type=str, required=True)
-#     parser.add_argument("-m", "--machine", type=str, required=True)
-#     parser.add_argument("-c", "--cloudy", type=str, nargs='?', const='CLOUDY17')
-#     args = parser.parse_args()
-# 
-#     synthesizer_data_dir = args.directory
-#     cloudy = args.cloudy
-# 
-#     if args.machine == 'apollo':
-#         apollo_submission_script(synthesizer_data_dir, cloudy)
-#     elif arg.machine == 'cosma7':
-#         cosma7_submission_script()
-#     else:
-#         ValueError(f'Machine {args.machine} not recognised.')
