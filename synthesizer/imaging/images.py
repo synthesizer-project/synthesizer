@@ -36,6 +36,9 @@ class Image(Observation):
     imgs : dict
         A dictionary containing filter_code keys and img values. Only used if a
         FilterCollection is passed.
+    combined_imgs : list
+        A list containing any other image objects that were combined to
+        make a composite image object.
 
     Methods
     -------
@@ -92,6 +95,99 @@ class Image(Observation):
         # Set up img arrays. When multiple filters are provided we need a dict.
         self.img = np.zeros((self.npix, self.npix), dtype=np.float64)
         self.imgs = {}
+
+        # Set up a list to hold combined images.
+        self.combined_imgs = []
+
+    def __add__(self, other_img):
+        """
+        Adds two img objects together, combining all images in all filters (or
+        single band/property images).
+
+        If the images are incompatible in dimension an error is thrown.
+
+        Note: Once a new composite Image object is returned this will contain
+        the combined images in the combined_imgs dictionary.
+
+        Parameters
+        ----------
+        other_img : obj (Image/ParticleImage/ParametricImage)
+            The other image to be combined with self.
+
+        Returns
+        -------
+        composite_img : obj (Image)
+             A new Image object contain the composite image of self and
+             other_img.
+        """
+
+        # Make sure the images are compatible dimensions
+        if (self.resolution != other_img.resolution
+            or self.fov != other_img.fov
+            or self.npix != other_img.npix):
+            raise exceptions.InconsistentAddition(
+                "Cannot add Images: resolution=("
+                + str(self.resolution) + " + " + str(other_img.resolution)
+                + "), fov=("
+                + str(self.fov) + " + " + str(other_img.fov)
+                + "), npix=("
+                + str(self.npix) + " + " + str(other_img.npix) + ")")
+
+        # Make sure they contain compatible filters (but we allow one
+        # filterless image to be added to a image object with filters)
+        if len(self.filters) > 0 and len(other_img.filters) > 0:
+            if self.filters != other_img.filters:
+                raise exceptions.InconsistentAddition(
+                    "Cannot add Images with incompatible filter sets!"
+                    + "\nFilter set 1:" + "[ "
+                    + ", ".join([fstr for fstr in self.filters.filter_codes])
+                    + " ]" + "\nFilter set 2:" + "[ "
+                    + ", ".join([fstr
+                                 for fstr in other_img.filters.filter_codes])
+                    + " ]")
+
+        # Get the filter set for the composite, we have to handle the case
+        # where one of the images is a single band/property image so can't
+        # just take self.filters
+        composite_filters = self.filters
+        if len(composite_filters) == 0:
+            composite_filters = other_img.filters
+
+        # Initialise the composite image
+        composite_img = Image(self.resolution, npix=self.npix, fov=self.fov,
+                              filters=composite_filters, sed=None, survey=None)
+
+        # Store the original images in the composite extracting any
+        # nested images.
+        if len(self.combined_imgs) > 0:
+            for img in self.combined_imgs:
+                composite_img.combined_imgs.append(img)
+        else:
+            composite_img.combined_imgs.append(self)
+        if len(other_img.combined_imgs) > 0:
+            for img in other_img.combined_imgs:
+                composite_img.combined_imgs.append(img)
+        else:
+            composite_img.combined_imgs.append(other_img)
+
+        # Now we can actually combine them, start with the single band/property
+        if self.img is not None and other_img.img is not None:
+            composite_img.img = self.img + other_img.img
+
+        # Are we adding a single band/property image to a dictionary?
+        elif self.img is not None and len(other_img.imgs) > 0:
+            for key, img in other_img.imgs:
+                composite_img.imgs[key] = img + self.img
+        elif other_img.img is not None and len(self.imgs) > 0:
+            for key, img in self.imgs:
+                composite_img.imgs[key] = other_img.imgs[key] + self.img
+
+        # Otherwise, we are simply combining images in multiple filters
+        else:
+            for key, img in self.imgs:
+                composite_filters.imgs[key] = img + other_img.imgs[key]
+
+        return composite_img
 
     def apply_filter(self, f):
         """
@@ -159,7 +255,7 @@ class ParticleImage(ParticleObservation, Image):
 
     def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
                  filters=(), survey=None, positions=None, pixel_values=None,
-                  rest_frame=True, redshift=None, cosmo=None, igm=None):
+                 rest_frame=True, redshift=None, cosmo=None, igm=None):
         """
         Intialise the ParticleImage.
 
