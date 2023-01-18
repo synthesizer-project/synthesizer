@@ -10,3 +10,4 @@ PyYAML==6.0
 scipy==1.9.3
 sympy==1.11.1
 unyt==2.9.2
+cmasher==1.6.3

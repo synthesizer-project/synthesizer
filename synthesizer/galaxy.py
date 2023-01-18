@@ -1,144 +1,104 @@
+
 import numpy as np
+import matplotlib.pyplot as plt
+import cmasher as cmr
 
-from weights import calculate_weights
-from .stars import Stars
 
+class BaseGalaxy:
 
-class Galaxy:
-    def __init__(self):
-        self.name = 'galaxy'
+    """ a base galaxy class """
 
-    def load_stars(self, masses, ages, metals, **kwargs):
-        self.stars = Stars(masses, ages, metals, **kwargs)
+    def T(self):
+        """ Calcualte transmission as a function of wavelength """
 
-    def stellar_particle_spectra(self, grid):
-        """
-        Calculate spectra for all individual stellar particles
+        return self.spectra['attenuated'].lam, self.spectra['attenuated'].lnu/self.spectra['intrinsic'].lnu
 
-        Warning: *much* slower than calculating integrated spectra,
-        as it does not use vectorisation.
+    def Al(self):
+        """ Calcualte attenuation as a function of wavelength """
 
-        Returns
-        lum (array) spectrum for each particle, (N_part, wl)
-        """
-        lum = np.zeros((len(self.stars.initial_masses),
-                        grid.spectra['stellar'].shape[-1]))
+        lam, T = self.T()
 
-        for i, (mass, age, metal) in enumerate(zip(
-                self.stars.initial_masses,
-                self.stars.log10ages,
-                self.stars.log10metallicities)):
+        return lam, -2.5*np.log10(T)
 
-            weights_temp = self._calculate_weights(grid, metal, age, mass)
-            lum[i] = np.sum(grid.spectra['stellar'] * weights_temp[:, :, None],
-                            axis=(0, 1))
+    def A(self, l):
+        """ Calculate attenuation at a given wavelength """
 
-        return lum
+        lam, Al = self.Al()
 
-    def integrated_stellar_spectrum(self, grid, save=False):
-        """
-        Calculate integrated spectrum for whole galaxy
+        return np.interp(l, lam, Al)
 
-        Args
-        grid: grid object
-        save (bool, False): determines if spectra saved to galaxy object
-                            if False, method returns spectrum as array
-        """
-        weights_temp = self._calculate_weights(grid,
-                                               self.stars.log10metallicities,
-                                               self.stars.log10ages,
-                                               self.stars.initial_masses)
+    def A1500(self):
+        """ Calculate rest-frame FUV attenuation """
 
-        _spec = np.sum(grid.spectra['stellar'] * weights_temp[:, :, None],
-                       axis=(0, 1))
+        return self.A(1500.)
 
-        # lum = self.stellar_particle_spectra(grid)
-        # _spec = np.sum(lum, axis=0)
-        if save:
-            self.stellar_spectrum = _spec
-        else:
-            return _spec
+    def plot_spectra(self, show=True, spectra_to_plot=None):
+        """ plots all spectra associated with a galaxy object """
 
-    def stellar_particle_line_luminosities(self, grid):
-        """
-        Calculate line luminosities from individual young stellar particles
+        fig = plt.figure(figsize=(3.5, 5.))
 
-        Warning: slower than calculating integrated line luminosities,
-        particularly where young particles are resampled, as it does
-        not use vectorisation.
+        left = 0.15
+        height = 0.8
+        bottom = 0.1
+        width = 0.8
 
-        Args
-        grid (object)
-        """
-        age_mask = self.stars.log10ages < grid.max_age
-        lum = np.zeros((np.sum(age_mask), len(grid.lines)))
+        ax = fig.add_axes((left, bottom, width, height))
 
-        if np.sum(age_mask) == 0:
-            return lum
-        else:
-            for i, (mass, age, metal) in enumerate(zip(
-                    self.stars.initial_masses[age_mask],
-                    self.stars.log10ages[age_mask],
-                    self.stars.log10metallicities[age_mask])):
+        if type(spectra_to_plot) != list:
+            spectra_to_plot = list(self.spectra.keys())
 
-                weights_temp = self._calculate_weights(grid, metal, age, mass,
-                                                       young_stars=True)
-                lum[i] = np.sum(grid.line_luminosities * weights_temp,
-                                axis=(1, 2))
+        for sed_name in spectra_to_plot:
+            sed = self.spectra[sed_name]
+            ax.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, label=sed_name)
 
-            return lum
+        ax.set_xlim([2.5, 4.2])
+        ax.set_ylim([27., 29.5])
+        ax.legend(fontsize=8, labelspacing=0.0)
+        ax.set_xlabel(r'$\rm log_{10}(\lambda/\AA)$')
+        ax.set_ylabel(r'$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$')
 
-    def integrated_stellar_line_luminosities(self, grid, save=False,
-                                             verbose=False):
-        """
-        Calculate integrated line luminosities for whole galaxy
+        if show:
+            plt.show()
 
-        Args
-        grid (object)
-        save (bool, False) determines if line luminosities dict saved
-                           to galaxy object. If false, return dict
-        """
-        # lum = self.stellar_particle_line_luminosities(grid)
+        return fig, ax
 
-        age_mask = self.stars.log10ages < grid.max_age
+    def plot_observed_spectra(self, cosmo, z, fc=None, show=True, spectra_to_plot=None):
+        """ plots all spectra associated with a galaxy object """
 
-        if np.sum(age_mask) > 0:
-            weights_temp =\
-              self._calculate_weights(grid,
-                                      self.stars.log10metallicities[age_mask],
-                                      self.stars.log10ages[age_mask],
-                                      self.stars.initial_masses[age_mask],
-                                      young_stars=True)
+        fig = plt.figure(figsize=(3.5, 5.))
 
-            lum = np.sum(grid.line_luminosities * weights_temp, axis=(1, 2))
-        else:
-            if verbose:
-                print("Warning: no particles below max age limit")
-            lum = np.empty([grid.line_luminosities.shape[0]])
-            lum[:] = np.nan
+        left = 0.15
+        height = 0.8
+        bottom = 0.1
+        width = 0.8
 
-        line_lums = {}
-        for i, line in enumerate(grid.lines):
-            line_lums[line] = lum[i]
+        ax = fig.add_axes((left, bottom, width, height))
+        filter_ax = ax.twinx()
 
-        if save:
-            self.stellar_line_luminosities = line_lums
-        else:
-            return line_lums
+        if type(spectra_to_plot) != list:
+            spectra_to_plot = list(self.spectra.keys())
 
-    def _calculate_weights(self, grid, metals, ages, imasses,
-                           young_stars=False):
-        """
-        Find weights of particles on grid
+        for sed_name in spectra_to_plot:
+            sed = self.spectra[sed_name]
+            sed.get_fnu(cosmo, z)
+            ax.plot(sed.lamz, sed.fnu, lw=1, alpha=0.8, label=sed_name)
+            print(sed_name)
 
-        Will calculate for particles individually
-        """
-        in_arr = np.array([ages, metals, imasses], dtype=np.float64).T
-        if (not hasattr(metals, '__len__')):  # check it's an array
-            in_arr = in_arr[None, :]  # update dimensions if scalar
+            if fc:
+                sed.get_broadband_fluxes(fc)
+                for f, filter in fc.filter.items():
+                    wv = filter.pivwv()
+                    filter_ax.plot(filter.lam, filter.t)
+                    ax.scatter(wv, sed.broadband_fluxes[f])
 
-        if young_stars:  # filter grid object
-            return calculate_weights(grid.log10ages[grid.ages <= grid.max_age],
-                                     grid.log10metallicities, in_arr)
-        else:
-            return calculate_weights(grid.log10ages, grid.log10metallicities, in_arr)
+        ax.set_xlim([5000., 100000.])
+        ax.set_ylim([0., 100])
+        filter_ax.set_ylim([-1., 5])
+        ax.legend(fontsize=8, labelspacing=0.0)
+        ax.set_xlabel(r'$\rm log_{10}(\lambda_{obs}/\AA)$')
+        ax.set_ylabel(r'$\rm log_{10}(f_{\nu}/nJy)$')
+
+        if show:
+            plt.show()
+
+        return fig, ax

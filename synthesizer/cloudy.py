@@ -67,7 +67,6 @@ def create_cloudy_binary(grid, params, verbose=False):
     # the frequency(wavelength) grid, nfreq points
     output.append(' '.join(map(str, grid.lam))+"\n")
 
-
     for i, a in enumerate(grid.ages):
         for j, z in enumerate(grid.metallicities):
             output.append(' '.join(map(str,
@@ -122,19 +121,20 @@ def create_cloudy_binary(grid, params, verbose=False):
 
 def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloudy_output/', **kwargs):
 
-    params = {'log10radius': -2, # radius in log10 parsecs
-              'covering_factor': 1.0, # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
-              'stop_T': 4000, # K
+    params = {'log10radius': -2,  # radius in log10 parsecs
+              # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
+              'covering_factor': 1.0,
+              'stop_T': 4000,  # K
               'stop_efrac': -2,
-              'T_floor': 100, # K
-              'log10n_H': 2.5, # Hydrogen density
-              'log10U_S_0': -2.0, # ionisation parameter at the reference metallicity and age ## NOTE: this is not how other people handle this but I think it makes more sense
-              'CO': 0.0, #
-              'd2m': 0.3, # dust-to-metal ratio
+              'T_floor': 100,  # K
+              'log10n_H': 2.5,  # Hydrogen density
+              'log10U_S_0': -2.0,  # ionisation parameter at the reference metallicity and age ## NOTE: this is not how other people handle this but I think it makes more sense
+              'CO': 0.0,
+              'd2m': 0.3,  # dust-to-metal ratio
               'z': 0.,
               'CMB': False,
               'cosmic_rays': False
-            }
+              }
 
     for key, value in list(kwargs.items()):
         params[key] = value
@@ -152,8 +152,7 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     a = abund.abundances(Z, params['CO'], params['d2m'])
 
     # --- determine elemental abundances for given Z, CO, d2m, WITHOUT depletion taken into account
-    a_nodep =  abund.abundances(Z, params['CO'], 0.0) # --- determine abundances for no depletion
-
+    a_nodep = abund.abundances(Z, params['CO'], 0.0)  # --- determine abundances for no depletion
 
     # ----- start CLOUDY input file (as a list)
     cinput = []
@@ -169,7 +168,6 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     # --- Define the chemical composition
     for ele in ['He'] + abund.metals:
         cinput.append('element abundance '+abund.name[ele]+' '+str(a[ele])+'\n')
-
 
     # --- add graphite and silicate grains
     # This old version does not actually conserve mass as the command abundances
@@ -200,17 +198,17 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     from Galliano+2008 (https://iopscience.iop.org/article/10.1086/523621, y = 4.17*Z_gas_sol - 7.085),
     which will again introduce issues on mass conservation."""
 
-    delta_C         = 10**a_nodep['C'] - 10**a['C']
-    delta_PAH       = 0.01 * (10**a_nodep['C'])
-    delta_graphite  = delta_C - delta_PAH
-    delta_Si        = 10**a_nodep['Si'] - 10**a['Si']
-    orion_C_abund   = -3.6259
-    orion_Si_abund  = -4.5547
-    PAH_abund       = -4.446
-    if params['d2m']>0:
-        f_graphite  = delta_graphite/(10**(orion_C_abund))
-        f_Si        = delta_Si/(10**(orion_Si_abund))
-        f_pah       = delta_PAH/(10**(PAH_abund))
+    delta_C = 10**a_nodep['C'] - 10**a['C']
+    delta_PAH = 0.01 * (10**a_nodep['C'])
+    delta_graphite = delta_C - delta_PAH
+    delta_Si = 10**a_nodep['Si'] - 10**a['Si']
+    orion_C_abund = -3.6259
+    orion_Si_abund = -4.5547
+    PAH_abund = -4.446
+    if params['d2m'] > 0:
+        f_graphite = delta_graphite/(10**(orion_C_abund))
+        f_Si = delta_Si/(10**(orion_Si_abund))
+        f_pah = delta_PAH/(10**(PAH_abund))
         command = F'grains Orion graphite {f_graphite} \ngrains Orion silicate {f_Si} \ngrains PAH {f_pah}'
         cinput.append(command+'\n')
     else:
@@ -248,8 +246,7 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     # cinput.append(f'save overview "model.ovr" last\n')
 
     # --- write input file
-    open(f'{output_dir}/{model_name}.in','w').writelines(cinput)
-
+    open(f'{output_dir}/{model_name}.in', 'w').writelines(cinput)
 
     # --- make a dictionary of the parameters including derived parameters
 
@@ -264,8 +261,6 @@ def write_cloudy_input(model_name, grid, ia, iZ, log10U, output_dir='grids/cloud
     #             params[name] = float(np.round(locals()[name],2))
     #     else:
     #         params[name] = locals()[name]
-
-
 
     # # --- write parameter file, including derived parameters
     # # yaml.dump({**params, **self.SPS_params}, open(f'params.yaml','w'))
@@ -295,12 +290,12 @@ def calculate_Q(U_avg, n_h=100):
     Returns
     Q - units: s^-1
     """
-    alpha_B = 2.59e-13 # cm^3 s^-1
-    c_cm = 2.99e8 * 100 # cm s^-1
+    alpha_B = 2.59e-13  # cm^3 s^-1
+    c_cm = 2.99e8 * 100  # cm s^-1
     epsilon = 1.
 
     return ((U_avg * c_cm)**3 / alpha_B**2) *\
-            ((4 * np.pi) / (3 * epsilon**2 * n_h))
+        ((4 * np.pi) / (3 * epsilon**2 * n_h))
 
 
 def calculate_U(Q_avg, n_h=100):
@@ -312,12 +307,12 @@ def calculate_U(Q_avg, n_h=100):
     Returns
     U - units: dimensionless
     """
-    alpha_B = 2.59e-13 # cm^3 s^-1
-    c_cm = 2.99e8 * 100 # cm s^-1
+    alpha_B = 2.59e-13  # cm^3 s^-1
+    c_cm = 2.99e8 * 100  # cm s^-1
     epsilon = 1.
 
     return ((alpha_B**(2./3)) / c_cm) *\
-            ((3 * Q_avg * (epsilon**2) * n_h) / (4 * np.pi))**(1./3)
+        ((3 * Q_avg * (epsilon**2) * n_h) / (4 * np.pi))**(1./3)
 
 
 def measure_Q(lam, L_AA, limit=100):
@@ -328,11 +323,11 @@ def measure_Q(lam, L_AA, limit=100):
     Returns
     Q: s^-1
     """
-    h = 6.626070040E-34 # J s
-    h_erg = h * 1e7 # erg s
-    c = 2.99E8 # m s-1
-    c_AA = c * 1e10 # AA s-1
-    f = lambda x: np.interp(x, lam, L_AA * lam) / (h_erg*c_AA)
+    h = 6.626070040E-34  # J s
+    h_erg = h * 1e7  # erg s
+    c = 2.99E8  # m s-1
+    c_AA = c * 1e10  # AA s-1
+    def f(x): return np.interp(x, lam, L_AA * lam) / (h_erg*c_AA)
     return integrate.quad(f, 0, 912, limit=limit)[0]
 
 
@@ -349,12 +344,37 @@ def measure_Q(lam, L_AA, limit=100):
 #     return Q / (4 * np.pi * R_inner**2 * n_h * 2.99e10)
 
 
+<<<<<<< HEAD
+=======
+def write_submission_script_cosma(N, input_prefix, params, output_dir):
+    # cosma_project, cosma_account, input_file_dir='grids/cloudy_output/'):
+
+    output = []
+    output.append(f'#!/bin/bash -l\n')
+    output.append(f'#SBATCH --ntasks 1\n')
+    output.append(f'#SBATCH -J job_name\n')
+    output.append(f'#SBATCH --array=0-{N}\n')
+    # output.append(f'#SBATCH -o standard_output_file.%A.%a.out
+    # output.append(f'#SBATCH -e standard_error_file.%A.%a.err
+    output.append(f'#SBATCH -p {params.cosma_project}\n')
+    output.append(f'#SBATCH -A {params.cosma_account}\n')
+    output.append(f'#SBATCH --exclusive\n')
+    output.append(f'#SBATCH -t 00:15:00\n\n')
+    # output.append(f'#SBATCH --mail-type=END # notifications for job done &
+    # output.append(f'#SBATCH --mail-user=<email address>
+    output.append(f'{params.cloudy_dir}/source/cloudy.exe -r {input_prefix}_$SLURM_ARRAY_TASK_ID\n')
+
+    open(f'{output_dir}/{input_prefix}_run.job', 'w').writelines(output)
+
+    return
+
+>>>>>>> main
 
 def determine_log10Q(log10U_S, log10n_H):
 
-    alpha_B = 2.59E-13 # cm3 s-1
-    c = 3.0E8 # m s-1
-    c_cm = c * 100. # cm s-1
+    alpha_B = 2.59E-13  # cm3 s-1
+    c = 3.0E8  # m s-1
+    c_cm = c * 100.  # cm s-1
 
     n_H = 10**log10n_H
     U_S = 10**log10U_S
@@ -364,7 +384,6 @@ def determine_log10Q(log10U_S, log10n_H):
     Q = ((U_S*3.*c_cm)**3/alpha_B**2)*((4.*np.pi)/(3*epsilon**2*n_H))
 
     return np.log10(Q)
-
 
 
 # def create_CLOUDY_SED(lam, Lnu):
@@ -385,13 +404,12 @@ def determine_log10Q(log10U_S, log10n_H):
 #     return CLOUDY_SED
 
 
-
-def read_lines(output_dir, output_file, lines = []):
-
+def read_lines(output_dir, output_file, lines=[]):
 
     log10M_cluster = 8.
 
-    lam, cID, intrinsic, emergent = np.loadtxt(f'{output_dir}/{output_file}.lines', dtype = str, delimiter='\t', usecols = (0,1,2,3)).T
+    lam, cID, intrinsic, emergent = np.loadtxt(
+        f'{output_dir}/{output_file}.lines', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
 
     lam = lam.astype(float)
     intrinsic = intrinsic.astype(float)
@@ -402,10 +420,9 @@ def read_lines(output_dir, output_file, lines = []):
     Intrinsic = []
     Emergent = []
 
+    for l, id, intrin, emerg in zip(lam, cID, intrinsic, emergent):
 
-    for l,id, intrin, emerg in zip(lam, cID, intrinsic, emergent):
-
-        l = int(np.round(l,0))
+        l = int(np.round(l, 0))
 
         li = list(filter(None, id.split(' ')))
 
@@ -413,22 +430,36 @@ def read_lines(output_dir, output_file, lines = []):
 
         i = li[1]
         j = '-'
-        if i == '1': j = 'I'
-        if i == '2': j = 'II'
-        if i == 'II': j = 'II'
-        if i == '3': j = 'III'
-        if i == '4': j = 'IV'
-        if i == '5': j = 'V'
-        if i == '6': j = 'VI'
-        if i == '7': j = 'VII'
-        if i == '8': j = 'VIII'
-        if i == '9': j = 'IX'
-        if i == '10': j = 'X'
-        if i == '11': j = 'XI'
-        if i == '12': j = 'XII'
-        if i == '13': j = 'XIII'
-        if i == '14': j = 'XIV'
-
+        if i == '1':
+            j = 'I'
+        if i == '2':
+            j = 'II'
+        if i == 'II':
+            j = 'II'
+        if i == '3':
+            j = 'III'
+        if i == '4':
+            j = 'IV'
+        if i == '5':
+            j = 'V'
+        if i == '6':
+            j = 'VI'
+        if i == '7':
+            j = 'VII'
+        if i == '8':
+            j = 'VIII'
+        if i == '9':
+            j = 'IX'
+        if i == '10':
+            j = 'X'
+        if i == '11':
+            j = 'XI'
+        if i == '12':
+            j = 'XII'
+        if i == '13':
+            j = 'XIII'
+        if i == '14':
+            j = 'XIV'
 
         nid = e+j+str(l)
 
@@ -436,7 +467,6 @@ def read_lines(output_dir, output_file, lines = []):
         ID.append(nid)
         Emergent.append(emerg)
         Intrinsic.append(intrin)
-
 
     Lam = np.array(Lam)
     ID = np.array(ID)
@@ -451,9 +481,9 @@ def read_lines(output_dir, output_file, lines = []):
 
         if line in ID:
 
-            n_emergent.append(Emergent[(ID==line)][0])
-            n_intrinsic.append(Intrinsic[(ID==line)][0])
-            n_Lam.append(Lam[(ID==line)][0])
+            n_emergent.append(Emergent[(ID == line)][0])
+            n_intrinsic.append(Intrinsic[(ID == line)][0])
+            n_Lam.append(Lam[(ID == line)][0])
 
         else:
 
@@ -461,45 +491,40 @@ def read_lines(output_dir, output_file, lines = []):
             n_intrinsic.append(-99.)
             n_Lam.append(1000.)
 
-
     n_Lam = np.array(n_Lam)
-    n_emergent = np.array(n_emergent) - log10M_cluster # correct for size of cluster # erg s^-1
-    n_intrinsic = np.array(n_intrinsic) - log10M_cluster # correct for size of cluster # erg s^-1
-
+    n_emergent = np.array(n_emergent) - log10M_cluster  # correct for size of cluster # erg s^-1
+    n_intrinsic = np.array(n_intrinsic) - log10M_cluster  # correct for size of cluster # erg s^-1
 
     return n_Lam, n_intrinsic, n_emergent
 
 
-
-
 def read_wavelength(filename):
-
     """ return just wavelength grid from cloudy file and reverse the order """
 
-    lam = np.loadtxt(f'{filename}.cont', delimiter='\t', usecols = (0)).T
+    lam = np.loadtxt(f'{filename}.cont', delimiter='\t', usecols=(0)).T
     lam = lam[::-1]  # reverse order
 
     return lam
 
-def read_continuum(filename, return_dict = False):
 
+def read_continuum(filename, return_dict=False):
     """ read a cloudy continuum file and convert spectra to erg/s/Hz """
 
     # ----- Open SED
 
     # 1 = incident, 2 = transmitted, 3 = nebular, 4 = total, 8 = contribution of lines to total
-    lam, incident, transmitted, nebular, total, linecont  = np.loadtxt(f'{filename}.cont', delimiter='\t', usecols = (0,1,2,3,4,8)).T
+    lam, incident, transmitted, nebular, total, linecont = np.loadtxt(
+        f'{filename}.cont', delimiter='\t', usecols=(0, 1, 2, 3, 4, 8)).T
 
     # --- frequency
-    lam = lam[::-1] # reverse array
-    lam_m = lam * 1E-10 # m
+    lam = lam[::-1]  # reverse array
+    lam_m = lam * 1E-10  # m
     nu = c.value / (lam_m)
 
     # --- nebular continuum is the total nebular emission (nebular) - the line continuum (linecont)
     nebular_continuum = nebular - linecont
 
     spec_dict = {'lam': lam, 'nu': nu}
-
 
     for spec_type in ['incident', 'transmitted', 'nebular', 'nebular_continuum', 'total', 'linecont']:
 
@@ -508,7 +533,6 @@ def read_continuum(filename, return_dict = False):
         sed /= 10**7  # convert from W to erg
         sed /= nu  # convert from nu l_nu to l_nu
         spec_dict[spec_type] = sed
-
 
     if return_dict:
         return spec_dict

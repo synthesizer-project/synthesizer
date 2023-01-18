@@ -13,7 +13,7 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from synthesizer.grid import SpectralGrid
+from synthesizer.grid import Grid
 
 import flare.plt as fplt
 
@@ -25,7 +25,7 @@ sps_name = 'bpass-v2.2.1_chab100-bin_cloudy-v17.0_logUref-2'
 
 fesc_LyA = 0.5
 
-grid = SpectralGrid(sps_name)
+grid = Grid(sps_name)
 
 
 iZ, log10Z = grid.get_nearest_log10Z(log10Z)

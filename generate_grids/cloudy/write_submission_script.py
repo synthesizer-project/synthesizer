@@ -40,7 +40,7 @@ ${cloudy} -r $SGE_TASK_ID
     print(f'qsub -t 1:{n} run_grid.job')
 
 
-def cosma7_submission_script(N, input_prefix, output_dir, cloudy,
+def cosma7_submission_script(N, output_dir, cloudy,
                              cosma_project='cosma7', cosma_account='dp004'):
 
     output = []
@@ -56,7 +56,7 @@ def cosma7_submission_script(N, input_prefix, output_dir, cloudy,
     output.append(f'#SBATCH -t 00:15:00\n\n')
     # output.append(f'#SBATCH --mail-type=END # notifications for job done &
     # output.append(f'#SBATCH --mail-user=<email address>
-    output.append(f'{cloudy} -r {input_prefix}_$SLURM_ARRAY_TASK_ID\n')
+    output.append(f'{cloudy} -r $SLURM_ARRAY_TASK_ID\n')
 
     open(f'{output_dir}/{input_prefix}_run.job','w').writelines(output)
 

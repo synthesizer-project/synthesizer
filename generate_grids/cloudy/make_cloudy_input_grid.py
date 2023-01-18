@@ -1,5 +1,5 @@
 """
-Run a grid of cloudy models
+Create a grid of cloudy models
 """
 
 import argparse
@@ -10,57 +10,57 @@ from pathlib import Path
 import yaml
 
 from synthesizer.abundances_sw import Abundances
-from synthesizer.grid import SpectralGrid
+from synthesizer.grid import Grid
 from synthesizer.cloudy_sw import create_cloudy_input
 
 from write_submission_script import (apollo_submission_script,
                                      cosma7_submission_script)
 
 
-def load_cloudy_parameters(verbose=False, **cloudy_parameters):
-    default_cloudy_parameters = {
-        # --- cloudy model
-        'cloudy_version': 'v17.03',
-        'U_model': 'ref',  # '' for fixed U
-        'log10U_ref': -2,
-        'log10age_ref': 6.,  # target reference age (only needed if U_model = 'ref')
-        'Z_ref': 0.01,  # target reference metallicity (only needed if U_model = 'ref')
-    
-        # abundance parameters; these are used, alongside the total 
-        # metallicity (Z), to define the abundance pattern
-        'CO': 0.0,
-        'd2m': 0.3,
-        'alpha': 0.0,
-        'scaling': None,
-    
-        # --- cloudy parameters
-        'log10radius': -2,  # radius in log10 parsecs
-        # covering factor. Keep as 1 as it is more efficient to simply combine SEDs 
-        # to get != 1.0 values
-        'covering_factor': 1.0,
-        'stop_T': 4000,  # K
-        'stop_efrac': -2,
-        'T_floor': 100,  # K
-        'log10n_H': 2,  # Hydrogen density
-        'z': 0.,
-        'CMB': False,
-        'cosmic_rays': False
-    }
-    
-    cloudy_params = default_cloudy_parameters
+def load_cloudy_parameters(param_file='default_param.yaml', 
+                           verbose=False, **kwarg_parameters):
+    """
+    A helpful docstring :)
+    """
 
-    for k, v in cloudy_parameters.items():
+    with open(param_file, "r") as stream:
+        try:
+            cloudy_params = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+
+    # update any custom parameters
+    for k, v in kwarg_parameters.items():
         cloudy_params[k] = v
 
     if verbose:
         print('-'*40)
         print(p)
 
-    grid_name = (f'cloudy-{cloudy_params["cloudy_version"]}'
-                 f'_log10U{cloudy_params["U_model"]}'
-                 f'{cloudy_params["log10U_ref"]:.1f}')
+    # search for any lists of parameters. 
+    # currently exits once it finds the *first* list
+    # TODO: adapt to accept multiple varied parameters
+    for k, v in cloudy_params.items():
+        if type(v) is list:
+            output_cloudy_params = []
+            output_cloudy_names = []
 
-    return cloudy_params, grid_name
+            for _v in v:
+                # update the value in our default dictionary
+                cloudy_params[k] = _v
+
+                # save to list of cloudy param dicts
+                output_cloudy_params.append(cloudy_params)
+
+                # replace negative '-' with m
+                out_str = f'{k}{_v.replace("-", "m")}'
+
+                # save to list of output strings
+                output_cloudy_names.append(out_str)
+
+            return output_cloudy_params, output_cloudy_names
+
+    return [cloudy_params], ['']
 
 
 def make_directories(synthesizer_data_dir, sps_grid, cloudy_name):
@@ -68,7 +68,9 @@ def make_directories(synthesizer_data_dir, sps_grid, cloudy_name):
     output_dir = f'{synthesizer_data_dir}/cloudy/{sps_grid}_{cloudy_name}'
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    Path(f'{output_dir}/output').mkdir(parents=True, exist_ok=True)  # for apollo output files
+
+    # for submission system output files
+    Path(f'{output_dir}/output').mkdir(parents=True, exist_ok=True)
 
     return output_dir
 
@@ -141,51 +143,60 @@ if __name__ == "__main__":
                                                   'given SPS grid.'))
 
     parser.add_argument("-dir", "--directory", type=str, required=True)
-    parser.add_argument("-m", "--machine", type=str, required=True)
-    parser.add_argument("-c", "--cloudy", type=str, nargs='?', const='CLOUDY17')
+
+    parser.add_argument("-m", "--machine", type=str, 
+                        choices=['cosma7', 'apollo'], default=None,
+                        help=('Write a submission script for the specified machine. '
+                              'Default is None - write no submission script.'))
+    
+    parser.add_argument("-sps", "--sps_grid", type=str, nargs='+', required=True, 
+                        help=('The SPS grid(s) to run the cloudy grid on. '
+                            'Multiple grids can be listed as: \n '
+                            '  --sps_grid grid_1 grid_2'))
+
+    parser.add_argument("-p", "--params", type=str, required=True, 
+                        help='YAML parameter file of cloudy parameters')
+
+    parser.add_argument("-c", "--cloudy", type=str, nargs='?', default='$CLOUDY17', 
+                        help='CLOUDY executable call')
     
     args = parser.parse_args()
 
     synthesizer_data_dir = args.directory
     cloudy = args.cloudy
 
-    sps_grids = [
-        'bc03_chabrier03',
-        # 'bpass-v2.2.1-bin_100-100',
-        # 'bpass-v2.2.1-bin_100-300',
-        # 'bpass-v2.2.1-bin_135-100',
-        # 'bpass-v2.2.1-bin_135-300',
-        # 'bpass-v2.2.1-bin_135all-100',
-        # 'bpass-v2.2.1-bin_170-100',
-        # 'bpass-v2.2.1-bin_170-300',
-        # 'bpass-v2.2.1-bin_chab-100',
-        # 'bpass-v2.2.1-bin_chab-300',
-        # 'maraston-rhb_kroupa',
-        # 'maraston-rhb_salpeter',
-        # 'bc03-2016-Stelib_chabrier03',
-        # 'bc03-2016-BaSeL_chabrier03',
-        # 'bc03-2016-Miles_chabrier03',
-    ]
+    for sps_grid in args.sps_grid:
 
-    # different high-mass slopes
-    # sps_grids = [f'fsps-v3.2_imf3:{imf3:.1f}' for imf3 in np.arange(1.5, 3.1, 0.1)]
+        print(f"Loading the SPS grid: {sps_grid}")
 
-    # sps_grids = [
-    #     f'fsps-v3.2_imfll:{imf_lower_limit:.1f}' for imf_lower_limit in [0.5, 1, 5, 10, 50]]
+        # load the specified SPS grid
+        grid = Grid(sps_grid, grid_dir=f'{synthesizer_data_dir}/grids')
+    
+        print(f"Loading the cloudy parameters from: {args.params}")
 
-    for sps_grid in sps_grids:
-        # ---- load SPS grid
-        grid = SpectralGrid(sps_grid, grid_dir=f'{synthesizer_data_dir}/grids')
-
-        cloudy_params, cloudy_name = load_cloudy_parameters()
-        output_dir = make_directories(synthesizer_data_dir, sps_grid, cloudy_name)
-        N = make_cloudy_input_grid(output_dir, grid, cloudy_params)
-
-        if args.machine == 'apollo':
-            apollo_submission_script(synthesizer_data_dir, cloudy)
-        elif args.machine == 'cosma7':
-            cosma7_submission_script(N, '', output_dir, cloudy,
-                         cosma_project='cosma7', cosma_account='dp004')
-        else:
-            ValueError(f'Machine {args.machine} not recognised.')
-
+        # load the cloudy parameters you are going to run
+        c_params, c_name = load_cloudy_parameters(args.params)
+        
+        for i, (cloudy_params, cloudy_name) in \
+                enumerate(zip(c_params, c_name)):
+            
+            # if no variations, save as 'default' cloudy grid
+            if cloudy_name == '':
+                cloudy_name = 'cloudy'
+    
+            output_dir = make_directories(synthesizer_data_dir, sps_grid, cloudy_name)
+            
+            print(f"Generating cloudy grid for ({i}) {cloudy_name} in {output_dir}")
+        
+            N = make_cloudy_input_grid(output_dir, grid, cloudy_params)
+        
+            if args.machine == 'apollo':
+                apollo_submission_script(synthesizer_data_dir, cloudy)
+            elif args.machine == 'cosma7':
+                cosma7_submission_script(N, output_dir, cloudy,
+                             cosma_project='cosma7', cosma_account='dp004')
+            elif args.machine is None:
+                print("No machine specified. Skipping submission script write out") 
+            else:
+                ValueError(f'Machine {args.machine} not recognised.')
+    

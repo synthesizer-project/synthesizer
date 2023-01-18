@@ -16,15 +16,13 @@ from unyt import h, c
 from synthesizer.sed import calculate_Q
 
 
-
-
-def download_data(model):
-
-    if model in model_url.keys():
-        filename = gdown.download(model_url[model], quiet=False, fuzzy=True)
-        return filename
-    else:
-        print('ERROR: no url for that model')
+# def download_data(model):
+# 
+#     if model in model_url.keys():
+#         filename = gdown.download(model_url[model], quiet=False, fuzzy=True)
+#         return filename
+#     else:
+#         print('ERROR: no url for that model')
 
 
 def untar_data(model, remove_archive = False):

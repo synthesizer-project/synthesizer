@@ -4,6 +4,7 @@ import numpy as np
 import sys
 from scipy import integrate
 
+
 class kernel():
 
     """
@@ -42,7 +43,6 @@ class kernel():
             raise ValueError('Kernel name not defined')
 
     def W_dz(self, z, b):
-
         """
             W(r)dz
         """
@@ -51,11 +51,9 @@ class kernel():
 
     def integral_func(self, ii):
 
-        return lambda z : self.W_dz(z, ii)
-
+        return lambda z: self.W_dz(z, ii)
 
     def get_kernel(self):
-
         """
             h^-2 * 2 * integral(W(r) dz) from x = 0 to sqrt(1.-b^2) for various values of `b`
         """
@@ -73,7 +71,6 @@ class kernel():
         return kernel
 
     def create_kernel(self):
-
         """
             Saves the computed kernel for easy look-up as .npz file
         """
@@ -82,17 +79,17 @@ class kernel():
         header = np.array([{'kernel': self.name, 'bins': self.binsize}])
         np.savez('kernel_{}.npz'.format(self.name), header=header, kernel=kernel)
 
-        print (header)
+        print(header)
 
         return kernel
 
 
-
 def uniform(r):
     if r < 1.:
-        self.f = 1./((4./3.)*np.pi)
+        return 1./((4./3.)*np.pi)
     else:
         return 0.
+
 
 def sph_anarchy(r):
 
@@ -100,6 +97,7 @@ def sph_anarchy(r):
         return (21./(2.*np.pi)) * ((1. - r)*(1. - r)*(1. - r)*(1. - r)*(1. + 4.*r))
     else:
         return 0.
+
 
 def gadget_2(r):
 
@@ -110,6 +108,7 @@ def gadget_2(r):
     else:
         return 0.
 
+
 def cubic(r):
 
     if r < 0.5:
@@ -119,13 +118,14 @@ def cubic(r):
     else:
         return 0
 
+
 def quintic(r):
 
     if r < 0.333333333:
-        return 27.0*(6.4457752*r*r*r*r*(1.0-r) -1.4323945*r*r +0.17507044)
+        return 27.0*(6.4457752*r*r*r*r*(1.0-r) - 1.4323945*r*r + 0.17507044)
     elif r < 0.666666667:
-        return 27.0*(3.2228876*r*r*r*r*(r-3.0) +10.7429587*r*r*r -5.01338071*r*r +0.5968310366*r +0.1352817016)
+        return 27.0*(3.2228876*r*r*r*r*(r-3.0) + 10.7429587*r*r*r - 5.01338071*r*r + 0.5968310366*r + 0.1352817016)
     elif r < 1:
-        return 27.0*0.64457752*(-r*r*r*r*r +5.0*r*r*r*r -10.0*r*r*r +10.0*r*r -5.0*r +1.0)
+        return 27.0*0.64457752*(-r*r*r*r*r + 5.0*r*r*r*r - 10.0*r*r*r + 10.0*r*r - 5.0*r + 1.0)
     else:
         return 0
