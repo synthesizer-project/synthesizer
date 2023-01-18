@@ -1,5 +1,5 @@
 import numpy as np
-import urllib
+import urllib.request
 
 import matplotlib.pyplot as plt
 
@@ -62,6 +62,67 @@ class FilterCollection:
 
             # Return the filter
             return self.filters[self.current_ind - 1]
+
+    def __ne__(self, other_filters):
+        """
+        Enables the != comparison of two filter collections. If the filter
+        collections contain the same filter codes they are guaranteed to
+        be identical.
+
+        Parameters
+        ----------
+        other_filters : obj (FilterCollection)
+            The other FilterCollection to be compared to self.
+
+        Returns
+        -------
+        True/False : bool
+             Are the FilterCollections the same?
+        """
+
+        # Do they have the same number of filters?
+        if self.nfilters != other_filters.nfilters:
+            return True
+
+        # Ok they do, so do they have the same filter codes? (elementwise test)
+        not_equal = False
+        for n in range(self.nfilters):
+            if self.filter_codes[n] != other_filters.filter_codes[n]:
+                not_equal = True
+                break
+
+        return not_equal
+
+    def __eq__(self, other_filters):
+        """
+        Enables the == comparison of two filter collections. If the filter
+        collections contain the same filter codes they are guaranteed to
+        be identical.
+
+        Parameters
+        ----------
+        other_filters : obj (FilterCollection)
+            The other FilterCollection to be compared to self.
+
+        Returns
+        -------
+        True/False : bool
+             Are the FilterCollections the same?
+        """
+
+        # Do they have the same number of filters?
+        if self.nfilters != other_filters.nfilters:
+            return False
+
+        # Ok they do, so do they have the same filter codes? (elementwise test)
+        equal = True
+        for n in range(self.nfilters):
+            if self.filter_codes[n] != other_filters.filter_codes[n]:
+                equal = False
+                break
+
+        return equal
+        
             
     def transmission_curve_ax(self, ax, add_filter_label=True):
         """ add filter transmission curves to a give axes """
