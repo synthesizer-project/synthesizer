@@ -27,7 +27,7 @@ nZ = len(original_grid['metallicities'])  # number of metallicity grid points
 na = len(original_grid['log10ages'])  # number of age grid points
 
 # define the new wavelength grid
-lmin, lmax, deltal = 100., 10000., 10.  # min wavelength, max wavelength, resolution
+lmin, lmax, deltal = 100., 20000., 20.  # min wavelength, max wavelength, resolution
 new_wavs = np.arange(lmin, lmax, deltal)
 
 
