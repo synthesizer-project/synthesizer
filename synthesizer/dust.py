@@ -233,12 +233,6 @@ class GrainsWD01():
     model: string
         dust grain model to use
 
-    Raises
-    -------
-    InconsistentParameter
-        If model other than MW, LMC or SMC is provided,
-        rasises an error
-
     Methods
     -------
     tau
