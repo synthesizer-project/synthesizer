@@ -1,8 +1,21 @@
-import argparse
-import numpy as np
 
+def apollo_submission_script(n, synthesizer_data_dir, cloudy):
+    """
+    Create an Apollo SGE submission script.
 
-def apollo_submission_script(synthesizer_data_dir, cloudy):
+    Parameters
+    ----------
+    n : int
+        Number of models to run, sets size of array job.
+    synthesizer_data_dir : str
+        where to write the submission script
+    cloudy : str
+        bash executable for CLOUDY
+
+    Returns
+    -------
+    None
+    """
 
     apollo_job_script = f"""
 ######################################################################
@@ -45,21 +58,44 @@ ${cloudy} -r $id
     print(synthesizer_data_dir)
     print(f'qsub -t 1:{n} run_grid.job')
 
+    return
+
 
 def cosma7_submission_script(N, output_dir, cloudy,
                              cosma_project='cosma7', cosma_account='dp004'):
+    """
+    Create a cosma7 SLURM submission script.
+
+    Parameters
+    ----------
+    N : int
+        Number of models to run, sets size of array job.
+        Warning: if greater than 1000, SLURM may fail. May need to set manually
+    output_dir : str
+        where to write the submission script
+    cloudy : str
+        bash executable for CLOUDY
+    cosma_project : str
+        name of COSMA project / machine to submit to
+    cosma_account : str
+        name of COSMA account to charge computing time to
+
+    Returns
+    -------
+    None
+    """
 
     output = []
-    output.append(f'#!/bin/bash -l\n')
-    output.append(f'#SBATCH --ntasks 1\n')
-    output.append(f'#SBATCH -J job_name\n')
+    output.append('#!/bin/bash -l\n')
+    output.append('#SBATCH --ntasks 1\n')
+    output.append('#SBATCH -J job_name\n')
     output.append(f'#SBATCH --array=0-{N}\n')
     # output.append(f'#SBATCH -o standard_output_file.%A.%a.out
     # output.append(f'#SBATCH -e standard_error_file.%A.%a.err
     output.append(f'#SBATCH -p {cosma_project}\n')
     output.append(f'#SBATCH -A {cosma_account}\n')
-    output.append(f'#SBATCH --exclusive\n')
-    output.append(f'#SBATCH -t 00:15:00\n\n')
+    output.append('#SBATCH --exclusive\n')
+    output.append('#SBATCH -t 00:15:00\n\n')
     # output.append(f'#SBATCH --mail-type=END # notifications for job done &
     # output.append(f'#SBATCH --mail-user=<email address>
 
@@ -72,7 +108,6 @@ def cosma7_submission_script(N, output_dir, cloudy,
     # run CLOUDY for the given model {ia}_{iZ}.in
     output.append(f'${cloudy} -r $id\n')
 
-    open(f'{output_dir}/run.job','w').writelines(output)
+    open(f'{output_dir}/run.job', 'w').writelines(output)
 
     return
-
