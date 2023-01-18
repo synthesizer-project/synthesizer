@@ -37,6 +37,12 @@ def kd_los(s_cood, g_cood, g_mass, g_Z, g_sml, lkernel, kbins,
         number bins of kernel values
     dimens: int
         (0,1,2) -> x, y, z coordinates
+
+    Returns
+    -------
+    Z_los_SD: float array
+        1D array of line-of-sight metal column density of star particles
+        along the z-direction
     """
 
     # Generalise dimensions (function assume LOS along z-axis)
@@ -125,6 +131,12 @@ def numba_los(s_cood, g_cood, g_mass, g_Z, g_sml, lkernel, kbins,
         number bins of kernel values
     dimens: int
         (0,1,2) -> x, y, z coordinates
+
+    Returns
+    -------
+    Z_los_SD: float array
+        1D array of line-of-sight metal column density of star particles
+        along the z-direction
     """
 
     nstar = len(s_cood)
@@ -173,7 +185,7 @@ def calc_los(npart, kernel_func, kernel_dict):
         situaition.
     """
 
-    # If lightweight use lightweight caluclation
+    # If lightweight use lightweight calculation
     if npart < 100:
         los = numba_los()
     else:
