@@ -10,12 +10,8 @@ from synthesizer.grid import Grid
 from astropy.table import Table
 
 
-def simple_UVJ(target_metallicity=0.01):
+def simple_UVJ(grid, target_metallicity=0.01):
     """ Calculate UVJ colours as a function of age for single metallicity """
-
-    grid_name = 'bpass-v2.2.1-bin_chab-100'
-
-    grid = Grid(grid_name)
 
     iZ = grid.get_nearest_index(target_metallicity, grid.metallicities)
 
@@ -37,12 +33,8 @@ def simple_UVJ(target_metallicity=0.01):
             f'log10(age/Myr): {log10age-6:.1f} U-V: {sed.c("U", "V"):.2f} V-J: {sed.c("V", "J"):.2f}')
 
 
-def UVJ_metallicity():
+def UVJ_metallicity(grid):
     """ Calculate UVJ as a function of metallicity and save as a .ecsv file and make a figure"""
-
-    grid_name = 'bpass-v2.2.1-bin_chab-100'
-
-    grid = Grid(grid_name)
 
     fc = UVJ(new_lam=grid.lam)
 
@@ -69,8 +61,6 @@ def UVJ_metallicity():
             for f in 'UVJ':
                 table[f'{Z}_{f}'][ia] = sed.broadband_fluxes[f]
 
-    table.write(f'data/{grid_name}_UVJ.ecsv', overwrite=True)
-
     # --- make plot
 
     fig, axes = plt.subplots(2, 1, figsize=(3.5, 4.5), sharex=True, sharey=True)
@@ -92,11 +82,19 @@ def UVJ_metallicity():
     axes[0].legend(fontsize=6, labelspacing=0.0)
     axes[1].set_xlabel(r'$\rm \log_{10}(age/Myr)$')
 
-    fig.savefig(f'figs/{grid_name}_UVJ.pdf')
+    return table, fig, axes
 
 
 if __name__ == '__main__':
 
-    simple_UVJ()
+    grid_dir = '../../tests/test_grid'
+    grid_name = 'test_grid'
 
-    UVJ_metallicity()
+    grid = Grid(grid_name, grid_dir=grid_dir)
+
+    simple_UVJ(grid)
+
+    table, fig, axes = UVJ_metallicity(grid)
+    plt.show()
+
+    # table.write(f'data/{grid_name}_UVJ.ecsv', overwrite=True)

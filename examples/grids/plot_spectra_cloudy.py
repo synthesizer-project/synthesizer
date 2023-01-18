@@ -56,9 +56,10 @@ if __name__ == '__main__':
     log10Z = -2.  # log10(metallicity)
     log10age = 6.0  # log10(age/yr)
 
+    grid_dir = '../../tests/test_grid'
     grid_name = 'test_grid'
 
-    grid = Grid(grid_name, grid_dir='../../tests/test_grid')
+    grid = Grid(grid_name, grid_dir=grid_dir)
 
     # fig, ax = plot_spectra(grid, log10Z = log10Z, log10age = log10age, spec_names = ['linecont'])
     fig, ax = plot_spectra(grid, log10Z=log10Z, log10age=log10age)
