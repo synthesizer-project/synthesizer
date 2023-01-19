@@ -1,4 +1,6 @@
-from synthesizer.grid import Grid
+
+from synthesizer.units import Units
+from synthesizer.grid import get_available_lines, Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
 from unyt import yr, Myr
@@ -10,14 +12,20 @@ if __name__ == '__main__':
 
     """
 
+    grid_dir = '../../tests/test_grid'
+    grid_name = 'test_grid'
+
+    # to see what lines are available in a grid we can use this helper function
+    available_lines = get_available_lines(grid_name, grid_dir)
+    print(available_lines)
+
     # list of lines. Lines in nested lists (or tuples) denote doublets for which the combined line properties are calculated
     # line_ids = ['HI4861', 'OIII4959', 'OIII5007', ['OIII4959', 'OIII5007']]
     # should result in the same behaviour as above
     line_ids = ['HI4861', 'OIII4959', 'OIII5007', 'OIII4959,OIII5007']
+    line_ids = ['HI4861']
 
-    # open test grid though without reading spectra BUT reading the required lines
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # open test grid though without reading spectra AND reading only the required lines
     grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=line_ids)
 
     # --- define the parameters of the star formation and metal enrichment histories
@@ -41,5 +49,21 @@ if __name__ == '__main__':
     print(galaxy)
 
     # --- print summaries of each line
+    print('-'*50)
+    print('INTRINSIC')
+    for line_id, line in lines.items():
+        print(line)
+
+    # --- calculate attenuated line properties assuming uniform dust (should leave EW unchanged)
+    lines = galaxy.get_screen_line(grid, line_ids, tauV=0.5)
+    print('-'*50)
+    print('SCREEN')
+    for line_id, line in lines.items():
+        print(line)
+
+    # --- calculate attenuated line properties assuming different dust affecting stellar and nebular components
+    lines = galaxy.get_attenuated_line(grid, line_ids, tauV_stellar=0.1, tauV_nebular=0.5)
+    print('-'*50)
+    print('ATTENUATED')
     for line_id, line in lines.items():
         print(line)
