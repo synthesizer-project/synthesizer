@@ -46,6 +46,15 @@ class power_law():
         self.params = params
 
     def tau_x(self, lam):
+        """
+        Calculate optical depth at lam
+
+        Parameters
+        ----------
+        lam: float array
+            wavelength, expected mwith units
+        """
+
         return (lam/5500.)**self.params['slope']
 
     def tau(self, lam):
