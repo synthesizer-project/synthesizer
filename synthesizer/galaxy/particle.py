@@ -538,19 +538,16 @@ class ParticleGalaxy(BaseGalaxy):
         
         # Make the image, handling incorrect image types
         if img_type == "hist":
-
-            # Are we applying a PSF or noise?
-            if psf is None and depth is None:
             
-                # Compute image
-                img.get_hist_img()
+            # Compute the image
+            img.get_hist_img()
         
-            if psf is not None:
+            if psfs is not None:
 
                 # Convolve the image/images
                 img.get_psfed_imgs(psfs)
                 
-            if depth is not None:
+            if depths is not None:
                 raise exceptions.UnimplementedFunctionality(
                     "Noise functionality coming soon."
                 )
@@ -559,18 +556,15 @@ class ParticleGalaxy(BaseGalaxy):
             
         elif img_type == "smoothed":
 
-            # Are we applying a PSF or noise?
-            if not with_psf and not with_noise:
-            
-                # Compute image
-                img.get_smoothed_img(kernel_func)
+            # Compute image
+            img.get_smoothed_img(kernel_func)
         
-            if psf is not None:
+            if psfs is not None:
                 
                 # Convolve the image/images
                 img.get_psfed_imgs(psfs)
                 
-            if depth is not None:
+            if depths is not None:
                 raise exceptions.UnimplementedFunctionality(
                     "Noise functionality coming soon."
                 )

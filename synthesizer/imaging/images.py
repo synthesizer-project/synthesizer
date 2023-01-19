@@ -311,9 +311,14 @@ class Image(Scene):
         for f in self.filters:
 
             # Apply the PSF to this image
-            self.imgs[f.filter_code] = self._get_psfed_single_img(
-                self.imgs[f.filter_code], psfs[f.filter_code]
-            )
+            if isinstance(psfs, dict):
+                self.imgs[f.filter_code] = self._get_psfed_single_img(
+                    self.imgs[f.filter_code], psfs[f.filter_code]
+                )
+            else:
+                self.imgs[f.filter_code] = self._get_psfed_single_img(
+                    self.imgs[f.filter_code], psfs
+                )
 
         return self.imgs
 
