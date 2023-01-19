@@ -222,32 +222,59 @@ class ParametricGalaxy(BaseGalaxy):
 
         print('WARNING: not yet implemented')
 
-    def get_intrinsic_line(self, grid, line_id, quantity=False, update=True):
+    def get_intrinsic_line(self, grid, line_ids, quantity=False, update=True):
         """ return intrinsic quantities (luminosity, EW) for a single line or line set """
 
-        if type(line_id) is str:
-            line_id = [line_id]
+        if type(line_ids) is str:
+            line_ids = [line_ids]
 
-        luminosity_ = []
-        continuum_ = []
-        wavelength_ = []
+        for line_id in line_ids:
 
-        for line_id_ in line_id:
-            grid_line = grid.lines[line_id_]
+            # if the line id a doublet in string form (e.g. 'OIII4959,OIII5007') convert it to a list
+            if type(line_id) is str:
+                if len(line_id.split(',')) > 1:
+                    line_id = line_id.split(',')
 
-            wavelength_.append(grid_line['wavelength'])  # \AA
-            #  continuum at line wavelength, erg/s/Hz
-            continuum_.append(np.sum(grid_line['continuum'] * self.sfzh, axis=(0, 1)))
-            luminosity_.append(np.sum(grid_line['luminosity'] * self.sfzh, axis=(0, 1)))
+            # if the line_id is a str denoting a single line
+            if isinstance(line_id, str):
 
-        # --- create line object
+                grid_line = grid.lines[line_id]
+                wavelength = grid_line['wavelength']
 
-        line = Line(line_id, wavelength_, luminosity_, continuum_)
+                #  line luminosity erg/s
+                luminosity = np.sum(grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1))
 
-        if update:
-            self.lines[line.id] = line
+                #  continuum at line wavelength, erg/s/Hz
+                continuum = np.sum(grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1))
 
-        return line
+            # else if the line is list or tuple denoting a doublet (or higher)
+            elif isinstance(line_id, list) or isinstance(line_id, tuple):
+
+                luminosity = []
+                continuum = []
+                wavelength = []
+
+                for line_id_ in line_id:
+                    grid_line = grid.lines[line_id_]
+
+                    # wavelength [\AA]
+                    wavelength.append(grid_line['wavelength'])
+
+                    #  continuum at line wavelength, erg/s/Hz
+                    continuum.append(np.sum(grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1)))
+
+                    luminosity.append(np.sum(grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1)))
+
+            else:
+                # throw exception
+                pass
+
+            line = Line(line_id, wavelength, luminosity, continuum)
+
+            if update:
+                self.lines[line.id] = line
+
+        return self.lines
 
     # def get_intrinsic_line(self, tauV):
     #

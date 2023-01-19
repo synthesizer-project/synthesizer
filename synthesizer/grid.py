@@ -18,7 +18,36 @@ from .sed import Sed, convert_fnu_to_flam
 from collections.abc import Iterable
 
 
-def flatten_list(list_to_flatten):
+def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
+    """Get a list of the lines available to a grid
+
+    Parameters
+    ----------
+    grid_name : str
+        list containing lists and/or strings and integers
+
+    grid_dir : str
+        path to grid
+
+    Returns
+    -------
+    list
+        list of lines
+    """
+
+    grid_filename = f'{grid_dir}/{grid_name}.h5'
+    with h5py.File(grid_filename, 'r') as hf:
+
+        lines = list(hf['lines'].keys())
+
+        if include_wavelengths:
+            wavelengths = np.array([hf['lines'][line].attrs['wavelength'] for line in lines])
+            return lines, wavelengths
+        else:
+            return lines
+
+
+def flatten_linelist(list_to_flatten):
     """Flatten a mixed list of lists and strings and remove duplicates
 
     Flattens a mixed list of lists and strings. Used when converting a desired line list which may contain single lines and doublets.
@@ -37,11 +66,22 @@ def flatten_list(list_to_flatten):
 
     flattend_list = []
     for l in list_to_flatten:
+
         if isinstance(l, list) or isinstance(l, tuple):
             for ll in l:
                 flattend_list.append(ll)
+
+        elif isinstance(l, str):
+
+            # --- if the line is a doublet resolve it and add each line individually
+            if len(l.split(',')) > 1:
+                flattend_list += l.split(',')
+            else:
+                flattend_list.append(l)
+
         else:
-            flattend_list.append(l)
+            # raise exception
+            pass
 
     return list(set(flattend_list))
 
@@ -119,7 +159,7 @@ class Grid():
 
         # convert line list into flattend list and remove duplicates
         if isinstance(read_lines, list):
-            read_lines = flatten_list(read_lines)
+            read_lines = flatten_linelist(read_lines)
 
         with h5py.File(self.grid_filename, 'r') as hf:
             self.spec_names = list(hf['spectra'].keys())
@@ -179,7 +219,7 @@ class Grid():
             if isinstance(read_lines, list):
                 self.line_list = read_lines
             else:
-                self.line_list = hf['lines'].attrs['lines']
+                self.line_list = hf['lines'].attrs['lines']  # apparently this doesn't exist
 
             with h5py.File(f'{self.grid_dir}/{self.grid_name}.h5', 'r') as hf:
 
