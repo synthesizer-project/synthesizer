@@ -216,8 +216,8 @@ class ParticleScene(Scene):
         self._check_part_args(stars, positions, centre)
 
         # Initilise the parent class
-        Observation.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                             sed=sed, survey=survey)
+        Scene.__init__(self, resolution=resolution, npix=npix, fov=fov,
+                       sed=sed, survey=survey)
 
         # Initialise stars attribute
         self.stars = stars
@@ -368,4 +368,4 @@ class ParametricScene(Scene):
         """
 
         # Initilise the parent class
-        Observation.__init__(self, resolution, npix, fov, sed, survey)
+        Scene.__init__(self, resolution, npix, fov, sed, survey)
