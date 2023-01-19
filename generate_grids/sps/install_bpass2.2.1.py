@@ -137,12 +137,12 @@ def make_grid(model):
         write_attribute(out_filename, 'metallicities', 'Units',
                         'dimensionless [log10(Z)]')
 
-        write_data_h5py(out_filename, 'log10metallicities', data=log10Zs,
-                        overwrite=True)
-        write_attribute(out_filename, 'log10metallicities', 'Description',
-                        'raw abundances in log10')
-        write_attribute(out_filename, 'log10metallicities', 'Units',
-                        'dimensionless [log10(Z)]')
+        # write_data_h5py(out_filename, 'log10metallicities', data=log10Zs,
+        #                 overwrite=True)
+        # write_attribute(out_filename, 'log10metallicities', 'Description',
+        #                 'raw abundances in log10')
+        # write_attribute(out_filename, 'log10metallicities', 'Units',
+        #                 'dimensionless [log10(Z)]')
 
         write_data_h5py(out_filename, 'spectra/wavelength', data=wavelengths,
                         overwrite=True)

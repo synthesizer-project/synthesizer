@@ -1,164 +1,295 @@
 
-
-from scipy import interpolate
-import numpy as np
 import os
+import numpy as np
+from unyt import Angstrom
+from scipy import interpolate
+from functools import partial
+from dust_attenuation.shapes import N09
+from dust_extinction.grain_models import WD01
+from . import exceptions
 this_dir, this_filename = os.path.split(__file__)
 
+# --- dust curves commonly used in literature
 
-curves = ['simple', 'MW_N18', 'MW_Pei92', 'SMC_Pei92', 'Starburst_Calzetti2000']
-named_curves = ['MW_N18', 'MW_Pei92', 'SMC_Pei92', 'Starburst_Calzetti2000']
+__all__ = ["power_law", "MW_N18", "Calzetti2000", "GrainsWD01"]
 
 
 class power_law():
+    """
+    Custom power law dust curve
+
+    Attributes
+    ----------
+    slope: float
+        power law slope
+
+    Methods
+    -------
+    tau
+        calculates V-band normalised optical depth
+    attenuate
+        applies the attenuation curve for given V-band optical
+        depth, returns the transmitted fraction
+    """
 
     def __init__(self, params={'slope': -1.}):
+        """
+        Initialise the power law slope of the dust curve
 
+        Parameters
+        ----------
+        slope: float
+            power law slope
+        """
+        
         self.description = 'simple power law dust curve'
         self.params = params
 
     def tau(self, lam):
         """
-        to get the dust attenuation here you do
-            tau(lam) = tauV * dust_curve.tau(lam)
-            T = np.exp(-tau)
+        Calculate V-band normalised optical depth
+
+        Parameters
+        ----------
+        lam: float array
+            wavelength, expected mwith units
         """
 
-        return (lam/5500.)**self.params['slope']
+        tau_x = (lam.to('Angstrom')/(5500.*Angstrom))**self.params['slope']
+        tau_V = np.interp(5500., lam.to('Angstrom').v, tau_x)
+
+        return tau_x/tau_V
+
+    def attenuate(self, tau_V, lam):
+        """
+        Provide the transmitted flux/luminosity fraction
+
+        Parameters
+        ----------
+        tau_V: float
+            optical depth in the V-band
+
+        lam: float
+            wavelength, expected with units
+        """
+
+        tau_x_v = self.tau(lam)
+
+        return np.exp(-(tau_V * tau_x_v))
 
 
 class MW_N18():
+    """
+    Milky Way attenuation curve used in Narayanan+2018
 
-    def __init__(self, params={}):
+    Attributes
+    ----------
+    lam: float
+        wavlength, expected with units
+
+    Methods
+    -------
+    tau
+        calculates V-band normalised optical depth
+    attenuate
+        applies the attenuation curve for given V-band optical
+        depth, returns the transmitted fraction
+    
+    """
+    def __init__(self):
+        """
+        Initialise the dust curve
+
+        Parameters
+        ----------
+        None
+        """
 
         self.description = 'MW extinction curve from Desika'
-
         self.d = np.load(f'{this_dir}/data/MW_N18.npz')
-
-        self.tau_lam_V = np.interp(5500., self.d.f.mw_df_lam[::-1], self.d.f.mw_df_chi[::-1])
-
-    def tau(self, lam, interp='cubic'):
-
-        f = interpolate.interp1d(
-            self.d.f.mw_df_lam[::-1], self.d.f.mw_df_chi[::-1], kind=interp, fill_value='extrapolate')
-
-        return f(lam)/self.tau_lam_V
-
-
-class MW_Pei92():
-
-    def __init__(self, params={}):
-
-        self.description = 'Empirical MW extiction curve taken from Pei et al. 1992'
-
-        self.R_V = 3.08
-
-        self.x = np.array([0.21, 0.29, 0.45, 0.61, 0.80, 1.11, 1.43, 1.82, 2.27, 2.50, 2.91, 3.65, 4.00, 4.17,
-                          4.35, 4.57, 4.76, 5.00, 5.26, 5.56, 5.88, 6.25, 6.71, 7.18, 7.60, 8.00, 8.50, 9.00, 9.50, 10.00])
-
-        self.ElvEbv = np.array([-3.02, -2.91, -2.76, -2.58, -2.23, -1.60, 0.78, 0.0, 1.0, 1.3, 1.8, 3.10, 4.19,
-                               4.9, 5.77, 6.57, 6.23, 5.52, 4.9, 4.65, 4.60, 4.73, 4.99, 5.36, 5.91, 6.55, 7.45, 8.45, 9.80, 11.30])
+        self.tau_lam_V = np.interp(5500.,
+                                   self.d.f.mw_df_lam[::-1],
+                                   self.d.f.mw_df_chi[::-1])
 
     def tau(self, lam, interp='cubic'):
+        """
+        Calculate V-band normalised optical depth
 
-        lam_mu = lam/1E4
+        Parameters
+        ----------
+        lam: float array
+            wavelength, expected mwith units
+        """
 
-        x = 1./lam_mu  # l in mu m
+        f = interpolate.interp1d(self.d.f.mw_df_lam[::-1],
+                                 self.d.f.mw_df_chi[::-1],
+                                 kind=interp,
+                                 fill_value='extrapolate')
+        
+        return f(lam.to('Angstrom').v)/self.tau_lam_V
 
-        f = interpolate.interp1d(self.x, self.ElvEbv, kind=interp, fill_value='extrapolate')
+    def attenuate(self, tau_V, lam):
+        """
+        Provide the transmitted flux/luminosity fraction
 
-        k = f(x) + self.R_V
+        Parameters
+        ----------
+        tau_V: float
+            optical depth in the V-band
 
-        k_V = f(1/0.55) + self.R_V
+        lam: float
+            wavelength, expected with units
+        """
 
-        return (k/k_V)*0.4/0.43
+        tau_x_v = self.tau(lam)
 
-
-class SMC_Pei92():
-
-    def __init__(self, params={}):
-
-        self.description = 'Empirical SMC extiction curve taken from Pei et al. 1992'
-
-        self.R_V = 2.93
-        self.x = np.array([0.45, 0.61, 0.8, 1.82, 2.27, 2.70, 3.22, 3.34, 3.46, 3.60, 3.75, 3.92, 4.09, 4.28,
-                          4.50, 4.73, 5.00, 5.24, 5.38, 5.52, 5.70, 5.88, 6.07, 6.27, 6.48, 6.72, 6.98, 7.23, 7.52, 8.22])
-        self.ElvEbv = np.array([-2.61, -2.47, -2.12, 0.0, 1.00, 1.67, 2.29, 2.65, 3.00, 3.15, 3.49, 3.91, 4.24,
-                               4.53, 5.30, 5.85, 6.38, 6.76, 6.90, 7.17, 7.71, 8.01, 8.49, 9.06, 9.28, 9.84, 10.80, 11.51, 12.52, 13.54])
-
-    def tau(self, lam, interp='slinear'):
-
-        lam_mu = lam/1E4
-
-        x = 1./lam_mu  # l in mu m
-
-        f = interpolate.interp1d(self.x, self.ElvEbv, kind=interp, fill_value='extrapolate')
-
-        k = f(x) + self.R_V
-
-        k_V = f(1/0.55) + self.R_V
-
-        return (k/k_V)*0.4/0.43
+        return np.exp(-(tau_V * tau_x_v))
 
 
-class Starburst_Calzetti2000():
+class Calzetti2000():
+    """
+    Calzetti attenuation curve; with option for the slope and UV-bump 
+    implemented in Noll et al. 2009.
 
-    def __init__(self, params={}):
+    Parameters
+    ----------
+    slope: float
+        slope of the attenuation curve
 
-        self.description = 'Starburst ATTENUATION curve from Calzetti 2000'
-        self.R_V = 4.05
+    x0: float
+        central wavelength of the UV bump, expected in microns    
+
+    ampl: float
+        amplitude of the UV-bump
+
+    Methods
+    -------
+    tau
+        calculates V-band normalised optical depth
+    attenuate
+        applies the attenuation curve for given V-band optical
+        depth, returns the transmitted fraction
+
+    """
+    def __init__(self, params={'slope': 0., 'x0': 0.2175, 'ampl': 0.}):
+        """
+        Initialise the dust curve
+
+        Parameters
+        ----------
+        slope: float
+            slope of the attenuation curve
+
+        x0: float
+            central wavelength of the UV bump, expected in microns    
+
+        ampl: float
+            amplitude of the UV-bump
+
+        """
+        self.description = 'Calzetti attenuation curve; with option for the slope and UV-bump implemented in Noll et al. 2009'
+        self.params = params
 
     def tau(self, lam):
+        """
+        Calculate V-band normalised optical depth
 
-        lam_mu = lam/1E4
+        Parameters
+        ----------
+        lam: float array
+            wavelength, expected mwith units
+        """
 
-        x = 1./lam_mu  # l in mu m
+        return N09(Av=1.,
+                   ampl=self.params['ampl'],
+                   slope=self.params['slope'],
+                   x0=self.params['x0'])(lam.to_astropy())
 
-        k = np.zeros(x.shape)
+    def attenuate(self, tau_V, lam):
+        """
+        Get the transmission at different wavelength for the curve
 
-        k[lam_mu > 0.63] = 2.659*(-1.857 + 1.040*x[lam_mu > 0.63]) + self.R_V
-        k[lam_mu <= 0.63] = 2.659*(-2.156+1.509*x[lam_mu <= 0.63]-0.198 *
-                                   x[lam_mu <= 0.63]**2+0.011*x[lam_mu <= 0.63]**3) + self.R_V
+        Parameters
+        ----------
+        tau_V: float
+            optical depth in the V-band
 
-        k_V = 2.659*(-2.156+1.509*(1/0.55)-0.198*(1/0.55)**2+0.011*(1/0.55)**3) + self.R_V
+        lam: float
+            wavelength, expected with units
+        """
+        return N09(Av=1.086*tau_V,
+                   ampl=self.params['ampl'],
+                   slope=self.params['slope'],
+                   x0=self.params['x0']).attenuate(lam.to_astropy())
 
-        return (k/k_V)*0.4/0.43
 
+class GrainsWD01():
+    """
+    Weingarter and Draine 2001 dust grain extinction model
+    for MW, SMC and LMC or any available in WD01
 
-# class MW_Cardelli89():
-#
-#
-#     def __init__(self, params = {}):
-#
-#         self.description = 'Cardelli89 MW'
-#         self.R_V = 3.1
-#
-#     def tau(self, lam):
-#
-#         lam_mu = lam/1E4
-#
-#         x=1./lam_mu #l in mu m
-#
-#
-#         a = np.zeros(x.shape)
-#         b = np.zeros(x.shape)
-#
-#         s = x<1.1
-#         a[s] = 0.574*x[s]**1.61
-#         b[s] = -0.527*x[s]**1.61
-#
-#         s = (x>1.1)&(x<3.3)
-#         y = x[s] - 1.82
-#         a[s] = (1.)+(0.17699*y)-(0.50447*y**2)-(0.02427*y**3)+(0.72085*y**4)+(0.01979*y**5)-(0.77530*y**6)+(0.32999*y**7)
-#         b[s] = (1.41338*y)+(2.28305*y**2)+(1.07233*y**3)-(5.38434*y**4)-(0.62261*y**5)+(5.30260*y**6)-(2.09002*y**7)
-#
-#         s = x>=3.3
-#
-#         a[s] = 1.752-0.316*x[s]-0.104/((x[s]-4.67)**2+0.263)
-#         b[s] = -2.090+1.825*x[s]+1.206/((x[s]-4.62)**2+0.263)
-#
-#         k = a+b/(self.R_V)/(1.337-1.) #hopefully
-#
-#         k_V = np.interp(0.55, lam_mu, k)
-#
-#         return (k/k_V)*0.4/0.43
+    Parameters
+    ----------
+    model: string
+        dust grain model to use
+
+    Methods
+    -------
+    tau
+        calculates V-band normalised optical depth
+    attenuate
+        applies the extinction curve for given V-band optical
+        depth, returns the transmitted fraction
+    """
+
+    def __init__(self, params={'model': 'SMCBar'}):
+        """
+        Initialise the dust curve
+
+        Parameters
+        ----------
+        model: string
+            dust grain model to use
+
+        """
+
+        self.description = 'Weingarter and Draine 2001 dust grain extinction model for MW, SMC and LMC'
+        self.params = {}
+        if 'MW' in params['model']:
+            self.params['model'] = 'MWRV31'
+        elif 'LMC' in params['model']:
+            self.params['model'] = 'LMCAvg'
+        elif 'SMC' in params['model']:
+            self.params['model'] = 'SMCBar'
+        else:
+            self.params['model'] = params['model']
+
+        self.emodel = WD01(self.params['model'])
+
+    def tau(self, lam):
+        """
+        Calculate V-band normalised optical depth
+
+        Parameters
+        ----------
+        lam: float array
+            wavelength, expected mwith units
+        """
+
+        return self.emodel(lam.to_astropy())
+
+    def attenuate(self, tau_V, lam):
+        """
+        Get the transmission at different wavelength for the curve
+
+        Parameters
+        ----------
+        tau_V: float
+            optical depth in the V-band
+
+        lam: float
+            wavelength, expected with units
+        """
+        
+        return self.emodel.extinguish(x=lam.to_astropy(),
+                                    Av=1.086*tau_V)
