@@ -26,7 +26,8 @@ if __name__ == '__main__':
     np.random.seed(42)
 
     # Define the grid
-    grid_name = 'bc03_chabrier03_cloudy-v17.03_log10Uref-2'
+    grid_name = "test_grid"
+    grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name)
 
     # Define the grid (normally this would be defined by an SPS grid)
