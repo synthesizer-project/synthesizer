@@ -2,14 +2,14 @@
 """
 import math
 import numpy as np
+from scipy import signal
 import synthesizer.exceptions as exceptions
-from synthesizer.imaging.observation import (Observation, ParticleObservation,
-                                             ParametricObservation)
+from synthesizer.imaging.scene import Scene, ParticleScene, ParametricScene
 from synthesizer.imaging.spectral_cubes import (ParticleSpectralCube,
                                                 ParametricSpectralCube)
 
 
-class Image(Observation):
+class Image(Scene):
     """
     The generic Image object, containing attributes and methods for calculating
     and manipulating images.
@@ -82,7 +82,7 @@ class Image(Observation):
             filters = ()
 
         # Initilise the parent class
-        Observation.__init__(self, resolution=resolution, npix=npix, fov=fov,
+        Scene.__init__(self, resolution=resolution, npix=npix, fov=fov,
                              sed=sed, survey=survey)
 
         # Intialise IFU attributes
@@ -222,14 +222,106 @@ class Image(Observation):
 
         return img
 
-    def get_psfed_img(self):
+    def _get_psfed_single_img(self, img, psf):
+        """
+        Convolve an image with a PSF using scipy.signal.fftconvolve.
+
+        Parameters
+        ----------
+        img : array-like (float)
+            The image to convolve with the PSF.
+        psf : array-like (float)
+            The PSF to convolve with the image.
+
+        Returns
+        -------
+        convolved_img : array_like (float)
+            The image convolved with the PSF.
+        """
+
+        # Perform the convolution
+        convolved_img = signal.fftconvolve(img, psf, mode="same")
+
+        return convolved_img
+
+    def get_psfed_imgs(self, psfs):
+        """
+        Convolve the imgs stored in this object with the set of psfs passed to
+        this method.
+
+        This function will handle the different cases for image creation. If
+        there are multiple filters it will use the psf for each filters,
+        unless a single psf is provided in which case each filter will be
+        convolved with the singular psf. If the Image only contains a single
+        image it will convolve the psf with that image.
+
+        NOTE: this method currently overwrites the arrays in self.img/self.imgs
+
+        Parameters
+        ----------
+        psfs : array-like (float)/dict
+            Either A single array describing a PSF or a dictionary containing a 
+
+        Returns
+        -------
+        img/imgs : array_like (float)/dictionary
+            If pixel_values exists: A singular image convolved with the PSF.
+            If a filter list exists: Each img in self.imgs is returned
+            convolved with the corresponding PSF (or the single PSF if an array
+            was supplied for psf).
+
+        Raises
+        -------
+        InconsistentArguments
+            If a dictionary of PSFs is provided that doesn't match the filters
+            an error is raised.
+        """
+
+        # Check we have a valid set of PSFs
+        if self.pixel_values is not None and isinstance(psfs, dict):
+            raise exceptions.InconsistentArguments(
+                "To convolve with a single image an array should be "
+                "provided for the PSF not a dictionary."
+            )
+        elif self.filters is not None and isinstance(psfs, dict):
+
+            # What filters are we missing psfs for?
+            filter_codes = set(filters.filter_codes)
+            for key in psfs:
+                filter_codes - key
+
+            # If filters are missing raise an error saying which filters we
+            # are missing
+            if len(filter_codes) > 0:
+                raise exceptions.InconsistentArguments(
+                    "Either a single PSF or a dictionary with a PSF for each "
+                    "filter must be given. PSFs are missing for filters: "
+                    "[" + ", ".join(list(filter_codes)) + "]"
+                )
+
+        # Handle the possible cases (multiple filters or single image)
+        if self.pixel_values is not None:
+            
+           self.img = self._get_psfed_single_img(self.img, psfs)
+
+           return self.img
+
+        # Otherwise, we need to loop over filters and return a dictionary of
+        # convolved images.
+        for f in self.filters:
+
+            # Apply the PSF to this image
+            self.imgs[f.filter_code] = self._get_psfed_single_img(
+                self.imgs[f.filter_code], psfs[f.filter_code]
+            )
+
+        return self.imgs
+
+    def get_noisy_imgs(self):
         pass
 
-    def get_noisy_img(self):
-        pass
 
-
-class ParticleImage(ParticleObservation, Image):
+class ParticleImage(ParticleScene, Image):
     """
     The Image object used when creating images from particle distributions.
 
@@ -297,7 +389,7 @@ class ParticleImage(ParticleObservation, Image):
         """
         
         # Initilise the parent classes
-        ParticleObservation.__init__(self, resolution=resolution, npix=npix,
+        ParticleScene.__init__(self, resolution=resolution, npix=npix,
                                      fov=fov, sed=sed, stars=stars,
                                      survey=survey, positions=positions)
         Image.__init__(self, resolution=resolution, npix=npix, fov=fov,
@@ -482,8 +574,10 @@ class ParticleImage(ParticleObservation, Image):
 
         # Handle the possible cases (multiple filters or single image)
         if self.pixel_values is not None:
-            
-            return self._get_smoothed_img_single_filter(kernel_func)
+
+            self.img = self._get_smoothed_img_single_filter(kernel_func)
+
+            return self.img
         
         # Calculate IFU "image"
         self.ifu = self.ifu_obj.get_smoothed_ifu(kernel_func)
@@ -497,7 +591,7 @@ class ParticleImage(ParticleObservation, Image):
         return self.imgs
 
 
-class ParametricImage(ParametricObservation, Image):
+class ParametricImage(ParametricScene, Image):
     """
     The Image object, containing attributes and methods for calculating images.
 
@@ -538,7 +632,7 @@ class ParametricImage(ParametricObservation, Image):
         """
 
         # Initilise the parent classes
-        ParametricObservation.__init__(self, resolution=resolution, npix=npix,
+        ParametricScene.__init__(self, resolution=resolution, npix=npix,
                                        fov=fov, sed=sed, survey=survey)
         Image.__init__(self, resolution=resolution, npix=npix, fov=fov,
                        filters=filters, sed=sed, survey=survey)

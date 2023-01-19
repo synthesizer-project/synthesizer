@@ -4,10 +4,10 @@ import warnings
 import math
 import numpy as np
 import synthesizer.exceptions as exceptions
-from synthesizer.imaging.observation import Observation, ParticleObservation, ParametricObservation
+from synthesizer.imaging.scene import Scene, ParticleScene, ParametricScene
 
 
-class SpectralCube(Observation):
+class SpectralCube(Scene):
     """
     The generic parent IFU/Spectral data cube object, containing common
     attributes and methods for both particle and parametric sIFUs.
@@ -47,7 +47,7 @@ class SpectralCube(Observation):
         """
 
         # Initilise the parent class
-        Observation.__init__(self, resolution=resolution, npix=npix, fov=fov,
+        Scene.__init__(self, resolution=resolution, npix=npix, fov=fov,
                              sed=sed, survey=survey)
 
         # Set up the data cube dimensions
@@ -64,7 +64,7 @@ class SpectralCube(Observation):
         pass
 
 
-class ParticleSpectralCube(ParticleObservation, SpectralCube):
+class ParticleSpectralCube(ParticleScene, SpectralCube):
     """
     The IFU/Spectral data cube object, used when creating observations from
     particle distributions.
@@ -141,7 +141,7 @@ class ParticleSpectralCube(ParticleObservation, SpectralCube):
         self._check_flux_args(rest_frame, cosmo, redshift)
 
         # Initilise the parent class
-        ParticleObservation.__init__(self, resolution=resolution, npix=npix,
+        ParticleScene.__init__(self, resolution=resolution, npix=npix,
                                      fov=fov, sed=sed, stars=stars,
                                      survey=survey, positions=positions)
         SpectralCube.__init__(self, sed=sed, resolution=resolution, npix=npix,
@@ -305,7 +305,7 @@ class ParticleSpectralCube(ParticleObservation, SpectralCube):
         return self.ifu
 
 
-class ParametricSpectralCube(ParametricObservation, SpectralCube):
+class ParametricSpectralCube(ParametricScene, SpectralCube):
     """
     The IFU/Spectral data cube object, used when creating parametric
     observations.
@@ -324,7 +324,7 @@ class ParametricSpectralCube(ParametricObservation, SpectralCube):
     def __init__(self, sed, resolution, npix=None, fov=None, survey=None):
 
         # Initilise the parent class
-        ParametricObservation.__init__(self, resolution=resolution, npix=npix,
+        ParametricScene.__init__(self, resolution=resolution, npix=npix,
                                        fov=fov, sed=sed, survey=survey)
         SpectralCube.__init__(self, sed=sed, resolution=resolution, npix=npix,
                               fov=fov, survey=survey)

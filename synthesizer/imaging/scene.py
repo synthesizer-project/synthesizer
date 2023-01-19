@@ -5,7 +5,7 @@ import numpy as np
 import synthesizer.exceptions as exceptions
 
 
-class Observation:
+class Scene:
     """
     The parent class for all "observations". These include:
     - Flux/rest frame luminosity images in photometric bands.
@@ -143,7 +143,7 @@ class Observation:
         self.fov = self.resolution * self.npix
 
 
-class ParticleObservation(Observation):
+class ParticleScene(Scene):
     """
     The parent class for all "observations". These include:
     - Flux/rest frame luminosity images in photometric bands.
@@ -323,7 +323,7 @@ class ParticleObservation(Observation):
         self.pix_pos[:, 2] = self.coords[:, 2] / self.resolution
 
 
-class ParametricObservation(Observation):
+class ParametricScene(Scene):
     """
     The parent class for all parametric "observations". These include:
     - Flux/rest frame luminosity images in photometric bands.
