@@ -9,14 +9,14 @@ if __name__ == '__main__':
     # -------------------------------------------------
     # --- calcualte the EW for a given line as a function of age
 
-    # grid_dir = '/example/grid_directory/synthesizer_data/grids/'
-    grid_dir = None
-    model = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
-    # model = 'bpass-v2.2.1-bin_chab-300_cloudy-v17.03_log10Uref-2'
+    grid_dir = '../../tests/test_grid'
+    grid_name = 'test_grid'
+
+    grid = Grid(grid_name, grid_dir=grid_dir)
 
     line_id = ['HI4861', 'OIII4959', 'OIII5007']
 
-    grid = Grid(model, grid_dir=grid_dir, read_spectra=False, read_lines=line_id)
+    grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=line_id)
 
     # --- define the parameters of the star formation and metal enrichment histories
     sfh_p = {'duration': 100 * Myr}

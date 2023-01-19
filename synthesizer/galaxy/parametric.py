@@ -8,6 +8,7 @@ from scipy import integrate
 from unyt import yr, erg, Hz, s, cm, angstrom
 
 from .galaxy import BaseGalaxy
+from .. import exceptions
 from ..dust import power_law
 from ..sed import Sed, convert_fnu_to_flam
 from ..line import Line
@@ -17,13 +18,90 @@ from ..stats import weighted_median, weighted_mean
 
 class ParametricGalaxy(BaseGalaxy):
 
-    def __init__(self, SFZH):
+    """A class defining parametric galaxy objects 
 
-        self.sfzh = SFZH.sfzh
+    """
+
+    def __init__(self, sfzh):
+        """__init__ method for ParametricGalaxy
+
+        Parameters
+        ----------
+        sfzh : obj
+            instance of the BinnedSFZH class containing the star formation and metal enrichment history.
+        """
+
+        self.sfzh = sfzh
         # add an extra dimension to the sfzh to allow the fast summation
-        self.sfzh_ = np.expand_dims(self.sfzh, axis=2)
+        self.sfzh_ = np.expand_dims(self.sfzh.sfzh, axis=2)
         self.spectra = {}  # dictionary holding spectra
         self.lines = {}  # dictionary holding lines
+        self.images = {}  # dictionary holding images
+
+    def __str__(self):
+        """Function to print a basic summary of the Galaxy object.
+
+        Returns a string containing the total mass formed and lists of the available SEDs, lines, and images.
+
+        Returns
+        -------
+        str
+            Summary string containing the total mass formed and lists of the available SEDs, lines, and images.
+        """
+
+        pstr = ''
+        pstr += '-'*10 + "\n"
+        pstr += 'SUMMARY OF PARAMETRIC GALAXY' + "\n"
+        pstr += str(self.__class__) + "\n"
+        pstr += f'log10(stellar mass formed/Msol): {np.log10(np.sum(self.sfzh.sfzh))}' + "\n"
+        pstr += f'available SEDs: {list(self.spectra.keys())}' + "\n"
+        pstr += f'available lines: {list(self.lines.keys())}' + "\n"
+        pstr += f'available images: {list(self.images.keys())}' + "\n"
+        pstr += '-'*10 + "\n"
+        return pstr
+
+    def __add__(self, second_galaxy):
+        """Allows two Galaxy objects to be added together.
+
+        Parameters
+        ----------
+        second_galaxy : ParametricGalaxy
+            A second ParametricGalaxy to be added to this one.
+
+        NOTE: functionality for adding lines and images not yet implemented.
+
+        Returns
+        -------
+        ParametricGalaxy
+            New ParametricGalaxy object containing summed SFZHs, SEDs, lines, and images.
+        """
+
+        new_sfzh = self.sfzh + second_galaxy.sfzh
+        new_galaxy = ParametricGalaxy(new_sfzh)
+
+        # add together spectra
+        for spec_name, spectra in self.spectra.items():
+            if spec_name in second_galaxy.spectra.keys():
+                new_galaxy.spectra[spec_name] = spectra + second_galaxy.spectra[spec_name]
+            else:
+                exceptions.InconsistentAddition(
+                    'Both galaxies must contain the same spectra to be added together')
+
+        # add together lines
+        # for line_name, line in self.spectra.items():
+        #     if spec_name in second_galaxy.spectra.keys():
+        #         new_galaxy.lines[line_name] = line + second_galaxy.lines[line_name]
+        #     else:
+        #         exceptions.InconsistentAddition('Both galaxies must contain the same emission line quantities to be added together')
+
+        # add together images
+        # for img_name, image in self.images.items():
+        #     if img_name in second_galaxy.images.keys():
+        #         new_galaxy.images[img_name] = image + second_galaxy.image[img_name]
+        #     else:
+        #         exceptions.InconsistentAddition('Both galaxies must contain the same images to be added together')
+
+        return new_galaxy
 
     def get_Q(self, grid):
         """ return the ionising photon luminosity (log10Q) for a given SFZH. """

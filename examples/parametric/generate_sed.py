@@ -13,9 +13,10 @@ from astropy.cosmology import Planck18 as cosmo
 
 if __name__ == '__main__':
 
-    grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
+    grid_dir = '../../tests/test_grid'
+    grid_name = 'test_grid'
 
-    grid = Grid(grid_name)
+    grid = Grid(grid_name, grid_dir=grid_dir)
 
     # --- define the parameters of the star formation and metal enrichment histories
     sfh_p = {'duration': 10 * Myr}
@@ -24,7 +25,8 @@ if __name__ == '__main__':
 
     # --- define the functional form of the star formation and metal enrichment histories
     sfh = SFH.Constant(sfh_p)  # constant star formation
-    sfh.summary()  # print sfh summary
+    print(sfh)  # print sfh summary
+
     Zh = ZH.deltaConstant(Z_p)  # constant metallicity
 
     # --- get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
@@ -60,3 +62,5 @@ if __name__ == '__main__':
     # # --- CF00 model NOT YET IMPLEMENTED
     # galaxy.get_pacman_spectra(grid, tauV = 0.1, fesc = 0.5)
     # galaxy.plot_spectra()
+
+    print(galaxy)
