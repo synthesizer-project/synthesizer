@@ -349,7 +349,7 @@ class ParametricGalaxy(BaseGalaxy):
 
         # if the intrinsic lines haven't already been calcualted and saved then generate them
         if 'intrinsic' not in self.lines:
-            intrinsic_lines = get_intrinsic_line(grid, line_ids, fesc=fesc, update=update)
+            intrinsic_lines = self.get_intrinsic_line(grid, line_ids, fesc=fesc, update=update)
         else:
             intrinsic_lines = self.lines['intrinsic']
 
