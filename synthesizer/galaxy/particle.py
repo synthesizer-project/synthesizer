@@ -10,24 +10,28 @@ from ..imaging.images import ParticleImage
 
 
 class ParticleGalaxy(BaseGalaxy):
-    def __init__(self, stars=None, gas=None):
-        self.name = 'galaxy'
+    def __init__(self, name='galaxy', stars=None, gas=None):
 
+        # Define a name for this galaxy
+        self.name = name
+
+        # Define containers for specific derived spectra
         self.stellar_lum = None
         self.stellar_lum_array = None
         self.intrinsic_lum = None
         self.intrinsic_lum_array = None
 
+        # Define dictionaries to hold different types of spectra
         self.spectra = {}  # integrated spectra dictionary
         self.spectra_array = {}  # spectra arrays dictionary
 
-        self.stars = stars  # a star object
+        # Store this galaxy's stellar and gas particles
+        self.stars = stars
         self.gas = gas
 
+        # If we have them record how many stellar particles there are
         if self.stars:
             self.nparticles = stars.nparticles
-
-    # this should be able to take a pre-existing stars object!
 
     def load_stars(self, initial_masses, ages, metals, **kwargs):
         self.stars = Stars(initial_masses, ages, metals, **kwargs)
@@ -458,7 +462,7 @@ class ParticleGalaxy(BaseGalaxy):
 
     def make_image(self, resolution, npix=None, fov=None, img_type="hist",
                    sed=None, survey=None, filters=(), pixel_values=None,
-                   with_psf=False,  with_noise=False, kernel_func=None,
+                   psfs=None, depths=None, aperture=None, kernel_func=None,
                    rest_frame=True, redshift=None, cosmo=None, igm=None):
         """
         Makes images, either one or one per filter. This is a generic method
@@ -490,10 +494,17 @@ class ParticleGalaxy(BaseGalaxy):
         pixel_values : array-like (float)
             The values to be sorted/smoothed into pixels. Only needed if an sed
             and filters are not used.
-        with_psf : bool
-            Are we applying a PSF? PLACEHOLDER
-        with_noise : bool
-            Are we adding noise? PLACEHOLDER
+        psfs : dict
+            A dictionary containing the psf in each filter where the key is
+            each filter code and the value is the psf in that filter.
+        depths : dict
+            A dictionary containing the depth of an observation in each filter
+            where the key is each filter code and the value is the depth in
+            that filter.
+        aperture : float/dict
+            Either a float describing the size of the aperture in which the
+            depth is defined or a dictionary containing the size of the depth
+            aperture in each filter.
         kernel_func : function
             A function describing the smoothing kernel that returns a single
             number between 0 and 1. This function can be imported from the
@@ -522,50 +533,53 @@ class ParticleGalaxy(BaseGalaxy):
         # Instantiate the Image object.
         img = ParticleImage(resolution=resolution, npix=npix, fov=fov, sed=sed,
                             stars=self.stars, survey=survey, filters=filters,
-                            pixel_values=pixel_values, rest_frame=True,
-                            redshift=None, cosmo=None, igm=None)
+                            pixel_values=pixel_values, rest_frame=rest_frame,
+                            redshift=redshift, cosmo=cosmo, igm=igm)
         
         # Make the image, handling incorrect image types
-        if img_type == "hist" and not with_psf and not with_noise:
+        if img_type == "hist":
+
+            # Are we applying a PSF or noise?
+            if psf is None and depth is None:
             
-            # Compute image
-            img.get_hist_img()
+                # Compute image
+                img.get_hist_img()
+        
+            if psf is not None:
+
+                # Convolve the image/images
+                img.get_psfed_imgs(psfs)
+                
+            if depth is not None:
+                raise exceptions.UnimplementedFunctionality(
+                    "Noise functionality coming soon."
+                )
 
             return img
-        
-        elif img_type == "hist" and with_psf and not with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "PSF functionality coming soon."
-            )
-        elif img_type == "hist" and not with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Noise functionality coming soon."
-            )
-        elif img_type == "hist" and with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "PSF and noise functionality coming soon."
-            )
-        elif img_type == "smoothed" and not with_psf and not with_noise:
             
-            # Compute image
-            img.get_smoothed_img(kernel_func)
+        elif img_type == "smoothed":
+
+            # Are we applying a PSF or noise?
+            if not with_psf and not with_noise:
+            
+                # Compute image
+                img.get_smoothed_img(kernel_func)
+        
+            if psf is not None:
+                
+                # Convolve the image/images
+                img.get_psfed_imgs(psfs)
+                
+            if depth is not None:
+                raise exceptions.UnimplementedFunctionality(
+                    "Noise functionality coming soon."
+                )
 
             return img
-        
-        elif img_type == "smoothed" and with_psf and not with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Smothed functionality coming soon."
-            )
-        elif img_type == "smoothed" and not with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Smothed functionality coming soon."
-            )
-        elif img_type == "smoothed" and with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Smothed functionality coming soon."
-            )
+            
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or 'smoothed')"
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
             )
             
