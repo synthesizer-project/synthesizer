@@ -27,8 +27,8 @@ if __name__ == '__main__':
 
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = "../../tests/test_grid/"
-    grid = Grid(grid_name)
+    grid_dir = "tests/test_grid/"
+    grid = Grid(grid_name, grid_dir=grid_dir)
 
     # Define the grid (normally this would be defined by an SPS grid)
     log10ages = np.arange(6., 10.5, 0.1)
