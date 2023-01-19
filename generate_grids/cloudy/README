@@ -1,0 +1,29 @@
+## Processing grids with CLOUDY
+
+In this directory we can create cloudy input arrays, and process the output of these cloudy runs into a grid.
+
+To create an input grid, we run `make_cloudy_input_grid.py`. This takes the following arguments:
+
+-dir (--directory): the output directory. We recommend using your default synthesizer data directory
+-m (--machine): the type of HPC on which you are running. If not provided, no submission script will be written.
+-sps (--sps_grid): name of the SPS grid on which you wish to run CLOUDY
+-p (--params): YAML file containing CLOUDY parameters
+-c (--cloudy): the bash executable for your CLOUDY installation (either full directory to the executable, or an alias set in your bashrc file)
+
+An example:
+
+    python make_cloudy_input_grid.py -dir ../../../synthesizer_data/ -m cosma7 -sps bc03_chabrier03 -p default_param.yaml -cloudy CLOUDY_EXE
+
+
+## The param YAML file
+This contains the parameters that will be input into CLOUDY.
+
+Users can provide arrays/lists of parameters they wish to iterate over. In this case, the code will create individual runs for each of the parameters specified, with the following naming convention:
+
+{sps_grid}_{imf}_nebular_{param}_{value}
+
+where {param} is the key in the param file of the parameter to be varied, and {value} is the value to be provided. If this is numeric, it will be converted to a string, and if it is negative, the '-' will be substituted for 'm'.
+
+Currently, only a *single* array can be specified. If multiple arrays are provided, only the *first* one will be read and processed.
+
+TODO: update to accept multiple arrays, and iterate over these recursively
