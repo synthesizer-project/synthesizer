@@ -18,12 +18,13 @@ class power_law():
         self.params = params
 
     def tau(self, lam):
+        """
+        to get the dust attenuation here you do
+            tau(lam) = tauV * dust_curve.tau(lam)
+            T = np.exp(-tau)
+        """
 
         return (lam/5500.)**self.params['slope']
-
-    def T(self, lam):
-
-        return np.exp(-self.tau(lam))
 
 
 class MW_N18():

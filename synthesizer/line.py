@@ -4,6 +4,7 @@ import numpy as np
 
 from .units import Quantity
 from .sed import convert_fnu_to_flam
+from . import exceptions
 
 
 def get_line_id(id):
@@ -51,6 +52,8 @@ class Line:
     def __init__(self, id_, wavelength_, luminosity_, continuum_):
 
         self.id_ = id_
+
+        # --- these are maintained because we may want to hold on to the individual lines of a doublet
         self.wavelength_ = wavelength_
         self.luminosity_ = luminosity_
         self.continuum_ = continuum_
@@ -90,6 +93,24 @@ class Line:
         pstr += "-"*10
 
         return pstr
+
+    def __add__(self, second_line):
+        """
+        Function allowing adding of two Line objects together. This should NOT be used to add different lines together.
+
+        Returns
+        -------
+        obj (Line)
+            New instance of Line
+        """
+
+        if second_line.id == self.id:
+
+            return Line(self.id, self._wavelength, self._luminosity + second_line._luminosity, self._continuum + second_line._continuum)
+
+        else:
+
+            exceptions.InconsistentAddition('Wavelength grids must be identical')
 
     def get_flux(self, cosmo, z):
         """Calculate the line flux in units of erg/s/cm2
