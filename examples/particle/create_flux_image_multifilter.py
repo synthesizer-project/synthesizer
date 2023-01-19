@@ -96,25 +96,22 @@ if __name__ == '__main__':
     redshift = 1
 
     # Get the image
-    hist_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
-                                 img_type="hist",
+    hist_img = galaxy.make_image(resolution, fov=width + 1, img_type="hist",
                                  sed=galaxy.spectra_array["intrinsic"],
-                                 survey=None, filters=filters, pixel_values=None,
-                                 with_psf=False, with_noise=False,
-                                 kernel_func=quintic, rest_frame=False,
-                                 redshift=redshift, cosmo=cosmo, igm=None)
+                                 filters=filters, kernel_func=quintic,
+                                 rest_frame=False, redshift=redshift,
+                                 cosmo=cosmo)
 
     print("Histogram images made, took:", time.time() - img_start)
     img_start = time.time()
 
     # Get the image
-    smooth_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
+    smooth_img = galaxy.make_image(resolution, fov=width + 1,
                                    img_type="smoothed",
                                    sed=galaxy.spectra_array["intrinsic"],
-                                   survey=None, filters=filters, pixel_values=None,
-                                   with_psf=False, with_noise=False,
-                                   kernel_func=quintic, rest_frame=False,
-                                   redshift=redshift, cosmo=cosmo, igm=None)
+                                   filters=filters, kernel_func=quintic,
+                                   rest_frame=False, redshift=redshift,
+                                   cosmo=cosmo)
 
     print("Smoothed images made, took:", time.time() - img_start)
 

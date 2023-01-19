@@ -99,27 +99,21 @@ if __name__ == '__main__':
         img_start = time.time()
 
         # Get the image
-        hist_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
+        hist_img = galaxy.make_image(resolution, fov=width + 1,
                                      img_type="hist",
                                      sed=galaxy.spectra_array["intrinsic"],
-                                     survey=None, filters=filters,
-                                     pixel_values=None,
-                                     with_psf=False, with_noise=False,
-                                     kernel_func=quintic, rest_frame=True,
-                                     redshift=None, cosmo=None, igm=None)
+                                     filters=filters,
+                                     kernel_func=quintic, rest_frame=True)
 
         create_hist[ind] = time.time() - img_start
         img_start = time.time()
 
         # Get the image
-        smooth_img = galaxy.make_image(resolution, npix=None, fov=width + 1,
+        smooth_img = galaxy.make_image(resolution, fov=width + 1,
                                        img_type="smoothed",
                                        sed=galaxy.spectra_array["intrinsic"],
-                                       survey=None, filters=filters,
-                                       pixel_values=None,
-                                       with_psf=False, with_noise=False,
-                                       kernel_func=quintic, rest_frame=True,
-                                       redshift=None, cosmo=None, igm=None)
+                                       filters=filters,
+                                       kernel_func=quintic, rest_frame=True)
 
         create_smooth[ind] = time.time() - img_start
 
