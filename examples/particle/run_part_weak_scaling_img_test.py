@@ -45,9 +45,8 @@ if __name__ == '__main__':
     filter_start = time.time()
 
     # Define filter list
-    filter_codes = ["JWST/NIRCam.F150W", "JWST/NIRCam.F200W",
-                    "JWST/NIRCam.F444W", "JWST/MIRI.F1000W",
-                    "JWST/MIRI.F1500W"]
+    filter_codes = ["JWST/NIRCam.F090W", "JWST/NIRCam.F150W",
+                    "JWST/NIRCam.F200W"]
 
     # Set up filter object
     filters = Filters(filter_codes, new_lam=grid.lam)
