@@ -9,8 +9,7 @@ from dust_extinction.grain_models import WD01
 from . import exceptions
 this_dir, this_filename = os.path.split(__file__)
 
-# --- dust curves commonly used in literature
-
+# Dust curves commonly used in literature
 __all__ = ["power_law", "MW_N18", "Calzetti2000", "GrainsWD01"]
 
 
