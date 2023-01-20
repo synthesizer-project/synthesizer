@@ -117,7 +117,7 @@ class ParametricGalaxy(BaseGalaxy):
     def get_Q(self, grid):
         """ return the ionising photon luminosity (log10Q) for a given SFZH. """
 
-        return np.sum(10**self.grid.log10Q * self.sfzh, axis=(0, 1))
+        return np.sum(10**grid.log10Q * self.sfzh, axis=(0, 1))
 
     def generate_lnu(self, grid, spectra_name):
 
@@ -162,16 +162,30 @@ class ParametricGalaxy(BaseGalaxy):
 
         return sed
 
-    def get_screen_spectra(self, grid, tauV=None, fesc=0.0, dust_curve=power_law({'slope': -1.}), update=True):
+    def get_screen_spectra(self, grid, tauV=None, dust_curve=power_law({'slope': -1.}), update=True):
         """
-        Similar to get_intrinsic_spectra but applies a dust screen
+        Calculates dust attenuated spectra assuming a simple screen
+
+        Parameters
+        ----------
+        grid : obj (Grid)
+            The spectral frid
+        tauV : float
+            numerical value of dust attenuation
+        dust_curve : obj
+            instance of dust_curve
+
+        Returns
+        -------
+        obj (Sed)
+             A Sed object containing the dust attenuated spectra
         """
 
         # --- begin by calculating intrinsic spectra
-        intrinsic = self.get_intrinsic_spectra(grid, fesc, update=update)
+        intrinsic = self.get_intrinsic_spectra(grid, update=update)
 
         if tauV:
-            T = dust_curve.attenuate(tauV, lam)
+            T = dust_curve.attenuate(tauV, grid.lam)
         else:
             T = 1.0
 
@@ -183,6 +197,30 @@ class ParametricGalaxy(BaseGalaxy):
         return sed
 
     def get_pacman_spectra(self, grid, fesc=0.0, fesc_LyA=1.0, tauV=None, dust_curve=power_law({'slope': -1.}), update=True):
+        """
+        Calculates dust attenuated spectra assuming the PACMAN dust/fesc model including variable Lyman-alpha transmission.
+        In this model some fraction of the stellar emission is able to complete escape with no dust attenuation or nebular reprocessing.
+
+        Parameters
+        ----------
+        grid : obj (Grid)
+            The spectral frid
+        fesc : float
+            Lyman continuum escape fraction
+        fesc_LyA : float
+            Lyman-alpha escape fraction
+        tauV : float
+            numerical value of dust attenuation
+        dust_curve : obj
+            instance of dust_curve
+
+        Returns
+        -------
+        obj (Sed)
+             A Sed object containing the dust attenuated spectra
+        """
+
+
         """ in the PACMAN model some fraction (fesc) of the pure stellar emission is assumed to completely escape the galaxy without reprocessing by gas or dust. The rest is assumed to be reprocessed by both gas and a screen of dust. """
 
         # --- begin by generating the pure stellar spectra
@@ -228,14 +266,45 @@ class ParametricGalaxy(BaseGalaxy):
 
         return self.spectra['total']
 
-    def get_CF00_spectra(tauV, p={}):
-        """ add Charlot \& Fall (2000) dust """
+    def get_CF00_spectra(self, grid, tauV_ISM, tauV_BC, alpha_ISM=-0.7, alpha_BC=-1.3, save_young_and_old=False):
+        """
+        Calculates dust attenuated spectra assuming the Charlot & Fall (2000) dust model. In this model young star particles
+        are embedded in a dusty birth cloud and thus feel more dust attenuation.
 
-        print('WARNING: not yet implemented')
+
+        Parameters
+        ----------
+        grid : obj (Grid)
+            The spectral frid
+        tauV_ISM: float
+            numerical value of dust attenuation due to the ISM in the V-band
+        tauV_BC: float
+            numerical value of dust attenuation due to the BC in the V-band
+        alpha_ISM: float
+            slope of the ISM dust curve, -0.7 in MAGPHYS
+        alpha_BC: float
+            slope of the BC dust curve, -1.3 in MAGPHYS
+        save_young_and_old: boolean
+            flag specifying whether to save young and old
+
+        Returns
+        -------
+        obj (Sed)
+             A Sed object containing the dust attenuated spectra
+        """
+
+
+
+        # calculate dust attenuation for young and old components
+        T_ISM = power_law({'slope': alpha_ISM}).attenuate(tauV_ISM, grid.lam)
+        T_BC = power_law({'slope': alpha_BC}).attenuate(tauV_BC, grid.lam)
+
+        T_young = T_ISM * T_BC
+        T_old = T_ISM
+
+        pass
 
     def get_intrinsic_line(self, grid, line_ids, fesc=0.0, update=True):
-        """ return intrinsic quantities (luminosity, EW) for a single line or line set """
-
         """
         Calculates **intrinsic** properties (luminosity, continuum, EW) for a set of lines.
 
