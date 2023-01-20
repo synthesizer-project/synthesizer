@@ -52,7 +52,13 @@ class power_law():
         Parameters
         ----------
         lam: float array
-            wavelength, expected mwith units
+            wavelength, in Angstroms
+
+
+        Returns
+        ----------
+        float array
+            optical depth
         """
 
         return (lam/5500.)**self.params['slope']

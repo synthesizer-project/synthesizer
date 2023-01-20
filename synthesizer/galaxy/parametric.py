@@ -320,7 +320,9 @@ class ParametricGalaxy(BaseGalaxy):
 
         return lines
 
-    def get_attenuated_line(self, grid, line_ids, fesc=0.0, tauV_nebular=None, tauV_stellar=None, dust_curve_nebular=power_law({'slope': -1.}), dust_curve_stellar=power_law({'slope': -1.}), update=True):
+    def get_attenuated_line(self, grid, line_ids, fesc=0.0, tauV_nebular=None,
+                            tauV_stellar=None, dust_curve_nebular=power_law({'slope': -1.}),
+                            dust_curve_stellar=power_law({'slope': -1.}), update=True):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a set of lines. Allows the nebular and stellar attenuation to be set separately.
 
