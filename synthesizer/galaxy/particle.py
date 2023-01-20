@@ -10,10 +10,13 @@ from ..imaging.images import ParticleImage
 
 
 class ParticleGalaxy(BaseGalaxy):
-    def __init__(self, name='galaxy', stars=None, gas=None):
+    def __init__(self, name='galaxy', stars=None, gas=None, redshift=None):
 
         # Define a name for this galaxy
         self.name = name
+
+        # What is the redshift of this galaxy?
+        self.redshift = redshift
 
         # Define containers for specific derived spectra
         self.stellar_lum = None
