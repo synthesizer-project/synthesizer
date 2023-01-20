@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 
-plt.style.use('http://stephenwilkins.co.uk/matplotlibrc.txt')
-
 
 def mlabel(l):
     return rf'$\rm {l}$'
