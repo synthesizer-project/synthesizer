@@ -171,7 +171,7 @@ class ParametricGalaxy(BaseGalaxy):
         intrinsic = self.get_intrinsic_spectra(grid, fesc, update=update)
 
         if tauV:
-            T = np.exp(-tauV * dust_curve.tau(grid.lam))
+            T = dust_curve.attenuate(tauV, lam)
         else:
             T = 1.0
 
@@ -219,7 +219,7 @@ class ParametricGalaxy(BaseGalaxy):
             self.spectra['reprocessed'].lnu  # the light before reprocessing by dust
 
         if tauV:
-            T = np.exp(-tauV * dust_curve.tau(grid.lam))
+            T = dust_curve.attenuate(tauV, grid.lam) # calculate dust attenuation
             self.spectra['attenuated'].lnu = self.spectra['escape'].lnu + \
                 T*self.spectra['reprocessed'].lnu
             self.spectra['total'].lnu = self.spectra['attenuated'].lnu
@@ -361,8 +361,8 @@ class ParametricGalaxy(BaseGalaxy):
         for line_id, intrinsic_line in intrinsic_lines.items():
 
             # calculate attenuation
-            T_nebular = np.exp(-tauV_nebular * dust_curve_nebular.tau(intrinsic_line._wavelength))
-            T_stellar = np.exp(-tauV_stellar * dust_curve_stellar.tau(intrinsic_line._wavelength))
+            T_nebular = dust_curve_nebular.attenuate(tauV_nebular, intrinsic_line._wavelength)
+            T_stellar = dust_curve_stellar.attenuate(tauV_stellar, intrinsic_line._wavelength)
 
             luminosity = intrinsic_line._luminosity * T_nebular
             continuum = intrinsic_line._continuum * T_stellar
