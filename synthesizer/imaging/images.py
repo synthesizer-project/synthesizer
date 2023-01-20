@@ -2,6 +2,7 @@
 """
 import math
 import numpy as np
+import matplotlib.pyplot as plt
 import synthesizer.exceptions as exceptions
 from synthesizer.imaging.observation import (Observation, ParticleObservation,
                                              ParametricObservation)
@@ -48,7 +49,7 @@ class Image(Observation):
         NotYetImplemented
 
     """
-    
+
     def __init__(self, resolution, npix=None, fov=None, filters=(), sed=None,
                  survey=None):
         """
@@ -60,7 +61,7 @@ class Image(Observation):
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -159,7 +160,7 @@ class ParticleImage(ParticleObservation, Image):
 
     def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
                  filters=(), survey=None, positions=None, pixel_values=None,
-                  rest_frame=True, redshift=None, cosmo=None, igm=None):
+                 rest_frame=True, redshift=None, cosmo=None, igm=None):
         """
         Intialise the ParticleImage.
 
@@ -169,7 +170,7 @@ class ParticleImage(ParticleObservation, Image):
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -199,7 +200,7 @@ class ParticleImage(ParticleObservation, Image):
             Object containing the absorbtion due to an intergalactic medium.
 
         """
-        
+
         # Initilise the parent classes
         ParticleObservation.__init__(self, resolution=resolution, npix=npix,
                                      fov=fov, sed=sed, stars=stars,
@@ -224,7 +225,7 @@ class ParticleImage(ParticleObservation, Image):
     def _get_hist_img_single_filter(self):
         """
         A generic method to calculate an image with no smoothing.
-        
+
         Just a wrapper for numpy.histogram2d utilising ParticleImage
         attributes.
 
@@ -256,7 +257,7 @@ class ParticleImage(ParticleObservation, Image):
             options in kernel_functions.py or can be user defined. If user
             defined the function must return the kernel value corredsponding
             to the position of a particle with smoothing length h at distance
-            r from the centre of the kernel (r/h). 
+            r from the centre of the kernel (r/h).
 
         Returns
         -------
@@ -264,7 +265,7 @@ class ParticleImage(ParticleObservation, Image):
             A 2D array containing particles sorted into an image.
             (npix, npix)
         """
-        
+
         # Get the size of a pixel
         res = self.resolution
 
@@ -293,7 +294,7 @@ class ParticleImage(ParticleObservation, Image):
 
                 # Compute the x separation
                 x_dist = (i * res) + (res / 2) - pos[0]
-                
+
                 for j in range(self.pix_pos[ind, 1] - delta_pix,
                                self.pix_pos[ind, 1] + delta_pix + 1):
 
@@ -373,7 +374,7 @@ class ParticleImage(ParticleObservation, Image):
             options in kernel_functions.py or can be user defined. If user
             defined the function must return the kernel value corredsponding
             to the position of a particle with smoothing length h at distance
-            r from the centre of the kernel (r/h). 
+            r from the centre of the kernel (r/h).
 
         Returns
         -------
@@ -386,9 +387,9 @@ class ParticleImage(ParticleObservation, Image):
 
         # Handle the possible cases (multiple filters or single image)
         if self.pixel_values is not None:
-            
+
             return self._get_smoothed_img_single_filter(kernel_func)
-        
+
         # Calculate IFU "image"
         self.ifu = self.ifu_obj.get_smoothed_ifu(kernel_func)
 
@@ -416,8 +417,7 @@ class ParametricImage(ParametricObservation, Image):
 
     """
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None, filters=(),
-                 survey=None):
+    def __init__(self, filters, resolution, npix=None, fov=None, sed=None,  morphology=None, survey=None):
         """
         Intialise the ParametricImage.
 
@@ -425,9 +425,11 @@ class ParametricImage(ParametricObservation, Image):
         ----------
         resolution : float
             The size a pixel.
+        filter_collection : obj (FilterCollection)
+            An object containing a collection of filters.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -447,7 +449,64 @@ class ParametricImage(ParametricObservation, Image):
         Image.__init__(self, resolution=resolution, npix=npix, fov=fov,
                        filters=filters, sed=sed, survey=survey)
 
-        # If we have a list of filters make an IFU
-        if len(filters) > 0:
-            self._ifu_obj = ParametricSpectralCube(sed, resolution, npix, fov,
-                                                   survey)
+        # Define 1D bin centres of each pixel
+        bin_centres = resolution * np.linspace(-(npix-1)/2, (npix-1)/2, npix)
+
+        # As above but for the 2D grid
+        xx, yy = np.meshgrid(bin_centres, bin_centres)
+
+        # define the base image
+        self.img = morphology.img(xx, yy)
+        self.img /= np.sum(self.img)  # normalise this image to 1
+
+        for filter in filters.filters:
+            self.imgs[filter.filter_code] = sed.broadband_luminosities[filter.filter_code] * self.img
+
+    def plot(self, filter_code):
+        """
+        Make a simple plot of the image
+
+        Parameters
+        ----------
+        filter_code : str
+            The filter code
+        """
+
+        plt.figure()
+        plt.imshow(np.log10(self.imgs[filter_code]), origin='lower', interpolation='nearest')
+        plt.show()
+
+    def make_rgb_image(self, rgb_filters, update=True):
+        """
+        Make an rgb image
+
+        Parameters
+        ----------
+        filter_code : str
+            rgb_filters
+        """
+
+        rgb_img = np.array([self.imgs[filter_code] for filter_code in rgb_filters]).T
+
+        if update:
+            self.rgb_img = rgb_img
+
+        return rgb_img
+
+    def plot_rgb(self, rgb_filters):
+        """
+        Make a simple rgb plot
+
+        Parameters
+        ----------
+        filter_code : str
+            rgb_filters
+        """
+
+        rgb_img = self.make_rgb_image(rgb_filters)
+
+        rgb_img /= np.max(rgb_img)
+
+        plt.figure()
+        plt.imshow(rgb_img, origin='lower', interpolation='nearest')
+        plt.show()

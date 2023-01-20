@@ -14,26 +14,30 @@ from ..sed import Sed, convert_fnu_to_flam
 from ..line import Line
 from ..plt import single_histxy, mlabel
 from ..stats import weighted_median, weighted_mean
+from ..imaging.images import ParametricImage
 
 
 class ParametricGalaxy(BaseGalaxy):
 
-    """A class defining parametric galaxy objects 
+    """A class defining parametric galaxy objects
 
     """
 
-    def __init__(self, sfzh):
+    def __init__(self, sfzh, morph=None):
         """__init__ method for ParametricGalaxy
 
         Parameters
         ----------
         sfzh : obj
             instance of the BinnedSFZH class containing the star formation and metal enrichment history.
+        morph : obj
         """
 
         self.sfzh = sfzh
         # add an extra dimension to the sfzh to allow the fast summation
         self.sfzh_ = np.expand_dims(self.sfzh.sfzh, axis=2)
+
+        self.morph = morph
         self.spectra = {}  # dictionary holding spectra
         self.lines = {}  # dictionary holding lines
         self.images = {}  # dictionary holding images
@@ -260,3 +264,13 @@ class ParametricGalaxy(BaseGalaxy):
     # def apply_dust_CF00_lines(self):
     #
     #     return
+
+    def make_images(self, spectra_type, filter_collection, resolution, npix=None, fov=None, update=True):
+
+        images = ParametricImage(filter_collection, resolution, npix=npix, fov=fov,
+                                 sed=self.spectra[spectra_type], morphology=self.morph)
+
+        if update:
+            self.images[spectra_type] = images
+
+        return images
