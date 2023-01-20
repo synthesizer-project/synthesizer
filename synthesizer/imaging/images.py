@@ -286,9 +286,9 @@ class Image(Scene):
         elif self.filters is not None and isinstance(psfs, dict):
 
             # What filters are we missing psfs for?
-            filter_codes = set(filters.filter_codes)
+            filter_codes = set(self.filters.filter_codes)
             for key in psfs:
-                filter_codes - key
+                filter_codes -= set([key, ])
 
             # If filters are missing raise an error saying which filters we
             # are missing
