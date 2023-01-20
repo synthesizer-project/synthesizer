@@ -30,7 +30,7 @@ class Instrument:
         """
 
         # Basic metadata
-        self.instrument = filter_.filter_code.split(".")[0]
+        self.instrument = filters.filter_codes[0].split(".")[0]
 
         # Store some basic instrument properties
         self.resolution = resolution
@@ -100,6 +100,7 @@ class Survey:
         # Basic information
         self.ninstruments = 0
         self.nfilters = 0
+        self.ngalaxies = 0
 
         # Information about the field being observered
         self.fov = fov
@@ -217,6 +218,9 @@ class Survey:
             # Include the new galaxies
             self.galaxies.extend(galaxies)
 
+        # Count how many galaxies we have
+        self.ngalaxies = len(self.galaxies)
+
 
     def get_photometry(self):
         """
@@ -263,7 +267,7 @@ class Survey:
             for gal in self.galaxies:
 
                 # Get images of this galaxy with this instrument
-                img = gal.make_image(self.resolution, fov=self.fov,
+                img = gal.make_image(inst.resolution, fov=self.fov,
                                      img_type=img_type,
                                      sed=gal.spectra_array[spectra_type],
                                      filters=inst.filters,
