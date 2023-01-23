@@ -32,6 +32,10 @@ class ParticleGalaxy(BaseGalaxy):
         self.stars = stars
         self.gas = gas
 
+        # Define integrated properties of this galaxy
+        if stars.current_masses is not None:
+            self.stellar_mass = np.sum(stars.current_masses)
+
         # If we have them record how many stellar particles there are
         if self.stars:
             self.nparticles = stars.nparticles
@@ -464,9 +468,10 @@ class ParticleGalaxy(BaseGalaxy):
         return img.get_hist_img()
 
     def make_image(self, resolution, npix=None, fov=None, img_type="hist",
-                   sed=None, survey=None, filters=(), pixel_values=None,
-                   psfs=None, depths=None, aperture=None, kernel_func=None,
-                   rest_frame=True, redshift=None, cosmo=None, igm=None):
+                   sed=None, filters=(), pixel_values=None,
+                   psfs=None, depths=None, snrs=None, aperture=None,
+                   noises=None, kernel_func=None, rest_frame=True, cosmo=None,
+                   igm=None, super_resolution_factor=2):
         """
         Makes images, either one or one per filter. This is a generic method
         that will make every sort of image using every possible combination of
@@ -535,9 +540,12 @@ class ParticleGalaxy(BaseGalaxy):
 
         # Instantiate the Image object.
         img = ParticleImage(resolution=resolution, npix=npix, fov=fov, sed=sed,
-                            stars=self.stars, survey=survey, filters=filters,
+                            stars=self.stars, filters=filters,
                             pixel_values=pixel_values, rest_frame=rest_frame,
-                            redshift=redshift, cosmo=cosmo, igm=igm)
+                            redshift=self.redshift, cosmo=cosmo, igm=igm,
+                            psfs=psfs, depths=depths, apertures=aperture,
+                            snrs=snrs,
+                            super_resolution_factor=super_resolution_factor)
         
         # Make the image, handling incorrect image types
         if img_type == "hist":
@@ -548,12 +556,11 @@ class ParticleGalaxy(BaseGalaxy):
             if psfs is not None:
 
                 # Convolve the image/images
-                img.get_psfed_imgs(psfs)
+                img.get_psfed_imgs()
                 
             if depths is not None:
-                raise exceptions.UnimplementedFunctionality(
-                    "Noise functionality coming soon."
-                )
+
+                img.get_noisy_imgs(noises)
 
             return img
             
@@ -565,12 +572,11 @@ class ParticleGalaxy(BaseGalaxy):
             if psfs is not None:
                 
                 # Convolve the image/images
-                img.get_psfed_imgs(psfs)
+                img.get_psfed_imgs()
                 
             if depths is not None:
-                raise exceptions.UnimplementedFunctionality(
-                    "Noise functionality coming soon."
-                )
+                
+                img.get_noisy_imgs(noises)
 
             return img
             
