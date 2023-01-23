@@ -466,14 +466,11 @@ class Filter:
 
         # If filter has been defined with an effective wavelength and FWHM
         # calculate the minimum and maximum wavelength.
-        if lam_eff is not None and lam_fwhm is not None:
-            self.lam_min = lam_eff - lam_fwhm/2.
-            self.lam_max = lam_eff + lam_fwhm/2.
+        if self.lam_eff is not None and self.lam_fwhm is not None:
+            self.lam_min = self.lam_eff - self.lam_fwhm/2.
+            self.lam_max = self.lam_eff + self.lam_fwhm/2.
 
         # Otherwise, use the explict min and max
-        elif lam_min is not None and lam_max is not None:
-            self.lam_min = lam_min
-            self.lam_max = lam_max
 
         # Define this top hat filters wavelength array (+/- 1000 Angstrom)
         # if it hasn't been provided
@@ -529,8 +526,8 @@ class Filter:
         if isinstance(self.lam, np.ndarray):
             self.t = self._iterpolate_wavelength()
         else:
-            self.lam = original_lam
-            self.t = original_t
+            self.lam = self.original_lam
+            self.t = self.original_t
         
 
     def _iterpolate_wavelength(self):
@@ -583,7 +580,7 @@ class Filter:
         in_band = self.t > 0
 
         # Multiply the IFU by the filter transmission curve
-        arr_in_band = self.ifu.compress(in_band, axis=-1) * f.t[in_band]
+        arr_in_band = self.ifu.compress(in_band, axis=-1) * self.t[in_band]
 
         # Sum over the final axis to "collect" transmission in this filer
         sum_in_band = np.sum(arr_in_band, axis=-1)
