@@ -3,6 +3,7 @@ This example shows how to create a survey of fake galaxies generated using a
 2D SFZH, and make images of each of these galaxies.
 """
 import time
+import random
 import numpy as np
 from scipy import signal
 import matplotlib as mpl
@@ -26,6 +27,9 @@ plt.rcParams['font.serif'] = ['Times New Roman']
 
 # Set the seed
 np.random.seed(42)
+random.seed(42)
+
+start = time.time()
 
 # Define the grid
 grid_name = "test_grid"
@@ -33,7 +37,7 @@ grid_dir = "tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
 # Create an empty Survey object
-survey = Survey(super_resolution_factor=2, fov=8)
+survey = Survey(super_resolution_factor=1)
 
 # Lets make filter sets for two different instruments
 hst_filter_codes = ["HST/WFC3_IR.F105W", "HST/WFC3_IR.F125W"]
@@ -42,30 +46,9 @@ webb_filter_codes = ["JWST/NIRCam.F090W", "JWST/NIRCam.F150W",
 hst_filters = Filters(hst_filter_codes, new_lam=grid.lam)
 webb_filters = Filters(webb_filter_codes, new_lam=grid.lam)
 
-# Create a fake PSF for each instrument (normalising the kernels)
-hst_psf = np.outer(signal.windows.gaussian(25, 2),
-                   signal.windows.gaussian(25, 2))
-hst_psf /= np.sum(hst_psf)
-webb_psf = np.outer(signal.windows.gaussian(50, 3),
-                    signal.windows.gaussian(50, 3))
-webb_psf /= np.sum(webb_psf)
-hst_psfs = {f: hst_psf for f in hst_filters.filter_codes}
-webb_psfs = {f: webb_psf for f in webb_filters.filter_codes}
-
-# Lets define some depths in magnitudes
-hst_depths = {f: 33.0 for f in hst_filters.filter_codes}
-webb_depths = {f: 33.0 for f in webb_filters.filter_codes}
-
 # Let's add these instruments to the survey
-survey.add_photometric_instrument(filters=hst_filters, resolution=0.1,
-                                  label="HST/WFC3_IR", psfs=hst_psfs,
-                                  depths=hst_depths, snrs=5, apertures=0.5)
-survey.add_photometric_instrument(filters=webb_filters, resolution=0.05,
-                                  label="JWST/NIRCam", psfs=webb_psfs,
-                                  depths=webb_depths, snrs=5, apertures=0.5)
-
-# We need to convert the our depths into flux to be consistent with the images.
-survey.convert_mag_depth_to_fnu()
+survey.add_photometric_instrument(filters=hst_filters, label="HST/WFC3_IR")
+survey.add_photometric_instrument(filters=webb_filters, label="JWST/NIRCam")
 
 # Define the grid (normally this would be defined by an SPS grid)
 log10ages = np.arange(6., 10.5, 0.1)
@@ -76,10 +59,10 @@ sfh_p = {'duration': 100 * Myr}
 sfh = SFH.Constant(sfh_p)  # constant star formation
 
 # Define a FOV to be updated by the particle distribution
-fov = survey.fov
+fov = 0
 
 # Make some fake galaxies
-ngalaxies = 4
+ngalaxies = 100
 galaxies = []
 for igal in range(ngalaxies):
 
@@ -87,10 +70,11 @@ for igal in range(ngalaxies):
     sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 
     # Create stars object
-    n = 100
+    n = random.randint(100, 100000)
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
+    stars.current_masses = stars.initial_masses
     cent = np.mean(coords, axis=0)  # define geometric centre
     rs = np.sqrt((coords[:, 0] - cent[0]) ** 2
                  + (coords[:, 1] - cent[1]) ** 2
@@ -109,62 +93,45 @@ for igal in range(ngalaxies):
     galaxy = Galaxy("Galaxy%d" % igal, stars=stars, redshift=1)
 
     # Calculate the SEDs of stars in this galaxy
-    galaxy.generate_intrinsic_spectra(grid, update=True, integrated=False)
+    galaxy.generate_intrinsic_spectra(grid, update=True, integrated=True)
 
     # Include this galaxy
     galaxies.append(galaxy)
-
-# Set the fov in the survey
-print("Image FOV:", fov)
-survey.fov = fov + 1
 
 # Store galaxies in the survey
 survey.add_galaxies(galaxies)
 
 # Make images for each galaxy in this survey
-survey.make_images(img_type="smoothed", spectra_type="intrinsic",
-                   kernel_func=quintic, rest_frame=False, cosmo=cosmo)
+survey.get_photometry(spectra_type="intrinsic")
+
+print("Total runtime:", time.time() - start)
+
+# Get stellar masses
+ms = []
+for gal in galaxies:
+    ms.append(gal.stellar_mass)
 
 # Set up plot
-fig = plt.figure(figsize=(3.5 * survey.nfilters, 3.5 * survey.ngalaxies))
-gs = gridspec.GridSpec(survey.ngalaxies, survey.nfilters)
+fig = plt.figure(figsize=(3.5, 3.5))
+ax = fig.add_subplot(111)
+ax.grid(True)
+ax.loglog()
 
-# Create top row
-axes = np.empty((survey.ngalaxies, survey.nfilters), dtype=object)
-for i in range(survey.ngalaxies):
-    for j in range(survey.nfilters):
-        axes[i, j] = fig.add_subplot(gs[i, j])
+# Loop over filters
+for f in survey.photometry:
 
-# Create a mask for which plots are populated
-populated = np.zeros((survey.ngalaxies, survey.nfilters))
+    # Get photometry
+    phot = survey.photometry[f]
 
-# Loop over instruments
-for inst in survey.imgs:
+    # Plot the scatter for this filter
+    ax.scatter(ms, phot, marker=".", label=f)
 
-    # Loop over galaxies
-    for i, img in enumerate(survey.imgs[inst]):
-
-        # Find the next cell in this row
-        j = 0
-        while populated[i, j] != 0:
-            j += 1
-
-        # Label the edge
-        if j == 0:
-            axes[i, j].set_ylabel(survey.galaxies[i].name)
-
-        # Loop over filters in this instrument
-        for fcode in img.imgs:
-            axes[i, j].imshow(img.imgs_noise[fcode], cmap="Greys_r")
-
-            # Label the top row
-            if i == 0:
-                axes[i, j].set_title(fcode)
-
-            # Record that we put an image here
-            populated[i, j] = 1
-            j += 1
+ax.set_ylabel("$L /$ [erg / s / Hz] ")
+ax.set_xlabel("$M / \mathrm{M}_\odot$")
+    
+ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15),
+          fancybox=True, shadow=True, ncol=2)
 
 # Plot the image
-plt.savefig("../survey_img_test.png",
+plt.savefig("../survey_photometry_test.png",
             bbox_inches="tight", dpi=300)
