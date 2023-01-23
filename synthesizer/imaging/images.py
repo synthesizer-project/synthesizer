@@ -454,7 +454,7 @@ class ParametricImage(ParametricObservation, Image):
         self.xx, self.yy = np.meshgrid(bin_centres, bin_centres)
 
         # define the base image
-        self.img = morphology.img(xx, yy)
+        self.img = morphology.img(self.xx, self.yy)
         self.img /= np.sum(self.img)  # normalise this image to 1
 
     def create_images(self, sed=None, filters=None):
