@@ -443,9 +443,9 @@ class ParametricImage(ParametricObservation, Image):
 
         # Initilise the parent classes
         ParametricObservation.__init__(self, resolution=resolution, npix=npix,
-                                       fov=fov, sed=sed, survey=survey)
+                                       fov=fov, survey=survey)
         Image.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                       filters=filters, sed=sed, survey=survey)
+                       filters=filters, survey=survey)
 
         # Define 1D bin centres of each pixel
         bin_centres = resolution * np.linspace(-(npix-1)/2, (npix-1)/2, npix)
