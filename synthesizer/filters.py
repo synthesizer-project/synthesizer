@@ -103,7 +103,7 @@ class FilterCollection:
 
         # Atrributes to enable looping
         self._current_ind = 0
-        self.nfilters = len(filter_codes)
+        self.nfilters = len(self.filter_codes)
 
     def _make_svo_collection(self, filter_codes):
         """
