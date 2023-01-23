@@ -43,7 +43,7 @@ class Scene:
     __slots__ = ["resolution", "fov", "npix", "sed", "survey"]
 
     def __init__(self, resolution, npix=None, fov=None, sed=None,
-                 survey=None):
+                 super_resolution_factor=None):
         """
         Intialise the Observation.
 
@@ -71,14 +71,17 @@ class Scene:
         # Check what we've been given
         self._check_obs_args(fov, npix)
 
-        # Image metadata
+        # Scene resolution, width and pixel information
         self.resolution = resolution
         self.fov = fov
         self.npix = npix
 
+        # Define the super resolution (used to resample the scene to a higher
+        # resolution if convolving with a PSF)
+        self.super_resolution_factor = super_resolution_factor
+
         # Attributes containing data
         self.sed = sed
-        self.survey = survey
 
         # Handle the different input cases
         if npix is None:
@@ -115,6 +118,26 @@ class Scene:
             raise exceptions.InconsistentArguments(
                 "Either fov or npix must be specified!"
             )
+
+    def _super_to_native_resolution(self):
+        """
+        Converts the super resolution resolution and npix into the native
+        equivalents after PSF convolution.
+        """
+
+        # Perform conversion
+        self.resolution *= self.super_resolution_factor
+        self.npix //= self.super_resolution_factor
+
+    def _native_to_super_resolution(self):
+        """
+        Converts the native resolution and npix into the super resolution
+        equivalents used in PSF convolution.
+        """
+
+        # Perform conversion
+        self.resolution /= self.super_resolution_factor
+        self.npix *= self.super_resolution_factor
 
     def _compute_npix(self):
         """
@@ -178,7 +201,7 @@ class ParticleScene(Scene):
     __slots__ = ["stars", "coords", "centre", "pix_pos", "npart"]
 
     def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
-                 survey=None, positions=None, centre=None):
+                 positions=None, centre=None, super_resolution_factor=None):
         """
         Intialise the ParticleObservation.
 
@@ -217,7 +240,7 @@ class ParticleScene(Scene):
 
         # Initilise the parent class
         Scene.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                       sed=sed, survey=survey)
+                       sed=sed, super_resolution_factor=super_resolution_factor)
 
         # Initialise stars attribute
         self.stars = stars
@@ -346,7 +369,7 @@ class ParametricScene(Scene):
     """
 
     def __init__(self, resolution, npix=None, fov=None, sed=None,
-                 survey=None):
+                 super_resolution_factor=None):
         """
         Intialise the ParametricObservation.
 
@@ -368,4 +391,5 @@ class ParametricScene(Scene):
         """
 
         # Initilise the parent class
-        Scene.__init__(self, resolution, npix, fov, sed, survey)
+        Scene.__init__(self, resolution, npix, fov, sed,
+                       super_resolution_factor=super_resolution_factor)

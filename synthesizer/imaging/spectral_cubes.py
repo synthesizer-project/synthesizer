@@ -21,7 +21,8 @@ class SpectralCube(Scene):
 
     """
 
-    def __init__(self, sed, resolution, npix=None, fov=None, survey=None):
+    def __init__(self, sed, resolution, npix=None, fov=None,
+                 depths=None, apertures=None, snrs=None):
         """
         Intialise the SpectralCube.
 
@@ -48,7 +49,7 @@ class SpectralCube(Scene):
 
         # Initilise the parent class
         Scene.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                             sed=sed, survey=survey)
+                             sed=sed)
 
         # Set up the data cube dimensions
         self.spectral_resolution = sed.lam.size
@@ -94,7 +95,8 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
     """
 
     def __init__(self, sed, resolution, npix=None, fov=None, stars=None,
-                 survey=None, positions=None, centre=None, rest_frame=True,
+                 positions=None, centre=None, psfs=None, depths=None,
+                 apertures=None, snrs=None, rest_frame=True,
                  redshift=None, cosmo=None, igm=None):
         """
         Intialise the ParticleSpectralCube.
@@ -142,10 +144,11 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
 
         # Initilise the parent class
         ParticleScene.__init__(self, resolution=resolution, npix=npix,
-                                     fov=fov, sed=sed, stars=stars,
-                                     survey=survey, positions=positions)
+                               fov=fov, sed=sed, stars=stars,
+                               positions=positions)
         SpectralCube.__init__(self, sed=sed, resolution=resolution, npix=npix,
-                              fov=fov, survey=survey)
+                              fov=fov, depths=depths, apertures=apertures,
+                              snrs=snrs)
 
         # Lets get the right SED form the object
         self.sed_values = None
@@ -321,10 +324,11 @@ class ParametricSpectralCube(ParametricScene, SpectralCube):
 
     """
 
-    def __init__(self, sed, resolution, npix=None, fov=None, survey=None):
+    def __init__(self, sed, resolution, npix=None, fov=None):
 
         # Initilise the parent class
         ParametricScene.__init__(self, resolution=resolution, npix=npix,
-                                       fov=fov, sed=sed, survey=survey)
+                                       fov=fov, sed=sed)
         SpectralCube.__init__(self, sed=sed, resolution=resolution, npix=npix,
-                              fov=fov, survey=survey)
+                              fov=fov, depths=depths, apertures=apertures,
+                              snrs=snrs)
