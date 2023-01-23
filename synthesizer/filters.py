@@ -120,7 +120,7 @@ class FilterCollection:
         for f in filter_codes:
 
             # Get filter from SVO
-            _filter = Filter(f, new_lam=self.new_lam)
+            _filter = Filter(f, new_lam=self.lam)
             
             # Store the filter and its code
             self.filters.append(_filter)
@@ -253,7 +253,7 @@ class FilterCollection:
         """
 
         # Check we haven't finished
-        if self.current_ind >= self.nfilters:
+        if self._current_ind >= self.nfilters:
             self._current_ind = 0
             raise StopIteration
         else:
@@ -409,7 +409,7 @@ class Filter:
         self.observatory = None
         self.instrument = None
         self.filter_ = None
-        self.filter_type = filter_type
+        self.filter_type = None
 
         # Properties for a top hat filter
         self.lam_min = lam_min
@@ -452,7 +452,7 @@ class Filter:
 
         # Define the original wavelength and transmission for property
         # calculation later.
-        if original_lam is None:
+        if self.original_lam is None:
             self.original_lam = self.lam
             self.original_t = self.t
 
@@ -501,10 +501,9 @@ class Filter:
         self.filter_type = "SVO"
 
         # Get the information stored in the filter code
-        self.filter_code = f
-        self.observatory = f.split('/')[0]
-        self.instrument = f.split('/')[1].split('.')[0]
-        self.filter_ = f.split('.')[-1]
+        self.observatory = self.filter_code.split('/')[0]
+        self.instrument = self.filter_code.split('/')[1].split('.')[0]
+        self.filter_ = self.filter_code.split('.')[-1]
 
         # Read directly from the SVO archive.
         self.svo_url = (f'http://svo2.cab.inta-csic.es/theory/'
