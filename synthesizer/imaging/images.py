@@ -417,7 +417,7 @@ class ParametricImage(ParametricObservation, Image):
 
     """
 
-    def __init__(self, filters, resolution, npix=None, fov=None, sed=None,  morphology=None, survey=None):
+    def __init__(self, filters, resolution, morphology, npix=None, fov=None, survey=None):
         """
         Intialise the ParametricImage.
 
@@ -436,8 +436,6 @@ class ParametricImage(ParametricObservation, Image):
         filters : obj (FilterCollection)
             An object containing the Filter objects for which images are
             required.
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
         survey : obj (Survey)
             WorkInProgress
 
@@ -453,14 +451,39 @@ class ParametricImage(ParametricObservation, Image):
         bin_centres = resolution * np.linspace(-(npix-1)/2, (npix-1)/2, npix)
 
         # As above but for the 2D grid
-        xx, yy = np.meshgrid(bin_centres, bin_centres)
+        self.xx, self.yy = np.meshgrid(bin_centres, bin_centres)
 
         # define the base image
         self.img = morphology.img(xx, yy)
         self.img /= np.sum(self.img)  # normalise this image to 1
 
-        for filter in filters.filters:
-            self.imgs[filter.filter_code] = sed.broadband_luminosities[filter.filter_code] * self.img
+    def create_images(self, sed, filters=None):
+        """
+        Create multiband images
+
+        Parameters
+        ----------
+        sed : obj (SED)
+            An sed object containing the spectra for this observation.
+
+        Returns
+        ----------
+        dictionary array
+            a dictionary of images
+        """
+
+        sed_filters = list(sed.broadband_luminosities.keys())
+
+        # if filters not given read from sed object
+        if not filters:
+            filters = sed_filters
+
+        # check if all filters have fluxes calculated
+
+        for filter_ in filters:
+            self.imgs[filter_] = sed.broadband_luminosities[filter_] * self.img
+
+        return self.imgs
 
     def plot(self, filter_code):
         """
