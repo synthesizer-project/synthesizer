@@ -126,7 +126,6 @@ class FilterCollection:
             self.filters.append(_filter)
             self.filter_codes.append(_filter.filter_code)
             
-
     def _make_top_hat_collection(self, tophat_dict):
         """
         Populate the FilterCollection with user defined top hat filters.
