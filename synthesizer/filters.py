@@ -229,7 +229,7 @@ class FilterCollection:
             )
 
         # Update the number of filters we have
-        self.nfilters = len(filter_codes)
+        self.nfilters = len(self.filter_codes)
 
         return self
 
