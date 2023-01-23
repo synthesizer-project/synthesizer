@@ -100,3 +100,55 @@ class Singleton(type):
             cls._instances[cls] = super(Singleton, cls).__call__(*args,
                                                                  **kwargs)
         return cls._instances[cls]
+
+
+def flux_to_m(flux):
+    """
+    Converts flux in nJy to apparent magnitude.
+
+    Parameters
+    ----------
+    flux : array-like (float)/float
+        The flux to be converted, can either be a singular value or array.
+    """
+    return -2.5*np.log10(flux/1E9) + 8.9
+
+
+def m_to_flux(m):
+    """
+    Converts apparent magnitude to flux in nJy.
+
+    Parameters
+    ----------
+    m : array-like (float)/float
+        The apparent magnitude to be converted, can either be a singular value
+        or array.
+    """
+
+    return 1E9 * 10**(-0.4*(m - 8.9))
+
+def flux_to_luminosity(flux, cosmo, redshift):
+    """
+    Converts flux in nJy to luminosity in erg / s / Hz.
+
+    Parameters
+    ----------
+    flux : array-like (float)/float
+        The flux to be converted to luminosity, can either be a singular
+        value or array.
+    cosmo : obj (astropy.cosmology)
+        The cosmology object used to calculate luminosity distance.
+    redshift : float
+        The redshift of the rest frame.
+    """
+
+    # Calculate the luminosity distance
+    lum_dist = cosmo.luminosity_distance(z).to('cm').value
+
+    # Calculate the luminosity in interim units
+    lum = flux * 4 * np.pi * lum_dist ** 2
+
+    # And convert to erg / s / Hz
+    lum *= 1 / (1E9 * 1E23 * (1 + redshift))
+
+    return lum
