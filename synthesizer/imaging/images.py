@@ -417,7 +417,7 @@ class ParametricImage(ParametricObservation, Image):
 
     """
 
-    def __init__(self, filters, resolution, morphology, npix=None, fov=None, survey=None):
+    def __init__(self, filters, resolution, morphology, sed=None, npix=None, fov=None, survey=None):
         """
         Intialise the ParametricImage.
 
@@ -443,9 +443,9 @@ class ParametricImage(ParametricObservation, Image):
 
         # Initilise the parent classes
         ParametricObservation.__init__(self, resolution=resolution, npix=npix,
-                                       fov=fov, survey=survey)
+                                       fov=fov, sed=sed, survey=survey)
         Image.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                       filters=filters, survey=survey)
+                       filters=filters, sed=sed, survey=survey)
 
         # Define 1D bin centres of each pixel
         bin_centres = resolution * np.linspace(-(npix-1)/2, (npix-1)/2, npix)
@@ -457,7 +457,7 @@ class ParametricImage(ParametricObservation, Image):
         self.img = morphology.img(xx, yy)
         self.img /= np.sum(self.img)  # normalise this image to 1
 
-    def create_images(self, sed, filters=None):
+    def create_images(self, sed=None, filters=None):
         """
         Create multiband images
 
@@ -471,6 +471,13 @@ class ParametricImage(ParametricObservation, Image):
         dictionary array
             a dictionary of images
         """
+
+        if not sed:
+            if self.sed:
+                sed = self.sed
+            else:
+                # raise exception
+                pass
 
         sed_filters = list(sed.broadband_luminosities.keys())
 
