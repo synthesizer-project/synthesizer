@@ -165,16 +165,16 @@ class Sed:
 
         self.broadband_luminosities = {}
 
-        for f in fc.filters:
+        for filter in fc.filters:
 
             """ calculate broadband fluxes by multiplying the observed spectra by the
             filter transmission curve and dividing by the normalisation """
 
-            int_num = integrate.trapezoid(self.lnu * fc.filter[f].t/self.nu,
+            int_num = integrate.trapezoid(self.lnu * filter.t/self.nu,
                                           self.nu)
-            int_den = integrate.trapezoid(fc.filter[f].t/self.nu, self.nu)
+            int_den = integrate.trapezoid(filter.t/self.nu, self.nu)
 
-            self.broadband_luminosities[f] = (int_num / int_den) * erg/s/Hz
+            self.broadband_luminosities[filter.filter_code] = (int_num / int_den) * erg/s/Hz
 
         return self.broadband_luminosities
 

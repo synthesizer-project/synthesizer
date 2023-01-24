@@ -238,7 +238,7 @@ class FilterCollection:
         Overload the len operator to return how many filters there are.
         """
         return len(self.filters)
-    
+
     def __iter__(self):
         """
         Overload iteration to allow simple looping over filter objects,
@@ -376,7 +376,7 @@ class Filter:
     pivwv:
         Calculate pivot wavelength
     """
-
+    
     def __init__(self, filter_code, transmission=None, lam_min=None,
                  lam_max=None, lam_eff=None, lam_fwhm=None, new_lam=None):
         """
