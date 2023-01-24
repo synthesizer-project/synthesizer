@@ -152,7 +152,7 @@ class Grid():
 
         self.grid_dir = grid_dir
         self.grid_name = grid_name
-        self.grid_filename = f'{self.grid_dir}/{self.grid_name}.h5'
+        self.grid_filename = f'{self.grid_dir}/{self.grid_name}.hdf5'
 
         self.spectra = None
         self.lines = None
