@@ -14,7 +14,9 @@ from ..sed import Sed, convert_fnu_to_flam
 from ..line import Line
 from ..plt import single_histxy, mlabel
 from ..stats import weighted_median, weighted_mean
+from ..imaging.images import ParametricImage
 from ..art import Art
+
 
 
 class ParametricGalaxy(BaseGalaxy):
@@ -23,18 +25,21 @@ class ParametricGalaxy(BaseGalaxy):
 
     """
 
-    def __init__(self, sfzh):
+    def __init__(self, sfzh, morph=None):
         """__init__ method for ParametricGalaxy
 
         Parameters
         ----------
         sfzh : obj
             instance of the BinnedSFZH class containing the star formation and metal enrichment history.
+        morph : obj
         """
 
         self.sfzh = sfzh
         # add an extra dimension to the sfzh to allow the fast summation
         self.sfzh_ = np.expand_dims(self.sfzh.sfzh, axis=2)
+
+        self.morph = morph
         self.spectra = {}  # dictionary holding spectra
         self.lines = {}  # dictionary holding lines
         self.images = {}  # dictionary holding images
@@ -385,9 +390,10 @@ class ParametricGalaxy(BaseGalaxy):
             lines[line.id] = line
 
         if update:
-            self.lines['intrinsic'] = lines
+            self.lines[line.id] = line
 
-        return lines
+        return line
+
 
     def get_attenuated_line(self, grid, line_ids, fesc=0.0, tauV_nebular=None,
                             tauV_stellar=None, dust_curve_nebular=power_law({'slope': -1.}),
@@ -475,3 +481,14 @@ class ParametricGalaxy(BaseGalaxy):
         """
 
         return self.get_attenuated_line(grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
+
+
+    def make_images(self, spectra_type, filter_collection, resolution, npix=None, fov=None, update=True):
+
+        images = ParametricImage(filter_collection, resolution, npix=npix, fov=fov,
+                                 sed=self.spectra[spectra_type], morphology=self.morph)
+
+        if update:
+            self.images[spectra_type] = images
+
+        return images
