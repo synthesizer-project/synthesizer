@@ -8,7 +8,7 @@ import yaml
 
 from synthesizer.abundances_sw import Abundances
 from synthesizer.grid import Grid
-from synthesizer.cloudy_sw import create_cloudy_input
+from synthesizer.cloudy import create_cloudy_input
 
 from write_submission_script import (apollo_submission_script,
                                      cosma7_submission_script)
@@ -143,7 +143,7 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
             if cloudy_params['U_model'] == 'ref':
 
                 delta_log10Q = grid.log10Q[ia, iZ] - \
-                        grid.log10Q[ia_ref, iZ_ref]
+                    grid.log10Q[ia_ref, iZ_ref]
 
                 log10U = cloudy_params['log10U_ref'] + (1/3) * delta_log10Q
 
