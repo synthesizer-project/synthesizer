@@ -35,7 +35,7 @@ def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
         list of lines
     """
 
-    grid_filename = f'{grid_dir}/{grid_name}.h5'
+    grid_filename = f'{grid_dir}/{grid_name}.hdf5'
     with h5py.File(grid_filename, 'r') as hf:
 
         lines = list(hf['lines'].keys())
@@ -191,7 +191,7 @@ class Grid():
 
             for spec_name in self.spec_names:
 
-                with h5py.File(f'{self.grid_dir}/{self.grid_name}.h5', 'r') as hf:
+                with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
                     self.spectra[spec_name] = hf['spectra'][spec_name][:]
                     # self.units[f'spectra/{spec_name}'] = hf['spectra'][spec_name].attrs['Units']
 
@@ -221,7 +221,7 @@ class Grid():
             else:
                 self.line_list = hf['lines'].attrs['lines']  # apparently this doesn't exist
 
-            with h5py.File(f'{self.grid_dir}/{self.grid_name}.h5', 'r') as hf:
+            with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
 
                 for line in self.line_list:
 
