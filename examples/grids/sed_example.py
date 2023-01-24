@@ -3,7 +3,7 @@ import numpy as np
 
 from synthesizer.sed import Sed
 from synthesizer.grid import Grid
-from synthesizer.filters import SVOFilterCollection
+from synthesizer.filters import FilterCollection
 
 
 if __name__ == '__main__':
@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     print("Broadband luminosities")
     fs = [f'JWST/NIRCam.{f}' for f in ['F200W', 'F356W']]
-    fc = SVOFilterCollection(fs, new_lam=_sed.lam)
+    fc = FilterCollection(fs, new_lam=_sed.lam)
 
     print("1D:", _sed.get_broadband_luminosities(fc))
     print("2D:", _sed_2d.get_broadband_luminosities(fc))

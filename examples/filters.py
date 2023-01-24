@@ -1,4 +1,4 @@
-from synthesizer.filters import FilterFromSVO, SVOFilterCollection,\
+from synthesizer.filters import FilterFromSVO, FilterCollection,\
     TopHatFilterCollection, UVJ
 
 # define individual filters
@@ -7,7 +7,7 @@ filt = FilterFromSVO(('JWST', 'NIRCam', 'F200W'))  # use Tuple
 
 # define a filter collection
 fs = [f'JWST/NIRCam.{f}' for f in ['F200W', 'F277W']]  # a list of filter codes
-fc = SVOFilterCollection(fs)
+fc = FilterCollection(fs)
 fc.plot_transmission_curves()
 
 # define a filter collection
