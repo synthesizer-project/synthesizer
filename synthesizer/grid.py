@@ -170,9 +170,9 @@ class Grid():
 
             self.log10ages = hf['log10ages'][:]
             self.ages = 10**self.log10ages
-            self.log10metallicities = hf['log10metallicities'][:]
-            self.metallicities = 10**self.log10metallicities
 
+            self.metallicities = hf['metallicities'][:]
+            self.log10metallicities = np.log10(self.metallicities)
             # TODO: why do we need this?
             self.log10Zs = self.log10metallicities  # alias
 
