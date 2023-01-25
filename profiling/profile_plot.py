@@ -19,7 +19,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def make_report(funcs, ncalls, cumtime, pcent, col_width, numeric_width=14):
+def make_report(funcs, ncalls, tottime, pcent, col_width, numeric_width=14):
 
     # Define string holding the table
     report_string = ""
@@ -32,7 +32,7 @@ def make_report(funcs, ncalls, cumtime, pcent, col_width, numeric_width=14):
     head = "|"
     head += "Function call".ljust(col_width) + "|"
     head += "ncalls".ljust(numeric_width) + "|"
-    head += "cumtime (s)".ljust(numeric_width) + "|"
+    head += "tottime (s)".ljust(numeric_width) + "|"
     head += "percall (ms)".ljust(numeric_width) + "|"
     head += "percent (%)".ljust(numeric_width) + "|"
 
@@ -56,8 +56,8 @@ def make_report(funcs, ncalls, cumtime, pcent, col_width, numeric_width=14):
         row_string = ""
         row_string += "|" + func.strip("\n").ljust(col_width) + "|"
         row_string += str(int(ncalls[ind])).ljust(numeric_width) + "|"
-        row_string += f"{cumtime[ind]:.4f}".ljust(numeric_width) + "|"
-        row_string += f"{cumtime[ind] / ncalls[ind] * 1000:.4f}".ljust(
+        row_string += f"{tottime[ind]:.4f}".ljust(numeric_width) + "|"
+        row_string += f"{tottime[ind] / ncalls[ind] * 1000:.4f}".ljust(
             numeric_width) + "|"
         row_string += f"{pcent[ind]:.2f}".ljust(numeric_width) + "|"
         row_string += "\n"
@@ -66,11 +66,11 @@ def make_report(funcs, ncalls, cumtime, pcent, col_width, numeric_width=14):
 
         # Do we need to start again with a larger column width?
         if len(func) + 2 > col_width:
-            return make_report(funcs, ncalls, cumtime, pcent,
+            return make_report(funcs, ncalls, tottime, pcent,
                                col_width=len(func.ljust(col_width)) + 1,
                                numeric_width=numeric_width)
         elif len(str(int(ncalls[ind]))) > numeric_width:
-            return make_report(funcs, ncalls, cumtime, pcent,
+            return make_report(funcs, ncalls, tottime, pcent,
                                col_width,
                                numeric_width=len(str(int(ncalls[ind]))) + 1)
 
@@ -86,7 +86,7 @@ plot_loc = sys.argv[2]
 
 # Create some dictionaries
 ncalls = {}
-cumtime = {}
+tottime = {}
 
 # Create a flag to skip non-profiling information in the output
 extract_data = False
@@ -120,27 +120,27 @@ with open(profile_file, 'r') as file:
                     )
                 else:
                     ncalls[line_split[-1]] = float(line_split[0])
-                cumtime[line_split[-1]] = float(line_split[3])
+                tottime[line_split[-1]] = float(line_split[3])
 
 # Convert dictionaries to arrays to manipulate, report and plot
 funcs = np.array(list(ncalls.keys()))
 ncalls = np.array(list(ncalls.values()))
-cumtime = np.array(list(cumtime.values()))
+tottime = np.array(list(tottime.values()))
 
 # Mask away inconsequential operations
-okinds = cumtime > 0.05 * total_runtime
+okinds = tottime > 0.05 * total_runtime
 funcs = funcs[okinds]
 ncalls = ncalls[okinds]
-cumtime = cumtime[okinds]
+tottime = tottime[okinds]
 
 # Compute the percentage of runtime spent doing operations
-pcent = cumtime / total_runtime * 100
+pcent = tottime / total_runtime * 100
 
 # Sort arrays in descending cumaltive time order
-sinds = np.argsort(cumtime)[::-1]
+sinds = np.argsort(tottime)[::-1]
 funcs = funcs[sinds]
 ncalls = ncalls[sinds]
-cumtime = cumtime[sinds]
+tottime = tottime[sinds]
 pcent = pcent[sinds]
 
 # Remove the script call itself and other uninteresting operations
@@ -150,7 +150,7 @@ for ind, func in enumerate(funcs):
         okinds[ind] = False
 funcs = funcs[okinds]
 ncalls = ncalls[okinds]
-cumtime = cumtime[okinds]
+tottime = tottime[okinds]
 pcent = pcent[okinds]
 
 # Clean up the function labels a bit
@@ -167,7 +167,7 @@ for ind, func in enumerate(funcs):
 
 # Report the results to the user
 col_width = 15
-report_string = make_report(funcs, ncalls, cumtime, pcent, col_width)
+report_string = make_report(funcs, ncalls, tottime, pcent, col_width)
 
 print(report_string)
 
@@ -212,11 +212,11 @@ fig = plt.figure(figsize=(3.5, 3.5))
 ax = fig.add_subplot(111)
 ax.grid(True)
 ax.set_axisbelow(True)
-ax.scatter(funcs, cumtime, marker="+")
+ax.scatter(funcs, tottime, marker="+")
 ax.set_xticks(ax.get_xticks())
 ax.set_xticklabels(ax.get_xticklabels(), rotation=-90)
 ax.set_title(file_name)
 ax.set_ylabel("Runtime (s)")
-outpng = plot_loc + file_name + "_cumalative_time.png"
+outpng = plot_loc + file_name + "_tot_time.png"
 fig.savefig(outpng, bbox_inches="tight")
 plt.close(fig)
