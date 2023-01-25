@@ -40,9 +40,27 @@ class power_law():
         slope: float
             power law slope
         """
-        
+
         self.description = 'simple power law dust curve'
         self.params = params
+
+    def tau_x(self, lam):
+        """
+        Calculate optical depth at lam
+
+        Parameters
+        ----------
+        lam: float array
+            wavelength, in Angstroms
+
+
+        Returns
+        ----------
+        float array
+            optical depth
+        """
+
+        return (lam/5500.)**self.params['slope']
 
     def tau(self, lam):
         """
@@ -54,10 +72,10 @@ class power_law():
             wavelength, expected mwith units
         """
 
-        tau_x = (lam.to('Angstrom')/(5500.*Angstrom))**self.params['slope']
-        tau_V = np.interp(5500., lam.to('Angstrom').v, tau_x)
+        # tau_x = (lam.to('Angstrom')/(5500.*Angstrom))**self.params['slope']
+        # tau_V = np.interp(5500., lam.to('Angstrom').v, tau_x)
 
-        return tau_x/tau_V
+        return self.tau_x(lam)/self.tau_x(5500.)
 
     def attenuate(self, tau_V, lam):
         """
@@ -93,8 +111,9 @@ class MW_N18():
     attenuate
         applies the attenuation curve for given V-band optical
         depth, returns the transmitted fraction
-    
+
     """
+
     def __init__(self):
         """
         Initialise the dust curve
@@ -124,7 +143,7 @@ class MW_N18():
                                  self.d.f.mw_df_chi[::-1],
                                  kind=interp,
                                  fill_value='extrapolate')
-        
+
         return f(lam.to('Angstrom').v)/self.tau_lam_V
 
     def attenuate(self, tau_V, lam):
@@ -147,7 +166,7 @@ class MW_N18():
 
 class Calzetti2000():
     """
-    Calzetti attenuation curve; with option for the slope and UV-bump 
+    Calzetti attenuation curve; with option for the slope and UV-bump
     implemented in Noll et al. 2009.
 
     Parameters
@@ -156,7 +175,7 @@ class Calzetti2000():
         slope of the attenuation curve
 
     x0: float
-        central wavelength of the UV bump, expected in microns    
+        central wavelength of the UV bump, expected in microns
 
     ampl: float
         amplitude of the UV-bump
@@ -170,6 +189,7 @@ class Calzetti2000():
         depth, returns the transmitted fraction
 
     """
+
     def __init__(self, params={'slope': 0., 'x0': 0.2175, 'ampl': 0.}):
         """
         Initialise the dust curve
@@ -180,7 +200,7 @@ class Calzetti2000():
             slope of the attenuation curve
 
         x0: float
-            central wavelength of the UV bump, expected in microns    
+            central wavelength of the UV bump, expected in microns
 
         ampl: float
             amplitude of the UV-bump
@@ -289,6 +309,6 @@ class GrainsWD01():
         lam: float
             wavelength, expected with units
         """
-        
+
         return self.emodel.extinguish(x=lam.to_astropy(),
-                                    Av=1.086*tau_V)
+                                      Av=1.086*tau_V)

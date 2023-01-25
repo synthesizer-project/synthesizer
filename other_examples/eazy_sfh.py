@@ -2,13 +2,12 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-from synthesizer.filters import FilterCollection
+from synthesizer.filters import SVOFilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr
-from synthesizer.igm import Madau96, Inoue14
 from astropy.cosmology import Planck18 as cosmo
 
 
@@ -26,6 +25,8 @@ if __name__ == '__main__':
 
     # --- define the functional form of the star formation and metal enrichment histories
     sfh = SFH.Constant(sfh_p)  # constant star formation
+    print(sfh)  # print sfh summary
+
     Zh = ZH.deltaConstant(Z_p)  # constant metallicity
 
     # --- get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
@@ -34,25 +35,32 @@ if __name__ == '__main__':
     # --- create a galaxy object
     galaxy = Galaxy(sfzh)
 
+    # # --- generate pure stellar spectra alone
+    # galaxy.get_stellar_spectra(grid)
+    # galaxy.plot_spectra()
+
+    # # --- generate intrinsic spectra (which includes reprocessing by gas)
+    # galaxy.get_intrinsic_spectra(grid, fesc = 0.5)
+    # galaxy.plot_spectra()
+
+    # # --- simple dust and gas screen
+    # galaxy.get_screen_spectra(grid, tauV = 0.1, fesc = 0.5)
+    # galaxy.plot_spectra()
+
+    # # --- pacman model
+    # galaxy.get_pacman_spectra(grid, tauV = 0.1, fesc = 0.5)
+    # galaxy.plot_spectra()
+
+    # # --- pacman model (no Lyman-alpha escapes and no dust)
+    # galaxy.get_pacman_spectra(grid, fesc = 0.0, fesc_LyA = 0.0)
+    # galaxy.plot_spectra()
+
     # # --- pacman model (complex)
-    sed = galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1)
+    galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1)
+    galaxy.plot_spectra()
 
-    # --- now calculate the observed frame spectra
+    # # --- CF00 model NOT YET IMPLEMENTED
+    # galaxy.get_pacman_spectra(grid, tauV = 0.1, fesc = 0.5)
+    # galaxy.plot_spectra()
 
-    z = 10.  # redshift
-    sed.get_fnu(cosmo, z, igm=Madau96())  # generate observed frame spectra
-
-    # --- calculate broadband luminosities
-    filter_codes = [f'JWST/NIRCam.{f}' for f in ['F090W', 'F115W', 'F150W',
-                                                 'F200W', 'F277W', 'F356W', 'F444W']]  # define a list of filter codes
-    filter_codes += [f'JWST/MIRI.{f}' for f in ['F770W']]
-    fc = FilterCollection(filter_codes, new_lam=sed.lamz)
-
-    # --- measure broadband fluxes
-    fluxes = sed.get_broadband_fluxes(fc)
-
-    for filter, flux in fluxes.items():
-        print(f'{filter}: {flux:.2f}')  # print broadband fluxes
-
-    # make plot of observed including broadband fluxes (if filter collection object given)
-    galaxy.plot_observed_spectra(cosmo, z, fc=fc, spectra_to_plot=['total'])
+    print(galaxy)

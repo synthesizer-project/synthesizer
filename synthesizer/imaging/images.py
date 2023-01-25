@@ -4,6 +4,7 @@ import math
 import numpy as np
 from scipy import signal
 from scipy.ndimage import zoom
+import matplotlib.pyplot as plt
 import synthesizer.exceptions as exceptions
 from synthesizer.imaging.scene import Scene, ParticleScene, ParametricScene
 from synthesizer.imaging.spectral_cubes import (ParticleSpectralCube,
@@ -76,7 +77,7 @@ class Image(Scene):
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -361,7 +362,7 @@ class Image(Scene):
         Parameters
         ----------
         psfs : array-like (float)/dict
-            Either A single array describing a PSF or a dictionary containing a 
+            Either A single array describing a PSF or a dictionary containing a
 
         Returns
         -------
@@ -695,7 +696,7 @@ class ParticleImage(ParticleScene, Image):
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -782,7 +783,7 @@ class ParticleImage(ParticleScene, Image):
             options in kernel_functions.py or can be user defined. If user
             defined the function must return the kernel value corredsponding
             to the position of a particle with smoothing length h at distance
-            r from the centre of the kernel (r/h). 
+            r from the centre of the kernel (r/h).
 
         Returns
         -------
@@ -899,7 +900,7 @@ class ParticleImage(ParticleScene, Image):
             options in kernel_functions.py or can be user defined. If user
             defined the function must return the kernel value corredsponding
             to the position of a particle with smoothing length h at distance
-            r from the centre of the kernel (r/h). 
+            r from the centre of the kernel (r/h).
 
         Returns
         -------
@@ -913,9 +914,7 @@ class ParticleImage(ParticleScene, Image):
         # Handle the possible cases (multiple filters or single image)
         if self.pixel_values is not None:
 
-            self.img = self._get_smoothed_img_single_filter(kernel_func)
-
-            return self.img
+            return self._get_smoothed_img_single_filter(kernel_func)
 
         # Calculate IFU "image"
         self.ifu = self.ifu_obj.get_smoothed_ifu(kernel_func)
@@ -944,9 +943,8 @@ class ParametricImage(ParametricScene, Image):
 
     """
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None, filters=(),
-                 psfs=None, depths=None, apertures=None, snrs=None,
-                 super_resolution_factor=None):
+    def __init__(self, resolution, morphology, filters=(), sed=None, npix=None,
+                 fov=None):
         """
         Intialise the ParametricImage.
 
@@ -954,17 +952,17 @@ class ParametricImage(ParametricScene, Image):
         ----------
         resolution : float
             The size a pixel.
+        filter_collection : obj (FilterCollection)
+            An object containing a collection of filters.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
         filters : obj (FilterCollection)
             An object containing the Filter objects for which images are
             required.
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
         survey : obj (Survey)
             WorkInProgress
 
@@ -981,3 +979,99 @@ class ParametricImage(ParametricScene, Image):
         # If we have a list of filters make an IFU
         if len(filters) > 0:
             self._ifu_obj = ParametricSpectralCube(sed, resolution, npix, fov)
+
+        # Define 1D bin centres of each pixel
+        bin_centres = resolution * np.linspace(-(npix-1)/2, (npix-1)/2, npix)
+
+        # As above but for the 2D grid
+        self.xx, self.yy = np.meshgrid(bin_centres, bin_centres)
+
+        # define the base image
+        self.img = morphology.img(self.xx, self.yy)
+        self.img /= np.sum(self.img)  # normalise this image to 1
+
+    def create_images(self, sed=None, filters=None):
+        """
+        Create multiband images
+
+        Parameters
+        ----------
+        sed : obj (SED)
+            An sed object containing the spectra for this observation.
+
+        Returns
+        ----------
+        dictionary array
+            a dictionary of images
+        """
+
+        if not sed:
+            if self.sed:
+                sed = self.sed
+            else:
+                # raise exception
+                pass
+
+        sed_filters = list(sed.broadband_luminosities.keys())
+
+        # if filters not given read from sed object
+        if not filters:
+            filters = sed_filters
+
+        # check if all filters have fluxes calculated
+
+        for filter_ in filters:
+            self.imgs[filter_] = sed.broadband_luminosities[filter_] * self.img
+
+        return self.imgs
+
+    def plot(self, filter_code):
+        """
+        Make a simple plot of the image
+
+        Parameters
+        ----------
+        filter_code : str
+            The filter code
+        """
+
+        plt.figure()
+        plt.imshow(np.log10(self.imgs[filter_code]),
+                   origin='lower', interpolation='nearest')
+        plt.show()
+
+    def make_rgb_image(self, rgb_filters, update=True):
+        """
+        Make an rgb image
+
+        Parameters
+        ----------
+        filter_code : str
+            rgb_filters
+        """
+
+        rgb_img = np.array([self.imgs[filter_code]
+                            for filter_code in rgb_filters]).T
+
+        if update:
+            self.rgb_img = rgb_img
+
+        return rgb_img
+
+    def plot_rgb(self, rgb_filters):
+        """
+        Make a simple rgb plot
+
+        Parameters
+        ----------
+        filter_code : str
+            rgb_filters
+        """
+
+        rgb_img = self.make_rgb_image(rgb_filters)
+
+        rgb_img /= np.max(rgb_img)
+
+        plt.figure()
+        plt.imshow(rgb_img, origin='lower', interpolation='nearest')
+        plt.show()

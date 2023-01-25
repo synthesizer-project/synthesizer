@@ -261,13 +261,29 @@ class ParticleGalaxy(BaseGalaxy):
     def get_CF00(self, grid, tauV_ISM, tauV_BC, alpha_ISM=-0.7, alpha_BC=-1.3,
                  integrated=True, save_young_and_old=False):
         """
-        Get Sed object for intrinsic spectrum of individual star particles or entire galaxy
-        Args
-        grid: grid object
-        tauV_ISM: numerical value of dust attenuation due to the ISM in the V-band
-        tauV_BC: numerical value of dust attenuation due to the BC in the V-band
-        alpha_ISM: slope of the ISM dust curve, -0.7 in MAGPHYS
-        alpha_BC: slope of the BC dust curve, -1.3 in MAGPHYS
+        Calculates dust attenuated spectra assuming the Charlot & Fall (2000) dust model. In this model young star particles
+        are embedded in a dusty birth cloud and thus feel more dust attenuation.
+
+
+        Parameters
+        ----------
+        grid : obj (Grid)
+            The spectral frid
+        tauV_ISM: float
+            numerical value of dust attenuation due to the ISM in the V-band
+        tauV_BC: float
+            numerical value of dust attenuation due to the BC in the V-band
+        alpha_ISM: float
+            slope of the ISM dust curve, -0.7 in MAGPHYS
+        alpha_BC: float
+            slope of the BC dust curve, -1.3 in MAGPHYS
+        save_young_and_old: boolean
+            flag specifying whether to save young and old
+
+        Returns
+        -------
+        obj (Sed)
+             A Sed object containing the dust attenuated spectra
         """
 
         _, stellar_sed_young, intrinsic_sed_young = self.generate_intrinsic_spectra(
@@ -295,8 +311,8 @@ class ParticleGalaxy(BaseGalaxy):
                 self.spectra['intrinsic_old'] = Sed(
                     self.lam, np.sum(intrinsic_sed_old))
 
-        T_ISM = np.exp(-tauV_ISM) * power_law({'slope': alpha_ISM}).T(self.lam)
-        T_BC = np.exp(-tauV_BC) * power_law({'slope': alpha_BC}).T(self.lam)
+        T_ISM = power_law({'slope': alpha_ISM}).attenuate(tauV_ISM, grid.lam)
+        T_BC = power_law({'slope': alpha_BC}).attenuate(tauV_BC, grid.lam)
 
         T_young = T_ISM * T_BC
         T_old = T_ISM
