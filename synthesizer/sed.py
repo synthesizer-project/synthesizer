@@ -4,7 +4,7 @@ from scipy.stats import linregress
 from scipy import integrate
 
 import unyt
-from unyt import c, h, nJy, erg, s, Hz, pc
+from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV,  unyt_array
 
 from .igm import Inoue14
 from . import exceptions
@@ -307,27 +307,68 @@ def convert_fnu_to_flam(lam, fnu):
     return fnu * (c.value/lam_m)/lam
 
 
-def calculate_Q(lam, lnu):
-    """ calculate the ionising photon luminosity
+# def calculate_Q_deprecated(lam, lnu):
+#     """ calculate the ionising photon luminosity
+#
+#     arguments:
+#     lam -- wavelength / \\AA
+#     lnu -- spectral luminosity density/erg/s/Hz
+#     """
+#
+#     # --- check lam is increasing and if not reverse
+#     if lam[1] < lam[0]:
+#         lam = lam[::-1]
+#
+#     lam_m = lam * 1E-10  # m
+#     lnu *= 1E-7  # convert to W s^-1 Hz^-1
+#     llam = lnu * c.value / (lam * lam_m)  # convert to l_lam (W s^-1 \AA^-1)
+#     nlam = (llam * lam_m) / (h.value * c.value)  # s^-1 \AA^-1
+#
+#     def f(l): return np.interp(l, lam, nlam)
+#     Q = integrate.quad(f, 0, 912.0)[0]
+#
+#     return Q
 
-    arguments:
-    lam -- wavelength / \\AA
-    lnu -- spectral luminosity density/erg/s/Hz
+
+def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
+    """
+    An improved function to calculate the ionising production rate.
+
+    Parameters
+    ----------
+    lam : float array
+        wavelength grid
+    lnu: float array
+        luminosity grid (erg/s/Hz)
+    ionisation_energy: unyt_array
+        ionisation energy
+
+    Returns
+    ----------
+    float
+        ionising photon luminosity (s^-1)
+
     """
 
-    # --- check lam is increasing and if not reverse
-    if lam[1] < lam[0]:
-        lam = lam[::-1]
+    if not isinstance(lam, unyt_array):
+        lam = lam * angstrom
 
-    lam_m = lam * 1E-10  # m
-    lnu *= 1E-7  # convert to W s^-1 Hz^-1
-    llam = lnu * c.value / (lam * lam_m)  # convert to l_lam (W s^-1 \AA^-1)
-    nlam = (llam * lam_m) / (h.value * c.value)  # s^-1 \AA^-1
+    if not isinstance(lnu, unyt_array):
+        lnu = lnu * erg/s/Hz
 
-    def f(l): return np.interp(l, lam, nlam)
-    Q = integrate.quad(f, 10.0, 912.0)[0]
+    # convert lnu to llam
+    llam = lnu * c / lam**2
 
-    return Q
+    # convert llam to lum [THIS SEEMS REDUNDANT]
+    lum = llam * lam
+
+    # caculate ionisation wavelength
+    ionisation_wavelength = h * c / ionisation_energy
+
+    def f(x): return np.interp(x, lam.to('Angstrom').value,
+                               lum.to('erg/s').value) / (h.to('erg/Hz').value*c.to('Angstrom/s').value)
+
+    return integrate.quad(f, 0, ionisation_wavelength.to('Angstrom'), limit=limit)[0]
 
 
 def rebin(l, f, n):  # rebin SED [currently destroys original]
