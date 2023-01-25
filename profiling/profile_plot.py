@@ -171,6 +171,10 @@ report_string = make_report(funcs, ncalls, cumtime, pcent, col_width)
 
 print(report_string)
 
+# And write the table to a file
+with open(plot_loc + file_name + "_report.txt", "w") as text_file:
+    text_file.write(report_string)
+
 # Get the name of this file
 file_name = profile_file.split("/")[-1].split(".")[0]
 
