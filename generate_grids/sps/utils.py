@@ -3,6 +3,29 @@ import numpy as np
 from synthesizer.sed import calculate_Q
 
 
+# def add_log10Q(filename):
+#     """ add ionising photon luminosity """
+#
+#     with h5py.File(filename, 'a') as hf:
+#
+#         metallicities = hf['metallicities'][()]
+#         log10ages = hf['log10ages'][()]
+#
+#         nZ = len(metallicities)
+#         na = len(log10ages)
+#
+#         lam = hf['spectra/wavelength'][()]
+#         if 'log10Q' in hf.keys():
+#             del hf['log10Q']  # delete log10Q if it already exists
+#         hf['log10Q'] = np.zeros((na, nZ))
+#
+#         # ---- determine stellar log10Q
+#
+#         for iZ, Z in enumerate(metallicities):
+#             for ia, log10age in enumerate(log10ages):
+#                 hf['log10Q'][ia, iZ] = np.log10(calculate_Q(lam, hf['spectra/stellar'][ia, iZ, :]))
+
+
 def add_log10Q(filename):
     """ add ionising photon luminosity """
 
@@ -15,15 +38,22 @@ def add_log10Q(filename):
         na = len(log10ages)
 
         lam = hf['spectra/wavelength'][()]
-        if 'log10Q' in hf.keys():
-            del hf['log10Q']  # delete log10Q if it already exists
-        hf['log10Q'] = np.zeros((na, nZ))
 
-        # ---- determine stellar log10Q
+        for ion, ionisation_energy in [('HI', 13.6 * eV), ('HeII', 54.4 * eV)]:
 
-        for iZ, Z in enumerate(metallicities):
-            for ia, log10age in enumerate(log10ages):
-                hf['log10Q'][ia, iZ] = np.log10(calculate_Q(lam, hf['spectra/stellar'][ia, iZ, :]))
+            id = f'log10Q_{ion}'
+
+            if id in hf.keys():
+                del hf[id]  # delete log10Q if it already exists
+
+            hf[id] = np.zeros((na, nZ))
+
+            # ---- determine stellar log10Q
+
+            for iZ, Z in enumerate(metallicities):
+                for ia, log10age in enumerate(log10ages):
+                    hf[id][ia, iZ] = np.log10(calculate_Q(
+                        lam, hf['spectra/stellar'][ia, iZ, :]))
 
 
 def get_model_filename(model):

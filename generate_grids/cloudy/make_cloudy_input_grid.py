@@ -218,7 +218,7 @@ if __name__ == "__main__":
 
             # if no variations, save as 'default' cloudy grid
             if cloudy_name == '':
-                cloudy_name = 'cloudy'
+                cloudy_name = 'cloudy'  # maybe this should be the version
 
             output_dir = make_directories(synthesizer_data_dir, sps_grid,
                                           cloudy_name)

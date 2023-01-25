@@ -6,7 +6,7 @@ grid. Can optionally generate an array of input files for selected parameters.
 import numpy as np
 from scipy import integrate
 
-from unyt import c, h, angstrom
+from unyt import c, h, angstrom, eV, erg, s, Hz, unyt_array
 
 
 def create_cloudy_input(model_name, lam, lnu, abundances,
@@ -148,6 +148,7 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     cinput.append(f'stop efrac {params["stop_efrac"]}\n')
 
     # --- output commands
+    cinput.append(f'print line vacuum')  # output vacuum wavelengths
     cinput.append((f'save last continuum "{model_name}.cont"'
                    f'units Angstroms no clobber\n'))
     cinput.append((f'save last lines, array "{model_name}.lines"'
@@ -194,20 +195,21 @@ def calculate_U_from_Q(Q_avg, n_h=100):
         ((3 * Q_avg * (epsilon**2) * n_h) / (4 * np.pi))**(1./3)
 
 
-def measure_Q(lam, L_AA, limit=100):
-    """
-    Args
-    lam: \\AA
-    L_AA: erg s^-1 AA^-1
-    Returns
-    Q: s^-1
-    """
-    h = 6.626070040E-34  # J s
-    h_erg = h * 1e7  # erg s
-    c = 2.99E8  # m s-1
-    c_AA = c * 1e10  # AA s-1
-    def f(x): return np.interp(x, lam, L_AA * lam) / (h_erg*c_AA)
-    return integrate.quad(f, 0, 912, limit=limit)[0]
+# deprecate in favour of the function in sed.py
+# def measure_Q(lam, L_AA, limit=100):
+#     """
+#     Args
+#     lam: \\AA
+#     L_AA: erg s^-1 AA^-1
+#     Returns
+#     Q: s^-1
+#     """
+#     h = 6.626070040E-34  # J s
+#     h_erg = h * 1e7  # erg s
+#     c = 2.99E8  # m s-1
+#     c_AA = c * 1e10  # AA s-1
+#     def f(x): return np.interp(x, lam, L_AA * lam) / (h_erg*c_AA)
+#     return integrate.quad(f, 0, 912, limit=limit)[0]
 
 
 def default_lines():
@@ -250,55 +252,88 @@ class Line:
     emergent = None  # emergent luminosity
 
 
-def get_new_id(wv, cloudy_id):
-    """ convert the cloudy ID into a new form ID """
+def get_roman_numeral(number):
+    """
+    Function to convert an integer into a roman numeral str.
 
-    wv = int(np.round(wv, 0))
+    Used for renaming emission lines from the cloudy defaults.
 
+    Returns
+    ---------
+    str
+        string reprensentation of the roman numeral
+    """
+
+    num = [1, 4, 5, 9, 10, 40, 50, 90,
+           100, 400, 500, 900, 1000]
+    sym = ["I", "IV", "V", "IX", "X", "XL",
+           "L", "XC", "C", "CD", "D", "CM", "M"]
+    i = 12
+
+    roman = ''
+    while number:
+        div = number // num[i]
+        number %= num[i]
+
+        while div:
+            roman += sym[i]
+            div -= 1
+        i -= 1
+    return roman
+
+
+def get_synthesizer_id(wavelength, cloudy_id):
+    """ convert the cloudy line ID into a new form ID """
+
+    # round wavelength
+    wv = int(np.round(wavelength, 0))
+
+    # split id into different components
     li = list(filter(None, cloudy_id.split(' ')))
 
-    e = li[0]
+    if len(li) == 2:
+        return [li[0]+str(wv), True]
 
-    i = li[1]
-    j = '-'
-    if i == '1':
-        j = 'I'
-    if i == '2':
-        j = 'II'
-    if i == 'II':
-        j = 'II'
-    if i == '3':
-        j = 'III'
-    if i == '4':
-        j = 'IV'
-    if i == '5':
-        j = 'V'
-    if i == '6':
-        j = 'VI'
-    if i == '7':
-        j = 'VII'
-    if i == '8':
-        j = 'VIII'
-    if i == '9':
-        j = 'IX'
-    if i == '10':
-        j = 'X'
-    if i == '11':
-        j = 'XI'
-    if i == '12':
-        j = 'XII'
-    if i == '13':
-        j = 'XIII'
-    if i == '14':
-        j = 'XIV'
+    elif len(li) == 3:
 
-    return e+j+str(wv)
+        # element
+        e = li[0]
+
+        # convert arabic ionisation level to roman
+
+        if li[1].isnumeric():
+            ion = get_roman_numeral(int(li[1]))
+        else:
+            ion = li[1]
+
+        return [e+ion+str(wv), False]
+
+
+def read_all_lines(filename):
+
+    wavelengths, cloudy_ids, intrinsic, emergent = np.loadtxt(
+        f'{filename}.lines', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
+
+    wavelengths = wavelengths.astype(float)
+    intrinsic = intrinsic.astype(float) - 7.  # erg s^{-1} magic number
+    emergent = emergent.astype(float) - 7.  # erg s^{-1} magic number
+
+    # synthesizer_ids, blend = np.array([get_synthesizer_id(wavelength, cloudy_id)
+    #                                    for wavelength, cloudy_id in zip(wavelengths, cloudy_ids)]).T
+
+    synthesizer_ids = []
+    blends = np.zeros(len(wavelengths), dtype=bool)
+
+    for i, (wavelength, cloudy_id) in enumerate(zip(wavelengths, cloudy_ids)):
+
+        synthesizer_id, blend = get_synthesizer_id(wavelength, cloudy_id)
+        synthesizer_ids.append(synthesizer_id)
+        blends[i] = blend
+
+    return np.array(synthesizer_ids), blends, emergent
 
 
 def read_lines(filename, line_ids=None):
-
-    if not line_ids:
-        line_ids = default_lines()
 
     wavelengths, cloudy_line_ids, intrinsic, emergent = np.loadtxt(
         f'{filename}.lines', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
@@ -307,25 +342,12 @@ def read_lines(filename, line_ids=None):
     intrinsic = intrinsic.astype(float) - 7.  # erg s^{-1} magic number
     emergent = emergent.astype(float) - 7.  # erg s^{-1} magic number
 
-    new_line_ids = np.array([get_new_id(wv, cloudy_line_id)
-                            for wv, cloudy_line_id in zip(wavelengths,
-                                                          cloudy_line_ids)])
+    new_line_ids = get_new_lineids(wavelengths, cloudy_line_ids)
 
-    # lines = {}  # dictionary holding the output of the lines
-    #
-    # for line_id in line_ids:
-    #
-    #     line = Line()
-    #
-    #     if line_id in new_line_ids:
-    #
-    #         s = new_line_ids == line_id
-    #
-    #         line.wv = wavelengths[s]
-    #         line.intrinsic = intrinsic[s]
-    #         line.emergent = emergent[s]
-    #
-    #     lines[line_id] = line
+    if line_ids == 'all':
+        line_ids = new_line_ids  # all lines
+    elif not line_ids:
+        line_ids = default_lines()
 
     wavelenths_ = []
     intrinsic_ = []
@@ -439,7 +461,7 @@ def read_continuum(filename, return_dict=False):
         return spec_dict
     else:
         return lam, nu, incident, transmitted, nebular,\
-               nebular_continuum, total, linecont
+            nebular_continuum, total, linecont
 
 
 # def _create_cloudy_binary(grid, params, verbose=False):
@@ -447,10 +469,10 @@ def read_continuum(filename, return_dict=False):
 #     DEPRECATED create a cloudy binary file
 #
 #     Args:
-# 
+#
 #     grid: synthesizer _grid_ object
 #     """
-# 
+#
 #     # # ---- TEMP check for negative values and amend
 #     # # The BPASS binary sed has a couple of erroneous negative values,
 #     # # possibly due to interpolation errors
@@ -461,60 +483,60 @@ def read_continuum(filename, return_dict=False):
 #     # for i in range(mask.shape[1]):
 #     #     sed[mask[0,i],mask[1,i],mask[2,i]] = \
 #     #           sed[mask[0,i],mask[1,i],mask[2,i]-1]+sed[mask[0,i],mask[1,i],mask[2,i]+1]/2
-# 
+#
 #     if verbose:
 #         print('Writing .ascii')
-# 
+#
 #     output = []
 #     output.append("20060612\n")  # magic number
 #     output.append("2\n")  # ndim
 #     output.append("2\n")  # npar
-# 
+#
 #     # First parameter MUST be log otherwise Cloudy throws a tantrum
 #     output.append("age\n")  # label par 1
 #     output.append("logz\n")  # label par 2
-# 
+#
 #     output.append(str(grid.spectra['stellar'].shape[0] *
 #                       grid.spectra['stellar'].shape[1])+"\n")  # nmod
 #     output.append(str(len(grid.lam))+"\n")  # nfreq (nwavelength)
 #     # output.append(str(len(frequency))+"\n")  # nfreq (nwavelength)
-# 
+#
 #     output.append("lambda\n")  # type of independent variable (nu or lambda)
 #     output.append("1.0\n")  # conversion factor for independent variable
-# 
+#
 #     # type of dependent variable (F_nu/H_nu or F_lambda/H_lambda)
 #     # output.append("F_nu\n")
-# 
+#
 #     # output.append("3.839e33\n")  # conversion factor for dependent variable
-# 
+#
 #     # type of dependent variable (F_nu/H_nu or F_lambda/H_lambda)
 #     output.append("F_lambda\n")
 #     output.append("1.0\n")  # conversion factor for dependent variable
-# 
+#
 #     for a in grid.ages:  # available SED ages
 #         for z in grid.metallicities:
 #             output.append(f'{np.log10(a)} {z}\n')  # (npar x nmod) parameters
-# 
+#
 #     # the frequency(wavelength) grid, nfreq points
 #     output.append(' '.join(map(str, grid.lam))+"\n")
-# 
+#
 #     for i, a in enumerate(grid.ages):
 #         for j, z in enumerate(grid.metallicities):
 #             output.append(' '.join(map(str,
 #                                        grid.spectra['stellar'][i, j]))+"\n")
-# 
+#
 #     with open('model.ascii', 'w') as target:
 #         target.writelines(output)
-# 
+#
 #     # ---- compile ascii file
 #     print('Compiling Cloudy atmosphere file (.ascii)')
 #     subprocess.call(('echo -e \'compile stars \"model.ascii\"\''
 #                     f'| {params.cloudy_dir}/source/cloudy.exe'), shell=True)
-# 
+#
 #     # ---- copy .mod file to cloudy data directory
 #     print(('Copying compiled atmosphere to Cloudy directory, '
 #            f'{params.cloudy_dir}'))
 #     subprocess.call(f'cp model.mod {params.cloudy_dir}/data/.', shell=True)
-# 
+#
 #     # ---- remove .ascii file
 #     # os.remove(out_dir+model+'.ascii')
