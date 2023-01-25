@@ -9,6 +9,12 @@ def UVJ(new_lam=None):
     """
     Helper function to produce a FilterCollection containing UVJ tophat filters.
 
+    Parameters
+    ----------
+    new_lam : array-like (float)
+        The wavelength array for which each filter's transmission curve is
+        defined.
+
     Returns
     -------
     FilterCollection
@@ -16,9 +22,9 @@ def UVJ(new_lam=None):
     """
 
     # Define the UVJ filters dictionary.
-    tophat_dict = [('U', {'lam_eff': 3650, 'lam_fwhm': 660}),
-                   ('V', {'lam_eff': 5510, 'lam_fwhm': 880}),
-                   ('J', {'lam_eff': 12200, 'lam_fwhm': 2130})]
+    tophat_dict = {'U': {'lam_eff': 3650, 'lam_fwhm': 660},
+                   'V': {'lam_eff': 5510, 'lam_fwhm': 880},
+                   'J': {'lam_eff': 12200, 'lam_fwhm': 2130}}
 
     return FilterCollection(tophat_dict=tophat_dict, new_lam=new_lam)
 
@@ -53,7 +59,7 @@ class FilterCollection:
     -------
     plot_transmission_curves
         A helper function to quickly plot all the transmission curves.
-    
+
     """
 
     def __init__(self, filter_codes=None, tophat_dict=None, generic_dict=None,
@@ -121,11 +127,11 @@ class FilterCollection:
 
             # Get filter from SVO
             _filter = Filter(f, new_lam=self.lam)
-            
+
             # Store the filter and its code
             self.filters.append(_filter)
             self.filter_codes.append(_filter.filter_code)
-            
+
     def _make_top_hat_collection(self, tophat_dict):
         """
         Populate the FilterCollection with user defined top hat filters.
@@ -147,14 +153,22 @@ class FilterCollection:
         for key in tophat_dict:
 
             # Get this filter's properties
-            if "lam_min" in tophat_dict:
-                lam_min = tophat_dict["lam_min"]
-            if "lam_max" in tophat_dict:
-                lam_max = tophat_dict["lam_max"]
-            if "lam_eff" in tophat_dict:
-                lam_eff = tophat_dict["lam_eff"]
-            if "lam_fwhm" in tophat_dict:
-                lam_fwhm = tophat_dict["lam_fwhm"]
+            if "lam_min" in tophat_dict[key]:
+                lam_min = tophat_dict[key]["lam_min"]
+            else:
+                lam_min = None
+            if "lam_max" in tophat_dict[key]:
+                lam_max = tophat_dict[key]["lam_max"]
+            else:
+                lam_max = None
+            if "lam_eff" in tophat_dict[key]:
+                lam_eff = tophat_dict[key]["lam_eff"]
+            else:
+                lam_eff = None
+            if "lam_fwhm" in tophat_dict[key]:
+                lam_fwhm = tophat_dict[key]["lam_fwhm"]
+            else:
+                lam_fwhm = None
 
             # Instantiate the filter
             _filter = Filter(key, lam_min=lam_min, lam_max=lam_max,
@@ -175,7 +189,7 @@ class FilterCollection:
             A dictionary containing the data to make a collection of filters
             from user defined transmission curves. The dictionary must have
             the form:
-            {<filter_code1> : {"transmission": <transmission_array>}}.
+            {<filter_code1>: <transmission_array>}.
             For generic filters new_lam must be provided.
         """
 
@@ -183,9 +197,8 @@ class FilterCollection:
         for key in generic_dict:
 
             # Get this filter's properties
-            if "transmission" in generic_dict:
-                t = generic_dict["transmission"]
-                
+            t = generic_dict[key]
+
             # Instantiate the filter
             _filter = Filter(key, transmission=t, new_lam=self.lam)
 
@@ -208,20 +221,20 @@ class FilterCollection:
 
         # Are we adding a collection or a single filter?
         if isinstance(other_filters, FilterCollection):
-            
+
             # Loop over the filters in other_filters
             for _filter in other_filters.filters:
 
                 # Store the filter and its code
                 self.filters.append(_filter)
                 self.filter_codes.append(_filter.filter_code)
-                
+
         elif isinstance(other_filters, Filter):
-            
+
             # Store the filter and its code
             self.filters.append(other_filters)
             self.filter_codes.append(other_filters.filter_code)
-            
+
         else:
             raise exceptions.InconsistentAddition(
                 "Cannot add non-filter objects together!"
@@ -261,7 +274,67 @@ class FilterCollection:
 
             # Return the filter
             return self.filters[self._current_ind - 1]
-            
+
+    def __ne__(self, other_filters):
+        """
+        Enables the != comparison of two filter collections. If the filter
+        collections contain the same filter codes they are guaranteed to
+        be identical.
+
+        Parameters
+        ----------
+        other_filters : obj (FilterCollection)
+            The other FilterCollection to be compared to self.
+
+        Returns
+        -------
+        True/False : bool
+             Are the FilterCollections the same?
+        """
+
+        # Do they have the same number of filters?
+        if self.nfilters != other_filters.nfilters:
+            return True
+
+        # Ok they do, so do they have the same filter codes? (elementwise test)
+        not_equal = False
+        for n in range(self.nfilters):
+            if self.filter_codes[n] != other_filters.filter_codes[n]:
+                not_equal = True
+                break
+
+        return not_equal
+
+    def __eq__(self, other_filters):
+        """
+        Enables the == comparison of two filter collections. If the filter
+        collections contain the same filter codes they are guaranteed to
+        be identical.
+
+        Parameters
+        ----------
+        other_filters : obj (FilterCollection)
+            The other FilterCollection to be compared to self.
+
+        Returns
+        -------
+        True/False : bool
+             Are the FilterCollections the same?
+        """
+
+        # Do they have the same number of filters?
+        if self.nfilters != other_filters.nfilters:
+            return False
+
+        # Ok they do, so do they have the same filter codes? (elementwise test)
+        equal = True
+        for n in range(self.nfilters):
+            if self.filter_codes[n] != other_filters.filter_codes[n]:
+                equal = False
+                break
+
+        return equal
+
     def _transmission_curve_ax(self, ax, add_filter_label=True):
         """
         Add filter transmission curves to a give axes
@@ -278,8 +351,8 @@ class FilterCollection:
         # TODO: Add colours
 
         # Loop over the filters plotting their curves.
-        for filter_code, F in self.filters.items():
-            ax.plot(F.lam, F.t, label=filter_code)
+        for f in self.filters:
+            ax.plot(f.lam, f.t, label=f.filter_code)
 
             # TODO: Add label with automatic placement
 
@@ -295,7 +368,7 @@ class FilterCollection:
         ----------
         show : bool
             Are we showing the output?
-        
+
         Returns
         -------
         fig obj (matplotlib.Figure)
@@ -327,7 +400,7 @@ class FilterCollection:
 class Filter:
     """
     A class holding a filter's transmission curve and wavelength array.
-    
+
     A filter can either be retrieved from the SVO database
     (http://svo2.cab.inta-csic.es/svo/theory/fps3/), made from specific top hat
     filter properties or made from a generic filter transmission curve and
@@ -375,7 +448,7 @@ class Filter:
     pivwv:
         Calculate pivot wavelength
     """
-    
+
     def __init__(self, filter_code, transmission=None, lam_min=None,
                  lam_max=None, lam_eff=None, lam_fwhm=None, new_lam=None):
         """
@@ -400,7 +473,7 @@ class Filter:
             If a top hat filter: The FWHM of the filter curve.
         new_lam : array-like (float)
             The wavelength array for which the transmission is defined.
-        
+
         """
 
         # Metadata of this filter
@@ -423,6 +496,8 @@ class Filter:
         # this filter
         self.t = transmission
         self.lam = new_lam
+        self.original_lam = new_lam
+        self.original_t = transmission
 
         # Is this a generic filter? (Everything other the label is defined
         # above.)
@@ -437,7 +512,7 @@ class Filter:
         # Is this an SVO filter?
         elif "/" in filter_code and "." in filter_code:
             self._make_svo_filter()
-            
+
         # Otherwise we haven't got a valid combination of inputs.
         else:
             raise exceptions.InconsistentArguments(
@@ -527,13 +602,12 @@ class Filter:
         else:
             self.lam = self.original_lam
             self.t = self.original_t
-        
 
     def _iterpolate_wavelength(self):
         """
         Interpolates a filter transmission curve onto the Filter's wavelength
         array.
-        
+
         Returns
         -------
         array-like (float)
@@ -548,7 +622,7 @@ class Filter:
         Apply this filter's transmission curve to an arbitrary dimensioned
         array returning the sum of the array convolved with the filter
         transmission curve along the wavelength axis.
-        
+
         Parameters
         ----------
         arr :  array-like (float)
@@ -560,7 +634,7 @@ class Filter:
         sum_in_band : array-like (float)
             The array (arr) convolved with the transmission curve and summed
             along the wavelength axis.
-        
+
         Raises
         ------
         ValueError
@@ -585,7 +659,6 @@ class Filter:
         sum_in_band = np.sum(arr_in_band, axis=-1)
 
         return sum_in_band
-        
 
     def pivwv(self):
         """
@@ -605,13 +678,13 @@ class Filter:
                        np.trapz(self.original_t / self.original_lam,
                                 x=self.original_lam))
 
-    def pivT(self): 
+    def pivT(self):
         """
         Calculate the transmission at the pivot wavelength.
-   
+
         For an SVO filter this uses the wavelength and transmission from
         the database.
-        
+
         Returns
         -------
         float
@@ -626,7 +699,7 @@ class Filter:
 
         For an SVO filter this uses the wavelength and transmission from
         the database.
-        
+
         Returns
         -------
         float
@@ -644,7 +717,7 @@ class Filter:
 
         For an SVO filter this uses the wavelength and transmission from
         the database.
-        
+
         Returns
         -------
         float
@@ -667,7 +740,7 @@ class Filter:
 
         For an SVO filter this uses the wavelength and transmission from
         the database.
-        
+
         Returns
         -------
         float
@@ -681,7 +754,7 @@ class Filter:
         Calculate the peak transmission
 
         For an SVO filter this uses the transmission from the database.
-        
+
         Returns
         -------
         float
@@ -696,7 +769,7 @@ class Filter:
 
         For an SVO filter this uses the wavelength and transmission from
         the database.
-        
+
         Returns
         -------
         float
@@ -711,7 +784,7 @@ class Filter:
 
         For an SVO filter this uses the wavelength and transmission from
         the database.
-        
+
         Returns
         -------
         float
@@ -726,7 +799,7 @@ class Filter:
 
         For an SVO filter this uses the wavelength and transmission from
         the database.
-        
+
         Returns
         -------
         float
@@ -738,10 +811,10 @@ class Filter:
     def mnmx(self):
         """
         Calculate the minimum and maximum wavelengths.
-        
+
         For an SVO filter this uses the wavelength and transmission from
         the database.
-        
+
         Returns
         -------
         float
@@ -751,4 +824,3 @@ class Filter:
         """
 
         return (self.original_lam.min(), self.original_lam.max())
-
