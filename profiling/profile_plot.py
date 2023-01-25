@@ -171,12 +171,12 @@ report_string = make_report(funcs, ncalls, tottime, pcent, col_width)
 
 print(report_string)
 
+# Get the name of this file
+file_name = profile_file.split("/")[-1].split(".")[0]
+
 # And write the table to a file
 with open(plot_loc + file_name + "_report.txt", "w") as text_file:
     text_file.write(report_string)
-
-# Get the name of this file
-file_name = profile_file.split("/")[-1].split(".")[0]
 
 # Now make a plot of the percentage time taken
 fig = plt.figure(figsize=(3.5, 3.5))
