@@ -13,6 +13,7 @@ Notes
 """
 import warnings
 import numpy as np
+from unyt import Mpc
 from .particles import Particles
 
 
@@ -61,10 +62,15 @@ class Stars(Particles):
     smoothing_lengths : array-like (float)
         The smoothing lengths (describing the sph kernel) of each stellar
         particle in simulation length units.
+    redshift : float/array-like (float)
+        The redshift of each star particle. Can either be a single float or
+        an array of redshifts for each particle.
     s_oxygen : array-like (float)
         fractional oxygen abundance
     s_hydrogen : array-like (float)
         fractional hydrogen abundance
+    coord_units : obj (unyt.unit)
+        The units of the coordinates.
     """
 
     # Define the allowed attributes
@@ -72,9 +78,10 @@ class Stars(Particles):
                  "tauV", "alpha", "imf_hmass_slope", "log10ages",
                  "log10metallicities", "resampled", "coordinates",
                  "velocities", "current_masses", "smoothing_lengths",
-                 "s_oxygen", "s_hydrogen"]
+                 "redshift", "s_oxygen", "s_hydrogen", "coord_units"]
 
-    def __init__(self, initial_masses, ages, metallicities, **kwargs):
+    def __init__(self, initial_masses, ages, metallicities, coord_units=Mpc,
+                 **kwargs):
         """
         Intialise the Stars instance. The first 3 arguments are always required.
         All other attributes are optional.
@@ -115,6 +122,9 @@ class Stars(Particles):
         # Handle kwargs
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+        # Define unit system
+        self.coord_units = coord_units
 
     def renormalise_mass(self, stellar_mass):
         """

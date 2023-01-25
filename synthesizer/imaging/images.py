@@ -63,7 +63,7 @@ class Image(Scene):
         NotYetImplemented
 
     """
-    
+
     def __init__(self, resolution, npix=None, fov=None, filters=(), sed=None,
                  psfs=None, depths=None, apertures=None, snrs=None,
                  super_resolution_factor=2):
@@ -105,9 +105,6 @@ class Image(Scene):
         # Sanitize inputs
         if filters is None:
             filters = ()
-
-        # Are we making a super resolution image to begin with?
-        
 
         # Initilise the parent class
         Scene.__init__(self, resolution=resolution, npix=npix, fov=fov,
@@ -175,7 +172,7 @@ class Image(Scene):
         # Make sure the images are compatible dimensions
         if (self.resolution != other_img.resolution
             or self.fov != other_img.fov
-            or self.npix != other_img.npix):
+                or self.npix != other_img.npix):
             raise exceptions.InconsistentAddition(
                 "Cannot add Images: resolution=("
                 + str(self.resolution) + " + " + str(other_img.resolution)
@@ -251,7 +248,7 @@ class Image(Scene):
             for key in self.psfs:
                 self.psfs[key] /= np.sum(self.psfs[key])
         else:
-            self.psfs /= np.sum(self.psfs)    
+            self.psfs /= np.sum(self.psfs)
 
     def apply_filter(self, f):
         """
@@ -408,10 +405,10 @@ class Image(Scene):
 
         # Handle the possible cases (multiple filters or single image)
         if self.pixel_values is not None:
-            
-           self.img_psf = self._get_psfed_single_img(self.img, psfs)
 
-           return self.img_psf
+            self.img_psf = self._get_psfed_single_img(self.img, psfs)
+
+            return self.img_psf
 
         # Otherwise, we need to loop over filters and return a dictionary of
         # convolved images.
@@ -457,7 +454,7 @@ class Image(Scene):
         noise : float
             The standard deviation of the noise distribution. If noise is
             provided then depth, snr and aperture are ignored.
-        
+
         Returns
         -------
         noisy_img : array_like (float)
@@ -476,7 +473,7 @@ class Image(Scene):
                 "Either a the explict standard deviation of the noise "
                 "contribution (noise_sigma) or a signal-to-noise ratio and "
                 "depth must be given."
-                )
+            )
 
         # Calculate noise from the depth, aperture, and snr if given.
         if noise is None and aperture is not None:
@@ -502,7 +499,7 @@ class Image(Scene):
             # NOTE: this assumes SNR = S / noise
             noise = depth / snr
 
-        # Make the noise array and calculate the weight map 
+        # Make the noise array and calculate the weight map
         noise_arr = noise * np.ones((self.npix, self.npix))
         weight_map = 1 / noise ** 2
         noise_arr *= np.random.randn(self.npix, self.npix)
@@ -511,7 +508,6 @@ class Image(Scene):
         noisy_img = img + noise_arr
 
         return noisy_img, weight_map, noise_arr
-
 
     def get_noisy_imgs(self, noises=None):
         """
@@ -525,7 +521,7 @@ class Image(Scene):
             The standard deviation of the noise distribution. If noises is
             provided then depth, snr and aperture are ignored. Can either be a
             single value or a value per filter in a dictionary.
-        
+
         Returns
         -------
         noisy_img : array_like (float)
@@ -564,7 +560,7 @@ class Image(Scene):
                     "filter must be given. Depths are missing for filters: "
                     "[" + ", ".join(list(filter_codes)) + "]"
                 )
-            
+
         if (self.filters is not None and isinstance(self.snrs, dict)):
 
             # What filters are we missing psfs for?
@@ -621,9 +617,9 @@ class Image(Scene):
             noise_tuple = self._get_noisy_single_img(
                 self.img_psf, self.depths, self.snrs, self.apertures, noises
             )
-            
+
             self.img_noise, self.weight_map, self.noise_arr = noise_tuple
-            
+
             return self.img_noise, self.weight_map, self.noise_arr
 
         # Otherwise, we need to loop over filters and return a dictionary of
@@ -652,14 +648,14 @@ class Image(Scene):
             noise_tuple = self._get_noisy_single_img(
                 self.imgs_psf[f.filter_code], depth, snr, aperture, noise
             )
-            
+
             # Store the resulting noisy image, weight, and noise arrays
             self.imgs_noise[f.filter_code] = noise_tuple[0]
             self.weight_maps[f.filter_code] = noise_tuple[1]
             self.noise_arrs[f.filter_code] = noise_tuple[2]
 
         return self.imgs_noise, self.weight_maps, self.noise_arrs
-        
+
 
 class ParticleImage(ParticleScene, Image):
     """
@@ -729,25 +725,24 @@ class ParticleImage(ParticleScene, Image):
             Object containing the absorbtion due to an intergalactic medium.
 
         """
-        
+
         # Initilise the parent classes
         ParticleScene.__init__(self, resolution=resolution, npix=npix,
                                fov=fov, sed=sed, stars=stars,
                                positions=positions,
-                               super_resolution_factor=super_resolution_factor)
+                               super_resolution_factor=super_resolution_factor,
+                               cosmo=cosmo)
         Image.__init__(self, resolution=resolution, npix=npix, fov=fov,
                        filters=filters, sed=sed, psfs=psfs, depths=depths,
                        apertures=apertures, snrs=snrs)
 
         # If we have a list of filters make an IFU
         if len(filters) > 0:
-            self.ifu_obj = ParticleSpectralCube(sed=self.sed,
-                                                resolution=self.resolution,
-                                                npix=self.npix, fov=self.fov,
-                                                stars=self.stars,
-                                                rest_frame=rest_frame,
-                                                redshift=redshift, cosmo=cosmo,
-                                                igm=igm)
+            self.ifu_obj = ParticleSpectralCube(
+                sed=self.sed, resolution=self.resolution * self.spatial_unit,
+                npix=npix, fov=fov, stars=self.stars,
+                rest_frame=rest_frame, cosmo=cosmo, igm=igm
+            )
 
         # Set up pixel values
         self.pixel_values = pixel_values
@@ -755,7 +750,7 @@ class ParticleImage(ParticleScene, Image):
     def _get_hist_img_single_filter(self):
         """
         A generic method to calculate an image with no smoothing.
-        
+
         Just a wrapper for numpy.histogram2d utilising ParticleImage
         attributes.
 
@@ -795,7 +790,7 @@ class ParticleImage(ParticleScene, Image):
             A 2D array containing particles sorted into an image.
             (npix, npix)
         """
-        
+
         # Get the size of a pixel
         res = self.resolution
 
@@ -803,9 +798,9 @@ class ParticleImage(ParticleScene, Image):
         for ind in range(self.npart):
 
             # Get this particles smoothing length and position
-            smooth_length = self.stars.smoothing_lengths[ind]
+            smooth_length = self.smoothing_lengths[ind]
             pos = self.coords[ind]
-            
+
             # How many pixels are in the smoothing length?
             delta_pix = math.ceil(smooth_length / self.resolution) + 1
 
@@ -824,7 +819,7 @@ class ParticleImage(ParticleScene, Image):
 
                 # Compute the x separation
                 x_dist = (i * res) + (res / 2) - pos[0]
-                
+
                 for j in range(self.pix_pos[ind, 1] - delta_pix,
                                self.pix_pos[ind, 1] + delta_pix + 1):
 
@@ -921,7 +916,7 @@ class ParticleImage(ParticleScene, Image):
             self.img = self._get_smoothed_img_single_filter(kernel_func)
 
             return self.img
-        
+
         # Calculate IFU "image"
         self.ifu = self.ifu_obj.get_smoothed_ifu(kernel_func)
 

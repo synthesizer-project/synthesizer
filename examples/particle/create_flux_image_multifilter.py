@@ -4,6 +4,7 @@ SED for each particle and then generates images in a number of Webb bands.
 """
 import time
 import numpy as np
+from unyt import kpc, arcsec
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec 
@@ -52,12 +53,14 @@ if __name__ == '__main__':
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
+    stars.coord_units = kpc
     cent = np.mean(coords, axis=0)  # define geometric centre
     rs = np.sqrt((coords[:, 0] - cent[0]) ** 2
                  + (coords[:, 1] - cent[1]) ** 2
                  + (coords[:, 2] - cent[2]) ** 2)  # calculate radii
     rs[rs < 0.1] = 0.4  # Set a lower bound on the "smoothing length"
     stars.smoothing_lengths = rs / 4  # convert radii into smoothing lengths
+    stars.redshift = 1
     print(stars)
 
     # Compute width of stellar distribution
@@ -93,26 +96,26 @@ if __name__ == '__main__':
     img_start = time.time()
 
     # Define image propertys
-    resolution = (width + 1) / 100
     redshift = 1
+    resolution = ((width + 1) / 100) * cosmo.arcsec_per_kpc_proper(
+        redshift).value * arcsec
+    width = (width + 1) * cosmo.arcsec_per_kpc_proper(redshift).value * arcsec
 
     # Get the image
-    hist_img = galaxy.make_image(resolution, fov=width + 1, img_type="hist",
+    hist_img = galaxy.make_image(resolution, fov=width, img_type="hist",
                                  sed=galaxy.spectra_array["intrinsic"],
                                  filters=filters, kernel_func=quintic,
-                                 rest_frame=False, redshift=redshift,
-                                 cosmo=cosmo)
+                                 rest_frame=False, cosmo=cosmo)
 
     print("Histogram images made, took:", time.time() - img_start)
     img_start = time.time()
 
     # Get the image
-    smooth_img = galaxy.make_image(resolution, fov=width + 1,
+    smooth_img = galaxy.make_image(resolution, fov=width,
                                    img_type="smoothed",
                                    sed=galaxy.spectra_array["intrinsic"],
                                    filters=filters, kernel_func=quintic,
-                                   rest_frame=False, redshift=redshift,
-                                   cosmo=cosmo)
+                                   rest_frame=False, cosmo=cosmo)
 
     print("Smoothed images made, took:", time.time() - img_start)
 

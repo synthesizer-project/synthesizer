@@ -97,7 +97,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
     def __init__(self, sed, resolution, npix=None, fov=None, stars=None,
                  positions=None, centre=None, psfs=None, depths=None,
                  apertures=None, snrs=None, rest_frame=True,
-                 redshift=None, cosmo=None, igm=None):
+                 cosmo=None, igm=None):
         """
         Intialise the ParticleSpectralCube.
 
@@ -140,28 +140,28 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         """
 
         # Check what we've been given
-        self._check_flux_args(rest_frame, cosmo, redshift)
+        self._check_flux_args(rest_frame, cosmo, stars.redshift)
 
         # Initilise the parent class
         ParticleScene.__init__(self, resolution=resolution, npix=npix,
                                fov=fov, sed=sed, stars=stars,
-                               positions=positions)
+                               positions=positions, cosmo=cosmo)
         SpectralCube.__init__(self, sed=sed, resolution=resolution, npix=npix,
                               fov=fov, depths=depths, apertures=apertures,
                               snrs=snrs)
 
-        # Lets get the right SED form the object
+        # Lets get the right SED from the object
         self.sed_values = None
-        if rest_frame and redshift is None:
+        if rest_frame and self.stars.redshift is None:
 
             # Get the rest frame SED (this is both sed.fnu0 and sed.lnu)
             self.sed_values = self.sed.lnu
             
-        elif redshift is not None and cosmo is not None:
+        elif self.stars.redshift is not None and self.cosmo is not None:
 
             # Check if we need to calculate sed.fnu, if not calculate it
             if self.sed.fnu is None:
-                self.sed.get_fnu(cosmo, redshift, igm)
+                self.sed.get_fnu(self.cosmo, self.stars.redshift, igm)
 
             # Assign the flux 
             self.sed_values = self.sed.fnu
@@ -172,7 +172,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             raise exceptions.InconsistentArguments(
                 "If rest_frame=False, i.e. an observed (flux) SED is requested"
                 ", both an cosmo object (from astropy) and the redshift of the"
-                " observation must be supplied."
+                " particles must be supplied."
             )
 
     def _check_flux_args(self, rest_frame, cosmo, redshift):
@@ -257,7 +257,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         for ind in range(self.npart):
 
             # Get this particles smoothing length and position
-            smooth_length = self.stars.smoothing_lengths[ind]
+            smooth_length = self.smoothing_lengths[ind]
             pos = self.coords[ind]
 
             # How many pixels are in the smoothing length?

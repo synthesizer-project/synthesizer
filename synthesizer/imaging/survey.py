@@ -50,6 +50,9 @@ class Instrument:
         self.noises = noises
         self.snrs = snrs
 
+        # Unit information
+        self.spatial_unit = resolution.units
+
     def _check_obs_args(self):
         """
         Ensures we have valid inputs.
