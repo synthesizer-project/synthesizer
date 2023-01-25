@@ -9,6 +9,12 @@ def UVJ(new_lam=None):
     """
     Helper function to produce a FilterCollection containing UVJ tophat filters.
 
+    Parameters
+    ----------
+    new_lam : array-like (float)
+        The wavelength array for which each filter's transmission curve is
+        defined.
+
     Returns
     -------
     FilterCollection
@@ -16,9 +22,9 @@ def UVJ(new_lam=None):
     """
 
     # Define the UVJ filters dictionary.
-    tophat_dict = [('U', {'lam_eff': 3650, 'lam_fwhm': 660}),
-                   ('V', {'lam_eff': 5510, 'lam_fwhm': 880}),
-                   ('J', {'lam_eff': 12200, 'lam_fwhm': 2130})]
+    tophat_dict = {'U': {'lam_eff': 3650, 'lam_fwhm': 660},
+                   'V': {'lam_eff': 5510, 'lam_fwhm': 880},
+                   'J': {'lam_eff': 12200, 'lam_fwhm': 2130}}
 
     return FilterCollection(tophat_dict=tophat_dict, new_lam=new_lam)
 
@@ -147,14 +153,22 @@ class FilterCollection:
         for key in tophat_dict:
 
             # Get this filter's properties
-            if "lam_min" in tophat_dict:
-                lam_min = tophat_dict["lam_min"]
-            if "lam_max" in tophat_dict:
-                lam_max = tophat_dict["lam_max"]
-            if "lam_eff" in tophat_dict:
-                lam_eff = tophat_dict["lam_eff"]
-            if "lam_fwhm" in tophat_dict:
-                lam_fwhm = tophat_dict["lam_fwhm"]
+            if "lam_min" in tophat_dict[key]:
+                lam_min = tophat_dict[key]["lam_min"]
+            else:
+                lam_min = None
+            if "lam_max" in tophat_dict[key]:
+                lam_max = tophat_dict[key]["lam_max"]
+            else:
+                lam_max = None
+            if "lam_eff" in tophat_dict[key]:
+                lam_eff = tophat_dict[key]["lam_eff"]
+            else:
+                lam_eff = None
+            if "lam_fwhm" in tophat_dict[key]:
+                lam_fwhm = tophat_dict[key]["lam_fwhm"]
+            else:
+                lam_fwhm = None
 
             # Instantiate the filter
             _filter = Filter(key, lam_min=lam_min, lam_max=lam_max,
@@ -175,7 +189,7 @@ class FilterCollection:
             A dictionary containing the data to make a collection of filters
             from user defined transmission curves. The dictionary must have
             the form:
-            {<filter_code1> : {"transmission": <transmission_array>}}.
+            {<filter_code1>: <transmission_array>}.
             For generic filters new_lam must be provided.
         """
 
@@ -183,8 +197,7 @@ class FilterCollection:
         for key in generic_dict:
 
             # Get this filter's properties
-            if "transmission" in generic_dict:
-                t = generic_dict["transmission"]
+            t = generic_dict[key]
 
             # Instantiate the filter
             _filter = Filter(key, transmission=t, new_lam=self.lam)
@@ -260,7 +273,7 @@ class FilterCollection:
             self._current_ind += 1
 
             # Return the filter
-            return self.filters[self.current_ind - 1]
+            return self.filters[self._current_ind - 1]
 
     def __ne__(self, other_filters):
         """
@@ -338,8 +351,8 @@ class FilterCollection:
         # TODO: Add colours
 
         # Loop over the filters plotting their curves.
-        for filter_code, F in self.filters.items():
-            ax.plot(F.lam, F.t, label=filter_code)
+        for f in self.filters:
+            ax.plot(f.lam, f.t, label=f.filter_code)
 
             # TODO: Add label with automatic placement
 
@@ -483,6 +496,8 @@ class Filter:
         # this filter
         self.t = transmission
         self.lam = new_lam
+        self.original_lam = new_lam
+        self.original_t = transmission
 
         # Is this a generic filter? (Everything other the label is defined
         # above.)
