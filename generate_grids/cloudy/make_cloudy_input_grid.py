@@ -120,9 +120,14 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
                                     grid.log10ages)
     iZ_ref = grid.get_nearest_index(cloudy_params['Z_ref'], grid.metallicities)
 
+    # add these to the parameter file
+    cloudy_params['ia_ref'] = int(ia_ref)
+    cloudy_params['iZ_ref'] = int(iZ_ref)
+
     # update the parameter file with the actual reference age and metallicity
-    cloudy_params['log10age_ref_actual'] = grid.log10ages[ia_ref]
-    cloudy_params['Z_ref_actual'] = grid.metallicities[iZ_ref]
+    # converting to float makes the resulting parameter file readable
+    cloudy_params['log10age_ref_actual'] = float(grid.log10ages[ia_ref])
+    cloudy_params['Z_ref_actual'] = float(grid.metallicities[iZ_ref])
 
     na = len(grid.ages)
     nZ = len(grid.metallicities)
@@ -156,7 +161,7 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
 
             model_name = f'{ia}_{iZ}'
 
-            cloudy_params['log10U'] = log10U
+            cloudy_params['log10U'] = float(log10U)
 
             create_cloudy_input(model_name, lam, lnu, abundances,
                                 output_dir=output_dir, **cloudy_params)

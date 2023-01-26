@@ -177,7 +177,12 @@ class Grid():
             self.log10Zs = self.log10metallicities  # alias
 
             if 'log10Q' in hf.keys():
-                self.log10Q = hf['log10Q'][:]
+
+                # backwards compatability
+                if isinstance(hf['log10Q'], h5py.Dataset):
+                    self.log10Q = hf['log10Q'][:]
+                else:
+                    self.log10Q = hf['log10Q/HI'][:]
                 self.log10Q[self.log10Q != self.log10Q] = -99.99
 
             # self.units = {}
