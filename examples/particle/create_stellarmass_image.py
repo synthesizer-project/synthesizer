@@ -3,10 +3,10 @@ This example generates a sample of star particles from a 2D SFZH and then
 generates an image of the mass distribution.
 
 """
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
-from unyt import yr, Myr
+from unyt import yr, Myr, kpc
 
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
@@ -31,6 +31,7 @@ N = 10000  # number of particles for sampling
 coords = CoordinateGenerator.generate_3D_gaussian(N)
 stars = sample_sfhz(sfzh, N)
 stars.coordinates = coords
+stars.coord_units = kpc
 print(stars)
 
 # Create galaxy object

@@ -14,7 +14,8 @@ import cmasher as cmr
 
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..')))
 
 
 norm = mpl.colors.Normalize(vmin=5., vmax=11.)
@@ -50,7 +51,8 @@ def plot_spectra_age(grid, log10Z=-2.0, spec_name='stellar'):
     for ia, log10age in enumerate(grid.log10ages):
         Lnu = grid.spectra[spec_name][ia, iZ, :]
         # Lnu = convert_fnu_to_flam(grid.lam, Lnu)
-        ax.plot(np.log10(grid.lam), np.log10(Lnu), c=cmap(norm(log10age)), lw=1, alpha=0.8)
+        ax.plot(np.log10(grid.lam), np.log10(Lnu),
+                c=cmap(norm(log10age)), lw=1, alpha=0.8)
 
     for wv in [912., 3646.]:
         ax.axvline(np.log10(wv), c='k', lw=1, alpha=0.5)
@@ -59,19 +61,25 @@ def plot_spectra_age(grid, log10Z=-2.0, spec_name='stellar'):
     ax.set_ylim([10., 22])
     ax.legend(fontsize=5, labelspacing=0.0)
     ax.set_xlabel(r'$\rm log_{10}(\lambda/\AA)$')
-    ax.set_ylabel(r'$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$')
+    ax.set_ylabel(
+        r'$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$')
 
     return fig, ax
 
 
 if __name__ == '__main__':
 
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
+
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
 
     grid = Grid(grid_name, grid_dir=grid_dir)
     log10Z = -2.
 
     fig, ax = plot_spectra_age(grid, log10Z=log10Z)
-    plt.show()
+    # plt.show()
     # fig.savefig(f'figs/spectra_age_{sps_name}.pdf')

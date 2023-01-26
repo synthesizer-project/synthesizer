@@ -1,3 +1,4 @@
+import os
 from synthesizer.grid import Grid
 # from synthesizer.parametric.morphology import Sersic2D
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh, generate_instant_sfzh
@@ -13,8 +14,14 @@ if __name__ == '__main__':
     # resolution = 0.5
     # npix = 25
 
-    grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
-    grid = Grid(grid_name)
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
+
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
+    grid = Grid(grid_name, grid_dir=grid_dir)
 
     filter_collection = UVJ(new_lam=grid.lam)
 
@@ -34,7 +41,8 @@ if __name__ == '__main__':
     Zh = ZH.deltaConstant(Z_p)  # constant metallicity
 
     # --- get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
-    sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh, stellar_mass=stellar_mass)
+    sfzh = generate_sfzh(grid.log10ages, grid.metallicities,
+                         sfh, Zh, stellar_mass=stellar_mass)
 
     # disk = Galaxy(morph=morph, SFZH=sfzh)
     disk = Galaxy(sfzh=sfzh)
@@ -62,7 +70,8 @@ if __name__ == '__main__':
 
     bulge.get_stellar_spectra(grid)
 
-    sed = bulge.spectra['stellar'].get_broadband_luminosities(filter_collection)
+    sed = bulge.spectra['stellar'].get_broadband_luminosities(
+        filter_collection)
 
     total = disk + bulge
 

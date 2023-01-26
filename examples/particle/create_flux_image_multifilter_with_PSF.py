@@ -5,6 +5,7 @@ SED for each particle and then generates images in a number of Webb bands.
 import os
 import time
 import numpy as np
+from scipy import signal
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -54,7 +55,7 @@ if __name__ == '__main__':
     stars_start = time.time()
 
     # Create stars object
-    n = 10000  # number of particles for sampling
+    n = 1000  # number of particles for sampling
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
@@ -98,28 +99,36 @@ if __name__ == '__main__':
 
     print("Filters created, took:", time.time() - filter_start)
 
-    img_start = time.time()
-
     # Define image propertys
     redshift = 1
     resolution = ((width + 1) / 100) * cosmo.arcsec_per_kpc_proper(
         redshift).value * arcsec
     width = (width + 1) * cosmo.arcsec_per_kpc_proper(redshift).value * arcsec
 
+    # Create a fake PSF
+    psf = np.outer(signal.windows.gaussian(50, 3),
+                   signal.windows.gaussian(50, 3))
+    psfs = {f: psf for f in filters.filter_codes}
+
+    img_start = time.time()
+
     # Get the image
     hist_img = galaxy.make_image(resolution, fov=width, img_type="hist",
                                  sed=galaxy.spectra_array["intrinsic"],
-                                 filters=filters, kernel_func=quintic,
+                                 filters=filters, psfs=psfs,
+                                 kernel_func=quintic,
                                  rest_frame=False, cosmo=cosmo)
 
     print("Histogram images made, took:", time.time() - img_start)
+
     img_start = time.time()
 
     # Get the image
     smooth_img = galaxy.make_image(resolution, fov=width,
                                    img_type="smoothed",
                                    sed=galaxy.spectra_array["intrinsic"],
-                                   filters=filters, kernel_func=quintic,
+                                   filters=filters, psfs=psfs,
+                                   kernel_func=quintic,
                                    rest_frame=False, cosmo=cosmo)
 
     print("Smoothed images made, took:", time.time() - img_start)
@@ -161,4 +170,5 @@ if __name__ == '__main__':
     axes[0].set_ylabel("Smoothed")
 
     # Plot the image
-    plt.savefig("../flux_in_filters_test.png", bbox_inches="tight", dpi=300)
+    plt.savefig("../flux_in_filters_with_PSF_test.png",
+                bbox_inches="tight", dpi=300)
