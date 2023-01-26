@@ -15,7 +15,7 @@ An example:
     python make_cloudy_input_grid.py -dir ../../../synthesizer_data/ -m cosma7 -sps bc03_chabrier03 -p default_param.yaml -cloudy CLOUDY_EXE
 
     python make_cloudy_input_grid.py -dir /Users/stephenwilkins/Dropbox/Research/data/synthesizer/ -m apollo -sps bpass-2.2.1-sin_chabrier03-0.1,100.0  -p default_param.yaml -c $CLOUDY17
-    python make_cloudy_input_grid.py -dir /research/astrodata/highz/synthesizer/ -m apollo -sps bpass-2.2.1-sin_chabrier03-0.1,100.0  -p default_param.yaml -c $CLOUDY17
+    python make_cloudy_input_grid.py -dir /research/astrodata/highz/synthesizer/ -m apollo -sps bpass-2.2.1-bin_chabrier03-0.1,100.0  -p default_param.yaml -c $CLOUDY17
 
 ## The param YAML file
 This contains the parameters that will be input into CLOUDY.
