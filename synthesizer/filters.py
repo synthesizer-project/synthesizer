@@ -92,7 +92,7 @@ class FilterCollection:
         """
 
         # Define lists to hold our filters and filter codes
-        self.filters = []
+        self.filters = {}
         self.filter_codes = []
 
         # Do we have an wavelength array? If so we will resample the
@@ -129,7 +129,7 @@ class FilterCollection:
             _filter = Filter(f, new_lam=self.lam)
 
             # Store the filter and its code
-            self.filters.append(_filter)
+            self.filters[_filter.filter_code] = _filter
             self.filter_codes.append(_filter.filter_code)
 
     def _make_top_hat_collection(self, tophat_dict):
@@ -176,7 +176,7 @@ class FilterCollection:
                              new_lam=self.lam)
 
             # Store the filter and its code
-            self.filters.append(_filter)
+            self.filters[_filter.filter_code] = _filter
             self.filter_codes.append(_filter.filter_code)
 
     def _make_generic_colleciton(self, generic_dict):
@@ -203,7 +203,7 @@ class FilterCollection:
             _filter = Filter(key, transmission=t, new_lam=self.lam)
 
             # Store the filter and its code
-            self.filters.append(_filter)
+            self.filters[_filter.filter_code] = _filter
             self.filter_codes.append(_filter.filter_code)
 
     def __add__(self, other_filters):
@@ -223,16 +223,17 @@ class FilterCollection:
         if isinstance(other_filters, FilterCollection):
 
             # Loop over the filters in other_filters
-            for _filter in other_filters.filters:
+            for key in other_filters.filters:
 
                 # Store the filter and its code
-                self.filters.append(_filter)
-                self.filter_codes.append(_filter.filter_code)
+                self.filters[key] = other_filters.filters[key]
+                self.filter_codes.append(
+                    other_filters.filters[key].filter_code)
 
         elif isinstance(other_filters, Filter):
 
             # Store the filter and its code
-            self.filters.append(other_filters)
+            self.filters[other_filters.filter_code] = other_filters
             self.filter_codes.append(other_filters.filter_code)
 
         else:
@@ -273,7 +274,7 @@ class FilterCollection:
             self._current_ind += 1
 
             # Return the filter
-            return self.filters[self._current_ind - 1]
+            return self.filters[self.filter_codes[self._current_ind - 1]]
 
     def __ne__(self, other_filters):
         """
@@ -351,7 +352,8 @@ class FilterCollection:
         # TODO: Add colours
 
         # Loop over the filters plotting their curves.
-        for f in self.filters:
+        for key in self.filters:
+            f = self.filters[key]
             ax.plot(f.lam, f.t, label=f.filter_code)
 
             # TODO: Add label with automatic placement
@@ -360,7 +362,7 @@ class FilterCollection:
         ax.set_xlabel(r'$\rm \lambda/\AA$')
         ax.set_ylabel(r'$\rm T_{\lambda}$')
 
-    def plot_transmission_curves(self, show=True):
+    def plot_transmission_curves(self, show=False):
         """
         Create a filter transmission curve plot
 
@@ -653,7 +655,7 @@ class Filter:
         in_band = self.t > 0
 
         # Multiply the IFU by the filter transmission curve
-        arr_in_band = self.ifu.compress(in_band, axis=-1) * self.t[in_band]
+        arr_in_band = arr.compress(in_band, axis=-1) * self.t[in_band]
 
         # Sum over the final axis to "collect" transmission in this filer
         sum_in_band = np.sum(arr_in_band, axis=-1)
