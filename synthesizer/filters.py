@@ -38,7 +38,7 @@ class FilterCollection:
         Overload the len operator to return how many filters there are.
         """
         return len(self.filters)
-    
+
     def __iter__(self):
         """
         Overload iteration to allow simple looping over filter objects,
@@ -62,7 +62,7 @@ class FilterCollection:
 
             # Return the filter
             return self.filters[self.current_ind - 1]
-            
+
     def transmission_curve_ax(self, ax, add_filter_label=True):
         """ add filter transmission curves to a give axes """
 
@@ -77,7 +77,7 @@ class FilterCollection:
         ax.set_xlabel(r'$\rm \lambda/\AA$')
         ax.set_ylabel(r'$\rm T_{\lambda}$')
 
-    def plot_transmission_curves(self, show=True):
+    def plot_transmission_curves(self, show=False):
         """ Create a filter transmission curve plot """
 
         fig = plt.figure(figsize=(5., 3.5))
@@ -114,7 +114,7 @@ class SVOFilterCollection(FilterCollection):
 
             # Get filter from SVO
             F = FilterFromSVO(f, new_lam=self.new_lam)
-            
+
             # Store the filter
             self.filters[F.filter_code] = F
 
