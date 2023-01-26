@@ -91,8 +91,11 @@ class BinnedSFZH:
         fig, ax, haxx, haxy = single_histxy()
 
         # this is technically incorrect because metallicity is not on a an actual grid.
-        ax.imshow(self.sfzh.T, origin='lower', extent=[
-                  *self.log10ages_lims, self.log10metallicities[0], self.log10metallicities[-1]], cmap=cmr.sunburst, aspect='auto')
+        ax.imshow(self.sfzh.T, origin='lower',
+                  extent=[* self.log10ages_lims,
+                          self.log10metallicities[0],
+                          self.log10metallicities[-1]],
+                  cmap=cmr.sunburst, aspect='auto')
 
         # --- add binned Z to right of the plot
         # haxx.step(log10ages, sfh, where='mid', color='k')
