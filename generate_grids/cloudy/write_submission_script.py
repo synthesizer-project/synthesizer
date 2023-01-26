@@ -1,5 +1,5 @@
 
-def apollo_submission_script(n, synthesizer_data_dir, cloudy):
+def apollo_submission_script(n, grid_data_dir, cloudy):
     """
     Create an Apollo SGE submission script.
 
@@ -51,11 +51,11 @@ let index=$SGE_TASK_ID+1
 
 # access line at index from input_names file
 id=$(sed "${{index}}q;d" input_names.txt)
-${cloudy} -r $id
+{cloudy} -r $id
 """
 
-    open(f'{synthesizer_data_dir}/run_grid.job', 'w').write(apollo_job_script)
-    print(synthesizer_data_dir)
+    open(f'{grid_data_dir}/run_grid.job', 'w').write(apollo_job_script)
+    print(grid_data_dir)
     print(f'qsub -t 1:{n} run_grid.job')
 
     return
