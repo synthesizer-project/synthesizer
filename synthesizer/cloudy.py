@@ -9,6 +9,40 @@ from scipy import integrate
 from unyt import c, h, angstrom, eV, erg, s, Hz, unyt_array
 
 
+from dataclasses import dataclass
+
+
+@dataclass
+class Ions:
+
+    """
+    A dataclass holding the ionisation energy of various ions amongst other
+    properties and methods
+
+    Used for calculating ionising photon luminosities (Q).
+
+    Values taken from: https://en.wikipedia.org/wiki/Ionization_energies_of_the_elements_(data_page)
+    """
+
+    energy = {
+        'HI': 13.6 * eV,
+        'HeI': 24.6 * eV,
+        'HeII': 54.4 * eV,
+        'CII': 24.4 * eV,
+        'CIII': 47.9 * eV,
+        'CIV': 64.5 * eV,
+        'NI': 14.5 * eV,
+        'NII': 29.6 * eV,
+        'NIII': 47.4 * eV,
+        'OI': 13.6 * eV,
+        'OII': 35.1 * eV,
+        'OIII': 54.9 * eV,
+        'NeI': 21.6 * eV,
+        'NeII': 41.0 * eV,
+        'NeIII': 63.45 * eV,
+    }
+
+
 def create_cloudy_input(model_name, lam, lnu, abundances,
                         output_dir='./', **kwargs):
 
@@ -196,20 +230,20 @@ def calculate_U_from_Q(Q_avg, n_h=100):
 
 
 # deprecate in favour of the function in sed.py
-# def measure_Q(lam, L_AA, limit=100):
-#     """
-#     Args
-#     lam: \\AA
-#     L_AA: erg s^-1 AA^-1
-#     Returns
-#     Q: s^-1
-#     """
-#     h = 6.626070040E-34  # J s
-#     h_erg = h * 1e7  # erg s
-#     c = 2.99E8  # m s-1
-#     c_AA = c * 1e10  # AA s-1
-#     def f(x): return np.interp(x, lam, L_AA * lam) / (h_erg*c_AA)
-#     return integrate.quad(f, 0, 912, limit=limit)[0]
+def measure_Q(lam, L_AA, limit=100):
+    """
+    Args
+    lam: \\AA
+    L_AA: erg s^-1 AA^-1
+    Returns
+    Q: s^-1
+    """
+    h = 6.626070040E-34  # J s
+    h_erg = h * 1e7  # erg s
+    c = 2.99E8  # m s-1
+    c_AA = c * 1e10  # AA s-1
+    def f(x): return np.interp(x, lam, L_AA * lam) / (h_erg*c_AA)
+    return integrate.quad(f, 0, 912, limit=limit)[0]
 
 
 def default_lines():

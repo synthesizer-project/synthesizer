@@ -1,7 +1,7 @@
 import h5py
 import numpy as np
 from synthesizer.sed import calculate_Q
-
+from synthesizer.cloudy import Ions
 
 # def add_log10Q(filename):
 #     """ add ionising photon luminosity """
@@ -26,10 +26,20 @@ from synthesizer.sed import calculate_Q
 #                 hf['log10Q'][ia, iZ] = np.log10(calculate_Q(lam, hf['spectra/stellar'][ia, iZ, :]))
 
 
-def add_log10Q(filename):
-    """ add ionising photon luminosity """
+def add_log10Q(grid_filename, ions=['HI', 'HeII']):
+    """
+    A function to calculate the ionising photon luminosity for different ions.
 
-    with h5py.File(filename, 'a') as hf:
+    Parameters
+    ---------
+    grid_filename : str
+        the filename of the HDF5 grid
+    ions : list
+        a list of ions to calculate Q for
+
+    """
+
+    with h5py.File(grid_filename, 'a') as hf:
 
         metallicities = hf['metallicities'][()]
         log10ages = hf['log10ages'][()]
@@ -39,21 +49,26 @@ def add_log10Q(filename):
 
         lam = hf['spectra/wavelength'][()]
 
-        for ion, ionisation_energy in [('HI', 13.6 * eV), ('HeII', 54.4 * eV)]:
+        if 'log10Q' in hf.keys():
+            del hf['log10Q']  # delete log10Q if it already exists
 
-            id = f'log10Q_{ion}'
+        for ion in ions:
 
-            if id in hf.keys():
-                del hf[id]  # delete log10Q if it already exists
+            ionisation_energy = Ions.energy[ion]
 
-            hf[id] = np.zeros((na, nZ))
+            hf[f'log10Q/{ion}'] = np.zeros((na, nZ))
 
             # ---- determine stellar log10Q
 
             for iZ, Z in enumerate(metallicities):
                 for ia, log10age in enumerate(log10ages):
-                    hf[id][ia, iZ] = np.log10(calculate_Q(
-                        lam, hf['spectra/stellar'][ia, iZ, :]))
+                    print(ia, iZ)
+
+                    lnu = hf['spectra/stellar'][ia, iZ, :]
+
+                    Q = calculate_Q(lam, lnu, ionisation_energy=ionisation_energy)
+
+                    hf[f'log10Q/{ion}'][ia, iZ] = np.log10(Q)
 
 
 def get_model_filename(model):

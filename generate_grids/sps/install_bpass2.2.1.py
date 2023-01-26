@@ -75,7 +75,6 @@ def make_grid(original_model_name, bin):
 
     # generate the synthesizer_model_name
     synthesizer_model_name = get_model_filename(model)
-    print(synthesizer_model_name)
 
     # this is the full path to the ultimate HDF5 grid file
     out_filename = f'{synthesizer_data_dir}/grids/{synthesizer_model_name}.hdf5'
@@ -206,7 +205,13 @@ if __name__ == "__main__":
 
         for bin in ['bin', 'sin']:
 
-            out_filename = make_grid(original_model_name, bin)
+            # out_filename = make_grid(original_model_name, bin)
 
-            # add log10Q
+            # get filename. This is useful if you want to simply add Q
+            model, bpass_imf = resolve_name(original_model_name, bin)
+            synthesizer_model_name = get_model_filename(model)
+            out_filename = f'{synthesizer_data_dir}/grids/{synthesizer_model_name}.hdf5'
+
+            # add log10Q, can specify the desired ions with ions keyword.
+            # by default calculates [HI, HeII]
             add_log10Q(out_filename)
