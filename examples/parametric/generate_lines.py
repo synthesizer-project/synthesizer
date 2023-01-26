@@ -70,6 +70,7 @@ if __name__ == '__main__':
     # --- calculate attenuated line properties assuming different dust affecting stellar and nebular components
     lines = galaxy.get_attenuated_line(
         grid, line_ids, tauV_stellar=0.1, tauV_nebular=0.5)
+
     print('-'*50)
     print('ATTENUATED')
     for line_id, line in lines.items():
