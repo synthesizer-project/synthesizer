@@ -182,10 +182,10 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     cinput.append(f'stop efrac {params["stop_efrac"]}\n')
 
     # --- output commands
-    cinput.append(f'print line vacuum')  # output vacuum wavelengths
-    cinput.append((f'save last continuum "{model_name}.cont"'
+    cinput.append(f'print line vacuum\n')  # output vacuum wavelengths
+    cinput.append((f'save last continuum "{model_name}.cont" '
                    f'units Angstroms no clobber\n'))
-    cinput.append((f'save last lines, array "{model_name}.lines"'
+    cinput.append((f'save last lines, array "{model_name}.lines" '
                   'units Angstroms no clobber\n'))
     cinput.append(f'save overview  "{model_name}.ovr" last\n')
 

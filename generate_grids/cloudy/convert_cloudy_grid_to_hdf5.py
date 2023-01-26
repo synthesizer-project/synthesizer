@@ -59,6 +59,38 @@ def create_new_grid(grid, synthesizer_data_dir):
             del hf.attrs['log10U']
 
 
+def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
+    """
+    Check that all the cloudy runs have run properly
+
+    Parameters
+    ----------
+    grid_name : str
+        Name of the grid
+    synthesizer_data_dir : str
+        Directory where synthesizer data is kept.
+    replace : boolean
+        If a run has failed simply replace the model with the previous one
+    """
+
+    # open the new grid
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'r') as hf:
+
+        # --- short hand for later
+        nZ = len(hf['metallicities'][:])  # number of metallicity grid points
+        na = len(hf['log10ages'][:])  # number of age grid points
+
+        for ia in range(na):
+            for iZ in range(nZ):
+
+                infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}'
+
+                if not os.path.isfile(infile+'.cont'):  # attempt to open run.
+                    print(f'{ia}_{iZ}.cont missing')
+                if not os.path.isfile(infile+'.lines'):  # attempt to open run.
+                    print(f'{ia}_{iZ}.lines missing')
+
+
 def add_spectra(grid_name, synthesizer_data_dir):
     """
     Open cloudy spectra and add them to the grid
@@ -244,7 +276,8 @@ if __name__ == "__main__":
 
     for grid_name in args.grid:
 
-        create_new_grid(grid_name, synthesizer_data_dir)
+        # create_new_grid(grid_name, synthesizer_data_dir)
+        check_cloudy_runs(grid_name, synthesizer_data_dir)
         # dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
         # add_lines(grid_name, synthesizer_data_dir, dlog10Q)
 
