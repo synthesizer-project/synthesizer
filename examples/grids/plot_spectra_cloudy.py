@@ -3,7 +3,6 @@
 # Create a model SED
 
 
-import flare.plt as fplt
 from synthesizer.grid import Grid
 import numpy as np
 import matplotlib as mpl

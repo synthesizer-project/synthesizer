@@ -3,7 +3,6 @@
 # Create a model SED
 
 
-import flare.plt as fplt
 from synthesizer.sed import convert_fnu_to_flam
 from synthesizer.grid import Grid
 import numpy as np
