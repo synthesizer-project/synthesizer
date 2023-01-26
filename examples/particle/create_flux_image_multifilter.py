@@ -2,13 +2,14 @@
 This example generates a sample of star particles from a 2D SFZH, generates an
 SED for each particle and then generates images in a number of Webb bands.
 """
+import os
 import time
 import numpy as np
-from unyt import kpc, arcsec
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec 
-from unyt import yr, Myr
+import matplotlib.gridspec as gridspec
+from unyt import yr, Myr, kpc, arcsec
+from astropy.cosmology import Planck18 as cosmo
 
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
@@ -18,7 +19,7 @@ from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.filters import FilterCollection as Filters
 from synthesizer.kernel_functions import quintic
-from astropy.cosmology import Planck18 as cosmo
+
 
 plt.rcParams['font.family'] = 'DeJavu Serif'
 plt.rcParams['font.serif'] = ['Times New Roman']
@@ -30,9 +31,13 @@ if __name__ == '__main__':
 
     start = time.time()
 
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
+
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = "tests/test_grid/"
+    grid_dir = script_path + "/../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # Define the grid (normally this would be defined by an SPS grid)

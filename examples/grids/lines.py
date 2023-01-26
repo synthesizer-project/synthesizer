@@ -1,3 +1,4 @@
+import os
 from synthesizer.grid import Grid
 
 if __name__ == '__main__':
@@ -5,13 +6,19 @@ if __name__ == '__main__':
     # -------------------------------------------------
     # --- calcualte the EW for a given line as a function of age
 
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
+
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
 
     lines = ['HI4861', 'OIII4959', 'OIII5007', ['OIII4959', 'OIII5007']]
 
     # read in just some specific lines (excluding spectra)
-    grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=lines)
+    grid = Grid(grid_name, grid_dir=grid_dir,
+                read_spectra=False, read_lines=lines)
 
     # alternatively we could read in all lines by simply setting read_lines to be True
     # grid = Grid(model, read_spectra = False, read_lines = True)

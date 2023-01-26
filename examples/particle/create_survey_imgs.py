@@ -2,13 +2,14 @@
 This example shows how to create a survey of fake galaxies generated using a
 2D SFZH, and make images of each of these galaxies.
 """
+import os
 import time
 import numpy as np
 from scipy import signal
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec 
-from unyt import yr, Myr
+import matplotlib.gridspec as gridspec
+from unyt import yr, Myr, kpc, arcsec
 
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
@@ -16,7 +17,7 @@ from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
-from synthesizer.filters import SVOFilterCollection as Filters
+from synthesizer.filters import FilterCollection as Filters
 from synthesizer.kernel_functions import quintic
 from synthesizer.imaging.survey import Survey
 from astropy.cosmology import Planck18 as cosmo
@@ -27,9 +28,13 @@ plt.rcParams['font.serif'] = ['Times New Roman']
 # Set the seed
 np.random.seed(42)
 
+# Get the location of this script, __file__ is the absolute path of this
+# script, however we just want to directory
+script_path = os.path.abspath(os.path.dirname(__file__))
+
 # Define the grid
 grid_name = "test_grid"
-grid_dir = "tests/test_grid/"
+grid_dir = script_path + "/../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
 # Create an empty Survey object
@@ -57,10 +62,10 @@ hst_depths = {f: 33.0 for f in hst_filters.filter_codes}
 webb_depths = {f: 33.0 for f in webb_filters.filter_codes}
 
 # Let's add these instruments to the survey
-survey.add_photometric_instrument(filters=hst_filters, resolution=0.1,
+survey.add_photometric_instrument(filters=hst_filters, resolution=0.1 * arcsec,
                                   label="HST/WFC3_IR", psfs=hst_psfs,
                                   depths=hst_depths, snrs=5, apertures=0.5)
-survey.add_photometric_instrument(filters=webb_filters, resolution=0.05,
+survey.add_photometric_instrument(filters=webb_filters, resolution=0.05 * arcsec,
                                   label="JWST/NIRCam", psfs=webb_psfs,
                                   depths=webb_depths, snrs=5, apertures=0.5)
 
@@ -87,16 +92,18 @@ for igal in range(ngalaxies):
     sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 
     # Create stars object
-    n = 100
+    n = 10000
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
+    stars.coord_units = kpc
     cent = np.mean(coords, axis=0)  # define geometric centre
     rs = np.sqrt((coords[:, 0] - cent[0]) ** 2
                  + (coords[:, 1] - cent[1]) ** 2
                  + (coords[:, 2] - cent[2]) ** 2)  # calculate radii
     rs[rs < 0.1] = 0.4  # Set a lower bound on the "smoothing length"
     stars.smoothing_lengths = rs / 4  # convert radii into smoothing lengths
+    stars.redshift = 1
 
     # Compute width of stellar distribution
     width = np.max(coords) - np.min(coords)
@@ -114,9 +121,13 @@ for igal in range(ngalaxies):
     # Include this galaxy
     galaxies.append(galaxy)
 
+# Define image propertys
+redshift = 1
+fov = (width + 1) * cosmo.arcsec_per_kpc_proper(redshift).value * arcsec
+
 # Set the fov in the survey
 print("Image FOV:", fov)
-survey.fov = fov + 1
+survey.fov = fov
 
 # Store galaxies in the survey
 survey.add_galaxies(galaxies)

@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -13,9 +14,13 @@ from astropy.cosmology import Planck18 as cosmo
 
 if __name__ == '__main__':
 
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
 
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # --- define the parameters of the star formation and metal enrichment histories
@@ -30,7 +35,8 @@ if __name__ == '__main__':
     Zh = ZH.deltaConstant(Z_p)  # constant metallicity
 
     # --- get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
-    sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh, stellar_mass=stellar_mass)
+    sfzh = generate_sfzh(grid.log10ages, grid.metallicities,
+                         sfh, Zh, stellar_mass=stellar_mass)
 
     # --- create a galaxy object
     galaxy = Galaxy(sfzh)

@@ -3,7 +3,7 @@ import numpy as np
 
 import cmasher as cmr
 
-from synthesizer.sed.igm import Madau96, Inoue14
+from synthesizer.igm import Madau96, Inoue14
 
 
 lam = np.arange(0, 20000)
@@ -21,5 +21,5 @@ plt.legend()
 plt.xlabel(r'$\lambda_{obs}/\AA$')
 plt.ylabel(r'$T$')
 plt.ylim([0, 1.1])
-plt.show()
+# plt.show()
 # plt.savefig('../docs/source/images/img.png', bbox_inches='tight', dpi=200)

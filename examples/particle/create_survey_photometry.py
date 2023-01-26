@@ -2,14 +2,15 @@
 This example shows how to create a survey of fake galaxies generated using a
 2D SFZH, and make images of each of these galaxies.
 """
+import os
 import time
 import random
 import numpy as np
 from scipy import signal
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec 
-from unyt import yr, Myr
+import matplotlib.gridspec as gridspec
+from unyt import yr, Myr, kpc, arcsec
 
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
@@ -17,7 +18,7 @@ from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
-from synthesizer.filters import SVOFilterCollection as Filters
+from synthesizer.filters import FilterCollection as Filters
 from synthesizer.kernel_functions import quintic
 from synthesizer.imaging.survey import Survey
 from astropy.cosmology import Planck18 as cosmo
@@ -31,9 +32,13 @@ random.seed(42)
 
 start = time.time()
 
+# Get the location of this script, __file__ is the absolute path of this
+# script, however we just want to directory
+script_path = os.path.abspath(os.path.dirname(__file__))
+
 # Define the grid
 grid_name = "test_grid"
-grid_dir = "tests/test_grid/"
+grid_dir = script_path + "/../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
 # Create an empty Survey object
@@ -58,9 +63,6 @@ Zh = ZH.deltaConstant(Z_p)
 sfh_p = {'duration': 100 * Myr}
 sfh = SFH.Constant(sfh_p)  # constant star formation
 
-# Define a FOV to be updated by the particle distribution
-fov = 0
-
 # Make some fake galaxies
 ngalaxies = 100
 galaxies = []
@@ -75,19 +77,6 @@ for igal in range(ngalaxies):
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
     stars.current_masses = stars.initial_masses
-    cent = np.mean(coords, axis=0)  # define geometric centre
-    rs = np.sqrt((coords[:, 0] - cent[0]) ** 2
-                 + (coords[:, 1] - cent[1]) ** 2
-                 + (coords[:, 2] - cent[2]) ** 2)  # calculate radii
-    rs[rs < 0.1] = 0.4  # Set a lower bound on the "smoothing length"
-    stars.smoothing_lengths = rs / 4  # convert radii into smoothing lengths
-
-    # Compute width of stellar distribution
-    width = np.max(coords) - np.min(coords)
-
-    # Update the FOV
-    if width > fov:
-        fov = width
 
     # Create galaxy object
     galaxy = Galaxy("Galaxy%d" % igal, stars=stars, redshift=1)
@@ -128,7 +117,7 @@ for f in survey.photometry:
 
 ax.set_ylabel("$L /$ [erg / s / Hz] ")
 ax.set_xlabel("$M / \mathrm{M}_\odot$")
-    
+
 ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15),
           fancybox=True, shadow=True, ncol=2)
 

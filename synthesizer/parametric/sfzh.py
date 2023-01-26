@@ -25,9 +25,11 @@ class BinnedSFZH:
         self.ages = 10**log10ages
         self.log10ages_lims = [self.log10ages[0], self.log10ages[-1]]
         self.metallicities = metallicities
-        self.metallicities_lims = [self.metallicities[0], self.metallicities[-1]]
+        self.metallicities_lims = [
+            self.metallicities[0], self.metallicities[-1]]
         self.log10metallicities = np.log10(metallicities)
-        self.log10metallicities_lims = [self.log10metallicities[0], self.log10metallicities[-1]]
+        self.log10metallicities_lims = [
+            self.log10metallicities[0], self.log10metallicities[-1]]
         self.sfzh = sfzh  # 2D star formation and metal enrichment history
         self.sfh = np.sum(self.sfzh, axis=1)  # 1D star formation history
         self.Z = np.sum(self.sfzh, axis=0)  # metallicity distribution
@@ -65,7 +67,8 @@ class BinnedSFZH:
         pstr += 'SUMMARY OF BINNED SFZH' + "\n"
         pstr += f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
         pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
-        pstr += f'mean metallicity: {self.calculate_mean_metallicity():.4f}' + "\n"
+        pstr += f'mean metallicity: {self.calculate_mean_metallicity():.4f}' + \
+            "\n"
         pstr += '-'*10 + "\n"
         return pstr
 
@@ -82,14 +85,15 @@ class BinnedSFZH:
 
             exceptions.InconsistentAddition('SFZH must be the same shape')
 
-    def plot(self, show=True):
+    def plot(self, show=False):
         """ Make a nice plots of the binned SZFH """
 
         fig, ax, haxx, haxy = single_histxy()
 
         # this is technically incorrect because metallicity is not on a an actual grid.
         ax.imshow(self.sfzh.T, origin='lower', extent=[
-                  *self.log10ages_lims, self.log10metallicities[0], self.log10metallicities[-1]], cmap=cmr.sunburst, aspect='auto')
+                  *self.log10ages_lims, self.log10metallicities[0],
+                  self.log10metallicities[-1]], cmap=cmr.sunburst, aspect='auto')
 
         # --- add binned Z to right of the plot
         # haxx.step(log10ages, sfh, where='mid', color='k')

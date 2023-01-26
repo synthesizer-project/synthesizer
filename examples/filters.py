@@ -49,8 +49,8 @@ fc += fc2
 print("My combined Filters:", fc.filter_codes)
 
 # You can even easily plot the transmission curves with a helper method.
-fc.plot_transmission_curves()
+fig, ax = fc.plot_transmission_curves(show=False)
 
 # There's also a helper function to create the above UVJ filter set.
 fc = UVJ(new_lam=lams)
-fc.plot_transmission_curves()
+fig, ax = fc.plot_transmission_curves(show=False)

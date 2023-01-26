@@ -1,5 +1,5 @@
+import os
 import numpy as np
-
 import matplotlib.pyplot as plt
 from unyt import yr, Myr
 
@@ -22,9 +22,13 @@ if __name__ == '__main__':
     # ------------------------------------------------
     # --- define SFZH
 
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
 
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # --- define the parameters of the star formation and metal enrichment histories
@@ -37,7 +41,8 @@ if __name__ == '__main__':
     Zh = ZH.deltaConstant(Z_p)  # constant metallicity
 
     # --- get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
-    sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh, stellar_mass=stellar_mass)
+    sfzh = generate_sfzh(grid.log10ages, grid.metallicities,
+                         sfh, Zh, stellar_mass=stellar_mass)
 
     # ------------------------------------------------
     # --- create galaxy
@@ -48,12 +53,14 @@ if __name__ == '__main__':
 
     filter_collection = UVJ(new_lam=grid.lam)
 
-    sed = galaxy.spectra['stellar'].get_broadband_luminosities(filter_collection)
+    sed = galaxy.spectra['stellar'].get_broadband_luminosities(
+        filter_collection)
 
     resolution = 0.5
     npix = 25
 
-    images = galaxy.make_images('stellar', filter_collection, resolution, npix=npix)
+    images = galaxy.make_images(
+        'stellar', filter_collection, resolution, npix=npix)
 
     images.plot('U')
 

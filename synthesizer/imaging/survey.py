@@ -51,7 +51,10 @@ class Instrument:
         self.snrs = snrs
 
         # Unit information
-        self.spatial_unit = resolution.units
+        if resolution is not None:
+            self.spatial_unit = resolution.units
+        else:
+            self.spatial_unit = None
 
     def _check_obs_args(self):
         """
@@ -59,10 +62,10 @@ class Instrument:
 
         Parameters
         ----------
-        
+
         Raises
         ------
-        
+
         """
         pass
 
@@ -73,14 +76,14 @@ class Instrument:
 
         Parameters
         ----------
-        
+
         Raises
         ------
-        
+
         """
         pass
 
-        
+
 class Survey:
     """
 
@@ -94,7 +97,7 @@ class Survey:
     -------
 
     """
-    
+
     def __init__(self, galaxies=(), fov=None, super_resolution_factor=2):
         """
         Initialise the Survey.
@@ -132,10 +135,10 @@ class Survey:
 
         Parameters
         ----------
-        
+
         Raises
         ------
-        
+
         """
         pass
 
@@ -147,7 +150,7 @@ class Survey:
 
         Parameters
         ----------
-        
+
         Raises
         ------
         InconsistentArguments
@@ -191,7 +194,7 @@ class Survey:
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
                     " len(filters)=%d, len(noises)=%d)" % (nfilters,
-                                                         len(noises))
+                                                           len(noises))
                 )
 
         # Create this observation configurations
@@ -207,7 +210,6 @@ class Survey:
     def add_spectral_instrument(self, resolution, resolving_power,
                                 psf=None, depth=None, aperture=None):
         pass
-        
 
     def add_galaxies(self, galaxies):
         """
@@ -217,7 +219,7 @@ class Survey:
         ----------
         galaxies : list
             The galaxies to include in this Survey.
-        
+
         """
 
         # If we have no galaxies just add them
@@ -238,7 +240,7 @@ class Survey:
 
         # ... or multiple galaxies
         else:
-            
+
             # Double check galaxies is a list
             self.galaxies = list(self.galaxies)
 
@@ -284,12 +286,12 @@ class Survey:
         for inst in self.instruments:
             if isinstance(self.instruments[inst].depths, dict):
                 for key in self.instruments[inst].depths:
-                    flux =  m_to_flux(self.instruments[inst].depths[key])
+                    flux = m_to_flux(self.instruments[inst].depths[key])
                     self.instruments[inst].depths[key] = flux_to_luminosity(
                         flux, cosmo, redshift
                     )
             else:
-                flux =  m_to_flux(self.instruments[inst].depths)
+                flux = m_to_flux(self.instruments[inst].depths)
                 self.instruments[inst].depths = flux_to_luminosity(
                     flux, cosmo, redshift
                 )
@@ -335,13 +337,13 @@ class Survey:
         transmission = np.sum(transmitted)
 
         return transmission
-            
+
     def get_photometry(self, spectra_type, cosmo=None, redshift=None, igm=None):
         """
 
         Parameters
         ----------
-        
+
         """
 
         # We need to handle whether different types of spectra exist.
@@ -354,8 +356,9 @@ class Survey:
                 "Attenuated spectra coming soon!"
             )
         else:
-           # TODO: make a UnknownSpectralType error 
-            raise exceptions.InconsistentArguments("Unrecognised spectra_type!")
+           # TODO: make a UnknownSpectralType error
+            raise exceptions.InconsistentArguments(
+                "Unrecognised spectra_type!")
 
         # Loop over each instrument
         for key in self.instruments:
@@ -394,7 +397,7 @@ class Survey:
 
         Parameters
         ----------
-        
+
         """
         pass
 
@@ -404,7 +407,7 @@ class Survey:
 
         Parameters
         ----------
-        
+
         """
 
         # Make a dictionary in which to store our image objects, within
@@ -439,14 +442,12 @@ class Survey:
 
         return self.imgs
 
-            
-
     def make_field_ifu(self, centre):
         """
 
         Parameters
         ----------
-        
+
         """
         pass
 
@@ -455,6 +456,6 @@ class Survey:
 
         Parameters
         ----------
-        
+
         """
         pass

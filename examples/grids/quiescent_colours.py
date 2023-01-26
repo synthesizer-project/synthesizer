@@ -1,5 +1,5 @@
 
-
+import os
 import numpy as np
 import cmasher as cmr
 import matplotlib.pyplot as plt
@@ -20,7 +20,8 @@ def simple_UVJ(grid, target_metallicity=0.01):
 
     for ia, log10age in enumerate(grid.log10ages):
 
-        sed = grid.get_sed(ia, iZ)  # creates an SED object from a given grid point
+        # creates an SED object from a given grid point
+        sed = grid.get_sed(ia, iZ)
 
         # --- now calculate the observed frame spectra
 
@@ -49,7 +50,8 @@ def UVJ_metallicity(grid):
 
         for ia, log10age in enumerate(grid.log10ages):
 
-            sed = grid.get_sed(ia, iZ)  # creates an SED object from a given grid point
+            # creates an SED object from a given grid point
+            sed = grid.get_sed(ia, iZ)
 
             # --- now calculate the observed frame spectra
 
@@ -63,8 +65,10 @@ def UVJ_metallicity(grid):
 
     # --- make plot
 
-    fig, axes = plt.subplots(2, 1, figsize=(3.5, 4.5), sharex=True, sharey=True)
-    plt.subplots_adjust(left=0.15, top=0.975, bottom=0.1, right=0.95, wspace=0.0, hspace=0.0)
+    fig, axes = plt.subplots(2, 1, figsize=(
+        3.5, 4.5), sharex=True, sharey=True)
+    plt.subplots_adjust(left=0.15, top=0.975, bottom=0.1,
+                        right=0.95, wspace=0.0, hspace=0.0)
 
     colors = cmr.take_cmap_colors('cmr.bubblegum', len(grid.metallicities))
 
@@ -87,8 +91,13 @@ def UVJ_metallicity(grid):
 
 if __name__ == '__main__':
 
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
+
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
 
     grid = Grid(grid_name, grid_dir=grid_dir)
 

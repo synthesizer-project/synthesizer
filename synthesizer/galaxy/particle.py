@@ -93,7 +93,7 @@ class ParticleGalaxy(BaseGalaxy):
             If integrated == True: Integrated intrinsic spectrum.
             If integrated == False: Intrinsic spectrum of each particle
                                     (N_part, N_wavelength).
-        
+
         Raises
         ------
         InconsistentArguments
@@ -178,7 +178,7 @@ class ParticleGalaxy(BaseGalaxy):
                 weights_temp = self._calculate_weights(grid, metal, age, mass)
                 non0_inds = np.where(weights_temp > 0)
 
-                 # Get the mask for grid cells we need to sum
+                # Get the mask for grid cells we need to sum
                 non0_inds = np.where(weights_temp > 0)
 
                 # Compute the stellar sed for this particle
@@ -186,7 +186,7 @@ class ParticleGalaxy(BaseGalaxy):
                     grid.spectra['stellar'][non0_inds[0], non0_inds[1], :]
                     * weights_temp[non0_inds[0], non0_inds[1], None], axis=0
                 )
-                
+
                 # TODO: perhaps should also check that fesc is not false
                 if 'total' in list(grid.spectra.keys()):
 
@@ -212,7 +212,7 @@ class ParticleGalaxy(BaseGalaxy):
                 # of an SED object below.)
                 self.stellar_lum_array = stellar_lum_array
                 self.intrinsic_lum_array = intrinsic_lum_array
-                
+
                 # Compute the integrated SEDs
                 self.stellar_lum = np.sum(stellar_lum_array, axis=0)
                 self.intrinsic_lum = np.sum(intrinsic_lum_array, axis=0)
@@ -478,7 +478,8 @@ class ParticleGalaxy(BaseGalaxy):
         """
 
         # Instantiate the Image object.
-        img = ParticleImage(resolution, npix, fov, stars=self.stars,
+        img = ParticleImage(resolution * self.stars.coord_units, npix, fov,
+                            stars=self.stars,
                             pixel_values=self.stars.initial_masses)
 
         return img.get_hist_img()
@@ -562,43 +563,42 @@ class ParticleGalaxy(BaseGalaxy):
                             psfs=psfs, depths=depths, apertures=aperture,
                             snrs=snrs,
                             super_resolution_factor=super_resolution_factor)
-        
+
         # Make the image, handling incorrect image types
         if img_type == "hist":
-            
+
             # Compute the image
             img.get_hist_img()
-        
+
             if psfs is not None:
 
                 # Convolve the image/images
                 img.get_psfed_imgs()
-                
+
             if depths is not None:
 
                 img.get_noisy_imgs(noises)
 
             return img
-            
+
         elif img_type == "smoothed":
 
             # Compute image
             img.get_smoothed_img(kernel_func)
-        
+
             if psfs is not None:
-                
+
                 # Convolve the image/images
                 img.get_psfed_imgs()
-                
+
             if depths is not None:
-                
+
                 img.get_noisy_imgs(noises)
 
             return img
-            
+
         else:
             raise exceptions.UnknownImageType(
                 "Unknown img_type %s. (Options are 'hist' or "
                 "'smoothed')" % img_type
             )
-            

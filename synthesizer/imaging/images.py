@@ -203,8 +203,9 @@ class Image(Scene):
             composite_filters = other_img.filters
 
         # Initialise the composite image
-        composite_img = Image(self.resolution, npix=self.npix, fov=self.fov,
-                              filters=composite_filters, sed=None, survey=None)
+        composite_img = Image(self.resolution * self.spatial_unit,
+                              npix=self.npix, fov=self.fov * self.spatial_unit,
+                              filters=composite_filters, sed=None)
 
         # Store the original images in the composite extracting any
         # nested images.
@@ -225,15 +226,15 @@ class Image(Scene):
 
         # Are we adding a single band/property image to a dictionary?
         elif self.img is not None and len(other_img.imgs) > 0:
-            for key, img in other_img.imgs:
+            for key, img in other_img.imgs.items():
                 composite_img.imgs[key] = img + self.img
         elif other_img.img is not None and len(self.imgs) > 0:
-            for key, img in self.imgs:
-                composite_img.imgs[key] = other_img.imgs[key] + self.img
+            for key, img in self.imgs.items():
+                composite_img.imgs[key] = other_img.img + self.imgs[key]
 
         # Otherwise, we are simply combining images in multiple filters
         else:
-            for key, img in self.imgs:
+            for key, img in self.imgs.items():
                 composite_img.imgs[key] = img + other_img.imgs[key]
 
         return composite_img
@@ -878,7 +879,7 @@ class ParticleImage(ParticleScene, Image):
         for f in self.filters:
 
             # Apply this filter to the IFU
-            self.imgs[f.filter_code] = self.apply_filter(f)
+            self.imgs[f.filter_code] = f.apply_filter(self.ifu)
 
         return self.imgs
 

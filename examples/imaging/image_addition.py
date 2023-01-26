@@ -1,10 +1,11 @@
 """
-Any example of how to do image addition and testing error functionality.
+An example of how to do image addition and testing error functionality.
 """
 import numpy as np
 from synthesizer.exceptions import InconsistentAddition
-from synthesizer.filters import SVOFilterCollection as Filters
+from synthesizer.filters import FilterCollection as Filters
 from synthesizer.imaging.images import Image
+from unyt import kpc
 
 
 # Create a filter collection
@@ -16,10 +17,12 @@ filters2 = Filters(filter_codes2)
 fake_img = np.zeros((100, 100))
 
 # Create fake image objects
-img1 = Image(resolution=0.5, npix=100, fov=None, filters=())
-img2 = Image(resolution=0.4, npix=100, fov=None, filters=())
-img_with_filters1 = Image(resolution=0.5, npix=100, fov=None, filters=filters1)
-img_with_filters2 = Image(resolution=0.5, npix=100, fov=None, filters=filters2)
+img1 = Image(resolution=0.5 * kpc, npix=100, fov=None, filters=())
+img2 = Image(resolution=0.4 * kpc, npix=100, fov=None, filters=())
+img_with_filters1 = Image(resolution=0.5 * kpc,
+                          npix=100, fov=None, filters=filters1)
+img_with_filters2 = Image(resolution=0.5 * kpc,
+                          npix=100, fov=None, filters=filters2)
 img1.img = fake_img
 img2.img = fake_img
 for f in filter_codes1:
@@ -48,8 +51,3 @@ try:
     broken = img_with_filters1 + img_with_filters2
 except InconsistentAddition as e:
     print(e)
-
-
-
-
-

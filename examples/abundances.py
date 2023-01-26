@@ -32,4 +32,4 @@ a_ae = abundances.generate_abundances(Z, alpha, CO, d2m, scaling=scaling)
 print(a_ae.solar_relative_abundance('O', ref_element='Fe'))
 
 plot_abundance_patterns([a, a_ae], ['default', r'\alpha = 0.6'],
-                        show=True, ylim=[-7., -3.])
+                        show=False, ylim=[-7., -3.])

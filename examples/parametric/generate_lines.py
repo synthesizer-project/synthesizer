@@ -1,4 +1,8 @@
-
+"""
+Example for generating a line object containing the luminosities, equivalent
+widths and other properties of lines.
+"""
+import os
 from synthesizer.units import Units
 from synthesizer.grid import get_available_lines, Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
@@ -8,12 +12,13 @@ from unyt import yr, Myr
 
 if __name__ == '__main__':
 
-    """Example for generating a line object containing the luminosities, equivalent widths and other properties of lines.
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
 
-    """
-
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
 
     # to see what lines are available in a grid we can use this helper function
     available_lines = get_available_lines(grid_name, grid_dir)
@@ -26,7 +31,8 @@ if __name__ == '__main__':
     line_ids = ['HI4861']
 
     # open test grid though without reading spectra AND reading only the required lines
-    grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=line_ids)
+    grid = Grid(grid_name, grid_dir=grid_dir,
+                read_spectra=False, read_lines=line_ids)
 
     # --- define the parameters of the star formation and metal enrichment histories
     sfh_p = {'duration': 100 * Myr}
@@ -62,7 +68,8 @@ if __name__ == '__main__':
         print(line)
 
     # --- calculate attenuated line properties assuming different dust affecting stellar and nebular components
-    lines = galaxy.get_attenuated_line(grid, line_ids, tauV_stellar=0.1, tauV_nebular=0.5)
+    lines = galaxy.get_attenuated_line(
+        grid, line_ids, tauV_stellar=0.1, tauV_nebular=0.5)
     print('-'*50)
     print('ATTENUATED')
     for line_id, line in lines.items():
