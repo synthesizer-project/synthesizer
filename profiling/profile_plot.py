@@ -120,7 +120,7 @@ with open(profile_file, 'r') as file:
                     )
                 else:
                     ncalls[line_split[-1]] = float(line_split[0])
-                tottime[line_split[-1]] = float(line_split[3])
+                tottime[line_split[-1]] = float(line_split[1])
 
 # Convert dictionaries to arrays to manipulate, report and plot
 funcs = np.array(list(ncalls.keys()))
