@@ -48,11 +48,15 @@ def create_new_grid(grid, synthesizer_data_dir):
 
         # open cloudy parameter file and add it
 
-        with open(f'{path_to_cloudy_files}/params.yaml', "r") as stream:
+        with open(f'{path_to_cloudy_files}/{grid_name}/params.yaml', "r") as stream:
             cloudy_params = yaml.safe_load(stream)
             for k, v in cloudy_params.items():
                 print(k, v)
+                if v is None:
+                    v = 'null'
                 hf.attrs[k] = v
+
+            del hf.attrs['log10U']
 
 
 def add_spectra(grid_name, synthesizer_data_dir):
@@ -241,5 +245,8 @@ if __name__ == "__main__":
     for grid_name in args.grid:
 
         create_new_grid(grid_name, synthesizer_data_dir)
-        dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
-        add_lines(grid_name, synthesizer_data_dir, dlog10Q)
+        # dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
+        # add_lines(grid_name, synthesizer_data_dir, dlog10Q)
+
+
+# python convert_cloudy_grid_to_hdf5.py -grid bpass-2.2.1-sin_chabrier03-0.1,100.0_cloudy -dir /Users/stephenwilkins/Dropbox/Research/data/synthesizer

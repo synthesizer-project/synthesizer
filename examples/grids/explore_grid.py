@@ -11,8 +11,10 @@ def explore(name, item):
 
 if __name__ == "__main__":
 
+    # ultimately replace with test grid
     grid_dir = '/Users/stephenwilkins/Dropbox/Research/data/synthesizer/grids'
     grid_name = 'bpass-2.2.1-sin_chabrier03-0.1,100.0'
+    grid_name = 'bpass-2.2.1-sin_chabrier03-0.1,100.0_cloudy'
 
     with h5py.File(f'{grid_dir}/{grid_name}.hdf5', 'r') as hf:
 
