@@ -29,14 +29,19 @@ N = 10  # number of iterations for timing
 
 
 name_func = [
-    ('measure_Q, HI', measure_Q(sed.lam, llam.to('erg/s/angstrom').value)),
-    ('calculate_Q, HI', calculate_Q(lam, lnu, ionisation_energy=13.6 * eV)),
-    ('calculate_Q, HI - no units', calculate_Q(sed.lam, sed.lnu, ionisation_energy=13.6 * eV)),
-    ('calculate_Q, HeII', calculate_Q(lam, lnu, ionisation_energy=54.4 * eV)),
+    ('measure_Q, HI', measure_Q, sed.lam, llam.to('erg/s/angstrom').value, {}),
+    ('calculate_Q, HI', calculate_Q, lam, lnu, {'ionisation_energy': 13.6 * eV}),
+    ('calculate_Q, HI - no units', calculate_Q, sed.lam, sed.lnu, {'ionisation_energy': 13.6 * eV}),
+    ('calculate_Q, HeII', calculate_Q, lam, lnu, {'ionisation_energy': 54.4 * eV}),
 ]
 
-for name, f in name_func:
+
+for name, func, lam, l, kwargs in name_func:
 
     print(name, '-'*10)
-    print(f'value: {np.log10(f)}')
-    # print(f'time: {imeit.timeit(func, number=N)/N}')
+    print(f'value: {np.log10(func(lam, l, **kwargs))}')
+
+    def f():
+        func(lam, l, **kwargs)
+
+    print(f'time: {timeit.timeit(f, number=N)/N}')

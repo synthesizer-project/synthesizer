@@ -47,7 +47,7 @@ def apollo_submission_script(n, grid_data_dir, cloudy):
 ######################################################################
 
 # increment array task ID so not zero indexed
-let index=$SGE_TASK_ID+1
+let index=$SGE_TASK_ID
 
 # access line at index from input_names file
 id=$(sed "${{index}}q;d" input_names.txt)

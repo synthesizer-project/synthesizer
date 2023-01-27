@@ -365,10 +365,12 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
     # caculate ionisation wavelength
     ionisation_wavelength = h * c / ionisation_energy
 
-    def f(x): return np.interp(x, lam.to('Angstrom').value,
-                               lum.to('erg/s').value) / (h.to('erg/Hz').value*c.to('Angstrom/s').value)
+    x = lam.to('Angstrom').value
+    y = lum.to('erg/s').value / (h.to('erg/Hz').value*c.to('Angstrom/s').value)
 
-    return integrate.quad(f, 0, ionisation_wavelength.to('Angstrom'), limit=limit)[0]
+    def f(x_): return np.interp(x_, x, y)
+
+    return integrate.quad(f, 0, ionisation_wavelength.to('Angstrom').value, limit=limit)[0]
 
 
 def rebin(l, f, n):  # rebin SED [currently destroys original]

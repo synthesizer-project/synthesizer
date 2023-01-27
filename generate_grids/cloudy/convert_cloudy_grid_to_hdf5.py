@@ -6,7 +6,7 @@ from scipy import integrate
 import os
 import shutil
 from synthesizer.utils import read_params
-from synthesizer.cloudy import read_wavelength, read_continuum, default_lines, read_lines
+from synthesizer.cloudy import read_wavelength, read_continuum, read_lines
 from synthesizer.sed import calculate_Q
 from unyt import eV
 import argparse
@@ -107,11 +107,8 @@ def add_spectra(grid_name, synthesizer_data_dir):
     #  the cloudy spectra to save (others can be generated later)
     spec_names = ['incident', 'transmitted', 'nebular', 'linecont']
 
-    path_to_grids = f'{synthesizer_data_dir}/grids'
-    path_to_cloudy_files = f'{synthesizer_data_dir}/cloudy'
-
     # open the new grid
-    with h5py.File(f'{path_to_grids}/{grid}.hdf5', 'a') as hf:
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'a') as hf:
 
         # --- short hand for later
         metallicities = hf['metallicities']
@@ -121,7 +118,7 @@ def add_spectra(grid_name, synthesizer_data_dir):
         na = len(log10ages)  # number of age grid points
 
         # --- read first spectra from the first grid point to get length and wavelength grid
-        lam = read_wavelength(f'{path_to_cloudy_files}/{sps_model}_{cloudy_model}/0_0')
+        lam = read_wavelength(f'{synthesizer_data_dir}/cloudy/{grid_name}/0_0')
 
         spectra = hf.create_group('spectra')  # create a group holding the spectra in the grid file
         spectra.attrs['spec_names'] = spec_names  # save list of spectra as attribute
@@ -139,9 +136,12 @@ def add_spectra(grid_name, synthesizer_data_dir):
         dlog10Q = np.zeros((na, nZ))
 
         for iZ, Z in enumerate(metallicities):
+
+            print(f'{iZ+1}/{len(metallicities)}')
+
             for ia, log10age in enumerate(log10ages):
 
-                infile = f'{path_to_cloudy_files}/{sps_model}_{cloudy_model}/{ia}_{iZ}'
+                infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}'
 
                 spec_dict = read_continuum(infile, return_dict=True)
                 for spec_name in spec_names:
@@ -163,9 +163,12 @@ def add_spectra(grid_name, synthesizer_data_dir):
         return dlog10Q
 
 
-def get_line_list(grid_name, synthesizer_data_dir, threshold=2.0):
+def get_line_list(grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.0):
     """
     Get a list of lines meeting some threshold at the reference age and metallicity
+
+    NOTE: the updated base grid HDF5 file must have been created first.
+    NOTE: changing the threshold to 2.5 doubles the number of lines and produces repeats that will need to be merged.
 
     Parameters
     ----------
@@ -176,28 +179,39 @@ def get_line_list(grid_name, synthesizer_data_dir, threshold=2.0):
     threshold : float
         The log threshold relative to Hbeta for which lines should be kept.
         Default = 2.0 which implies L > 0.01 * L_Hbeta
+
+    Returns
+    ----------
+    list
+        list of the lines meeting the threshold criteria
     """
 
     # open the new grid
-    with h5py.File(f'{synthesizer_data_dir}/grids/{grid}.hdf5', 'a') as hf:
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'a') as hf:
 
         # get the reference metallicity and age grid point
         ia = hf.attrs['ia_ref']
         iZ = hf.attrs['iZ_ref']
 
-    ids, blend, emergent = read_all_lines(
-        f'{synthesizer_data_dir}/cloudy/grid_name/{ia}_{iZ}')
+    reference_filename = f'{synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}'
 
-    s = (emergent > emergent[ids == 'HI4861']-threshold) & (blend == False)
+    cloudy_ids, blends, wavelengths, intrinsic, emergent = read_lines(
+        reference_filename)
 
-    print(f'number of lines: {np.sum(s)}')
+    threshold = emergent[cloudy_ids == threshold_line] - relative_threshold
 
-    line_list = ids[s]
+    s = (emergent > threshold) & (blends == False) & (wavelengths < 50000)
+
+    line_list = cloudy_ids[s]
+
+    # print(f'number of lines: {np.sum(s)}')
+    # print(line_list)
+    # print(len(list(set(line_list))))
 
     return line_list
 
 
-def add_lines(grid_name, synthesizer_data_dir, dlog10Q):
+def add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include):
     """
     Open cloudy lines and add them to the HDF5 grid
 
@@ -207,17 +221,18 @@ def add_lines(grid_name, synthesizer_data_dir, dlog10Q):
         Name of the grid.
     synthesizer_data_dir: str
         Directory where synthesizer data is kept.
+    dlog10Q
+        The difference between the original and cloudy log10Q used for rescaling the cloudy spectra
     """
 
-    path_to_grids = f'{synthesizer_data_dir}/grids'
-    path_to_cloudy_files = f'{synthesizer_data_dir}/cloudy'
-
     # open the new grid
-    with h5py.File(f'{path_to_grids}/{grid}.hdf5', 'a') as hf:
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'a') as hf:
 
         # --- short hand for later
         metallicities = hf['metallicities']
         log10ages = hf['log10ages']
+        spectra = hf['spectra']
+        lam = spectra['wavelength']
 
         nZ = len(metallicities)  # number of metallicity grid points
         na = len(log10ages)  # number of age grid points
@@ -225,36 +240,42 @@ def add_lines(grid_name, synthesizer_data_dir, dlog10Q):
         # -- get list of lines
 
         lines = hf.create_group('lines')
-        lines.attrs['lines'] = default_lines  # save list of spectra as attribute
+        # lines.attrs['lines'] = list(lines_to_include)  # save list of spectra as attribute
 
-        for line_id in default_lines:
+        for line_id in lines_to_include:
             lines[f'{line_id}/luminosity'] = np.zeros((na, nZ))
             lines[f'{line_id}/stellar_continuum'] = np.zeros((na, nZ))
             lines[f'{line_id}/nebular_continuum'] = np.zeros((na, nZ))
             lines[f'{line_id}/continuum'] = np.zeros((na, nZ))
 
         for iZ, Z in enumerate(metallicities):
+            print(iZ)
             for ia, log10age in enumerate(log10ages):
 
-                infile = f'{path_to_cloudy_files}/{sps_model}_{cloudy_model}/{ia}_{iZ}'
-
-                # --- get line quantities
-                line_ids, line_wavelengths, _, line_luminosities = read_lines(infile)
+                infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}'
 
                 # --- get TOTAL continuum spectra
                 nebular_continuum = spectra['nebular'][ia, iZ] - spectra['linecont'][ia, iZ]
                 continuum = spectra['transmitted'][ia, iZ] + nebular_continuum
 
-                for line_id, line_wv, line_lum in zip(line_ids, line_wavelengths, line_luminosities):
-                    lines[line_id].attrs['wavelength'] = line_wv
-                    lines[f'{line_id}/luminosity'][ia,
-                                                   iZ] = 10**(line_lum + dlog10Q[ia, iZ])  # erg s^-1
-                    lines[f'{line_id}/stellar_continuum'][ia,
-                                                          iZ] = np.interp(line_wv, lam, spectra['transmitted'][ia, iZ])  # erg s^-1 Hz^-1
-                    lines[f'{line_id}/nebular_continuum'][ia,
-                                                          iZ] = np.interp(line_wv, lam, nebular_continuum)  # erg s^-1 Hz^-1
-                    lines[f'{line_id}/continuum'][ia,
-                                                  iZ] = np.interp(line_wv, lam, continuum)  # erg s^-1 Hz^-1
+                # --- get line quantities
+                id, blend, wavelength, intrinsic, emergent = read_lines(infile)
+
+                s = np.nonzero(np.in1d(id, np.array(lines_to_include)))[0]
+
+                for id_, wavelength_, emergent_ in zip(id[s], wavelength[s], emergent[s]):
+
+                    line = lines[id_]
+
+                    line.attrs['wavelength'] = wavelength_
+
+                    line['luminosity'][ia, iZ] = 10**(emergent_ + dlog10Q[ia, iZ])  # erg s^-1
+                    line['stellar_continuum'][ia, iZ] = np.interp(
+                        wavelength_, lam, spectra['transmitted'][ia, iZ])  # erg s^-1 Hz^-1
+                    line['nebular_continuum'][ia, iZ] = np.interp(
+                        wavelength_, lam, nebular_continuum)  # erg s^-1 Hz^-1
+                    line['continuum'][ia, iZ] = np.interp(
+                        wavelength_, lam, continuum)  # erg s^-1 Hz^-1
 
 
 if __name__ == "__main__":
@@ -276,10 +297,11 @@ if __name__ == "__main__":
 
     for grid_name in args.grid:
 
-        # create_new_grid(grid_name, synthesizer_data_dir)
+        create_new_grid(grid_name, synthesizer_data_dir)
         check_cloudy_runs(grid_name, synthesizer_data_dir)
-        # dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
-        # add_lines(grid_name, synthesizer_data_dir, dlog10Q)
+        dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
 
+        lines_to_include = get_line_list(
+            grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.5)
 
-# python convert_cloudy_grid_to_hdf5.py -grid bpass-2.2.1-sin_chabrier03-0.1,100.0_cloudy -dir /Users/stephenwilkins/Dropbox/Research/data/synthesizer
+        add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include)
