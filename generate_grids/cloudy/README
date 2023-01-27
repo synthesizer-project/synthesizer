@@ -22,7 +22,7 @@ This contains the parameters that will be input into CLOUDY.
 
 Users can provide arrays/lists of parameters they wish to iterate over. In this case, the code will create individual runs for each of the parameters specified, with the following naming convention:
 
-{sps_grid}_{imf}_nebular_{param}_{value}
+{sps_grid}_{imf}_cloudy_{param}_{value}
 
 where {param} is the key in the param file of the parameter to be varied, and {value} is the value to be provided. If this is numeric, it will be converted to a string, and if it is negative, the '-' will be substituted for 'm'.
 

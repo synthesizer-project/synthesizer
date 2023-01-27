@@ -196,21 +196,27 @@ if __name__ == "__main__":
     grid_dir = f'{synthesizer_data_dir}/grids'
 
     original_model_names = [
-        'bpass_v2.2.1_imf_chab100',
+        # 'bpass_v2.2.1_imf_chab100',
         # 'bpass_v2.2.1_imf_chab300',
-        # 'bpass_v2.2.1_imf135_300',
+        'bpass_v2.2.1_imf100_300',
+        'bpass_v2.2.1_imf135_300',
+        'bpass_v2.2.1_imf170_300',
+        'bpass_v2.2.1_imf100_100',
+        'bpass_v2.2.1_imf135_100',
+        'bpass_v2.2.1_imf170_100',
     ]
 
     for original_model_name in original_model_names:
-
+        print('-'*50)
+        print(original_model_name)
         for bin in ['bin', 'sin']:
 
-            # out_filename = make_grid(original_model_name, bin)
+            out_filename = make_grid(original_model_name, bin)
 
             # get filename. This is useful if you want to simply add Q
-            model, bpass_imf = resolve_name(original_model_name, bin)
-            synthesizer_model_name = get_model_filename(model)
-            out_filename = f'{synthesizer_data_dir}/grids/{synthesizer_model_name}.hdf5'
+            # model, bpass_imf = resolve_name(original_model_name, bin)
+            # synthesizer_model_name = get_model_filename(model)
+            # out_filename = f'{synthesizer_data_dir}/grids/{synthesizer_model_name}.hdf5'
 
             # add log10Q, can specify the desired ions with ions keyword.
             # by default calculates [HI, HeII]

@@ -229,121 +229,80 @@ def calculate_U_from_Q(Q_avg, n_h=100):
         ((3 * Q_avg * (epsilon**2) * n_h) / (4 * np.pi))**(1./3)
 
 
-# deprecate in favour of the function in sed.py
-def measure_Q(lam, L_AA, limit=100):
-    """
-    Args
-    lam: \\AA
-    L_AA: erg s^-1 AA^-1
-    Returns
-    Q: s^-1
-    """
-    h = 6.626070040E-34  # J s
-    h_erg = h * 1e7  # erg s
-    c = 2.99E8  # m s-1
-    c_AA = c * 1e10  # AA s-1
-    def f(x): return np.interp(x, lam, L_AA * lam) / (h_erg*c_AA)
-    return integrate.quad(f, 0, 912, limit=limit)[0]
+# # deprecate in favour of the function in sed.py
+# def measure_Q(lam, L_AA, limit=100):
+#     """
+#     Args
+#     lam: \\AA
+#     L_AA: erg s^-1 AA^-1
+#     Returns
+#     Q: s^-1
+#     """
+#     h = 6.626070040E-34  # J s
+#     h_erg = h * 1e7  # erg s
+#     c = 2.99E8  # m s-1
+#     c_AA = c * 1e10  # AA s-1
+#     def f(x): return np.interp(x, lam, L_AA * lam) / (h_erg*c_AA)
+#     return integrate.quad(f, 0, 912, limit=limit)[0]
+
+# def get_roman_numeral(number):
+#     """
+#     Function to convert an integer into a roman numeral str.
+#
+#     Used for renaming emission lines from the cloudy defaults.
+#
+#     Returns
+#     ---------
+#     str
+#         string reprensentation of the roman numeral
+#     """
+#
+#     num = [1, 4, 5, 9, 10, 40, 50, 90,
+#            100, 400, 500, 900, 1000]
+#     sym = ["I", "IV", "V", "IX", "X", "XL",
+#            "L", "XC", "C", "CD", "D", "CM", "M"]
+#     i = 12
+#
+#     roman = ''
+#     while number:
+#         div = number // num[i]
+#         number %= num[i]
+#
+#         while div:
+#             roman += sym[i]
+#             div -= 1
+#         i -= 1
+#     return roman
 
 
-def default_lines():
-    return [
-        'MgII2803', 'MgII2796',
-        'ArIII7136', 'ArIII7751', 'ArIV4711', 'ArIV4740',
-        'NeIII3869', 'NeIII3967',
-        'FeIV3095', 'FeIV2836', 'FeIV2829',
-        'CII2325', 'CII2327', 'CIII1909', 'CIII1907',
-        'CIV1551', 'CIV1548', 'C-1335',
-        'OII2470', 'OII3729', 'OII3726', 'OIII4959',
-        'OIII5007', 'OIII2321', 'OIII4363',
-        'OIII1661', 'OIII1666',
-        'SiIII1892', 'SiIII1883', 'SiIII1206',
-        'SiIV1394', 'SiIV1403',
-        'NII6583',
-        'SII6731', 'SII6716', 'SIII9069', 'SIII9531',
-        'SIII3722', 'SIII6312',
-        'HeII1640', 'HeI10830', 'HeI3889', 'HeI3188',
-        'HeI2945', 'HeI2829', 'HeI20581',
-        'HeI5016', 'HeI3965', 'HeI7065', 'HeI5876',
-        'HeI4471', 'HeI4026', 'HeI3820',
-        'HeI3705', 'HeI6678', 'HeI4922', 'HeI18685',
-        'HI1216', 'HI1026', 'HI6563', 'HI4861', 'HI4340',
-        'HI4102', 'HI3970', 'HI3889',
-        'HI3835', 'HI3798', 'HI3771', 'HI3750', 'HI3734',
-        'HI3722', 'HI3712', 'HI3704',
-        'HI3697', 'HI3692', 'HI3687', 'HI3683', 'HI3679',
-        'HI3671', 'HI3669', 'HI18751',
-        'HI12818', 'HI10938', 'HI10049', 'HI9546', 'HI9229',
-        'HI9015', 'HI8863', 'HI8750',
-        'HI8665', 'HI8323', 'HI26251', 'HI21655',
-        'HI19445', 'HI18174',
-    ]
+# def get_synthesizer_id(wavelength, cloudy_id):
+#     """ convert the cloudy line ID into a new form ID """
+#
+#     # round wavelength
+#     wv = int(np.round(wavelength, 0))
+#
+#     # split id into different components
+#     li = list(filter(None, cloudy_id.split(' ')))
+#
+#     if len(li) == 2:
+#         return [li[0]+str(wv), True]
+#
+#     elif len(li) == 3:
+#
+#         # element
+#         e = li[0]
+#
+#         # convert arabic ionisation level to roman
+#
+#         if li[1].isnumeric():
+#             ion = get_roman_numeral(int(li[1]))
+#         else:
+#             ion = li[1]
+#
+#         return [e+ion+str(wv), False]
 
 
-class Line:
-    wv = None  # wavelength
-    intrinsic = None  #  intrinsic luminosity
-    emergent = None  # emergent luminosity
-
-
-def get_roman_numeral(number):
-    """
-    Function to convert an integer into a roman numeral str.
-
-    Used for renaming emission lines from the cloudy defaults.
-
-    Returns
-    ---------
-    str
-        string reprensentation of the roman numeral
-    """
-
-    num = [1, 4, 5, 9, 10, 40, 50, 90,
-           100, 400, 500, 900, 1000]
-    sym = ["I", "IV", "V", "IX", "X", "XL",
-           "L", "XC", "C", "CD", "D", "CM", "M"]
-    i = 12
-
-    roman = ''
-    while number:
-        div = number // num[i]
-        number %= num[i]
-
-        while div:
-            roman += sym[i]
-            div -= 1
-        i -= 1
-    return roman
-
-
-def get_synthesizer_id(wavelength, cloudy_id):
-    """ convert the cloudy line ID into a new form ID """
-
-    # round wavelength
-    wv = int(np.round(wavelength, 0))
-
-    # split id into different components
-    li = list(filter(None, cloudy_id.split(' ')))
-
-    if len(li) == 2:
-        return [li[0]+str(wv), True]
-
-    elif len(li) == 3:
-
-        # element
-        e = li[0]
-
-        # convert arabic ionisation level to roman
-
-        if li[1].isnumeric():
-            ion = get_roman_numeral(int(li[1]))
-        else:
-            ion = li[1]
-
-        return [e+ion+str(wv), False]
-
-
-def read_all_lines(filename):
+def read_lines(filename):
 
     wavelengths, cloudy_ids, intrinsic, emergent = np.loadtxt(
         f'{filename}.lines', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
@@ -352,60 +311,13 @@ def read_all_lines(filename):
     intrinsic = intrinsic.astype(float) - 7.  # erg s^{-1} magic number
     emergent = emergent.astype(float) - 7.  # erg s^{-1} magic number
 
-    # synthesizer_ids, blend = np.array([get_synthesizer_id(wavelength, cloudy_id)
-    #                                    for wavelength, cloudy_id in zip(wavelengths, cloudy_ids)]).T
+    new_cloudy_ids = np.array([' '.join(list(filter(None, id.split(' ')))) for id in cloudy_ids])
+    lenid = np.array([len(list(filter(None, id.split(' ')))) for id in cloudy_ids])
 
-    synthesizer_ids = []
-    blends = np.zeros(len(wavelengths), dtype=bool)
+    blends = np.ones(len(wavelengths), dtype=bool)
+    blends[lenid == 3] = False
 
-    for i, (wavelength, cloudy_id) in enumerate(zip(wavelengths, cloudy_ids)):
-
-        synthesizer_id, blend = get_synthesizer_id(wavelength, cloudy_id)
-        synthesizer_ids.append(synthesizer_id)
-        blends[i] = blend
-
-    return np.array(synthesizer_ids), blends, emergent
-
-
-def read_lines(filename, line_ids=None):
-
-    wavelengths, cloudy_line_ids, intrinsic, emergent = np.loadtxt(
-        f'{filename}.lines', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
-
-    wavelengths = wavelengths.astype(float)
-    intrinsic = intrinsic.astype(float) - 7.  # erg s^{-1} magic number
-    emergent = emergent.astype(float) - 7.  # erg s^{-1} magic number
-
-    new_line_ids = get_new_lineids(wavelengths, cloudy_line_ids)
-
-    if line_ids == 'all':
-        line_ids = new_line_ids  # all lines
-    elif not line_ids:
-        line_ids = default_lines()
-
-    wavelenths_ = []
-    intrinsic_ = []
-    emergent_ = []
-
-    for line_id in line_ids:
-
-        if line_id in new_line_ids:
-
-            s = new_line_ids == line_id
-
-            wavelenths_.append(wavelengths[s][0])
-            intrinsic_.append(intrinsic[s][0])
-            emergent_.append(emergent[s][0])
-
-        else:
-            wavelenths_.append(-99)
-            intrinsic_.append(-99)
-            emergent_.append(-99)
-
-    inds = np.array(wavelenths_).argsort()
-
-    return np.array(line_ids)[inds], np.array(wavelenths_)[inds],\
-        np.array(intrinsic_)[inds], np.array(emergent_)[inds]
+    return new_cloudy_ids, blends, wavelengths, intrinsic, emergent
 
 
 def make_linecont(filename, wavelength_grid, line_ids=None):
@@ -427,8 +339,8 @@ def make_linecont(filename, wavelength_grid, line_ids=None):
     emergent = emergent.astype(float)  # correct for size of cluster # erg s^-1
 
     new_line_ids = np.array([get_new_id(wv, cloudy_line_id)
-                            for wv, cloudy_line_id in zip(line_wavelengths,
-                                                          cloudy_line_ids)])
+                             for wv, cloudy_line_id in zip(line_wavelengths,
+                                                           cloudy_line_ids)])
 
     line_spectra = np.zeros(len(wavelength_grid)) + 1E-100
 
@@ -486,7 +398,7 @@ def read_continuum(filename, return_dict=False):
                       'nebular_continuum', 'total', 'linecont']:
 
         sed = locals()[spec_type]
-        sed = sed[::-1]  # reverse array
+        sed = sed[:: -1]  # reverse array
         sed /= 10**7  # convert from W to erg
         sed /= nu  # convert from nu l_nu to l_nu
         spec_dict[spec_type] = sed
