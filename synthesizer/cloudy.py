@@ -320,44 +320,43 @@ def read_lines(filename):
     return new_cloudy_ids, blends, wavelengths, intrinsic, emergent
 
 
-def make_linecont(filename, wavelength_grid, line_ids=None):
-    """
-    make linecont from lines
-    (hopefully the same as that from the continuum)
-    """
+# I DON'T BELIEVE THIS IS USED ANYMORE. I BELIEVE THIS WAS TO GENERATE SPECTRA FROM JUST LINES.
 
-    if not line_ids:
-        line_ids = default_lines()
-
-    line_wavelengths, cloudy_line_ids, intrinsic, emergent = np.loadtxt(
-        f'{filename}.lines', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
-
-    line_wavelengths = line_wavelengths.astype(float)
-
-    # correct for size of cluster # erg s^-1
-    intrinsic = intrinsic.astype(float)
-    emergent = emergent.astype(float)  # correct for size of cluster # erg s^-1
-
-    new_line_ids = np.array([get_new_id(wv, cloudy_line_id)
-                             for wv, cloudy_line_id in zip(line_wavelengths,
-                                                           cloudy_line_ids)])
-
-    line_spectra = np.zeros(len(wavelength_grid)) + 1E-100
-
-    for new_line_id, line_wv, line_luminosity in zip(new_line_ids,
-                                                     line_wavelengths,
-                                                     emergent):
-
-        if new_line_id in line_ids:
-
-            line_luminosity += -7.  # erg -> W ??????
-
-            idx = (np.abs(wavelength_grid-line_wv)).argmin()
-            dl = 0.5*(wavelength_grid[idx+1] - wavelength_grid[idx-1])
-            n = c.value/(line_wv*1E-10)
-            line_spectra[idx] += line_wv*((10**line_luminosity)/n)/dl
-
-    return line_spectra
+# def make_linecont(filename, wavelength_grid, line_ids=None):
+#     """
+#     make linecont from lines
+#     (hopefully the same as that from the continuum)
+#     """
+#
+#     line_wavelengths, cloudy_line_ids, intrinsic, emergent = np.loadtxt(
+#         f'{filename}.lines', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
+#
+#     line_wavelengths = line_wavelengths.astype(float)
+#
+#     # correct for size of cluster # erg s^-1
+#     intrinsic = intrinsic.astype(float)
+#     emergent = emergent.astype(float)  # correct for size of cluster # erg s^-1
+#
+#     new_line_ids = np.array([get_new_id(wv, cloudy_line_id)
+#                              for wv, cloudy_line_id in zip(line_wavelengths,
+#                                                            cloudy_line_ids)])
+#
+#     line_spectra = np.zeros(len(wavelength_grid)) + 1E-100
+#
+#     for new_line_id, line_wv, line_luminosity in zip(new_line_ids,
+#                                                      line_wavelengths,
+#                                                      emergent):
+#
+#         if new_line_id in line_ids:
+#
+#             line_luminosity += -7.  # erg -> W ??????
+#
+#             idx = (np.abs(wavelength_grid-line_wv)).argmin()
+#             dl = 0.5*(wavelength_grid[idx+1] - wavelength_grid[idx-1])
+#             n = c.value/(line_wv*1E-10)
+#             line_spectra[idx] += line_wv*((10**line_luminosity)/n)/dl
+#
+#     return line_spectra
 
 
 def read_wavelength(filename):
