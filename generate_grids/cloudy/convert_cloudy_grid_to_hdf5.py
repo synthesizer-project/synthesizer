@@ -1,5 +1,8 @@
 
-""" This reads in a cloudy grid of models and creates a new SPS grid including the various outputs """
+"""
+This reads in a cloudy grid of models and creates a new SPS grid including the various outputs
+
+"""
 
 
 from scipy import integrate
