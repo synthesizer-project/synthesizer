@@ -1,3 +1,11 @@
+"""
+Example for generating a emission lines for a parametric galaxy. This example will:
+- show the available lines to a grid
+- build a parametric galaxy (see make_sfzh and make_sed)
+- calculate intrinsic line properties
+- calculate dust-attenuated line properties
+"""
+
 
 from synthesizer.units import Units
 from synthesizer.grid import get_available_lines, Grid
@@ -8,10 +16,7 @@ from unyt import yr, Myr
 
 if __name__ == '__main__':
 
-    """Example for generating a line object containing the luminosities, equivalent widths and other properties of lines.
-
-    """
-
+    # location and name of the grid
     grid_dir = '../../tests/test_grid'
     grid_name = 'test_grid'
 
