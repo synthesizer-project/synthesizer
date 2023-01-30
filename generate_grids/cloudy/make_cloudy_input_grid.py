@@ -149,8 +149,8 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
 
             if cloudy_params['U_model'] == 'ref':
 
-                delta_log10Q = grid.log10Q[ia, iZ] - \
-                    grid.log10Q[ia_ref, iZ_ref]
+                delta_log10Q = grid.log10Q['HI'][ia, iZ] - \
+                    grid.log10Q['HI'][ia_ref, iZ_ref]
 
                 log10U = cloudy_params['log10U_ref'] + (1/3) * delta_log10Q
 
