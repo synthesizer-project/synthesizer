@@ -478,10 +478,10 @@ class ParametricGalaxy(BaseGalaxy):
 
         return self.get_attenuated_line(grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
 
-    def make_images(self, spectra_type, filter_collection, resolution, npix=None, fov=None, update=True):
+    def make_images(self, spectra_type, resolution, filter_collection=None, npix=None, fov=None, update=True):
 
-        images = ParametricImage(filter_collection, resolution, npix=npix, fov=fov,
-                                 sed=self.spectra[spectra_type], morphology=self.morph)
+        images = ParametricImage(self.morph, resolution, filter_collection=filter_collection, npix=npix, fov=fov,
+                                 sed=self.spectra[spectra_type])
 
         if update:
             self.images[spectra_type] = images

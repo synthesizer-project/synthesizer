@@ -1,7 +1,7 @@
 import numpy as np
 
 import matplotlib.pyplot as plt
-from unyt import yr, Myr
+from unyt import kpc, yr, Myr, mas
 
 from synthesizer.filters import UVJ
 from synthesizer.galaxy import ParametricGalaxy as Galaxy
@@ -15,8 +15,8 @@ if __name__ == '__main__':
     # ------------------------------------------------
     # --- define morphology
 
-    morphology_parameters = {'r_eff': 5., 'n': 1.}
-    morph = Sersic2D(morphology_parameters)
+    # r_eff could be defined in terms of (physical) kpc instead
+    morph = Sersic2D({'r_eff': 1 * kpc, 'n': 1.})
     # morph.plot(pixel_size=21, pixel_scale=1)  # --- show quick plot of morphology
 
     # ------------------------------------------------
@@ -48,12 +48,16 @@ if __name__ == '__main__':
 
     filter_collection = UVJ(new_lam=grid.lam)
 
+    print(filter_collection)
+
     sed = galaxy.spectra['stellar'].get_broadband_luminosities(filter_collection)
 
-    resolution = 0.5
+    resolution = 0.1 * kpc  # resolution in kpc
     npix = 25
 
     images = galaxy.make_images('stellar', filter_collection, resolution, npix=npix)
+
+    print(images)
 
     images.plot('U')
 

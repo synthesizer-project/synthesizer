@@ -1,7 +1,7 @@
 import numpy as np
 from astropy.modeling.models import Sersic2D as Sersic2D_
+from unyt.dimensions import length, angle
 import matplotlib.pyplot as plt
-
 
 
 class MorphologyBase:
@@ -15,7 +15,7 @@ class MorphologyBase:
         shows a plot of the model for a given resolution and npix
     """
 
-    def plot(self, resolution, npix=None):
+    def plot(self, resolution, npix=None, cosmo=None, z=None):
         """
         Produce a plot of the current morphology
 
@@ -49,19 +49,41 @@ class Sersic2D(MorphologyBase):
         returns an image
     """
 
-    def __init__(self, p):
+    def __init__(self, p, cosmo=None, z=None):
 
-        parameters = {
-            'r_eff': 1,
+        self.parameters = {
+            'r_eff_kpc': None,
+            'r_eff_mas': None,
             'n': 1,
             'ellip': 0,
             'theta': 0}
 
         for key, value in list(p.items()):
-            parameters[key] = value
+            self.parameters[key] = value
 
-        self.model = Sersic2D_(amplitude=1, r_eff=parameters['r_eff'],
-                               n=parameters['n'], ellip=parameters['ellip'], theta=parameters['theta'])
+        if p['r_eff'].units.dimensions == angle:
+            self.parameters['r_eff_mas'] = p['r_eff'].to('mas').value
+        elif p['r_eff'].units.dimensions == length:
+            self.parameters['r_eff_kpc'] = p['r_eff'].to('kpc').value
+
+        # if cosmology and redshift provided calculate the conversion of pkpc to mas
+        if cosmo and z:
+            self.kpc_proper_per_mas = cosmo.kpc_proper_per_arcmin(z).to('kpc/mas').value
+
+            if self.parameters['r_eff_kpc']:
+                self.parameters['r_eff_mas'] = self.parameters['r_eff_kpc'] / \
+                    self.kpc_proper_per_mas
+            else self.parameters['r_eff_mas']:
+                self.parameters['r_eff_kpc'] = self.parameters['r_eff_mas'] * \
+                    self.kpc_proper_per_mas
+
+        if self.parameters['r_eff_kpc']:
+            self.model_kpc = Sersic2D_(amplitude=1, r_eff=self.parameters['r_eff_kpc'].value,
+                                       n=self.parameters['n'], ellip=self.parameters['ellip'], theta=self.parameters['theta'])
+
+        if self.parameters['r_eff_mas']:
+            self.model_mas = Sersic2D_(amplitude=1, r_eff=self.parameters['r_eff_mas'].value,
+                                       n=self.parameters['n'], ellip=self.parameters['ellip'], theta=self.parameters['theta'])
 
     def img(self, xx, yy):
         """
@@ -90,4 +112,3 @@ class Sersic2D(MorphologyBase):
         """
 
         return self.model(xx, yy)
-

@@ -417,7 +417,7 @@ class ParametricImage(ParametricObservation, Image):
 
     """
 
-    def __init__(self, filters, resolution, morphology, sed=None, npix=None, fov=None, survey=None):
+    def __init__(self, morphology, resolution, sed=None, npix=None, fov=None, survey=None, cosmo=None, z=None):
         """
         Intialise the ParametricImage.
 
@@ -448,7 +448,20 @@ class ParametricImage(ParametricObservation, Image):
                        filters=filters, sed=sed, survey=survey)
 
         # Define 1D bin centres of each pixel
-        bin_centres = resolution * np.linspace(-(npix-1)/2, (npix-1)/2, npix)
+
+        self.spatial_units = resolution.units
+
+        if morphology.spatial_units != self.spatial_units:
+
+            # if not in the same unit convert (requires cosmology)
+
+            self.morphology
+
+        else:
+
+            self.morphology = morphology
+
+        bin_centres = resolution.value * np.linspace(-(npix-1)/2, (npix-1)/2, npix)
 
         # As above but for the 2D grid
         self.xx, self.yy = np.meshgrid(bin_centres, bin_centres)
