@@ -1,5 +1,6 @@
 import numpy as np
 from astropy.modeling.models import Sersic2D as Sersic2D_
+from unyt import kpc, mas
 from unyt.dimensions import length, angle
 import matplotlib.pyplot as plt
 
@@ -51,6 +52,10 @@ class Sersic2D(MorphologyBase):
 
     def __init__(self, p, cosmo=None, z=None):
 
+        self.update(p, cosmo=cosmo, z=z)
+
+    def update(self, p, cosmo=None, z=None):
+
         self.parameters = {
             'r_eff_kpc': None,
             'r_eff_mas': None,
@@ -73,19 +78,23 @@ class Sersic2D(MorphologyBase):
             if self.parameters['r_eff_kpc']:
                 self.parameters['r_eff_mas'] = self.parameters['r_eff_kpc'] / \
                     self.kpc_proper_per_mas
-            else self.parameters['r_eff_mas']:
+            else:
                 self.parameters['r_eff_kpc'] = self.parameters['r_eff_mas'] * \
                     self.kpc_proper_per_mas
 
         if self.parameters['r_eff_kpc']:
-            self.model_kpc = Sersic2D_(amplitude=1, r_eff=self.parameters['r_eff_kpc'].value,
+            self.model_kpc = Sersic2D_(amplitude=1, r_eff=self.parameters['r_eff_kpc'],
                                        n=self.parameters['n'], ellip=self.parameters['ellip'], theta=self.parameters['theta'])
+        else:
+            self.model_kpc = None
 
         if self.parameters['r_eff_mas']:
-            self.model_mas = Sersic2D_(amplitude=1, r_eff=self.parameters['r_eff_mas'].value,
+            self.model_mas = Sersic2D_(amplitude=1, r_eff=self.parameters['r_eff_mas'],
                                        n=self.parameters['n'], ellip=self.parameters['ellip'], theta=self.parameters['theta'])
+        else:
+            self.model_mas = None
 
-    def img(self, xx, yy):
+    def img(self, xx, yy, units=kpc):
         """
         Produce a plot of the current morphology
 
@@ -111,4 +120,7 @@ class Sersic2D(MorphologyBase):
 
         """
 
-        return self.model(xx, yy)
+        if units == kpc:
+            return self.model_kpc(xx, yy)
+        if units == mas:
+            return self.model_mas(xx, yy)

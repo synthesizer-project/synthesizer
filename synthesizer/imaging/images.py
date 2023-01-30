@@ -4,6 +4,8 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import synthesizer.exceptions as exceptions
+from unyt import unyt_quantity, kpc, mas
+from unyt.dimensions import length, angle
 from synthesizer.imaging.observation import (Observation, ParticleObservation,
                                              ParametricObservation)
 from synthesizer.imaging.spectral_cubes import (ParticleSpectralCube,
@@ -417,7 +419,7 @@ class ParametricImage(ParametricObservation, Image):
 
     """
 
-    def __init__(self, morphology, resolution, sed=None, npix=None, fov=None, survey=None, cosmo=None, z=None):
+    def __init__(self, morphology, resolution, filters=None, sed=None, npix=None, fov=None, survey=None, cosmo=None, z=None, rest_frame=True):
         """
         Intialise the ParametricImage.
 
@@ -447,30 +449,55 @@ class ParametricImage(ParametricObservation, Image):
         Image.__init__(self, resolution=resolution, npix=npix, fov=fov,
                        filters=filters, sed=sed, survey=survey)
 
-        # Define 1D bin centres of each pixel
+        self.rest_frame = rest_frame
 
-        self.spatial_units = resolution.units
-
-        if morphology.spatial_units != self.spatial_units:
-
-            # if not in the same unit convert (requires cosmology)
-
-            self.morphology
-
+        # check resolution has units and convert to desired units
+        if isinstance(resolution, unyt_quantity):
+            if resolution.units.dimensions == angle:
+                resolution = resolution.to('mas')
+            elif resolution.units.dimensions == length:
+                resolution = resolution.to('kpc')
+            else:
+                # raise exception, don't understand units
+                pass
+            _resolution = resolution.value
         else:
+            # raise exception, resolution must have units
+            pass
 
-            self.morphology = morphology
+        # check morphology has the correct method
+        # this might not be generic enough
+        if (resolution.units == kpc) & (not morphology.model_kpc):
 
-        bin_centres = resolution.value * np.linspace(-(npix-1)/2, (npix-1)/2, npix)
+            if (cosmo != None) & (z != None):
+                morphology.update(morphology.p, cosmo=cosmo, z=z)
+            else:
+                """ raise exception, morphology is defined in mas but image
+                resolution in kpc. Please provide cosmology (cosmo) and redshift (z)
+                """
+                pass
+
+        if (resolution.units == mas) & (not morphology.model_mas):
+
+            if (cosmo != None) & (z != None):
+                morphology.update(morphology.p, cosmo=cosmo, z=z)
+            else:
+                """ raise exception, morphology is defined in kpc but image
+                resolution in mas. Please provide cosmology (cosmo) and redshift (z)
+                """
+                pass
+
+        # Define 1D bin centres of each pixel
+        bin_centres = _resolution * np.linspace(-(npix-1)/2, (npix-1)/2, npix)
 
         # As above but for the 2D grid
         self.xx, self.yy = np.meshgrid(bin_centres, bin_centres)
 
         # define the base image
-        self.img = morphology.img(self.xx, self.yy)
+        self.img = morphology.img(self.xx, self.yy, units=resolution.units)
         self.img /= np.sum(self.img)  # normalise this image to 1
 
-    def create_images(self, sed=None, filters=None):
+    def create_images(self, sed=None):
         """
         Create multiband images
 
@@ -489,23 +516,29 @@ class ParametricImage(ParametricObservation, Image):
             if self.sed:
                 sed = self.sed
             else:
-                # raise exception
+                # raise exception if no Sed object available
                 pass
 
-        sed_filters = list(sed.broadband_luminosities.keys())
-
-        # if filters not given read from sed object
-        if not filters:
-            filters = sed_filters
-
         # check if all filters have fluxes calculated
+        if self.rest_frame:
+            if sed.broadband_luminosities:
+                filters = list(sed.broadband_luminosities.keys())
+            else:
+                # raise exception if broadband luminosities not generated
+                pass
+        else:
+            if sed.broadband_fluxes:
+                filters = list(sed.broadband_fluxes.keys())
+            else:
+                # raise exception if broadband fluxes not generated
+                pass
 
         for filter_ in filters:
             self.imgs[filter_] = sed.broadband_luminosities[filter_] * self.img
 
         return self.imgs
 
-    def plot(self, filter_code):
+    def plot(self, filter_code=None):
         """
         Make a simple plot of the image
 
@@ -515,8 +548,14 @@ class ParametricImage(ParametricObservation, Image):
             The filter code
         """
 
+        # if filter code provided use broadband image, else use base image
+        if filter_code:
+            img = self.imgs[filter_code]
+        else:
+            img = self.img
+
         plt.figure()
-        plt.imshow(np.log10(self.imgs[filter_code]), origin='lower', interpolation='nearest')
+        plt.imshow(np.log10(img), origin='lower', interpolation='nearest')
         plt.show()
 
     def make_rgb_image(self, rgb_filters, update=True):
