@@ -49,8 +49,10 @@ def create_new_grid(grid, synthesizer_data_dir):
             for ds in ['metallicities', 'log10ages', 'log10Q']:
                 hf_sps.copy(hf_sps[ds], hf['/'], ds)
 
-        # open cloudy parameter file and add it
+        # add attribute with the grid axes for future when using >2D grid or AGN grids
+        hf.attrs['grid_axes'] = ['log10ages', 'metallicities']
 
+        # open cloudy parameter file and add it
         with open(f'{path_to_cloudy_files}/{grid_name}/params.yaml', "r") as stream:
             cloudy_params = yaml.safe_load(stream)
             for k, v in cloudy_params.items():
