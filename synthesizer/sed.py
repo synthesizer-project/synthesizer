@@ -63,13 +63,15 @@ class Sed:
 
         if np.array_equal(self.lam, second_sed.lam):
 
-            exceptions.InconsistentAddition('Wavelength grids must be identical')
+            exceptions.InconsistentAddition(
+                'Wavelength grids must be identical')
 
         else:
 
             if self.lnu.ndim != second_sed.lnu.ndim:
 
-                exceptions.InconsistentAddition('SEDs must have same dimensions')
+                exceptions.InconsistentAddition(
+                    'SEDs must have same dimensions')
 
             elif self.lnu.ndim == 1:
 
@@ -85,7 +87,8 @@ class Sed:
 
             else:
 
-                exceptions.InconsistentAddition('Sed.lnu must have ndim 1 or 2')
+                exceptions.InconsistentAddition(
+                    'Sed.lnu must have ndim 1 or 2')
 
     def __str__(self):
         """
@@ -172,16 +175,17 @@ class Sed:
 
         self.broadband_luminosities = {}
 
-        for filter in fc.filters:
+        for _filter in fc:
 
-            """ calculate broadband fluxes by multiplying the observed spectra by the
-            filter transmission curve and dividing by the normalisation """
-
-            int_num = integrate.trapezoid(self.lnu * filter.t/self.nu,
+            # Calculate broadband fluxes by multiplying the observed spectra
+            # by the filter transmission curve and dividing by the
+            # normalisation.
+            int_num = integrate.trapezoid(self.lnu * _filter.t / self.nu,
                                           self.nu)
-            int_den = integrate.trapezoid(filter.t/self.nu, self.nu)
+            int_den = integrate.trapezoid(_filter.t / self.nu, self.nu)
 
-            self.broadband_luminosities[filter.filter_code] = (int_num / int_den) * erg/s/Hz
+            self.broadband_luminosities[_filter.filter_code] = (
+                int_num / int_den) * erg / s / Hz
 
         return self.broadband_luminosities
 
@@ -237,18 +241,18 @@ class Sed:
         # loop over filters in filter collection
         for f in fc.filters:
 
-            """ check whether the filter transmission curve wavelength grid
-            and the spectral grid are the same array"""
+            # Check whether the filter transmission curve wavelength grid
+            # and the spectral grid are the same array
 
             if not np.array_equal(f.lam, self.lamz):
                 print(('WARNING: filter wavelength grid is not '
                        'the same as the SED wavelength grid.'))
 
-            """ calculate broadband fluxes by multiplying the observed spetra by
-            the filter transmission curve and dividing by the normalisation
+            # Calculate broadband fluxes by multiplying the observed spetra by
+            # the filter transmission curve and dividing by the normalisation
 
-            all of these versions seem to work. I suspect the first one won't
-            work for different wavelength grids."""
+            # NOTE: All of these versions seem to work. I suspect the first one
+            # won't work for different wavelength grids.
 
             # int_num = integrate.trapezoid(self.fnu * fc.filter[f].t)
             # int_den = integrate.trapezoid(fc.filter[f].t)

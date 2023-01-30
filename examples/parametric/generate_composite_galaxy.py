@@ -1,4 +1,3 @@
-
 """
 Example for generating a composite galaxy
 photometry. This example will:
