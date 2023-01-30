@@ -178,6 +178,25 @@ def generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=1.):
     return BinnedSFZH(log10ages, metallicities, sfzh, sfh_f=sfh, Zh_f=Zh)
 
 
+def generate_sfzh_from_array(log10ages, metallicities, sfh, Zh, stellar_mass=1.):
+    """
+    Generated a BinnedSFZH from an array instead of function
+    """
+
+    if not isinstance(Zh, np.ndarray):
+        iZ = np.abs(metallicities - Zh).argmin()
+        Zh = np.zeros(len(metallicities))
+        Zh[iZ] = 1.0
+
+    sfzh = sfh[:, np.newaxis] * Zh
+
+    # --- normalise
+    sfzh /= np.sum(sfzh)
+    sfzh *= stellar_mass
+
+    return BinnedSFZH(log10ages, metallicities, sfzh)
+
+
 class ZH:
 
     """ A collection of classes describing the metallicity history (and distribution) """
