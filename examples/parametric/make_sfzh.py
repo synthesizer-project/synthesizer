@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from unyt import yr, Myr
 
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh, generate_sfzh_from_array
 # from synthesizer.plt import single, single_histxy, mlabel
 
 # TODO: SFH currently reliant on sfzh to get binned history
@@ -22,6 +22,15 @@ if __name__ == '__main__':
     log10ages = np.arange(6., 10.5, 0.1)
     log10metallicities = np.arange(-5., -1.5, 0.25)
     metallicities = 10**log10metallicities
+
+    # --- define the SFH as an array and the metallicity as a number
+
+    sfh = np.ones(len(log10ages))
+    Z = 0.01
+    sfzh = generate_sfzh_from_array(log10ages, metallicities, sfh, Z)
+    print(sfzh)
+    sfzh.plot()
+    print(sfzh.sfzh.shape)
 
     # --- define the parameters of the star formation and metal enrichment histories
 
