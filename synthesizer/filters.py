@@ -600,12 +600,12 @@ class Filter:
         # If a new wavelength grid is provided, interpolate
         # the transmission curve on to that grid
         if isinstance(self.lam, np.ndarray):
-            self.t = self._iterpolate_wavelength()
+            self.t = self._interpolate_wavelength()
         else:
             self.lam = self.original_lam
             self.t = self.original_t
 
-    def _iterpolate_wavelength(self):
+    def _interpolate_wavelength(self):
         """
         Interpolates a filter transmission curve onto the Filter's wavelength
         array.
