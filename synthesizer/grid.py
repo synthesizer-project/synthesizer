@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from . import __file__ as filepath
 from .plt import mlabel
 from .sed import Sed, convert_fnu_to_flam
+from .line import Line
 
 
 from collections.abc import Iterable
@@ -35,7 +36,7 @@ def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
         list of lines
     """
 
-    grid_filename = f'{grid_dir}/{grid_name}.h5'
+    grid_filename = f'{grid_dir}/{grid_name}.hdf5'
     with h5py.File(grid_filename, 'r') as hf:
 
         lines = list(hf['lines'].keys())
@@ -152,7 +153,7 @@ class Grid():
 
         self.grid_dir = grid_dir
         self.grid_name = grid_name
-        self.grid_filename = f'{self.grid_dir}/{self.grid_name}.h5'
+        self.grid_filename = f'{self.grid_dir}/{self.grid_name}.hdf5'
 
         self.spectra = None
         self.lines = None
@@ -161,29 +162,25 @@ class Grid():
         if isinstance(read_lines, list):
             read_lines = flatten_linelist(read_lines)
 
+        # get basic info of the grid
         with h5py.File(self.grid_filename, 'r') as hf:
+
+            self.parameters = {k: v for k, v in hf.attrs.items()}
+
             self.spec_names = list(hf['spectra'].keys())
             self.spec_names.remove('wavelength')
 
-            self.lam = hf['spectra/wavelength'][:]
-            self.nu = 3E8/(self.lam*1E-10)
-
             self.log10ages = hf['log10ages'][:]
             self.ages = 10**self.log10ages
-            self.log10metallicities = hf['log10metallicities'][:]
-            self.metallicities = 10**self.log10metallicities
 
-            # TODO: why do we need this?
-            self.log10Zs = self.log10metallicities  # alias
+            self.metallicities = hf['metallicities'][:]
+            self.log10metallicities = np.log10(self.metallicities)
 
             if 'log10Q' in hf.keys():
-                self.log10Q = hf['log10Q'][:]
-                self.log10Q[self.log10Q != self.log10Q] = -99.99
 
-            # self.units = {}
-            # self.units['log10ages'] = hf['log10ages'].attrs['Units']
-            # self.units['log10metallicities'] = hf['log10ages'].attrs['Units']
-            # self.units['lam'] = hf['spectra/wavelength'].attrs['Units']
+                self.log10Q = {}
+                for ion in hf['log10Q'].keys():
+                    self.log10Q[ion] = hf['log10Q'][ion][:]
 
         if read_spectra:
 
@@ -191,7 +188,11 @@ class Grid():
 
             for spec_name in self.spec_names:
 
-                with h5py.File(f'{self.grid_dir}/{self.grid_name}.h5', 'r') as hf:
+                with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
+
+                    self.lam = hf['spectra/wavelength'][:]
+                    self.nu = 3E8/(self.lam*1E-10)
+
                     self.spectra[spec_name] = hf['spectra'][spec_name][:]
                     # self.units[f'spectra/{spec_name}'] = hf['spectra'][spec_name].attrs['Units']
 
@@ -219,9 +220,9 @@ class Grid():
             if isinstance(read_lines, list):
                 self.line_list = read_lines
             else:
-                self.line_list = hf['lines'].attrs['lines']  # apparently this doesn't exist
+                self.line_list = get_available_lines(grid_name, grid_dir)
 
-            with h5py.File(f'{self.grid_dir}/{self.grid_name}.h5', 'r') as hf:
+            with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
 
                 for line in self.line_list:
 
@@ -229,6 +230,33 @@ class Grid():
                     self.lines[line]['wavelength'] = hf['lines'][line].attrs['wavelength']  # angstrom
                     self.lines[line]['luminosity'] = hf['lines'][line]['luminosity'][:]
                     self.lines[line]['continuum'] = hf['lines'][line]['continuum'][:]
+
+    def __str__(self):
+        """Function to print a basic summary of the Grid object.
+
+        Returns
+        -------
+        str
+
+        """
+
+        # Set up string for printing
+        pstr = ""
+
+        # Add the content of the summary to the string to be printed
+        pstr += "-"*30 + "\n"
+        pstr += f"SUMMARY OF GRID" + "\n"
+        pstr += f"log10ages: {self.log10ages}\n"
+        pstr += f"metallicities: {self.metallicities}\n"
+        for k, v in self.parameters.items():
+            pstr += f"{k}: {v} \n"
+        if self.spectra:
+            pstr += f"spectra: {list(self.spectra.keys())}\n"
+        if self.lines:
+            pstr += f"lines: {list(self.lines.keys())}\n"
+        pstr += "-"*30 + "\n"
+
+        return pstr
 
     def get_nearest_index(self, value, array):
         """
@@ -301,7 +329,7 @@ class Grid():
         return Sed(self.lam, lnu=self.spectra[spec_name][ia, iZ])
 
     # TODO: move to plotting script to remove cmasher dependency
-    def plot_log10Q(self, hsize=3.5, vsize=2.5, cmap=cmr.sapphire,
+    def plot_log10Q(self, ion='HI', hsize=3.5, vsize=2.5, cmap=cmr.sapphire,
                     vmin=42.5, vmax=47.5, max_log10age=9.):
 
         left = 0.2
@@ -319,7 +347,7 @@ class Grid():
 
         y = np.arange(len(self.metallicities))
 
-        log10Q = self.log10Q
+        log10Q = self.log10Q[ion]
 
         if max_log10age:
             ia_max = self.get_nearest_index(max_log10age, self.log10ages)
@@ -340,7 +368,7 @@ class Grid():
         fig.colorbar(cmapper, cax=cax, orientation='horizontal')
         cax.xaxis.tick_top()
         cax.xaxis.set_label_position('top')
-        cax.set_xlabel(r'$\rm log_{10}(\dot{n}_{LyC}/s^{-1}\ M_{\odot}^{-1})$')
+        cax.set_xlabel(r'$\rm log_{10}(\dot{n}_{'+ion+'}/s^{-1}\ M_{\odot}^{-1})$')
         cax.set_yticks([])
 
         ax.set_yticks(y, self.metallicities)
@@ -374,55 +402,39 @@ class Grid():
             self.lines[line_id]['continuum'] = continuum
             self.lines[line_id]['wavelength'] = wavelength
 
-        return {'luminosity': luminosity,
-                'continuum': continuum,
-                'wavelength': wavelength}
+        return Line(line_id, wavelength, luminosity, continuum)
 
     def get_line_info(self, line_id, ia, iZ):
         """
-        return the equivalent width of a line (or line combination) for a given age and metalliciy
+        Return a line object for a given line and metallicity/age index
 
         Parameters:
-
-        line_id (list or str): unique line identification string
-        ia (int): age index
-        iZ (int): metallicity index
-        save_line_info (bool): if fetch_line required, determines whether
-                               we save the line properties to the grid
-                               object (True), or load them on the fly (False)
+        ------------
+        line_id : (list or str):
+            unique line identification string
+        ia : int
+            age grid point index
+        iZ : int
+            metallicity grid point index
 
         Returns:
-        wavelength (float)
-        line_luminosity (float)
-        ew (float): line equivalent width
+        ------------
+        obj (Line)
         """
 
         if type(line_id) is str:
             line_id = [line_id]
 
-        line_luminosity = 0.0
-        continuum_nu = []
-        wv = []
+        wavelength = []
+        luminosity = []
+        continuum = []
 
-        for _lid in line_id:
+        for line_id_ in line_id:
+            line_ = self.lines[line_id_]
+            wavelength.append(line_['wavelength'])
+            luminosity.append(line_['luminosity'][ia, iZ])
+            continuum.append(line_['continuum'][ia, iZ])
 
-            line = self.lines[_lid]
+        line = Line(line_id, wavelength, luminosity, continuum)
 
-            wavelength = line['wavelength']
-            luminosity = line['luminosity']
-            continuum = line['continuum']
-
-            wv.append(wavelength)  # \AA
-            line_luminosity += luminosity[ia, iZ]  # line luminosity, erg/s
-
-            #  continuum at line wavelength, erg/s/Hz
-            continuum_nu.append(continuum[ia, iZ])
-
-        continuum_lam = convert_fnu_to_flam(np.mean(wv), np.mean(
-            continuum_nu))  # continuum at line wavelength, erg/s/AA
-        ew = line_luminosity / continuum_lam  # AA
-
-        return {'name': ','.join(line_id),
-                'wavelength': np.mean(wv),
-                'luminosity': line_luminosity,
-                'equivalent_width': ew}
+        return line

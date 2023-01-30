@@ -14,13 +14,15 @@ An example:
 
     python make_cloudy_input_grid.py -dir ../../../synthesizer_data/ -m cosma7 -sps bc03_chabrier03 -p default_param.yaml -cloudy CLOUDY_EXE
 
+    python make_cloudy_input_grid.py -dir /Users/stephenwilkins/Dropbox/Research/data/synthesizer/ -m apollo -sps bpass-2.2.1-sin_chabrier03-0.1,100.0  -p default_param.yaml -c $CLOUDY17
+    python make_cloudy_input_grid.py -dir /research/astrodata/highz/synthesizer/ -m apollo -sps bpass-2.2.1-bin_chabrier03-0.1,100.0  -p default_param.yaml -c $CLOUDY17
 
 ## The param YAML file
 This contains the parameters that will be input into CLOUDY.
 
 Users can provide arrays/lists of parameters they wish to iterate over. In this case, the code will create individual runs for each of the parameters specified, with the following naming convention:
 
-{sps_grid}_{imf}_nebular_{param}_{value}
+{sps_grid}_{imf}_cloudy_{param}_{value}
 
 where {param} is the key in the param file of the parameter to be varied, and {value} is the value to be provided. If this is numeric, it will be converted to a string, and if it is negative, the '-' will be substituted for 'm'.
 

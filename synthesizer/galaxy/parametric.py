@@ -18,7 +18,6 @@ from ..imaging.images import ParametricImage
 from ..art import Art
 
 
-
 class ParametricGalaxy(BaseGalaxy):
 
     """A class defining parametric galaxy objects
@@ -225,7 +224,6 @@ class ParametricGalaxy(BaseGalaxy):
              A Sed object containing the dust attenuated spectra
         """
 
-
         """ in the PACMAN model some fraction (fesc) of the pure stellar emission is assumed to completely escape the galaxy without reprocessing by gas or dust. The rest is assumed to be reprocessed by both gas and a screen of dust. """
 
         # --- begin by generating the pure stellar spectra
@@ -262,7 +260,7 @@ class ParametricGalaxy(BaseGalaxy):
             self.spectra['reprocessed'].lnu  # the light before reprocessing by dust
 
         if tauV:
-            T = dust_curve.attenuate(tauV, grid.lam) # calculate dust attenuation
+            T = dust_curve.attenuate(tauV, grid.lam)  # calculate dust attenuation
             self.spectra['attenuated'].lnu = self.spectra['escape'].lnu + \
                 T*self.spectra['reprocessed'].lnu
             self.spectra['total'].lnu = self.spectra['attenuated'].lnu
@@ -297,8 +295,6 @@ class ParametricGalaxy(BaseGalaxy):
         obj (Sed)
              A Sed object containing the dust attenuated spectra
         """
-
-
 
         # calculate dust attenuation for young and old components
         T_ISM = power_law({'slope': alpha_ISM}).attenuate(tauV_ISM, grid.lam)
@@ -392,8 +388,7 @@ class ParametricGalaxy(BaseGalaxy):
         if update:
             self.lines[line.id] = line
 
-        return line
-
+        return lines
 
     def get_attenuated_line(self, grid, line_ids, fesc=0.0, tauV_nebular=None,
                             tauV_stellar=None, dust_curve_nebular=power_law({'slope': -1.}),
@@ -481,7 +476,6 @@ class ParametricGalaxy(BaseGalaxy):
         """
 
         return self.get_attenuated_line(grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
-
 
     def make_images(self, spectra_type, filter_collection, resolution, npix=None, fov=None, update=True):
 
