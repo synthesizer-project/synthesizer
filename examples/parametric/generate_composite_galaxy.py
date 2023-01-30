@@ -1,3 +1,13 @@
+
+"""
+Example for generating a composite galaxy
+photometry. This example will:
+- build two parametric "galaxies" (see make_sfzh)
+- calculate spectral luminosity density of each
+TODO: add image creation
+"""
+
+
 from synthesizer.grid import Grid
 # from synthesizer.parametric.morphology import Sersic2D
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh, generate_instant_sfzh

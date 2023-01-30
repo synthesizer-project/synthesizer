@@ -10,16 +10,20 @@ from spectres import spectres
 
 # define the original base grid
 path_to_grids = '/Users/stephenwilkins/Dropbox/Research/data/synthesizer/grids'
-grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
+grid_name = 'bpass-2.2.1-bin_chabrier03-0.1,100.0_cloudy'
 
 # open the original grid
-original_grid = h5py.File(f'{path_to_grids}/{grid_name}.h5', 'r')
+original_grid = h5py.File(f'{path_to_grids}/{grid_name}.hdf5', 'r')
 
 # open the new grid file
-rebinned_grid = h5py.File(f'../tests/test_grid/test_grid.h5', 'w')
+rebinned_grid = h5py.File(f'../tests/test_grid/test_grid.hdf5', 'w')
+
+# copy attributes
+for k, v in original_grid.attrs.items():
+    rebinned_grid.attrs[k] = v
 
 # copy various quantities (all excluding the spectra) from the original grid
-for ds in ['metallicities', 'log10metallicities', 'log10ages', 'log10Q', 'star_fraction', 'remnant_fraction', 'lines']:
+for ds in ['metallicities', 'log10ages', 'log10Q', 'lines']:
     original_grid.copy(original_grid[ds], rebinned_grid['/'], ds)
 
 # define the length of the metallicities and ages
