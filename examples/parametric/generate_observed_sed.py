@@ -9,7 +9,8 @@ photometry. This example will:
 
 import numpy as np
 import matplotlib.pyplot as plt
-from synthesizer.filters import SVOFilterCollection
+
+from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
@@ -53,7 +54,7 @@ if __name__ == '__main__':
     filter_codes = [f'JWST/NIRCam.{f}' for f in ['F090W', 'F115W', 'F150W',
                                                  'F200W', 'F277W', 'F356W', 'F444W']]  # define a list of filter codes
     filter_codes += [f'JWST/MIRI.{f}' for f in ['F770W']]
-    fc = SVOFilterCollection(filter_codes, new_lam=sed.lamz)
+    fc = FilterCollection(filter_codes, new_lam=sed.lamz)
 
     # measure broadband fluxes
     fluxes = sed.get_broadband_fluxes(fc)

@@ -14,7 +14,7 @@ from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
-from synthesizer.filters import SVOFilterCollection as Filters
+from synthesizer.filters import FilterCollection as Filters
 from synthesizer.kernel_functions import quintic
 
 plt.rcParams['font.family'] = 'DeJavu Serif'

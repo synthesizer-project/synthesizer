@@ -7,7 +7,8 @@ photometry. This example will:
 
 import numpy as np
 import matplotlib.pyplot as plt
-from synthesizer.filters import SVOFilterCollection
+
+from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy

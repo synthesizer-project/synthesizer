@@ -95,3 +95,36 @@ class InconsistentCoordinates(Exception):
             return '{0} '.format(self.message)
         else:
             return 'Coordinates are inconsistent'
+
+class SVOFilterNotFound(Exception):
+    """
+    Exception class for when an SVO filter code does not match one in
+    the database.
+    """
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'Filter not found!'
+
+class InconsistentWavelengths(Exception):
+    """
+    Exception class for when array dimensions don't
+    """
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'Coordinates are inconsistent'
