@@ -6,6 +6,7 @@ from scipy import integrate
 import unyt
 from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV,  unyt_array
 
+from .units import Quantity
 from .igm import Inoue14
 from . import exceptions
 
@@ -36,6 +37,10 @@ class Sed:
         wavelength range
     """
 
+    lam = Quantity()
+    lnu = Quantity()
+    fnu = Quantity()
+
     def __init__(self, lam, lnu=None, description=False):
         """ Initialise an empty spectral energy distribution object """
 
@@ -53,34 +58,37 @@ class Sed:
 
         self.lamz = None
         self.fnu = None
+        self.broadband_luminosities = None
+        self.broadband_fluxes = None
 
     def __add__(self, second_sed):
 
-        if np.array_equal(self.lam, second_sed.lam):
+        if not np.array_equal(self.lam, second_sed.lam):
 
-            exceptions.InconsistentAddition('Wavelength grids must be identical')
+            exceptions.InconsistentAddition(
+                'Wavelength grids must be identical')
 
         else:
 
             if self.lnu.ndim != second_sed.lnu.ndim:
 
-                exceptions.InconsistentAddition('SEDs must have same dimensions')
+                exceptions.InconsistentAddition(
+                    'SEDs must have same dimensions')
 
             elif self.lnu.ndim == 1:
 
                 # if single Seds simply add together and return.
-
                 return Sed(self.lam, lnu=self.lnu + second_sed.lnu)
 
             elif self.lnu.ndim == 2:
 
                 # if array of Seds concatenate them. This is only relevant for particles.
-
                 return Sed(self.lam, np.concatenate((self.lnu, second_sed.lnu)))
 
             else:
 
-                exceptions.InconsistentAddition('Sed.lnu must have ndim 1 or 2')
+                exceptions.InconsistentAddition(
+                    'Sed.lnu must have ndim 1 or 2')
 
     def __str__(self):
         """
@@ -93,8 +101,8 @@ class Sed:
 
         # Add the content of the summary to the string to be printed
         pstr += "-"*10 + "\n"
-        pstr += "SUMMARY OF SED" + "\n"
-        pstr += f"Number of wavelength points: {len(self.lam)}"
+        pstr += "SUMMARY OF SED \n"
+        pstr += f"Number of wavelength points: {len(self.lam)} \n"
         # pstr += f"Bolometric luminosity: {self.get_bolometric_luminosity()}"
         pstr += "-"*10
 
@@ -120,8 +128,10 @@ class Sed:
         return np.log10(f0/f1)/np.log10(wv[0]/wv[1])-2.0
 
     def return_beta_spec(self, wv=[1250., 3000.]):
-        """ Return the UV continuum slope (\beta) based on linear
-            regression to the spectra over a wavelength range. """
+        """
+        Return the UV continuum slope (\beta) based on linear
+        regression to the spectra over a wavelength range.
+        """
 
         s = (self.lam > wv[0]) & (self.lam < wv[1])
 
@@ -165,16 +175,17 @@ class Sed:
 
         self.broadband_luminosities = {}
 
-        for filter in fc.filters:
+        for _filter in fc:
 
-            """ calculate broadband fluxes by multiplying the observed spectra by the
-            filter transmission curve and dividing by the normalisation """
-
-            int_num = integrate.trapezoid(self.lnu * filter.t/self.nu,
+            # Calculate broadband fluxes by multiplying the observed spectra
+            # by the filter transmission curve and dividing by the
+            # normalisation.
+            int_num = integrate.trapezoid(self.lnu * _filter.t / self.nu,
                                           self.nu)
-            int_den = integrate.trapezoid(filter.t/self.nu, self.nu)
+            int_den = integrate.trapezoid(_filter.t / self.nu, self.nu)
 
-            self.broadband_luminosities[filter.filter_code] = (int_num / int_den) * erg/s/Hz
+            self.broadband_luminosities[_filter.filter_code] = (
+                int_num / int_den) * erg / s / Hz
 
         return self.broadband_luminosities
 
@@ -190,18 +201,22 @@ class Sed:
     def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution in nJy
+
+
+
+
         """
 
         # Define default igm if none has been given
         if igm is None:
             igm = Inoue14()
 
-        self.lamz = self.lam * (1. + z)  # observed frame wavelength
+        self.lamz = self._lam * (1. + z)  # observed frame wavelength
         luminosity_distance = cosmo.luminosity_distance(
             z).to('cm').value  # the luminosity distance in cm
 
         # erg/s/Hz/cm2
-        self.fnu = self.lnu * (1.+z) / (4 * np.pi * luminosity_distance**2)
+        self.fnu = self._lnu * (1.+z) / (4 * np.pi * luminosity_distance**2)
         self.fnu *= 1E23  # convert to Jy
         self.fnu *= 1E9  # convert to nJy
 
@@ -223,37 +238,38 @@ class Sed:
 
         self.broadband_fluxes = {}
 
+        # loop over filters in filter collection
         for f in fc.filters:
 
-            """ check whether the filter transmission curve wavelength grid
-            and the spectral grid are the same array"""
+            # Check whether the filter transmission curve wavelength grid
+            # and the spectral grid are the same array
 
-            if not np.array_equal(fc.filter[f].lam, self.lamz):
+            if not np.array_equal(f.lam, self.lamz):
                 print(('WARNING: filter wavelength grid is not '
                        'the same as the SED wavelength grid.'))
 
-            """ calculate broadband fluxes by multiplying the observed spetra by
-            the filter transmission curve and dividing by the normalisation
+            # Calculate broadband fluxes by multiplying the observed spetra by
+            # the filter transmission curve and dividing by the normalisation
 
-            all of these versions seem to work. I suspect the first one won't
-            work for different wavelength grids."""
+            # NOTE: All of these versions seem to work. I suspect the first one
+            # won't work for different wavelength grids.
 
             # int_num = integrate.trapezoid(self.fnu * fc.filter[f].t)
             # int_den = integrate.trapezoid(fc.filter[f].t)
 
-            int_num = integrate.trapezoid(self.fnu * fc.filter[f].t/self.nu,
+            int_num = integrate.trapezoid(self.fnu * f.t/self.nu,
                                           self.nu)
-            int_den = integrate.trapezoid(fc.filter[f].t/self.nu, self.nu)
+            int_den = integrate.trapezoid(f.t/self.nu, self.nu)
 
             # int_num = integrate.simpson(self.fnu * fc.filter[f].t/self.nu,
             #                             self.nu)
             # int_den = integrate.simpson(fc.filter[f].t/self.nu, self.nu)
 
-            self.broadband_fluxes[f] = int_num / int_den * nJy
+            self.broadband_fluxes[f.filter_code] = int_num / int_den * nJy
 
         return self.broadband_fluxes
 
-    def c(self, f1, f2, verbose=False):
+    def colour(self, f1, f2, verbose=False):
         """
         Calculate broadband colours using the broad_band fluxes
         """
