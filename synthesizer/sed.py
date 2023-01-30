@@ -120,8 +120,10 @@ class Sed:
         return np.log10(f0/f1)/np.log10(wv[0]/wv[1])-2.0
 
     def return_beta_spec(self, wv=[1250., 3000.]):
-        """ Return the UV continuum slope (\beta) based on linear
-            regression to the spectra over a wavelength range. """
+        """
+        Return the UV continuum slope (\beta) based on linear
+        regression to the spectra over a wavelength range.
+        """
 
         s = (self.lam > wv[0]) & (self.lam < wv[1])
 
@@ -223,12 +225,13 @@ class Sed:
 
         self.broadband_fluxes = {}
 
+        # loop over filters in filter collection
         for f in fc.filters:
 
             """ check whether the filter transmission curve wavelength grid
             and the spectral grid are the same array"""
 
-            if not np.array_equal(fc.filter[f].lam, self.lamz):
+            if not np.array_equal(f.lam, self.lamz):
                 print(('WARNING: filter wavelength grid is not '
                        'the same as the SED wavelength grid.'))
 
@@ -241,15 +244,15 @@ class Sed:
             # int_num = integrate.trapezoid(self.fnu * fc.filter[f].t)
             # int_den = integrate.trapezoid(fc.filter[f].t)
 
-            int_num = integrate.trapezoid(self.fnu * fc.filter[f].t/self.nu,
+            int_num = integrate.trapezoid(self.fnu * f.t/self.nu,
                                           self.nu)
-            int_den = integrate.trapezoid(fc.filter[f].t/self.nu, self.nu)
+            int_den = integrate.trapezoid(f.t/self.nu, self.nu)
 
             # int_num = integrate.simpson(self.fnu * fc.filter[f].t/self.nu,
             #                             self.nu)
             # int_den = integrate.simpson(fc.filter[f].t/self.nu, self.nu)
 
-            self.broadband_fluxes[f] = int_num / int_den * nJy
+            self.broadband_fluxes[f.filter_code] = int_num / int_den * nJy
 
         return self.broadband_fluxes
 
