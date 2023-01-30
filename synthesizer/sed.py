@@ -58,6 +58,8 @@ class Sed:
 
         self.lamz = None
         self.fnu = None
+        self.broadband_luminosities = None
+        self.broadband_fluxes = None
 
     def __add__(self, second_sed):
 

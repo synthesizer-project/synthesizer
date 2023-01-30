@@ -48,17 +48,15 @@ if __name__ == '__main__':
 
     filter_collection = UVJ(new_lam=grid.lam)
 
-    print(filter_collection)
-
     sed = galaxy.spectra['stellar'].get_broadband_luminosities(filter_collection)
 
     resolution = 0.1 * kpc  # resolution in kpc
     npix = 25
 
-    images = galaxy.make_images('stellar', filter_collection, resolution, npix=npix)
+    images = galaxy.make_images('stellar', resolution, npix=npix)
 
     print(images)
 
-    images.plot('U')
-
-    images.plot_rgb(['J', 'V', 'U'])
+    images.plot()  #  plot base image
+    images.plot('U')  #  plot U-band image
+    images.plot_rgb(['J', 'V', 'U'])  #  plot RGB image

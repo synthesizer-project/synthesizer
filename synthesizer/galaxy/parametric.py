@@ -110,11 +110,12 @@ class ParametricGalaxy(BaseGalaxy):
                             'Both galaxies must contain the same emission lines to be added together')
 
         # add together images
-        # for img_name, image in self.images.items():
-        #     if img_name in second_galaxy.images.keys():
-        #         new_galaxy.images[img_name] = image + second_galaxy.image[img_name]
-        #     else:
-        #         exceptions.InconsistentAddition('Both galaxies must contain the same images to be added together')
+        for img_name, image in self.images.items():
+            if img_name in second_galaxy.images.keys():
+                new_galaxy.images[img_name] = image + second_galaxy.images[img_name]
+            else:
+                exceptions.InconsistentAddition(
+                    'Both galaxies must contain the same images to be added together')
 
         return new_galaxy
 
@@ -478,10 +479,11 @@ class ParametricGalaxy(BaseGalaxy):
 
         return self.get_attenuated_line(grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
 
-    def make_images(self, spectra_type, resolution, filter_collection=None, npix=None, fov=None, update=True):
+    def make_images(self, spectra_type, resolution, npix=None, fov=None, update=True, rest_frame=True):
 
-        images = ParametricImage(self.morph, resolution, filter_collection=filter_collection, npix=npix, fov=fov,
-                                 sed=self.spectra[spectra_type])
+        images = ParametricImage(self.morph, resolution, npix=npix, fov=fov,
+                                 sed=self.spectra[spectra_type], rest_frame=rest_frame)
+        images.create_images()
 
         if update:
             self.images[spectra_type] = images
