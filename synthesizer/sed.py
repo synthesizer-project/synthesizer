@@ -6,6 +6,7 @@ from scipy import integrate
 import unyt
 from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV,  unyt_array
 
+from .units import Quantity
 from .igm import Inoue14
 from . import exceptions
 
@@ -35,6 +36,10 @@ class Sed:
         Calculate beta using linear regression to the spectra over a
         wavelength range
     """
+
+    lam = Quantity()
+    lnu = Quantity()
+    fnu = Quantity()
 
     def __init__(self, lam, lnu=None, description=False):
         """ Initialise an empty spectral energy distribution object """
@@ -192,18 +197,22 @@ class Sed:
     def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution in nJy
+
+
+
+
         """
 
         # Define default igm if none has been given
         if igm is None:
             igm = Inoue14()
 
-        self.lamz = self.lam * (1. + z)  # observed frame wavelength
+        self.lamz = self._lam * (1. + z)  # observed frame wavelength
         luminosity_distance = cosmo.luminosity_distance(
             z).to('cm').value  # the luminosity distance in cm
 
         # erg/s/Hz/cm2
-        self.fnu = self.lnu * (1.+z) / (4 * np.pi * luminosity_distance**2)
+        self.fnu = self._lnu * (1.+z) / (4 * np.pi * luminosity_distance**2)
         self.fnu *= 1E23  # convert to Jy
         self.fnu *= 1E9  # convert to nJy
 
@@ -256,7 +265,7 @@ class Sed:
 
         return self.broadband_fluxes
 
-    def c(self, f1, f2, verbose=False):
+    def colour(self, f1, f2, verbose=False):
         """
         Calculate broadband colours using the broad_band fluxes
         """
