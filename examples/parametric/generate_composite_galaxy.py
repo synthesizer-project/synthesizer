@@ -28,9 +28,9 @@ if __name__ == '__main__':
 
     filter_collection = UVJ(new_lam=grid.lam)
 
-    # ------------------------------------------------
-    # --- DISK
+    # DISK
 
+    # define morphology
     morphology_parameters = {'r_eff': 1. * kpc, 'n': 1., 'ellip': 0.5, 'theta': 35.}
     morph = Sersic2D(morphology_parameters)
 

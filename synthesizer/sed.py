@@ -63,7 +63,7 @@ class Sed:
 
     def __add__(self, second_sed):
 
-        if np.array_equal(self.lam, second_sed.lam):
+        if not np.array_equal(self.lam, second_sed.lam):
 
             exceptions.InconsistentAddition(
                 'Wavelength grids must be identical')
@@ -78,13 +78,11 @@ class Sed:
             elif self.lnu.ndim == 1:
 
                 # if single Seds simply add together and return.
-
                 return Sed(self.lam, lnu=self.lnu + second_sed.lnu)
 
             elif self.lnu.ndim == 2:
 
                 # if array of Seds concatenate them. This is only relevant for particles.
-
                 return Sed(self.lam, np.concatenate((self.lnu, second_sed.lnu)))
 
             else:
@@ -103,8 +101,8 @@ class Sed:
 
         # Add the content of the summary to the string to be printed
         pstr += "-"*10 + "\n"
-        pstr += "SUMMARY OF SED" + "\n"
-        pstr += f"Number of wavelength points: {len(self.lam)}"
+        pstr += "SUMMARY OF SED \n"
+        pstr += f"Number of wavelength points: {len(self.lam)} \n"
         # pstr += f"Bolometric luminosity: {self.get_bolometric_luminosity()}"
         pstr += "-"*10
 

@@ -558,6 +558,37 @@ class ParametricImage(ParametricObservation, Image):
         plt.imshow(np.log10(img), origin='lower', interpolation='nearest')
         plt.show()
 
+    def make_ascii(self, filter_code=None):
+        """
+        Make an ascii art image
+
+        Parameters
+        ----------
+        filter_code : str
+            The filter code
+        """
+
+        scale = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft|()1{}[]?-_+~<>i!lI;:,\"^`'. "[::-1]
+        # scale = " .:-=+*#%@"
+        nscale = len(scale)
+
+        # if filter code provided use broadband image, else use base image
+        if filter_code:
+            img = self.imgs[filter_code]
+        else:
+            img = self.img
+
+        img = (nscale-1)*img/np.max(img)  # maps image onto a
+        img = img.astype(int)
+
+        ascii_img = ''
+        for i in range(img.shape[0]):
+            for j in range(img.shape[1]):
+                ascii_img += 2*scale[img[i, j]]
+            ascii_img += '\n'
+
+        print(ascii_img)
+
     def make_rgb_image(self, rgb_filters, update=True):
         """
         Make an rgb image
