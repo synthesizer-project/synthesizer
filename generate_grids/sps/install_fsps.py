@@ -17,6 +17,7 @@ def generate_grid(model):
     out_filename = f'{synthesizer_data_dir}/grids/{synthesizer_model_name}.hdf5'
 
     # set up StellarPopulation grid
+    imf_type = model['imf_type']
     imf_masses = model['imf_masses']
 
     if imf_type == 'chabrier03':
