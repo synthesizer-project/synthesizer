@@ -2,7 +2,7 @@ import os
 import sys
 
 import numpy as np
-# import fsps
+import fsps
 
 from utils import write_data_h5py, write_attribute, get_model_filename
 
