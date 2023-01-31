@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import fsps
 
-from utils import write_data_h5py, write_attribute, get_model_filename
+from utils import write_data_h5py, write_attribute, get_model_filename, add_log10Q
 
 
 def generate_grid(model):
