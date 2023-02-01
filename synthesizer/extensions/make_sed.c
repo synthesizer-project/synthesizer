@@ -270,7 +270,7 @@ void calculate_weights(const PyObject *grid_tuple, const PyObject *part_tuple,
  */
 PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
-  const int grid_dim, npart, nlam;
+  const int32_t grid_dim, npart, nlam;
   const double fesc;
   const PyObject *grid_tuple, *part_tuple;
   const PyArrayObject *np_stellar_spectra, *np_total_spectra;
@@ -287,7 +287,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   if (npart == 0) return NULL;
   if (nlam == 0) return NULL;
 
-  /* Extract a pointer to the spectra grids */
+  /* Extract a point32_ter to the spectra grids */
   const double *grid_stellar_spectra = np_stellar_spectra->data;
   /* double *grid_total_spectra = NULL; */
   /* if (np_total_spectra != NULL) */
@@ -302,14 +302,14 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     bzero(total_spectra, nlam * sizeof(double));
   }
 
-  /* Extract a pointer to the grid dims */
-  const int *dims = np_grid_dims->data;
+  /* Extract a point32_ter to the grid dims */
+  const int32_t *dims = np_grid_dims->data;
 
-  /* Extract a pointer to the particle masses. */
+  /* Extract a point32_ter to the particle masses. */
   const double *part_mass = np_part_mass->data;
 
   /* Compute the number of weights we need. */
-  const int nweights = pow(2, grid_dim) + 0.1;
+  const int32_t nweights = pow(2, grid_dim) + 0.1;
 
   /* Define an array to hold this particle's weights. */
   double *weights = malloc(nweights * sizeof(double));
@@ -319,19 +319,19 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
   double *fracs = malloc(grid_dim * sizeof(double));
-  int *frac_indices = malloc((grid_dim + 1) * sizeof(int));
-  int *weight_indices = malloc(nweights * sizeof(int));
-  int *sub_indices = malloc(grid_dim * sizeof(double));
+  int32_t *frac_indices = malloc((grid_dim + 1) * sizeof(int32_t));
+  int32_t *weight_indices = malloc(nweights * sizeof(int32_t));
+  int32_t *sub_indices = malloc(grid_dim * sizeof(double));
     
   /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
+  for (int32_t p = 0; p < npart; p++) {
 
     /* Reset arrays. */
-    for (int ind = 0; ind < grid_dim + 1; ind++)
+    for (int32_t ind = 0; ind < grid_dim + 1; ind++)
       frac_indices[ind] = 0;
-    for (int ind = 0; ind < nweights; ind++)
+    for (int32_t ind = 0; ind < nweights; ind++)
       weight_indices[ind] = 0;
-    for (int ind = 0; ind < grid_dim; ind++) {
+    for (int32_t ind = 0; ind < grid_dim; ind++) {
       fracs[ind] = 0;
       sub_indices[ind] = 0;
     }
@@ -342,20 +342,20 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
                       frac_indices, sub_indices);
 
     /* Loop over weights and their indices. */
-    for (int i = 0; i < nweights; i++) {
+    for (int32_t i = 0; i < nweights; i++) {
 
       /* Get this weight and it's flattened index. */
       const double weight = weights[i];
-      const int weight_ind = weight_indices[i];
+      const int32_t weight_ind = weight_indices[i];
 
       /* Add this particle's contribution to... */
-      for (int ilam = 0; ilam < nlam; ilam++) {
+      for (int32_t ilam = 0; ilam < nlam; ilam++) {
 
         /* ... the stellar SED. */
         stellar_spectra[ilam] +=
           grid_stellar_spectra[weight_ind + ilam] * weight;
 
-        /* And the intrinsic SED if we have it. */
+        /* And the int32_trinsic SED if we have it. */
         if (grid_total_spectra != NULL) {
           total_spectra[ilam] +=
             grid_total_spectra[weight_ind + ilam] * (1 - fesc) * weight;
@@ -396,11 +396,11 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
-  const int grid_dim, npart, nlam;
+  const int32_t grid_dim, npart, nlam;
   const double fesc;
-  PyObject *grid_tuple, *part_tuple;
-  PyArrayObject *np_stellar_spectra, *np_total_spectra;
-  PyArrayObject *np_part_mass, *np_grid_dims;
+  const PyObject *grid_tuple, *part_tuple;
+  const PyArrayObject *np_stellar_spectra, *np_total_spectra;
+  const PyArrayObject *np_part_mass, *np_grid_dims;
 
   if(!PyArg_ParseTuple(args, "OOOOOdOiii",
                        &np_stellar_spectra, &np_total_spectra, &grid_tuple,
@@ -408,11 +408,16 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
                        &grid_dim, &npart, &nlam))
     return NULL;
 
-  /* Extract a pointer to the spectra grids */
-  double *grid_stellar_spectra = np_stellar_spectra->data;
+  /* Quick check to make sure our inputs are valid. */
+  if (grid_dim == 0) return NULL;
+  if (npart == 0) return NULL;
+  if (nlam == 0) return NULL;
+
+  /* Extract a point64_ter to the spectra grids */
+  const double *grid_stellar_spectra = np_stellar_spectra->data;
   /* double *grid_total_spectra = NULL; */
   /* if (np_total_spectra != NULL) */
-  double *grid_total_spectra = np_total_spectra->data;
+  const double *grid_total_spectra = np_total_spectra->data;
 
   /* Set up arrays to hold the SEDs themselves. */
   double *stellar_spectra = malloc(npart * nlam * sizeof(double));
@@ -423,15 +428,15 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     bzero(total_spectra, npart * nlam * sizeof(double));
   }
 
-  /* Extract a pointer to the grid dims */
-  int *dims = np_grid_dims->data;
+  /* Extract a point64_ter to the grid dims */
+  const int32_t *dims = np_grid_dims->data;
 
-  /* Extract a pointer to the particle masses. */
+  /* Extract a point32_ter to the particle masses. */
   const double *part_mass = np_part_mass->data;
 
   /* Compute the number of weights we need. */
-  int nweights = pow(2, grid_dim) + 0.1;
-  
+  const int32_t nweights = pow(2, grid_dim) + 0.1;
+
   /* Define an array to hold this particle's weights. */
   double *weights = malloc(nweights * sizeof(double));
   bzero(weights, nweights * sizeof(double));
@@ -440,19 +445,19 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
   double *fracs = malloc(grid_dim * sizeof(double));
-  int *frac_indices = malloc((grid_dim + 1) * sizeof(int));
-  int *weight_indices = malloc(nweights * sizeof(int));
-  int *sub_indices = malloc(grid_dim * sizeof(double));
+  int32_t *frac_indices = malloc((grid_dim + 1) * sizeof(int32_t));
+  int32_t *weight_indices = malloc(nweights * sizeof(int32_t));
+  int32_t *sub_indices = malloc(grid_dim * sizeof(double));
     
   /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
+  for (int32_t p = 0; p < npart; p++) {
 
     /* Reset arrays. */
-    for (int ind = 0; ind < grid_dim + 1; ind++)
+    for (int32_t ind = 0; ind < grid_dim + 1; ind++)
       frac_indices[ind] = 0;
-    for (int ind = 0; ind < nweights; ind++)
+    for (int32_t ind = 0; ind < nweights; ind++)
       weight_indices[ind] = 0;
-    for (int ind = 0; ind < grid_dim; ind++) {
+    for (int32_t ind = 0; ind < grid_dim; ind++) {
       fracs[ind] = 0;
       sub_indices[ind] = 0;
     }
@@ -463,20 +468,20 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
                       frac_indices, sub_indices);
 
     /* Loop over weights and their indices. */
-    for (int i = 0; i < nweights; i++) {
+    for (int32_t i = 0; i < nweights; i++) {
 
       /* Get this weight and it's flattened index. */
-      double weight = weights[i];
-      int weight_ind = weight_indices[i];
+      const double weight = weights[i];
+      const int32_t weight_ind = weight_indices[i];
 
       /* Add this particle's contribution to... */
-      for (int ilam = 0; ilam < nlam; ilam++) {
+      for (int32_t ilam = 0; ilam < nlam; ilam++) {
 
         /* ... the stellar SED. */
         stellar_spectra[p * nlam + ilam] +=
           grid_stellar_spectra[weight_ind + ilam] * weight;
 
-        /* And the intrinsic SED if we have it. */
+        /* And the int32_trinsic SED if we have it. */
         if (grid_total_spectra != NULL) {
           total_spectra[p * nlam + ilam] +=
             grid_total_spectra[weight_ind + ilam] * (1 - fesc) * weight;
@@ -488,7 +493,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Reconstruct the python array to return. */
   npy_intp np_dims[2] = {npart, nlam};
   PyArrayObject *out_stellar_spectra =
-    (PyArrayObject *) PyArray_SimpleNewFromData(2, np_dims, NPY_FLOAT64,
+    (PyArrayObject *) PyArray_SimpleNewFromData(2, np_dims, NPY_FLOAT32,
                                                 stellar_spectra);
   out_stellar_spectra->flags = NPY_OWNDATA;
 
