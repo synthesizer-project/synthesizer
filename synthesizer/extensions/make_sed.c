@@ -15,7 +15,7 @@
 
 #include <Python.h>
 
-//#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
 #include <numpy/ndarraytypes.h>
 #include <numpy/ndarrayobject.h>
@@ -127,11 +127,11 @@ void recursive_frac_loop(const PyObject *grid_tuple, const PyObject *part_tuple,
 
   /* Get a pointer to the grid property data itself. */
   const PyArrayObject *np_grid_arr = PyTuple_GetItem(grid_tuple, dim);
-  const double *grid_arr = np_grid_arr->data;
+  const double *grid_arr = PyArray_DATA(np_grid_arr);
     
   /* Get a pointer to the particle property data itself. */
   const PyArrayObject *np_part_arr = PyTuple_GetItem(part_tuple, dim);
-  const double *part_arr = np_part_arr->data;
+  const double *part_arr = PyArray_DATA(np_part_arr);
   const double part_val = part_arr[p];
   
   /* Get the cloest value to val in arr. The upper bound is always
@@ -287,11 +287,11 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   if (npart == 0) return NULL;
   if (nlam == 0) return NULL;
 
-  /* Extract a point32_ter to the spectra grids */
-  const double *grid_stellar_spectra = np_stellar_spectra->data;
+  /* Extract a pointer to the spectra grids */
+  const double *grid_stellar_spectra = PyArray_DATA(np_stellar_spectra);
   /* double *grid_total_spectra = NULL; */
   /* if (np_total_spectra != NULL) */
-  const double *grid_total_spectra = np_total_spectra->data;
+  const double *grid_total_spectra = PyArray_DATA(np_total_spectra);
 
   /* Set up arrays to hold the SEDs themselves. */
   double *stellar_spectra = malloc(nlam * sizeof(double));
@@ -302,11 +302,11 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     bzero(total_spectra, nlam * sizeof(double));
   }
 
-  /* Extract a point32_ter to the grid dims */
-  const int32_t *dims = np_grid_dims->data;
+  /* Extract a pointer to the grid dims */
+  const int32_t *dims = PyArray_DATA(np_grid_dims);
 
-  /* Extract a point32_ter to the particle masses. */
-  const double *part_mass = np_part_mass->data;
+  /* Extract a pointer to the particle masses. */
+  const double *part_mass = PyArray_DATA(np_part_mass);
 
   /* Compute the number of weights we need. */
   const int32_t nweights = pow(2, grid_dim) + 0.1;
@@ -369,13 +369,13 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   PyArrayObject *out_stellar_spectra =
     (PyArrayObject *) PyArray_SimpleNewFromData(1, np_dims, NPY_FLOAT64,
                                                 stellar_spectra);
-  out_stellar_spectra->flags = NPY_OWNDATA;
+  /* out_stellar_spectra->flags = NPY_OWNDATA; */
 
   /* Reconstruct the python array to return. */
   PyArrayObject *out_total_spectra =
     (PyArrayObject *) PyArray_SimpleNewFromData(1, np_dims, NPY_FLOAT64,
                                                 total_spectra);
-  out_total_spectra->flags = NPY_OWNDATA;
+  /* out_total_spectra->flags = NPY_OWNDATA; */
   
   return Py_BuildValue("NN", out_stellar_spectra, out_total_spectra);
 }
@@ -413,29 +413,29 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   if (npart == 0) return NULL;
   if (nlam == 0) return NULL;
 
-  /* Extract a point64_ter to the spectra grids */
-  const double *grid_stellar_spectra = np_stellar_spectra->data;
+  /* Extract a pointer to the spectra grids */
+  const double *grid_stellar_spectra = PyArray_DATA(np_stellar_spectra);
   /* double *grid_total_spectra = NULL; */
   /* if (np_total_spectra != NULL) */
-  const double *grid_total_spectra = np_total_spectra->data;
+  const double *grid_total_spectra = PyArray_DATA(np_total_spectra);
 
   /* Set up arrays to hold the SEDs themselves. */
-  double *stellar_spectra = malloc(npart * nlam * sizeof(double));
-  bzero(stellar_spectra, npart * nlam * sizeof(double));
+  double *stellar_spectra = malloc(nlam * sizeof(double));
+  bzero(stellar_spectra, nlam * sizeof(double));
   double *total_spectra = NULL;
   if (grid_total_spectra != NULL) {
-    total_spectra = malloc(npart * nlam * sizeof(double));
-    bzero(total_spectra, npart * nlam * sizeof(double));
+    total_spectra = malloc(nlam * sizeof(double));
+    bzero(total_spectra, nlam * sizeof(double));
   }
 
-  /* Extract a point64_ter to the grid dims */
-  const int32_t *dims = np_grid_dims->data;
+  /* Extract a pointer to the grid dims */
+  const int32_t *dims = PyArray_DATA(np_grid_dims);
 
-  /* Extract a point32_ter to the particle masses. */
-  const double *part_mass = np_part_mass->data;
+  /* Extract a pointer to the particle masses. */
+  const double *part_mass = PyArray_DATA(np_part_mass);
 
   /* Compute the number of weights we need. */
-  const int32_t nweights = pow(2, grid_dim) + 0.1;
+  const int32_t nweights = (int32_t)(pow(2, grid_dim) + 0.1);
 
   /* Define an array to hold this particle's weights. */
   double *weights = malloc(nweights * sizeof(double));
@@ -495,13 +495,11 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   PyArrayObject *out_stellar_spectra =
     (PyArrayObject *) PyArray_SimpleNewFromData(2, np_dims, NPY_FLOAT32,
                                                 stellar_spectra);
-  out_stellar_spectra->flags = NPY_OWNDATA;
 
   /* Reconstruct the python array to return. */
   PyArrayObject *out_total_spectra =
     (PyArrayObject *) PyArray_SimpleNewFromData(2, np_dims, NPY_FLOAT64,
                                                 total_spectra);
-  out_total_spectra->flags = NPY_OWNDATA;
   
   return Py_BuildValue("NN", out_stellar_spectra, out_total_spectra);
 }
