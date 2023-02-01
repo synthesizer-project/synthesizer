@@ -20,13 +20,16 @@
 #include <numpy/ndarraytypes.h>
 #include <numpy/ndarrayobject.h>
 
+/* Define a macro to handle that bzero is non-standard. */
+#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
+
 
 /**
  * @brief Compute a flat grid index based on the grid dimensions.
  *
- * @param indices: 
- * @param dims: 
- * @param ndim: 
+ * @param indices: An array of N-dimensional indices.
+ * @param dims: The length of each dimension.
+ * @param ndim: The number of dimensions.
  */
 int get_flat_index(const int *indices, const int *dims, int ndim) {
 
@@ -96,8 +99,23 @@ int closest_index(double *arr, int n, double x) {
   return l + 1;
 }
 
-void recursive_frac_loop(PyObject *grid_tuple, PyObject *part_tuple, int p,
-                         int dim, int ndim, int *dims, int *indices,
+/**
+ * @brief This calculates the mass fractions in each right most grid cell.
+ *
+ * To do this for an N-dimensional array this is done recursively.
+ *
+ * @param grid_tuple: The tuple contain each array of grid properties.
+ * @param part_tuple: The tuple containing each array of particle properties.
+ * @param p: Index of the current particle.
+ * @param dim: The current dimension in the recursion.
+ * @param ndim: The number of grid dimensions.
+ * @param dims: The length of each grid dimension.
+ * @param indices: The array for storing N-dimensional grid indicies.
+ * @param fracs: The array for storing the mass fractions. NOTE: The left most
+ *               grid cell's mass fraction is simply (1 - frac[dim])
+ */
+void recursive_frac_loop(const PyObject *grid_tuple, const PyObject *part_tuple,
+                         int p, int dim, int ndim, int *dims, int *indices,
                          double *fracs) {
 
   /* Are we done yet? */
@@ -108,11 +126,11 @@ void recursive_frac_loop(PyObject *grid_tuple, PyObject *part_tuple, int p,
   int low, high;
 
   /* Get a pointer to the grid property data itself. */
-  PyArrayObject *np_grid_arr = PyTuple_GetItem(grid_tuple, dim);
+  const PyArrayObject *np_grid_arr = PyTuple_GetItem(grid_tuple, dim);
   const double *grid_arr = np_grid_arr->data;
     
   /* Get a pointer to the particle property data itself. */
-  PyArrayObject *np_part_arr = PyTuple_GetItem(part_tuple, dim);
+  const PyArrayObject *np_part_arr = PyTuple_GetItem(part_tuple, dim);
   const double *part_arr = np_part_arr->data;
   const double part_val = part_arr[p];
   
@@ -145,16 +163,16 @@ void recursive_frac_loop(PyObject *grid_tuple, PyObject *part_tuple, int p,
                       fracs);
 }
 
-void recursive_weight_loop(double mass, int*sub_indices,
+void recursive_weight_loop(const double mass, int*sub_indices,
                            int *frac_indices, int *weight_indices,
                            double *weights, double *fracs,
-                           int dim, int *dims, int ndim) {
+                           int dim, const int *dims, const int ndim) {
 
   /* Are we done yet? */
   if (dim >= ndim) {
 
     /* Get the index for this particle in the weights array. */
-    int weight_ind = get_flat_index(sub_indices, /*dims*/NULL, ndim);
+    const int weight_ind = get_flat_index(sub_indices, /*dims*/NULL, ndim);
 
     /* Get the flattened index into the grid array. */
     weight_indices[weight_ind] = get_flat_index(frac_indices, dims, ndim);
@@ -201,10 +219,10 @@ void recursive_weight_loop(double mass, int*sub_indices,
  * @param lenz: The number of metallicity values in z.
  * @param npart: The number of stellar particles.
  */
-void calculate_weights(PyObject *grid_tuple, PyObject *part_tuple,
-                       int *dims, double *part_mass, int p,
-                       int grid_dim, int *weight_indices,
-                       double *weights, int nlam, double *fracs,
+void calculate_weights(const PyObject *grid_tuple, const PyObject *part_tuple,
+                       const int *dims, const double *part_mass, int p,
+                       const int grid_dim, int *weight_indices,
+                       double *weights, const int nlam, double *fracs,
                        int *frac_indices, int *sub_indices) {
   
   /* Get this particle's mass. */
@@ -239,9 +257,9 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   const int grid_dim, npart, nlam;
   const double fesc;
-  PyObject *grid_tuple, *part_tuple;
-  PyArrayObject *np_stellar_spectra, *np_total_spectra;
-  PyArrayObject *np_part_mass, *np_grid_dims;
+  const PyObject *grid_tuple, *part_tuple;
+  const PyArrayObject *np_stellar_spectra, *np_total_spectra;
+  const PyArrayObject *np_part_mass, *np_grid_dims;
 
   if(!PyArg_ParseTuple(args, "OOOOOdOiii",
                        &np_stellar_spectra, &np_total_spectra, &grid_tuple,
@@ -250,10 +268,10 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     return NULL;
 
   /* Extract a pointer to the spectra grids */
-  double *grid_stellar_spectra = np_stellar_spectra->data;
+  const double *grid_stellar_spectra = np_stellar_spectra->data;
   /* double *grid_total_spectra = NULL; */
   /* if (np_total_spectra != NULL) */
-  double *grid_total_spectra = np_total_spectra->data;
+  const double *grid_total_spectra = np_total_spectra->data;
 
   /* Set up arrays to hold the SEDs themselves. */
   double *stellar_spectra = malloc(nlam * sizeof(double));
@@ -265,13 +283,13 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   }
 
   /* Extract a pointer to the grid dims */
-  int *dims = np_grid_dims->data;
+  const int *dims = np_grid_dims->data;
 
   /* Extract a pointer to the particle masses. */
   const double *part_mass = np_part_mass->data;
 
   /* Compute the number of weights we need. */
-  int nweights = pow(2, grid_dim) + 0.1;
+  const int nweights = pow(2, grid_dim) + 0.1;
 
   /* Define an array to hold this particle's weights. */
   double *weights = malloc(nweights * sizeof(double));
@@ -307,8 +325,8 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     for (int i = 0; i < nweights; i++) {
 
       /* Get this weight and it's flattened index. */
-      double weight = weights[i];
-      int weight_ind = weight_indices[i];
+      const double weight = weights[i];
+      const int weight_ind = weight_indices[i];
 
       /* Add this particle's contribution to... */
       for (int ilam = 0; ilam < nlam; ilam++) {

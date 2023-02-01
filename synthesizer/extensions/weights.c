@@ -20,6 +20,9 @@
 #include <numpy/ndarraytypes.h>
 #include <numpy/ndarrayobject.h>
 
+/* Define a macro to handle that bzero is non-standard. */
+#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
+
 /**
  * @brief Performs a binary search to find the closest value in a float array
  *        to comparison float value.

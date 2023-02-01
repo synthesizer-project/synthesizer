@@ -12,6 +12,9 @@
 #include <numpy/ndarraytypes.h>
 #include <numpy/ndarrayobject.h>
 
+/* Define a macro to handle that bzero is non-standard. */
+#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
+
 /* Need to define the kernel locally because Python doesn't support header
  * files properly without compiling the C. */
 double quintic(double r) {
