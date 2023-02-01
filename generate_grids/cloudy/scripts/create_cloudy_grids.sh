@@ -10,6 +10,11 @@ machine="apollo"
 
 # FSPS high-mass slope variants
 sps="fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,1.5 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,1.6 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,1.7 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,1.8 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,1.9 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.0 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.2 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.3 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.4 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.5 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.6 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.7 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.8 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.9 fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,3.0"
+
+# FSPS high-mass cut off variants
+# sps=$sps" fsps-3.2_chabrier03-0.08,120 fsps-3.2_chabrier03-0.08,100 fsps-3.2_chabrier03-0.08,50 fsps-3.2_chabrier03-0.08,20 fsps-3.2_chabrier03-0.08,10 fsps-3.2_chabrier03-0.08,5 fsps-3.2_chabrier03-0.08,2 fsps-3.2_chabrier03-0.08,1"
+
+
 p="default_param.yaml"
 c=$CLOUDY17
 

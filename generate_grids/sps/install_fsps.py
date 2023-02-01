@@ -115,10 +115,11 @@ if __name__ == "__main__":
     #            ]
 
     # different high-mass slopes
-    models += [{'imf_slopes': [1.3, 2.3, a3]} for a3 in np.arange(2.8, 3.0, 0.1)]
+    # models += [{'imf_slopes': [1.3, 2.3, a3]} for a3 in np.arange(2.8, 3.01, 0.1)]
 
     # different high-mass cut-offs
-    models += [{'imf_masses': [0.08, 0.5, 1, hmc]} for hmc in [5, 10, 50, 100]]
+    models += [{'imf_type': 'chabrier03', 'imf_masses': [0.08, 0.5, 1, hmc]}
+               for hmc in [1, 2, 5, 10, 20, 50, 100]]
 
     for model_ in models:
 
