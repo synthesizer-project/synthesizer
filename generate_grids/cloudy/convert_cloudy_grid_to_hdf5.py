@@ -32,8 +32,6 @@ def create_new_grid(grid, synthesizer_data_dir):
     # parse the grid to get the sps model
     sps_grid = grid.split('_cloudy')[0]
 
-    print(grid, sps_grid)
-
     # open the new grid
     with h5py.File(f'{path_to_grids}/{grid}.hdf5', 'w') as hf:
 
@@ -42,7 +40,7 @@ def create_new_grid(grid, synthesizer_data_dir):
 
             # copy top-level attributes
             for k, v in hf_sps.attrs.items():
-                print(k, v)
+                # print(k, v)
                 hf.attrs[k] = v
 
             # copy various quantities (all excluding the spectra) from the original sps grid
@@ -56,7 +54,7 @@ def create_new_grid(grid, synthesizer_data_dir):
         with open(f'{path_to_cloudy_files}/{grid_name}/params.yaml', "r") as stream:
             cloudy_params = yaml.safe_load(stream)
             for k, v in cloudy_params.items():
-                print(k, v)
+                # print(k, v)
                 if v is None:
                     v = 'null'
                 hf.attrs[k] = v
@@ -148,7 +146,7 @@ def add_spectra(grid_name, synthesizer_data_dir):
 
         for iZ, Z in enumerate(metallicities):
 
-            print(f'{iZ+1}/{len(metallicities)}')
+            # print(f'{iZ+1}/{len(metallicities)}')
 
             for ia, log10age in enumerate(log10ages):
 
@@ -260,7 +258,7 @@ def add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include):
             lines[f'{line_id}/continuum'] = np.zeros((na, nZ))
 
         for iZ, Z in enumerate(metallicities):
-            print(iZ)
+
             for ia, log10age in enumerate(log10ages):
 
                 infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}'
