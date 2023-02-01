@@ -109,7 +109,7 @@ class ParticleGalaxy(BaseGalaxy):
 
         # get the SEDs
         if integrated:
-            from ..extensions.make_sed import compute_integrated_sed
+            from ..extensions.csed import compute_integrated_sed
             stellar_lum, intrinsic_lum = compute_integrated_sed(
                 np.ascontiguousarray(stellar_spectra, dtype=np.float64),
                 np.ascontiguousarray(total_spectra, dtype=np.float64),
@@ -117,7 +117,7 @@ class ParticleGalaxy(BaseGalaxy):
                 len(grid_props), npart, nlam
             )
         else:
-            from ..extensions.make_sed import compute_particle_seds
+            from ..extensions.csed import compute_particle_seds
             stellar_lum, intrinsic_lum = compute_particle_seds(
                 np.ascontiguousarray(
                     stellar_spectra, dtype=np.float64),

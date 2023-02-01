@@ -526,7 +526,7 @@ static struct PyModuleDef moduledef = {
         NULL,                                      /* m_free */
     };
 
-PyMODINIT_FUNC PyInit_make_sed(void) {
+PyMODINIT_FUNC PyInit_csed(void) {
     PyObject *m = PyModule_Create(&moduledef);
     import_array();
     return m;

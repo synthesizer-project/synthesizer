@@ -91,8 +91,8 @@ class BuildExt(build_ext):
 extensions = [
     Extension(path, sources=[source])
     for path, source in {
-        "synthesizer/extensions/make_sed":
-            "synthesizer/extensions/make_sed.c",
+        "synthesizer/extensions/csed":
+            "synthesizer/extensions/csed.c",
         "synthesizer/extensions/weights":
             "synthesizer/extensions/weights.c",
         "synthesizer/imaging/extensions/sph_kernel_calc":
