@@ -128,7 +128,7 @@ if __name__ == "__main__":
 
         print(synthesizer_model_name, model)
 
-        make grid
+        # make grid
         generate_grid(model)
 
         # this is the full path to the ultimate HDF5 grid file
