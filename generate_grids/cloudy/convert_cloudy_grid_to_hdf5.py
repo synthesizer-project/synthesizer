@@ -85,15 +85,21 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
         nZ = len(hf['metallicities'][:])  # number of metallicity grid points
         na = len(hf['log10ages'][:])  # number of age grid points
 
+        failed = False
+
         for ia in range(na):
             for iZ in range(nZ):
 
                 infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}'
 
                 if not os.path.isfile(infile+'.cont'):  # attempt to open run.
-                    print(f'{ia}_{iZ}.cont missing')
+                    failed = True
+                    # print(f'{ia}_{iZ}.cont missing')
                 if not os.path.isfile(infile+'.lines'):  # attempt to open run.
-                    print(f'{ia}_{iZ}.lines missing')
+                    failed = True
+                    # print(f'{ia}_{iZ}.lines missing')
+
+        return failed
 
 
 def add_spectra(grid_name, synthesizer_data_dir):
@@ -302,11 +308,18 @@ if __name__ == "__main__":
 
     for grid_name in args.grid:
 
+        print('-'*50)
+        print(grid_name)
+
         create_new_grid(grid_name, synthesizer_data_dir)
-        check_cloudy_runs(grid_name, synthesizer_data_dir)
-        dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
+        failed = check_cloudy_runs(grid_name, synthesizer_data_dir)
 
-        lines_to_include = get_line_list(
-            grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.5)
+        if not failed:
+            dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
 
-        add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include)
+            lines_to_include = get_line_list(
+                grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.5)
+
+            add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include)
+        else:
+            print('FAILED')
