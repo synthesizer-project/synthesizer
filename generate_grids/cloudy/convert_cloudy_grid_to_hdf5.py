@@ -304,9 +304,9 @@ if __name__ == "__main__":
 
         create_new_grid(grid_name, synthesizer_data_dir)
         check_cloudy_runs(grid_name, synthesizer_data_dir)
-        # dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
-        #
-        # lines_to_include = get_line_list(
-        #     grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.5)
-        #
-        # add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include)
+        dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
+
+        lines_to_include = get_line_list(
+            grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.5)
+
+        add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include)
