@@ -1,4 +1,4 @@
-# Synthesizer
+
 
 
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⡀⠒⠒⠦⣄⡀⠀⠀⠀⠀⠀⠀⠀                                      
@@ -17,6 +17,8 @@
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀                                      
 
 ***
+
+# Synthesizer
 
 ![workflow](https://github.com/flaresimulations/synthesizer/actions/workflows/python-app.yml/badge.svg)
 [![Documentation Status](https://readthedocs.org/projects/synthesizer-docs/badge/?version=latest)](https://synthesizer-docs.readthedocs.io/en/latest/?badge=latest)
