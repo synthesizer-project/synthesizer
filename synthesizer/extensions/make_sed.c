@@ -31,7 +31,7 @@
  * @param dims: The length of each dimension.
  * @param ndim: The number of dimensions.
  */
-int get_flat_index(const int *indices, const int *dims, int ndim) {
+int get_flat_index(const int *indices, const int *dims, const int ndim) {
 
   /* Define the index. */
   int index = indices[0];
@@ -68,7 +68,7 @@ int get_flat_index(const int *indices, const int *dims, int ndim) {
  * @param n: The number of entries in arr.
  * @param x: The value you compare against.
  */
-int closest_index(double *arr, int n, double x) {
+int closest_index(const double *arr, const int n, const double x) {
 
   /* Define the starting indices. */
   int l = 0, r = n-1;
@@ -115,8 +115,8 @@ int closest_index(double *arr, int n, double x) {
  *               grid cell's mass fraction is simply (1 - frac[dim])
  */
 void recursive_frac_loop(const PyObject *grid_tuple, const PyObject *part_tuple,
-                         int p, int dim, int ndim, int *dims, int *indices,
-                         double *fracs) {
+                         int p, int dim, const int ndim, const int *dims,
+                         int *indices, double *fracs) {
 
   /* Are we done yet? */
   if (dim >= ndim) {
@@ -267,6 +267,11 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
                        &grid_dim, &npart, &nlam))
     return NULL;
 
+  /* Quick check to make sure our inputs are valid. */
+  if (grid_dim == 0) return NULL;
+  if (npart == 0) return NULL;
+  if (nlam == 0) return NULL;
+
   /* Extract a pointer to the spectra grids */
   const double *grid_stellar_spectra = np_stellar_spectra->data;
   /* double *grid_total_spectra = NULL; */
@@ -298,10 +303,10 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   /* Set up arrays to store grid indices for the weights, mass fractions
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
-  double fracs[grid_dim];
-  int frac_indices[grid_dim + 1];
-  int weight_indices[nweights];
-  int sub_indices[grid_dim];
+  double *fracs = malloc(grid_dim * sizeof(double));
+  int *frac_indices = malloc((grid_dim + 1) * sizeof(int));
+  int *weight_indices = malloc(nweights * sizeof(int));
+  int *sub_indices = malloc(grid_dim * sizeof(double));
     
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
