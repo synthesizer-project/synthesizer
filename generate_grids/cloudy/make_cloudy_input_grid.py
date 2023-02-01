@@ -58,7 +58,7 @@ def load_cloudy_parameters(param_file='default_param.yaml',
                 output_cloudy_params.append(cloudy_params)
 
                 # replace negative '-' with m
-                out_str = f'{k}{str(_v).replace("-", "m")}'
+                out_str = f'_{k}{str(_v).replace("-", "m")}'
 
                 # save to list of output strings
                 output_cloudy_names.append(out_str)
@@ -222,8 +222,10 @@ if __name__ == "__main__":
                 enumerate(zip(c_params, c_name)):
 
             # if no variations, save as 'default' cloudy grid
-            if cloudy_name == '':
-                cloudy_name = 'cloudy'  # maybe this should be the version
+            # if cloudy_name == '':
+            #     cloudy_name = 'cloudy'  # maybe this should be the version
+
+            cloudy_name = 'cloudy'+cloudy_name
 
             output_dir = make_directories(synthesizer_data_dir, sps_grid,
                                           cloudy_name)
