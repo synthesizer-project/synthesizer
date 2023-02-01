@@ -1,6 +1,11 @@
-import os
-import numpy as np
+"""
+Example for generating the rest-frame spectrum for a parametric galaxy including
+photometry. This example will:
+- build a parametric galaxy (see make_sfzh)
+- calculate spectral luminosity density
+"""
 
+import numpy as np
 import matplotlib.pyplot as plt
 
 from synthesizer.filters import FilterCollection
@@ -14,13 +19,9 @@ from astropy.cosmology import Planck18 as cosmo
 
 if __name__ == '__main__':
 
-    # Get the location of this script, __file__ is the absolute path of this
-    # script, however we just want to directory
-    script_path = os.path.abspath(os.path.dirname(__file__))
-
-    # Define the grid
-    grid_name = "test_grid"
-    grid_dir = script_path + "/../../tests/test_grid/"
+    # define and initialise grid
+    grid_dir = '../../tests/test_grid'
+    grid_name = 'test_grid'
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # --- define the parameters of the star formation and metal enrichment histories
@@ -62,11 +63,12 @@ if __name__ == '__main__':
     # galaxy.plot_spectra()
 
     # # --- pacman model (complex)
-    galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1)
+    galaxy.get_pacman_spectra(grid, fesc=0.0, fesc_LyA=0.5, tauV=0.6)
     galaxy.plot_spectra()
 
     # # --- CF00 model NOT YET IMPLEMENTED
     # galaxy.get_pacman_spectra(grid, tauV = 0.1, fesc = 0.5)
     # galaxy.plot_spectra()
 
+    # print galaxy summary
     print(galaxy)
