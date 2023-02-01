@@ -110,9 +110,9 @@ if __name__ == "__main__":
     models = []
 
     # two standard models
-    models += [{},  # default model
-               {'imf_type': 'chabrier03', 'imf_masses': [0.08, 120]},  # chabrier03
-               ]
+    # models += [{},  # default model
+    #            {'imf_type': 'chabrier03', 'imf_masses': [0.08, 120]},  # chabrier03
+    #            ]
 
     # different high-mass slopes
     models += [{'imf_slopes': [1.3, 2.3, a3]} for a3 in np.arange(1.5, 3.0, 0.1)]
