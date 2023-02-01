@@ -115,7 +115,7 @@ if __name__ == "__main__":
     #            ]
 
     # different high-mass slopes
-    models += [{'imf_slopes': [1.3, 2.3, a3]} for a3 in np.arange(1.5, 3.0, 0.1)]
+    models += [{'imf_slopes': [1.3, 2.3, a3]} for a3 in np.arange(1.7, 3.0, 0.1)]
 
     # different high-mass cut-offs
     models += [{'imf_masses': [0.08, 0.5, 1, hmc]} for hmc in [5, 10, 50, 100]]
@@ -128,7 +128,7 @@ if __name__ == "__main__":
 
         print(synthesizer_model_name, model)
 
-        # make grid
+        make grid
         generate_grid(model)
 
         # this is the full path to the ultimate HDF5 grid file
