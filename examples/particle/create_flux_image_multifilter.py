@@ -54,7 +54,7 @@ if __name__ == '__main__':
     stars_start = time.time()
 
     # Create stars object
-    n = 10000  # number of particles for sampling
+    n = 1000000  # number of particles for sampling
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
@@ -102,9 +102,8 @@ if __name__ == '__main__':
 
     # Define image propertys
     redshift = 1
-    resolution = ((width + 1) / 100) * cosmo.arcsec_per_kpc_proper(
-        redshift).value * arcsec
-    width = (width + 1) * cosmo.arcsec_per_kpc_proper(redshift).value * arcsec
+    resolution = ((width + 1) / 100) * kpc
+    width = (width + 1) * kpc
 
     # Get the image
     hist_img = galaxy.make_image(resolution, fov=width, img_type="hist",

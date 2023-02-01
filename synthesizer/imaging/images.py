@@ -2,6 +2,7 @@
 """
 import math
 import numpy as np
+import ctypes
 from scipy import signal
 from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
@@ -792,6 +793,7 @@ class ParticleImage(ParticleScene, Image):
             A 2D array containing particles sorted into an image.
             (npix, npix)
         """
+        from .extensions.sph_kernel_calc import sph_kernel_loop
 
         # Get the size of a pixel
         res = self.resolution
@@ -806,47 +808,16 @@ class ParticleImage(ParticleScene, Image):
             # How many pixels are in the smoothing length?
             delta_pix = math.ceil(smooth_length / self.resolution) + 1
 
-            # Loop over a square aperture around this particle
-            # NOTE: This includes "pixels" in front of and behind the image
-            #       plane since the kernel is by defintion 3D
-            # TODO: Would be considerably more accurate to integrate over the
-            #       kernel in z axis since this is not quantised into pixels
-            #       like the axes in the image plane.
-            for i in range(self.pix_pos[ind, 0] - delta_pix,
-                           self.pix_pos[ind, 0] + delta_pix + 1):
+            # Calculate this particles sph kernel
+            kernel = sph_kernel_loop(
+                self.pix_pos[ind, 0], self.pix_pos[ind, 1],
+                self.pix_pos[ind, 2], delta_pix, self.npix, pos,
+                self.resolution, kernel_func, smooth_length)
 
-                # Skip if outside of image
-                if i < 0 or i >= self.npix:
-                    continue
-
-                # Compute the x separation
-                x_dist = (i * res) + (res / 2) - pos[0]
-
-                for j in range(self.pix_pos[ind, 1] - delta_pix,
-                               self.pix_pos[ind, 1] + delta_pix + 1):
-
-                    # Skip if outside of image
-                    if j < 0 or j >= self.npix:
-                        continue
-
-                    # Compute the y separation
-                    y_dist = (j * res) + (res / 2) - pos[1]
-
-                    for k in range(self.pix_pos[ind, 2] - delta_pix,
-                                   self.pix_pos[ind, 2] + delta_pix + 1):
-
-                        # Compute the z separation
-                        z_dist = (k * res) + (res / 2) - pos[2]
-
-                        # Compute the distance between the centre of this pixel
-                        # and the particle.
-                        dist = np.sqrt(x_dist ** 2 + y_dist ** 2 + z_dist ** 2)
-
-                        # Get the value of the kernel here
-                        kernel_val = kernel_func(dist / smooth_length)
-
-                        # Add this pixel's contribution
-                        self.img[i, j] += self.pixel_values[ind] * kernel_val
+            # Add this pixel's contribution
+            self.img[
+                i - delta_pix: i + delta_pix + 1,
+                j - delta_pix: j + delta_pix + 1] += self.pixel_values[ind] * kernel
 
         return self.img
 

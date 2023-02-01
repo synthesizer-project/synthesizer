@@ -111,7 +111,7 @@ class Scene:
             The width of the image.
         npix : int
             The number of pixels in the image.
-        
+
         Raises
         ------
         InconsistentArguments
@@ -203,7 +203,7 @@ class Scene:
 
         # Strip off the units
         self.fov = self.fov.value
-            
+
 
 class ParticleScene(Scene):
     """
@@ -342,7 +342,7 @@ class ParticleScene(Scene):
 
         # Check the stars we have been given.
         if stars is not None:
-            
+
             # Ensure we haven't been handed a resampled set of stars
             if stars.resampled:
                 raise exceptions.UnimplementedFunctionality(
@@ -354,7 +354,7 @@ class ParticleScene(Scene):
             # If we are working in terms of angles we need redshifts for the
             # stars.
             if (spatial_unit.same_dimensions_as(arcsec) and
-                stars.redshift is None):
+                    stars.redshift is None):
                 raise exceptions.InconsistentArguments(
                     "When working in an angular unit system the provided "
                     "stars need a redshift associated to them. Stars.redshift"
@@ -367,7 +367,7 @@ class ParticleScene(Scene):
             raise exceptions.InconsistentArguments(
                 "When working in an angular unit system a cosmology object"
                 " must be given."
-                )
+            )
 
         # Missing positions
         if stars is None and positions is None:
@@ -386,7 +386,7 @@ class ParticleScene(Scene):
                     centre[1] < np.min(pos[:, 1]) or
                     centre[1] > np.max(pos[:, 1]) or
                     centre[2] < np.min(pos[:, 2]) or
-                    centre[2] > np.max(pos[:, 2])):
+                        centre[2] > np.max(pos[:, 2])):
                     raise exceptions.InconsistentCoordinates(
                         "The centre lies outside of the coordinate range. "
                         "Are they already centred?"
@@ -413,9 +413,7 @@ class ParticleScene(Scene):
         """
 
         # Convert sim positions to pixel positions
-        self.pix_pos[:, 0] = self.coords[:, 0] / self.resolution
-        self.pix_pos[:, 1] = self.coords[:, 1] / self.resolution
-        self.pix_pos[:, 2] = self.coords[:, 2] / self.resolution
+        self.pix_pos = np.int32(np.floor(self.coords / self.resolution))
 
     def _convert_to_img_units(self):
         """
@@ -448,7 +446,7 @@ class ParticleScene(Scene):
 
             # First we need to convert to kpc
             if self.stars.coord_units != kpc:
-                
+
                 # First do the coordinates
                 self.coords *= self.stars.coord_units
                 self.coords.convert_to_units(kpc)
@@ -456,11 +454,11 @@ class ParticleScene(Scene):
 
             # Now we can convert to arcsec
             self.coords *= arcsec_per_kpc_proper * arcsec
-                
+
             # Finally convert to the image unit system if needed
             if self.spatial_unit != arcsec:
                 self.coords.convert_to_units(self.spatial_unit)
-                
+
             # And strip off the unit
             self.coords = self.coords.value
 
@@ -474,7 +472,7 @@ class ParticleScene(Scene):
 
         # And now do the smoothing lengths
         if self.smoothing_lengths is not None:
-            
+
             # If they are the same dimension do the conversion.
             if self.spatial_unit.same_dimensions_as(self.stars.coord_units):
                 self.smoothing_lengths *= self.stars.coord_units
@@ -496,15 +494,15 @@ class ParticleScene(Scene):
 
                 # Now we can convert to arcsec
                 self.smoothing_lengths *= arcsec_per_kpc_proper * arcsec
-                
+
                 # Finally convert to the image unit system if needed
                 if self.spatial_unit != arcsec:
                     self.coords.convert_to_units(self.spatial_unit)
                     self.smoothing_lengths.convert_to_units(self.spatial_unit)
-                
+
                 # And strip off the unit
                 self.smoothing_lengths = self.smoothing_lengths.value
-            
+
 
 class ParametricScene(Scene):
     """

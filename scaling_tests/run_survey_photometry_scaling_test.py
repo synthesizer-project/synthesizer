@@ -2,13 +2,14 @@
 This example shows how to create a survey of fake galaxies generated using a
 2D SFZH, and make images of each of these galaxies.
 """
+import os
 import time
 import random
 import numpy as np
 from scipy import signal
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec 
+import matplotlib.gridspec as gridspec
 from unyt import yr, Myr
 
 from synthesizer.grid import Grid
@@ -17,10 +18,8 @@ from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
-from synthesizer.filters import SVOFilterCollection as Filters
-from synthesizer.kernel_functions import quintic
+from synthesizer.filters import FilterCollection as Filters
 from synthesizer.imaging.survey import Survey
-from astropy.cosmology import Planck18 as cosmo
 
 plt.rcParams['font.family'] = 'DeJavu Serif'
 plt.rcParams['font.serif'] = ['Times New Roman']
@@ -31,9 +30,13 @@ random.seed(42)
 
 start = time.time()
 
+# Get the location of this script, __file__ is the absolute path of this
+# script, however we just want to directory
+script_path = os.path.abspath(os.path.dirname(__file__))
+
 # Define the grid
 grid_name = "test_grid"
-grid_dir = "tests/test_grid/"
+grid_dir = script_path + "/../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
 # Define the grid (normally this would be defined by an SPS grid)
@@ -54,7 +57,7 @@ ax.grid(True)
 ax.loglog()
 
 # Define the number of particles in a galaxy
-nparts = [50, 100, 1000, 10000, 100000]
+nparts = [10, 100, 1000, 10000, 100000]
 
 # Lets make filter sets for two different instruments
 hst_filter_codes = ["HST/WFC3_IR.F105W", "HST/WFC3_IR.F125W"]
@@ -67,8 +70,8 @@ webb_filters = Filters(webb_filter_codes, new_lam=grid.lam)
 for npart in nparts:
 
     # Define the number of galaxies array and timings results array
-    gal_res = 10
-    ngals = np.linspace(10, 10000, gal_res, dtype=int)
+    gal_res = 5
+    ngals = np.logspace(1, 3, gal_res, dtype=int)
     times = np.zeros(gal_res)
 
     # Create stars object
@@ -77,7 +80,7 @@ for npart in nparts:
 
     # Loop over n galaxies
     for i, ngalaxies in enumerate(ngals):
-        
+
         # Create an empty Survey object
         survey = Survey(super_resolution_factor=1)
 
@@ -123,7 +126,7 @@ for npart in nparts:
 # Label axes
 ax.set_ylabel("Wallclock / [s]")
 ax.set_xlabel("$N_\mathrm{gal}$")
-    
+
 ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15),
           fancybox=True, shadow=True, ncol=2)
 

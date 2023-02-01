@@ -2,11 +2,12 @@
 This example generates a sample of star particles from a 2D SFZH, generates an
 SED for each particle and then generates images in a number of Webb bands.
 """
+import os
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec 
-from unyt import yr, Myr
+import matplotlib.gridspec as gridspec
+from unyt import yr, Myr, kpc
 import gc
 
 from synthesizer.grid import Grid
@@ -28,9 +29,13 @@ if __name__ == '__main__':
 
     start = time.time()
 
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
+
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = "tests/test_grid/"
+    grid_dir = script_path + "/../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # Define the grid (normally this would be defined by an SPS grid)
@@ -54,7 +59,7 @@ if __name__ == '__main__':
     print("Filters created, took:", time.time() - filter_start)
 
     # Create list of particle numbers
-    ns = [20, 50, 100, 500, 1000, 2000, 5000, 10000, 50000, 100000]
+    ns = [10, 100, 1000, 10000, 100000, 1000000]
 
     # Create arrays to store runtimes
     create_stars = np.zeros(len(ns))
@@ -72,7 +77,15 @@ if __name__ == '__main__':
         coords = CoordinateGenerator.generate_3D_gaussian(n)
         stars = sample_sfhz(sfzh, n)
         stars.coordinates = coords
-        stars.smoothing_lengths = np.ones(n) / 4
+        stars.coord_units = kpc
+        cent = np.mean(coords, axis=0)  # define geometric centre
+        rs = np.sqrt((coords[:, 0] - cent[0]) ** 2
+                     + (coords[:, 1] - cent[1]) ** 2
+                     + (coords[:, 2] - cent[2]) ** 2)  # calculate radii
+        rs[rs < 0.1] = 0.4  # Set a lower bound on the "smoothing length"
+        stars.smoothing_lengths = rs / 4  # convert radii into smoothing lengths
+        stars.redshift = 1
+        print(stars)
 
         # Compute width of stellar distribution
         width = np.max(coords) - np.min(coords)
@@ -94,12 +107,14 @@ if __name__ == '__main__':
         create_spec[ind] = time.time() - spectra_start
 
         # Define image propertys
-        resolution = (width + 1) / 100
+        redshift = 1
+        resolution = ((width + 1) / 100) * kpc
+        width = (width + 1) * kpc
 
         img_start = time.time()
 
         # Get the image
-        hist_img = galaxy.make_image(resolution, fov=width + 1,
+        hist_img = galaxy.make_image(resolution, fov=width,
                                      img_type="hist",
                                      sed=galaxy.spectra_array["intrinsic"],
                                      filters=filters,
@@ -109,7 +124,7 @@ if __name__ == '__main__':
         img_start = time.time()
 
         # Get the image
-        smooth_img = galaxy.make_image(resolution, fov=width + 1,
+        smooth_img = galaxy.make_image(resolution, fov=width,
                                        img_type="smoothed",
                                        sed=galaxy.spectra_array["intrinsic"],
                                        filters=filters,

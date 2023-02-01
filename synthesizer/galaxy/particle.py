@@ -7,6 +7,7 @@ from .. import exceptions
 from ..weights import calculate_weights
 import numpy as np
 from ..imaging.images import ParticleImage
+import time
 
 
 class ParticleGalaxy(BaseGalaxy):
@@ -53,6 +54,79 @@ class ParticleGalaxy(BaseGalaxy):
         """
 
         # by default should update self.stars
+
+    def _get_seds(self, grid, fesc, okinds, integrated):
+        """
+        """
+
+        # Set up the inputs to the C function.
+        grid_props = [grid.log10ages, grid.log10metallicities]
+        part_props = [
+            np.ascontiguousarray(
+                self.stars.log10ages[okinds], dtype=np.float64),
+            np.ascontiguousarray(
+                self.stars.log10metallicities[okinds], dtype=np.float64),
+        ]
+        part_mass = np.ascontiguousarray(
+            self.stars.initial_masses[okinds], dtype=np.float64)
+        npart = np.int32(self.stars.initial_masses[okinds].size)
+        nlam = np.int32(grid.spectra['stellar'].shape[-1])
+
+        # Lets limit the search space to where we have particles.
+        slc = [slice(None)] * len(grid.spectra['stellar'].shape)
+        for ind, pprop in enumerate(part_props):
+
+            # Get the minima and maxima
+            prop_min = np.min(pprop)
+            prop_max = np.max(pprop)
+
+            # Get the corresponding indices with some buffer
+            min_ind = grid_props[ind].searchsorted(prop_min) - 3
+            max_ind = grid_props[ind].searchsorted(prop_max) + 3
+            min_ind = np.max([min_ind, 0])
+            max_ind = np.min([max_ind, grid_props[ind].size])
+
+            # Limit the property array
+            grid_props[ind] = np.ascontiguousarray(
+                grid_props[ind][min_ind: max_ind], dtype=np.float64
+            )
+
+            # Define this slice in the grid
+            slc[ind] = slice(min_ind, max_ind)
+
+        # Slice the spectral grids
+        stellar_spectra = grid.spectra['stellar'][tuple(slc)]
+        total_spectra = grid.spectra['total'][tuple(slc)]
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        # get the SEDs
+        if integrated:
+            from ..extensions.make_sed import compute_integrated_sed
+            stellar_lum, intrinsic_lum = compute_integrated_sed(
+                np.ascontiguousarray(stellar_spectra, dtype=np.float64),
+                np.ascontiguousarray(total_spectra, dtype=np.float64),
+                grid_props, part_props, part_mass, fesc, grid_dims,
+                len(grid_props), npart, nlam
+            )
+        else:
+            from ..extensions.make_sed import compute_particle_seds
+            stellar_lum, intrinsic_lum = compute_particle_seds(
+                np.ascontiguousarray(
+                    stellar_spectra, dtype=np.float64),
+                np.ascontiguousarray(total_spectra, dtype=np.float64),
+                grid_props, part_props, part_mass, fesc, grid_dims,
+                len(grid_props), npart, nlam
+            )
+
+        return stellar_lum, intrinsic_lum
 
     def generate_intrinsic_spectra(self, grid, fesc=0.0, update=True,
                                    young=False, old=False, integrated=True):
@@ -107,45 +181,18 @@ class ParticleGalaxy(BaseGalaxy):
             raise exceptions.InconsistentParameter(
                 'Galaxy sub-component can not be simultaneously young and old')
         if young:
-            s = self.stars.log10ages <= np.log10(young)
+            okinds = self.stars.log10ages <= np.log10(young)
         elif old:
-            s = self.stars.log10ages > np.log10(old)
+            okinds = self.stars.log10ages > np.log10(old)
         else:
-            s = np.ones(self.nparticles, dtype=bool)
+            okinds = np.ones(self.nparticles, dtype=bool)
 
         # Calculate integrared spectra
         if integrated:
 
-            # Calculate the grid weights for all stellar particles
-            weights_temp = self._calculate_weights(
-                grid, self.stars.log10metallicities[s],
-                self.stars.log10ages[s], self.stars.initial_masses[s]
-            )
-
-            # Get the mask for grid cells we need to sum
-            non0_inds = np.where(weights_temp > 0)
-
-            # Compute integrated stellar sed
-            stellar_lum = np.sum(
-                grid.spectra['stellar'][non0_inds[0], non0_inds[1], :]
-                * weights_temp[non0_inds[0], non0_inds[1], None], axis=0
-            )
-
-            # TODO: perhaps should also check that fesc is not false
-            if 'total' in list(grid.spectra.keys()):
-
-                # Compute the integrated intrinsic sed
-                intrinsic_lum = np.sum(
-                    (1.-fesc)
-                    * grid.spectra['total'][non0_inds[0], non0_inds[1], :]
-                    * weights_temp[non0_inds[0], non0_inds[1], None], axis=0
-                )
-
-            else:
-
-                # If no nebular emission the intrinsic emission is simply
-                # the stellar emission
-                intrinsic_lum = stellar_lum
+            # Get the seds
+            stellar_lum, intrinsic_lum = self._get_seds(grid, fesc, okinds,
+                                                        integrated)
 
             # Update the SED's attributes
             if update:
@@ -161,48 +208,10 @@ class ParticleGalaxy(BaseGalaxy):
         # necessary for los calculation anyway.
         else:
 
-            # Initialise arrays to store SEDs
-            stellar_lum_array = np.zeros((self.nparticles,
-                                          grid.spectra['stellar'].shape[-1]))
-
-            intrinsic_lum_array = np.zeros((self.nparticles,
-                                            grid.spectra['stellar'].shape[-1]))
-
-            # Loop over all stellar particles
-            for i, (mass, age, metal) in enumerate(zip(
-                    self.stars.initial_masses[s],
-                    self.stars.log10ages[s],
-                    self.stars.log10metallicities[s])):
-
-                # Calculate the grid weights for this particle
-                weights_temp = self._calculate_weights(grid, metal, age, mass)
-                non0_inds = np.where(weights_temp > 0)
-
-                # Get the mask for grid cells we need to sum
-                non0_inds = np.where(weights_temp > 0)
-
-                # Compute the stellar sed for this particle
-                stellar_lum_array[i] = np.sum(
-                    grid.spectra['stellar'][non0_inds[0], non0_inds[1], :]
-                    * weights_temp[non0_inds[0], non0_inds[1], None], axis=0
-                )
-
-                # TODO: perhaps should also check that fesc is not false
-                if 'total' in list(grid.spectra.keys()):
-
-                    # Calculate the intrinsic sed for this particle
-                    # TODO: I'm not sure this will actually work if fesc is an array
-                    intrinsic_lum_array[i] = np.sum(
-                        (1.-fesc)
-                        * grid.spectra['total'][non0_inds[0], non0_inds[1], :]
-                        * weights_temp[non0_inds[0], non0_inds[1], None],
-                        axis=0
-                    )
-
-                else:
-                    # If no nebular emission the intrinsic emission is simply
-                    # the stellar emission
-                    intrinsic_lum_array[i] = stellar_lum_array[i]
+            # Get the seds
+            stellar_lum_array, intrinsic_lum_array = self._get_seds(grid, fesc,
+                                                                    okinds,
+                                                                    integrated)
 
             # Update the SED's attributes
             if update:
@@ -442,18 +451,54 @@ class ParticleGalaxy(BaseGalaxy):
         """
         Find weights of particles on grid
 
-        Will calculate for particles individually
+        This utilises a function import from C.
         """
-        in_arr = np.array([ages, metals, imasses], dtype=np.float64).T
-        if (not hasattr(metals, '__len__')):  # check it's an array
-            in_arr = in_arr[None, :]  # update dimensions if scalar
+        from ..extensions.weights import calculate_weights
 
-        if young_stars:  # filter grid object
-            return calculate_weights(grid.log10ages[grid.ages <= grid.max_age],
-                                     grid.log10metallicities, in_arr)
+        # Ensure we have arrays
+        if not isinstance(metals, np.ndarray):
+            metals = np.array([metals, ])
+        if not isinstance(ages, np.ndarray):
+            ages = np.array([ages, ])
+        if not isinstance(imasses, np.ndarray):
+            imasses = np.array([imasses, ])
+
+        # Are we masking for only young stars?
+        if young_stars:
+            okinds = grid.ages <= grid.max_age
         else:
-            return calculate_weights(grid.log10ages, grid.log10metallicities,
-                                     in_arr)
+            okinds = np.ones(len(grid.ages), dtype=bool)
+
+        # How many elements do we have in each array?
+        # NOTE: for now this requires noth age and metallicity arrays to exist
+        # in the grid.
+        nage = len(grid.log10ages[okinds])
+        nmetals = len(grid.log10metallicities)
+        npart = len(metals)
+
+        # Calculate the weights with the C function
+        weights = calculate_weights(grid.log10metallicities,
+                                    grid.log10ages[okinds], metals, ages,
+                                    imasses, nage, nmetals, npart)
+
+        return weights
+
+    # def _calculate_weights(self, grid, metals, ages, imasses,
+    #                        young_stars=False):
+    #     """
+    #     Find weights of particles on grid
+    #     Will calculate for particles individually
+    #     """
+    #     in_arr = np.array([ages, metals, imasses], dtype=np.float64).T
+    #     if (not hasattr(metals, '__len__')):  # check it's an array
+    #         in_arr = in_arr[None, :]  # update dimensions if scalar
+
+    #     if young_stars:  # filter grid object
+    #         return calculate_weights(grid.log10ages[grid.ages <= grid.max_age],
+    #                                  grid.log10metallicities, in_arr)
+    #     else:
+    #         return calculate_weights(grid.log10ages, grid.log10metallicities,
+    #                                  in_arr)
 
     def create_stellarmass_hist(self, resolution, npix=None, fov=None):
         """
