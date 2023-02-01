@@ -58,7 +58,7 @@ def load_cloudy_parameters(param_file='default_param.yaml',
                 output_cloudy_params.append(cloudy_params)
 
                 # replace negative '-' with m
-                out_str = f'_{k}{str(_v).replace("-", "m")}'
+                out_str = f'-{k}{str(_v).replace("-", "m")}'
 
                 # save to list of output strings
                 output_cloudy_names.append(out_str)
