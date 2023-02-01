@@ -163,6 +163,21 @@ void recursive_frac_loop(const PyObject *grid_tuple, const PyObject *part_tuple,
                       fracs);
 }
 
+/**
+ * @brief This calculates the grid weights in each grid cell.
+ *
+ * To do this for an N-dimensional array this is done recursively.
+ *
+ * @param mass: The mass of the current particle.
+ * @param part_tuple: The tuple containing each array of particle properties.
+ * @param p: Index of the current particle.
+ * @param dim: The current dimension in the recursion.
+ * @param ndim: The number of grid dimensions.
+ * @param dims: The length of each grid dimension.
+ * @param indices: The array for storing N-dimensional grid indicies.
+ * @param fracs: The array for storing the mass fractions. NOTE: The left most
+ *               grid cell's mass fraction is simply (1 - frac[dim])
+ */
 void recursive_weight_loop(const double mass, int*sub_indices,
                            int *frac_indices, int *weight_indices,
                            double *weights, double *fracs,
@@ -424,10 +439,10 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Set up arrays to store grid indices for the weights, mass fractions
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
-  double fracs[grid_dim];
-  int frac_indices[grid_dim + 1];
-  int weight_indices[nweights];
-  int sub_indices[grid_dim];
+  double *fracs = malloc(grid_dim * sizeof(double));
+  int *frac_indices = malloc((grid_dim + 1) * sizeof(int));
+  int *weight_indices = malloc(nweights * sizeof(int));
+  int *sub_indices = malloc(grid_dim * sizeof(double));
     
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
