@@ -1,4 +1,3 @@
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -7,13 +6,10 @@ from synthesizer.sed import Sed
 from synthesizer.load_data import load_CAMELS_SIMBA
 from synthesizer.filters import UVJ
 
-if len(sys.argv) > 1:
-    grid_dir = str(sys.argv[1])
-else:
-    grid_dir = None
-
-# first load a spectral grid
-_grid = grid.Grid('bc03_chabrier03', grid_dir=grid_dir)
+# define and initialise grid
+grid_dir = '../../tests/test_grid'
+grid_name = 'test_grid'
+grid = grid.Grid(grid_name, grid_dir=grid_dir)
 
 # now load some example CAMELS data using the dedicated data loader
 gals = load_CAMELS_SIMBA('data/', snap='033')
@@ -22,7 +18,8 @@ gals = load_CAMELS_SIMBA('data/', snap='033')
     here we set the `sed_object` flag to automatically assign
     to an sed object """
 _g = gals[0]
-_spec = _g.integrated_stellar_spectrum(_grid, sed_object=True)
+_spec = _g.generate_intrinsic_spectra(grid, integrated=True)
+
 
 plt.loglog(_spec.lam, _spec.lnu)
 plt.xlabel('$\lambda \,/\, \\AA$')
@@ -33,12 +30,12 @@ plt.savefig('../../docs/source/images/camels_single_spec.png', dpi=200); plt.clo
 """ multiple galaxies
     Here we leave the `sed_object` flag as the default (False), 
     and combine into a single sed object afterwards """
-_specs = np.vstack([_g.integrated_stellar_spectrum(_grid)
+_specs = np.vstack([_g.generate_intrinsic_spectra(grid)
                     for _g in gals[:10]])
 
-_specs = Sed(lam=_grid.lam, lnu=_specs)
+_specs = Sed(lam=grid.lam, lnu=_specs)
 
-plt.loglog(_grid.lam, _specs.lnu.T)
+plt.loglog(grid.lam, _specs.lnu.T)
 plt.xlabel('$\lambda \,/\, \\AA$')
 plt.ylabel('$L_{\\nu} \,/\, \mathrm{erg \; s^{-1} \; Hz^{-1}}$')
 # plt.show()
@@ -50,7 +47,7 @@ plt.savefig('../../docs/source/images/camels_multiple_spec.png', dpi=200); plt.c
 _spec.get_fnu0()
 
 # define a filter collection object (UVJ default)
-fc = UVJ(new_lam=_grid.lam)
+fc = UVJ(new_lam=grid.lam)
 
 _UVJ = _spec.get_broadband_fluxes(fc)
 print(_UVJ)
@@ -61,10 +58,10 @@ print(_UVJ)
 mstar = np.log10(np.array([np.sum(_g.stars.masses) for _g in gals]) * 1e10)
 mask = np.where(mstar > 8)[0]
 
-_specs = np.vstack([gals[_g].integrated_stellar_spectrum(_grid)
+_specs = np.vstack([gals[_g].integrated_stellar_spectrum(grid)
                     for _g in mask])
 
-_specs = Sed(lam=_grid.lam, lnu=_specs)
+_specs = Sed(lam=grid.lam, lnu=_specs)
 _specs.get_fnu0()
 _UVJ = _specs.get_broadband_fluxes(fc)
 

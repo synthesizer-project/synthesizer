@@ -1,3 +1,7 @@
+"""
+Plot different dust attenuation curves
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 from unyt import matplotlib_support
@@ -29,4 +33,4 @@ plt.xlim(np.min(lam), np.max(lam))
 plt.legend(frameon=False, fontsize=10)
 plt.grid()
 
-# plt.show()
+plt.show()
