@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from . import __file__ as filepath
 from .plt import mlabel
 from .sed import Sed, convert_fnu_to_flam
-from .line import Line
+from .line import Line, LineCollection
 
 
 from collections.abc import Iterable
@@ -438,3 +438,37 @@ class Grid():
         line = Line(line_id, wavelength, luminosity, continuum)
 
         return line
+
+    def get_lines_info(self, line_ids, ia, iZ):
+        """
+        Return a LineCollection object for a given line and metallicity/age index
+
+        Parameters:
+        ------------
+        line_ids : list:
+            list of unique line identification string
+        ia : int
+            age grid point index
+        iZ : int
+            metallicity grid point index
+
+        Returns:
+        ------------
+        obj (Line)
+        """
+
+        # line dictionary
+        lines = {}
+
+        for line_id in line_ids:
+
+            line = self.get_line_info(line_id, ia, iZ)
+
+            # add to dictionary
+            lines[line.id] = line
+
+        # create collection
+        line_collection = LineCollection(lines)
+
+        # return collection
+        return line_collection
