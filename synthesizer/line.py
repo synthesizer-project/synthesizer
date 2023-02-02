@@ -1,7 +1,7 @@
 
 
 import numpy as np
-
+from dataclasses import dataclass
 from .units import Quantity
 from .sed import convert_fnu_to_flam
 from . import exceptions
@@ -27,6 +27,30 @@ def get_line_id(id):
         return ','.join(id)
     else:
         return id
+
+
+@dataclass
+class LineRatios:
+
+    """
+    A dataclass holding useful line ratio diagnostics, e.g. BPT.
+    """
+
+    ratios = {}
+    ratios['R23'] = [['O 3 4960.29A', 'O 3 5008.24A', 'O 2 3727.09A',
+                      'O 2 3729.88A'], ['H 1 4862.69A']]  #  add reference
+    ratios['R3'] = [['O 3 5008.24A'], ['H 1 4862.69A']]  #  add reference
+    ratios['R2'] = [['O 2 3727.09A'], ['H 1 4862.69A']]  #  add reference
+
+    ratios['O32'] = [['O 3 5008.24A'], ['O 2 3727.09A']]  #  add reference
+    ratios['Ne3O2'] = [[''], ['O 2 3727.09A']]  #  add reference
+
+    diagrams = {}
+    diagrams['OHNO'] = [['O 3 4960.29A', 'O 3 5008.24A'], []]  #  add reference
+    diagrams['BPT'] = [[], []]  #  add reference
+
+    diagrams['VO78'] = [[], []]  #  Trump '15
+    diagrams['unVO78'] = [[], []]  #  Trump '15
 
 
 class Line:
