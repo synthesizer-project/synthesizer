@@ -121,8 +121,9 @@ if __name__ == "__main__":
     # models += [{'imf_type': 'chabrier03', 'imf_masses': [0.08, hmc]}
     #            for hmc in [1, 2, 5, 10, 20, 50, 100]]
 
-    models += [{'imf_type': 'chabrier03', 'imf_masses': [0.08, hmc]}
-               for hmc in [10, 20, 50, 100]]
+    # different low-mass cut-offs
+    models += [{'imf_type': 'chabrier03', 'imf_masses': [lmc, 120]}
+               for lmc in [0.5, 1, 2, 5, 10, 20, 50]]
 
     for model_ in models:
 
