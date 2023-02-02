@@ -233,16 +233,18 @@ if __name__ == "__main__":
             print((f"Generating cloudy grid for ({i}) "
                    f"{cloudy_name} in {output_dir}"))
 
-            N = make_cloudy_input_grid(output_dir, grid, cloudy_params)
+            print(cloudy_params)
 
-            if args.machine == 'apollo':
-                apollo_submission_script(N, output_dir, cloudy)
-            elif args.machine == 'cosma7':
-                cosma7_submission_script(N, output_dir, cloudy,
-                                         cosma_project='cosma7',
-                                         cosma_account='dp004')
-            elif args.machine is None:
-                print(("No machine specified. Skipping "
-                       "submission script write out"))
-            else:
-                ValueError(f'Machine {args.machine} not recognised.')
+            # N = make_cloudy_input_grid(output_dir, grid, cloudy_params)
+            #
+            # if args.machine == 'apollo':
+            #     apollo_submission_script(N, output_dir, cloudy)
+            # elif args.machine == 'cosma7':
+            #     cosma7_submission_script(N, output_dir, cloudy,
+            #                              cosma_project='cosma7',
+            #                              cosma_account='dp004')
+            # elif args.machine is None:
+            #     print(("No machine specified. Skipping "
+            #            "submission script write out"))
+            # else:
+            #     ValueError(f'Machine {args.machine} not recognised.')
