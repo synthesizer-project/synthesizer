@@ -75,13 +75,15 @@ def add_log10Q(grid_filename, ions=['HI', 'HeII']):
 
 def get_model_filename(model):
 
-    synthesizer_model_name = f'{model["sps_name"]}-{model["sps_version"]}'
+    synthesizer_model_name = f'{model["sps_name"]}'
+
+    if model["sps_version"] != '':
+        synthesizer_model_name += f'-{model["sps_version"]}'
+
     if model["sps_variant"] != '':
         synthesizer_model_name += f'-{model["sps_variant"]}'
 
     mass_limits_label = ','.join(map(lambda x: str(np.round(x, 2)), model["imf_masses"]))
-
-    Decimal('1.75').normalize()
 
     synthesizer_model_name += f'_{model["imf_type"]}-{mass_limits_label}'
 
