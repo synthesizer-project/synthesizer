@@ -94,7 +94,7 @@ if __name__ == '__main__':
     plt.show()
 
     # we can also generate "diagrams" pairs of line ratios like the BPT diagram
-    diagram_id = 'BPT'
+    diagram_id = 'BPT-NII'
     ia = 0  # 1 Myr old for test grid
     x = []
     y = []
@@ -110,8 +110,8 @@ if __name__ == '__main__':
     plt.xscale('log')
     plt.yscale('log')
 
-    # grab x and y labels
-    xlabel, ylabel = lines.get_diagram_label(diagram_id)
+    # grab x and y labels, this time use "fancy" label ids
+    xlabel, ylabel = lines.get_diagram_label(diagram_id, fancy=True)
 
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)

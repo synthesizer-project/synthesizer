@@ -29,6 +29,53 @@ def get_line_id(id):
         return id
 
 
+def get_roman_numeral(number):
+    """
+    Function to convert an integer into a roman numeral str.
+
+    Used for renaming emission lines from the cloudy defaults.
+
+    Returns
+    ---------
+    str
+        string reprensentation of the roman numeral
+    """
+
+    num = [1, 4, 5, 9, 10, 40, 50, 90,
+           100, 400, 500, 900, 1000]
+    sym = ["I", "IV", "V", "IX", "X", "XL",
+           "L", "XC", "C", "CD", "D", "CM", "M"]
+    i = 12
+
+    roman = ''
+    while number:
+        div = number // num[i]
+        number %= num[i]
+
+        while div:
+            roman += sym[i]
+            div -= 1
+        i -= 1
+    return roman
+
+
+def get_fancy_line_id(id):
+    """
+    Function to get a nicer line id, e.g. "O 3 5008.24A" -> "OIII5008"
+
+    Returns
+    ---------
+    str
+        the fancy line id
+    """
+
+    element, ion, wavelength = id.split(' ')
+
+    wavelength = float(wavelength[:-1])
+
+    return f'{element}{get_roman_numeral(int(ion))}{wavelength: .4g}'
+
+
 @dataclass
 class LineRatios:
 
@@ -59,7 +106,7 @@ class LineRatios:
 
     diagrams = {}
     diagrams['OHNO'] = [R3, [['Ne 3 3869.86A'], O2]]  #  add reference
-    diagrams['BPT'] = [[['N 2 6585.27A'], [Ha]], R3]  #  add reference
+    diagrams['BPT-NII'] = [[['N 2 6585.27A'], [Ha]], R3]  #  add reference
     # diagrams['VO78'] = [[], []]
     # diagrams['unVO78'] = [[], []]
 
@@ -156,7 +203,7 @@ class LineCollection:
 
         return self.get_ratio_(ab)
 
-    def get_ratio_label_(self, ab, nice=False):
+    def get_ratio_label_(self, ab, fancy=False):
         """
         Get a line ratio label
 
@@ -164,6 +211,8 @@ class LineCollection:
         -------
         ab
             a list of lists of lines, e.g. [[l1,l2], [l3]]
+        fancy
+            flag to return fancy label instead
 
         Returns
         -------
@@ -172,9 +221,14 @@ class LineCollection:
         """
 
         a, b = ab
+
+        if fancy:
+            a = map(get_fancy_line_id, a)
+            b = map(get_fancy_line_id, b)
+
         return f"({','.join(a)})/({','.join(b)})"
 
-    def get_ratio_label(self, ratio_id):
+    def get_ratio_label(self, ratio_id, fancy=False):
         """
         Get a line ratio label
 
@@ -190,7 +244,7 @@ class LineCollection:
         """
         ab = LineRatios.ratios[ratio_id]
 
-        return f'{ratio_id}={self.get_ratio_label_(ab)}'
+        return f'{ratio_id}={self.get_ratio_label_(ab, fancy = fancy)}'
 
     def get_diagram(self, diagram_id):
         """
@@ -210,7 +264,7 @@ class LineCollection:
 
         return self.get_ratio_(ab), self.get_ratio_(cd)
 
-    def get_diagram_label(self, diagram_id):
+    def get_diagram_label(self, diagram_id, fancy=False):
         """
         Get a line ratio label
 
@@ -226,7 +280,7 @@ class LineCollection:
         """
         ab, cd = LineRatios.diagrams[diagram_id]
 
-        return self.get_ratio_label_(ab), self.get_ratio_label_(cd)
+        return self.get_ratio_label_(ab, fancy=fancy), self.get_ratio_label_(cd, fancy=fancy)
 
 
 class Line:
