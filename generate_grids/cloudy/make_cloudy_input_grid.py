@@ -13,6 +13,8 @@ from synthesizer.cloudy import create_cloudy_input
 from write_submission_script import (apollo_submission_script,
                                      cosma7_submission_script)
 
+from copy import deepcopy
+
 
 def load_cloudy_parameters(param_file='default_param.yaml',
                            **kwarg_parameters):
@@ -51,11 +53,14 @@ def load_cloudy_parameters(param_file='default_param.yaml',
             output_cloudy_names = []
 
             for _v in v:
+
+                cloudy_params_ = deepcopy(cloudy_params)
+
                 # update the value in our default dictionary
-                cloudy_params[k] = _v
+                cloudy_params_[k] = _v
 
                 # save to list of cloudy param dicts
-                output_cloudy_params.append(cloudy_params)
+                output_cloudy_params.append(cloudy_params_)
 
                 # replace negative '-' with m
                 out_str = f'-{k}{str(_v).replace("-", "m")}'
@@ -221,10 +226,6 @@ if __name__ == "__main__":
         for i, (cloudy_params, cloudy_name) in \
                 enumerate(zip(c_params, c_name)):
 
-            # if no variations, save as 'default' cloudy grid
-            # if cloudy_name == '':
-            #     cloudy_name = 'cloudy'  # maybe this should be the version
-
             cloudy_name = 'cloudy'+cloudy_name
 
             output_dir = make_directories(synthesizer_data_dir, sps_grid,
@@ -233,18 +234,16 @@ if __name__ == "__main__":
             print((f"Generating cloudy grid for ({i}) "
                    f"{cloudy_name} in {output_dir}"))
 
-            print(cloudy_params)
+            N = make_cloudy_input_grid(output_dir, grid, cloudy_params)
 
-            # N = make_cloudy_input_grid(output_dir, grid, cloudy_params)
-            #
-            # if args.machine == 'apollo':
-            #     apollo_submission_script(N, output_dir, cloudy)
-            # elif args.machine == 'cosma7':
-            #     cosma7_submission_script(N, output_dir, cloudy,
-            #                              cosma_project='cosma7',
-            #                              cosma_account='dp004')
-            # elif args.machine is None:
-            #     print(("No machine specified. Skipping "
-            #            "submission script write out"))
-            # else:
-            #     ValueError(f'Machine {args.machine} not recognised.')
+            if args.machine == 'apollo':
+                apollo_submission_script(N, output_dir, cloudy)
+            elif args.machine == 'cosma7':
+                cosma7_submission_script(N, output_dir, cloudy,
+                                         cosma_project='cosma7',
+                                         cosma_account='dp004')
+            elif args.machine is None:
+                print(("No machine specified. Skipping "
+                       "submission script write out"))
+            else:
+                ValueError(f'Machine {args.machine} not recognised.')
