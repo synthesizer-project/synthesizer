@@ -17,12 +17,6 @@ import numpy as np
 import h5py
 import yaml
 
-#
-# from unyt import c, h
-
-h = 6.626E-34
-c = 3.E8
-
 
 def create_new_grid(grid, synthesizer_data_dir):
 
