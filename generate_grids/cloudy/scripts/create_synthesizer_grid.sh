@@ -15,8 +15,8 @@ grid=""
 # # FSPS slope variants
 # grid=$grid" fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,1.5_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,1.6_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,1.7_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,1.8_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,1.9_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.0_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.2_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.3_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.4_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.5_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.6_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.7_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.8_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.9_cloudy fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,3.0_cloudy"
 #
-# # FSPS high-mass cut off
-grid=$grid" fsps-3.2_chabrier03-0.08,1_cloudy fsps-3.2_chabrier03-0.08,2_cloudy fsps-3.2_chabrier03-0.08,5_cloudy fsps-3.2_chabrier03-0.08,10_cloudy fsps-3.2_chabrier03-0.08,20_cloudy fsps-3.2_chabrier03-0.08,50_cloudy fsps-3.2_chabrier03-0.08,100_cloudy"
+# # FSPS high-mass cut off - I DONT THINK THIS WORKS BECAUSE THERE ARE SO FEW IONISING PHOTONS IN THE FIRST MODELS
+# grid=$grid" fsps-3.2_chabrier03-0.08,1_cloudy fsps-3.2_chabrier03-0.08,2_cloudy fsps-3.2_chabrier03-0.08,5_cloudy fsps-3.2_chabrier03-0.08,10_cloudy fsps-3.2_chabrier03-0.08,20_cloudy fsps-3.2_chabrier03-0.08,50_cloudy fsps-3.2_chabrier03-0.08,100_cloudy"
 
 # # FSPS low-mass cut off
 grid=$grid" fsps-3.2_chabrier03-0.5,120_cloudy fsps-3.2_chabrier03-1,120_cloudy fsps-3.2_chabrier03-2,120_cloudy fsps-3.2_chabrier03-5,120_cloudy fsps-3.2_chabrier03-10,120_cloudy fsps-3.2_chabrier03-20,120_cloudy fsps-3.2_chabrier03-50,120_cloudy"
