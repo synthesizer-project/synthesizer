@@ -172,6 +172,19 @@ def add_spectra(grid_name, synthesizer_data_dir):
         return dlog10Q
 
 
+def get_default_line_list(interesting=True):
+
+    with open('default_lines.dat') as f:
+        line_list = f.read().splitlines()
+
+    if interesting:
+
+        with open('interesting_lines.dat') as f:
+            line_list += f.read().splitlines()
+
+    return line_list
+
+
 def get_line_list(grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.0):
     """
     Get a list of lines meeting some threshold at the reference age and metallicity
@@ -315,7 +328,10 @@ if __name__ == "__main__":
         if not failed:
             dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
 
-            lines_to_include = get_line_list(
-                grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.5)
+            # this causes issues for 3D grids
+            # lines_to_include = get_line_list(
+            #     grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.5)
+
+            lines_to_include = get_default_line_list()
 
             add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include)
