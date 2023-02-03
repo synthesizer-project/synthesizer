@@ -4,23 +4,10 @@ This example allows us to explore a HDF5 and the correspinding Grid object.
 """
 
 from synthesizer.grid import Grid, get_available_lines
+from synthesizer.utils import explore_hdf5_grid
+
+
 import h5py
-
-
-def explore_hdf5_grid(name, item):
-    """
-    A simple function for exploring HDF5 grid files.
-
-    NOTE: this should be moved to some kind of utilities.
-    TODO: modify to not loop over every line.
-    """
-
-    split = name.split('/')
-    name_ = '    '*(len(split)-1)+split[-1]
-    print(name_, item)
-
-    for k, v in item.attrs.items():
-        print('    '*(len(split)-1), k, ':', v)
 
 
 if __name__ == "__main__":
@@ -34,7 +21,7 @@ if __name__ == "__main__":
         for k, v in hf.attrs.items():
             print('    -', k, ':', v)
 
-        # hf.visititems(explore_hdf5_grid)
+        hf.visititems(explore_hdf5_grid)
 
     grid = Grid(grid_name, grid_dir=grid_dir)
     print(grid)
