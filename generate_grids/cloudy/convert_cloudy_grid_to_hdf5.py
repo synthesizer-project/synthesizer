@@ -84,6 +84,7 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
         na = len(hf['log10ages'][:])  # number of age grid points
 
         failed = False
+        failed_list = []
 
         for ia in range(na):
             for iZ in range(nZ):
@@ -92,10 +93,15 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
 
                 if not os.path.isfile(infile+'.cont'):  # attempt to open run.
                     failed = True
+                    failed_list.append((ia, iZ))
                     # print(f'{ia}_{iZ}.cont missing')
                 if not os.path.isfile(infile+'.lines'):  # attempt to open run.
                     failed = True
                     # print(f'{ia}_{iZ}.lines missing')
+
+        if failed:
+            print('FAILED')
+            print(f'missing files: {failed_list}')
 
         return failed
 
@@ -319,5 +325,3 @@ if __name__ == "__main__":
                 grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.5)
 
             add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include)
-        else:
-            print('FAILED')
