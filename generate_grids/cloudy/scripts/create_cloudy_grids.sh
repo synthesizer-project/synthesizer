@@ -15,7 +15,10 @@ machine="apollo"
 # sps="fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.1 fsps-3.2_chabrier03-0.08,120 fsps-3.2_chabrier03-0.08,100 fsps-3.2_chabrier03-0.08,50 fsps-3.2_chabrier03-0.08,20 fsps-3.2_chabrier03-0.08,10 fsps-3.2_chabrier03-0.08,5 fsps-3.2_chabrier03-0.08,2 fsps-3.2_chabrier03-0.08,1"
 
 # FSPS low-mass cut off variants
-sps="fsps-3.2_chabrier03-0.5,120 fsps-3.2_chabrier03-1,120 fsps-3.2_chabrier03-2,120 fsps-3.2_chabrier03-5,120 fsps-3.2_chabrier03-10,120 fsps-3.2_chabrier03-20,120 fsps-3.2_chabrier03-50,120"
+# sps="fsps-3.2_chabrier03-0.5,120 fsps-3.2_chabrier03-1,120 fsps-3.2_chabrier03-2,120 fsps-3.2_chabrier03-5,120 fsps-3.2_chabrier03-10,120 fsps-3.2_chabrier03-20,120 fsps-3.2_chabrier03-50,120"
+
+# BC03
+sps="bc03-2016-BaSeL_chabrier03-0.1,100 bc03-2016-Miles_chabrier03-0.1,100 bc03-2016-Stelib_chabrier03-0.1,100 bc03_chabrier03-0.1,100"
 
 
 p="default_param.yaml"
