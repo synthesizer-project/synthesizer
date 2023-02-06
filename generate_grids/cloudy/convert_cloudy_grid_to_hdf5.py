@@ -8,7 +8,7 @@ This reads in a cloudy grid of models and creates a new SPS grid including the v
 from scipy import integrate
 import os
 import shutil
-from synthesizer.utils import read_params
+from synthesizer.utils import read_params, explore_hdf5_grid
 from synthesizer.cloudy import read_wavelength, read_continuum, read_lines
 from synthesizer.sed import calculate_Q
 from unyt import eV
@@ -31,6 +31,8 @@ def create_new_grid(grid, synthesizer_data_dir):
 
         # open the original SPS model grid
         with h5py.File(f'{path_to_grids}/{sps_grid}.hdf5', 'r') as hf_sps:
+
+            hf_sps.visititems(explore_hdf5_grid)
 
             # copy top-level attributes
             for k, v in hf_sps.attrs.items():
