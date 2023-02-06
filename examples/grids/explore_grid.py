@@ -15,9 +15,6 @@ if __name__ == "__main__":
     grid_dir = '../../tests/test_grid'
     grid_name = 'test_grid'
 
-    grid_dir = '/Users/stephenwilkins/Dropbox/Research/data/synthesizer/grids'
-    grid_name = 'bc03-2016-BaSeL_chabrier03-0.1,100'
-
     # explore HDF5 grid
     with h5py.File(f'{grid_dir}/{grid_name}.hdf5', 'r') as hf:
 
@@ -25,6 +22,12 @@ if __name__ == "__main__":
             print('    -', k, ':', v)
 
         hf.visititems(explore_hdf5_grid)
+
+    grid = Grid(grid_name, grid_dir=grid_dir)
+    print(grid)
+
+    # read 3D grid instead
+    grid_name = 'test_grid3D'
 
     grid = Grid(grid_name, grid_dir=grid_dir)
     print(grid)

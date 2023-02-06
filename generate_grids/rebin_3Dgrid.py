@@ -29,7 +29,7 @@ z = original_grid.attrs['grid_axes'][2]
 
 
 # copy various quantities (all excluding the spectra) from the original grid
-for ds in ['metallicities', 'log10ages', 'log10Q', 'lines']:
+for ds in ['log10Q', 'lines']+list(original_grid.attrs['grid_axes']):
     original_grid.copy(original_grid[ds], rebinned_grid['/'], ds)
 
 # define the length of the metallicities and ages
