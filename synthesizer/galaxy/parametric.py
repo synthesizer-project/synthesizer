@@ -18,7 +18,6 @@ from ..imaging.images import ParametricImage
 from ..art import Art
 
 
-
 class ParametricGalaxy(BaseGalaxy):
 
     """A class defining parametric galaxy objects
@@ -89,7 +88,8 @@ class ParametricGalaxy(BaseGalaxy):
         # add together spectra
         for spec_name, spectra in self.spectra.items():
             if spec_name in second_galaxy.spectra.keys():
-                new_galaxy.spectra[spec_name] = spectra + second_galaxy.spectra[spec_name]
+                new_galaxy.spectra[spec_name] = spectra + \
+                    second_galaxy.spectra[spec_name]
             else:
                 exceptions.InconsistentAddition(
                     'Both galaxies must contain the same spectra to be added together')
@@ -127,7 +127,11 @@ class ParametricGalaxy(BaseGalaxy):
     def generate_lnu(self, grid, spectra_name):
 
         # calculate pure stellar emission
-        return np.sum(grid.spectra[spectra_name] * self.sfzh_, axis=(0, 1))
+        non0_inds = np.where(self.sfzh_ > 0)
+        return np.sum(grid.spectra[spectra_name][non0_inds[0],
+                                                 non0_inds[1], :]
+                      * self.sfzh_[non0_inds[0],
+                                   non0_inds[1]], axis=0)
 
     def get_stellar_spectra(self, grid, update=True):
         """ generate the pure stellar spectra using the provided grid"""
@@ -167,7 +171,7 @@ class ParametricGalaxy(BaseGalaxy):
 
         return sed
 
-    def get_screen_spectra(self, grid, tauV=None, dust_curve=power_law({'slope': -1.}), update=True):
+    def get_screen_spectra(self, grid, tauV=None, dust_curve=power_law({'slope': -1.}), update=True, fesc=0.0):
         """
         Calculates dust attenuated spectra assuming a simple screen
 
@@ -187,7 +191,7 @@ class ParametricGalaxy(BaseGalaxy):
         """
 
         # --- begin by calculating intrinsic spectra
-        intrinsic = self.get_intrinsic_spectra(grid, update=update)
+        intrinsic = self.get_intrinsic_spectra(grid, update=update, fesc=fesc)
 
         if tauV:
             T = dust_curve.attenuate(tauV, grid.lam)
@@ -225,7 +229,6 @@ class ParametricGalaxy(BaseGalaxy):
              A Sed object containing the dust attenuated spectra
         """
 
-
         """ in the PACMAN model some fraction (fesc) of the pure stellar emission is assumed to completely escape the galaxy without reprocessing by gas or dust. The rest is assumed to be reprocessed by both gas and a screen of dust. """
 
         # --- begin by generating the pure stellar spectra
@@ -244,13 +247,16 @@ class ParametricGalaxy(BaseGalaxy):
             # if Lyman-alpha escape fraction is specified reduce LyA luminosity
 
             # --- generate contribution of line emission alone and reduce the contribution of Lyman-alpha
-            linecont = np.sum(grid.spectra['linecont'] * self.sfzh_, axis=(0, 1))
-            idx = grid.get_nearest_index(1216., grid.lam)  # get index of Lyman-alpha
+            linecont = np.sum(
+                grid.spectra['linecont'] * self.sfzh_, axis=(0, 1))
+            # get index of Lyman-alpha
+            idx = grid.get_nearest_index(1216., grid.lam)
             linecont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
 
             nebular_continuum = np.sum(
                 grid.spectra['nebular_continuum'] * self.sfzh_, axis=(0, 1))
-            transmitted = np.sum(grid.spectra['transmitted'] * self.sfzh_, axis=(0, 1))
+            transmitted = np.sum(
+                grid.spectra['transmitted'] * self.sfzh_, axis=(0, 1))
             self.spectra['reprocessed'].lnu = (
                 1.-fesc) * (linecont + nebular_continuum + transmitted)
 
@@ -262,12 +268,14 @@ class ParametricGalaxy(BaseGalaxy):
             self.spectra['reprocessed'].lnu  # the light before reprocessing by dust
 
         if tauV:
-            T = dust_curve.attenuate(tauV, grid.lam) # calculate dust attenuation
+            # calculate dust attenuation
+            T = dust_curve.attenuate(tauV, grid.lam)
             self.spectra['attenuated'].lnu = self.spectra['escape'].lnu + \
                 T*self.spectra['reprocessed'].lnu
             self.spectra['total'].lnu = self.spectra['attenuated'].lnu
         else:
-            self.spectra['total'].lnu = self.spectra['escape'].lnu + self.spectra['reprocessed'].lnu
+            self.spectra['total'].lnu = self.spectra['escape'].lnu + \
+                self.spectra['reprocessed'].lnu
 
         return self.spectra['total']
 
@@ -297,8 +305,6 @@ class ParametricGalaxy(BaseGalaxy):
         obj (Sed)
              A Sed object containing the dust attenuated spectra
         """
-
-
 
         # calculate dust attenuation for young and old components
         T_ISM = power_law({'slope': alpha_ISM}).attenuate(tauV_ISM, grid.lam)
@@ -350,10 +356,12 @@ class ParametricGalaxy(BaseGalaxy):
                 wavelength = grid_line['wavelength']
 
                 #  line luminosity erg/s
-                luminosity = np.sum((1-fesc)*grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1))
+                luminosity = np.sum(
+                    (1-fesc)*grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1))
 
                 #  continuum at line wavelength, erg/s/Hz
-                continuum = np.sum(grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1))
+                continuum = np.sum(
+                    grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1))
 
                 # NOTE: this is currently incorrect and should be made of the separated nebular and stellar continuum emission
                 # proposed alternative
@@ -380,7 +388,8 @@ class ParametricGalaxy(BaseGalaxy):
                         (1-fesc)*np.sum(grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1)))
 
                     #  continuum at line wavelength, erg/s/Hz
-                    continuum.append(np.sum(grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1)))
+                    continuum.append(
+                        np.sum(grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1)))
 
             else:
                 # throw exception
@@ -393,7 +402,6 @@ class ParametricGalaxy(BaseGalaxy):
             self.lines[line.id] = line
 
         return line
-
 
     def get_attenuated_line(self, grid, line_ids, fesc=0.0, tauV_nebular=None,
                             tauV_stellar=None, dust_curve_nebular=power_law({'slope': -1.}),
@@ -426,7 +434,8 @@ class ParametricGalaxy(BaseGalaxy):
 
         # if the intrinsic lines haven't already been calcualted and saved then generate them
         if 'intrinsic' not in self.lines:
-            intrinsic_lines = self.get_intrinsic_line(grid, line_ids, fesc=fesc, update=update)
+            intrinsic_lines = self.get_intrinsic_line(
+                grid, line_ids, fesc=fesc, update=update)
         else:
             intrinsic_lines = self.lines['intrinsic']
 
@@ -436,13 +445,16 @@ class ParametricGalaxy(BaseGalaxy):
         for line_id, intrinsic_line in intrinsic_lines.items():
 
             # calculate attenuation
-            T_nebular = dust_curve_nebular.attenuate(tauV_nebular, intrinsic_line._wavelength)
-            T_stellar = dust_curve_stellar.attenuate(tauV_stellar, intrinsic_line._wavelength)
+            T_nebular = dust_curve_nebular.attenuate(
+                tauV_nebular, intrinsic_line._wavelength)
+            T_stellar = dust_curve_stellar.attenuate(
+                tauV_stellar, intrinsic_line._wavelength)
 
             luminosity = intrinsic_line._luminosity * T_nebular
             continuum = intrinsic_line._continuum * T_stellar
 
-            line = Line(intrinsic_line.id, intrinsic_line._wavelength, luminosity, continuum)
+            line = Line(intrinsic_line.id,
+                        intrinsic_line._wavelength, luminosity, continuum)
 
             # NOTE: the above is wrong and should be separated into stellar and nebular continuum components:
             # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
@@ -481,7 +493,6 @@ class ParametricGalaxy(BaseGalaxy):
         """
 
         return self.get_attenuated_line(grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
-
 
     def make_images(self, spectra_type, filter_collection, resolution, npix=None, fov=None, update=True):
 
