@@ -652,8 +652,8 @@ class Filter:
                                  "wavelength array size (arr.shape[-1]=%d, "
                                  "transmission.size=%d)" % (arr.shape[-1],
                                                             self.lam.size))
-            else:
-                if xs.size != arr.shape[-1]:
+        else:
+            if xs.size != arr.shape[-1]:
                 raise ValueError("Final dimension of array did not match "
                                  "wavelength array size (arr.shape[-1]=%d, "
                                  "xs.size=%d)" % (arr.shape[-1],

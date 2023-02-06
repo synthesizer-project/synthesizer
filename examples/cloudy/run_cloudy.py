@@ -61,7 +61,7 @@ for k, v in params.items():
 
 
 # ---- load SPS grid
-grid = SpectralGrid(params['sps_grid'])
+grid = Grid(params['sps_grid'])
 
 # --- get metallicity
 Z = grid.metallicities[params['iZ']]

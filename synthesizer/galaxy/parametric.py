@@ -264,9 +264,8 @@ class ParametricGalaxy(BaseGalaxy):
             self.spectra['reprocessed']._lnu = (
                 1.-fesc) * np.sum(grid.spectra['total'] * self.sfzh_, axis=(0, 1))
 
-        self.spectra['intrinsic']._lnu = self.spectra['escape']._lnu +
-           # the light before reprocessing by dust
-           self.spectra['reprocessed']._lnu
+        self.spectra['intrinsic']._lnu = self.spectra['escape']._lnu + \
+            self.spectra['reprocessed']._lnu
 
         if tauV:
             # calculate dust attenuation
