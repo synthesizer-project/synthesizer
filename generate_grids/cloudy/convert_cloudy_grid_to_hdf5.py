@@ -29,7 +29,7 @@ def create_new_grid(grid, synthesizer_data_dir):
     print(sps_grid)
 
     # testing
-    with h5py.File(f'{path_to_grids}/{sps_grid}.hdf5', 'r') as hf_sps:
+    with h5py.File(f'{path_to_grids}/bc03-2016-BaSeL_chabrier03-0.1,100.hdf5', 'r') as hf_sps:
         print('yo')
         hf_sps.visititems(explore_hdf5_grid)
         print('yo2')
