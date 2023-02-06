@@ -8,7 +8,7 @@ import h5py
 
 from . import __file__ as filepath
 from .sed import Sed, convert_fnu_to_flam
-from .line import Line
+from .line import Line, LineCollection
 
 
 from collections.abc import Iterable
@@ -425,3 +425,35 @@ class Grid:
             continuum.append(line_['continuum'][grid_point])
 
         return Line(line_id, wavelength, luminosity, continuum)
+
+    def get_lines_info(self, line_ids, grid_point):
+        """
+        Return a LineCollection object for a given line and metallicity/age index
+        Parameters:
+        ------------
+        line_ids : list:
+            list of unique line identification string
+        ia : int
+            age grid point index
+        iZ : int
+            metallicity grid point index
+        Returns:
+        ------------
+        obj (Line)
+        """
+
+        # line dictionary
+        lines = {}
+
+        for line_id in line_ids:
+
+            line = self.get_line_info(line_id, grid_point)
+
+            # add to dictionary
+            lines[line.id] = line
+
+        # create collection
+        line_collection = LineCollection(lines)
+
+        # return collection
+        return line_collection

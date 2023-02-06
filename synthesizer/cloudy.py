@@ -245,35 +245,6 @@ def calculate_U_from_Q(Q_avg, n_h=100):
 #     def f(x): return np.interp(x, lam, L_AA * lam) / (h_erg*c_AA)
 #     return integrate.quad(f, 0, 912, limit=limit)[0]
 
-# def get_roman_numeral(number):
-#     """
-#     Function to convert an integer into a roman numeral str.
-#
-#     Used for renaming emission lines from the cloudy defaults.
-#
-#     Returns
-#     ---------
-#     str
-#         string reprensentation of the roman numeral
-#     """
-#
-#     num = [1, 4, 5, 9, 10, 40, 50, 90,
-#            100, 400, 500, 900, 1000]
-#     sym = ["I", "IV", "V", "IX", "X", "XL",
-#            "L", "XC", "C", "CD", "D", "CM", "M"]
-#     i = 12
-#
-#     roman = ''
-#     while number:
-#         div = number // num[i]
-#         number %= num[i]
-#
-#         while div:
-#             roman += sym[i]
-#             div -= 1
-#         i -= 1
-#     return roman
-
 
 # def get_synthesizer_id(wavelength, cloudy_id):
 #     """ convert the cloudy line ID into a new form ID """
