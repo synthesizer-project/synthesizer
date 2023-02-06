@@ -86,9 +86,8 @@ class Instrument:
 
 class Survey:
     """
+    A Survey helper object which defines all the properties of a survey. This enables the defintion of a survey approach and then the production of photometry and/or images based on that instruments/filters making up the survey. This can handle PSFs and depths which vary across bands and intruments.
 
-    Should be both a container for information and the base object to make a
-    "field" observation.
 
     Attributes
     ----------
@@ -314,30 +313,6 @@ class Survey:
                     self.instruments[inst].depths
                 )
 
-    @staticmethod
-    def _apply_filter_to_spectra(spectra, f):
-        """
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        transmission : float
-             The photometry for this spectra in this band.
-        """
-
-        # Get the mask that removes wavelengths we don't currently care about
-        in_band = f.t > 0
-
-        # Multiply the IFU by the filter transmission curve
-        transmitted = spectra[in_band] * f.t[in_band]
-
-        # Sum over the final axis to "collect" transmission in this filer
-        transmission = np.sum(transmitted)
-
-        return transmission
-
     def get_photometry(self, spectra_type, cosmo=None, redshift=None, igm=None):
         """
 
@@ -381,11 +356,13 @@ class Survey:
                         if sed.fnu is None:
                             sed.get_fnu(cosmo, redshift, igm)
                         spectra = sed.fnu
+                        lams = sed.lamz
                     else:
                         spectra = sed.lnu
+                        lams = sed.lam
 
                     # Calculate the photometry in this band
-                    phot = self._apply_filter_to_spectra(spectra, f)
+                    phot = f.apply_filter(spectra, lams)
 
                     # Store this photometry
                     self.photometry[f.filter_code][igal] = phot
