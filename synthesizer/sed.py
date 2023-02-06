@@ -57,6 +57,7 @@ class Sed:
         self.nu = c.value/(self.lam_m)  # Hz
 
         self.lamz = None
+        self.nuz = None
         self.fnu = None
         self.broadband_luminosities = None
         self.broadband_fluxes = None
@@ -215,6 +216,8 @@ class Sed:
         luminosity_distance = cosmo.luminosity_distance(
             z).to('cm').value  # the luminosity distance in cm
 
+        self.nuz = c.value/self.lamz
+
         # erg/s/Hz/cm2
         self.fnu = self._lnu * (1.+z) / (4 * np.pi * luminosity_distance**2)
 
@@ -258,9 +261,9 @@ class Sed:
             # int_num = integrate.trapezoid(self.fnu * fc.filter[f].t)
             # int_den = integrate.trapezoid(fc.filter[f].t)
 
-            int_num = integrate.trapezoid(self._fnu * f.t/self.nu,
-                                          self.nu)
-            int_den = integrate.trapezoid(f.t/self.nu, self.nu)
+            int_num = integrate.trapezoid(self._fnu * f.t/self.nuz,
+                                          self.nuz)
+            int_den = integrate.trapezoid(f.t/self.nuz, self.nuz)
 
             # int_num = integrate.simpson(self.fnu * fc.filter[f].t/self.nu,
             #                             self.nu)
