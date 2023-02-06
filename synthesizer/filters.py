@@ -646,7 +646,7 @@ class Filter:
         """
 
         # Check dimensions are ok
-        if x is None:
+        if xs is None:
             if self.lam.size != arr.shape[-1]:
                 raise ValueError("Final dimension of array did not match "
                                  "wavelength array size (arr.shape[-1]=%d, "
