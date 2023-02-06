@@ -15,6 +15,9 @@ if __name__ == "__main__":
     grid_dir = '../../tests/test_grid'
     grid_name = 'test_grid'
 
+    grid_dir = '/Users/stephenwilkins/Dropbox/Research/data/synthesizer/grids'
+    grid_name = 'bc03-2016-BaSeL_chabrier03-0.1,100'
+
     # explore HDF5 grid
     with h5py.File(f'{grid_dir}/{grid_name}.hdf5', 'r') as hf:
 
