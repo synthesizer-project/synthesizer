@@ -180,7 +180,7 @@ class Sed:
             # Calculate broadband fluxes by multiplying the observed spectra
             # by the filter transmission curve and dividing by the
             # normalisation.
-            int_num = integrate.trapezoid(self.lnu * _filter.t / self.nu,
+            int_num = integrate.trapezoid(self._lnu * _filter.t / self.nu,
                                           self.nu)
             int_den = integrate.trapezoid(_filter.t / self.nu, self.nu)
 
