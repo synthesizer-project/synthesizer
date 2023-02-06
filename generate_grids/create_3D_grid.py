@@ -69,8 +69,8 @@ with h5py.File(f'{path_to_grids}/{base_grid}.hdf5', 'w') as hf:
         for spec_id in spectra.attrs['spec_names']:
             spectra[spec_id] = np.zeros((na, nZ, nz, nlam))
 
-    hf.attrs[z_name] = z
-
+    # hf.attrs[z_name] = z
+    hf[z_name] = z
     # add attribute with the grid axes for future when using >2D grid or AGN grids
     hf.attrs['grid_axes'] = ['log10ages', 'metallicities', z_name]
 
