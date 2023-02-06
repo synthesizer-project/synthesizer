@@ -89,8 +89,7 @@ class Sed:
 
             else:
 
-                exceptions.InconsistentAddition(
-                    "Sed.lnu must have ndim 1 or 2")
+                exceptions.InconsistentAddition("Sed.lnu must have ndim 1 or 2")
 
     def __str__(self):
         """
@@ -142,8 +141,7 @@ class Sed:
         if self._spec_dims == 2:
             slope = np.array(
                 [
-                    linregress(np.log10(self.lam[s]),
-                               np.log10(_lnu[..., s]))[0]
+                    linregress(np.log10(self.lam[s]), np.log10(_lnu[..., s]))[0]
                     for _lnu in self.lnu
                 ]
             )
@@ -193,8 +191,9 @@ class Sed:
             # Calculate broadband fluxes by multiplying the observed spectra
             # by the filter transmission curve and dividing by the
             # normalisation.
-            int_num = integrate.trapezoid(self._lnu * _filter.t / self.nu,
-                                          self.nu)
+            int_num = integrate.trapezoid(
+                self._lnu * _filter.t / self.nu, self.nu
+            )
             int_den = integrate.trapezoid(_filter.t / self.nu, self.nu)
 
             self.broadband_luminosities[_filter.filter_code] = (
