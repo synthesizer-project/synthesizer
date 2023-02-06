@@ -13,7 +13,7 @@ def plot_spectra(sed):
     Plot a single spectra
     """
 
-    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, label=spec_name)
+    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8)
     plt.xlim([2., 4.])
     plt.ylim([18., 23])
     plt.legend(fontsize=8, labelspacing=0.0)
