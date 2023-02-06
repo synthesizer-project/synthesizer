@@ -5,7 +5,8 @@ import h5py
 import copy
 import numpy as np
 from scipy import integrate
-from unyt import yr
+from unyt import yr, Gyr
+import math
 
 
 import matplotlib.pyplot as plt
@@ -354,5 +355,61 @@ class SFH:
 
             if age < self.max_age:
                 return (1./(self.max_age-age))*np.exp(-(np.log(self.max_age-age)-self.T0)**2/(2*self.tau**2))
+            else:
+                return 0.0
+
+    class TruncatedNormal(Common):
+        """
+        A truncated normal distribution
+        """
+
+        def __init__(self, parameters):
+            self.name = "Truncated Normal"
+            self.parameters = parameters
+            self._parse_parameters()
+            self.mean = parameters["mean_age"].to(yr).value
+            self.sigma = parameters["sigma"].to(yr).value
+
+        def _parse_parameters(self):
+
+            if "mean_age" not in self.parameters:
+                raise exceptions.InconsistentArguments(
+                    "Mean age must be supplied!"
+                )
+
+            if "sigma" not in self.parameters:
+                raise exceptions.InconsistentArguments(
+                    "Standard deviation must be supplied!"
+                )
+
+            if "min_age" in self.parameters:
+                self.min_age = self.parameters["min_age"].to(yr).value
+            else:
+                self.min_age = 0
+
+            if "max_age" in self.parameters:
+                self.max_age = self.parameters["max_age"].to(yr).value
+            else:
+                self.max_age = (13.8 * Gyr).to(yr).value
+
+            if "significance" in self.parameters:
+                self.significance = self.parameters["significance"]
+            else:
+                self.significance = 1
+
+        def sfr_(self, age):
+            """ age is lookback time """
+
+            if age < self.max_age:
+
+                norm = 1 / self.sigma
+                exponent = (1 / np.sqrt(2 * np.pi)
+                            * np.exp(-0.5 * ((age - self.mean) /
+                                             self.sigma) ** 2))
+                phi_a = 0.5 * (1 + math.erf(((self.min_age - self.mean) /
+                                             self.sigma) / np.sqrt(2)))
+                phi_b = 0.5 * (1 + math.erf(((self.max_age - self.mean) /
+                                             self.sigma) / np.sqrt(2)))
+                return self.significance * norm * exponent / (phi_b - phi_a)
             else:
                 return 0.0
