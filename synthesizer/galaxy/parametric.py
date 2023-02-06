@@ -403,7 +403,7 @@ class ParametricGalaxy(BaseGalaxy):
 
         return lines
 
-   def get_attenuated_line(self, grid, line_ids, fesc=0.0, tauV_nebular=None,
+    def get_attenuated_line(self, grid, line_ids, fesc=0.0, tauV_nebular=None,
                             tauV_stellar=None, dust_curve_nebular=power_law({'slope': -1.}),
                             dust_curve_stellar=power_law({'slope': -1.}), update=True):
         """
