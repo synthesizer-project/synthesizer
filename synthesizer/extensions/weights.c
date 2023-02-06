@@ -160,9 +160,9 @@ PyObject *calculate_weights(PyObject *self, PyObject *args) {
     if (ilow != ihigh) {
       mfrac = mass * jfrac;
       weights[ihigh* lenz + jlow] += mfrac * (1.-ifrac);
-    }
-    if (jlow != jhigh) {
-      weights[ihigh * lenz + jhigh] += mfrac * ifrac;
+      if (jlow != jhigh) {
+        weights[ihigh * lenz + jhigh] += mfrac * ifrac;
+      }
     }
   }
 
