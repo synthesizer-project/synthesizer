@@ -1,4 +1,5 @@
 from synthesizer.particle.particles import CoordinateGenerator
+
 # from synthesizer.particle.image import ImageGenerator
 
 # --- create a set of particles assuming a 3D gaussian

@@ -14,7 +14,7 @@ from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
 from unyt import yr, Myr
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
@@ -31,14 +31,19 @@ if __name__ == '__main__':
     # list of lines. Lines in nested lists (or tuples) denote doublets for
     # which the combined line properties are calculated should result in the
     # same behaviour as above
-    line_ids = ['H 1 4862.69A', 'O 3 4960.29A',
-                'O 3 5008.24A', ['O 3 4960.29A', 'O 3 5008.24A']]
-    grid = Grid(grid_name, grid_dir=grid_dir,
-                read_spectra=False, read_lines=line_ids)
+    line_ids = [
+        "H 1 4862.69A",
+        "O 3 4960.29A",
+        "O 3 5008.24A",
+        ["O 3 4960.29A", "O 3 5008.24A"],
+    ]
+    grid = Grid(
+        grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=line_ids
+    )
 
     # Define the parameters of the star formation and metal enrichment histories
-    sfh_p = {'duration': 100 * Myr}
-    Z_p = {'log10Z': -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    sfh_p = {"duration": 100 * Myr}
+    Z_p = {"log10Z": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
 
     # Define the functional form of the star formation and metal enrichment
     # histories
@@ -57,24 +62,25 @@ if __name__ == '__main__':
 
     # --- create the Lines dictionary which contains line objects
     lines = galaxy.get_intrinsic_line(grid, line_ids)
-    print('-'*50)
-    print('INTRINSIC')
+    print("-" * 50)
+    print("INTRINSIC")
     for line_id, line in lines.items():
         print(line)
 
     # Calculate attenuated line properties assuming uniform dust (should
     # leave EW unchanged)
     lines = galaxy.get_screen_line(grid, line_ids, tauV=0.5)
-    print('-'*50)
-    print('SCREEN')
+    print("-" * 50)
+    print("SCREEN")
     for line_id, line in lines.items():
         print(line)
 
     # Calculate attenuated line properties assuming different dust affecting
     # stellar and nebular components
     lines = galaxy.get_attenuated_line(
-        grid, line_ids, tauV_stellar=0.1, tauV_nebular=0.5)
-    print('-'*50)
-    print('ATTENUATED')
+        grid, line_ids, tauV_stellar=0.1, tauV_nebular=0.5
+    )
+    print("-" * 50)
+    print("ATTENUATED")
     for line_id, line in lines.items():
         print(line)

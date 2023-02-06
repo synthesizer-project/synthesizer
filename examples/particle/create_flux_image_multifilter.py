@@ -21,10 +21,10 @@ from synthesizer.filters import FilterCollection as Filters
 from synthesizer.kernel_functions import quintic
 
 
-plt.rcParams['font.family'] = 'DeJavu Serif'
-plt.rcParams['font.serif'] = ['Times New Roman']
+plt.rcParams["font.family"] = "DeJavu Serif"
+plt.rcParams["font.serif"] = ["Times New Roman"]
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     # Set the seed
     np.random.seed(42)
@@ -41,11 +41,11 @@ if __name__ == '__main__':
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # Define the grid (normally this would be defined by an SPS grid)
-    log10ages = np.arange(6., 10.5, 0.1)
-    metallicities = 10**np.arange(-5., -1.5, 0.1)
-    Z_p = {'Z': 0.01}
+    log10ages = np.arange(6.0, 10.5, 0.1)
+    metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
+    Z_p = {"Z": 0.01}
     Zh = ZH.deltaConstant(Z_p)
-    sfh_p = {'duration': 100 * Myr}
+    sfh_p = {"duration": 100 * Myr}
     sfh = SFH.Constant(sfh_p)  # constant star formation
     sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 
@@ -60,9 +60,11 @@ if __name__ == '__main__':
     stars.coordinates = coords
     stars.coord_units = kpc
     cent = np.mean(coords, axis=0)  # define geometric centre
-    rs = np.sqrt((coords[:, 0] - cent[0]) ** 2
-                 + (coords[:, 1] - cent[1]) ** 2
-                 + (coords[:, 2] - cent[2]) ** 2)  # calculate radii
+    rs = np.sqrt(
+        (coords[:, 0] - cent[0]) ** 2
+        + (coords[:, 1] - cent[1]) ** 2
+        + (coords[:, 2] - cent[2]) ** 2
+    )  # calculate radii
     rs[rs < 0.1] = 0.4  # Set a lower bound on the "smoothing length"
     stars.smoothing_lengths = rs / 4  # convert radii into smoothing lengths
     stars.redshift = 1
@@ -90,8 +92,11 @@ if __name__ == '__main__':
     filter_start = time.time()
 
     # Define filter list
-    filter_codes = ["JWST/NIRCam.F090W", "JWST/NIRCam.F150W",
-                    "JWST/NIRCam.F200W"]
+    filter_codes = [
+        "JWST/NIRCam.F090W",
+        "JWST/NIRCam.F150W",
+        "JWST/NIRCam.F200W",
+    ]
 
     # Set up filter object
     filters = Filters(filter_codes, new_lam=grid.lam)
@@ -106,20 +111,31 @@ if __name__ == '__main__':
     width = (width + 1) * kpc
 
     # Get the image
-    hist_img = galaxy.make_image(resolution, fov=width, img_type="hist",
-                                 sed=galaxy.spectra_array["intrinsic"],
-                                 filters=filters, kernel_func=quintic,
-                                 rest_frame=False, cosmo=cosmo)
+    hist_img = galaxy.make_image(
+        resolution,
+        fov=width,
+        img_type="hist",
+        sed=galaxy.spectra_array["intrinsic"],
+        filters=filters,
+        kernel_func=quintic,
+        rest_frame=False,
+        cosmo=cosmo,
+    )
 
     print("Histogram images made, took:", time.time() - img_start)
     img_start = time.time()
 
     # Get the image
-    smooth_img = galaxy.make_image(resolution, fov=width,
-                                   img_type="smoothed",
-                                   sed=galaxy.spectra_array["intrinsic"],
-                                   filters=filters, kernel_func=quintic,
-                                   rest_frame=False, cosmo=cosmo)
+    smooth_img = galaxy.make_image(
+        resolution,
+        fov=width,
+        img_type="smoothed",
+        sed=galaxy.spectra_array["intrinsic"],
+        filters=filters,
+        kernel_func=quintic,
+        rest_frame=False,
+        cosmo=cosmo,
+    )
 
     print("Smoothed images made, took:", time.time() - img_start)
 

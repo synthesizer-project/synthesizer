@@ -23,8 +23,8 @@ from synthesizer.kernel_functions import quintic
 from synthesizer.imaging.survey import Survey
 from astropy.cosmology import Planck18 as cosmo
 
-plt.rcParams['font.family'] = 'DeJavu Serif'
-plt.rcParams['font.serif'] = ['Times New Roman']
+plt.rcParams["font.family"] = "DeJavu Serif"
+plt.rcParams["font.serif"] = ["Times New Roman"]
 
 # Set the seed
 np.random.seed(42)
@@ -46,8 +46,11 @@ survey = Survey(super_resolution_factor=1)
 
 # Lets make filter sets for two different instruments
 hst_filter_codes = ["HST/WFC3_IR.F105W", "HST/WFC3_IR.F125W"]
-webb_filter_codes = ["JWST/NIRCam.F090W", "JWST/NIRCam.F150W",
-                     "JWST/NIRCam.F200W"]
+webb_filter_codes = [
+    "JWST/NIRCam.F090W",
+    "JWST/NIRCam.F150W",
+    "JWST/NIRCam.F200W",
+]
 hst_filters = Filters(hst_filter_codes, new_lam=grid.lam)
 webb_filters = Filters(webb_filter_codes, new_lam=grid.lam)
 
@@ -56,11 +59,11 @@ survey.add_photometric_instrument(filters=hst_filters, label="HST/WFC3_IR")
 survey.add_photometric_instrument(filters=webb_filters, label="JWST/NIRCam")
 
 # Define the grid (normally this would be defined by an SPS grid)
-log10ages = np.arange(6., 10.5, 0.1)
-metallicities = 10**np.arange(-5., -1.5, 0.1)
-Z_p = {'Z': 0.01}
+log10ages = np.arange(6.0, 10.5, 0.1)
+metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
+Z_p = {"Z": 0.01}
 Zh = ZH.deltaConstant(Z_p)
-sfh_p = {'duration': 100 * Myr}
+sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(sfh_p)  # constant star formation
 
 # Make some fake galaxies
@@ -118,9 +121,13 @@ for f in survey.photometry:
 ax.set_ylabel("$L /$ [erg / s / Hz] ")
 ax.set_xlabel("$M / \mathrm{M}_\odot$")
 
-ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15),
-          fancybox=True, shadow=True, ncol=2)
+ax.legend(
+    loc="upper center",
+    bbox_to_anchor=(0.5, -0.15),
+    fancybox=True,
+    shadow=True,
+    ncol=2,
+)
 
 # Plot the image
-plt.savefig("../survey_photometry_test.png",
-            bbox_inches="tight", dpi=300)
+plt.savefig("../survey_photometry_test.png", bbox_inches="tight", dpi=300)

@@ -5,7 +5,7 @@ SED for each particle and then generates images in a number of Webb bands.
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec 
+import matplotlib.gridspec as gridspec
 from unyt import yr, Myr
 
 from synthesizer.grid import Grid
@@ -17,10 +17,10 @@ from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.filters import FilterCollection as Filters
 from synthesizer.kernel_functions import quintic
 
-plt.rcParams['font.family'] = 'DeJavu Serif'
-plt.rcParams['font.serif'] = ['Times New Roman']
+plt.rcParams["font.family"] = "DeJavu Serif"
+plt.rcParams["font.serif"] = ["Times New Roman"]
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     # Set the seed
     np.random.seed(42)
@@ -31,16 +31,18 @@ if __name__ == '__main__':
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # Define the grid (normally this would be defined by an SPS grid)
-    log10ages = np.arange(6., 10.5, 0.1)
-    metallicities = 10**np.arange(-5., -1.5, 0.1)
-    Z_p = {'Z': 0.01}
+    log10ages = np.arange(6.0, 10.5, 0.1)
+    metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
+    Z_p = {"Z": 0.01}
     Zh = ZH.deltaConstant(Z_p)
-    sfh_p = {'duration': 100 * Myr}
+    sfh_p = {"duration": 100 * Myr}
     sfh = SFH.Constant(sfh_p)  # constant star formation
     sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 
     # Define filter list
-    filter_codes = ["JWST/NIRCam.F150W",]
+    filter_codes = [
+        "JWST/NIRCam.F150W",
+    ]
 
     # Set up filter object
     filters = Filters(filter_codes, new_lam=grid.lam)
@@ -75,7 +77,9 @@ if __name__ == '__main__':
     create_smooth = np.zeros(len(ns))
 
     # Set up filters
-    filter_codes = ["JWST/NIRCam.F150W",]
+    filter_codes = [
+        "JWST/NIRCam.F150W",
+    ]
 
     # Loop over particle numbers
     for ind, n in enumerate(ns):
@@ -89,21 +93,29 @@ if __name__ == '__main__':
         img_start = time.time()
 
         # Get the image
-        hist_img = galaxy.make_image(resolution, fov=width + 1,
-                                     img_type="hist",
-                                     sed=galaxy.spectra_array["intrinsic"],
-                                     filters=filters,
-                                     kernel_func=quintic, rest_frame=True)
+        hist_img = galaxy.make_image(
+            resolution,
+            fov=width + 1,
+            img_type="hist",
+            sed=galaxy.spectra_array["intrinsic"],
+            filters=filters,
+            kernel_func=quintic,
+            rest_frame=True,
+        )
 
         create_hist[ind] = time.time() - img_start
         img_start = time.time()
 
         # Get the image
-        smooth_img = galaxy.make_image(resolution, fov=width + 1,
-                                       img_type="smoothed",
-                                       sed=galaxy.spectra_array["intrinsic"],
-                                       filters=filters,
-                                       kernel_func=quintic, rest_frame=True)
+        smooth_img = galaxy.make_image(
+            resolution,
+            fov=width + 1,
+            img_type="smoothed",
+            sed=galaxy.spectra_array["intrinsic"],
+            filters=filters,
+            kernel_func=quintic,
+            rest_frame=True,
+        )
 
         create_smooth[ind] = time.time() - img_start
 
@@ -115,16 +127,22 @@ if __name__ == '__main__':
     ax.grid(True)
 
     # Plot each timed section
-    for arr, lab in zip([create_hist, create_smooth],
-                        ["Image (hist)", "Image (smoothed)"]):
+    for arr, lab in zip(
+        [create_hist, create_smooth], ["Image (hist)", "Image (smoothed)"]
+    ):
         ax.semilogy(ns, arr, label=lab)
 
     # Label axes
     ax.set_ylabel("Wallclock / [s]")
     ax.set_xlabel("$N_{\mathrm{filters}}$")
 
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
-              fancybox=True, shadow=True, ncol=5)
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.1),
+        fancybox=True,
+        shadow=True,
+        ncol=5,
+    )
 
     # Plot the image
     plt.savefig("../filter_scaling_test.png", bbox_inches="tight", dpi=300)

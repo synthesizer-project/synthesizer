@@ -1,5 +1,3 @@
-
-
 import numpy as np
 from numpy.random import multivariate_normal
 
@@ -10,12 +8,11 @@ class Particles:
 
 
 class CoordinateGenerator:
-
     def generate_3D_gaussian(N, mean=np.zeros(3), cov=None):
 
         if not cov:
             cov = np.zeros((3, 3))
-            np.fill_diagonal(cov, 1.)
+            np.fill_diagonal(cov, 1.0)
 
         """ Generate a random collection of particle coordinates assuming a 3D gaussian """
 

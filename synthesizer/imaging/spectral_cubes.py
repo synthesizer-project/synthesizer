@@ -21,8 +21,16 @@ class SpectralCube(Scene):
 
     """
 
-    def __init__(self, sed, resolution, npix=None, fov=None,
-                 depths=None, apertures=None, snrs=None):
+    def __init__(
+        self,
+        sed,
+        resolution,
+        npix=None,
+        fov=None,
+        depths=None,
+        apertures=None,
+        snrs=None,
+    ):
         """
         Intialise the SpectralCube.
 
@@ -34,7 +42,7 @@ class SpectralCube(Scene):
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -48,15 +56,15 @@ class SpectralCube(Scene):
         """
 
         # Initilise the parent class
-        Scene.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                       sed=sed)
+        Scene.__init__(self, resolution=resolution, npix=npix, fov=fov, sed=sed)
 
         # Set up the data cube dimensions
         self.spectral_resolution = sed.lam.size
 
         # Set up the image itself (populated later)
-        self.ifu = np.zeros((self.npix, self.npix, self.spectral_resolution),
-                            dtype=np.float64)
+        self.ifu = np.zeros(
+            (self.npix, self.npix, self.spectral_resolution), dtype=np.float64
+        )
 
     def get_psfed_ifu(self):
         pass
@@ -94,10 +102,23 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
 
     """
 
-    def __init__(self, sed, resolution, npix=None, fov=None, stars=None,
-                 positions=None, centre=None, psfs=None, depths=None,
-                 apertures=None, snrs=None, rest_frame=True,
-                 cosmo=None, igm=None):
+    def __init__(
+        self,
+        sed,
+        resolution,
+        npix=None,
+        fov=None,
+        stars=None,
+        positions=None,
+        centre=None,
+        psfs=None,
+        depths=None,
+        apertures=None,
+        snrs=None,
+        rest_frame=True,
+        cosmo=None,
+        igm=None,
+    ):
         """
         Intialise the ParticleSpectralCube.
 
@@ -109,7 +130,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -143,12 +164,26 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         self._check_flux_args(rest_frame, cosmo, stars.redshift)
 
         # Initilise the parent class
-        ParticleScene.__init__(self, resolution=resolution, npix=npix,
-                               fov=fov, sed=sed, stars=stars,
-                               positions=positions, cosmo=cosmo)
-        SpectralCube.__init__(self, sed=sed, resolution=resolution, npix=npix,
-                              fov=fov, depths=depths, apertures=apertures,
-                              snrs=snrs)
+        ParticleScene.__init__(
+            self,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            sed=sed,
+            stars=stars,
+            positions=positions,
+            cosmo=cosmo,
+        )
+        SpectralCube.__init__(
+            self,
+            sed=sed,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            depths=depths,
+            apertures=apertures,
+            snrs=snrs,
+        )
 
         # Lets get the right SED from the object
         self.sed_values = None
@@ -199,8 +234,9 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
 
         # Warn that specifying redshift does nothing for rest frame observations
         if rest_frame and redshift is not None:
-            warnings.warn("Warning, redshift not used when computing rest "
-                          "frame SEDs!")
+            warnings.warn(
+                "Warning, redshift not used when computing rest " "frame SEDs!"
+            )
 
         if not rest_frame and (redshift is None or cosmo is None):
             raise exceptions.InconsistentArguments(
@@ -221,8 +257,9 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
 
         # Loop over positions including the sed
         for ind in range(self.npart):
-            self.ifu[self.pix_pos[ind, 0],
-                     self.pix_pos[ind, 1], :] += self.sed_values[ind, :]
+            self.ifu[
+                self.pix_pos[ind, 0], self.pix_pos[ind, 1], :
+            ] += self.sed_values[ind, :]
 
         return self.ifu
 
@@ -264,7 +301,8 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             kernel_sum = 0
 
             img_this_part = np.zeros(
-                (self.npix, self.npix, self.spectral_resolution))
+                (self.npix, self.npix, self.spectral_resolution)
+            )
 
             # Loop over a square aperture around this particle
             # NOTE: This includes "pixels" in front of and behind the image
@@ -272,8 +310,10 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             # TODO: Would be considerably more accurate to integrate over the
             #       kernel in z axis since this is not quantised into pixels
             #       like the axes in the image plane.
-            for i in range(self.pix_pos[ind, 0] - delta_pix,
-                           self.pix_pos[ind, 0] + delta_pix + 1):
+            for i in range(
+                self.pix_pos[ind, 0] - delta_pix,
+                self.pix_pos[ind, 0] + delta_pix + 1,
+            ):
 
                 # Skip if outside of image
                 if i < 0 or i >= self.npix:
@@ -282,8 +322,10 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
                 # Compute the x separation
                 x_dist = (i * res) + (res / 2) - pos[0]
 
-                for j in range(self.pix_pos[ind, 1] - delta_pix,
-                               self.pix_pos[ind, 1] + delta_pix + 1):
+                for j in range(
+                    self.pix_pos[ind, 1] - delta_pix,
+                    self.pix_pos[ind, 1] + delta_pix + 1,
+                ):
 
                     # Skip if outside of image
                     if j < 0 or j >= self.npix:
@@ -292,15 +334,17 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
                     # Compute the y separation
                     y_dist = (j * res) + (res / 2) - pos[1]
 
-                    for k in range(self.pix_pos[ind, 2] - delta_pix,
-                                   self.pix_pos[ind, 2] + delta_pix + 1):
+                    for k in range(
+                        self.pix_pos[ind, 2] - delta_pix,
+                        self.pix_pos[ind, 2] + delta_pix + 1,
+                    ):
 
                         # Compute the z separation
                         z_dist = (k * res) + (res / 2) - pos[2]
 
                         # Compute the distance between the centre of this pixel
                         # and the particle.
-                        dist = np.sqrt(x_dist ** 2 + y_dist ** 2 + z_dist ** 2)
+                        dist = np.sqrt(x_dist**2 + y_dist**2 + z_dist**2)
 
                         # Get the value of the kernel here
                         kernel_val = kernel_func(dist / smooth_length)
@@ -310,8 +354,9 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
                         #       (k * res), ((k + 1) * res))
 
                         # Add this pixel's contribution
-                        img_this_part[i, j, :] += self.sed_values[ind,
-                                                                  :] * kernel_val
+                        img_this_part[i, j, :] += (
+                            self.sed_values[ind, :] * kernel_val
+                        )
 
             img_this_part /= kernel_sum
 
@@ -336,12 +381,28 @@ class ParametricSpectralCube(ParametricScene, SpectralCube):
 
     """
 
-    def __init__(self, sed, resolution, depths=None, apertures=None,
-                 npix=None, fov=None, snrs=None):
+    def __init__(
+        self,
+        sed,
+        resolution,
+        depths=None,
+        apertures=None,
+        npix=None,
+        fov=None,
+        snrs=None,
+    ):
 
         # Initilise the parent class
-        ParametricScene.__init__(self, resolution=resolution, npix=npix,
-                                 fov=fov, sed=sed)
-        SpectralCube.__init__(self, sed=sed, resolution=resolution, npix=npix,
-                              fov=fov, depths=depths, apertures=apertures,
-                              snrs=snrs)
+        ParametricScene.__init__(
+            self, resolution=resolution, npix=npix, fov=fov, sed=sed
+        )
+        SpectralCube.__init__(
+            self,
+            sed=sed,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            depths=depths,
+            apertures=apertures,
+            snrs=snrs,
+        )

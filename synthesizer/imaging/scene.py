@@ -23,7 +23,7 @@ class Scene:
         The size a pixel.
     npix : int
         The number of pixels along an axis of the image or number of spaxels
-        in the image plane of the IFU. 
+        in the image plane of the IFU.
     fov : float
         The width of the image/ifu. If coordinates are being used to make the
         image this should have the same units as those coordinates.
@@ -47,8 +47,14 @@ class Scene:
     # possible attributes.
     __slots__ = ["resolution", "fov", "npix", "sed", "survey", "spatial_unit"]
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None,
-                 super_resolution_factor=None):
+    def __init__(
+        self,
+        resolution,
+        npix=None,
+        fov=None,
+        sed=None,
+        super_resolution_factor=None,
+    ):
         """
         Intialise the Observation.
 
@@ -58,7 +64,7 @@ class Scene:
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : Quantity (float * unyt.unit)
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -239,9 +245,18 @@ class ParticleScene(Scene):
     # Define slots to reduce memory overhead of this class
     __slots__ = ["stars", "coords", "centre", "pix_pos", "npart"]
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
-                 positions=None, centre=None, super_resolution_factor=None,
-                 cosmo=None):
+    def __init__(
+        self,
+        resolution,
+        npix=None,
+        fov=None,
+        sed=None,
+        stars=None,
+        positions=None,
+        centre=None,
+        super_resolution_factor=None,
+        cosmo=None,
+    ):
         """
         Intialise the ParticleObservation.
 
@@ -251,7 +266,7 @@ class ParticleScene(Scene):
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -279,8 +294,14 @@ class ParticleScene(Scene):
         self._check_part_args(resolution, stars, positions, centre, cosmo)
 
         # Initilise the parent class
-        Scene.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                       sed=sed, super_resolution_factor=super_resolution_factor)
+        Scene.__init__(
+            self,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            sed=sed,
+            super_resolution_factor=super_resolution_factor,
+        )
 
         # Store the cosmology object
         self.cosmo = cosmo
@@ -353,8 +374,10 @@ class ParticleScene(Scene):
 
             # If we are working in terms of angles we need redshifts for the
             # stars.
-            if (spatial_unit.same_dimensions_as(arcsec) and
-                    stars.redshift is None):
+            if (
+                spatial_unit.same_dimensions_as(arcsec)
+                and stars.redshift is None
+            ):
                 raise exceptions.InconsistentArguments(
                     "When working in an angular unit system the provided "
                     "stars need a redshift associated to them. Stars.redshift"
@@ -381,12 +404,14 @@ class ParticleScene(Scene):
                 pos = positions
             else:
                 pos = stars.coordinates
-                if (centre[0] < np.min(pos[:, 0]) or
-                    centre[0] > np.max(pos[:, 0]) or
-                    centre[1] < np.min(pos[:, 1]) or
-                    centre[1] > np.max(pos[:, 1]) or
-                    centre[2] < np.min(pos[:, 2]) or
-                        centre[2] > np.max(pos[:, 2])):
+                if (
+                    centre[0] < np.min(pos[:, 0])
+                    or centre[0] > np.max(pos[:, 0])
+                    or centre[1] < np.min(pos[:, 1])
+                    or centre[1] > np.max(pos[:, 1])
+                    or centre[2] < np.min(pos[:, 2])
+                    or centre[2] > np.max(pos[:, 2])
+                ):
                     raise exceptions.InconsistentCoordinates(
                         "The centre lies outside of the coordinate range. "
                         "Are they already centred?"
@@ -434,15 +459,17 @@ class ParticleScene(Scene):
             self.coords = self.coords.value
 
         # Otherwise, handle conversion between length and angle
-        elif (self.spatial_unit.same_dimensions_as(arcsec) and
-              self.stars.coord_units.same_dimensions_as(kpc)):
+        elif self.spatial_unit.same_dimensions_as(
+            arcsec
+        ) and self.stars.coord_units.same_dimensions_as(kpc):
 
             # Convert coordinates from comoving to physical coordinates
-            self.coords *= (1 / (1 + self.stars.redshift))
+            self.coords *= 1 / (1 + self.stars.redshift)
 
             # Get the conversion factor for arcsec and kpc at this redshift
             arcsec_per_kpc_proper = self.cosmo.arcsec_per_kpc_proper(
-                self.stars.redshift).value
+                self.stars.redshift
+            ).value
 
             # First we need to convert to kpc
             if self.stars.coord_units != kpc:
@@ -480,11 +507,12 @@ class ParticleScene(Scene):
                 self.smoothing_lengths = self.smoothing_lengths.value
 
             # Otherwise, handle conversion between length and angle
-            elif (self.spatial_unit.same_dimensions_as(arcsec) and
-                  self.stars.coord_units.same_dimensions_as(kpc)):
+            elif self.spatial_unit.same_dimensions_as(
+                arcsec
+            ) and self.stars.coord_units.same_dimensions_as(kpc):
 
                 # Convert coordinates from comoving to physical coordinates
-                self.smoothing_lengths *= (1 / (1 + self.stars.redshift))
+                self.smoothing_lengths *= 1 / (1 + self.stars.redshift)
 
                 # First we need to convert to kpc
                 if self.stars.coord_units != kpc:
@@ -526,8 +554,14 @@ class ParametricScene(Scene):
 
     """
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None,
-                 super_resolution_factor=None):
+    def __init__(
+        self,
+        resolution,
+        npix=None,
+        fov=None,
+        sed=None,
+        super_resolution_factor=None,
+    ):
         """
         Intialise the ParametricObservation.
 
@@ -537,7 +571,7 @@ class ParametricScene(Scene):
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -549,5 +583,11 @@ class ParametricScene(Scene):
         """
 
         # Initilise the parent class
-        Scene.__init__(self, resolution, npix, fov, sed,
-                       super_resolution_factor=super_resolution_factor)
+        Scene.__init__(
+            self,
+            resolution,
+            npix,
+            fov,
+            sed,
+            super_resolution_factor=super_resolution_factor,
+        )

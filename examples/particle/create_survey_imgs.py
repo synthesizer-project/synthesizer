@@ -22,8 +22,8 @@ from synthesizer.kernel_functions import quintic
 from synthesizer.imaging.survey import Survey
 from astropy.cosmology import Planck18 as cosmo
 
-plt.rcParams['font.family'] = 'DeJavu Serif'
-plt.rcParams['font.serif'] = ['Times New Roman']
+plt.rcParams["font.family"] = "DeJavu Serif"
+plt.rcParams["font.serif"] = ["Times New Roman"]
 
 # Set the seed
 np.random.seed(42)
@@ -42,17 +42,22 @@ survey = Survey(super_resolution_factor=2, fov=8)
 
 # Lets make filter sets for two different instruments
 hst_filter_codes = ["HST/WFC3_IR.F105W", "HST/WFC3_IR.F125W"]
-webb_filter_codes = ["JWST/NIRCam.F090W", "JWST/NIRCam.F150W",
-                     "JWST/NIRCam.F200W"]
+webb_filter_codes = [
+    "JWST/NIRCam.F090W",
+    "JWST/NIRCam.F150W",
+    "JWST/NIRCam.F200W",
+]
 hst_filters = Filters(hst_filter_codes, new_lam=grid.lam)
 webb_filters = Filters(webb_filter_codes, new_lam=grid.lam)
 
 # Create a fake PSF for each instrument (normalising the kernels)
-hst_psf = np.outer(signal.windows.gaussian(25, 2),
-                   signal.windows.gaussian(25, 2))
+hst_psf = np.outer(
+    signal.windows.gaussian(25, 2), signal.windows.gaussian(25, 2)
+)
 hst_psf /= np.sum(hst_psf)
-webb_psf = np.outer(signal.windows.gaussian(50, 3),
-                    signal.windows.gaussian(50, 3))
+webb_psf = np.outer(
+    signal.windows.gaussian(50, 3), signal.windows.gaussian(50, 3)
+)
 webb_psf /= np.sum(webb_psf)
 hst_psfs = {f: hst_psf for f in hst_filters.filter_codes}
 webb_psfs = {f: webb_psf for f in webb_filters.filter_codes}
@@ -62,22 +67,34 @@ hst_depths = {f: 33.0 for f in hst_filters.filter_codes}
 webb_depths = {f: 33.0 for f in webb_filters.filter_codes}
 
 # Let's add these instruments to the survey
-survey.add_photometric_instrument(filters=hst_filters, resolution=0.1 * arcsec,
-                                  label="HST/WFC3_IR", psfs=hst_psfs,
-                                  depths=hst_depths, snrs=5, apertures=0.5)
-survey.add_photometric_instrument(filters=webb_filters, resolution=0.05 * arcsec,
-                                  label="JWST/NIRCam", psfs=webb_psfs,
-                                  depths=webb_depths, snrs=5, apertures=0.5)
+survey.add_photometric_instrument(
+    filters=hst_filters,
+    resolution=0.1 * arcsec,
+    label="HST/WFC3_IR",
+    psfs=hst_psfs,
+    depths=hst_depths,
+    snrs=5,
+    apertures=0.5,
+)
+survey.add_photometric_instrument(
+    filters=webb_filters,
+    resolution=0.05 * arcsec,
+    label="JWST/NIRCam",
+    psfs=webb_psfs,
+    depths=webb_depths,
+    snrs=5,
+    apertures=0.5,
+)
 
 # We need to convert the our depths into flux to be consistent with the images.
 survey.convert_mag_depth_to_fnu()
 
 # Define the grid (normally this would be defined by an SPS grid)
-log10ages = np.arange(6., 10.5, 0.1)
-metallicities = 10**np.arange(-5., -1.5, 0.1)
-Z_p = {'Z': 0.01}
+log10ages = np.arange(6.0, 10.5, 0.1)
+metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
+Z_p = {"Z": 0.01}
 Zh = ZH.deltaConstant(Z_p)
-sfh_p = {'duration': 100 * Myr}
+sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(sfh_p)  # constant star formation
 
 # Define a FOV to be updated by the particle distribution
@@ -98,9 +115,11 @@ for igal in range(ngalaxies):
     stars.coordinates = coords
     stars.coord_units = kpc
     cent = np.mean(coords, axis=0)  # define geometric centre
-    rs = np.sqrt((coords[:, 0] - cent[0]) ** 2
-                 + (coords[:, 1] - cent[1]) ** 2
-                 + (coords[:, 2] - cent[2]) ** 2)  # calculate radii
+    rs = np.sqrt(
+        (coords[:, 0] - cent[0]) ** 2
+        + (coords[:, 1] - cent[1]) ** 2
+        + (coords[:, 2] - cent[2]) ** 2
+    )  # calculate radii
     rs[rs < 0.1] = 0.4  # Set a lower bound on the "smoothing length"
     stars.smoothing_lengths = rs / 4  # convert radii into smoothing lengths
     stars.redshift = 1
@@ -133,8 +152,13 @@ survey.fov = fov
 survey.add_galaxies(galaxies)
 
 # Make images for each galaxy in this survey
-survey.make_images(img_type="smoothed", spectra_type="intrinsic",
-                   kernel_func=quintic, rest_frame=False, cosmo=cosmo)
+survey.make_images(
+    img_type="smoothed",
+    spectra_type="intrinsic",
+    kernel_func=quintic,
+    rest_frame=False,
+    cosmo=cosmo,
+)
 
 # Set up plot
 fig = plt.figure(figsize=(3.5 * survey.nfilters, 3.5 * survey.ngalaxies))
@@ -177,5 +201,4 @@ for inst in survey.imgs:
             j += 1
 
 # Plot the image
-plt.savefig("../survey_img_test.png",
-            bbox_inches="tight", dpi=300)
+plt.savefig("../survey_img_test.png", bbox_inches="tight", dpi=300)

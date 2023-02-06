@@ -19,10 +19,12 @@ fake_img = np.zeros((100, 100))
 # Create fake image objects
 img1 = Image(resolution=0.5 * kpc, npix=100, fov=None, filters=())
 img2 = Image(resolution=0.4 * kpc, npix=100, fov=None, filters=())
-img_with_filters1 = Image(resolution=0.5 * kpc,
-                          npix=100, fov=None, filters=filters1)
-img_with_filters2 = Image(resolution=0.5 * kpc,
-                          npix=100, fov=None, filters=filters2)
+img_with_filters1 = Image(
+    resolution=0.5 * kpc, npix=100, fov=None, filters=filters1
+)
+img_with_filters2 = Image(
+    resolution=0.5 * kpc, npix=100, fov=None, filters=filters2
+)
 img1.img = fake_img
 img2.img = fake_img
 for f in filter_codes1:
@@ -37,8 +39,9 @@ composite_mixed1 = img1 + img_with_filters1
 composite_mixed2 = img_with_filters1 + img1
 
 # Added images preserve a history of what objects were added
-print("Example of image nesting from img1 + img2 + img3:",
-      composite.combined_imgs)
+print(
+    "Example of image nesting from img1 + img2 + img3:", composite.combined_imgs
+)
 
 print("Error Demonstration:")
 
