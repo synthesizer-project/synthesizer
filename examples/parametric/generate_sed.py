@@ -78,3 +78,15 @@ if __name__ == "__main__":
 
     # print galaxy summary
     print(galaxy)
+
+    sed = galaxy.spectra['total']
+    print(sed)
+
+    # generate broadband photometry
+    tophats = {'U': {'lam_eff': 3650, 'lam_fwhm': 660},
+               'V': {'lam_eff': 5510, 'lam_fwhm': 880},
+               'J': {'lam_eff': 12200, 'lam_fwhm': 2130}}
+    fc = FilterCollection(tophat_dict=tophats, new_lam=sed.lam)
+
+    bb_lnu = sed.get_broadband_luminosities(fc)
+    print(bb_lnu)
