@@ -217,11 +217,12 @@ class Sed:
 
         # erg/s/Hz/cm2
         self.fnu = self._lnu * (1.+z) / (4 * np.pi * luminosity_distance**2)
-        self.fnu *= 1E23  # convert to Jy
-        self.fnu *= 1E9  # convert to nJy
+
+        self._fnu *= 1E23  # convert to Jy
+        self._fnu *= 1E9  # convert to nJy
 
         if igm:
-            self.fnu *= igm.T(z, self.lamz)
+            self._fnu *= igm.T(z, self.lamz)
 
     def get_broadband_fluxes(self, fc):  # broad band flux/nJy
         """
@@ -239,7 +240,7 @@ class Sed:
         self.broadband_fluxes = {}
 
         # loop over filters in filter collection
-        for f in fc.filters:
+        for f in fc:
 
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
@@ -257,7 +258,7 @@ class Sed:
             # int_num = integrate.trapezoid(self.fnu * fc.filter[f].t)
             # int_den = integrate.trapezoid(fc.filter[f].t)
 
-            int_num = integrate.trapezoid(self.fnu * f.t/self.nu,
+            int_num = integrate.trapezoid(self._fnu * f.t/self.nu,
                                           self.nu)
             int_den = integrate.trapezoid(f.t/self.nu, self.nu)
 
