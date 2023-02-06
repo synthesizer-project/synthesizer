@@ -54,7 +54,7 @@ if __name__ == '__main__':
     stars_start = time.time()
 
     # Create stars object
-    n = 1000000  # number of particles for sampling
+    n = 1000  # number of particles for sampling
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords

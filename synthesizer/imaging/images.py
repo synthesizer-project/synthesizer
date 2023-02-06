@@ -56,13 +56,14 @@ class Image(Scene):
 
     Methods
     -------
-    apply_filter
-        Applies the transmission curve stored in Filter objects to the ifu and
-        stores the resulting image in imgs.
-    get_psfed_img
-        NotYetImplemented
-    get_noisy_img
-        NotYetImplemented
+    get_psfed_imgs
+        Applies a user provided PSF to the images contained within this object.
+        Note that a PSF for each filter must be provided in a dictionary if
+        images have been made for each filter.
+    get_noisy_imgs
+        Applies noise defied by the user to the images contained within this
+        object. Note that noise can be defined in a number of ways see
+        documentation for details.
 
     """
 
@@ -252,39 +253,6 @@ class Image(Scene):
                 self.psfs[key] /= np.sum(self.psfs[key])
         else:
             self.psfs /= np.sum(self.psfs)
-
-    def apply_filter(self, f):
-        """
-        Applies a filters transmission curve defined by a Filter object to an
-        IFU to get a single band image.
-
-        Constructing an IFU first and applying the filter to the image will
-        always be faster than calculating particle photometry and making
-        multiple images when there are multiple bands. This way the image is
-        made once as an IFU and the filter application which is much faster
-        is done for each band.
-
-        Parameters
-        ----------
-        f : obj (Filter)
-            The Filter object containing all filter information.
-
-        Returns
-        -------
-        img : array-like (float)
-             A single band image in this filter with shape (npix, npix).
-        """
-
-        # Get the mask that removes wavelengths we don't currently care about
-        in_band = f.t > 0
-
-        # Multiply the IFU by the filter transmission curve
-        transmitted = self.ifu[:, :, in_band] * f.t[in_band]
-
-        # Sum over the final axis to "collect" transmission in this filer
-        img = np.sum(transmitted, axis=-1)
-
-        return img
 
     @staticmethod
     def resample_img(img, factor):
@@ -776,7 +744,6 @@ class ParticleImage(ParticleScene, Image):
         A generic method to calculate an image where particles are smoothed over
         a kernel.
 
-
         Parameters
         ----------
         kernel_func : function
@@ -793,7 +760,6 @@ class ParticleImage(ParticleScene, Image):
             A 2D array containing particles sorted into an image.
             (npix, npix)
         """
-        from .extensions.sph_kernel_calc import sph_kernel_loop
 
         # Get the size of a pixel
         res = self.resolution
@@ -802,22 +768,63 @@ class ParticleImage(ParticleScene, Image):
         for ind in range(self.npart):
 
             # Get this particles smoothing length and position
-            smooth_length = self.smoothing_lengths[ind]
+            smooth_length = self.stars.smoothing_lengths[ind]
             pos = self.coords[ind]
 
             # How many pixels are in the smoothing length?
             delta_pix = math.ceil(smooth_length / self.resolution) + 1
 
-            # Calculate this particles sph kernel
-            kernel = sph_kernel_loop(
-                self.pix_pos[ind, 0], self.pix_pos[ind, 1],
-                self.pix_pos[ind, 2], delta_pix, self.npix, pos,
-                self.resolution, kernel_func, smooth_length)
+            kernel_sum = 0
 
-            # Add this pixel's contribution
-            self.img[
-                i - delta_pix: i + delta_pix + 1,
-                j - delta_pix: j + delta_pix + 1] += self.pixel_values[ind] * kernel
+            img_this_part = np.zeros((self.npix, self.npix))
+
+            # Loop over a square aperture around this particle
+            # NOTE: This includes "pixels" in front of and behind the image
+            #       plane since the kernel is by defintion 3D
+            # TODO: Would be considerably more accurate to integrate over the
+            #       kernel in z axis since this is not quantised into pixels
+            #       like the axes in the image plane.
+            for i in range(self.pix_pos[ind, 0] - delta_pix,
+                           self.pix_pos[ind, 0] + delta_pix + 1):
+
+                # Skip if outside of image
+                if i < 0 or i >= self.npix:
+                    continue
+
+                # Compute the x separation
+                x_dist = (i * res) + (res / 2) - pos[0]
+
+                for j in range(self.pix_pos[ind, 1] - delta_pix,
+                               self.pix_pos[ind, 1] + delta_pix + 1):
+
+                    # Skip if outside of image
+                    if j < 0 or j >= self.npix:
+                        continue
+
+                    # Compute the y separation
+                    y_dist = (j * res) + (res / 2) - pos[1]
+
+                    for k in range(self.pix_pos[ind, 2] - delta_pix,
+                                   self.pix_pos[ind, 2] + delta_pix + 1):
+
+                        # Compute the z separation
+                        z_dist = (k * res) + (res / 2) - pos[2]
+
+                        # Compute the distance between the centre of this pixel
+                        # and the particle.
+                        dist = np.sqrt(x_dist ** 2 + y_dist ** 2 + z_dist ** 2)
+
+                        # Get the value of the kernel here
+                        kernel_val = kernel_func(dist / smooth_length)
+                        kernel_sum += kernel_val
+
+                        # Add this pixel's contribution
+                        img_this_part[i,
+                                      j] += self.pixel_values[ind] * kernel_val
+
+            img_this_part /= kernel_sum
+
+            self.img += img_this_part
 
         return self.img
 
@@ -850,7 +857,8 @@ class ParticleImage(ParticleScene, Image):
         for f in self.filters:
 
             # Apply this filter to the IFU
-            self.imgs[f.filter_code] = f.apply_filter(self.ifu)
+            self.imgs[f.filter_code] = f.apply_filter(
+                self.ifu, self.ifu_obj.sed.nu)
 
         return self.imgs
 
@@ -895,7 +903,8 @@ class ParticleImage(ParticleScene, Image):
         for f in self.filters:
 
             # Apply this filter to the IFU
-            self.imgs[f.filter_code] = self.apply_filter(f)
+            self.imgs[f.filter_code] = f.apply_filter(
+                self.ifu, self.ifu_obj.sed.nu)
 
         return self.imgs
 
