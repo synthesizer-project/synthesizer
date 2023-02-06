@@ -17,11 +17,11 @@ from synthesizer.particle.particles import CoordinateGenerator
 
 
 # Define the grid (normally this would be defined by an SPS grid)
-log10ages = np.arange(6., 10.5, 0.1)
-metallicities = 10**np.arange(-5., -1.5, 0.1)
-Z_p = {'Z': 0.01}
+log10ages = np.arange(6.0, 10.5, 0.1)
+metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
+Z_p = {"Z": 0.01}
 Zh = ZH.deltaConstant(Z_p)
-sfh_p = {'duration': 100 * Myr}
+sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(sfh_p)  # constant star formation
 sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 

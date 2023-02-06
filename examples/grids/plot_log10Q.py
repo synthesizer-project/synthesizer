@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from synthesizer.grid import Grid
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
@@ -18,8 +18,8 @@ if __name__ == '__main__':
 
     grid = Grid(grid_name, grid_dir=grid_dir)
 
-    fig, ax = grid.plot_log10Q(ion='HI')
+    fig, ax = grid.plot_log10Q(ion="HI")
     plt.show()
 
-    fig, ax = grid.plot_log10Q(ion='HeII')
+    fig, ax = grid.plot_log10Q(ion="HeII")
     plt.show()

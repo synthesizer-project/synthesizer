@@ -12,8 +12,10 @@ from unyt.dimensions import length, angle
 
 import synthesizer.exceptions as exceptions
 from synthesizer.imaging.scene import Scene, ParticleScene, ParametricScene
-from synthesizer.imaging.spectral_cubes import (ParticleSpectralCube,
-                                                ParametricSpectralCube)
+from synthesizer.imaging.spectral_cubes import (
+    ParticleSpectralCube,
+    ParametricSpectralCube,
+)
 
 
 class Image(Scene):
@@ -71,9 +73,19 @@ class Image(Scene):
 
     """
 
-    def __init__(self, resolution, npix=None, fov=None, filters=(), sed=None,
-                 psfs=None, depths=None, apertures=None, snrs=None,
-                 super_resolution_factor=2):
+    def __init__(
+        self,
+        resolution,
+        npix=None,
+        fov=None,
+        filters=(),
+        sed=None,
+        psfs=None,
+        depths=None,
+        apertures=None,
+        snrs=None,
+        super_resolution_factor=2,
+    ):
         """
         Intialise the Image.
 
@@ -114,8 +126,14 @@ class Image(Scene):
             filters = ()
 
         # Initilise the parent class
-        Scene.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                       sed=sed, super_resolution_factor=super_resolution_factor)
+        Scene.__init__(
+            self,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            sed=sed,
+            super_resolution_factor=super_resolution_factor,
+        )
 
         # Define attributes to hold the PSF information
         self.psfs = psfs
@@ -177,16 +195,26 @@ class Image(Scene):
         """
 
         # Make sure the images are compatible dimensions
-        if (self.resolution != other_img.resolution
+        if (
+            self.resolution != other_img.resolution
             or self.fov != other_img.fov
-                or self.npix != other_img.npix):
+            or self.npix != other_img.npix
+        ):
             raise exceptions.InconsistentAddition(
                 "Cannot add Images: resolution=("
-                + str(self.resolution) + " + " + str(other_img.resolution)
+                + str(self.resolution)
+                + " + "
+                + str(other_img.resolution)
                 + "), fov=("
-                + str(self.fov) + " + " + str(other_img.fov)
+                + str(self.fov)
+                + " + "
+                + str(other_img.fov)
                 + "), npix=("
-                + str(self.npix) + " + " + str(other_img.npix) + ")")
+                + str(self.npix)
+                + " + "
+                + str(other_img.npix)
+                + ")"
+            )
 
         # Make sure they contain compatible filters (but we allow one
         # filterless image to be added to a image object with filters)
@@ -194,12 +222,17 @@ class Image(Scene):
             if self.filters != other_img.filters:
                 raise exceptions.InconsistentAddition(
                     "Cannot add Images with incompatible filter sets!"
-                    + "\nFilter set 1:" + "[ "
+                    + "\nFilter set 1:"
+                    + "[ "
                     + ", ".join([fstr for fstr in self.filters.filter_codes])
-                    + " ]" + "\nFilter set 2:" + "[ "
-                    + ", ".join([fstr
-                                 for fstr in other_img.filters.filter_codes])
-                    + " ]")
+                    + " ]"
+                    + "\nFilter set 2:"
+                    + "[ "
+                    + ", ".join(
+                        [fstr for fstr in other_img.filters.filter_codes]
+                    )
+                    + " ]"
+                )
 
         # Get the filter set for the composite, we have to handle the case
         # where one of the images is a single band/property image so can't
@@ -209,9 +242,13 @@ class Image(Scene):
             composite_filters = other_img.filters
 
         # Initialise the composite image
-        composite_img = Image(self.resolution * self.spatial_unit,
-                              npix=self.npix, fov=self.fov * self.spatial_unit,
-                              filters=composite_filters, sed=None)
+        composite_img = Image(
+            self.resolution * self.spatial_unit,
+            npix=self.npix,
+            fov=self.fov * self.spatial_unit,
+            filters=composite_filters,
+            sed=None,
+        )
 
         # Store the original images in the composite extracting any
         # nested images.
@@ -311,8 +348,9 @@ class Image(Scene):
         convolved_img = signal.fftconvolve(img, psf, mode="same")
 
         # Downsample the image back to native resolution.
-        convolved_img = self.resample_img(convolved_img,
-                                          1 / self.super_resolution_factor)
+        convolved_img = self.resample_img(
+            convolved_img, 1 / self.super_resolution_factor
+        )
 
         return convolved_img
 
@@ -367,7 +405,11 @@ class Image(Scene):
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in psfs:
-                filter_codes -= set([key, ])
+                filter_codes -= set(
+                    [
+                        key,
+                    ]
+                )
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -403,13 +445,15 @@ class Image(Scene):
         # to the native resolution.
         self._super_to_native_resolution()
         for f in self.imgs:
-            self.imgs[f] = self.resample_img(self.imgs[f],
-                                             1 / self.super_resolution_factor)
+            self.imgs[f] = self.resample_img(
+                self.imgs[f], 1 / self.super_resolution_factor
+            )
 
         return self.imgs_psf
 
-    def _get_noisy_single_img(self, img, depth=None, snr=None, aperture=None,
-                              noise=None):
+    def _get_noisy_single_img(
+        self, img, depth=None, snr=None, aperture=None, noise=None
+    ):
         """
         Make and add a noise array to this image defined by either a depth and
         signal-to-noise in an aperture or by an explicit noise pixel value.
@@ -458,7 +502,7 @@ class Image(Scene):
             app_noise = (depth / snr) ** 2
 
             # Calculate the aperture area in image coordinates
-            app_area_coords = np.pi * aperture ** 2
+            app_area_coords = np.pi * aperture**2
 
             # Convert the aperture area to units of pixels
             app_area_pix = app_area_coords / (self.resolution) ** 2
@@ -476,7 +520,7 @@ class Image(Scene):
 
         # Make the noise array and calculate the weight map
         noise_arr = noise * np.ones((self.npix, self.npix))
-        weight_map = 1 / noise ** 2
+        weight_map = 1 / noise**2
         noise_arr *= np.random.randn(self.npix, self.npix)
 
         # Add the noise to the image
@@ -511,21 +555,26 @@ class Image(Scene):
 
         # Check we have a valid set of PSFs
         # TODO: could move these to a check args function.
-        if (self.pixel_values is not None and
-            (isinstance(self.depths, dict) or
-             isinstance(self.snrs, dict) or
-             isinstance(self.apertures, dict) or
-             isinstance(self.noises, dict))):
+        if self.pixel_values is not None and (
+            isinstance(self.depths, dict)
+            or isinstance(self.snrs, dict)
+            or isinstance(self.apertures, dict)
+            or isinstance(self.noises, dict)
+        ):
             raise exceptions.InconsistentArguments(
                 "If there is a single image then noise arguments should be "
                 "floats not dictionaries."
             )
-        if (self.filters is not None and isinstance(self.depths, dict)):
+        if self.filters is not None and isinstance(self.depths, dict):
 
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in self.depths:
-                filter_codes -= set([key, ])
+                filter_codes -= set(
+                    [
+                        key,
+                    ]
+                )
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -536,12 +585,16 @@ class Image(Scene):
                     "[" + ", ".join(list(filter_codes)) + "]"
                 )
 
-        if (self.filters is not None and isinstance(self.snrs, dict)):
+        if self.filters is not None and isinstance(self.snrs, dict):
 
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in self.snrs:
-                filter_codes -= set([key, ])
+                filter_codes -= set(
+                    [
+                        key,
+                    ]
+                )
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -552,12 +605,16 @@ class Image(Scene):
                     "[" + ", ".join(list(filter_codes)) + "]"
                 )
 
-        if (self.filters is not None and isinstance(self.apertures, dict)):
+        if self.filters is not None and isinstance(self.apertures, dict):
 
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in self.apertures:
-                filter_codes -= set([key, ])
+                filter_codes -= set(
+                    [
+                        key,
+                    ]
+                )
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -569,12 +626,16 @@ class Image(Scene):
                     "[" + ", ".join(list(filter_codes)) + "]"
                 )
 
-        if (self.filters is not None and isinstance(noises, dict)):
+        if self.filters is not None and isinstance(noises, dict):
 
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in noises:
-                filter_codes -= set([key, ])
+                filter_codes -= set(
+                    [
+                        key,
+                    ]
+                )
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -656,11 +717,26 @@ class ParticleImage(ParticleScene, Image):
 
     """
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
-                 filters=(), positions=None, pixel_values=None,
-                 rest_frame=True, redshift=None, cosmo=None, igm=None,
-                 psfs=None, depths=None, apertures=None, snrs=None,
-                 super_resolution_factor=None):
+    def __init__(
+        self,
+        resolution,
+        npix=None,
+        fov=None,
+        sed=None,
+        stars=None,
+        filters=(),
+        positions=None,
+        pixel_values=None,
+        rest_frame=True,
+        redshift=None,
+        cosmo=None,
+        igm=None,
+        psfs=None,
+        depths=None,
+        apertures=None,
+        snrs=None,
+        super_resolution_factor=None,
+    ):
         """
         Intialise the ParticleImage.
 
@@ -702,21 +778,41 @@ class ParticleImage(ParticleScene, Image):
         """
 
         # Initilise the parent classes
-        ParticleScene.__init__(self, resolution=resolution, npix=npix,
-                               fov=fov, sed=sed, stars=stars,
-                               positions=positions,
-                               super_resolution_factor=super_resolution_factor,
-                               cosmo=cosmo)
-        Image.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                       filters=filters, sed=sed, psfs=psfs, depths=depths,
-                       apertures=apertures, snrs=snrs)
+        ParticleScene.__init__(
+            self,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            sed=sed,
+            stars=stars,
+            positions=positions,
+            super_resolution_factor=super_resolution_factor,
+            cosmo=cosmo,
+        )
+        Image.__init__(
+            self,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            filters=filters,
+            sed=sed,
+            psfs=psfs,
+            depths=depths,
+            apertures=apertures,
+            snrs=snrs,
+        )
 
         # If we have a list of filters make an IFU
         if len(filters) > 0:
             self.ifu_obj = ParticleSpectralCube(
-                sed=self.sed, resolution=self.resolution * self.spatial_unit,
-                npix=npix, fov=fov, stars=self.stars,
-                rest_frame=rest_frame, cosmo=cosmo, igm=igm
+                sed=self.sed,
+                resolution=self.resolution * self.spatial_unit,
+                npix=npix,
+                fov=fov,
+                stars=self.stars,
+                rest_frame=rest_frame,
+                cosmo=cosmo,
+                igm=igm,
             )
 
         # Set up pixel values
@@ -736,10 +832,13 @@ class ParticleImage(ParticleScene, Image):
             (npix, npix)
         """
 
-        self.img = np.histogram2d(self.pix_pos[:, 0], self.pix_pos[:, 1],
-                                  bins=self.npix,
-                                  range=((0, self.npix), (0, self.npix)),
-                                  weights=self.pixel_values)[0]
+        self.img = np.histogram2d(
+            self.pix_pos[:, 0],
+            self.pix_pos[:, 1],
+            bins=self.npix,
+            range=((0, self.npix), (0, self.npix)),
+            weights=self.pixel_values,
+        )[0]
 
         return self.img
 
@@ -788,8 +887,10 @@ class ParticleImage(ParticleScene, Image):
             # TODO: Would be considerably more accurate to integrate over the
             #       kernel in z axis since this is not quantised into pixels
             #       like the axes in the image plane.
-            for i in range(self.pix_pos[ind, 0] - delta_pix,
-                           self.pix_pos[ind, 0] + delta_pix + 1):
+            for i in range(
+                self.pix_pos[ind, 0] - delta_pix,
+                self.pix_pos[ind, 0] + delta_pix + 1,
+            ):
 
                 # Skip if outside of image
                 if i < 0 or i >= self.npix:
@@ -798,8 +899,10 @@ class ParticleImage(ParticleScene, Image):
                 # Compute the x separation
                 x_dist = (i * res) + (res / 2) - pos[0]
 
-                for j in range(self.pix_pos[ind, 1] - delta_pix,
-                               self.pix_pos[ind, 1] + delta_pix + 1):
+                for j in range(
+                    self.pix_pos[ind, 1] - delta_pix,
+                    self.pix_pos[ind, 1] + delta_pix + 1,
+                ):
 
                     # Skip if outside of image
                     if j < 0 or j >= self.npix:
@@ -808,23 +911,26 @@ class ParticleImage(ParticleScene, Image):
                     # Compute the y separation
                     y_dist = (j * res) + (res / 2) - pos[1]
 
-                    for k in range(self.pix_pos[ind, 2] - delta_pix,
-                                   self.pix_pos[ind, 2] + delta_pix + 1):
+                    for k in range(
+                        self.pix_pos[ind, 2] - delta_pix,
+                        self.pix_pos[ind, 2] + delta_pix + 1,
+                    ):
 
                         # Compute the z separation
                         z_dist = (k * res) + (res / 2) - pos[2]
 
                         # Compute the distance between the centre of this pixel
                         # and the particle.
-                        dist = np.sqrt(x_dist ** 2 + y_dist ** 2 + z_dist ** 2)
+                        dist = np.sqrt(x_dist**2 + y_dist**2 + z_dist**2)
 
                         # Get the value of the kernel here
                         kernel_val = kernel_func(dist / smooth_length)
                         kernel_sum += kernel_val
 
                         # Add this pixel's contribution
-                        img_this_part[i,
-                                      j] += self.pixel_values[ind] * kernel_val
+                        img_this_part[i, j] += (
+                            self.pixel_values[ind] * kernel_val
+                        )
 
             img_this_part /= kernel_sum
 
@@ -862,7 +968,8 @@ class ParticleImage(ParticleScene, Image):
 
             # Apply this filter to the IFU
             self.imgs[f.filter_code] = f.apply_filter(
-                self.ifu, self.ifu_obj.sed.nu)
+                self.ifu, self.ifu_obj.sed.nu
+            )
 
         return self.imgs
 
@@ -908,7 +1015,8 @@ class ParticleImage(ParticleScene, Image):
 
             # Apply this filter to the IFU
             self.imgs[f.filter_code] = f.apply_filter(
-                self.ifu, self.ifu_obj.sed.nu)
+                self.ifu, self.ifu_obj.sed.nu
+            )
 
         return self.imgs
 
@@ -928,10 +1036,23 @@ class ParametricImage(ParametricScene, Image):
 
     """
 
-    def __init__(self, morphology, resolution, filters=None, sed=None,
-                 npix=None, fov=None, cosmo=None, redshift=None,
-                 rest_frame=True, psfs=None, depths=None, apertures=None,
-                 snrs=None, super_resolution_factor=None):
+    def __init__(
+        self,
+        morphology,
+        resolution,
+        filters=None,
+        sed=None,
+        npix=None,
+        fov=None,
+        cosmo=None,
+        redshift=None,
+        rest_frame=True,
+        psfs=None,
+        depths=None,
+        apertures=None,
+        snrs=None,
+        super_resolution_factor=None,
+    ):
         """
         Intialise the ParametricImage.
 
@@ -956,12 +1077,26 @@ class ParametricImage(ParametricScene, Image):
         """
 
         # Initilise the parent classes
-        ParametricScene.__init__(self, resolution=resolution, npix=npix,
-                                 fov=fov, sed=sed,
-                                 super_resolution_factor=super_resolution_factor)
-        Image.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                       filters=filters, sed=sed, psfs=psfs, depths=depths,
-                       apertures=apertures, snrs=snrs)
+        ParametricScene.__init__(
+            self,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            sed=sed,
+            super_resolution_factor=super_resolution_factor,
+        )
+        Image.__init__(
+            self,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            filters=filters,
+            sed=sed,
+            psfs=psfs,
+            depths=depths,
+            apertures=apertures,
+            snrs=snrs,
+        )
 
         # If we have a list of filters make an IFU
         if len(filters) > 0:
@@ -972,9 +1107,9 @@ class ParametricImage(ParametricScene, Image):
         # check resolution has units and convert to desired units
         if isinstance(resolution, unyt_quantity):
             if resolution.units.dimensions == angle:
-                resolution = resolution.to('mas')
+                resolution = resolution.to("mas")
             elif resolution.units.dimensions == length:
-                resolution = resolution.to('kpc')
+                resolution = resolution.to("kpc")
             else:
                 # raise exception, don't understand units
                 pass
@@ -990,7 +1125,7 @@ class ParametricImage(ParametricScene, Image):
             if (cosmo != None) & (redshift != None):
                 morphology.update(morphology.p, cosmo=cosmo, z=redshift)
             else:
-                """ raise exception, morphology is defined in mas but image
+                """raise exception, morphology is defined in mas but image
                 resolution in kpc. Please provide cosmology (cosmo) and redshift.
                 """
                 pass
@@ -1000,13 +1135,15 @@ class ParametricImage(ParametricScene, Image):
             if (cosmo != None) & (redshift != None):
                 morphology.update(morphology.p, cosmo=cosmo, z=redshift)
             else:
-                """ raise exception, morphology is defined in kpc but image
+                """raise exception, morphology is defined in kpc but image
                 resolution in mas. Please provide cosmology (cosmo) and redshift.
                 """
                 pass
 
         # Define 1D bin centres of each pixel
-        bin_centres = _resolution * np.linspace(-(npix-1)/2, (npix-1)/2, npix)
+        bin_centres = _resolution * np.linspace(
+            -(npix - 1) / 2, (npix - 1) / 2, npix
+        )
 
         # As above but for the 2D grid
         self.xx, self.yy = np.meshgrid(bin_centres, bin_centres)
@@ -1074,7 +1211,7 @@ class ParametricImage(ParametricScene, Image):
 
         plt.figure()
 
-        plt.imshow(np.log10(img), origin='lower', interpolation='nearest')
+        plt.imshow(np.log10(img), origin="lower", interpolation="nearest")
         plt.show()
 
     def make_ascii(self, filter_code=None):
@@ -1087,7 +1224,9 @@ class ParametricImage(ParametricScene, Image):
             The filter code
         """
 
-        scale = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft|()1{}[]?-_+~<>i!lI;:,\"^`'. "[::-1]
+        scale = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft|()1{}[]?-_+~<>i!lI;:,\"^`'. "[
+            ::-1
+        ]
         # scale = " .:-=+*#%@"
         nscale = len(scale)
 
@@ -1097,14 +1236,14 @@ class ParametricImage(ParametricScene, Image):
         else:
             img = self.img
 
-        img = (nscale-1)*img/np.max(img)  # maps image onto a
+        img = (nscale - 1) * img / np.max(img)  # maps image onto a
         img = img.astype(int)
 
-        ascii_img = ''
+        ascii_img = ""
         for i in range(img.shape[0]):
             for j in range(img.shape[1]):
-                ascii_img += 2*scale[img[i, j]]
-            ascii_img += '\n'
+                ascii_img += 2 * scale[img[i, j]]
+            ascii_img += "\n"
 
         print(ascii_img)
 
@@ -1118,8 +1257,9 @@ class ParametricImage(ParametricScene, Image):
             rgb_filters
         """
 
-        rgb_img = np.array([self.imgs[filter_code]
-                            for filter_code in rgb_filters]).T
+        rgb_img = np.array(
+            [self.imgs[filter_code] for filter_code in rgb_filters]
+        ).T
 
         if update:
             self.rgb_img = rgb_img
@@ -1141,5 +1281,5 @@ class ParametricImage(ParametricScene, Image):
         rgb_img /= np.max(rgb_img)
 
         plt.figure()
-        plt.imshow(rgb_img, origin='lower', interpolation='nearest')
+        plt.imshow(rgb_img, origin="lower", interpolation="nearest")
         plt.show()

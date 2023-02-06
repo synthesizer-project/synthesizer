@@ -7,7 +7,7 @@ from synthesizer.grid import Grid
 from synthesizer.filters import FilterCollection
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
@@ -20,8 +20,8 @@ if __name__ == '__main__':
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     lam = grid.lam
-    spec = grid.spectra['stellar'][0, 0]
-    spec_2d = grid.spectra['stellar'][0, :10]
+    spec = grid.spectra["stellar"][0, 0]
+    spec_2d = grid.spectra["stellar"][0, :10]
 
     _sed = Sed(lam=lam, lnu=spec)
     _sed_2d = Sed(lam=lam, lnu=spec_2d)
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     print("2D:", _sed_2d.get_balmer_break())
 
     print("Broadband luminosities")
-    fs = [f'JWST/NIRCam.{f}' for f in ['F200W', 'F356W']]
+    fs = [f"JWST/NIRCam.{f}" for f in ["F200W", "F356W"]]
     fc = FilterCollection(fs, new_lam=_sed.lam)
 
     print("1D:", _sed.get_broadband_luminosities(fc))

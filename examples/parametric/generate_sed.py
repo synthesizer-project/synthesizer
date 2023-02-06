@@ -18,7 +18,7 @@ from unyt import yr, Myr
 from astropy.cosmology import Planck18 as cosmo
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
@@ -30,9 +30,9 @@ if __name__ == '__main__':
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # --- define the parameters of the star formation and metal enrichment histories
-    sfh_p = {'duration': 10 * Myr}
-    Z_p = {'log10Z': -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
-    stellar_mass = 1E8
+    sfh_p = {"duration": 10 * Myr}
+    Z_p = {"log10Z": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    stellar_mass = 1e8
 
     # --- define the functional form of the star formation and metal enrichment histories
     sfh = SFH.Constant(sfh_p)  # constant star formation
@@ -41,8 +41,9 @@ if __name__ == '__main__':
     Zh = ZH.deltaConstant(Z_p)  # constant metallicity
 
     # --- get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
-    sfzh = generate_sfzh(grid.log10ages, grid.metallicities,
-                         sfh, Zh, stellar_mass=stellar_mass)
+    sfzh = generate_sfzh(
+        grid.log10ages, grid.metallicities, sfh, Zh, stellar_mass=stellar_mass
+    )
 
     # --- create a galaxy object
     galaxy = Galaxy(sfzh)

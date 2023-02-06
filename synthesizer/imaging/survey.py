@@ -21,9 +21,18 @@ class Instrument:
 
     """
 
-    def __init__(self, resolution, filters, psfs=None, depths=None,
-                 aperture=None, snrs=None, noises=None,
-                 resolving_power=None, lam=None):
+    def __init__(
+        self,
+        resolution,
+        filters,
+        psfs=None,
+        depths=None,
+        aperture=None,
+        snrs=None,
+        noises=None,
+        resolving_power=None,
+        lam=None,
+    ):
         """
         Initialise the Observatory.
 
@@ -141,9 +150,17 @@ class Survey:
         """
         pass
 
-    def add_photometric_instrument(self, filters, label, resolution=None,
-                                   psfs=None, depths=None, apertures=None,
-                                   snrs=None, noises=None):
+    def add_photometric_instrument(
+        self,
+        filters,
+        label,
+        resolution=None,
+        psfs=None,
+        depths=None,
+        apertures=None,
+        snrs=None,
+        noises=None,
+    ):
         """
         Adds an instrument and all it's filters to the Survey.
 
@@ -171,43 +188,48 @@ class Survey:
             if nfilters != len(depths):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(depths)=%d)" % (nfilters,
-                                                           len(depths))
+                    " len(filters)=%d, len(depths)=%d)"
+                    % (nfilters, len(depths))
                 )
         if isinstance(apertures, dict):
             if nfilters != len(apertures):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(apertures)=%d)" % (nfilters,
-                                                              len(apertures))
+                    " len(filters)=%d, len(apertures)=%d)"
+                    % (nfilters, len(apertures))
                 )
         if isinstance(snrs, dict):
             if nfilters != len(snrs):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(snrs)=%d)" % (nfilters,
-                                                         len(snrs))
+                    " len(filters)=%d, len(snrs)=%d)" % (nfilters, len(snrs))
                 )
         if isinstance(noises, dict):
             if nfilters != len(noises):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(noises)=%d)" % (nfilters,
-                                                           len(noises))
+                    " len(filters)=%d, len(noises)=%d)"
+                    % (nfilters, len(noises))
                 )
 
         # Create this observation configurations
         self.instruments[label] = Instrument(
-            resolution=resolution, filters=filters, psfs=psfs,
-            depths=depths, aperture=apertures, snrs=snrs, noises=noises
+            resolution=resolution,
+            filters=filters,
+            psfs=psfs,
+            depths=depths,
+            aperture=apertures,
+            snrs=snrs,
+            noises=noises,
         )
 
         # Record that we included another insturment and count the filters
         self.ninstruments += 1
         self.nfilters += len(filters)
 
-    def add_spectral_instrument(self, resolution, resolving_power,
-                                psf=None, depth=None, aperture=None):
+    def add_spectral_instrument(
+        self, resolution, resolving_power, psf=None, depth=None, aperture=None
+    ):
         pass
 
     def add_galaxies(self, galaxies):
@@ -227,9 +249,10 @@ class Survey:
 
         # Otherwise, we have to add them on to what we have, handling whether
         # we are adding 1 galaxy...
-        elif (len(self.galaxies) > 0 and
-              (isinstance(galaxies, ParticleGalaxy) or
-               isinstance(galaxies, ParametricGalaxy))):
+        elif len(self.galaxies) > 0 and (
+            isinstance(galaxies, ParticleGalaxy)
+            or isinstance(galaxies, ParametricGalaxy)
+        ):
 
             # Double check galaxies is a list
             self.galaxies = list(self.galaxies)
@@ -331,9 +354,8 @@ class Survey:
                 "Attenuated spectra coming soon!"
             )
         else:
-           # TODO: make a UnknownSpectralType error
-            raise exceptions.InconsistentArguments(
-                "Unrecognised spectra_type!")
+            # TODO: make a UnknownSpectralType error
+            raise exceptions.InconsistentArguments("Unrecognised spectra_type!")
 
         # Loop over each instrument
         for key in self.instruments:
@@ -378,8 +400,15 @@ class Survey:
         """
         pass
 
-    def make_images(self, img_type, spectra_type, kernel_func=None,
-                    rest_frame=False, cosmo=None, igm=None):
+    def make_images(
+        self,
+        img_type,
+        spectra_type,
+        kernel_func=None,
+        rest_frame=False,
+        cosmo=None,
+        igm=None,
+    ):
         """
 
         Parameters
@@ -406,12 +435,20 @@ class Survey:
 
                 # Get images of this galaxy with this instrument
                 img = gal.make_image(
-                    inst.resolution, fov=self.fov, img_type=img_type,
-                    sed=gal.spectra_array[spectra_type], filters=inst.filters,
-                    psfs=inst.psfs, depths=inst.depths,  aperture=inst.aperture,
-                    snrs=inst.snrs, kernel_func=kernel_func,
-                    rest_frame=rest_frame, cosmo=cosmo, igm=igm,
-                    super_resolution_factor=self.super_resolution_factor
+                    inst.resolution,
+                    fov=self.fov,
+                    img_type=img_type,
+                    sed=gal.spectra_array[spectra_type],
+                    filters=inst.filters,
+                    psfs=inst.psfs,
+                    depths=inst.depths,
+                    aperture=inst.aperture,
+                    snrs=inst.snrs,
+                    kernel_func=kernel_func,
+                    rest_frame=rest_frame,
+                    cosmo=cosmo,
+                    igm=igm,
+                    super_resolution_factor=self.super_resolution_factor,
                 )
 
                 # Store this result

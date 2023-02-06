@@ -1,5 +1,3 @@
-
-
 """
 Cython extension to calculate SED weights for star particles.
 Calculates weights on an age / metallicity grid given the mass.
@@ -32,13 +30,13 @@ def calculate_weights(z, a, particle):
 
     # simple test for sorted z and a arrays
     if z[0] > z[1]:
-        raise ValueError('Metallicity array not sorted ascendingly')
+        raise ValueError("Metallicity array not sorted ascendingly")
 
     if a[0] > a[1]:
-        raise ValueError('Age array not sorted ascendingly')
+        raise ValueError("Age array not sorted ascendingly")
 
     for p in range(0, len(particle)):
-        #metal, age, mass = particle[p]
+        # metal, age, mass = particle[p]
         metal = particle[p][0]
         age = particle[p][1]
         # mass = particle[p][2]
@@ -69,16 +67,16 @@ def calculate_weights(z, a, particle):
             jlow -= 1
             jfrac = (age - a[jlow]) / (a[jhigh] - a[jlow])
 
-        mfrac = particle[p][2] * (1.-ifrac)
-        w[ilow, jlow] = w[ilow, jlow] + mfrac * (1.-jfrac)
+        mfrac = particle[p][2] * (1.0 - ifrac)
+        w[ilow, jlow] = w[ilow, jlow] + mfrac * (1.0 - jfrac)
 
         # ensure we're not adding weights more than once when outside range
-        if (jlow != jhigh):
+        if jlow != jhigh:
             w[ilow, jhigh] = w[ilow, jhigh] + mfrac * jfrac
-        if (ilow != ihigh):
+        if ilow != ihigh:
             mfrac = particle[p][2] * ifrac
-            w[ihigh, jlow] = w[ihigh, jlow] + mfrac * (1.-jfrac)
-            if (jlow != jhigh):
+            w[ihigh, jlow] = w[ihigh, jlow] + mfrac * (1.0 - jfrac)
+            if jlow != jhigh:
                 w[ihigh, jhigh] = w[ihigh, jhigh] + mfrac * jfrac
 
     return np.asarray(w)

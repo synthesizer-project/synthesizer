@@ -1,4 +1,3 @@
-
 # --- this example compares a sampled and binned (parametric) SED for different numbers of particles
 
 import os
@@ -25,9 +24,9 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 
 # --- define the binned (parametric star formation history)
 
-Z_p = {'Z': 0.01}
+Z_p = {"Z": 0.01}
 Zh = ZH.deltaConstant(Z_p)
-sfh_p = {'duration': 100 * Myr}
+sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(sfh_p)  # constant star formation
 sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh)
 
@@ -37,9 +36,15 @@ sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh)
 
 parametric_galaxy = ParametricGalaxy(sfzh)
 parametric_galaxy.get_stellar_spectra(grid)
-sed = parametric_galaxy.spectra['stellar']
-plt.plot(np.log10(sed.lam), np.log10(sed.lnu),
-         label='parametric', lw=4, c='k', alpha=0.3)
+sed = parametric_galaxy.spectra["stellar"]
+plt.plot(
+    np.log10(sed.lam),
+    np.log10(sed.lnu),
+    label="parametric",
+    lw=4,
+    c="k",
+    alpha=0.3,
+)
 
 
 # --------------------------------------------
@@ -50,7 +55,7 @@ for N in [1, 10, 100, 1000]:
     # --- create stars object
     stars = sample_sfhz(sfzh, N)
     # ensure that the total mass = 1 irrespective of N. This can be also acheived by setting the mass of the star particles in sample_sfhz but this will be easier most of the time.
-    stars.renormalise_mass(1.)
+    stars.renormalise_mass(1.0)
 
     # --- create galaxy object
     particle_galaxy = ParticleGalaxy(stars=stars)
@@ -58,8 +63,8 @@ for N in [1, 10, 100, 1000]:
     # --- this generates stellar and intrinsic spectra
     particle_galaxy.generate_intrinsic_spectra(grid, fesc=0.0, integrated=True)
 
-    sed = particle_galaxy.spectra['stellar']
-    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=f'particle (N={N})')
+    sed = particle_galaxy.spectra["stellar"]
+    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=f"particle (N={N})")
 
 
 plt.legend()
