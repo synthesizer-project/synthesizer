@@ -620,7 +620,7 @@ class Filter:
         return np.interp(self.lam, self.original_lam, self.original_t,
                          left=0.0, right=0.0)
 
-    def apply_filter(self, arr, xs):
+    def apply_filter(self, arr, xs=None):
         """
         Apply this filter's transmission curve to an arbitrary dimensioned
         array returning the sum of the array convolved with the filter
@@ -646,11 +646,18 @@ class Filter:
         """
 
         # Check dimensions are ok
-        if self.lam.size != arr.shape[-1]:
-            raise ValueError("Final dimension of array did not match "
-                             "wavelength array size (arr.shape[-1]=%d, "
-                             "transmission.size=%d)" % (arr.shape[-1],
-                                                        self.lam.size))
+        if x is None:
+            if self.lam.size != arr.shape[-1]:
+                raise ValueError("Final dimension of array did not match "
+                                 "wavelength array size (arr.shape[-1]=%d, "
+                                 "transmission.size=%d)" % (arr.shape[-1],
+                                                            self.lam.size))
+            else:
+                if xs.size != arr.shape[-1]:
+                raise ValueError("Final dimension of array did not match "
+                                 "wavelength array size (arr.shape[-1]=%d, "
+                                 "xs.size=%d)" % (arr.shape[-1],
+                                                  xs.size))
 
         # Get the mask that removes wavelengths we don't currently care about
         in_band = self.t > 0
@@ -659,17 +666,17 @@ class Filter:
         arr_in_band = arr.compress(in_band, axis=-1) * self.t[in_band]
 
         # Get the xs in the band, this could be lam or nu.
-        xs_in_band = xs[in_band]
+        if xs is not None:
+            xs_in_band = xs[in_band]
+        else:
+            xs_in_band = self.lam[in_band]
 
         # Sum over the final axis to "collect" transmission in this filer
-        sum_in_band = np.sum(arr_in_band, axis=-1)
-
-        sum_num = integrate.trapezoid(arr_in_band * self.t[in_band]
-                                      / xs_in_band, xs_in_band, axis=-1)
+        sum_per_x = integrate.trapezoid(arr_in_band * self.t[in_band]
+                                        / xs_in_band, xs_in_band, axis=-1)
         sum_den = integrate.trapezoid(self.t[in_band] / xs_in_band, xs_in_band,
                                       axis=-1)
-
-        sum_in_band = sum_num / sum_den
+        sum_in_band = sum_per_x / sum_den
 
         return sum_in_band
 
