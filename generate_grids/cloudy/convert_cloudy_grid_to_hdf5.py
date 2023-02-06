@@ -26,13 +26,15 @@ def create_new_grid(grid, synthesizer_data_dir):
     # parse the grid to get the sps model
     sps_grid = grid.split('_cloudy')[0]
 
+    # testing
+    with h5py.File(f'{path_to_grids}/{sps_grid}.hdf5', 'r') as hf_sps:
+        hf_sps.visititems(explore_hdf5_grid)
+
     # open the new grid
     with h5py.File(f'{path_to_grids}/{grid}.hdf5', 'w') as hf:
 
         # open the original SPS model grid
         with h5py.File(f'{path_to_grids}/{sps_grid}.hdf5', 'r') as hf_sps:
-
-            hf_sps.visititems(explore_hdf5_grid)
 
             # copy top-level attributes
             for k, v in hf_sps.attrs.items():
