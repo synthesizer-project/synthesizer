@@ -22,10 +22,10 @@ grid=""
 # grid=$grid" fsps-3.2_chabrier03-0.5,120_cloudy fsps-3.2_chabrier03-1,120_cloudy fsps-3.2_chabrier03-2,120_cloudy fsps-3.2_chabrier03-5,120_cloudy fsps-3.2_chabrier03-10,120_cloudy fsps-3.2_chabrier03-20,120_cloudy fsps-3.2_chabrier03-50,120_cloudy"
 
 # bpass U variation
-grid=$grid" bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-log10U_refm1 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-log10U_refm2 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-log10U_refm3 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-log10U_refm4"
+# grid=$grid" bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-log10U_refm1 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-log10U_refm2 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-log10U_refm3 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-log10U_refm4"
 
 # bpass alpha variation
-grid=$grid" bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpham0.2 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha0.0 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha0.2 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha0.4 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha0.6 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha0.8 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha1.0"
+# grid=$grid" bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpham0.2 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha0.0 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha0.2 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha0.4 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha0.6 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha0.8 bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-alpha1.0"
 
 # bc03
 grid=$grid" bc03-2016-BaSeL_chabrier03-0.1,100 bc03-2016-Miles_chabrier03-0.1,100 bc03-2016-Stelib_chabrier03-0.1,100 bc03_chabrier03-0.1,100"
