@@ -1,6 +1,7 @@
 import numpy as np
 import urllib.request
 import matplotlib.pyplot as plt
+from scipy import integrate
 
 import synthesizer.exceptions as exceptions
 
@@ -354,7 +355,7 @@ class FilterCollection:
         # Loop over the filters plotting their curves.
         for key in self.filters:
             f = self.filters[key]
-            ax.plot(f.lam, f.t, label=f.filter_code)
+            ax.semilogx(f.lam, f.t, label=f.filter_code)
 
             # TODO: Add label with automatic placement
 
@@ -619,7 +620,7 @@ class Filter:
         return np.interp(self.lam, self.original_lam, self.original_t,
                          left=0.0, right=0.0)
 
-    def apply_filter(self, arr):
+    def apply_filter(self, arr, xs):
         """
         Apply this filter's transmission curve to an arbitrary dimensioned
         array returning the sum of the array convolved with the filter
@@ -657,8 +658,18 @@ class Filter:
         # Multiply the IFU by the filter transmission curve
         arr_in_band = arr.compress(in_band, axis=-1) * self.t[in_band]
 
+        # Get the xs in the band, this could be lam or nu.
+        xs_in_band = xs[in_band]
+
         # Sum over the final axis to "collect" transmission in this filer
         sum_in_band = np.sum(arr_in_band, axis=-1)
+
+        sum_num = integrate.trapezoid(arr_in_band * self.t[in_band]
+                                      / xs_in_band, xs_in_band, axis=-1)
+        sum_den = integrate.trapezoid(self.t[in_band] / xs_in_band, xs_in_band,
+                                      axis=-1)
+
+        sum_in_band = sum_num / sum_den
 
         return sum_in_band
 
