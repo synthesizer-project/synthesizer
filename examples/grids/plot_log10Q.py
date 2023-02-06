@@ -18,5 +18,8 @@ if __name__ == '__main__':
 
     grid = Grid(grid_name, grid_dir=grid_dir)
 
-    fig, ax = grid.plot_log10Q()
-    # plt.show()
+    fig, ax = grid.plot_log10Q(ion='HI')
+    plt.show()
+
+    fig, ax = grid.plot_log10Q(ion='HeII')
+    plt.show()
