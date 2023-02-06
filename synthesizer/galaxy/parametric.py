@@ -325,7 +325,8 @@ class ParametricGalaxy(BaseGalaxy):
         grid : obj (Grid)
             The Grid
         line_ids : list or str
-            A list of line_ids or a str denoting a single line. Doublets can be specified as a nested list or using a comma (e.g. 'OIII4363,OIII4959')
+            A list of line_ids or a str denoting a single line. Doublets can
+            be specified as a nested list or using a comma (e.g. 'OIII4363,OIII4959')
         fesc : float
             The Lyman continuum escape fraction, the fraction of ionising photons that entirely escape
 
@@ -407,14 +408,17 @@ class ParametricGalaxy(BaseGalaxy):
                             tauV_stellar=None, dust_curve_nebular=power_law({'slope': -1.}),
                             dust_curve_stellar=power_law({'slope': -1.}), update=True):
         """
-        Calculates attenuated properties (luminosity, continuum, EW) for a set of lines. Allows the nebular and stellar attenuation to be set separately.
+        Calculates attenuated properties (luminosity, continuum, EW) for a set
+        of lines. Allows the nebular and stellar attenuation to be set
+        separately.
 
         Parameters
         ----------
         grid : obj (Grid)
             The Grid
         line_ids : list or str
-            A list of line_ids or a str denoting a single line. Doublets can be specified as a nested list or using a comma (e.g. 'OIII4363,OIII4959')
+            A list of line_ids or a str denoting a single line. Doublets can be
+            specified as a nested list or using a comma (e.g. 'OIII4363,OIII4959')
         fesc : float
             The Lyman continuum escape fraction, the fraction of ionising photons that entirely escape
         tauV_nebular : float
@@ -454,7 +458,7 @@ class ParametricGalaxy(BaseGalaxy):
             continuum = intrinsic_line._continuum * T_stellar
 
             line = Line(intrinsic_line.id,
-                      intrinsic_line._wavelength, luminosity, continuum)
+                        intrinsic_line._wavelength, luminosity, continuum)
 
             # NOTE: the above is wrong and should be separated into stellar and nebular continuum components:
             # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
@@ -468,9 +472,13 @@ class ParametricGalaxy(BaseGalaxy):
 
         return lines
 
-    def get_screen_line(self, grid, line_ids, fesc=0.0, tauV=None, dust_curve=power_law({'slope': -1.}), update=True):
+    def get_screen_line(self, grid, line_ids, fesc=0.0, tauV=None,
+                        dust_curve=power_law({'slope': -1.}), update=True):
         """
-        Calculates attenuated properties (luminosity, continuum, EW) for a set of lines assuming a simple dust screen (i.e. both nebular and stellar emission feels the same dust attenuation). This is a wrapper around the more general method above.
+        Calculates attenuated properties (luminosity, continuum, EW) for a set
+        of lines assuming a simple dust screen (i.e. both nebular and stellar
+        emission feels the same dust attenuation). This is a wrapper around the
+        more general method above.
 
         Parameters
         ----------
@@ -492,15 +500,19 @@ class ParametricGalaxy(BaseGalaxy):
              A dictionary containing line objects.
         """
 
-        return self.get_attenuated_line(grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
+        return self.get_attenuated_line(
+            grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV,
+            dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve
+        )
 
-   def make_images(self, spectra_type, resolution, npix=None, fov=None, update=True, rest_frame=True):
+    def make_images(self, spectra_type, resolution, npix=None, fov=None,
+                    update=True, rest_frame=True):
 
-        images =ParametricImage(self.morph, resolution, npix=npix, fov=fov,
-                               sed=self.spectra[spectra_type], rest_frame=rest_frame)
+        images = ParametricImage(self.morph, resolution, npix=npix, fov=fov,
+                                 sed=self.spectra[spectra_type], rest_frame=rest_frame)
         images.create_images()
 
-   if update:
-        self.images[spectra_type] = images
+        if update:
+            self.images[spectra_type] = images
 
-    return images
+        return images
