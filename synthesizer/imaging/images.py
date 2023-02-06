@@ -929,7 +929,9 @@ class ParametricImage(ParametricScene, Image):
     """
 
     def __init__(self, morphology, resolution, filters=None, sed=None,
-                 npix=None, fov=None, cosmo=None, redshift=None, rest_frame=True):
+                 npix=None, fov=None, cosmo=None, redshift=None,
+                 rest_frame=True, psfs=None, depths=None, apertures=None,
+                 snrs=None, super_resolution_factor=None):
         """
         Intialise the ParametricImage.
 
@@ -995,8 +997,8 @@ class ParametricImage(ParametricScene, Image):
 
         if (resolution.units == mas) & (not morphology.model_mas):
 
-            if (cosmo != None) & (z != None):
-                morphology.update(morphology.p, cosmo=cosmo, z=z)
+            if (cosmo != None) & (redshift != None):
+                morphology.update(morphology.p, cosmo=cosmo, z=redshift)
             else:
                 """ raise exception, morphology is defined in kpc but image
                 resolution in mas. Please provide cosmology (cosmo) and redshift.
