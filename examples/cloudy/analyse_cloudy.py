@@ -34,7 +34,7 @@ def compare_with_grid(model, grid_name, ia=0, iZ=8, spectra='total', show=False)
 
     fig, ax = single((5., 3.5))
 
-    grid = SpectralGrid(grid_name)
+    grid = Grid(grid_name)
     lnu = grid.spectra[spectra][ia, iZ]
 
     ax.plot(np.log10(grid.lam), np.log10(lnu))

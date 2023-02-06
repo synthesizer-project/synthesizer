@@ -1072,13 +1072,7 @@ class ParametricImage(ParametricScene, Image):
 
         plt.figure()
 
-
-<< << << < HEAD
-        plt.imshow(np.log10(self.imgs[filter_code]),
-                   origin='lower', interpolation='nearest')
-== == == =
         plt.imshow(np.log10(img), origin='lower', interpolation='nearest')
->>>>>> > origin/main
         plt.show()
 
     def make_ascii(self, filter_code=None):

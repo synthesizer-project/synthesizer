@@ -336,7 +336,8 @@ class ParametricSpectralCube(ParametricScene, SpectralCube):
 
     """
 
-    def __init__(self, sed, resolution, npix=None, fov=None):
+    def __init__(self, sed, resolution, depths=None, apertures=None,
+                 npix=None, fov=None, snrs=None):
 
         # Initilise the parent class
         ParametricScene.__init__(self, resolution=resolution, npix=npix,

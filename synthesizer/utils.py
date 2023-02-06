@@ -127,6 +127,7 @@ def m_to_flux(m):
 
     return 1E9 * 10**(-0.4*(m - 8.9))
 
+
 def flux_to_luminosity(flux, cosmo, redshift):
     """
     Converts flux in nJy to luminosity in erg / s / Hz.
@@ -143,7 +144,7 @@ def flux_to_luminosity(flux, cosmo, redshift):
     """
 
     # Calculate the luminosity distance
-    lum_dist = cosmo.luminosity_distance(z).to('cm').value
+    lum_dist = cosmo.luminosity_distance(redshift).to('cm').value
 
     # Calculate the luminosity in interim units
     lum = flux * 4 * np.pi * lum_dist ** 2
