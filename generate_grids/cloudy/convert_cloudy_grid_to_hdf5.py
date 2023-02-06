@@ -20,13 +20,15 @@ import yaml
 
 def create_new_grid(grid, synthesizer_data_dir):
 
+    print(grid)
+
     path_to_grids = f'{synthesizer_data_dir}/grids'
     path_to_cloudy_files = f'{synthesizer_data_dir}/cloudy'
 
     # parse the grid to get the sps model
     sps_grid = grid.split('_cloudy')[0]
 
-    print('yo')
+    print(sps_grid)
 
     # testing
     with h5py.File(f'{path_to_grids}/{sps_grid}.hdf5', 'r') as hf_sps:
