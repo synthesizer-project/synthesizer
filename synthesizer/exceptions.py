@@ -1,5 +1,3 @@
-
-
 class InconsistentParameter(Exception):
     """
     Generic exception class for inconsistent parameters.
@@ -13,8 +11,8 @@ class InconsistentParameter(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
-        return 'Inconsistent parameter choice'
+            return "{0} ".format(self.message)
+        return "Inconsistent parameter choice"
 
 
 class InconsistentArguments(Exception):
@@ -30,8 +28,8 @@ class InconsistentArguments(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
-        return 'Inconsistent parameter choice'
+            return "{0} ".format(self.message)
+        return "Inconsistent parameter choice"
 
 
 class UnimplementedFunctionality(Exception):
@@ -47,8 +45,8 @@ class UnimplementedFunctionality(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
-        return 'Unimplemented functionality!'
+            return "{0} ".format(self.message)
+        return "Unimplemented functionality!"
 
 
 class UnknownImageType(Exception):
@@ -60,13 +58,14 @@ class UnknownImageType(Exception):
         if args:
             self.message = args[0]
         else:
-            return 'Inconsistent parameter choice'
+            return "Inconsistent parameter choice"
 
 
 class InconsistentAddition(Exception):
     """
     Generic exception class for when adding two objects is impossible.
     """
+
     def __init__(self, *args):
         if args:
             self.message = args[0]
@@ -75,15 +74,16 @@ class InconsistentAddition(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return "{0} ".format(self.message)
         else:
-            return 'Unable to add'
+            return "Unable to add"
 
 
 class InconsistentCoordinates(Exception):
     """
     Generic exception class for when coordinates are inconsistent.
     """
+
     def __init__(self, *args):
         if args:
             self.message = args[0]
@@ -92,15 +92,17 @@ class InconsistentCoordinates(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return "{0} ".format(self.message)
         else:
-            return 'Coordinates are inconsistent'
+            return "Coordinates are inconsistent"
+
 
 class SVOFilterNotFound(Exception):
     """
     Exception class for when an SVO filter code does not match one in
     the database.
     """
+
     def __init__(self, *args):
         if args:
             self.message = args[0]
@@ -109,14 +111,16 @@ class SVOFilterNotFound(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return "{0} ".format(self.message)
         else:
-            return 'Filter not found!'
+            return "Filter not found!"
+
 
 class InconsistentWavelengths(Exception):
     """
     Exception class for when array dimensions don't
     """
+
     def __init__(self, *args):
         if args:
             self.message = args[0]
@@ -125,6 +129,6 @@ class InconsistentWavelengths(Exception):
 
     def __str__(self):
         if self.message:
-            return '{0} '.format(self.message)
+            return "{0} ".format(self.message)
         else:
-            return 'Coordinates are inconsistent'
+            return "Coordinates are inconsistent"
