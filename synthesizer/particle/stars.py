@@ -13,6 +13,7 @@ Notes
 """
 import warnings
 import numpy as np
+from unyt import Mpc
 from .particles import Particles
 
 
@@ -61,20 +62,42 @@ class Stars(Particles):
     smoothing_lengths : array-like (float)
         The smoothing lengths (describing the sph kernel) of each stellar
         particle in simulation length units.
+    redshift : float/array-like (float)
+        The redshift of each star particle. Can either be a single float or
+        an array of redshifts for each particle.
     s_oxygen : array-like (float)
         fractional oxygen abundance
     s_hydrogen : array-like (float)
         fractional hydrogen abundance
+    coord_units : obj (unyt.unit)
+        The units of the coordinates.
     """
 
     # Define the allowed attributes
-    __slots__ = ["initial_masses", "ages", "metallicities", "nparticles",
-                 "tauV", "alpha", "imf_hmass_slope", "log10ages",
-                 "log10metallicities", "resampled", "coordinates",
-                 "velocities", "current_masses", "smoothing_lengths",
-                 "s_oxygen", "s_hydrogen"]
+    __slots__ = [
+        "initial_masses",
+        "ages",
+        "metallicities",
+        "nparticles",
+        "tauV",
+        "alpha",
+        "imf_hmass_slope",
+        "log10ages",
+        "log10metallicities",
+        "resampled",
+        "coordinates",
+        "velocities",
+        "current_masses",
+        "smoothing_lengths",
+        "redshift",
+        "s_oxygen",
+        "s_hydrogen",
+        "coord_units",
+    ]
 
-    def __init__(self, initial_masses, ages, metallicities, **kwargs):
+    def __init__(
+        self, initial_masses, ages, metallicities, coord_units=Mpc, **kwargs
+    ):
         """
         Intialise the Stars instance. The first 3 arguments are always required.
         All other attributes are optional.
@@ -116,6 +139,9 @@ class Stars(Particles):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+        # Define unit system
+        self.coord_units = coord_units
+
     def renormalise_mass(self, stellar_mass):
         """
         Renormalises the masses and stores them in the initial_mass attribute.
@@ -129,7 +155,7 @@ class Stars(Particles):
             The stellar mass array to be renormalised.
         """
 
-        self.initial_masses *= stellar_mass/np.sum(self.initial_masses)
+        self.initial_masses *= stellar_mass / np.sum(self.initial_masses)
 
     def __str__(self):
         """
@@ -141,20 +167,20 @@ class Stars(Particles):
         pstr = ""
 
         # Add the content of the summary to the string to be printed
-        pstr += "-"*10 + "\n"
+        pstr += "-" * 10 + "\n"
         pstr += "SUMMARY OF STAR PARTICLES" + "\n"
         pstr += f"N_stars: {self.nparticles}" + "\n"
         pstr += "log10(total mass formed/Msol): "
         pstr += f"{np.log10(np.sum(self.initial_masses)): .2f}" + "\n"
         pstr += f"median(age/Myr): {np.median(self.ages)/1E6:.1f}" + "\n"
-        pstr += "-"*10
+        pstr += "-" * 10
 
         return pstr
 
     def _power_law_sample(self, low_lim, upp_lim, g, size=1):
         """
         Sample from a power law over an interval not containing zero.
-        
+
         Power-law gen for pdf(x) propto x^{g-1} for a<=x<=b
 
         Parameters
@@ -177,13 +203,20 @@ class Stars(Particles):
         # Get a random sample
         rand = np.random.random(size=size)
 
-        low_lim_g, upp_lim_g = low_lim ** g, low_lim ** g
+        low_lim_g, upp_lim_g = low_lim**g, low_lim**g
 
         return (low_lim_g + (upp_lim_g - low_lim_g) * rand) ** (1 / g)
 
-    def resample_young_stars(self, min_age=1e8, min_mass=700, max_mass=1e6,
-                             power_law_index=-1.3, n_samples=1e3,
-                             force_resample=False, verbose=False):
+    def resample_young_stars(
+        self,
+        min_age=1e8,
+        min_mass=700,
+        max_mass=1e6,
+        power_law_index=-1.3,
+        n_samples=1e3,
+        force_resample=False,
+        verbose=False,
+    ):
         """
         Resample young stellar particles into individual HII regions, with a
         power law distribution of masses. A young stellar particle is a
@@ -214,8 +247,10 @@ class Stars(Particles):
 
         # Warn the user we are resampling a resampled population
         if self.resampled & (~force_resample):
-            warnings.warn("Warning, galaxy stars already resampled. \
-                    To force resample, set force_resample=True. Returning...")
+            warnings.warn(
+                "Warning, galaxy stars already resampled. \
+                    To force resample, set force_resample=True. Returning..."
+            )
             return None
 
         if verbose:
@@ -239,21 +274,23 @@ class Stars(Particles):
         for _idx in resample_idxs:
 
             # Sample the power law
-            rvs = self._power_law_sample(min_mass, max_mass,
-                                         power_law_index, int(n_samples))
+            rvs = self._power_law_sample(
+                min_mass, max_mass, power_law_index, int(n_samples)
+            )
 
             # If not enough mass has been sampled, repeat
             while np.sum(rvs) < self.masses[_idx]:
                 n_samples *= 2
-                rvs = self._power_law_sample(min_mass, max_mass,
-                                             power_law_index, int(n_samples))
+                rvs = self._power_law_sample(
+                    min_mass, max_mass, power_law_index, int(n_samples)
+                )
 
             # Sum masses up to the total mass limit
             _mask = np.cumsum(rvs) < self.masses[_idx]
             _masses = rvs[_mask]
 
             # Scale up to the original mass
-            _masses *= (self.masses[_idx] / np.sum(_masses))
+            _masses *= self.masses[_idx] / np.sum(_masses)
 
             # Sample uniform distribution of ages
             _ages = np.random.rand(len(_masses)) * min_age
@@ -272,8 +309,7 @@ class Stars(Particles):
             print("Concatenate new arrays to existing")
 
         # Include the resampled particles in the attributes
-        for attr, new_arr in zip(["masses", "ages"],
-                                 [new_masses, new_ages]):
+        for attr, new_arr in zip(["masses", "ages"], [new_masses, new_ages]):
             attr_array = getattr(self, attr)
             setattr(self, attr, np.append(attr_array, new_arr))
 
@@ -289,9 +325,13 @@ class Stars(Particles):
 
             # Include resampled stellar particles in this attribute
             attr_array = getattr(self, attr)[resample_idxs]
-            setattr(self, attr, np.append(getattr(self, attr),
-                                          np.repeat(attr_array, new_lens,
-                                                    axis=0)))
+            setattr(
+                self,
+                attr,
+                np.append(
+                    getattr(self, attr), np.repeat(attr_array, new_lens, axis=0)
+                ),
+            )
 
         if verbose:
             print("Delete old particles")
@@ -336,7 +376,7 @@ def sample_sfhz(sfzh, n, initial_mass=1):
     """
 
     # Normalise the sfhz to produce a histogram (binned in time)
-    hist = sfzh.sfzh/np.sum(sfzh.sfzh)
+    hist = sfzh.sfzh / np.sum(sfzh.sfzh)
 
     # Get the midpoints of x and y to...
     x_bin_midpoints = sfzh.log10ages
@@ -352,15 +392,17 @@ def sample_sfhz(sfzh, n, initial_mass=1):
 
     # Convert indices to correct shape and extract the ages (x) and
     # metallicites (y) from the random sample
-    x_idx, y_idx = np.unravel_index(value_bins,
-                                    (len(x_bin_midpoints),
-                                     len(y_bin_midpoints)))
-    random_from_cdf = np.column_stack((x_bin_midpoints[x_idx],
-                                       y_bin_midpoints[y_idx]))
+    x_idx, y_idx = np.unravel_index(
+        value_bins, (len(x_bin_midpoints), len(y_bin_midpoints))
+    )
+    random_from_cdf = np.column_stack(
+        (x_bin_midpoints[x_idx], y_bin_midpoints[y_idx])
+    )
     log10ages, log10metallicities = random_from_cdf.T
 
     # Instantiate Stars object
-    stars = Stars(initial_mass * np.ones(n), 10 ** log10ages,
-                  10 ** log10metallicities)
+    stars = Stars(
+        initial_mass * np.ones(n), 10**log10ages, 10**log10metallicities
+    )
 
     return stars

@@ -8,18 +8,24 @@ import numpy as np
 import matplotlib.pyplot as plt
 from unyt import yr, Myr
 
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh, generate_sfzh_from_array
+from synthesizer.parametric.sfzh import (
+    SFH,
+    ZH,
+    generate_sfzh,
+    generate_sfzh_from_array,
+)
+
 # from synthesizer.plt import single, single_histxy, mlabel
 
 # TODO: SFH currently reliant on sfzh to get binned history
 # TODO: need new binning method for SFH class
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     # --- define a age and metallicity grid. In practice these are pulled from the SPS model.
-    log10ages = np.arange(6., 10.5, 0.1)
-    log10metallicities = np.arange(-5., -1.5, 0.25)
+    log10ages = np.arange(6.0, 10.5, 0.1)
+    log10metallicities = np.arange(-5.0, -1.5, 0.25)
     metallicities = 10**log10metallicities
 
     # --- define the SFH as an array and the metallicity as a number
@@ -33,13 +39,13 @@ if __name__ == '__main__':
 
     # --- define the parameters of the star formation and metal enrichment histories
 
-    Z_p = {'log10Z': -2.5}  # can also use linear metallicity e.g. {'Z': 0.01}
+    Z_p = {"log10Z": -2.5}  # can also use linear metallicity e.g. {'Z': 0.01}
     Zh = ZH.deltaConstant(Z_p)
     print(Zh)  # print summary
 
     # --- make a constant SFH
 
-    sfh_p = {'duration': 100 * Myr}
+    sfh_p = {"duration": 100 * Myr}
     sfh = SFH.Constant(sfh_p)  # constant star formation
     print(sfh)  # print summary
 
@@ -49,7 +55,7 @@ if __name__ == '__main__':
 
     # --- make an exponential SFH
 
-    sfh_p = {'tau': 100 * Myr, 'max_age': 200 * Myr}
+    sfh_p = {"tau": 100 * Myr, "max_age": 200 * Myr}
     sfh = SFH.TruncatedExponential(sfh_p)  # constant star formation
     print(sfh)  # print summary of the star formation history
 
