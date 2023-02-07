@@ -56,7 +56,8 @@ class SpectralCube(Scene):
         """
 
         # Initilise the parent class
-        Scene.__init__(self, resolution=resolution, npix=npix, fov=fov, sed=sed)
+        Scene.__init__(self, resolution=resolution,
+                       npix=npix, fov=fov, sed=sed)
 
         # Set up the data cube dimensions
         self.spectral_resolution = sed.lam.size
@@ -190,16 +191,16 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         if rest_frame:
 
             # Get the rest frame SED (this is both sed.fnu0 and sed.lnu)
-            self.sed_values = self.sed.lnu
+            self.sed_values = self.sed.lnu.value
 
         elif self.stars.redshift is not None and self.cosmo is not None:
 
             # Check if we need to calculate sed.fnu, if not calculate it
-            if self.sed.fnu is None:
+            if self.sed._fnu is None:
                 self.sed.get_fnu(self.cosmo, self.stars.redshift, igm)
 
             # Assign the flux
-            self.sed_values = self.sed.fnu
+            self.sed_values = self.sed.fnu.value
 
         else:
 
