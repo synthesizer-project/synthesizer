@@ -1,3 +1,4 @@
+
 """
 This example allows us to explore a HDF5 and the correspinding Grid object.
 """
@@ -14,24 +15,24 @@ def explore_hdf5_grid(name, item):
     TODO: modify to not loop over every line.
     """
 
-    split = name.split("/")
-    name_ = "    " * (len(split) - 1) + split[-1]
+    split = name.split('/')
+    name_ = '    '*(len(split)-1)+split[-1]
     print(name_, item)
 
     for k, v in item.attrs.items():
-        print("    " * (len(split) - 1), k, ":", v)
+        print('    '*(len(split)-1), k, ':', v)
 
 
 if __name__ == "__main__":
 
-    grid_dir = "../../tests/test_grid"
-    grid_name = "test_grid"
+    grid_dir = '../../tests/test_grid'
+    grid_name = 'test_grid'
 
     # explore HDF5 grid
-    with h5py.File(f"{grid_dir}/{grid_name}.hdf5", "r") as hf:
+    with h5py.File(f'{grid_dir}/{grid_name}.hdf5', 'r') as hf:
 
         for k, v in hf.attrs.items():
-            print("    -", k, ":", v)
+            print('    -', k, ':', v)
 
         # hf.visititems(explore_hdf5_grid)
 
