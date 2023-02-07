@@ -4,7 +4,8 @@ photometry. This example will:
 - build a parametric galaxy (see make_sfzh)
 - calculate spectral luminosity density
 """
-
+import os
+import numpy as np
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -17,17 +18,21 @@ from unyt import yr, Myr
 from astropy.cosmology import Planck18 as cosmo
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
 
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # --- define the parameters of the star formation and metal enrichment histories
-    sfh_p = {'duration': 10 * Myr}
-    Z_p = {'log10Z': -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
-    stellar_mass = 1E8
+    sfh_p = {"duration": 10 * Myr}
+    Z_p = {"log10Z": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    stellar_mass = 1e8
 
     # --- define the functional form of the star formation and metal enrichment histories
     sfh = SFH.Constant(sfh_p)  # constant star formation
@@ -36,7 +41,9 @@ if __name__ == '__main__':
     Zh = ZH.deltaConstant(Z_p)  # constant metallicity
 
     # --- get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
-    sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh, stellar_mass=stellar_mass)
+    sfzh = generate_sfzh(
+        grid.log10ages, grid.metallicities, sfh, Zh, stellar_mass=stellar_mass
+    )
 
     # --- create a galaxy object
     galaxy = Galaxy(sfzh)
@@ -72,13 +79,15 @@ if __name__ == '__main__':
     # print galaxy summary
     print(galaxy)
 
-    sed = galaxy.spectra['total']
+    sed = galaxy.spectra["total"]
     print(sed)
 
     # generate broadband photometry
-    tophats = {'U': {'lam_eff': 3650, 'lam_fwhm': 660},
-               'V': {'lam_eff': 5510, 'lam_fwhm': 880},
-               'J': {'lam_eff': 12200, 'lam_fwhm': 2130}}
+    tophats = {
+        "U": {"lam_eff": 3650, "lam_fwhm": 660},
+        "V": {"lam_eff": 5510, "lam_fwhm": 880},
+        "J": {"lam_eff": 12200, "lam_fwhm": 2130},
+    }
     fc = FilterCollection(tophat_dict=tophats, new_lam=sed.lam)
 
     bb_lnu = sed.get_broadband_luminosities(fc)
