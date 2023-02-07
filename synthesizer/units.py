@@ -13,6 +13,8 @@ class Units:
     lam = Angstrom
     lamz = Angstrom
     wavelength = Angstrom
+    nu = Hz
+    nuz = Hz
 
     luminosity = erg/s  # luminosity
     lnu = erg/s/Hz  # spectral luminosity density

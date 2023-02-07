@@ -20,8 +20,6 @@ class Sed:
     ----------
     lam : ndarray
         the wavelength grid in Angstroms
-    lam_m : ndarray
-        the wavelength grid in m
     nu : ndarray
         frequency in Hz
     lnu: ndarray
@@ -38,6 +36,7 @@ class Sed:
     """
 
     lam = Quantity()
+    nu = Quantity()
     lnu = Quantity()
     fnu = Quantity()
 
@@ -47,14 +46,13 @@ class Sed:
         self.description = description
 
         self.lam = lam  # \AA
-        self.lam_m = lam * 1E10  # m
 
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)  # luminosity ers/s/Hz
         else:
             self.lnu = lnu
 
-        self.nu = c.value/(self.lam_m)  # Hz
+        self.nu = (c/(self.lam)).to('Hz').value  # Hz
 
         self.lamz = None
         self.nuz = None
@@ -64,27 +62,27 @@ class Sed:
 
     def __add__(self, second_sed):
 
-        if not np.array_equal(self.lam, second_sed.lam):
+        if not np.array_equal(self._lam, second_sed._lam):
 
             exceptions.InconsistentAddition(
                 'Wavelength grids must be identical')
 
         else:
 
-            if self.lnu.ndim != second_sed.lnu.ndim:
+            if self._lnu.ndim != second_sed._lnu.ndim:
 
                 exceptions.InconsistentAddition(
                     'SEDs must have same dimensions')
 
-            elif self.lnu.ndim == 1:
+            elif self._lnu.ndim == 1:
 
                 # if single Seds simply add together and return.
-                return Sed(self.lam, lnu=self.lnu + second_sed.lnu)
+                return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
 
-            elif self.lnu.ndim == 2:
+            elif self._lnu.ndim == 2:
 
                 # if array of Seds concatenate them. This is only relevant for particles.
-                return Sed(self.lam, np.concatenate((self.lnu, second_sed.lnu)))
+                return Sed(self._lam, np.concatenate((self._lnu, second_sed._lnu)))
 
             else:
 
@@ -103,7 +101,7 @@ class Sed:
         # Add the content of the summary to the string to be printed
         pstr += "-"*10 + "\n"
         pstr += "SUMMARY OF SED \n"
-        pstr += f"Number of wavelength points: {len(self.lam)} \n"
+        pstr += f"Number of wavelength points: {len(self._lam)} \n"
         # pstr += f"Bolometric luminosity: {self.get_bolometric_luminosity()}"
         pstr += "-"*10
 
@@ -118,15 +116,15 @@ class Sed:
             at two wavelength. """
 
         if self._spec_dims == 2:
-            f0 = np.array([np.interp(wv[0], self.lam, _lnu)
-                           for _lnu in self.lnu])
-            f1 = np.array([np.interp(wv[1], self.lam, _lnu)
-                           for _lnu in self.lnu])
+            f0 = np.array([np.interp(wv[0], self._lam, _lnu)
+                           for _lnu in self._lnu])
+            f1 = np.array([np.interp(wv[1], self._lam, _lnu)
+                           for _lnu in self._lnu])
         else:
-            f0 = np.interp(wv[0], self.lam, self.lnu)
-            f1 = np.interp(wv[1], self.lam, self.lnu)
+            f0 = np.interp(wv[0], self._lam, self._lnu)
+            f1 = np.interp(wv[1], self._lam, self._lnu)
 
-        return np.log10(f0/f1)/np.log10(wv[0]/wv[1])-2.0
+        return np.log10(f0/f1)/np.log10(wv[0]/wv[1])-2.0  # dimensionless
 
     def return_beta_spec(self, wv=[1250., 3000.]):
         """
