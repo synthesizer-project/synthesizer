@@ -46,7 +46,6 @@ if __name__ == '__main__':
     sed = galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1)
 
     # now calculate the observed frame spectra
-
     z = 10.  # redshift
     sed.get_fnu(cosmo, z, igm=Madau96())  # generate observed frame spectra
 
