@@ -1,7 +1,10 @@
+"""
+This example generates a sample of star particles from a 2D SFZH. In this
+case it is generated from a parametric star formation history with constant
+star formation.
+"""
 
-# --- this example generates a sample of star particles from a 2D SFZH. In this case it is generated from a parametric star formation history with constant star formation.
-
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from unyt import yr, Myr
@@ -14,15 +17,15 @@ from synthesizer.galaxy.particle import ParticleGalaxy
 
 
 # --- define the grid (normally this would be defined by an SPS grid)
-log10ages = np.arange(6., 10.5, 0.1)
-metallicities = 10**np.arange(-5., -1.5, 0.1)
+log10ages = np.arange(6.0, 10.5, 0.1)
+metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
 
 # --- define the parameters of the star formation and metal enrichment histories
 
-Z_p = {'Z': 0.01}
+Z_p = {"Z": 0.01}
 Zh = ZH.deltaConstant(Z_p)
 
-sfh_p = {'duration': 100 * Myr}
+sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(sfh_p)  # constant star formation
 sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
 sfzh.summary()
@@ -37,8 +40,14 @@ stars = sample_sfhz(sfzh, N)
 
 # --- open grid
 
-grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
-grid = Grid(grid_name)
+# Get the location of this script, __file__ is the absolute path of this
+# script, however we just want to directory
+script_path = os.path.abspath(os.path.dirname(__file__))
+
+# Define the grid
+grid_name = "test_grid"
+grid_dir = script_path + "/../../tests/test_grid/"
+grid = Grid(grid_name, grid_dir=grid_dir)
 
 # --- create galaxy object
 

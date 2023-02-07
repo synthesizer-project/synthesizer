@@ -1,5 +1,3 @@
-
-
 class Art:
 
     synthesizer = """+-+-+-+-+-+-+-+-+-+-+-+

@@ -29,7 +29,8 @@ a_ae = abundances.generate_abundances(Z, alpha, CO, d2m, scaling=scaling)
 
 # [O/Fe], should be 0.4, comes out as 0.4
 # TODO: not clear what correct value should be
-print(a_ae.solar_relative_abundance('O', ref_element='Fe'))
+print(a_ae.solar_relative_abundance("O", ref_element="Fe"))
 
-plot_abundance_patterns([a, a_ae], ['default', r'\alpha = 0.6'],
-                        show=True, ylim=[-7., -3.])
+plot_abundance_patterns(
+    [a, a_ae], ["default", r"\alpha = 0.6"], show=False, ylim=[-7.0, -3.0]
+)

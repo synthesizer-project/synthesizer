@@ -9,13 +9,15 @@ Licence..
 import numpy as np
 from scipy.spatial import cKDTree
 from numba import njit, prange, types, config
-config.THREADING_LAYER = 'threadsafe'
+
+config.THREADING_LAYER = "threadsafe"
 
 
-def kd_los(s_cood, g_cood, g_mass, g_Z, g_sml, lkernel, kbins,
-           dimens=(0, 1, 2)):
+def kd_los(
+    s_cood, g_cood, g_mass, g_Z, g_sml, lkernel, kbins, dimens=(0, 1, 2)
+):
     """
-    KD-Tree flavour of LOS calculation. 
+    KD-Tree flavour of LOS calculation.
     Compute the los metal surface density (in Msun/Mpc^2) for star
     particles inside the galaxy taking the z-axis as the los.
 
@@ -87,27 +89,38 @@ def kd_los(s_cood, g_cood, g_mass, g_Z, g_sml, lkernel, kbins,
         thisgmass = thisgmass[ok]
 
         # Get radii and divide by smooting length
-        b = np.linalg.norm(thisgpos[:, (xdir, ydir)]
-                           - thisspos[((xdir, ydir), )],
-                           axis=-1)
+        b = np.linalg.norm(
+            thisgpos[:, (xdir, ydir)] - thisspos[((xdir, ydir),)], axis=-1
+        )
         boverh = b / thisgsml
 
         # Apply kernel
         kernel_vals = np.array([lkernel[int(kbins * ll)] for ll in boverh])
 
         # Finally get LOS metal surface density in units of Msun/pc^2
-        Z_los_SD[s_ind] = np.sum((thisgmass * thisgZ
-                                  / (thisgsml * thisgsml))
-                                 * kernel_vals)
+        Z_los_SD[s_ind] = np.sum(
+            (thisgmass * thisgZ / (thisgsml * thisgsml)) * kernel_vals
+        )
 
     return Z_los_SD
 
 
-@njit((types.float32[:, :], types.float32[:, :], types.float32[:],
-       types.float32[:], types.float32[:], types.float32[:], types.int32),
-       parallel=True, nogil=True)
-def numba_los(s_cood, g_cood, g_mass, g_Z, g_sml, lkernel, kbins,
-              dimens=(0, 1, 2)):
+@njit(
+    (
+        types.float32[:, :],
+        types.float32[:, :],
+        types.float32[:],
+        types.float32[:],
+        types.float32[:],
+        types.float32[:],
+        types.int32,
+    ),
+    parallel=True,
+    nogil=True,
+)
+def numba_los(
+    s_cood, g_cood, g_mass, g_Z, g_sml, lkernel, kbins, dimens=(0, 1, 2)
+):
     """
     Original LOS calculation. Faster for smaller particle numbers.
     Compute the los metal surface density (in Msun/Mpc^2) for star
@@ -162,27 +175,28 @@ def numba_los(s_cood, g_cood, g_mass, g_Z, g_sml, lkernel, kbins,
         y = thisgpos[:, ydir] - thisspos[ydir]
 
         # Calculate the impact parameter of the LOS on the gas particles
-        boverh = np.sqrt(x*x + y*y) / thisgsml
+        boverh = np.sqrt(x * x + y * y) / thisgsml
 
         # LOS that pass through the gas particles
-        ok = boverh <= 1.
+        ok = boverh <= 1.0
 
         # Apply kernel
-        kernel_vals = np.array([lkernel[int(kbins*ll)] for ll in boverh[ok]])
+        kernel_vals = np.array([lkernel[int(kbins * ll)] for ll in boverh[ok]])
 
         # in units of Msun/Mpc^2
-        Z_los_SD[s_ind] = np.sum((thisgmass[ok]*thisgZ[ok]
-                                 / (thisgsml[ok]*thisgsml[ok]))
-                                 * kernel_vals)
+        Z_los_SD[s_ind] = np.sum(
+            (thisgmass[ok] * thisgZ[ok] / (thisgsml[ok] * thisgsml[ok]))
+            * kernel_vals
+        )
 
     return Z_los_SD
 
 
 def calc_los(npart, kernel_func, kernel_dict):
-    """ User facing wrapper for line of sight calculations.
+    """User facing wrapper for line of sight calculations.
 
-        This will choose the best LOS implementation to apply to the
-        situaition.
+    This will choose the best LOS implementation to apply to the
+    situaition.
     """
 
     # If lightweight use lightweight calculation
