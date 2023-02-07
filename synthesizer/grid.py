@@ -36,15 +36,13 @@ def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
         list of lines
     """
 
-    grid_filename = f"{grid_dir}/{grid_name}.hdf5"
-    with h5py.File(grid_filename, "r") as hf:
+    grid_filename = f'{grid_dir}/{grid_name}.hdf5'
+    with h5py.File(grid_filename, 'r') as hf:
 
-        lines = list(hf["lines"].keys())
+        lines = list(hf['lines'].keys())
 
         if include_wavelengths:
-            wavelengths = np.array(
-                [hf["lines"][line].attrs["wavelength"] for line in lines]
-            )
+            wavelengths = np.array([hf['lines'][line].attrs['wavelength'] for line in lines])
             return lines, wavelengths
         else:
             return lines
@@ -77,8 +75,8 @@ def flatten_linelist(list_to_flatten):
         elif isinstance(l, str):
 
             # --- if the line is a doublet resolve it and add each line individually
-            if len(l.split(",")) > 1:
-                flattend_list += l.split(",")
+            if len(l.split(',')) > 1:
+                flattend_list += l.split(',')
             else:
                 flattend_list.append(l)
 
@@ -95,51 +93,47 @@ def parse_grid_id(grid_id):
     version, and IMF
     """
 
-    if len(grid_id.split("_")) == 2:
-        sps_model_, imf_ = grid_id.split("_")
-        cloudy = cloudy_model = ""
+    if len(grid_id.split('_')) == 2:
+        sps_model_, imf_ = grid_id.split('_')
+        cloudy = cloudy_model = ''
 
-    if len(grid_id.split("_")) == 4:
-        sps_model_, imf_, cloudy, cloudy_model = grid_id.split("_")
+    if len(grid_id.split('_')) == 4:
+        sps_model_, imf_, cloudy, cloudy_model = grid_id.split('_')
 
-    if len(sps_model_.split("-")) == 1:
-        sps_model = sps_model_.split("-")[0]
-        sps_model_version = ""
+    if len(sps_model_.split('-')) == 1:
+        sps_model = sps_model_.split('-')[0]
+        sps_model_version = ''
 
-    if len(sps_model_.split("-")) == 2:
-        sps_model = sps_model_.split("-")[0]
-        sps_model_version = sps_model_.split("-")[1]
+    if len(sps_model_.split('-')) == 2:
+        sps_model = sps_model_.split('-')[0]
+        sps_model_version = sps_model_.split('-')[1]
 
-    if len(sps_model_.split("-")) > 2:
-        sps_model = sps_model_.split("-")[0]
-        sps_model_version = "-".join(sps_model_.split("-")[1:])
+    if len(sps_model_.split('-')) > 2:
+        sps_model = sps_model_.split('-')[0]
+        sps_model_version = '-'.join(sps_model_.split('-')[1:])
 
-    if len(imf_.split("-")) == 1:
-        imf = imf_.split("-")[0]
-        imf_hmc = ""
+    if len(imf_.split('-')) == 1:
+        imf = imf_.split('-')[0]
+        imf_hmc = ''
 
-    if len(imf_.split("-")) == 2:
-        imf = imf_.split("-")[0]
-        imf_hmc = imf_.split("-")[1]
+    if len(imf_.split('-')) == 2:
+        imf = imf_.split('-')[0]
+        imf_hmc = imf_.split('-')[1]
 
-    if imf in ["chab", "chabrier03", "Chabrier03"]:
-        imf = "Chabrier (2003)"
-    if imf in ["kroupa"]:
-        imf = "Kroupa (2003)"
-    if imf in ["salpeter", "135all"]:
-        imf = "Salpeter (1955)"
+    if imf in ['chab', 'chabrier03', 'Chabrier03']:
+        imf = 'Chabrier (2003)'
+    if imf in ['kroupa']:
+        imf = 'Kroupa (2003)'
+    if imf in ['salpeter', '135all']:
+        imf = 'Salpeter (1955)'
     if imf.isnumeric():
-        imf = rf"$\alpha={float(imf)/100}$"
+        imf = rf'$\alpha={float(imf)/100}$'
 
-    return {
-        "sps_model": sps_model,
-        "sps_model_version": sps_model_version,
-        "imf": imf,
-        "imf_hmc": imf_hmc,
-    }
+    return {'sps_model': sps_model, 'sps_model_version': sps_model_version,
+            'imf': imf, 'imf_hmc': imf_hmc}
 
 
-class Grid:
+class Grid():
     """
     The Grid class, containing attributes and methods for reading and manipulating spectral grids
 
@@ -152,21 +146,14 @@ class Grid:
 
     """
 
-    def __init__(
-        self,
-        grid_name,
-        grid_dir=None,
-        verbose=False,
-        read_spectra=True,
-        read_lines=False,
-    ):
+    def __init__(self, grid_name, grid_dir=None, verbose=False, read_spectra=True, read_lines=False):
 
         if not grid_dir:
-            grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
+            grid_dir = os.path.join(os.path.dirname(filepath), 'data/grids')
 
         self.grid_dir = grid_dir
         self.grid_name = grid_name
-        self.grid_filename = f"{self.grid_dir}/{self.grid_name}.hdf5"
+        self.grid_filename = f'{self.grid_dir}/{self.grid_name}.hdf5'
 
         self.spectra = None
         self.lines = None
@@ -176,24 +163,24 @@ class Grid:
             read_lines = flatten_linelist(read_lines)
 
         # get basic info of the grid
-        with h5py.File(self.grid_filename, "r") as hf:
+        with h5py.File(self.grid_filename, 'r') as hf:
 
             self.parameters = {k: v for k, v in hf.attrs.items()}
 
-            self.spec_names = list(hf["spectra"].keys())
-            self.spec_names.remove("wavelength")
+            self.spec_names = list(hf['spectra'].keys())
+            self.spec_names.remove('wavelength')
 
-            self.log10ages = hf["log10ages"][:]
+            self.log10ages = hf['log10ages'][:]
             self.ages = 10**self.log10ages
 
-            self.metallicities = hf["metallicities"][:]
+            self.metallicities = hf['metallicities'][:]
             self.log10metallicities = np.log10(self.metallicities)
 
-            if "log10Q" in hf.keys():
+            if 'log10Q' in hf.keys():
 
                 self.log10Q = {}
-                for ion in hf["log10Q"].keys():
-                    self.log10Q[ion] = hf["log10Q"][ion][:]
+                for ion in hf['log10Q'].keys():
+                    self.log10Q[ion] = hf['log10Q'][ion][:]
 
         if read_spectra:
 
@@ -201,34 +188,30 @@ class Grid:
 
             for spec_name in self.spec_names:
 
-                with h5py.File(
-                    f"{self.grid_dir}/{self.grid_name}.hdf5", "r"
-                ) as hf:
+                with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
 
-                    self.lam = hf["spectra/wavelength"][:]
-                    self.nu = 3e8 / (self.lam * 1e-10)
+                    self.lam = hf['spectra/wavelength'][:]
+                    self.nu = 3E8/(self.lam*1E-10)
 
-                    self.spectra[spec_name] = hf["spectra"][spec_name][:]
+                    self.spectra[spec_name] = hf['spectra'][spec_name][:]
                     # self.units[f'spectra/{spec_name}'] = hf['spectra'][spec_name].attrs['Units']
 
-                if spec_name == "incident":
-                    self.spectra["stellar"] = self.spectra[spec_name]
+                if spec_name == 'incident':
+                    self.spectra['stellar'] = self.spectra[spec_name]
                     # self.units[f'spectra/stellar'] = hf['spectra'][spec_name].attrs['Units']
 
             """ if full cloudy grid available calculate
             some other spectra for convenience """
-            if "linecont" in self.spec_names:
+            if 'linecont' in self.spec_names:
 
-                self.spectra["total"] = (
-                    self.spectra["transmitted"] + self.spectra["nebular"]
-                )  #  assumes fesc = 0
+                self.spectra['total'] = self.spectra['transmitted'] +\
+                    self.spectra['nebular']  #  assumes fesc = 0
 
-                self.spectra["nebular_continuum"] = (
-                    self.spectra["nebular"] - self.spectra["linecont"]
-                )
+                self.spectra['nebular_continuum'] = self.spectra['nebular'] -\
+                    self.spectra['linecont']
 
             if verbose:
-                print("available spectra:", list(self.spectra.keys()))
+                print('available spectra:', list(self.spectra.keys()))
 
         if read_lines:
 
@@ -239,20 +222,14 @@ class Grid:
             else:
                 self.line_list = get_available_lines(grid_name, grid_dir)
 
-            with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
+            with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
 
                 for line in self.line_list:
 
                     self.lines[line] = {}
-                    self.lines[line]["wavelength"] = hf["lines"][line].attrs[
-                        "wavelength"
-                    ]  # angstrom
-                    self.lines[line]["luminosity"] = hf["lines"][line][
-                        "luminosity"
-                    ][:]
-                    self.lines[line]["continuum"] = hf["lines"][line][
-                        "continuum"
-                    ][:]
+                    self.lines[line]['wavelength'] = hf['lines'][line].attrs['wavelength']  # angstrom
+                    self.lines[line]['luminosity'] = hf['lines'][line]['luminosity'][:]
+                    self.lines[line]['continuum'] = hf['lines'][line]['continuum'][:]
 
     def __str__(self):
         """Function to print a basic summary of the Grid object.
@@ -267,7 +244,7 @@ class Grid:
         pstr = ""
 
         # Add the content of the summary to the string to be printed
-        pstr += "-" * 30 + "\n"
+        pstr += "-"*30 + "\n"
         pstr += f"SUMMARY OF GRID" + "\n"
         pstr += f"log10ages: {self.log10ages}\n"
         pstr += f"metallicities: {self.metallicities}\n"
@@ -277,7 +254,7 @@ class Grid:
             pstr += f"spectra: {list(self.spectra.keys())}\n"
         if self.lines:
             pstr += f"lines: {list(self.lines.keys())}\n"
-        pstr += "-" * 30 + "\n"
+        pstr += "-"*30 + "\n"
 
         return pstr
 
@@ -331,7 +308,7 @@ class Grid:
 
         return self.get_nearest(log10age, self.log10ages)
 
-    def get_sed(self, ia, iZ, spec_name="stellar"):
+    def get_sed(self, ia, iZ, spec_name='stellar'):
         """
         Simple function for calculating the closest index in an array for a given value
 
@@ -352,16 +329,8 @@ class Grid:
         return Sed(self.lam, lnu=self.spectra[spec_name][ia, iZ])
 
     # TODO: move to plotting script to remove cmasher dependency
-    def plot_log10Q(
-        self,
-        ion="HI",
-        hsize=3.5,
-        vsize=2.5,
-        cmap=cmr.sapphire,
-        vmin=42.5,
-        vmax=47.5,
-        max_log10age=9.0,
-    ):
+    def plot_log10Q(self, ion='HI', hsize=3.5, vsize=2.5, cmap=cmr.sapphire,
+                    vmin=42.5, vmax=47.5, max_log10age=9.):
 
         left = 0.2
         height = 0.65
@@ -369,12 +338,12 @@ class Grid:
         width = 0.75
 
         if not vsize:
-            vsize = hsize * width / height
+            vsize = hsize*width/height
 
         fig = plt.figure(figsize=(hsize, vsize))
 
         ax = fig.add_axes((left, bottom, width, height))
-        cax = fig.add_axes([left, bottom + height + 0.01, width, 0.05])
+        cax = fig.add_axes([left, bottom+height+0.01, width, 0.05])
 
         y = np.arange(len(self.metallicities))
 
@@ -388,37 +357,24 @@ class Grid:
 
         """ this is technically incorrect because metallicity
         is not on an actual grid."""
-        ax.imshow(
-            log10Q.T,
-            origin="lower",
-            extent=[
-                self.log10ages[0],
-                self.log10ages[ia_max],
-                y[0] - 0.5,
-                y[-1] + 0.5,
-            ],
-            cmap=cmap,
-            aspect="auto",
-            vmin=vmin,
-            vmax=vmax,
-        )
+        ax.imshow(log10Q.T, origin='lower', extent=[self.log10ages[0],
+                  self.log10ages[ia_max], y[0]-0.5, y[-1]+0.5], cmap=cmap,
+                  aspect='auto', vmin=vmin, vmax=vmax)
 
         norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
         cmapper = cm.ScalarMappable(norm=norm, cmap=cmap)
         cmapper.set_array([])
 
-        fig.colorbar(cmapper, cax=cax, orientation="horizontal")
+        fig.colorbar(cmapper, cax=cax, orientation='horizontal')
         cax.xaxis.tick_top()
-        cax.xaxis.set_label_position("top")
-        cax.set_xlabel(
-            r"$\rm log_{10}(\dot{n}_{" + ion + "}/s^{-1}\ M_{\odot}^{-1})$"
-        )
+        cax.xaxis.set_label_position('top')
+        cax.set_xlabel(r'$\rm log_{10}(\dot{n}_{'+ion+'}/s^{-1}\ M_{\odot}^{-1})$')
         cax.set_yticks([])
 
         ax.set_yticks(y, self.metallicities)
         ax.minorticks_off()
-        ax.set_xlabel(mlabel("log_{10}(age/yr)"))
-        ax.set_ylabel(mlabel("Z"))
+        ax.set_xlabel(mlabel('log_{10}(age/yr)'))
+        ax.set_ylabel(mlabel('Z'))
 
         return fig, ax
 
@@ -435,16 +391,16 @@ class Grid:
         wavelength (float)
         """
 
-        with h5py.File(self.grid_filename, "r") as hf:
-            luminosity = hf[f"lines/{line_id}/luminosity"][:]
-            continuum = hf[f"lines/{line_id}/continuum"][:]
-            wavelength = hf[f"lines/{line_id}"].attrs["wavelength"]
+        with h5py.File(self.grid_filename, 'r') as hf:
+            luminosity = hf[f'lines/{line_id}/luminosity'][:]
+            continuum = hf[f'lines/{line_id}/continuum'][:]
+            wavelength = hf[f'lines/{line_id}'].attrs['wavelength']
 
         if save:
             self.lines[line_id] = {}
-            self.lines[line_id]["luminosity"] = luminosity
-            self.lines[line_id]["continuum"] = continuum
-            self.lines[line_id]["wavelength"] = wavelength
+            self.lines[line_id]['luminosity'] = luminosity
+            self.lines[line_id]['continuum'] = continuum
+            self.lines[line_id]['wavelength'] = wavelength
 
         return Line(line_id, wavelength, luminosity, continuum)
 
@@ -475,9 +431,9 @@ class Grid:
 
         for line_id_ in line_id:
             line_ = self.lines[line_id_]
-            wavelength.append(line_["wavelength"])
-            luminosity.append(line_["luminosity"][ia, iZ])
-            continuum.append(line_["continuum"][ia, iZ])
+            wavelength.append(line_['wavelength'])
+            luminosity.append(line_['luminosity'][ia, iZ])
+            continuum.append(line_['continuum'][ia, iZ])
 
         line = Line(line_id, wavelength, luminosity, continuum)
 
