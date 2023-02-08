@@ -578,18 +578,18 @@ class ParticleGalaxy(BaseGalaxy):
         return img.get_hist_img()
 
     def make_image(self, resolution, npix=None, fov=None, img_type="hist",
-                   sed=None, survey=None, filters=(), pixel_values=None,
-                   with_psf=False,  with_noise=False, kernel_func=None,
-                   rest_frame=True, redshift=None, cosmo=None, igm=None):
+                   sed=None, filters=(), pixel_values=None, psfs=None,
+                   depths=None, snrs=None, aperture=None, noises=None,
+                   kernel_func=None, rest_frame=True, cosmo=None, igm=None,
+                   super_resolution_factor=None,
+                   ):
         """
         Makes images, either one or one per filter. This is a generic method
         that will make every sort of image using every possible combination of
         arguments allowed by the ParticleImage class. These methods can be
         either a simple histogram or smoothing particles over a kernel. Either
         of these operations can be done with or without a PSF and noise.
-
         NOTE: Either npix or fov must be defined.
-
         Parameters
         ----------
         resolution : float
@@ -611,17 +611,24 @@ class ParticleGalaxy(BaseGalaxy):
         pixel_values : array-like (float)
             The values to be sorted/smoothed into pixels. Only needed if an sed
             and filters are not used.
-        with_psf : bool
-            Are we applying a PSF? PLACEHOLDER
-        with_noise : bool
-            Are we adding noise? PLACEHOLDER
+        psfs : dict
+            A dictionary containing the psf in each filter where the key is
+            each filter code and the value is the psf in that filter.
+        depths : dict
+            A dictionary containing the depth of an observation in each filter
+            where the key is each filter code and the value is the depth in
+            that filter.
+        aperture : float/dict
+            Either a float describing the size of the aperture in which the
+            depth is defined or a dictionary containing the size of the depth
+            aperture in each filter.
         kernel_func : function
             A function describing the smoothing kernel that returns a single
             number between 0 and 1. This function can be imported from the
             options in kernel_functions.py or can be user defined. If user
             defined the function must return the kernel value corredsponding
             to the position of a particle with smoothing length h at distance
-            r from the centre of the kernel (r/h). 
+            r from the centre of the kernel (r/h).
         rest_frame : bool
             Are we making an observation in the rest frame?
         redshift : float
@@ -632,60 +639,67 @@ class ParticleGalaxy(BaseGalaxy):
             when converting rest frame luminosity to flux.
         igm : obj (Inoue14/Madau96)
             Object containing the absorbtion due to an intergalactic medium.
-
         Returns
         -------
         Image : array-like
             A 2D array containing the image.
-
         """
 
         # Instantiate the Image object.
-        img = ParticleImage(resolution=resolution, npix=npix, fov=fov, sed=sed,
-                            stars=self.stars, survey=survey, filters=filters,
-                            pixel_values=pixel_values, rest_frame=True,
-                            redshift=None, cosmo=None, igm=None)
+        img = ParticleImage(
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            sed=sed,
+            stars=self.stars,
+            filters=filters,
+            pixel_values=pixel_values,
+            rest_frame=rest_frame,
+            redshift=self.redshift,
+            cosmo=cosmo,
+            igm=igm,
+            psfs=psfs,
+            depths=depths,
+            apertures=aperture,
+            snrs=snrs,
+            super_resolution_factor=super_resolution_factor,
+        )
 
         # Make the image, handling incorrect image types
-        if img_type == "hist" and not with_psf and not with_noise:
+        if img_type == "hist":
 
-            # Compute image
+            # Compute the image
             img.get_hist_img()
+
+            if psfs is not None:
+
+                # Convolve the image/images
+                img.get_psfed_imgs()
+
+            if depths is not None:
+
+                img.get_noisy_imgs(noises)
 
             return img
 
-        elif img_type == "hist" and with_psf and not with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "PSF functionality coming soon."
-            )
-        elif img_type == "hist" and not with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Noise functionality coming soon."
-            )
-        elif img_type == "hist" and with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "PSF and noise functionality coming soon."
-            )
-        elif img_type == "smoothed" and not with_psf and not with_noise:
+        elif img_type == "smoothed":
 
             # Compute image
             img.get_smoothed_img(kernel_func)
 
+            if psfs is not None:
+
+                # Convolve the image/images
+                img.get_psfed_imgs()
+
+            if depths is not None:
+
+                img.get_noisy_imgs(noises)
+
             return img
 
-        elif img_type == "smoothed" and with_psf and not with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Smothed functionality coming soon."
-            )
-        elif img_type == "smoothed" and not with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Smothed functionality coming soon."
-            )
-        elif img_type == "smoothed" and with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Smothed functionality coming soon."
-            )
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or 'smoothed')"
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
             )
