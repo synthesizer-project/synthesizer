@@ -1,7 +1,6 @@
 import numpy as np
 import urllib.request
 import matplotlib.pyplot as plt
-from scipy import integrate
 
 import synthesizer.exceptions as exceptions
 
@@ -23,11 +22,9 @@ def UVJ(new_lam=None):
     """
 
     # Define the UVJ filters dictionary.
-    tophat_dict = {
-        "U": {"lam_eff": 3650, "lam_fwhm": 660},
-        "V": {"lam_eff": 5510, "lam_fwhm": 880},
-        "J": {"lam_eff": 12200, "lam_fwhm": 2130},
-    }
+    tophat_dict = {'U': {'lam_eff': 3650, 'lam_fwhm': 660},
+                   'V': {'lam_eff': 5510, 'lam_fwhm': 880},
+                   'J': {'lam_eff': 12200, 'lam_fwhm': 2130}}
 
     return FilterCollection(tophat_dict=tophat_dict, new_lam=new_lam)
 
@@ -65,13 +62,8 @@ class FilterCollection:
 
     """
 
-    def __init__(
-        self,
-        filter_codes=None,
-        tophat_dict=None,
-        generic_dict=None,
-        new_lam=None,
-    ):
+    def __init__(self, filter_codes=None, tophat_dict=None, generic_dict=None,
+                 new_lam=None):
         """
         Intialise the FilterCollection.
 
@@ -179,14 +171,9 @@ class FilterCollection:
                 lam_fwhm = None
 
             # Instantiate the filter
-            _filter = Filter(
-                key,
-                lam_min=lam_min,
-                lam_max=lam_max,
-                lam_eff=lam_eff,
-                lam_fwhm=lam_fwhm,
-                new_lam=self.lam,
-            )
+            _filter = Filter(key, lam_min=lam_min, lam_max=lam_max,
+                             lam_eff=lam_eff, lam_fwhm=lam_fwhm,
+                             new_lam=self.lam)
 
             # Store the filter and its code
             self.filters[_filter.filter_code] = _filter
@@ -240,7 +227,8 @@ class FilterCollection:
 
                 # Store the filter and its code
                 self.filters[key] = other_filters.filters[key]
-                self.filter_codes.append(other_filters.filters[key].filter_code)
+                self.filter_codes.append(
+                    other_filters.filters[key].filter_code)
 
         elif isinstance(other_filters, Filter):
 
@@ -371,8 +359,8 @@ class FilterCollection:
             # TODO: Add label with automatic placement
 
         # Label the axes
-        ax.set_xlabel(r"$\rm \lambda/\AA$")
-        ax.set_ylabel(r"$\rm T_{\lambda}$")
+        ax.set_xlabel(r'$\rm \lambda/\AA$')
+        ax.set_ylabel(r'$\rm T_{\lambda}$')
 
     def plot_transmission_curves(self, show=False):
         """
@@ -392,7 +380,7 @@ class FilterCollection:
         """
 
         # Set up figure
-        fig = plt.figure(figsize=(5.0, 3.5))
+        fig = plt.figure(figsize=(5., 3.5))
         left = 0.1
         height = 0.8
         bottom = 0.15
@@ -463,16 +451,8 @@ class Filter:
         Calculate pivot wavelength
     """
 
-    def __init__(
-        self,
-        filter_code,
-        transmission=None,
-        lam_min=None,
-        lam_max=None,
-        lam_eff=None,
-        lam_fwhm=None,
-        new_lam=None,
-    ):
+    def __init__(self, filter_code, transmission=None, lam_min=None,
+                 lam_max=None, lam_eff=None, lam_fwhm=None, new_lam=None):
         """
         Initialise a filter.
 
@@ -527,9 +507,8 @@ class Filter:
             self.filter_type = "Generic"
 
         # Is this a top hat filter?
-        elif (lam_min is not None and lam_max is not None) or (
-            lam_eff is not None and lam_fwhm is not None
-        ):
+        elif ((lam_min is not None and lam_max is not None) or
+              (lam_eff is not None and lam_fwhm is not None)):
             self._make_top_hat_filter()
 
         # Is this an SVO filter?
@@ -564,17 +543,16 @@ class Filter:
         # If filter has been defined with an effective wavelength and FWHM
         # calculate the minimum and maximum wavelength.
         if self.lam_eff is not None and self.lam_fwhm is not None:
-            self.lam_min = self.lam_eff - self.lam_fwhm / 2.0
-            self.lam_max = self.lam_eff + self.lam_fwhm / 2.0
+            self.lam_min = self.lam_eff - self.lam_fwhm/2.
+            self.lam_max = self.lam_eff + self.lam_fwhm/2.
 
         # Otherwise, use the explict min and max
 
         # Define this top hat filters wavelength array (+/- 1000 Angstrom)
         # if it hasn't been provided
         if self.lam is None:
-            self.lam = np.arange(
-                np.max([0, self.lam_min - 1000]), self.lam_max + 1000, 1
-            )
+            self.lam = np.arange(np.max([0, self.lam_min - 1000]),
+                                 self.lam_max + 1000, 1)
 
         # Define the transmission curve (1 inside, 0 outside)
         self.t = np.zeros(len(self.lam))
@@ -596,16 +574,14 @@ class Filter:
         self.filter_type = "SVO"
 
         # Get the information stored in the filter code
-        self.observatory = self.filter_code.split("/")[0]
-        self.instrument = self.filter_code.split("/")[1].split(".")[0]
-        self.filter_ = self.filter_code.split(".")[-1]
+        self.observatory = self.filter_code.split('/')[0]
+        self.instrument = self.filter_code.split('/')[1].split('.')[0]
+        self.filter_ = self.filter_code.split('.')[-1]
 
         # Read directly from the SVO archive.
-        self.svo_url = (
-            f"http://svo2.cab.inta-csic.es/theory/"
-            f"fps/getdata.php?format=ascii&id={self.observatory}"
-            f"/{self.instrument}.{self.filter_}"
-        )
+        self.svo_url = (f'http://svo2.cab.inta-csic.es/theory/'
+                        f'fps/getdata.php?format=ascii&id={self.observatory}'
+                        f'/{self.instrument}.{self.filter_}')
         with urllib.request.urlopen(self.svo_url) as f:
             df = np.loadtxt(f)
 
@@ -640,11 +616,10 @@ class Filter:
             Transmission curve interpolated onto the new wavelength array.
         """
 
-        return np.interp(
-            self.lam, self.original_lam, self.original_t, left=0.0, right=0.0
-        )
+        return np.interp(self.lam, self.original_lam, self.original_t,
+                         left=0.0, right=0.0)
 
-    def apply_filter(self, arr, xs=None):
+    def apply_filter(self, arr):
         """
         Apply this filter's transmission curve to an arbitrary dimensioned
         array returning the sum of the array convolved with the filter
@@ -670,20 +645,11 @@ class Filter:
         """
 
         # Check dimensions are ok
-        if xs is None:
-            if self.lam.size != arr.shape[-1]:
-                raise ValueError(
-                    "Final dimension of array did not match "
-                    "wavelength array size (arr.shape[-1]=%d, "
-                    "transmission.size=%d)" % (arr.shape[-1], self.lam.size)
-                )
-        else:
-            if xs.size != arr.shape[-1]:
-                raise ValueError(
-                    "Final dimension of array did not match "
-                    "wavelength array size (arr.shape[-1]=%d, "
-                    "xs.size=%d)" % (arr.shape[-1], xs.size)
-                )
+        if self.lam.size != arr.shape[-1]:
+            raise ValueError("Final dimension of array did not match "
+                             "wavelength array size (arr.shape[-1]=%d, "
+                             "transmission.size=%d)" % (arr.shape[-1],
+                                                        self.lam.size))
 
         # Get the mask that removes wavelengths we don't currently care about
         in_band = self.t > 0
@@ -691,20 +657,8 @@ class Filter:
         # Multiply the IFU by the filter transmission curve
         arr_in_band = arr.compress(in_band, axis=-1) * self.t[in_band]
 
-        # Get the xs in the band, this could be lam or nu.
-        if xs is not None:
-            xs_in_band = xs[in_band]
-        else:
-            xs_in_band = self.lam[in_band]
-
         # Sum over the final axis to "collect" transmission in this filer
-        sum_per_x = integrate.trapezoid(
-            arr_in_band * self.t[in_band] / xs_in_band, xs_in_band, axis=-1
-        )
-        sum_den = integrate.trapezoid(
-            self.t[in_band] / xs_in_band, xs_in_band, axis=-1
-        )
-        sum_in_band = sum_per_x / sum_den
+        sum_in_band = np.sum(arr_in_band, axis=-1)
 
         return sum_in_band
 
@@ -721,10 +675,10 @@ class Filter:
             Pivot wavelength.
         """
 
-        return np.sqrt(
-            np.trapz(self.original_lam * self.original_t, x=self.original_lam)
-            / np.trapz(self.original_t / self.original_lam, x=self.original_lam)
-        )
+        return np.sqrt(np.trapz(self.original_lam * self.original_t,
+                                x=self.original_lam) /
+                       np.trapz(self.original_t / self.original_lam,
+                                x=self.original_lam))
 
     def pivT(self):
         """
@@ -751,16 +705,13 @@ class Filter:
         Returns
         -------
         float
-            Mean wavelength.
+            Mean wavelength.        
         """
 
-        return np.exp(
-            np.trapz(
-                np.log(self.original_lam) * self.original_t / self.original_lam,
-                x=self.original_lam,
-            )
-            / np.trapz(self.original_t / self.original_lam, x=self.original_lam)
-        )
+        return np.exp(np.trapz(np.log(self.original_lam) * self.original_t /
+                               self.original_lam, x=self.original_lam) /
+                      np.trapz(self.original_t / self.original_lam,
+                               x=self.original_lam))
 
     def bandw(self):
         """
@@ -776,18 +727,12 @@ class Filter:
         """
 
         # Calculate the left and right hand side.
-        A = np.sqrt(
-            np.trapz(
-                (np.log(self.original_lam / self.meanwv()) ** 2)
-                * self.original_t
-                / self.original_lam,
-                x=self.original_lam,
-            )
-        )
+        A = np.sqrt(np.trapz((np.log(self.original_lam /
+                                     self.meanwv())**2) * self.original_t /
+                             self.original_lam, x=self.original_lam))
 
-        B = np.sqrt(
-            np.trapz(self.original_t / self.original_lam, x=self.original_lam)
-        )
+        B = np.sqrt(np.trapz(self.original_t / self.original_lam,
+                             x=self.original_lam))
 
         return self.meanwv() * (A / B)
 
@@ -804,7 +749,7 @@ class Filter:
             The FWHM of the filter.
         """
 
-        return np.sqrt(8.0 * np.log(2)) * self.bandw()
+        return np.sqrt(8. * np.log(2)) * self.bandw()
 
     def Tpeak(self):
         """
@@ -848,7 +793,7 @@ class Filter:
             The maximum wavelength at which transmission is nonzero.
         """
 
-        return self.original_lam[self.original_t > 1e-2][-1]
+        return self.original_lam[self.original_t > 1E-2][-1]
 
     def min(self):
         """
@@ -863,7 +808,7 @@ class Filter:
             The minimum wavelength at which transmission is nonzero.
         """
 
-        return self.original_lam[self.original_t > 1e-2][0]
+        return self.original_lam[self.original_t > 1E-2][0]
 
     def mnmx(self):
         """
