@@ -6,6 +6,7 @@ from synthesizer import grid
 from synthesizer.sed import Sed
 from synthesizer.load_data import load_CAMELS_SIMBA
 from synthesizer.filters import UVJ
+from synthesizer.imaging.survey import Survey
 
 from synthesizer.galaxy.particle import ParticleGalaxy
 
@@ -15,7 +16,7 @@ if len(sys.argv) > 1:
 else:
     grid_dir = None
 
-# first load a spectral grid
+# First load a spectral grid
 _grid = grid.Grid('bc03_chabrier03-0.1,100', grid_dir=grid_dir)
 
 # now load some example CAMELS data using the dedicated data loader
@@ -58,12 +59,6 @@ plt.close()
 # first get rest frame 'flux'
 _spec.get_fnu0()
 
-# define a filter collection object (UVJ default)
-fc = UVJ(new_lam=_grid.lam)
-
-_UVJ = _spec.get_broadband_fluxes(fc)
-print(_UVJ)
-
 """ do for multiple, plot UVJ diagram """
 
 # first filter by stellar mass
@@ -71,12 +66,33 @@ mstar = np.log10(np.array([np.sum(_g.stars.initial_masses)
                            for _g in gals]) * 1e10)
 mask = np.where(mstar > 8)[0]
 
-_specs = np.vstack([gals[_g].generate_intrinsic_spectra(_grid)
-                    for _g in mask])
+# ========================= Using a Survey =========================
 
-_specs = Sed(lam=_grid.lam, lnu=_specs)
-_specs.get_fnu0()
-_UVJ = _specs.get_broadband_fluxes(fc)
+# Set up a filter collection object (UVJ default)
+fc = UVJ(new_lam=_grid.lam)
+
+_UVJ = _spec.get_broadband_fluxes(fc)
+print(_UVJ)
+
+# Convert gals to an array
+gals = np.array(gals)
+
+# Create an empty Survey object
+survey = Survey(super_resolution_factor=1)
+
+# Let's add the filters to an instrument in the survey
+survey.add_photometric_instrument(filters=fc, label="Top_Hat")
+
+# Store the galaxies in the survey
+survey.add_galaxies(gals[mask])
+
+# Get the SEDs
+survey.get_integrated_stellar_spectra(_grid, rest_frame=True)
+
+# Compute the photometry in UVJ filters
+survey.get_photometry(spectra_type="stellar")
+
+_UVJ = survey.photometry
 
 UV = _UVJ['U'] / _UVJ['V']
 VJ = _UVJ['V'] / _UVJ['J']
