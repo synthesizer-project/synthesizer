@@ -129,10 +129,7 @@ class Sed:
 
         return np.log10(f0/f1)/np.log10(wv[0]/wv[1])-2.0
 
-
-
     def return_beta_spec(self, wv=[1250.0, 3000.0]):
-
         """
         Return the UV continuum slope (\beta) based on linear
         regression to the spectra over a wavelength range.
@@ -200,15 +197,14 @@ class Sed:
         Useful when you want rest-frame quantities.
         """
 
-        self.lamz = self.lam
-        self.fnu = self.lnu
+        self.lamz = self._lam
+        self.fnu = self._lnu
+
+        self.nuz = c.value/self.lamz
 
     def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution in nJy
-
-
-
 
         """
 
@@ -267,7 +263,6 @@ class Sed:
             int_num = integrate.trapezoid(self._fnu * f.t/self.nuz,
                                           self.nuz)
             int_den = integrate.trapezoid(f.t/self.nuz, self.nuz)
-
 
             # int_num = integrate.simpson(self.fnu * fc.filter[f].t/self.nu,
             #                             self.nu)
