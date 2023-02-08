@@ -41,7 +41,8 @@ class Scene:
 
     # Define slots to reduce memory overhead of this class and limit the
     # possible attributes.
-    __slots__ = ["resolution", "fov", "npix", "sed", "survey", "spatial_unit"]
+    __slots__ = ["resolution", "fov", "npix", "sed", "survey", "spatial_unit",
+                 "orig_resolution", "orig_npix", ]
 
     def __init__(
         self,
@@ -94,11 +95,22 @@ class Scene:
         # Attributes containing data
         self.sed = sed
 
+        # Keep track of the input resolution and and npix so we can handle
+        # super resolution correctly.
+        self.orig_resolution = resolution
+        self.orig_npix = npix
+
         # Handle the different input cases
         if npix is None:
             self._compute_npix()
-        else:
+        elif fov is None:
             self._compute_fov()
+
+        # Do we need to make a super resoution image?
+        if self.super_resolution_factor is not None:
+            print(self.npix, self.fov, self.resolution)
+            self._native_to_super_resolution()
+            print(self.npix)
 
     def _check_obs_args(self, resolution, fov, npix):
         """
@@ -158,6 +170,7 @@ class Scene:
 
         # Compute how many pixels fall in the FOV
         self.npix = math.ceil(self.fov / self.resolution)
+        self.orig_npix = math.ceil(self.fov / self.resolution)
 
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix

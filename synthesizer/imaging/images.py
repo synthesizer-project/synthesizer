@@ -80,7 +80,7 @@ class Image(Scene):
         depths=None,
         apertures=None,
         snrs=None,
-        super_resolution_factor=2,
+        super_resolution_factor=None,
     ):
         """
         Intialise the Image.
@@ -132,10 +132,6 @@ class Image(Scene):
         # Define attributes to hold the PSF information
         self.psfs = psfs
         self._normalise_psfs
-
-        # Do we need to make a super resoution image?
-        if self.psfs is not None:
-            self._native_to_super_resolution()
 
         # Intialise IFU attributes
         self.ifu_obj = None
@@ -412,23 +408,20 @@ class Image(Scene):
         # convolved images.
         for f in self.filters:
 
-            # Apply the PSF to this image
+            # Get the PSF
             if isinstance(psfs, dict):
-                self.imgs_psf[f.filter_code] = self._get_psfed_single_img(
-                    self.imgs[f.filter_code], psfs[f.filter_code]
-                )
+                psf = psfs[f.filter_code]
             else:
-                self.imgs_psf[f.filter_code] = self._get_psfed_single_img(
-                    self.imgs[f.filter_code], psfs
-                )
+                psf = psfs
+
+            # Apply the PSF to this image
+            self.imgs_psf[f.filter_code] = self._get_psfed_single_img(
+                self.imgs[f.filter_code], psf
+            )
 
         # Now that we are done with the convolution return the original images
         # to the native resolution.
         self._super_to_native_resolution()
-        for f in self.imgs:
-            self.imgs[f] = self.resample_img(
-                self.imgs[f], 1 / self.super_resolution_factor
-            )
 
         return self.imgs_psf
 
@@ -545,11 +538,7 @@ class Image(Scene):
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in self.depths:
-                filter_codes -= set(
-                    [
-                        key,
-                    ]
-                )
+                filter_codes -= set([key, ])
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -565,11 +554,7 @@ class Image(Scene):
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in self.snrs:
-                filter_codes -= set(
-                    [
-                        key,
-                    ]
-                )
+                filter_codes -= set([key, ])
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -585,11 +570,7 @@ class Image(Scene):
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in self.apertures:
-                filter_codes -= set(
-                    [
-                        key,
-                    ]
-                )
+                filter_codes -= set([key, ])
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -606,11 +587,7 @@ class Image(Scene):
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in noises:
-                filter_codes -= set(
-                    [
-                        key,
-                    ]
-                )
+                filter_codes -= set([key, ])
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -770,19 +747,21 @@ class ParticleImage(ParticleScene, Image):
             depths=depths,
             apertures=apertures,
             snrs=snrs,
+            super_resolution_factor=super_resolution_factor,
         )
 
         # If we have a list of filters make an IFU
         if len(filters) > 0:
             self.ifu_obj = ParticleSpectralCube(
                 sed=self.sed,
-                resolution=self.resolution * self.spatial_unit,
-                npix=npix,
+                resolution=self.orig_resolution,
+                npix=self.orig_npix,
                 fov=fov,
                 stars=self.stars,
                 rest_frame=rest_frame,
                 cosmo=cosmo,
                 igm=igm,
+                super_resolution_factor=super_resolution_factor,
             )
 
         # Set up pixel values
@@ -898,9 +877,10 @@ class ParticleImage(ParticleScene, Image):
                             self.pixel_values[ind] * kernel_val
                         )
 
-            img_this_part /= kernel_sum
+            if kernel_sum > 0:
+                img_this_part /= kernel_sum
 
-            self.img += img_this_part
+                self.img += img_this_part
 
         return self.img
 

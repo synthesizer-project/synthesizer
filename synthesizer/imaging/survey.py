@@ -7,6 +7,7 @@ from synthesizer.imaging import images, spectral_cubes
 from synthesizer.galaxy.particle import ParticleGalaxy
 from synthesizer.galaxy.parametric import ParametricGalaxy
 from synthesizer.utils import m_to_flux, flux_to_luminosity
+from synthesizer.sed import Sed
 
 
 class Instrument:
@@ -96,7 +97,7 @@ class Survey:
     -------
     """
 
-    def __init__(self, galaxies=(), fov=None, super_resolution_factor=2):
+    def __init__(self, galaxies=(), fov=None, super_resolution_factor=None):
         """
         Initialise the Survey.
         Parameters
@@ -120,6 +121,9 @@ class Survey:
 
         # Intialise somewhere to keep survey images, this is populated later
         self.imgs = None
+
+        # Intialise where we will store the Survey's SEDs
+        self.seds = {}
 
         # Initialise somewhere to keep galaxy photometry. This is the
         # integrated flux/luminosity in each band in Survey.filters.
@@ -314,6 +318,50 @@ class Survey:
                     self.instruments[inst].depths
                 )
 
+    def get_integrated_stellar_spectra(self, grid, rest_frame=False, cosmo=None,
+                                       redshift=None, igm=None):
+        """
+        Compute the integrated stellar spectra of each galaxy.
+        """
+
+        _specs = np.zeros((self.ngalaxies, grid.lam.size))
+
+        for ind, gal in enumerate(self.galaxies):
+
+            # Are we getting a flux or rest frame?
+            _specs[ind, :] = gal.generate_intrinsic_spectra(grid)
+
+        # Create and store an SED object for these SEDs
+        self.seds["stellar"] = Sed(lam=grid.lam, lnu=_specs)
+
+        # Get the flux
+        # TODO: if galaxies differ in redshift this does not work!
+        # TODO: catch error if improper arguments are handed
+        if rest_frame:
+            self.seds["stellar"].get_fnu0()
+        else:
+            self.seds["stellar"].get_fnu(cosmo, redshift, igm)
+
+    def get_particle_stellar_spectra(self, grid, rest_frame=False, cosmo=None,
+                                     igm=None):
+        """
+        Compute the integrated stellar spectra of each galaxy.
+        """
+
+        for ind, gal in enumerate(self.galaxies):
+
+            # Are we getting a flux or rest frame?
+            sed = gal.generate_intrinsic_particle_spectra(grid,
+                                                          sed_object=True)
+            gal.spectra_array["stellar"] = sed
+
+            # Get the flux
+            # TODO: catch error if improper arguments are handed
+            if rest_frame:
+                gal.spectra_array["stellar"].get_fnu0()
+            else:
+                gal.spectra_array["stellar"].get_fnu(cosmo, gal.redshift, igm)
+
     def get_photometry(self, spectra_type, cosmo=None, redshift=None, igm=None):
         """
         Parameters
@@ -341,30 +389,10 @@ class Survey:
             for f in self.instruments[key].filters:
 
                 # Make an entry in the photometry dictionary for this filter
-                self.photometry[f.filter_code] = np.zeros(self.ngalaxies)
-
-                # Loop over each galaxy
-                for igal in range(self.ngalaxies):
-
-                    if spectra_type not in self.galaxies[igal].spectra:
-                        pass
-
-                    # Are we getting flux or luminosity?
-                    sed = self.galaxies[igal].spectra[spectra_type]
-                    if cosmo is not None:
-                        if sed.fnu is None:
-                            sed.get_fnu(cosmo, redshift, igm)
-                        spectra = sed.fnu
-                        lams = sed.lamz
-                    else:
-                        spectra = sed.lnu
-                        lams = sed.lam
-
-                    # Calculate the photometry in this band
-                    phot = f.apply_filter(spectra, lams)
-
-                    # Store this photometry
-                    self.photometry[f.filter_code][igal] = phot
+                self.photometry[f.filter_code] = f.apply_filter(
+                    self.seds[spectra_type]._fnu,
+                    xs=self.seds[spectra_type].nuz
+                )
 
         return self.photometry
 
