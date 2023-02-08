@@ -7,30 +7,30 @@ from astropy.cosmology import FlatLambdaCDM
 from .galaxy import Galaxy
 
 
-def load_CAMELS_SIMBA(_dir=".", snap="033"):
+def load_CAMELS_SIMBA(_dir='.', snap='033'):
 
-    with h5py.File(f"{_dir}/snap_{snap}.hdf5", "r") as hf:
-        form_time = hf["PartType4/StellarFormationTime"][:]
-        coods = hf["PartType4/Coordinates"][:]
-        masses = hf["PartType4/Masses"][:]  # TODO: not initial masses
-        _metals = hf["PartType4/Metallicity"][:]
+    with h5py.File(f'{_dir}/snap_{snap}.hdf5', 'r') as hf:
+        form_time = hf['PartType4/StellarFormationTime'][:]
+        coods = hf['PartType4/Coordinates'][:]
+        masses = hf['PartType4/Masses'][:]  # TODO: not initial masses
+        _metals = hf['PartType4/Metallicity'][:]
 
-        scale_factor = hf["Header"].attrs["Time"]
-        Om0 = hf["Header"].attrs["Omega0"]
-        h = hf["Header"].attrs["HubbleParam"]
+        scale_factor = hf['Header'].attrs[u'Time']
+        Om0 = hf['Header'].attrs[u'Omega0']
+        h = hf['Header'].attrs[u'HubbleParam']
 
     s_oxygen = _metals[:, 4]
     s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
     metals = _metals[:, 0]
 
     # convert formation times to ages
-    cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
-    universe_age = cosmo.age(1.0 / scale_factor - 1)
-    _ages = cosmo.age(1.0 / form_time - 1)
+    cosmo = FlatLambdaCDM(H0=h*100, Om0=Om0)
+    universe_age = cosmo.age(1. / scale_factor - 1)
+    _ages = cosmo.age(1./form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
-    with h5py.File(f"{_dir}/fof_subhalo_tab_{snap}.hdf5", "r") as hf:
-        lens = hf["Subhalo/SubhaloLenType"][:]
+    with h5py.File(f'{_dir}/fof_subhalo_tab_{snap}.hdf5', 'r') as hf:
+        lens = hf['Subhalo/SubhaloLenType'][:]
 
     begin, end = get_len(lens[:, 4])
 
@@ -38,35 +38,31 @@ def load_CAMELS_SIMBA(_dir=".", snap="033"):
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
         # WARNING: initial masses set to current for now
-        galaxies[i].load_stars(
-            masses[b:e],
-            ages[b:e],
-            metals[b:e],
-            s_oxygen=s_oxygen[b:e],
-            s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :],
-            initial_masses=masses[b:e],
-        )
+        galaxies[i].load_stars(masses[b:e], ages[b:e], metals[b:e],
+                               s_oxygen=s_oxygen[b:e],
+                               s_hydrogen=s_hydrogen[b:e],
+                               coordinates=coods[b:e, :],
+                               initial_masses=masses[b:e])
 
     return galaxies
 
 
 def load_FLARES(f, region, tag):
-    with h5py.File(f, "r") as hf:
-        lens = hf[f"{region}/{tag}/Galaxy/S_Length"][:]
-        ages = hf[f"{region}/{tag}/Particle/S_Age"][:]  # Gyr
-        coods = hf[f"{region}/{tag}/Particle/S_Coordinates"][:].T
-        mass = hf[f"{region}/{tag}/Particle/S_Mass"][:]  # 1e10 Msol
-        imass = hf[f"{region}/{tag}/Particle/S_MassInitial"][:]  # 1e10 Msol
+    with h5py.File(f, 'r') as hf:
+        lens = hf[f'{region}/{tag}/Galaxy/S_Length'][:]
+        ages = hf[f'{region}/{tag}/Particle/S_Age'][:]  # Gyr
+        coods = hf[f'{region}/{tag}/Particle/S_Coordinates'][:].T
+        mass = hf[f'{region}/{tag}/Particle/S_Mass'][:]  # 1e10 Msol
+        imass = hf[f'{region}/{tag}/Particle/S_MassInitial'][:]  # 1e10 Msol
         # metals = hf[f'{region}/{tag}/Particle/S_Z'][:]
-        metals = hf[f"{region}/{tag}/Particle/S_Z_smooth"][:]
-        s_oxygen = hf[f"{region}/{tag}/Particle/S_Abundance_Oxygen"][:]
-        s_hydrogen = hf[f"{region}/{tag}/Particle/S_Abundance_Hydrogen"][:]
+        metals = hf[f'{region}/{tag}/Particle/S_Z_smooth'][:]
+        s_oxygen = hf[f'{region}/{tag}/Particle/S_Abundance_Oxygen'][:]
+        s_hydrogen = hf[f'{region}/{tag}/Particle/S_Abundance_Hydrogen'][:]
         # ids = hf[f'{region}/{tag}/Particle/S_ID'][:]
         # index = hf[f'{region}/{tag}/Particle/S_Index'][:]
         # hf[f'{pre}/S_Vel']
 
-    ages = ages * 1e9  # yr
+    ages = (ages * 1e9)  # yr
     mass = mass * 1e10  # Msol
     imass = imass * 1e10  # Msol
 
@@ -75,15 +71,11 @@ def load_FLARES(f, region, tag):
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
-        galaxies[i].load_stars(
-            mass[b:e],
-            ages[b:e],
-            metals[b:e],
-            s_oxygen=s_oxygen[b:e],
-            s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :],
-            initial_masses=imass[b:e],
-        )
+        galaxies[i].load_stars(mass[b:e], ages[b:e], metals[b:e],
+                               s_oxygen=s_oxygen[b:e],
+                               s_hydrogen=s_hydrogen[b:e],
+                               coordinates=coods[b:e, :],
+                               initial_masses=imass[b:e])
 
     return galaxies
 
