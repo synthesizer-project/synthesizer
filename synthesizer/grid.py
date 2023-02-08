@@ -5,13 +5,8 @@ Create a Grid object
 import os
 import numpy as np
 import h5py
-import cmasher as cmr
-import matplotlib as mpl
-import matplotlib.cm as cm
-import matplotlib.pyplot as plt
 
 from . import __file__ as filepath
-from .plt import mlabel
 from .sed import Sed, convert_fnu_to_flam
 from .line import Line, LineCollection
 
@@ -133,7 +128,7 @@ def parse_grid_id(grid_id):
             'imf': imf, 'imf_hmc': imf_hmc}
 
 
-class Grid():
+class Grid:
     """
     The Grid class, containing attributes and methods for reading and manipulating spectral grids
 
@@ -155,6 +150,9 @@ class Grid():
         self.grid_name = grid_name
         self.grid_filename = f'{self.grid_dir}/{self.grid_name}.hdf5'
 
+        self.read_lines = read_lines
+        self.read_spectra = read_spectra  #  not used
+
         self.spectra = None
         self.lines = None
 
@@ -167,72 +165,44 @@ class Grid():
 
             self.parameters = {k: v for k, v in hf.attrs.items()}
 
-            self.spec_names = list(hf['spectra'].keys())
-            self.spec_names.remove('wavelength')
+            if 'grid_axes' in hf.attrs.keys():
+                self.axes = hf.attrs['grid_axes']
+            else:
+                # backwards compatability with old grids
+                self.axes = ['log10ages', 'metallicities']
 
-            self.log10ages = hf['log10ages'][:]
-            self.ages = 10**self.log10ages
+            self.naxes = len(self.axes)
 
-            self.metallicities = hf['metallicities'][:]
-            self.log10metallicities = np.log10(self.metallicities)
+            # the centres of the bins
+            self.bin_centres = {}
+
+            for axis in self.axes:
+                self.bin_centres[axis] = hf[axis][:]
+
+            if 'log10ages' in self.axes:
+                self.log10ages = hf['log10ages'][:]
+                self.ages = 10**self.log10ages
+
+            if 'metallicities' in self.axes:
+                self.metallicities = hf['metallicities'][:]
+                self.log10metallicities = np.log10(self.metallicities)
 
             if 'log10Q' in hf.keys():
-
                 self.log10Q = {}
                 for ion in hf['log10Q'].keys():
                     self.log10Q[ion] = hf['log10Q'][ion][:]
 
+        # read in spectra
         if read_spectra:
+            self.get_spectra()
 
-            self.spectra = {}
-
-            for spec_name in self.spec_names:
-
-                with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
-
-                    self.lam = hf['spectra/wavelength'][:]
-                    self.nu = 3E8/(self.lam*1E-10)
-
-                    self.spectra[spec_name] = hf['spectra'][spec_name][:]
-                    # self.units[f'spectra/{spec_name}'] = hf['spectra'][spec_name].attrs['Units']
-
-                if spec_name == 'incident':
-                    self.spectra['stellar'] = self.spectra[spec_name]
-                    # self.units[f'spectra/stellar'] = hf['spectra'][spec_name].attrs['Units']
-
-            """ if full cloudy grid available calculate
-            some other spectra for convenience """
-            if 'linecont' in self.spec_names:
-
-                self.spectra['total'] = self.spectra['transmitted'] +\
-                    self.spectra['nebular']  #  assumes fesc = 0
-
-                self.spectra['nebular_continuum'] = self.spectra['nebular'] -\
-                    self.spectra['linecont']
-
-            if verbose:
-                print('available spectra:', list(self.spectra.keys()))
-
+        # read in lines
         if read_lines:
-
-            self.lines = {}
-
-            if isinstance(read_lines, list):
-                self.line_list = read_lines
-            else:
-                self.line_list = get_available_lines(grid_name, grid_dir)
-
-            with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
-
-                for line in self.line_list:
-
-                    self.lines[line] = {}
-                    self.lines[line]['wavelength'] = hf['lines'][line].attrs['wavelength']  # angstrom
-                    self.lines[line]['luminosity'] = hf['lines'][line]['luminosity'][:]
-                    self.lines[line]['continuum'] = hf['lines'][line]['continuum'][:]
+            self.get_lines()
 
     def __str__(self):
-        """Function to print a basic summary of the Grid object.
+        """
+        Function to print a basic summary of the Grid object.
 
         Returns
         -------
@@ -258,6 +228,71 @@ class Grid():
 
         return pstr
 
+    def get_spectra(self):
+        """
+        Function to read in spectra from the HDF5 grid
+
+        Returns
+        -------
+        str
+
+        """
+
+        self.spectra = {}
+
+        with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
+
+            # get list of available spectra
+            self.spec_names = list(hf['spectra'].keys())
+            self.spec_names.remove('wavelength')
+
+            for spec_name in self.spec_names:
+
+                self.lam = hf['spectra/wavelength'][:]
+                self.nu = 3E8/(self.lam*1E-10)  # used?
+
+                self.spectra[spec_name] = hf['spectra'][spec_name][:]
+
+                # if incident is one of the spectra also add a spectra called "stellar"
+                if spec_name == 'incident':
+                    self.spectra['stellar'] = self.spectra[spec_name]
+
+        """ if full cloudy grid available calculate
+        some other spectra for convenience """
+        if 'linecont' in self.spec_names:
+
+            self.spectra['total'] = self.spectra['transmitted'] +\
+                self.spectra['nebular']  #  assumes fesc = 0
+
+            self.spectra['nebular_continuum'] = self.spectra['nebular'] -\
+                self.spectra['linecont']
+
+    def get_lines(self):
+        """
+        Function to read in lines from the HDF5 grid
+
+        Returns
+        -------
+        str
+
+        """
+
+        self.lines = {}
+
+        if isinstance(self.read_lines, list):
+            self.line_list = flatten_linelist(self.read_lines)
+        else:
+            self.line_list = get_available_lines(self.grid_name, self.grid_dir)
+
+        with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
+
+            for line in self.line_list:
+
+                self.lines[line] = {}
+                self.lines[line]['wavelength'] = hf['lines'][line].attrs['wavelength']  # angstrom
+                self.lines[line]['luminosity'] = hf['lines'][line]['luminosity'][:]
+                self.lines[line]['continuum'] = hf['lines'][line]['continuum'][:]
+
     def get_nearest_index(self, value, array):
         """
         Simple function for calculating the closest index in an array for a given value
@@ -277,6 +312,23 @@ class Grid():
         """
 
         return (np.abs(array - value)).argmin()
+
+    def get_grid_point(self, values):
+        """
+        Identify the nearest grid point for a tuple of values
+
+        Parameters
+        ----------
+        value : float
+            The target value
+
+        Returns
+        -------
+        int
+             The index of the closet point in the grid (array)
+        """
+
+        return tuple([self.get_nearest_index(value, self.bin_centres[axis]) for axis, value in zip(self.axes, values)])
 
     def get_nearest(self, value, array):
         """
@@ -308,9 +360,11 @@ class Grid():
 
         return self.get_nearest(log10age, self.log10ages)
 
-    def get_sed(self, ia, iZ, spec_name='stellar'):
+    def get_sed(self, grid_point, spec_name='stellar'):
         """
         Simple function for calculating the closest index in an array for a given value
+
+        NOTE: ONLY WORKS FOR 2D GRIDS
 
         Parameters
         ----------
@@ -326,101 +380,36 @@ class Grid():
              An Sed object at the defined grid point
         """
 
-        return Sed(self.lam, lnu=self.spectra[spec_name][ia, iZ])
+        if len(grid_point) != self.naxes:
+            # throw exception
+            print('grid point tuple should have same shape as grid')
+            pass
 
-    # TODO: move to plotting script to remove cmasher dependency
-    def plot_log10Q(self, ion='HI', hsize=3.5, vsize=2.5, cmap=cmr.sapphire,
-                    vmin=42.5, vmax=47.5, max_log10age=9.):
+        return Sed(self.lam, lnu=self.spectra[spec_name][grid_point])
 
-        left = 0.2
-        height = 0.65
-        bottom = 0.15
-        width = 0.75
-
-        if not vsize:
-            vsize = hsize*width/height
-
-        fig = plt.figure(figsize=(hsize, vsize))
-
-        ax = fig.add_axes((left, bottom, width, height))
-        cax = fig.add_axes([left, bottom+height+0.01, width, 0.05])
-
-        y = np.arange(len(self.metallicities))
-
-        log10Q = self.log10Q[ion]
-
-        if max_log10age:
-            ia_max = self.get_nearest_index(max_log10age, self.log10ages)
-            log10Q = log10Q[:ia_max, :]
-        else:
-            ia_max = -1
-
-        """ this is technically incorrect because metallicity
-        is not on an actual grid."""
-        ax.imshow(log10Q.T, origin='lower', extent=[self.log10ages[0],
-                  self.log10ages[ia_max], y[0]-0.5, y[-1]+0.5], cmap=cmap,
-                  aspect='auto', vmin=vmin, vmax=vmax)
-
-        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
-        cmapper = cm.ScalarMappable(norm=norm, cmap=cmap)
-        cmapper.set_array([])
-
-        fig.colorbar(cmapper, cax=cax, orientation='horizontal')
-        cax.xaxis.tick_top()
-        cax.xaxis.set_label_position('top')
-        cax.set_xlabel(r'$\rm log_{10}(\dot{n}_{'+ion+'}/s^{-1}\ M_{\odot}^{-1})$')
-        cax.set_yticks([])
-
-        ax.set_yticks(y, self.metallicities)
-        ax.minorticks_off()
-        ax.set_xlabel(mlabel('log_{10}(age/yr)'))
-        ax.set_ylabel(mlabel('Z'))
-
-        return fig, ax
-
-    # I'm not convinced this is necessary anymore
-
-    def fetch_line(self, line_id, save=True):
-        """
-        Fetch line information from the grid HDF5 file
-        Parameters:
-        line_id (str): unique line identifier
-        Returns:
-        luminosity (ndarray)
-        continuum (ndarray)
-        wavelength (float)
-        """
-
-        with h5py.File(self.grid_filename, 'r') as hf:
-            luminosity = hf[f'lines/{line_id}/luminosity'][:]
-            continuum = hf[f'lines/{line_id}/continuum'][:]
-            wavelength = hf[f'lines/{line_id}'].attrs['wavelength']
-
-        if save:
-            self.lines[line_id] = {}
-            self.lines[line_id]['luminosity'] = luminosity
-            self.lines[line_id]['continuum'] = continuum
-            self.lines[line_id]['wavelength'] = wavelength
-
-        return Line(line_id, wavelength, luminosity, continuum)
-
-    def get_line_info(self, line_id, ia, iZ):
+    def get_line_info(self, line_id, grid_point):
         """
         Return a line object for a given line and metallicity/age index
+
+        NOTE: ONLY WORKS FOR 2D GRIDS
 
         Parameters:
         ------------
         line_id : (list or str):
             unique line identification string
-        ia : int
-            age grid point index
-        iZ : int
-            metallicity grid point index
+
+        grid_point : tuple (int)
+            the grid point to select
 
         Returns:
         ------------
         obj (Line)
         """
+
+        if len(grid_point) != self.naxes:
+            # throw exception
+            print('grid point tuple should have same shape as grid')
+            pass
 
         if type(line_id) is str:
             line_id = [line_id]
@@ -432,17 +421,14 @@ class Grid():
         for line_id_ in line_id:
             line_ = self.lines[line_id_]
             wavelength.append(line_['wavelength'])
-            luminosity.append(line_['luminosity'][ia, iZ])
-            continuum.append(line_['continuum'][ia, iZ])
+            luminosity.append(line_['luminosity'][grid_point])
+            continuum.append(line_['continuum'][grid_point])
 
-        line = Line(line_id, wavelength, luminosity, continuum)
+        return Line(line_id, wavelength, luminosity, continuum)
 
-        return line
-
-    def get_lines_info(self, line_ids, ia, iZ):
+    def get_lines_info(self, line_ids, grid_point):
         """
         Return a LineCollection object for a given line and metallicity/age index
-
         Parameters:
         ------------
         line_ids : list:
@@ -451,7 +437,6 @@ class Grid():
             age grid point index
         iZ : int
             metallicity grid point index
-
         Returns:
         ------------
         obj (Line)
@@ -462,7 +447,7 @@ class Grid():
 
         for line_id in line_ids:
 
-            line = self.get_line_info(line_id, ia, iZ)
+            line = self.get_line_info(line_id, grid_point)
 
             # add to dictionary
             lines[line.id] = line
