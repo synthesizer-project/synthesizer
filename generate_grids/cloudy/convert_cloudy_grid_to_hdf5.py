@@ -8,7 +8,7 @@ This reads in a cloudy grid of models and creates a new SPS grid including the v
 from scipy import integrate
 import os
 import shutil
-from synthesizer.utils import read_params
+from synthesizer.utils import read_params, explore_hdf5_grid
 from synthesizer.cloudy import read_wavelength, read_continuum, read_lines
 from synthesizer.sed import calculate_Q
 from unyt import eV
@@ -16,12 +16,6 @@ import argparse
 import numpy as np
 import h5py
 import yaml
-
-#
-# from unyt import c, h
-
-h = 6.626E-34
-c = 3.E8
 
 
 def create_new_grid(grid, synthesizer_data_dir):
@@ -32,8 +26,6 @@ def create_new_grid(grid, synthesizer_data_dir):
     # parse the grid to get the sps model
     sps_grid = grid.split('_cloudy')[0]
 
-    print(grid, sps_grid)
-
     # open the new grid
     with h5py.File(f'{path_to_grids}/{grid}.hdf5', 'w') as hf:
 
@@ -42,7 +34,7 @@ def create_new_grid(grid, synthesizer_data_dir):
 
             # copy top-level attributes
             for k, v in hf_sps.attrs.items():
-                print(k, v)
+                # print(k, v)
                 hf.attrs[k] = v
 
             # copy various quantities (all excluding the spectra) from the original sps grid
@@ -56,7 +48,7 @@ def create_new_grid(grid, synthesizer_data_dir):
         with open(f'{path_to_cloudy_files}/{grid_name}/params.yaml', "r") as stream:
             cloudy_params = yaml.safe_load(stream)
             for k, v in cloudy_params.items():
-                print(k, v)
+                # print(k, v)
                 if v is None:
                     v = 'null'
                 hf.attrs[k] = v
@@ -85,15 +77,27 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
         nZ = len(hf['metallicities'][:])  # number of metallicity grid points
         na = len(hf['log10ages'][:])  # number of age grid points
 
+        failed = False
+        failed_list = []
+
         for ia in range(na):
             for iZ in range(nZ):
 
                 infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}'
 
                 if not os.path.isfile(infile+'.cont'):  # attempt to open run.
-                    print(f'{ia}_{iZ}.cont missing')
+                    failed = True
+                    failed_list.append((ia, iZ))
+                    # print(f'{ia}_{iZ}.cont missing')
                 if not os.path.isfile(infile+'.lines'):  # attempt to open run.
-                    print(f'{ia}_{iZ}.lines missing')
+                    failed = True
+                    # print(f'{ia}_{iZ}.lines missing')
+
+        if failed:
+            print('FAILED')
+            print(f'missing files: {failed_list}')
+
+        return failed
 
 
 def add_spectra(grid_name, synthesizer_data_dir):
@@ -142,7 +146,7 @@ def add_spectra(grid_name, synthesizer_data_dir):
 
         for iZ, Z in enumerate(metallicities):
 
-            print(f'{iZ+1}/{len(metallicities)}')
+            # print(f'{iZ+1}/{len(metallicities)}')
 
             for ia, log10age in enumerate(log10ages):
 
@@ -166,6 +170,19 @@ def add_spectra(grid_name, synthesizer_data_dir):
                     spectra[spec_name][ia, iZ] *= 10**dlog10Q[ia, iZ]
 
         return dlog10Q
+
+
+def get_default_line_list(interesting=True):
+
+    with open('default_lines.dat') as f:
+        line_list = f.read().splitlines()
+
+    if interesting:
+
+        with open('interesting_lines.dat') as f:
+            line_list += f.read().splitlines()
+
+    return line_list
 
 
 def get_line_list(grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.0):
@@ -254,7 +271,7 @@ def add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include):
             lines[f'{line_id}/continuum'] = np.zeros((na, nZ))
 
         for iZ, Z in enumerate(metallicities):
-            print(iZ)
+
             for ia, log10age in enumerate(log10ages):
 
                 infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}'
@@ -302,11 +319,19 @@ if __name__ == "__main__":
 
     for grid_name in args.grid:
 
+        print('-'*50)
+        print(grid_name)
+
         create_new_grid(grid_name, synthesizer_data_dir)
-        check_cloudy_runs(grid_name, synthesizer_data_dir)
-        dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
+        failed = check_cloudy_runs(grid_name, synthesizer_data_dir)
 
-        lines_to_include = get_line_list(
-            grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.5)
+        if not failed:
+            dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
 
-        add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include)
+            # this causes issues for 3D grids
+            # lines_to_include = get_line_list(
+            #     grid_name, synthesizer_data_dir, threshold_line='H 1 4862.69A', relative_threshold=2.5)
+
+            lines_to_include = get_default_line_list()
+
+            add_lines(grid_name, synthesizer_data_dir, dlog10Q, lines_to_include)
