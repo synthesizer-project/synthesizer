@@ -225,7 +225,7 @@ class ParticleGalaxy(BaseGalaxy):
         #     (self.nparticles, grid.spectra["stellar"].shape[-1])
         # )
     
-        intrinsic_lum_array = np.zeros(
+        stellar_lum_array = np.zeros(
             (self.nparticles, grid.spectra["stellar"].shape[-1])
         )
     
