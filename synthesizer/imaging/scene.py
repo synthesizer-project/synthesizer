@@ -13,17 +13,15 @@ class Scene:
     - Flux/rest frame luminosity images in photometric bands.
     - Images of underlying properties such as SFR, stellar mass, etc.
     - Data cubes (IFUs) containing spatially resolved spectra.
-
     This parent contains the attributes and methods common to all observation
     types to reduce boilerplate.
-
     Attributes
     ----------
     resolution : float
         The size a pixel.
     npix : int
         The number of pixels along an axis of the image or number of spaxels
-        in the image plane of the IFU. 
+        in the image plane of the IFU.
     fov : float
         The width of the image/ifu. If coordinates are being used to make the
         image this should have the same units as those coordinates.
@@ -34,31 +32,35 @@ class Scene:
     spatial_unit : obj (unyt.unit)
         The units of the spatial image/IFU information (coordinates,
         resolution, fov, apertures, etc.).
-
     Raises
     ----------
     InconsistentArguments
         If an incompatible combination of arguments is provided an error is
         raised.
-
     """
 
     # Define slots to reduce memory overhead of this class and limit the
     # possible attributes.
-    __slots__ = ["resolution", "fov", "npix", "sed", "survey", "spatial_unit"]
+    __slots__ = ["resolution", "fov", "npix", "sed", "survey", "spatial_unit",
+                 "orig_resolution", "orig_npix", ]
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None,
-                 super_resolution_factor=None):
+    def __init__(
+        self,
+        resolution,
+        npix=None,
+        fov=None,
+        sed=None,
+        super_resolution_factor=None,
+    ):
         """
         Intialise the Observation.
-
         Parameters
         ----------
         resolution : Quantity (float * unyt.unit)
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : Quantity (float * unyt.unit)
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -66,7 +68,6 @@ class Scene:
             An sed object containing the spectra for this observation.
         survey : obj (Survey)
             WorkInProgress
-
         Raises
         ------
         InconsistentArguments
@@ -94,24 +95,32 @@ class Scene:
         # Attributes containing data
         self.sed = sed
 
+        # Keep track of the input resolution and and npix so we can handle
+        # super resolution correctly.
+        self.orig_resolution = resolution
+        self.orig_npix = npix
+
         # Handle the different input cases
         if npix is None:
             self._compute_npix()
-        else:
+        elif fov is None:
             self._compute_fov()
+
+        # Do we need to make a super resoution image?
+        if self.super_resolution_factor is not None:
+            print(self.npix, self.fov, self.resolution)
+            self._native_to_super_resolution()
+            print(self.npix)
 
     def _check_obs_args(self, resolution, fov, npix):
         """
         Ensures we have a valid combination of inputs.
-
-
         Parameters
         ----------
         fov : float
             The width of the image.
         npix : int
             The number of pixels in the image.
-
         Raises
         ------
         InconsistentArguments
@@ -155,13 +164,13 @@ class Scene:
         """
         Compute the number of pixels in the FOV, ensuring the FOV is an
         integer number of pixels.
-
         There are multiple ways to define the dimensions of an image, this
         handles the case where the resolution and FOV is given.
         """
 
         # Compute how many pixels fall in the FOV
         self.npix = math.ceil(self.fov / self.resolution)
+        self.orig_npix = math.ceil(self.fov / self.resolution)
 
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
@@ -169,7 +178,6 @@ class Scene:
     def _compute_fov(self):
         """
         Compute the FOV, based on the number of pixels.
-
         There are multiple ways to define the dimensions of an image, this
         handles the case where the resolution and number of pixels is given.
         """
@@ -211,10 +219,8 @@ class ParticleScene(Scene):
     - Flux/rest frame luminosity images in photometric bands.
     - Images of underlying properties such as SFR, stellar mass, etc.
     - Data cubes (IFUs) containing spatially resolved spectra.
-
     This parent contains the attributes and methods common to all observation
     types to reduce boilerplate.
-
     Attributes
     ----------
     stars : obj (Stars)
@@ -227,31 +233,37 @@ class ParticleScene(Scene):
         The integer coordinates of particles in pixel units.
     npart : int
         The number of stellar particles.
-
     Raises
     ----------
     InconsistentArguments
         If an incompatible combination of arguments is provided an error is
         raised.
-
     """
 
     # Define slots to reduce memory overhead of this class
     __slots__ = ["stars", "coords", "centre", "pix_pos", "npart"]
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
-                 positions=None, centre=None, super_resolution_factor=None,
-                 cosmo=None):
+    def __init__(
+        self,
+        resolution,
+        npix=None,
+        fov=None,
+        sed=None,
+        stars=None,
+        positions=None,
+        centre=None,
+        super_resolution_factor=None,
+        cosmo=None,
+    ):
         """
         Intialise the ParticleObservation.
-
         Parameters
         ----------
         resolution : float
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -266,21 +278,25 @@ class ParticleScene(Scene):
         centre : array-like (float)
             The coordinates around which the image will be centered. The if one
             is not provided then the geometric centre is calculated and used.
-
         Raises
         ------
         InconsistentArguments
             If an incompatible combination of arguments is provided an error is
             raised.
-
         """
 
         # Check what we've been given
         self._check_part_args(resolution, stars, positions, centre, cosmo)
 
         # Initilise the parent class
-        Scene.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                       sed=sed, super_resolution_factor=super_resolution_factor)
+        Scene.__init__(
+            self,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            sed=sed,
+            super_resolution_factor=super_resolution_factor,
+        )
 
         # Store the cosmology object
         self.cosmo = cosmo
@@ -318,7 +334,6 @@ class ParticleScene(Scene):
     def _check_part_args(self, resolution, stars, positions, centre, cosmo):
         """
         Ensures we have a valid combination of inputs.
-
         Parameters
         ----------
         stars : obj (Stars)
@@ -327,7 +342,6 @@ class ParticleScene(Scene):
             The position of particles to be sorted into the image.
         centre : array-like (float)
             The coordinates around which the image will be centered.
-
         Raises
         ------
         InconsistentArguments
@@ -353,8 +367,10 @@ class ParticleScene(Scene):
 
             # If we are working in terms of angles we need redshifts for the
             # stars.
-            if (spatial_unit.same_dimensions_as(arcsec) and
-                    stars.redshift is None):
+            if (
+                spatial_unit.same_dimensions_as(arcsec)
+                and stars.redshift is None
+            ):
                 raise exceptions.InconsistentArguments(
                     "When working in an angular unit system the provided "
                     "stars need a redshift associated to them. Stars.redshift"
@@ -381,12 +397,14 @@ class ParticleScene(Scene):
                 pos = positions
             else:
                 pos = stars.coordinates
-                if (centre[0] < np.min(pos[:, 0]) or
-                    centre[0] > np.max(pos[:, 0]) or
-                    centre[1] < np.min(pos[:, 1]) or
-                    centre[1] > np.max(pos[:, 1]) or
-                    centre[2] < np.min(pos[:, 2]) or
-                        centre[2] > np.max(pos[:, 2])):
+                if (
+                    centre[0] < np.min(pos[:, 0])
+                    or centre[0] > np.max(pos[:, 0])
+                    or centre[1] < np.min(pos[:, 1])
+                    or centre[1] > np.max(pos[:, 1])
+                    or centre[2] < np.min(pos[:, 2])
+                    or centre[2] > np.max(pos[:, 2])
+                ):
                     raise exceptions.InconsistentCoordinates(
                         "The centre lies outside of the coordinate range. "
                         "Are they already centred?"
@@ -407,7 +425,6 @@ class ParticleScene(Scene):
     def _get_pixel_pos(self):
         """
         Convert particle positions to interger pixel coordinates.
-
         These later help speed up sorting particles into pixels since their
         index is precomputed here.
         """
@@ -434,15 +451,17 @@ class ParticleScene(Scene):
             self.coords = self.coords.value
 
         # Otherwise, handle conversion between length and angle
-        elif (self.spatial_unit.same_dimensions_as(arcsec) and
-              self.stars.coord_units.same_dimensions_as(kpc)):
+        elif self.spatial_unit.same_dimensions_as(
+            arcsec
+        ) and self.stars.coord_units.same_dimensions_as(kpc):
 
             # Convert coordinates from comoving to physical coordinates
-            self.coords *= (1 / (1 + self.stars.redshift))
+            self.coords *= 1 / (1 + self.stars.redshift)
 
             # Get the conversion factor for arcsec and kpc at this redshift
             arcsec_per_kpc_proper = self.cosmo.arcsec_per_kpc_proper(
-                self.stars.redshift).value
+                self.stars.redshift
+            ).value
 
             # First we need to convert to kpc
             if self.stars.coord_units != kpc:
@@ -480,11 +499,12 @@ class ParticleScene(Scene):
                 self.smoothing_lengths = self.smoothing_lengths.value
 
             # Otherwise, handle conversion between length and angle
-            elif (self.spatial_unit.same_dimensions_as(arcsec) and
-                  self.stars.coord_units.same_dimensions_as(kpc)):
+            elif self.spatial_unit.same_dimensions_as(
+                arcsec
+            ) and self.stars.coord_units.same_dimensions_as(kpc):
 
                 # Convert coordinates from comoving to physical coordinates
-                self.smoothing_lengths *= (1 / (1 + self.stars.redshift))
+                self.smoothing_lengths *= 1 / (1 + self.stars.redshift)
 
                 # First we need to convert to kpc
                 if self.stars.coord_units != kpc:
@@ -510,34 +530,34 @@ class ParametricScene(Scene):
     - Flux/rest frame luminosity images in photometric bands.
     - Images of underlying properties such as SFR, stellar mass, etc.
     - Data cubes (IFUs) containing spatially resolved spectra.
-
     This parent contains all functionality needed for parametric observations.
-
     WorkInProgress
-
     Attributes
     ----------
-
     Raises
     ----------
     InconsistentArguments
         If an incompatible combination of arguments is provided an error is
         raised.
-
     """
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None,
-                 super_resolution_factor=None):
+    def __init__(
+        self,
+        resolution,
+        npix=None,
+        fov=None,
+        sed=None,
+        super_resolution_factor=None,
+    ):
         """
         Intialise the ParametricObservation.
-
         Parameters
         ----------
         resolution : float
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -545,9 +565,14 @@ class ParametricScene(Scene):
             An sed object containing the spectra for this observation.
         survey : obj (Survey)
             WorkInProgress
-
         """
 
         # Initilise the parent class
-        Scene.__init__(self, resolution, npix, fov, sed,
-                       super_resolution_factor=super_resolution_factor)
+        Scene.__init__(
+            self,
+            resolution,
+            npix,
+            fov,
+            sed,
+            super_resolution_factor=super_resolution_factor,
+        )

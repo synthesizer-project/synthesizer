@@ -1,11 +1,7 @@
 
-"""
-This example generates a sample of star particles from a 2D SFZH. In this
-case it is generated from a parametric star formation history with constant
-star formation.
-"""
+# --- this example generates a sample of star particles from a 2D SFZH. In this case it is generated from a parametric star formation history with constant star formation.
 
-import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 from unyt import yr, Myr
@@ -41,14 +37,8 @@ stars = sample_sfhz(sfzh, N)
 
 # --- open grid
 
-# Get the location of this script, __file__ is the absolute path of this
-# script, however we just want to directory
-script_path = os.path.abspath(os.path.dirname(__file__))
-
-# Define the grid
-grid_name = "test_grid"
-grid_dir = script_path + "/../../tests/test_grid/"
-grid = Grid(grid_name, grid_dir=grid_dir)
+grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
+grid = Grid(grid_name)
 
 # --- create galaxy object
 

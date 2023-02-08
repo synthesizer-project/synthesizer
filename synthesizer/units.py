@@ -10,7 +10,11 @@ class Units:
     Holds the definition of the internal unit system using unyt.
     """
 
+    lam = Angstrom
+    lamz = Angstrom
     wavelength = Angstrom
+    nu = Hz
+    nuz = Hz
 
     luminosity = erg/s  # luminosity
     lnu = erg/s/Hz  # spectral luminosity density

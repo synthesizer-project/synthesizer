@@ -5,8 +5,7 @@ import h5py
 import copy
 import numpy as np
 from scipy import integrate
-from unyt import yr, Gyr
-import math
+from unyt import yr
 
 
 import matplotlib.pyplot as plt
@@ -26,11 +25,9 @@ class BinnedSFZH:
         self.ages = 10**log10ages
         self.log10ages_lims = [self.log10ages[0], self.log10ages[-1]]
         self.metallicities = metallicities
-        self.metallicities_lims = [
-            self.metallicities[0], self.metallicities[-1]]
+        self.metallicities_lims = [self.metallicities[0], self.metallicities[-1]]
         self.log10metallicities = np.log10(metallicities)
-        self.log10metallicities_lims = [
-            self.log10metallicities[0], self.log10metallicities[-1]]
+        self.log10metallicities_lims = [self.log10metallicities[0], self.log10metallicities[-1]]
         self.sfzh = sfzh  # 2D star formation and metal enrichment history
         self.sfh = np.sum(self.sfzh, axis=1)  # 1D star formation history
         self.Z = np.sum(self.sfzh, axis=0)  # metallicity distribution
@@ -68,8 +65,7 @@ class BinnedSFZH:
         pstr += 'SUMMARY OF BINNED SFZH' + "\n"
         pstr += f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
         pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
-        pstr += f'mean metallicity: {self.calculate_mean_metallicity():.4f}' + \
-            "\n"
+        pstr += f'mean metallicity: {self.calculate_mean_metallicity():.4f}' + "\n"
         pstr += '-'*10 + "\n"
         return pstr
 
@@ -86,15 +82,14 @@ class BinnedSFZH:
 
             exceptions.InconsistentAddition('SFZH must be the same shape')
 
-    def plot(self, show=False):
+    def plot(self, show=True):
         """ Make a nice plots of the binned SZFH """
 
         fig, ax, haxx, haxy = single_histxy()
 
         # this is technically incorrect because metallicity is not on a an actual grid.
         ax.imshow(self.sfzh.T, origin='lower', extent=[
-                  *self.log10ages_lims, self.log10metallicities[0],
-                  self.log10metallicities[-1]], cmap=cmr.sunburst, aspect='auto')
+                  *self.log10ages_lims, self.log10metallicities[0], self.log10metallicities[-1]], cmap=cmr.sunburst, aspect='auto')
 
         # --- add binned Z to right of the plot
         # haxx.step(log10ages, sfh, where='mid', color='k')
@@ -181,6 +176,25 @@ def generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=1.):
     sfzh *= stellar_mass
 
     return BinnedSFZH(log10ages, metallicities, sfzh, sfh_f=sfh, Zh_f=Zh)
+
+
+def generate_sfzh_from_array(log10ages, metallicities, sfh, Zh, stellar_mass=1.):
+    """
+    Generated a BinnedSFZH from an array instead of function
+    """
+
+    if not isinstance(Zh, np.ndarray):
+        iZ = np.abs(metallicities - Zh).argmin()
+        Zh = np.zeros(len(metallicities))
+        Zh[iZ] = 1.0
+
+    sfzh = sfh[:, np.newaxis] * Zh
+
+    # --- normalise
+    sfzh /= np.sum(sfzh)
+    sfzh *= stellar_mass
+
+    return BinnedSFZH(log10ages, metallicities, sfzh)
 
 
 class ZH:
@@ -355,61 +369,5 @@ class SFH:
 
             if age < self.max_age:
                 return (1./(self.max_age-age))*np.exp(-(np.log(self.max_age-age)-self.T0)**2/(2*self.tau**2))
-            else:
-                return 0.0
-
-    class TruncatedNormal(Common):
-        """
-        A truncated normal distribution
-        """
-
-        def __init__(self, parameters):
-            self.name = "Truncated Normal"
-            self.parameters = parameters
-            self._parse_parameters()
-            self.mean = parameters["mean_age"].to(yr).value
-            self.sigma = parameters["sigma"].to(yr).value
-
-        def _parse_parameters(self):
-
-            if "mean_age" not in self.parameters:
-                raise exceptions.InconsistentArguments(
-                    "Mean age must be supplied!"
-                )
-
-            if "sigma" not in self.parameters:
-                raise exceptions.InconsistentArguments(
-                    "Standard deviation must be supplied!"
-                )
-
-            if "min_age" in self.parameters:
-                self.min_age = self.parameters["min_age"].to(yr).value
-            else:
-                self.min_age = 0
-
-            if "max_age" in self.parameters:
-                self.max_age = self.parameters["max_age"].to(yr).value
-            else:
-                self.max_age = (13.8 * Gyr).to(yr).value
-
-            if "significance" in self.parameters:
-                self.significance = self.parameters["significance"]
-            else:
-                self.significance = 1
-
-        def sfr_(self, age):
-            """ age is lookback time """
-
-            if age < self.max_age:
-
-                norm = 1 / self.sigma
-                exponent = (1 / np.sqrt(2 * np.pi)
-                            * np.exp(-0.5 * ((age - self.mean) /
-                                             self.sigma) ** 2))
-                phi_a = 0.5 * (1 + math.erf(((self.min_age - self.mean) /
-                                             self.sigma) / np.sqrt(2)))
-                phi_b = 0.5 * (1 + math.erf(((self.max_age - self.mean) /
-                                             self.sigma) / np.sqrt(2)))
-                return self.significance * norm * exponent / (phi_b - phi_a)
             else:
                 return 0.0

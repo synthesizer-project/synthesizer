@@ -23,8 +23,8 @@ from synthesizer.kernel_functions import quintic
 from synthesizer.imaging.survey import Survey
 from astropy.cosmology import Planck18 as cosmo
 
-plt.rcParams['font.family'] = 'DeJavu Serif'
-plt.rcParams['font.serif'] = ['Times New Roman']
+plt.rcParams["font.family"] = "DeJavu Serif"
+plt.rcParams["font.serif"] = ["Times New Roman"]
 
 # Set the seed
 np.random.seed(42)
@@ -46,8 +46,11 @@ survey = Survey(super_resolution_factor=1)
 
 # Lets make filter sets for two different instruments
 hst_filter_codes = ["HST/WFC3_IR.F105W", "HST/WFC3_IR.F125W"]
-webb_filter_codes = ["JWST/NIRCam.F090W", "JWST/NIRCam.F150W",
-                     "JWST/NIRCam.F200W"]
+webb_filter_codes = [
+    "JWST/NIRCam.F090W",
+    "JWST/NIRCam.F150W",
+    "JWST/NIRCam.F200W",
+]
 hst_filters = Filters(hst_filter_codes, new_lam=grid.lam)
 webb_filters = Filters(webb_filter_codes, new_lam=grid.lam)
 
@@ -56,11 +59,11 @@ survey.add_photometric_instrument(filters=hst_filters, label="HST/WFC3_IR")
 survey.add_photometric_instrument(filters=webb_filters, label="JWST/NIRCam")
 
 # Define the grid (normally this would be defined by an SPS grid)
-log10ages = np.arange(6., 10.5, 0.1)
-metallicities = 10**np.arange(-5., -1.5, 0.1)
-Z_p = {'Z': 0.01}
+log10ages = np.arange(6.0, 10.5, 0.1)
+metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
+Z_p = {"Z": 0.01}
 Zh = ZH.deltaConstant(Z_p)
-sfh_p = {'duration': 100 * Myr}
+sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(sfh_p)  # constant star formation
 
 # Make some fake galaxies
@@ -69,20 +72,18 @@ galaxies = []
 for igal in range(ngalaxies):
 
     # Generate the star formation metallicity history
-    sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
+    mass = np.random.uniform(10**6, 10**10, 1)[0]
+    sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=mass)
 
     # Create stars object
-    n = random.randint(100, 100000)
+    n = random.randint(100, 1000)
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
     stars.current_masses = stars.initial_masses
 
     # Create galaxy object
-    galaxy = Galaxy("Galaxy%d" % igal, stars=stars, redshift=1)
-
-    # Calculate the SEDs of stars in this galaxy
-    galaxy.generate_intrinsic_spectra(grid, update=True, integrated=True)
+    galaxy = Galaxy(name="Galaxy%d" % igal, stars=stars, redshift=1)
 
     # Include this galaxy
     galaxies.append(galaxy)
@@ -90,8 +91,11 @@ for igal in range(ngalaxies):
 # Store galaxies in the survey
 survey.add_galaxies(galaxies)
 
+# Get the SEDs
+survey.get_integrated_stellar_spectra(grid, rest_frame=True)
+
 # Make images for each galaxy in this survey
-survey.get_photometry(spectra_type="intrinsic")
+survey.get_photometry(spectra_type="stellar")
 
 print("Total runtime:", time.time() - start)
 
@@ -118,9 +122,13 @@ for f in survey.photometry:
 ax.set_ylabel("$L /$ [erg / s / Hz] ")
 ax.set_xlabel("$M / \mathrm{M}_\odot$")
 
-ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15),
-          fancybox=True, shadow=True, ncol=2)
+ax.legend(
+    loc="upper center",
+    bbox_to_anchor=(0.5, -0.15),
+    fancybox=True,
+    shadow=True,
+    ncol=2,
+)
 
 # Plot the image
-plt.savefig("../survey_photometry_test.png",
-            bbox_inches="tight", dpi=300)
+plt.savefig("../survey_photometry_test.png", bbox_inches="tight", dpi=300)

@@ -8,10 +8,12 @@ import yaml
 
 from synthesizer.abundances_sw import Abundances
 from synthesizer.grid import Grid
-from synthesizer.cloudy_sw import create_cloudy_input
+from synthesizer.cloudy import create_cloudy_input
 
 from write_submission_script import (apollo_submission_script,
                                      cosma7_submission_script)
+
+from copy import deepcopy
 
 
 def load_cloudy_parameters(param_file='default_param.yaml',
@@ -51,14 +53,17 @@ def load_cloudy_parameters(param_file='default_param.yaml',
             output_cloudy_names = []
 
             for _v in v:
+
+                cloudy_params_ = deepcopy(cloudy_params)
+
                 # update the value in our default dictionary
-                cloudy_params[k] = _v
+                cloudy_params_[k] = _v
 
                 # save to list of cloudy param dicts
-                output_cloudy_params.append(cloudy_params)
+                output_cloudy_params.append(cloudy_params_)
 
                 # replace negative '-' with m
-                out_str = f'{k}{str(_v).replace("-", "m")}'
+                out_str = f'-{k}{str(_v).replace("-", "m")}'
 
                 # save to list of output strings
                 output_cloudy_names.append(out_str)
@@ -120,9 +125,14 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
                                     grid.log10ages)
     iZ_ref = grid.get_nearest_index(cloudy_params['Z_ref'], grid.metallicities)
 
+    # add these to the parameter file
+    cloudy_params['ia_ref'] = int(ia_ref)
+    cloudy_params['iZ_ref'] = int(iZ_ref)
+
     # update the parameter file with the actual reference age and metallicity
-    cloudy_params['log10age_ref_actual'] = grid.log10ages[ia_ref]
-    cloudy_params['Z_ref_actual'] = grid.metallicities[iZ_ref]
+    # converting to float makes the resulting parameter file readable
+    cloudy_params['log10age_ref_actual'] = float(grid.log10ages[ia_ref])
+    cloudy_params['Z_ref_actual'] = float(grid.metallicities[iZ_ref])
 
     na = len(grid.ages)
     nZ = len(grid.metallicities)
@@ -142,8 +152,8 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
 
             if cloudy_params['U_model'] == 'ref':
 
-                delta_log10Q = grid.log10Q[ia, iZ] - \
-                        grid.log10Q[ia_ref, iZ_ref]
+                delta_log10Q = grid.log10Q['HI'][ia, iZ] - \
+                    grid.log10Q['HI'][ia_ref, iZ_ref]
 
                 log10U = cloudy_params['log10U_ref'] + (1/3) * delta_log10Q
 
@@ -156,7 +166,7 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
 
             model_name = f'{ia}_{iZ}'
 
-            cloudy_params['log10U'] = log10U
+            cloudy_params['log10U'] = float(log10U)
 
             create_cloudy_input(model_name, lam, lnu, abundances,
                                 output_dir=output_dir, **cloudy_params)
@@ -216,9 +226,7 @@ if __name__ == "__main__":
         for i, (cloudy_params, cloudy_name) in \
                 enumerate(zip(c_params, c_name)):
 
-            # if no variations, save as 'default' cloudy grid
-            if cloudy_name == '':
-                cloudy_name = 'cloudy'
+            cloudy_name = 'cloudy'+cloudy_name
 
             output_dir = make_directories(synthesizer_data_dir, sps_grid,
                                           cloudy_name)
@@ -229,7 +237,7 @@ if __name__ == "__main__":
             N = make_cloudy_input_grid(output_dir, grid, cloudy_params)
 
             if args.machine == 'apollo':
-                apollo_submission_script(N, synthesizer_data_dir, cloudy)
+                apollo_submission_script(N, output_dir, cloudy)
             elif args.machine == 'cosma7':
                 cosma7_submission_script(N, output_dir, cloudy,
                                          cosma_project='cosma7',

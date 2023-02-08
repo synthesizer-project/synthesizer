@@ -7,29 +7,34 @@ from synthesizer.imaging import images, spectral_cubes
 from synthesizer.galaxy.particle import ParticleGalaxy
 from synthesizer.galaxy.parametric import ParametricGalaxy
 from synthesizer.utils import m_to_flux, flux_to_luminosity
+from synthesizer.sed import Sed
 
 
 class Instrument:
     """
     This class describes an instrument used to make a set of observations.
-
     Attributes
     ----------
-
     Methods
     -------
-
     """
 
-    def __init__(self, resolution, filters, psfs=None, depths=None,
-                 aperture=None, snrs=None, noises=None,
-                 resolving_power=None, lam=None):
+    def __init__(
+        self,
+        resolution,
+        filters,
+        psfs=None,
+        depths=None,
+        aperture=None,
+        snrs=None,
+        noises=None,
+        resolving_power=None,
+        lam=None,
+    ):
         """
         Initialise the Observatory.
-
         Parameters
         ----------
-
         """
 
         # Basic metadata
@@ -59,13 +64,10 @@ class Instrument:
     def _check_obs_args(self):
         """
         Ensures we have valid inputs.
-
         Parameters
         ----------
-
         Raises
         ------
-
         """
         pass
 
@@ -73,38 +75,33 @@ class Instrument:
         """
         Calculates the wavelengths of a spectrum based on this observations
         resolving power.
-
         Parameters
         ----------
-
         Raises
         ------
-
         """
         pass
 
 
 class Survey:
     """
-
-    Should be both a container for information and the base object to make a
-    "field" observation.
+    A Survey helper object which defines all the properties of a survey. This
+    enables the defintion of a survey approach and then the production of
+    photometry and/or images based on that instruments/filters making up the
+    survey. This can handle PSFs and depths which vary across bands and
+    instruments.
 
     Attributes
     ----------
-
     Methods
     -------
-
     """
 
-    def __init__(self, galaxies=(), fov=None, super_resolution_factor=2):
+    def __init__(self, galaxies=(), fov=None, super_resolution_factor=None):
         """
         Initialise the Survey.
-
         Parameters
         ----------
-
         """
 
         # Basic information
@@ -125,6 +122,9 @@ class Survey:
         # Intialise somewhere to keep survey images, this is populated later
         self.imgs = None
 
+        # Intialise where we will store the Survey's SEDs
+        self.seds = {}
+
         # Initialise somewhere to keep galaxy photometry. This is the
         # integrated flux/luminosity in each band in Survey.filters.
         self.photometry = {}
@@ -132,25 +132,28 @@ class Survey:
     def _check_survey_args(self):
         """
         Ensures we have valid inputs.
-
         Parameters
         ----------
-
         Raises
         ------
-
         """
         pass
 
-    def add_photometric_instrument(self, filters, label, resolution=None,
-                                   psfs=None, depths=None, apertures=None,
-                                   snrs=None, noises=None):
+    def add_photometric_instrument(
+        self,
+        filters,
+        label,
+        resolution=None,
+        psfs=None,
+        depths=None,
+        apertures=None,
+        snrs=None,
+        noises=None,
+    ):
         """
         Adds an instrument and all it's filters to the Survey.
-
         Parameters
         ----------
-
         Raises
         ------
         InconsistentArguments
@@ -172,54 +175,57 @@ class Survey:
             if nfilters != len(depths):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(depths)=%d)" % (nfilters,
-                                                           len(depths))
+                    " len(filters)=%d, len(depths)=%d)"
+                    % (nfilters, len(depths))
                 )
         if isinstance(apertures, dict):
             if nfilters != len(apertures):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(apertures)=%d)" % (nfilters,
-                                                              len(apertures))
+                    " len(filters)=%d, len(apertures)=%d)"
+                    % (nfilters, len(apertures))
                 )
         if isinstance(snrs, dict):
             if nfilters != len(snrs):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(snrs)=%d)" % (nfilters,
-                                                         len(snrs))
+                    " len(filters)=%d, len(snrs)=%d)" % (nfilters, len(snrs))
                 )
         if isinstance(noises, dict):
             if nfilters != len(noises):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(noises)=%d)" % (nfilters,
-                                                           len(noises))
+                    " len(filters)=%d, len(noises)=%d)"
+                    % (nfilters, len(noises))
                 )
 
         # Create this observation configurations
         self.instruments[label] = Instrument(
-            resolution=resolution, filters=filters, psfs=psfs,
-            depths=depths, aperture=apertures, snrs=snrs, noises=noises
+            resolution=resolution,
+            filters=filters,
+            psfs=psfs,
+            depths=depths,
+            aperture=apertures,
+            snrs=snrs,
+            noises=noises,
         )
 
         # Record that we included another insturment and count the filters
         self.ninstruments += 1
         self.nfilters += len(filters)
 
-    def add_spectral_instrument(self, resolution, resolving_power,
-                                psf=None, depth=None, aperture=None):
+    def add_spectral_instrument(
+        self, resolution, resolving_power, psf=None, depth=None, aperture=None
+    ):
         pass
 
     def add_galaxies(self, galaxies):
         """
         Adds galaxies to this survey
-
         Parameters
         ----------
         galaxies : list
             The galaxies to include in this Survey.
-
         """
 
         # If we have no galaxies just add them
@@ -228,9 +234,10 @@ class Survey:
 
         # Otherwise, we have to add them on to what we have, handling whether
         # we are adding 1 galaxy...
-        elif (len(self.galaxies) > 0 and
-              (isinstance(galaxies, ParticleGalaxy) or
-               isinstance(galaxies, ParametricGalaxy))):
+        elif len(self.galaxies) > 0 and (
+            isinstance(galaxies, ParticleGalaxy)
+            or isinstance(galaxies, ParametricGalaxy)
+        ):
 
             # Double check galaxies is a list
             self.galaxies = list(self.galaxies)
@@ -254,10 +261,8 @@ class Survey:
         """
         Converts depths defined in absolute magnitude to the units of
         luminosity (erg / s /Hz).
-
         This is a helpful wrapper to handle the use of different terminology in
         the SED object.
-
         Parameters
         ----------
         redshift : float
@@ -272,7 +277,6 @@ class Survey:
         """
         Converts depths defined in apparent magnitude to the units of
         luminosity (erg / s /Hz).
-
         Parameters
         ----------
         redshift : float
@@ -314,36 +318,54 @@ class Survey:
                     self.instruments[inst].depths
                 )
 
-    @staticmethod
-    def _apply_filter_to_spectra(spectra, f):
+    def get_integrated_stellar_spectra(self, grid, rest_frame=False, cosmo=None,
+                                       redshift=None, igm=None):
+        """
+        Compute the integrated stellar spectra of each galaxy.
         """
 
-        Parameters
-        ----------
+        _specs = np.zeros((self.ngalaxies, grid.lam.size))
 
-        Returns
-        -------
-        transmission : float
-             The photometry for this spectra in this band.
+        for ind, gal in enumerate(self.galaxies):
+
+            # Are we getting a flux or rest frame?
+            _specs[ind, :] = gal.generate_intrinsic_spectra(grid)
+
+        # Create and store an SED object for these SEDs
+        self.seds["stellar"] = Sed(lam=grid.lam, lnu=_specs)
+
+        # Get the flux
+        # TODO: if galaxies differ in redshift this does not work!
+        # TODO: catch error if improper arguments are handed
+        if rest_frame:
+            self.seds["stellar"].get_fnu0()
+        else:
+            self.seds["stellar"].get_fnu(cosmo, redshift, igm)
+
+    def get_particle_stellar_spectra(self, grid, rest_frame=False, cosmo=None,
+                                     igm=None):
+        """
+        Compute the integrated stellar spectra of each galaxy.
         """
 
-        # Get the mask that removes wavelengths we don't currently care about
-        in_band = f.t > 0
+        for ind, gal in enumerate(self.galaxies):
 
-        # Multiply the IFU by the filter transmission curve
-        transmitted = spectra[in_band] * f.t[in_band]
+            # Are we getting a flux or rest frame?
+            sed = gal.generate_intrinsic_particle_spectra(grid,
+                                                          sed_object=True)
+            gal.spectra_array["stellar"] = sed
 
-        # Sum over the final axis to "collect" transmission in this filer
-        transmission = np.sum(transmitted)
-
-        return transmission
+            # Get the flux
+            # TODO: catch error if improper arguments are handed
+            if rest_frame:
+                gal.spectra_array["stellar"].get_fnu0()
+            else:
+                gal.spectra_array["stellar"].get_fnu(cosmo, gal.redshift, igm)
 
     def get_photometry(self, spectra_type, cosmo=None, redshift=None, igm=None):
         """
-
         Parameters
         ----------
-
         """
 
         # We need to handle whether different types of spectra exist.
@@ -356,7 +378,7 @@ class Survey:
                 "Attenuated spectra coming soon!"
             )
         else:
-           # TODO: make a UnknownSpectralType error
+            # TODO: make a UnknownSpectralType error
             raise exceptions.InconsistentArguments(
                 "Unrecognised spectra_type!")
 
@@ -367,47 +389,32 @@ class Survey:
             for f in self.instruments[key].filters:
 
                 # Make an entry in the photometry dictionary for this filter
-                self.photometry[f.filter_code] = np.zeros(self.ngalaxies)
-
-                # Loop over each galaxy
-                for igal in range(self.ngalaxies):
-
-                    if spectra_type not in self.galaxies[igal].spectra:
-                        pass
-
-                    # Are we getting flux or luminosity?
-                    sed = self.galaxies[igal].spectra[spectra_type]
-                    if cosmo is not None:
-                        if sed.fnu is None:
-                            sed.get_fnu(cosmo, redshift, igm)
-                        spectra = sed.fnu
-                    else:
-                        spectra = sed.lnu
-
-                    # Calculate the photometry in this band
-                    phot = self._apply_filter_to_spectra(spectra, f)
-
-                    # Store this photometry
-                    self.photometry[f.filter_code][igal] = phot
+                self.photometry[f.filter_code] = f.apply_filter(
+                    self.seds[spectra_type]._fnu,
+                    xs=self.seds[spectra_type].nuz
+                )
 
         return self.photometry
 
     def make_field_image(self, centre):
         """
-
         Parameters
         ----------
-
         """
         pass
 
-    def make_images(self, img_type, spectra_type, kernel_func=None,
-                    rest_frame=False, cosmo=None, igm=None):
+    def make_images(
+            self,
+            img_type,
+            spectra_type,
+            kernel_func=None,
+            rest_frame=False,
+            cosmo=None,
+            igm=None,
+    ):
         """
-
         Parameters
         ----------
-
         """
 
         # Make a dictionary in which to store our image objects, within
@@ -429,12 +436,20 @@ class Survey:
 
                 # Get images of this galaxy with this instrument
                 img = gal.make_image(
-                    inst.resolution, fov=self.fov, img_type=img_type,
-                    sed=gal.spectra_array[spectra_type], filters=inst.filters,
-                    psfs=inst.psfs, depths=inst.depths,  aperture=inst.aperture,
-                    snrs=inst.snrs, kernel_func=kernel_func,
-                    rest_frame=rest_frame, cosmo=cosmo, igm=igm,
-                    super_resolution_factor=self.super_resolution_factor
+                    inst.resolution,
+                    fov=self.fov,
+                    img_type=img_type,
+                    sed=gal.spectra_array[spectra_type],
+                    filters=inst.filters,
+                    psfs=inst.psfs,
+                    depths=inst.depths,
+                    aperture=inst.aperture,
+                    snrs=inst.snrs,
+                    kernel_func=kernel_func,
+                    rest_frame=rest_frame,
+                    cosmo=cosmo,
+                    igm=igm,
+                    super_resolution_factor=self.super_resolution_factor,
                 )
 
                 # Store this result
@@ -444,18 +459,14 @@ class Survey:
 
     def make_field_ifu(self, centre):
         """
-
         Parameters
         ----------
-
         """
         pass
 
     def make_ifus(self):
         """
-
         Parameters
         ----------
-
         """
         pass
