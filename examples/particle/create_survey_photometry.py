@@ -67,12 +67,13 @@ sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(sfh_p)  # constant star formation
 
 # Make some fake galaxies
-ngalaxies = 10
+ngalaxies = 100
 galaxies = []
 for igal in range(ngalaxies):
 
     # Generate the star formation metallicity history
-    sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
+    mass = np.random.uniform(10**6, 10**10, 1)[0]
+    sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=mass)
 
     # Create stars object
     n = random.randint(100, 1000)
@@ -84,17 +85,17 @@ for igal in range(ngalaxies):
     # Create galaxy object
     galaxy = Galaxy(name="Galaxy%d" % igal, stars=stars, redshift=1)
 
-    # Calculate the SEDs of stars in this galaxy
-    galaxy.generate_intrinsic_spectra(grid, update=True, integrated=True)
-
     # Include this galaxy
     galaxies.append(galaxy)
 
 # Store galaxies in the survey
 survey.add_galaxies(galaxies)
 
+# Get the SEDs
+survey.get_integrated_stellar_spectra(grid, rest_frame=True)
+
 # Make images for each galaxy in this survey
-survey.get_photometry(spectra_type="intrinsic")
+survey.get_photometry(spectra_type="stellar")
 
 print("Total runtime:", time.time() - start)
 
