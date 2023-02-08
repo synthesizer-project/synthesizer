@@ -32,40 +32,18 @@ if __name__ == '__main__':
 
     print(grid.line_list)
 
-    # we can grab a different line that wasn't previously read in single line
-    line = grid.fetch_line('Si 2 1533.43A')
-    print(line)
-
-    # by default this saves it to the grid object, however we can
-    # also just load it on the fly
-    line = grid.fetch_line('Si 2 1533.43A', save=False)
-    print(line)
-
     # we can also calculate luminosities and equivalent widths for a single line ...
-    # 5,6 denote ia, iZ the age and metallicity grid point
-    line = grid.get_line_info('H 1 4862.69A', 5, 6)
+    grid_point = (5, 6)  # ia, iZ the age and metallicity grid point
+
+    line = grid.get_line_info('H 1 4862.69A', grid_point)
     print(line)
 
     # or a combination combination of lines, e.g. a doublet
-    line = grid.get_line_info(['O 3 4960.29A', 'O 3 5008.24A'], 5, 6)
+    line = grid.get_lines_info(['H 1 4862.69A', 'O 3 4960.29A', 'O 3 5008.24A'], grid_point)
     print(line)
 
-    # if we want multiple lines we can create a line collection instead
-    lines = grid.get_lines_info(['H 1 4862.69A', 'O 3 4960.29A',
-                                'O 3 5008.24A', 'H 1 6564.62A'], 5, 6)
+    lines = grid.get_lines_info(line_ids, grid_point)
     print(lines)
-
-    # we could get all lines available
-    lines = grid.get_lines_info(line_ids, 5, 6)
-    print(lines)
-
-    # lines can be access like this:
-    line = lines.lines['H 1 4862.69A']
-    print(line)
-
-    # ... or like this (uses __getitem__):
-    line = lines['H 1 4862.69A']
-    print(line)
 
     # we can measure line ratios
     ratio = lines.get_ratio('BalmerDecrement')  # R23, R2, R3, ...
@@ -80,7 +58,8 @@ if __name__ == '__main__':
     ia = 0  # 1 Myr old for test grid
     ratios = []
     for iZ, Z in enumerate(grid.metallicities):
-        lines = grid.get_lines_info(line_ids, ia, iZ)
+        grid_point = (ia, iZ)
+        lines = grid.get_lines_info(line_ids, grid_point)
         ratios.append(lines.get_ratio(ratio_id))
 
     Zsun = grid.metallicities/0.0124
@@ -99,7 +78,8 @@ if __name__ == '__main__':
     x = []
     y = []
     for iZ, Z in enumerate(grid.metallicities):
-        lines = grid.get_lines_info(line_ids, ia, iZ)
+        grid_point = (ia, iZ)
+        lines = grid.get_lines_info(line_ids, grid_point)
         x_, y_ = lines.get_diagram(diagram_id)
         x.append(x_)
         y.append(y_)
