@@ -106,10 +106,11 @@ galaxies = []
 for igal in range(ngalaxies):
 
     # Generate the star formation metallicity history
-    sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
+    mass = 10**10
+    sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=mass)
 
     # Create stars object
-    n = 100
+    n = 1000
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
@@ -134,9 +135,6 @@ for igal in range(ngalaxies):
     # Create galaxy object
     galaxy = Galaxy("Galaxy%d" % igal, stars=stars, redshift=1)
 
-    # Calculate the SEDs of stars in this galaxy
-    galaxy.generate_intrinsic_spectra(grid, update=True, integrated=False)
-
     # Include this galaxy
     galaxies.append(galaxy)
 
@@ -151,10 +149,13 @@ survey.fov = fov
 # Store galaxies in the survey
 survey.add_galaxies(galaxies)
 
+# Calculate the SEDs
+survey.get_particle_stellar_spectra(grid, cosmo=cosmo)
+
 # Make images for each galaxy in this survey
 survey.make_images(
     img_type="smoothed",
-    spectra_type="intrinsic",
+    spectra_type="stellar",
     kernel_func=quintic,
     rest_frame=False,
     cosmo=cosmo,
