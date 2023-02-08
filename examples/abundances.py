@@ -24,6 +24,5 @@ print(a3)
 
 print(f"[O/Fe] = {a3.solar_relative_abundance('O', ref_element='Fe'):.2f}")  # [O/Fe]
 
-
 plot_abundance_pattern([a2, a3], [r'Z=0.01', r'Z=0.01; \alpha = 0.6'],
                        show=True, ylim=[-7., -3.])
