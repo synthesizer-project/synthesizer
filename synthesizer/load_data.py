@@ -4,7 +4,7 @@ import numpy as np
 
 from astropy.cosmology import FlatLambdaCDM
 
-from .galaxy import Galaxy
+from .galaxy.particle import ParticleGalaxy
 
 
 def load_CAMELS_SIMBA(_dir=".", snap="033"):
@@ -36,7 +36,7 @@ def load_CAMELS_SIMBA(_dir=".", snap="033"):
 
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
-        galaxies[i] = Galaxy()
+        galaxies[i] = ParticleGalaxy()
         # WARNING: initial masses set to current for now
         galaxies[i].load_stars(
             masses[b:e],
@@ -45,7 +45,7 @@ def load_CAMELS_SIMBA(_dir=".", snap="033"):
             s_oxygen=s_oxygen[b:e],
             s_hydrogen=s_hydrogen[b:e],
             coordinates=coods[b:e, :],
-            initial_masses=masses[b:e],
+            current_masses=masses[b:e]
         )
 
     return galaxies
@@ -74,7 +74,7 @@ def load_FLARES(f, region, tag):
 
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
-        galaxies[i] = Galaxy()
+        galaxies[i] = ParticleGalaxy()
         galaxies[i].load_stars(
             mass[b:e],
             ages[b:e],
@@ -82,7 +82,6 @@ def load_FLARES(f, region, tag):
             s_oxygen=s_oxygen[b:e],
             s_hydrogen=s_hydrogen[b:e],
             coordinates=coods[b:e, :],
-            initial_masses=imass[b:e],
         )
 
     return galaxies

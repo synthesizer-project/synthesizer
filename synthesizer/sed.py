@@ -259,7 +259,7 @@ class Sed:
         self.broadband_fluxes = {}
 
         # loop over filters in filter collection
-        for f in fc.filters:
+        for f in fc:
 
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
