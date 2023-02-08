@@ -28,6 +28,7 @@ class SpectralCube(Scene):
         depths=None,
         apertures=None,
         snrs=None,
+        super_resolution_factor=None,
     ):
         """
         Intialise the SpectralCube.
@@ -53,7 +54,8 @@ class SpectralCube(Scene):
 
         # Initilise the parent class
         Scene.__init__(self, resolution=resolution,
-                       npix=npix, fov=fov, sed=sed)
+                       npix=npix, fov=fov, sed=sed,
+                       super_resolution_factor=super_resolution_factor)
 
         # Set up the data cube dimensions
         self.spectral_resolution = sed.lam.size
@@ -111,6 +113,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         rest_frame=True,
         cosmo=None,
         igm=None,
+        super_resolution_factor=None,
     ):
         """
         Intialise the ParticleSpectralCube.
@@ -163,6 +166,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             sed=sed,
             stars=stars,
             positions=positions,
+            super_resolution_factor=super_resolution_factor,
             cosmo=cosmo,
         )
         SpectralCube.__init__(
@@ -174,6 +178,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             depths=depths,
             apertures=apertures,
             snrs=snrs,
+            super_resolution_factor=super_resolution_factor,
         )
 
         # Lets get the right SED from the object
@@ -181,7 +186,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         if rest_frame:
 
             # Get the rest frame SED (this is both sed.fnu0 and sed.lnu)
-            self.sed_values = self.sed.lnu.value
+            self.sed_values = self.sed._lnu
 
         elif self.stars.redshift is not None and self.cosmo is not None:
 
@@ -190,7 +195,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
                 self.sed.get_fnu(self.cosmo, self.stars.redshift, igm)
 
             # Assign the flux
-            self.sed_values = self.sed.fnu.value
+            self.sed_values = self.sed._fnu
 
         else:
 
@@ -345,9 +350,10 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
                             self.sed_values[ind, :] * kernel_val
                         )
 
-            img_this_part /= kernel_sum
+            if kernel_sum > 0:
+                img_this_part /= kernel_sum
 
-            self.ifu += img_this_part
+                self.ifu += img_this_part
 
         return self.ifu
 
