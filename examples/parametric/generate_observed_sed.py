@@ -46,7 +46,6 @@ if __name__ == '__main__':
     sed = galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1)
 
     # now calculate the observed frame spectra
-
     z = 10.  # redshift
     sed.get_fnu(cosmo, z, igm=Madau96())  # generate observed frame spectra
 
@@ -56,6 +55,10 @@ if __name__ == '__main__':
     filter_codes += [f'JWST/MIRI.{f}' for f in ['F770W']]
     fc = FilterCollection(filter_codes, new_lam=sed.lamz)
 
+    # print(sed.fnu)
+    # print(sed.lnu)
+    # print(sed._lnu)
+
     # measure broadband fluxes
     fluxes = sed.get_broadband_fluxes(fc)
 
@@ -64,4 +67,4 @@ if __name__ == '__main__':
         print(f'{filter}: {flux:.2f}')
 
     # make plot of observed including broadband fluxes (if filter collection object given)
-    galaxy.plot_observed_spectra(cosmo, z, fc=fc, spectra_to_plot=['total'])
+    # galaxy.plot_observed_spectra(cosmo, z, fc=fc, spectra_to_plot=['total'])
