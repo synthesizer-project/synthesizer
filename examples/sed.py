@@ -14,13 +14,42 @@ from synthesizer.grid import Grid
 grid_dir = '../tests/test_grid'
 grid_name = 'test_grid'
 grid = Grid(grid_name, grid_dir=grid_dir)
+grid_point = (5, 5)
 
-print(grid)
-
-sed1 = grid.get_sed(5, 5)  # get stellar SED at ia = 5, iZ = 5
-sed2 = grid.get_sed(3, 5)  # get stellar SED at ia = 5, iZ = 5
+sed1 = grid.get_sed(grid_point)  # get stellar SED at ia = 5, iZ = 5
+sed2 = grid.get_sed((3, 5))  # get stellar SED at ia = 5, iZ = 5
 
 # add together two Seds (MAGIC!)
 sed = sed1 + sed2
 
 print(sed)
+
+# calculate UV continuum slope
+
+
+# calcualte Balmer break
+
+# calcualte fluxes
+
+
+# print("Beta")
+# print("1D:", _sed.return_beta())
+# print("2D:", _sed_2d.return_beta())
+#
+# print("Beta from spectra")
+# print("1D:", _sed.return_beta_spec())
+# print("2D:", _sed_2d.return_beta_spec())
+#
+# print("Balmer break")
+# print("1D:", _sed.get_balmer_break())
+# print("2D:", _sed_2d.get_balmer_break())
+#
+# print("Broadband luminosities")
+# fs = [f'JWST/NIRCam.{f}' for f in ['F200W', 'F356W']]
+# fc = FilterCollection(fs, new_lam=_sed.lam)
+#
+# print("1D:", _sed.get_broadband_luminosities(fc))
+# print("2D:", _sed_2d.get_broadband_luminosities(fc))
+#
+# print("1D:", _sed.get_broadband_fluxes(fc))
+# print("2D:", _sed_2d.get_broadband_fluxes(fc))
