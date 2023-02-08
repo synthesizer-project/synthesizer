@@ -17,6 +17,8 @@ import numpy as np
 
 def calculate_weights(z, a, particle):
 
+    print("Warning: using python weights code, performance may suffer")
+
     lenz = len(z)
     lena = len(a)
 
