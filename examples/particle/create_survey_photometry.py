@@ -82,7 +82,7 @@ for igal in range(ngalaxies):
     stars.current_masses = stars.initial_masses
 
     # Create galaxy object
-    galaxy = Galaxy("Galaxy%d" % igal, stars=stars, redshift=1)
+    galaxy = Galaxy(name="Galaxy%d" % igal, stars=stars, redshift=1)
 
     # Calculate the SEDs of stars in this galaxy
     galaxy.generate_intrinsic_spectra(grid, update=True, integrated=True)
