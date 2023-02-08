@@ -18,7 +18,7 @@ def grid(Nage=80, NZ=20, zsolar=0.0142):
         wl (array, float) wavelength array, units Angstroms
     """
 
-    sp = fsps.StellarPopulation(zcontinuous=1, sfh=0, imf_type=2, sf_start=0.0)
+    sp = fsps.StellarPopulation(zcontinuous=1, sfh=0, imf_type=2, sf_start=0.)
 
     wl = sp.wavelengths  # units: Angstroms
     ages = sp.log_age  # units: log10(years)
@@ -30,56 +30,45 @@ def grid(Nage=80, NZ=20, zsolar=0.0142):
     for i, Z in enumerate(metallicities):
         print(i, Z)
         for j, a in enumerate(10**ages / 1e9):
-            sp.params["logzsol"] = Z - np.log10(Z_solar)
-            spec[i, j] = sp.get_spectrum(tage=a, peraa=True)[1]  # Lsol / AA
+            sp.params['logzsol'] = Z - np.log10(Z_solar)
+            spec[i, j] = sp.get_spectrum(tage=a, peraa=True)[1]   # Lsol / AA
 
     # convert spec units
-    spec *= 3.826e33 / 1.1964952e40  # erg / s / cm^2 / AA
+    spec *= (3.826e33 / 1.1964952e40)  # erg / s / cm^2 / AA
 
     return spec, ages, metallicities, wl
 
 
-def main(outfile="output/fsps.h5"):
-    """Main function to create fsps grids used by synthesizer"""
+def main(outfile='output/fsps.h5'):
+    """ Main function to create fsps grids used by synthesizer """
     Nage = 81
     NZ = 41
 
     spec, age, Z, wl = grid(Nage=Nage, NZ=NZ)
 
-    write_data_h5py(outfile, "spectra", data=spec, overwrite=True)
-    write_attribute(
-        outfile,
-        "spectra",
-        "Description",
-        "Three-dimensional spectra grid, [Z,Age,wavelength]",
-    )
-    write_attribute(outfile, "spectra", "Units", "erg s^-1 cm^2 AA^-1")
+    write_data_h5py(outfile, 'spectra', data=spec, overwrite=True)
+    write_attribute(outfile, 'spectra', 'Description',
+                    'Three-dimensional spectra grid, [Z,Age,wavelength]')
+    write_attribute(outfile, 'spectra', 'Units', 'erg s^-1 cm^2 AA^-1')
 
-    write_data_h5py(outfile, "log10ages", data=age, overwrite=True)
-    write_attribute(
-        outfile,
-        "log10ages",
-        "Description",
-        "Stellar population ages in log10 years",
-    )
-    write_attribute(outfile, "ages", "Units", "log10(yr)")
+    write_data_h5py(outfile, 'log10ages', data=age, overwrite=True)
+    write_attribute(outfile, 'log10ages', 'Description',
+                    'Stellar population ages in log10 years')
+    write_attribute(outfile, 'ages', 'Units', 'log10(yr)')
 
-    write_data_h5py(outfile, "log10metallicities", data=Z, overwrite=True)
-    write_attribute(
-        outfile, "log10metallicities", "Description", "raw abundances in log10"
-    )
-    write_attribute(
-        outfile, "metallicities", "Units", "dimensionless [log10(Z)]"
-    )
+    write_data_h5py(outfile, 'log10metallicities', data=Z, overwrite=True)
+    write_attribute(outfile, 'log10metallicities', 'Description',
+                    'raw abundances in log10')
+    write_attribute(outfile, 'metallicities', 'Units',
+                    'dimensionless [log10(Z)]')
 
-    write_data_h5py(outfile, "wavelength", data=wl, overwrite=True)
-    write_attribute(
-        outfile, "wavelength", "Description", "Wavelength of the spectra grid"
-    )
-    write_attribute(outfile, "wavelength", "Units", "AA")
+    write_data_h5py(outfile, 'wavelength', data=wl, overwrite=True)
+    write_attribute(outfile, 'wavelength', 'Description',
+                    'Wavelength of the spectra grid')
+    write_attribute(outfile, 'wavelength', 'Units', 'AA')
 
 
 if __name__ == "__main__":
-    synthesizer_data_dir = os.getenv("SYNTHESIZER_DATA")
-    outfile = f"{synthesizer_data_dir}/grids/fsps.h5"
+    synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
+    outfile = f'{synthesizer_data_dir}/grids/fsps.h5'
     main(outfile)
