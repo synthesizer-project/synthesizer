@@ -48,14 +48,14 @@ if __name__ == "__main__":
     Zh = ZH.deltaConstant(Z_p)
     sfh_p = {"duration": 100 * Myr}
     sfh = SFH.Constant(sfh_p)  # constant star formation
-    sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
+    sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=10**9)
 
     print("SFHZ sampled, took:", time.time() - start)
 
     stars_start = time.time()
 
     # Create stars object
-    n = 1000  # number of particles for sampling
+    n = 100  # number of particles for sampling
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     spectra_start = time.time()
 
     # Calculate the stars SEDs
-    galaxy.generate_intrinsic_spectra(grid, update=True, integrated=False)
+    sed = galaxy.generate_intrinsic_particle_spectra(grid, sed_object=True)
 
     print("Spectra created, took:", time.time() - spectra_start)
 
@@ -106,12 +106,8 @@ if __name__ == "__main__":
 
     # Define image propertys
     redshift = 1
-    resolution = (
-        ((width + 1) / 100)
-        * cosmo.arcsec_per_kpc_proper(redshift).value
-        * arcsec
-    )
-    width = (width + 1) * cosmo.arcsec_per_kpc_proper(redshift).value * arcsec
+    resolution = ((width + 1) / 100) * kpc
+    width = (width + 1) * kpc
 
     # Create a fake PSF
     psf = np.outer(
@@ -126,7 +122,7 @@ if __name__ == "__main__":
         resolution,
         fov=width,
         img_type="hist",
-        sed=galaxy.spectra_array["intrinsic"],
+        sed=sed,
         filters=filters,
         psfs=psfs,
         kernel_func=quintic,
@@ -143,7 +139,7 @@ if __name__ == "__main__":
         resolution,
         fov=width,
         img_type="smoothed",
-        sed=galaxy.spectra_array["intrinsic"],
+        sed=sed,
         filters=filters,
         psfs=psfs,
         kernel_func=quintic,
