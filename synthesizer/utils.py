@@ -80,6 +80,22 @@ def read_params(param_file):
     return __import__(param_file)
 
 
+def explore_hdf5_grid(name, item):
+    """
+    A simple function for exploring HDF5 grid files.
+
+    NOTE: this should be moved to some kind of utilities.
+    TODO: modify to not loop over every line.
+    """
+
+    split = name.split('/')
+    name_ = '    '*(len(split)-1)+split[-1]
+    print(name_, item)
+
+    for k, v in item.attrs.items():
+        print('    '*(len(split)-1), k, ':', v)
+
+
 class Singleton(type):
     """ A metaclass used to ensure singleton behaviour, i.e. there can only
         ever be a single instance of a class in a namespace.
