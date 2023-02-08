@@ -6,8 +6,8 @@ from synthesizer.sed import Sed
 
 @pytest.fixture
 def empty_sed():
-    """returns an Sed instance"""
-    lam = np.loadtxt("tests/test_sed/lam.txt")
+    """ returns an Sed instance"""
+    lam = np.loadtxt('tests/test_sed/lam.txt')
 
     return Sed(lam=lam)
 

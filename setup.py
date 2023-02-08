@@ -12,12 +12,8 @@ from Cython.Distutils import build_ext
 import numpy as np
 
 extensions = [
-    Extension(
-        "weights",
-        ["synthesizer/weights.pyx"],
-        define_macros=[("CYTHON_TRACE", "1")],
-        extra_compile_args=["-ffast-math"],
-    )
+    Extension("weights", ["synthesizer/weights.pyx"], 
+        define_macros=[('CYTHON_TRACE', '1')])
 ]
 
 setup(
@@ -34,18 +30,17 @@ setup(
     install_requires=[  # Need to actually write the module to know this...
         "numpy>=1.14.5",
         "scipy>=1.7",
+
     ],
     # extras_require={"plotting": ["matplotlib>=2.2.0", "jupyter"]},
     # setup_requires=["pytest-runner", "flake8"],
     # tests_require=["pytest"],
     entry_points={
-        "console_scripts": [
-            "init_bc03=grids.grid_bc03:main",
-            "init_fsps=grids.grid_fsps:main",
-        ]
+        "console_scripts": ["init_bc03=grids.grid_bc03:main",
+                            "init_fsps=grids.grid_fsps:main"]
     },
     include_package_data=True,
-    cmdclass={"build_ext": build_ext},
-    ext_modules=cythonize(extensions, language_level="3"),
-    include_dirs=[np.get_include()],
+    cmdclass={'build_ext': build_ext},
+    ext_modules=cythonize(extensions),
+    include_dirs = [np.get_include()],
 )

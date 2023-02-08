@@ -5,8 +5,8 @@ from synthesizer.utils import Singleton
 
 
 class Survey:
-    """A generic survey object to hold all survey specific attributes
-    and methods"""
+    """ A generic survey object to hold all survey specific attributes
+        and methods """
 
     def __init__(self, filters):
 
@@ -17,9 +17,7 @@ class Survey:
         self.depths = {f: None for f in self.filters}
         self.depth_apertures = {f: None for f in self.filters}
 
-    def compute_pixel_noise(
-        self,
-    ):
+    def compute_pixel_noise(self,):
         pass
 
 

@@ -57,10 +57,8 @@ def make_report(funcs, ncalls, tottime, pcent, col_width, numeric_width=14):
         row_string += "|" + func.strip("\n").ljust(col_width) + "|"
         row_string += str(int(ncalls[ind])).ljust(numeric_width) + "|"
         row_string += f"{tottime[ind]:.4f}".ljust(numeric_width) + "|"
-        row_string += (
-            f"{tottime[ind] / ncalls[ind] * 1000:.4f}".ljust(numeric_width)
-            + "|"
-        )
+        row_string += f"{tottime[ind] / ncalls[ind] * 1000:.4f}".ljust(
+            numeric_width) + "|"
         row_string += f"{pcent[ind]:.2f}".ljust(numeric_width) + "|"
         row_string += "\n"
 
@@ -68,23 +66,13 @@ def make_report(funcs, ncalls, tottime, pcent, col_width, numeric_width=14):
 
         # Do we need to start again with a larger column width?
         if len(func) + 2 > col_width:
-            return make_report(
-                funcs,
-                ncalls,
-                tottime,
-                pcent,
-                col_width=len(func.ljust(col_width)) + 1,
-                numeric_width=numeric_width,
-            )
+            return make_report(funcs, ncalls, tottime, pcent,
+                               col_width=len(func.ljust(col_width)) + 1,
+                               numeric_width=numeric_width)
         elif len(str(int(ncalls[ind]))) > numeric_width:
-            return make_report(
-                funcs,
-                ncalls,
-                tottime,
-                pcent,
-                col_width,
-                numeric_width=len(str(int(ncalls[ind]))) + 1,
-            )
+            return make_report(funcs, ncalls, tottime, pcent,
+                               col_width,
+                               numeric_width=len(str(int(ncalls[ind]))) + 1)
 
     # Close off the bottom of the table
     report_string += "=" * len(head)
@@ -104,16 +92,13 @@ tottime = {}
 extract_data = False
 
 # Open the profile file
-with open(profile_file, "r") as file:
+with open(profile_file, 'r') as file:
     for iline, line in enumerate(file):
         line_split = [s for s in line.split(" ") if s != " " and s != ""]
 
         # Flag that we found the table (this is very primitive)
-        if (
-            line_split[-1] == "seconds\n"
-            and line_split[-3] == "in"
-            and line_split[-4] == "calls)"
-        ):
+        if (line_split[-1] == "seconds\n" and line_split[-3] == "in" and
+                line_split[-4] == "calls)"):
 
             # Flag that we can now extract data
             extract_data = True
@@ -172,12 +157,8 @@ pcent = pcent[okinds]
 for ind, func in enumerate(funcs):
 
     # Split the function signature
-    func_split = [
-        s
-        for s1 in func.split(":")
-        for s2 in s1.split("(")
-        for s in s2.split(")")
-    ]
+    func_split = [s for s1 in func.split(":")
+                  for s2 in s1.split("(") for s in s2.split(")")]
 
     if len(func_split[0]) > 0:
         funcs[ind] = func_split[0] + ":" + func_split[2]
