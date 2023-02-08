@@ -9,7 +9,7 @@ import os
 import sys
 import re
 import wget
-from utils import write_data_h5py, write_attribute
+from utils import write_data_h5py, write_attribute, get_model_filename, add_log10Q
 import tarfile
 import glob
 import gzip
@@ -21,7 +21,7 @@ from synthesizer.sed import calculate_Q
 def download_data(variant):
 
     url = ("http://www.bruzual.org/bc03/Updated_version_2016/"
-            f"BC03_{variant.lower()}_chabrier.tgz")
+           f"BC03_{variant.lower()}_chabrier.tgz")
 
     filename = wget.download(url)
     return filename
@@ -175,7 +175,7 @@ def convertBC03(files=None):
             np.array(lambdaBins, dtype=np.float64))
 
 
-def make_grid(variant, synthesizer_data_dir):
+def make_grid(variant, synthesizer_data_dir, out_filename):
     """ Main function to convert BC03 grids and
         produce grids used by synthesizer """
 
@@ -193,12 +193,6 @@ def make_grid(variant, synthesizer_data_dir):
     basepath = (f'{synthesizer_data_dir}/input_files/'
                 f'bc03-2016/{variant_dir}/Chabrier_IMF/')
 
-    
-    model_name = f'bc03-2016-{variant}_chabrier03'
-
-    # Define output
-    fname = f'{synthesizer_data_dir}/grids/{model_name}.h5'
-
     # Define files
     files = [f'bc2003_{variant_code}_m22_chab_ssp.ised_ASCII',
              f'bc2003_{variant_code}_m32_chab_ssp.ised_ASCII',
@@ -213,13 +207,9 @@ def make_grid(variant, synthesizer_data_dir):
     metallicities = out[1]
     log10metallicities = np.log10(metallicities)
 
-    print(metallicities)
-
     ages = out[2]
     ages[0] = 1E5
     log10ages = np.log10(ages)
-
-    print(log10ages)
 
     lam = out[3]
     nu = 3E8/(lam*1E-10)
@@ -236,56 +226,51 @@ def make_grid(variant, synthesizer_data_dir):
     na = len(ages)
     nZ = len(metallicities)
 
-    log10Q = np.zeros((na, nZ))  # the ionising photon production rate
-
-    for iZ, metallicity in enumerate(metallicities):
-        for ia, log10age in enumerate(log10ages):
-
-            # --- calcualte ionising photon luminosity
-            log10Q[ia, iZ] = np.log10(calculate_Q(lam, spec[ia, iZ, :]))
-
-    write_data_h5py(fname, 'ages', data=ages, overwrite=True)
-    write_attribute(fname, 'ages', 'Description',
-                    'Stellar population ages years')
-    write_attribute(fname, 'ages', 'Units', 'yr')
-
-    write_data_h5py(fname, 'log10ages', data=log10ages, overwrite=True)
-    write_attribute(fname, 'log10ages', 'Description',
+    write_data_h5py(out_filename, 'log10ages', data=log10ages, overwrite=True)
+    write_attribute(out_filename, 'log10ages', 'Description',
                     'Stellar population ages in log10 years')
-    write_attribute(fname, 'log10ages', 'Units', 'log10(yr)')
+    write_attribute(out_filename, 'log10ages', 'Units', 'dex(yr)')
 
-    write_data_h5py(fname, 'metallicities', data=metallicities, overwrite=True)
-    write_attribute(fname, 'metallicities', 'Description',
+    write_data_h5py(out_filename, 'metallicities', data=metallicities, overwrite=True)
+    write_attribute(out_filename, 'metallicities', 'Description',
                     'raw abundances')
-    write_attribute(fname, 'metallicities', 'Units', 'dimensionless [Z]')
+    write_attribute(out_filename, 'metallicities', 'Units', '')
 
-    write_data_h5py(fname, 'log10metallicities', data=log10metallicities,
-                    overwrite=True)
-    write_attribute(fname, 'log10metallicities', 'Description',
-                    'raw abundances in log10')
-    write_attribute(fname, 'log10metallicities', 'Units',
-                    'dimensionless [log10(Z)]')
-
-    write_data_h5py(fname, 'log10Q', data=log10Q, overwrite=True)
-    write_attribute(fname, 'log10Q', 'Description',
-                    ('Two-dimensional ionising photon production '
-                     'rate grid, [age,Z]'))
-
-    write_data_h5py(fname, 'spectra/wavelength', data=lam, overwrite=True)
-    write_attribute(fname, 'spectra/wavelength', 'Description',
+    write_data_h5py(out_filename, 'spectra/wavelength', data=lam, overwrite=True)
+    write_attribute(out_filename, 'spectra/wavelength', 'Description',
                     'Wavelength of the spectra grid')
-    write_attribute(fname, 'spectra/wavelength', 'Units', 'AA')
+    write_attribute(out_filename, 'spectra/wavelength', 'Units', 'Angstrom')
 
-    write_data_h5py(fname, 'spectra/stellar', data=spec, overwrite=True)
-    write_attribute(fname, 'spectra/stellar', 'Description',
+    write_data_h5py(out_filename, 'spectra/stellar', data=spec, overwrite=True)
+    write_attribute(out_filename, 'spectra/stellar', 'Description',
                     ('Three-dimensional spectra grid, '
                      '[age, metallicity, wavelength]'))
-    write_attribute(fname, 'spectra/stellar', 'Units', 'erg s^-1 Hz^-1')
+    write_attribute(out_filename, 'spectra/stellar', 'Units', 'erg/s/Hz')
 
 
 if __name__ == "__main__":
 
     synthesizer_data_dir = os.getenv('SYNTHESIZER_DATA')
 
-    for variant in ['Miles', 'Stelib']:  # 'BaSeL',
-        make_grid(variant, synthesizer_data_dir)
+    default_model = {'sps_name': 'bc03-2016',
+                     'sps_version': '',
+                     'sps_variant': '',
+                     'imf_type': 'chabrier03',  # named IMF or bpl (broken power law)
+                     'imf_masses': [0.1, 100],
+                     'imf_slopes': '',
+                     'alpha': '',
+                     }
+
+    for variant in ['BaSeL', 'Miles', 'Stelib']:  # 'BaSeL',
+
+        model = default_model | {'sps_variant': variant}
+
+        synthesizer_model_name = get_model_filename(model)
+        print(synthesizer_model_name)
+
+        # this is the full path to the ultimate HDF5 grid file
+        out_filename = f'{synthesizer_data_dir}/grids/{synthesizer_model_name}.hdf5'
+
+        make_grid(variant, synthesizer_data_dir, out_filename)
+
+        add_log10Q(out_filename)
