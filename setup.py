@@ -12,7 +12,7 @@ from Cython.Distutils import build_ext
 import numpy as np
 
 extensions = [
-    Extension("weights", ["synthesizer/weights.pyx"], 
+    Extension("synthesizer.weights", ["synthesizer/weights.pyx"], 
         define_macros=[('CYTHON_TRACE', '1')])
 ]
 
