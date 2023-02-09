@@ -200,8 +200,11 @@ class Sed:
         Useful when you want rest-frame quantities.
         """
 
+        # TODO: should these be _lnu and _lam?
         self.lamz = self.lam
         self.fnu = self.lnu
+
+        self.nuz = c.value/self.lamz
 
     def get_fnu(self, cosmo, z, igm=None):
         """
