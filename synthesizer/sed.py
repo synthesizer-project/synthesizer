@@ -202,6 +202,8 @@ class Sed:
 
         self.nuz = c.value/self.lamz
 
+        self.nuz = c.value/self.lamz
+
     def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution in nJy
