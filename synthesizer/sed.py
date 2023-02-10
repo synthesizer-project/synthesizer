@@ -201,8 +201,8 @@ class Sed:
         """
 
         # TODO: should these be _lnu and _lam?
-        self.lamz = self.lam
-        self.fnu = self.lnu
+        self.lamz = self._lam
+        self.fnu = self._lnu
 
         self.nuz = c.value/self.lamz
 
