@@ -53,10 +53,46 @@ class ParticleGalaxy(BaseGalaxy):
 
         # by default should update self.stars
 
+    def _prepare_args(self, grid, fesc, spectra_type):
+        """
+        A method to prepare the arguments for SED computation with the C
+        functions.
+        """
+
+        # Set up the inputs to the C function.
+        grid_props = [grid.log10ages, grid.log10metallicities]
+        part_props = [
+            np.ascontiguousarray(
+                self.stars.log10ages, dtype=np.float64),
+            np.ascontiguousarray(
+                self.stars.log10metallicities, dtype=np.float64),
+        ]
+        part_mass = np.ascontiguousarray(
+            self.stars.initial_masses, dtype=np.float64)
+        npart = np.int32(part_mass.size)
+        nlam = np.int32(grid.spectra[spectra_type].shape[-1])
+
+        # Slice the spectral grids and pad them with copies of the edges.
+        grid_spectra = np.ascontiguousarray(
+            grid.spectra[spectra_type], np.float64)
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+        grid_dims[ind + 1] = nlam
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        return (grid_spectra, grid_props, part_props, part_mass, fesc,
+                grid_dims, len(grid_props), npart, nlam)
+
     def generate_intrinsic_spectra(
         self,
         grid,
-        fesc=0.0,
+        fesc=-1,
         update=True,
         young=False,
         old=False,
@@ -107,59 +143,13 @@ class ParticleGalaxy(BaseGalaxy):
             Errors if both a young and old component is requested because these
             directly contradict each other resulting in 0 particles in the mask.
         """
+        from ..extensions.csed import compute_integrated_sed
 
-        # Get masks for which components we are handling, if a sub-component
-        # has not been requested it's necessarily all particles.
-        s = self._get_masks(young, old)
+        # Prepare the arguments for the C function.
+        args = self._prepare_args(grid, fesc=fesc, spectra_type="stellar")
 
-        # Calculate integrared spectra
-
-        # Calculate the grid weights for all stellar particles
-        weights_temp = self._calculate_weights(
-            grid,
-            self.stars.log10metallicities[s],
-            self.stars.log10ages[s],
-            self.stars.initial_masses[s],
-        )
-
-        # Get the mask for grid cells we need to sum
-        non0_inds = np.where(weights_temp > 0)
-
-        # print(np.unique(weights_temp[non0_inds]))
-
-        # Compute integrated stellar sed
-        stellar_lum = np.sum(
-            grid.spectra["stellar"][non0_inds[0], non0_inds[1], :]
-            * weights_temp[non0_inds[0], non0_inds[1], None],
-            axis=0,
-        )
-
-        # print(np.sum(stellar_lum))
-
-        # # TODO: perhaps should also check that fesc is not false
-        # if "total" in list(grid.spectra.keys()):
-
-        #     # Compute the integrated intrinsic sed
-        #     intrinsic_lum = np.sum(
-        #         (1.0 - fesc)
-        #         * grid.spectra["total"][non0_inds[0], non0_inds[1], :]
-        #         * weights_temp[non0_inds[0], non0_inds[1], None],
-        #         axis=0,
-        #     )
-
-        # else:
-
-        #     # If no nebular emission the intrinsic emission is simply
-        #     # the stellar emission
-        #     intrinsic_lum = stellar_lum
-
-        # # Update the SED's attributes
-        # if update:
-        #     self.stellar_lum = stellar_lum
-        #     self.intrinsic_lum = intrinsic_lum
-        #     self.spectra["stellar"] = Sed(grid.lam, self.stellar_lum)
-        #     self.spectra["intrinsic"] = Sed(grid.lam, self.intrinsic_lum)
-        #     self.lam = grid.lam
+        # Get the integrated stellar SED
+        stellar_lum = compute_integrated_sed(*args)
 
         if sed_object:
             return Sed(grid.lam, stellar_lum)
@@ -172,7 +162,7 @@ class ParticleGalaxy(BaseGalaxy):
     def generate_intrinsic_particle_spectra(
         self,
         grid,
-        fesc=0.0,
+        fesc=-1,
         update=True,
         young=False,
         old=False,
@@ -219,86 +209,13 @@ class ParticleGalaxy(BaseGalaxy):
             directly contradict each other resulting in 0 particles in the mask.
         """
 
-        s = self._get_masks(young, old)
+        from ..extensions.csed import compute_particle_seds
 
-        # Calculate spectra for every particle individually. This is
-        # necessary for los calculation anyway.
+        # Prepare the arguments for the C function.
+        args = self._prepare_args(grid, fesc=fesc, spectra_type="stellar")
 
-        # # Initialise arrays to store SEDs
-        # stellar_lum_array = np.zeros(
-        #     (self.nparticles, grid.spectra["stellar"].shape[-1])
-        # )
-
-        stellar_lum_array = np.zeros(
-            (self.nparticles, grid.spectra["stellar"].shape[-1])
-        )
-
-        # Loop over all stellar particles
-        for i, (mass, age, metal) in enumerate(
-            zip(
-                self.stars.initial_masses[s],
-                self.stars.log10ages[s],
-                self.stars.log10metallicities[s],
-            )
-        ):
-
-            # Calculate the grid weights for this particle
-            weights_temp = self._calculate_weights(grid, metal, age, mass)
-            non0_inds = np.where(weights_temp > 0)
-
-            # Get the mask for grid cells we need to sum
-            non0_inds = np.where(weights_temp > 0)
-
-            # Compute the stellar sed for this particle
-            stellar_lum_array[i] = np.sum(
-                grid.spectra["stellar"][non0_inds[0], non0_inds[1], :]
-                * weights_temp[non0_inds[0], non0_inds[1], None],
-                axis=0,
-            )
-
-            # # TODO: perhaps should also check that fesc is not false
-            # if "total" in list(grid.spectra.keys()):
-
-            #     # Calculate the intrinsic sed for this particle
-            #     # TODO: I'm not sure this will actually work if fesc is an array
-            #     intrinsic_lum_array[i] = np.sum(
-            #         (1.0 - fesc)
-            #         * grid.spectra["total"][non0_inds[0], non0_inds[1], :]
-            #         * weights_temp[non0_inds[0], non0_inds[1], None],
-            #         axis=0,
-            #     )
-
-            # else:
-            #     # If no nebular emission the intrinsic emission is simply
-            #     # the stellar emission
-            #     intrinsic_lum_array[i] = stellar_lum_array[i]
-
-        # # Update the SED's attributes
-        # if update:
-
-        #     # Store the values of the SED in arrays local to Galaxy.
-        #     # (These quantities are actually repeated, in the context
-        #     # of an SED object below.)
-        #     self.stellar_lum_array = stellar_lum_array
-        #     self.intrinsic_lum_array = intrinsic_lum_array
-
-        #     # Compute the integrated SEDs
-        #     self.stellar_lum = np.sum(stellar_lum_array, axis=0)
-        #     self.intrinsic_lum = np.sum(intrinsic_lum_array, axis=0)
-
-        #     # Create the SED objects and store them in the dictionaries
-        #     # TODO: Repititon of above, may want to consolidate
-        #     self.spectra["stellar"] = Sed(grid.lam, self.stellar_lum)
-        #     self.spectra_array["stellar"] = Sed(
-        #         grid.lam, self.stellar_lum_array
-        #     )
-        #     self.spectra["intrinsic"] = Sed(grid.lam, self.intrinsic_lum)
-        #     self.spectra_array["intrinsic"] = Sed(
-        #         grid.lam, self.intrinsic_lum_array
-        #     )
-
-        #     # Store the wavelength array
-        #     self.lam = grid.lam
+        # Get the integrated stellar SED
+        stellar_lum_array = compute_particle_seds(*args)
 
         if sed_object:
             return Sed(grid.lam, stellar_lum_array)
