@@ -36,7 +36,7 @@ def load_CAMELS_IllustrisTNG(_dir='.', LH='0', snap='033'):
         form_time = hf['PartType4/StellarFormationTime'][:]
         coods = hf['PartType4/Coordinates'][:]
         masses = hf['PartType4/Masses'][:]
-        masses = hf['PartType4/GFM_InitialMass'][:]
+        imasses = hf['PartType4/GFM_InitialMass'][:]
         _metals = hf['PartType4/Metallicity'][:]
 
         scale_factor = hf['Header'].attrs[u'Time']
