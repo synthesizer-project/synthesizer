@@ -16,6 +16,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
+from .exceptions import InconsistentParameter
+
 
 class Elements:
 
@@ -249,11 +251,19 @@ class Abundances(Elements):
 
         if d2m:
 
-            # get scaled depletion values, i.e. the fraction of each element which is depleted on to dust
-            self.get_depletions()
+            if d2m <= self.max_d2m:
 
-            for element in self.metals:
-                self.a[element] += np.log10(self.depletion[element])
+                # get scaled depletion values, i.e. the fraction of each element which is depleted on to dust
+                self.get_depletions()
+
+                for element in self.metals:
+                    self.a[element] += np.log10(self.depletion[element])
+
+            else:
+
+                # this doesn't work
+                InconsistentParameter(
+                    f'The dust-to-metal ratio (d2m) must be less than the maximum possible ratio ({self.max_d2m:.2f})')
 
     def __getitem__(self, element):
         """
