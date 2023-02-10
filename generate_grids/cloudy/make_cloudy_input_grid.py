@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 import yaml
 
-from synthesizer.abundances_sw import Abundances
+from synthesizer.abundances import Abundances
 from synthesizer.grid import Grid
 from synthesizer.cloudy import create_cloudy_input
 
@@ -16,7 +16,7 @@ from write_submission_script import (apollo_submission_script,
 from copy import deepcopy
 
 
-def load_cloudy_parameters(param_file='default_param.yaml',
+def load_cloudy_parameters(param_file='default_param.yaml', default_param_file='default_param.yaml',
                            **kwarg_parameters):
     """
     Load CLOUDY parameters from a YAML file
@@ -34,15 +34,34 @@ def load_cloudy_parameters(param_file='default_param.yaml',
         True if successful, False otherwise.
     """
 
+    # open paramter file
     with open(param_file, "r") as stream:
         try:
             cloudy_params = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
             print(exc)
 
+    # open default parameter file
+    with open(default_param_file, "r") as stream:
+        try:
+            default_cloudy_params = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+
+    # find any differences
+    cloudy_params_set = set(cloudy_params.items())
+    default_cloudy_params_set = set(default_cloudy_params.items())
+
+    param_changes = dict(cloudy_params_set - default_cloudy_params_set)
+
     # update any custom parameters
     for k, v in kwarg_parameters.items():
         cloudy_params[k] = v
+        param_changes[k] = v
+
+    out_str = ''
+    for k, v in param_changes.items():
+        out_str += f'-{k}{str(v).replace("-", "m")}'
 
     # search for any lists of parameters.
     # currently exits once it finds the *first* list
@@ -63,14 +82,14 @@ def load_cloudy_parameters(param_file='default_param.yaml',
                 output_cloudy_params.append(cloudy_params_)
 
                 # replace negative '-' with m
-                out_str = f'-{k}{str(_v).replace("-", "m")}'
+                out_str += f'-{k}{str(_v).replace("-", "m")}'
 
                 # save to list of output strings
                 output_cloudy_names.append(out_str)
 
             return output_cloudy_params, output_cloudy_names
 
-    return [cloudy_params], ['']
+    return [cloudy_params], [out_str]
 
 
 def make_directories(synthesizer_data_dir, sps_grid, cloudy_name):
