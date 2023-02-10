@@ -88,7 +88,8 @@ class ParametricGalaxy(BaseGalaxy):
         # add together spectra
         for spec_name, spectra in self.spectra.items():
             if spec_name in second_galaxy.spectra.keys():
-                new_galaxy.spectra[spec_name] = spectra + second_galaxy.spectra[spec_name]
+                new_galaxy.spectra[spec_name] = spectra + \
+                    second_galaxy.spectra[spec_name]
             else:
                 exceptions.InconsistentAddition(
                     'Both galaxies must contain the same spectra to be added together')
@@ -112,7 +113,8 @@ class ParametricGalaxy(BaseGalaxy):
         # add together images
         for img_name, image in self.images.items():
             if img_name in second_galaxy.images.keys():
-                new_galaxy.images[img_name] = image + second_galaxy.images[img_name]
+                new_galaxy.images[img_name] = image + \
+                    second_galaxy.images[img_name]
             else:
                 exceptions.InconsistentAddition(
                     'Both galaxies must contain the same images to be added together')
@@ -243,13 +245,16 @@ class ParametricGalaxy(BaseGalaxy):
             # if Lyman-alpha escape fraction is specified reduce LyA luminosity
 
             # --- generate contribution of line emission alone and reduce the contribution of Lyman-alpha
-            linecont = np.sum(grid.spectra['linecont'] * self.sfzh_, axis=(0, 1))
-            idx = grid.get_nearest_index(1216., grid.lam)  # get index of Lyman-alpha
+            linecont = np.sum(
+                grid.spectra['linecont'] * self.sfzh_, axis=(0, 1))
+            # get index of Lyman-alpha
+            idx = grid.get_nearest_index(1216., grid.lam)
             linecont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
 
             nebular_continuum = np.sum(
                 grid.spectra['nebular_continuum'] * self.sfzh_, axis=(0, 1))
-            transmitted = np.sum(grid.spectra['transmitted'] * self.sfzh_, axis=(0, 1))
+            transmitted = np.sum(
+                grid.spectra['transmitted'] * self.sfzh_, axis=(0, 1))
             self.spectra['reprocessed']._lnu = (
                 1.-fesc) * (linecont + nebular_continuum + transmitted)
 
@@ -261,7 +266,8 @@ class ParametricGalaxy(BaseGalaxy):
             self.spectra['reprocessed']._lnu  # the light before reprocessing by dust
 
         if tauV:
-            T = dust_curve.attenuate(tauV, grid.lam)  # calculate dust attenuation
+            # calculate dust attenuation
+            T = dust_curve.attenuate(tauV, grid.lam)
             self.spectra['attenuated']._lnu = self.spectra['escape']._lnu + \
                 T*self.spectra['reprocessed']._lnu
             self.spectra['total']._lnu = self.spectra['attenuated']._lnu
@@ -348,10 +354,12 @@ class ParametricGalaxy(BaseGalaxy):
                 wavelength = grid_line['wavelength']
 
                 #  line luminosity erg/s
-                luminosity = np.sum((1-fesc)*grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1))
+                luminosity = np.sum(
+                    (1-fesc)*grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1))
 
                 #  continuum at line wavelength, erg/s/Hz
-                continuum = np.sum(grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1))
+                continuum = np.sum(
+                    grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1))
 
                 # NOTE: this is currently incorrect and should be made of the separated nebular and stellar continuum emission
                 # proposed alternative
@@ -378,7 +386,8 @@ class ParametricGalaxy(BaseGalaxy):
                         (1-fesc)*np.sum(grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1)))
 
                     #  continuum at line wavelength, erg/s/Hz
-                    continuum.append(np.sum(grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1)))
+                    continuum.append(
+                        np.sum(grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1)))
 
             else:
                 # throw exception
@@ -423,7 +432,8 @@ class ParametricGalaxy(BaseGalaxy):
 
         # if the intrinsic lines haven't already been calcualted and saved then generate them
         if 'intrinsic' not in self.lines:
-            intrinsic_lines = self.get_intrinsic_line(grid, line_ids, fesc=fesc, update=update)
+            intrinsic_lines = self.get_intrinsic_line(
+                grid, line_ids, fesc=fesc, update=update)
         else:
             intrinsic_lines = self.lines['intrinsic']
 
@@ -433,13 +443,16 @@ class ParametricGalaxy(BaseGalaxy):
         for line_id, intrinsic_line in intrinsic_lines.items():
 
             # calculate attenuation
-            T_nebular = dust_curve_nebular.attenuate(tauV_nebular, intrinsic_line._wavelength)
-            T_stellar = dust_curve_stellar.attenuate(tauV_stellar, intrinsic_line._wavelength)
+            T_nebular = dust_curve_nebular.attenuate(
+                tauV_nebular, intrinsic_line._wavelength)
+            T_stellar = dust_curve_stellar.attenuate(
+                tauV_stellar, intrinsic_line._wavelength)
 
             luminosity = intrinsic_line._luminosity * T_nebular
             continuum = intrinsic_line._continuum * T_stellar
 
-            line = Line(intrinsic_line.id, intrinsic_line._wavelength, luminosity, continuum)
+            line = Line(intrinsic_line.id,
+                        intrinsic_line._wavelength, luminosity, continuum)
 
             # NOTE: the above is wrong and should be separated into stellar and nebular continuum components:
             # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
