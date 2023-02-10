@@ -19,4 +19,4 @@ scaling: null
 stop_T: 4000  # stopping temperature
 stop_efrac: -2  # limiting ratio of electron to H densities
 z: 0.0  # redshift
-grains: true # include grains
+grains: false # include grains
