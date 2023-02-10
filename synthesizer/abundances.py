@@ -134,46 +134,47 @@ class Elements:
     sol['Cu'] = -7.81
     sol['Zn'] = -7.44
 
-    # ---------------- Depletion
+    # ---------------- default Depletion
     # --- ADOPTED VALUES
     # Gutkin+2016: https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract
     # Dopita+2013: https://ui.adsabs.harvard.edu/abs/2013ApJS..208...10D/abstract
     # Dopita+2006: https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract
 
-    depsol = {}
+    default_depletion = {}
     # Depletion of 1 -> no depletion, while 0 -> fully depleted
     # Noble gases aren't depleted (eventhough there is some eveidence
     # for Argon depletion -> https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.2310G/abstract)
-    depsol['H'] = 1.0
-    depsol['He'] = 1.0
-    depsol['Li'] = 0.16
-    depsol['Be'] = 0.6
-    depsol['B'] = 0.13
-    depsol['C'] = 0.5
-    depsol['N'] = 0.89  # <----- replaced by Dopita+2013 value, Gutkin+2016 assumes no depletion
-    depsol['O'] = 0.7
-    depsol['F'] = 0.3
-    depsol['Ne'] = 1.0
-    depsol['Na'] = 0.25
-    depsol['Mg'] = 0.2
-    depsol['Al'] = 0.02
-    depsol['Si'] = 0.1
-    depsol['P'] = 0.25
-    depsol['S'] = 1.0
-    depsol['Cl'] = 0.5
-    depsol['Ar'] = 1.0
-    depsol['K'] = 0.3
-    depsol['Ca'] = 0.003
-    depsol['Sc'] = 0.005
-    depsol['Ti'] = 0.008
-    depsol['V'] = 0.006
-    depsol['Cr'] = 0.006
-    depsol['Mn'] = 0.05
-    depsol['Fe'] = 0.01
-    depsol['Co'] = 0.01
-    depsol['Ni'] = 0.04
-    depsol['Cu'] = 0.1
-    depsol['Zn'] = 0.25
+    default_depletion['H'] = 1.0
+    default_depletion['He'] = 1.0
+    default_depletion['Li'] = 0.16
+    default_depletion['Be'] = 0.6
+    default_depletion['B'] = 0.13
+    default_depletion['C'] = 0.5
+    # <----- replaced by Dopita+2013 value, Gutkin+2016 assumes no depletion
+    default_depletion['N'] = 0.89
+    default_depletion['O'] = 0.7
+    default_depletion['F'] = 0.3
+    default_depletion['Ne'] = 1.0
+    default_depletion['Na'] = 0.25
+    default_depletion['Mg'] = 0.2
+    default_depletion['Al'] = 0.02
+    default_depletion['Si'] = 0.1
+    default_depletion['P'] = 0.25
+    default_depletion['S'] = 1.0
+    default_depletion['Cl'] = 0.5
+    default_depletion['Ar'] = 1.0
+    default_depletion['K'] = 0.3
+    default_depletion['Ca'] = 0.003
+    default_depletion['Sc'] = 0.005
+    default_depletion['Ti'] = 0.008
+    default_depletion['V'] = 0.006
+    default_depletion['Cr'] = 0.006
+    default_depletion['Mn'] = 0.05
+    default_depletion['Fe'] = 0.01
+    default_depletion['Co'] = 0.01
+    default_depletion['Ni'] = 0.04
+    default_depletion['Cu'] = 0.1
+    default_depletion['Zn'] = 0.25
 
 
 class Abundances(Elements):
@@ -197,6 +198,9 @@ class Abundances(Elements):
         self.CO = CO
         self.d2m = d2m
         self.scaling = scaling
+
+        # set all depletions to zero initially
+        self.depletion = {element: 0.0 for element in self.all_elements}
 
         # logathrimic abundance of element relative to H
         a = {}
@@ -231,19 +235,25 @@ class Abundances(Elements):
             a['N'] = -4.47 + np.log10(Z / self.Z_sol + (Z / self.Z_sol)**2)
 
         # rescale abundances to recover correct Z
-        cor = np.log10(Z / self.metallicity(a))
+        cor = np.log10(Z / self.get_metallicity(a))
 
         for i in self.metals:
             a[i] += cor
 
+        # calculate max_d2m
+        self.a = a
+
+        self.max_d2m = self.get_max_d2m()
+
+        self.a_nodep = deepcopy(a)
+
         if d2m:
 
-            dep = self.depletions(d2m)
+            # get scaled depletion values, i.e. the fraction of each element which is depleted on to dust
+            self.get_depletions()
 
-            for i in self.metals:
-                a[i] += np.log10(dep[i])
-
-        self.a = a
+            for element in self.metals:
+                self.a[element] += np.log10(self.depletion[element])
 
     def __getitem__(self, element):
         """
@@ -281,13 +291,14 @@ class Abundances(Elements):
         pstr += f"CO: {self.CO}\n"
         pstr += f"dust-to-metal ratio: {self.d2m}\n"
         pstr += "-"*10 + "\n"
+        pstr += "element log10(X/H) (log10(X/H)+12) [depletion]\n"
         for ele in self.all_elements:
-            pstr += f"{self.name[ele]}: {self.a[ele]:.2f} ({self.a[ele]+12:.2f})\n"
+            pstr += f"{self.name[ele]}: {self.a[ele]:.2f} ({self.a[ele]+12:.2f}) [{self.depletion[ele]:.2f}]\n"
         pstr += "-"*20
 
         return pstr
 
-    def metallicity(self, a=None):
+    def get_metallicity(self, a=None):
         """
         This function determines the mass fraction of the metals, or the metallicity
 
@@ -308,46 +319,18 @@ class Abundances(Elements):
             np.sum([self.A[i]*10**(a[i])
                     for i in self.all_elements])
 
-    def dust_to_metal(self, a, dep):
-        """
-        This function returns the dust-to-metal ratio from the depleted amount of metals
-
-        :param a: a dictionary with the absolute elemental abundances
-        :param dep: a dictionary with non-depleted fraction of the metals
-
-        :return: the dust-to-metal ratio
-        :rtype: float
-        """
-        # TODO: rewrite this for improved clarity
-
-        return np.sum([self.A[i] * (1. - dep[i])*10**a[i] for i in self.metals]) /\
-            np.sum([self.A[i]*10**a[i] for i in self.metals])
-
-    def depletions(self, d2m):
+    def get_depletions(self):
         """
         This function returns the depletion after scaling using the solar abundances and
         depletion patterns from the dust-to-metal ratio.
 
-        :param d2m: float, dust-to-metal ratio
-
-        :return: a dictionary of depletion patterns
-        :rtype: float
         """
+        for element in self.all_elements:
+            # calculate depletion factor by rescaling the
+            self.depletion[element] = 1-((self.d2m/self.max_d2m) *
+                                         (1.-self.default_depletion[element]))
 
-        dep = {}
-
-        for i in self.metals:
-
-            if self.depsol[i] != 1.0:
-                # A very crude interpolation, using no depletion,
-                # solar depletion patterns and fully depleted metal
-                # corresponding to 0, solar and 1 dust-to-metal ratio
-                dep[i] = np.interp(d2m, np.array([0.0, self.dust_to_metal(self.sol, self.depsol), 1.0]),
-                                   np.array([1.0, self.depsol[i], 0.0]))
-            else:
-                dep[i] = 1.0
-
-        return dep
+        return self.depletion
 
     def solar_relative_abundance(self, e, ref_element='H'):
         """
@@ -357,6 +340,28 @@ class Abundances(Elements):
         """
 
         return (self.a[e]-self.a[ref_element]) - (self.sol[e]-self.sol[ref_element])
+
+    def get_max_d2m(self):
+        """
+        This function determine the maximum dust-to-metal ratio
+        """
+
+        dust = 0.0  # mass fraction in dust
+        for element in self.metals:
+            dust += 10**self.a[element]*self.A[element]*(1.0-self.default_depletion[element])
+
+        return dust/self.Z
+
+    def get_d2m(self):
+        """
+        This function measures the dust-to-metal ratio for the calculated depletion
+        """
+
+        dust = 0.0  # mass fraction in dust
+        for element in self.metals:
+            dust += (10**(self.a_nodep[element])-10**(self.a[element]))*self.A[element]
+
+        return dust/self.Z
 
 
 # eventually move this to dedicated plotting module
