@@ -158,9 +158,12 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     # # --- Define the ionising luminosity
     # # log10Q = np.log10(calculate_Q(10**log10U,
     #                     R_inner=10**params['log10radius'] * 3.086e18))
-    log10Q = np.log10(calculate_Q_from_U(10**log10U, 10**params["log10n_H"]))
-    cinput.append(f'Q(H) = {log10Q}\n')
+    # log10Q = np.log10(calculate_Q_from_U(10**log10U, 10**params["log10n_H"]))
+    # cinput.append(f'Q(H) = {log10Q}\n')
     # # cinput.append(f'ionization parameter = {log10U} log\n')
+
+    # log U
+    cinput.append(f'ionization parameter = {log10U:.3f}\n')
 
     # add background continuum
     if params['cosmic_rays']:
@@ -170,9 +173,14 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
 
     # --- Define the geometry
     cinput.append(f'hden {params["log10n_H"]} log constant density\n')
-    cinput.append(f'radius {params["log10radius"]} log parsecs\n')
-    cinput.append('sphere\n')
-    cinput.append(f'covering factor {params["covering_factor"]} linear\n')
+
+    # inner radius = 10^30 cm and thickness = 10^21.5 cm (==1 kpc) this is essentially plane parallel geometry
+    cinput.append(f'radius 30.0 21.5\n')
+
+    # spherical geometry, the old way of doing it
+    # cinput.append(f'radius {params["log10radius"]} log parsecs\n')
+    # cinput.append('sphere\n')
+    # cinput.append(f'covering factor {params["covering_factor"]} linear\n')
 
     # --- Processing commands
     cinput.append('iterate to convergence\n')
