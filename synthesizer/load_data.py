@@ -6,18 +6,45 @@ from astropy.cosmology import FlatLambdaCDM
 
 from .galaxy.particle import ParticleGalaxy
 
+def _load_CAMELS(lens, imasses, ages, metals, 
+                 s_oxygen, s_hydrogen, coods, 
+                 masses):
+    """
+    Load CAMELS galaxies into a galaxy object
+    """
+    begin, end = get_len(lens[:, 4])
 
-def load_CAMELS_SIMBA(_dir='.', snap='033'):
+    galaxies = [None] * len(begin)
+    for i, (b, e) in enumerate(zip(begin, end)):
+        galaxies[i] = ParticleGalaxy()
+        
+        galaxies[i].load_stars(
+            imasses[b:e],
+            ages[b:e],
+            metals[b:e],
+            s_oxygen=s_oxygen[b:e],
+            s_hydrogen=s_hydrogen[b:e],
+            coordinates=coods[b:e, :],
+            current_masses=masses[b:e]
+        )
 
-    with h5py.File(f'{_dir}/snap_{snap}.hdf5', 'r') as hf:
+    return galaxies
+
+def load_CAMELS_IllustrisTNG(_dir='.', LH='0', snap='033'):
+
+    with h5py.File(f'{_dir}/LH_{LH}_snap_{snap}.hdf5', 'r') as hf:
         form_time = hf['PartType4/StellarFormationTime'][:]
         coods = hf['PartType4/Coordinates'][:]
-        masses = hf['PartType4/Masses'][:]  # TODO: not initial masses
+        masses = hf['PartType4/Masses'][:]
+        imasses = hf['PartType4/GFM_InitialMass'][:]
         _metals = hf['PartType4/Metallicity'][:]
 
         scale_factor = hf['Header'].attrs[u'Time']
         Om0 = hf['Header'].attrs[u'Omega0']
         h = hf['Header'].attrs[u'HubbleParam']
+
+    masses = (masses * 1e10) / h
+    imasses = (imasses * 1e10) / h
 
     s_oxygen = _metals[:, 4]
     s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
@@ -29,27 +56,43 @@ def load_CAMELS_SIMBA(_dir='.', snap='033'):
     _ages = cosmo.age(1./form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
-    with h5py.File(f'{_dir}/fof_subhalo_tab_{snap}.hdf5', 'r') as hf:
+    with h5py.File(f'{_dir}/LH_{LH}_fof_subhalo_tab_{snap}.hdf5', 'r') as hf:
         lens = hf['Subhalo/SubhaloLenType'][:]
 
-    begin, end = get_len(lens[:, 4])
+    return _load_CAMELS(lens, imasses, ages, metals,
+                        s_oxygen, s_hydrogen, coods, masses)
 
-    galaxies = [None] * len(begin)
-    for i, (b, e) in enumerate(zip(begin, end)):
-        galaxies[i] = ParticleGalaxy()
-        # WARNING: initial masses set to current for now
-        galaxies[i].load_stars(
-            masses[b:e],
-            ages[b:e],
-            metals[b:e],
-            s_oxygen=s_oxygen[b:e],
-            s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :],
-            current_masses=masses[b:e]
-        )
+def load_CAMELS_SIMBA(_dir='.', LH='0', snap='033'):
 
-    return galaxies
+    with h5py.File(f'{_dir}/LH_{LH}_snap_{snap}.hdf5', 'r') as hf:
+        form_time = hf['PartType4/StellarFormationTime'][:]
+        coods = hf['PartType4/Coordinates'][:]
+        masses = hf['PartType4/Masses'][:]
+        imasses = np.ones(len(masses)) * 0.00155 # * hf['Header'].attrs['MassTable'][1]
+        _metals = hf['PartType4/Metallicity'][:]
 
+        scale_factor = hf['Header'].attrs[u'Time']
+        Om0 = hf['Header'].attrs[u'Omega0']
+        h = hf['Header'].attrs[u'HubbleParam']
+
+    masses = (masses * 1e10) / h
+    imasses = (imasses * 1e10) / h
+
+    s_oxygen = _metals[:, 4]
+    s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
+    metals = _metals[:, 0]
+
+    # convert formation times to ages
+    cosmo = FlatLambdaCDM(H0=h*100, Om0=Om0)
+    universe_age = cosmo.age(1. / scale_factor - 1)
+    _ages = cosmo.age(1./form_time - 1)
+    ages = (universe_age - _ages).value * 1e9  # yr
+
+    with h5py.File(f'{_dir}/LH_{LH}_fof_subhalo_tab_{snap}.hdf5', 'r') as hf:
+        lens = hf['Subhalo/SubhaloLenType'][:]
+
+    return _load_CAMELS(lens, imasses, ages, metals,
+                        s_oxygen, s_hydrogen, coods, masses)
 
 def load_FLARES(f, region, tag):
     with h5py.File(f, 'r') as hf:
