@@ -49,18 +49,17 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     params = {
         'log10U': -2,
         'log10radius': -2,  # radius in log10 parsecs
-
         # covering factor. Keep as 1 as it is more
         # efficient to simply combine SEDs to get != 1.0 values
         'covering_factor': 1.0,
-
         'stop_T': 4000,  # K
         'stop_efrac': -2,
         'T_floor': 100,  # K
         'log10n_H': 2.5,  # Hydrogen density
         'z': 0.,
         'CMB': False,
-        'cosmic_rays': False
+        'cosmic_rays': False,
+        'grains': False
     }
 
     for key, value in list(kwargs.items()):
@@ -85,7 +84,7 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     # --- Define the chemical composition
     for ele in ['He'] + abundances.metals:
         cinput.append((f'element abundance {abundances.name[ele]} '
-                       f'{abundances.a[ele]}\n'))
+                       f'{abundances.a[ele]} no grains\n'))
 
     """
     add graphite and silicate grains
@@ -136,7 +135,7 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     which will again introduce issues on mass conservation.
     """
 
-    if abundances.params['d2m'] > 0:
+    if (abundances.d2m > 0) & params['grains']:
         delta_C = 10**abundances.a_nodep['C'] - 10**abundances.a['C']
         delta_PAH = 0.01 * (10**abundances.a_nodep['C'])
         delta_graphite = delta_C - delta_PAH
