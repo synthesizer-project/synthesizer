@@ -163,9 +163,8 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
         Z = grid.metallicities[iZ]
 
         # ---- initialise abundances object
-        abundances = Abundances().generate_abundances(
-            Z, cloudy_params['alpha'], cloudy_params['CO'],
-            cloudy_params['d2m'], scaling=cloudy_params['scaling'])
+        abundances = Abundances(
+            Z=Z, alpha=cloudy_params['alpha'], CO=cloudy_params['CO'], d2m=cloudy_params['d2m'])
 
         for ia in range(na):
 
