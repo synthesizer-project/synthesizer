@@ -30,7 +30,11 @@ grid=""
 # bc03
 # grid=$grid" bc03-2016-BaSeL_chabrier03-0.1,100_cloudy bc03-2016-Miles_chabrier03-0.1,100_cloudy bc03-2016-Stelib_chabrier03-0.1,100 bc03_chabrier03-0.1,100_cloudy"
 
-grid=$grid" bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-old"
+# grid=$grid" bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-old"
+grid=$grid" bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy"
+grid=$grid" bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-d2m0.0-grainsFalse"
+grid=$grid" bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-grainsFalse"
+
 # FSPS high-mass slope variants
 
 cd ..
