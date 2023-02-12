@@ -8,7 +8,7 @@ This reads in a cloudy grid of models and creates a new SPS grid including the v
 from scipy import integrate
 import os
 import shutil
-from synthesizer.utils import read_params, explore_hdf5_grid
+from synthesizer.utils import read_params
 from synthesizer.cloudy import read_wavelength, read_continuum, read_lines
 from synthesizer.sed import calculate_Q
 from unyt import eV
