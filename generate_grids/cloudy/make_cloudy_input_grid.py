@@ -16,7 +16,7 @@ from write_submission_script import (apollo_submission_script,
 from copy import deepcopy
 
 
-def load_cloudy_parameters(param_file='default_param.yaml', default_param_file='default_param.yaml',
+def load_cloudy_parameters(param_file='default.yaml', default_param_file='default.yaml',
                            **kwarg_parameters):
     """
     Load CLOUDY parameters from a YAML file
@@ -173,11 +173,27 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
                 delta_log10Q = grid.log10Q['HI'][ia, iZ] - \
                     grid.log10Q['HI'][ia_ref, iZ_ref]
 
-                log10U = cloudy_params['log10U_ref'] + (1/3) * delta_log10Q
+                if cloudy_params['geometry'] == 'spherical':
+
+                    # SW: I'm not sure I fully understand this
+                    log10U = cloudy_params['log10U_ref'] + (1/3) * delta_log10Q
+
+                elif cloudy_params['geometry'] == 'planeparallel':
+
+                    # log10U just scales with log10Q
+                    log10U = cloudy_params['log10U_ref'] + delta_log10Q
+
+                else:
+
+                    print(f"ERROR: do not understand geometry choice: {cloudy_params['geometry']}")
+
+            elif cloudy_params['U_model'] == 'fixed':
+
+                log10U = cloudy_params['log10U_ref']
 
             else:
 
-                log10U = cloudy_params['log10U_ref']
+                print(f"ERROR: do not understand U model choice: {cloudy_params['U_model']}")
 
             lam = grid.lam
             lnu = grid.spectra['stellar'][ia, iZ]

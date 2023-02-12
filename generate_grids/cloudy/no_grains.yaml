@@ -20,3 +20,4 @@ stop_T: 4000  # stopping temperature
 stop_efrac: -2  # limiting ratio of electron to H densities
 z: 0.0  # redshift
 grains: false # include grains
+geometry: planeparallel
