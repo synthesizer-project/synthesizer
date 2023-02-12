@@ -67,14 +67,12 @@ def load_cloudy_parameters(param_file='default.yaml', default_param_file='defaul
                 output_cloudy_params.append(cloudy_params_)
 
                 # replace negative '-' with m
-                out_str += f'-{k}{str(_v).replace("-", "m")}'
+                out_str = f'-{k}{str(_v).replace("-", "m")}'
 
                 # save to list of output strings
                 output_cloudy_names.append(out_str)
 
             return output_cloudy_params, output_cloudy_names
-
-    return [cloudy_params], [out_str]
 
 
 def make_directories(synthesizer_data_dir, sps_grid, cloudy_name):
