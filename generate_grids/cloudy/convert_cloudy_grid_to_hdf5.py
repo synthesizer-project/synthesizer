@@ -100,6 +100,42 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
         return failed
 
 
+def fix_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
+    """
+    If a cloudy run has failed replace it with the previous metallicity grid point
+    """
+
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'r') as hf:
+
+        # --- short hand for later
+        nZ = len(hf['metallicities'][:])  # number of metallicity grid points
+        na = len(hf['log10ages'][:])  # number of age grid points
+
+        failed = False
+        failed_list = []
+
+        for ia in range(na):
+            for iZ in range(nZ):
+
+                infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}'
+
+                try:
+                    read_continuum(infile, return_dict=True)
+                except:
+                    os.system(
+                        f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ-1}.cont {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.cont')
+                    os.system(
+                        f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ-1}.lines {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.lines')
+                    failed = True
+                    failed_list.append((ia, iZ))
+
+        if failed:
+            print('FAILED')
+            print(f'missing files: {failed_list}')
+
+        return failed
+
+
 def add_spectra(grid_name, synthesizer_data_dir):
     """
     Open cloudy spectra and add them to the grid
@@ -324,6 +360,9 @@ if __name__ == "__main__":
 
         create_new_grid(grid_name, synthesizer_data_dir)
         failed = check_cloudy_runs(grid_name, synthesizer_data_dir)
+
+        # fix failed cloudy runs by replacing with nearest metallicity grid point
+        fix_cloudy_runs(grid_name, synthesizer_data_dir)
 
         if not failed:
             dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
