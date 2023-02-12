@@ -7,4 +7,4 @@ p="vary_Uref.yaml"
 c=$CLOUDY17
 
 cd ..
-python3 make_cloudy_input_grid.py -dir $synthesizer_dir -m $machine -sps $sps  -p $p  -c $c
+python3 make_cloudy_input_grid_array.py -dir $synthesizer_dir -m $machine -sps $sps  -p $p  -c $c
