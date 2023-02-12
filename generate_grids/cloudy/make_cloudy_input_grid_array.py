@@ -48,20 +48,31 @@ def load_cloudy_parameters(param_file='default.yaml', default_param_file='defaul
         except yaml.YAMLError as exc:
             print(exc)
 
-    # find any differences - this breaks when a list is defined
-    cloudy_params_set = set(cloudy_params.items())
-    default_cloudy_params_set = set(default_cloudy_params.items())
+    # search for any lists of parameters.
+    # currently exits once it finds the *first* list
+    # TODO: adapt to accept multiple varied parameters
+    for k, v in cloudy_params.items():
+        if type(v) is list:
+            output_cloudy_params = []
+            output_cloudy_names = []
 
-    param_changes = dict(cloudy_params_set - default_cloudy_params_set)
+            for _v in v:
 
-    # update any custom parameters
-    for k, v in kwarg_parameters.items():
-        cloudy_params[k] = v
-        param_changes[k] = v
+                cloudy_params_ = deepcopy(cloudy_params)
 
-    out_str = ''
-    for k, v in param_changes.items():
-        out_str += f'-{k}{str(v).replace("-", "m")}'
+                # update the value in our default dictionary
+                cloudy_params_[k] = _v
+
+                # save to list of cloudy param dicts
+                output_cloudy_params.append(cloudy_params_)
+
+                # replace negative '-' with m
+                out_str += f'-{k}{str(_v).replace("-", "m")}'
+
+                # save to list of output strings
+                output_cloudy_names.append(out_str)
+
+            return output_cloudy_params, output_cloudy_names
 
     return [cloudy_params], [out_str]
 
