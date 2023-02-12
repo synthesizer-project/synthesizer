@@ -3,7 +3,7 @@
 synthesizer_dir="/research/astrodata/highz/synthesizer/" # apollo
 machine="apollo"
 sps="bpass-2.2.1-bin_chabrier03-0.1,300.0" # FLARE default
-p="vary_alpha.yaml"
+p="vary_log10nH.yaml"
 c=$CLOUDY17
 
 cd ..

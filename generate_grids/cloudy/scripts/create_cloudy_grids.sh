@@ -1,7 +1,15 @@
 #!/bin/bash
+
+
+# create a default grid
+
+
 # synthesizer_dir="/Users/stephenwilkins/Dropbox/Research/data/synthesizer/"
 synthesizer_dir="/research/astrodata/highz/synthesizer/" # apollo
 machine="apollo"
+
+sps="bpass-2.2.1-bin_chabrier03-0.1,300.0 "
+
 
 # sps="bpass-2.2.1-bin_chabrier03-0.1,100.0 "
 # sps="bpass-2.2.1-bin_chabrier03-0.1,100.0 "
@@ -18,10 +26,10 @@ machine="apollo"
 # sps="fsps-3.2_chabrier03-0.5,120 fsps-3.2_chabrier03-1,120 fsps-3.2_chabrier03-2,120 fsps-3.2_chabrier03-5,120 fsps-3.2_chabrier03-10,120 fsps-3.2_chabrier03-20,120 fsps-3.2_chabrier03-50,120"
 
 # BC03
-sps="bc03-2016-BaSeL_chabrier03-0.1,100 bc03-2016-Miles_chabrier03-0.1,100 bc03-2016-Stelib_chabrier03-0.1,100 bc03_chabrier03-0.1,100"
+# sps="bc03-2016-BaSeL_chabrier03-0.1,100 bc03-2016-Miles_chabrier03-0.1,100 bc03-2016-Stelib_chabrier03-0.1,100 bc03_chabrier03-0.1,100"
 
 
-p="default_param.yaml"
+p="default.yaml"
 c=$CLOUDY17
 
 cd ..
