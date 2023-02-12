@@ -359,7 +359,7 @@ if __name__ == "__main__":
         print(grid_name)
 
         create_new_grid(grid_name, synthesizer_data_dir)
-        failed = check_cloudy_runs(grid_name, synthesizer_data_dir)
+        # failed = check_cloudy_runs(grid_name, synthesizer_data_dir)
 
         # fix failed cloudy runs by replacing with nearest metallicity grid point
         fix_cloudy_runs(grid_name, synthesizer_data_dir)
