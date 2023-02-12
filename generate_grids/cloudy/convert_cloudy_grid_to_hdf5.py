@@ -358,6 +358,8 @@ if __name__ == "__main__":
         print('-'*50)
         print(grid_name)
 
+        failed = False
+
         create_new_grid(grid_name, synthesizer_data_dir)
         # failed = check_cloudy_runs(grid_name, synthesizer_data_dir)
 
