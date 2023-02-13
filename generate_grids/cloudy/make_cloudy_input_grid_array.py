@@ -55,7 +55,7 @@ def load_cloudy_parameters(param_file='default.yaml', default_param_file='defaul
     for k, v in cloudy_params.items():
         if type(v) is not list:
             if v != default_cloudy_params[k]:
-                out_str_ += f'-{k}{str(_v).replace("-", "m")}'
+                out_str_ += f'-{k}{str(v).replace("-", "m")}'
 
     # search for any lists of parameters.
     # currently exits once it finds the *first* list
