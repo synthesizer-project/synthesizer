@@ -48,6 +48,15 @@ def load_cloudy_parameters(param_file='default.yaml', default_param_file='defaul
         except yaml.YAMLError as exc:
             print(exc)
 
+    # first loop through and identify changes that are not in lists (e.g. U_model)
+
+    out_str_ = ''
+
+    for k, v in cloudy_params.items():
+        if type(v) is not list:
+            if v != default_cloudy_params[k]:
+                out_str_ += f'-{k}{str(_v).replace("-", "m")}'
+
     # search for any lists of parameters.
     # currently exits once it finds the *first* list
     # TODO: adapt to accept multiple varied parameters
@@ -70,7 +79,7 @@ def load_cloudy_parameters(param_file='default.yaml', default_param_file='defaul
                 out_str = f'-{k}{str(_v).replace("-", "m")}'
 
                 # save to list of output strings
-                output_cloudy_names.append(out_str)
+                output_cloudy_names.append(out_str_+out_str)
 
             return output_cloudy_params, output_cloudy_names
 
@@ -123,18 +132,19 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
         Total number of models.
     """
 
-    ia_ref = grid.get_nearest_index(cloudy_params['log10age_ref'],
-                                    grid.log10ages)
-    iZ_ref = grid.get_nearest_index(cloudy_params['Z_ref'], grid.metallicities)
+    if cloudy_params['U_model'] == 'ref':
+        ia_ref = grid.get_nearest_index(cloudy_params['log10age_ref'],
+                                        grid.log10ages)
+        iZ_ref = grid.get_nearest_index(cloudy_params['Z_ref'], grid.metallicities)
 
-    # add these to the parameter file
-    cloudy_params['ia_ref'] = int(ia_ref)
-    cloudy_params['iZ_ref'] = int(iZ_ref)
+        # add these to the parameter file
+        cloudy_params['ia_ref'] = int(ia_ref)
+        cloudy_params['iZ_ref'] = int(iZ_ref)
 
-    # update the parameter file with the actual reference age and metallicity
-    # converting to float makes the resulting parameter file readable
-    cloudy_params['log10age_ref_actual'] = float(grid.log10ages[ia_ref])
-    cloudy_params['Z_ref_actual'] = float(grid.metallicities[iZ_ref])
+        # update the parameter file with the actual reference age and metallicity
+        # converting to float makes the resulting parameter file readable
+        cloudy_params['log10age_ref_actual'] = float(grid.log10ages[ia_ref])
+        cloudy_params['Z_ref_actual'] = float(grid.metallicities[iZ_ref])
 
     na = len(grid.ages)
     nZ = len(grid.metallicities)
@@ -172,7 +182,7 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
 
             elif cloudy_params['U_model'] == 'fixed':
 
-                log10U = cloudy_params['log10U_ref']
+                log10U = cloudy_params['log10U']
 
             else:
 
@@ -239,6 +249,8 @@ if __name__ == "__main__":
 
         # load the cloudy parameters you are going to run
         c_params, c_name = load_cloudy_parameters(args.params)
+
+        print(c_name)
 
         for i, (cloudy_params, cloudy_name) in \
                 enumerate(zip(c_params, c_name)):
