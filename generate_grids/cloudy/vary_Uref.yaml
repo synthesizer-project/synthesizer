@@ -4,7 +4,8 @@
 CMB: false  # include CMB heating
 T_floor: 100  # lower gas temperature floor
 U_model: ref  # which ionisation parameter model to use. `ref` assumes a varying ionisation parameter at a fixed reference age and metallicity
-log10U_ref: [-4, -3, -2, -1, 0]  # value of ionisation parameter at reference value, for U_model='ref'
+# log10U_ref: [-4, -3, -2, -1, 0]  # value of ionisation parameter at reference value, for U_model='ref'
+log10U_ref: [-3.5, -2.5, -1.5, -0.5]  # value of ionisation parameter at reference value, for U_model='ref'
 log10age_ref: 6.0  # log10(age/year) at which to set reference ionisation parameter, for U_model='ref'
 Z_ref: 0.01  # metallicity at which to set reference ionisation parameter, for U_model='ref'
 alpha: 0.0  # alpha element enhancement
