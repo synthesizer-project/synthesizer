@@ -84,17 +84,17 @@ def load_cloudy_parameters(param_file='default.yaml', default_param_file='defaul
         output_cloudy_params = []
         output_cloudy_names = []
 
-        for k, v in cloudy_params.items():
+        for k, v in cloudy_params_.items():
             if type(v) is list:
                 for _v in v:
 
-                    cloudy_params_ = deepcopy(cloudy_params)
+                    cloudy_params_var = deepcopy(cloudy_params)
 
                     # update the value in our default dictionary
-                    cloudy_params_[k] = _v
+                    cloudy_params_var[k] = _v
 
                     # save to list of cloudy param dicts
-                    output_cloudy_params.append(cloudy_params_)
+                    output_cloudy_params.append(cloudy_params_var)
 
                     # replace negative '-' with m
                     # out_str = f'-{k}{str(_v).replace("-", "m")}'
