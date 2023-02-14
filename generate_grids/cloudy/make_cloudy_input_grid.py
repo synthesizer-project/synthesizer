@@ -54,7 +54,7 @@ def load_cloudy_parameters(param_file='default.yaml', default_param_file='defaul
             cloudy_params[k] = v
 
     # first loop through and identify changes that are not in lists (e.g. U_model) and add them to the model name
-    out_str_ = f"_cloudy-{cloudy_params['cloudy_version']}"
+    out_str_ = f"cloudy-{cloudy_params['cloudy_version']}"
 
     # flag denoting that the parameter file includes at least one list. Used below.
     parameter_list = False
