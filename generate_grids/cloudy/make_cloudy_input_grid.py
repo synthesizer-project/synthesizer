@@ -34,10 +34,12 @@ def load_cloudy_parameters(param_file='default.yaml', default_param_file='defaul
         True if successful, False otherwise.
     """
 
+    cloudy_params = {}
+
     # open paramter file
     with open(param_file, "r") as stream:
         try:
-            cloudy_params = yaml.safe_load(stream)
+            cloudy_params_ = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
             print(exc)
 
@@ -52,10 +54,11 @@ def load_cloudy_parameters(param_file='default.yaml', default_param_file='defaul
 
     # flag denoting that the parameter file includes at least one list. Used below.
     parameter_list = False
-    for k, v in cloudy_params.items():
+    for k, v in cloudy_params_.items():
         if type(v) is not list:
             if v != default_cloudy_params[k]:
                 out_str_ += f'-{k}{str(v).replace("-", "m")}'
+                cloudy_params[k] = v
         else:
             parameter_list = True
 
