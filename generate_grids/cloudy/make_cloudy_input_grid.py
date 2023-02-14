@@ -48,13 +48,7 @@ def load_cloudy_parameters(param_file='default.yaml', default_param_file='defaul
         except yaml.YAMLError as exc:
             print(exc)
 
-    # copy over defaults where the parameter is not already set
-    for k, v in default_cloudy_params.items():
-        if k not in cloudy_params.keys():
-            cloudy_params[k] = v
-
-    # first loop through and identify changes that are not in lists (e.g. U_model) and add them to the model name
-    out_str_ = f"cloudy-{cloudy_params['cloudy_version']}"
+    out_str_ = ''
 
     # flag denoting that the parameter file includes at least one list. Used below.
     parameter_list = False
@@ -64,6 +58,14 @@ def load_cloudy_parameters(param_file='default.yaml', default_param_file='defaul
                 out_str_ += f'-{k}{str(v).replace("-", "m")}'
         else:
             parameter_list = True
+
+    # copy over defaults where the parameter is not already set
+    for k, v in default_cloudy_params.items():
+        if k not in cloudy_params.keys():
+            cloudy_params[k] = v
+
+    # first loop through and identify changes that are not in lists (e.g. U_model) and add them to the model name
+    out_str_ = f"cloudy-{cloudy_params['cloudy_version']}"+out_str_
 
     # search for any lists of parameters.
     # currently exits once it finds the *first* list
