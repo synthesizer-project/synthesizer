@@ -311,8 +311,6 @@ if __name__ == "__main__":
     # load the cloudy parameters you are going to run
     c_params, c_name = load_cloudy_parameters(args.params)
 
-    print(c_params, c_name)
-
     for i, cloudy_name in enumerate(c_name):
         print(i, cloudy_name)
 
