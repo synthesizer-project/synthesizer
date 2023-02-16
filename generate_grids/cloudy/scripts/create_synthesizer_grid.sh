@@ -38,4 +38,4 @@ grid=""
 
 
 cd ..
-python3 convert_cloudy_grid_to_hdf5.py -grid $grid -dir $synthesizer_dir
+python3 create_synthesizer_grid.py -grid $grid -dir $synthesizer_dir
