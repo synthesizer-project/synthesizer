@@ -26,19 +26,19 @@
 # needs to be copied, and then execute the program
 ######################################################################
 
+
+synthesizer_dir="/research/astrodata/highz/synthesizer/" # apollo
+machine="apollo"
+c=$CLOUDY17
+
 # increment array task ID so not zero indexed
 let index=$SGE_TASK_ID
 
 # access line at index from input_names file
-p=$(sed "${index}q;d" params.txt)
-
-
-synthesizer_dir="/research/astrodata/highz/synthesizer/" # apollo
-machine="apollo"
-
-sps="bpass-2.2.1-bin_chabrier03-0.1,300.0 "
-
-c=$CLOUDY17
+p=$(sed "${index}q;d" spsparams.txt)
+arrIN=(${p// / })
+sps=${arrIN[0]}
+params=${arrIN[1]}
 
 cd ..
 python3 make_cloudy_input_grid.py -dir $synthesizer_dir -m $machine -sps $sps  -p $p.yaml  -c $c
