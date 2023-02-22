@@ -48,7 +48,7 @@ class Sed:
         self.lam = lam  # \AA
 
         if lnu is None:
-            self.lnu = np.zeros(self.lam.shape)  # luminosity ers/s/Hz
+            self.lnu = np.zeros(self.lam.shape)  # luminosity erg/s/Hz
         else:
             self.lnu = lnu
 
