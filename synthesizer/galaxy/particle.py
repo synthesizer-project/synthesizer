@@ -1,22 +1,34 @@
+import numpy as np
+
 import synthesizer.exceptions as exceptions
 from ..particle.stars import Stars
+from ..particle.gas import Gas
 from ..sed import Sed
 from ..dust import power_law
 from .galaxy import BaseGalaxy
 from .. import exceptions
 from ..weights import calculate_weights
-import numpy as np
 from ..imaging.images import ParticleImage
 
 
 class ParticleGalaxy(BaseGalaxy):
+
+    __slots__ = [
+        # "stellar_lum", "stellar_lum_array",
+        # "intrinsic_lum", "intrinsic_lum_array",
+        "spectra", "spectra_array", "lam",
+        "stars", "gas", 
+        "sf_gas_metallicity", "sf_gas_mass",
+        "gas_mass"
+    ]
+
     def __init__(self, stars=None, gas=None):
         self.name = 'galaxy'
 
-        self.stellar_lum = None
-        self.stellar_lum_array = None
-        self.intrinsic_lum = None
-        self.intrinsic_lum_array = None
+        # self.stellar_lum = None
+        # self.stellar_lum_array = None
+        # self.intrinsic_lum = None
+        # self.intrinsic_lum_array = None
 
         self.spectra = {}  # integrated spectra dictionary
         self.spectra_array = {}  # spectra arrays dictionary
@@ -24,30 +36,94 @@ class ParticleGalaxy(BaseGalaxy):
         self.stars = stars  # a star object
         self.gas = gas
 
-
-        # If we have them record how many stellar particles there are
+        # If we have them, record how many stellar particles there are
         if self.stars:
-            self.nparticles = stars.nparticles
-    
-            # Define integrated properties of this galaxy
-            if stars.current_masses is not None:
-                self.stellar_mass = np.sum(stars.current_masses)
+            self.calculate_integrated_stellar_properties()
 
-    # this should be able to take a pre-existing stars object!
+        if self.gas:
+            self.calculate_integrated_gas_properties()
+
+        # Ensure all attributes are intialised to None
+        for attr in ParticleGalaxy.__slots__:
+            try:
+                getattr(self, attr)
+            except AttributeError:
+                setattr(self, attr, None)
+    
+    def calculate_integrated_stellar_properties(self):
+        """
+        Calculate integrated stellar properties
+        """
+        self.n_starparticles = self.stars.nparticles
+
+        # Define integrated properties of this galaxy
+        if self.stars.current_masses is not None:
+            self.stellar_mass = np.sum(self.stars.current_masses)
+
+    def calculate_integrated_gas_properties(self):
+        """
+        Calculate integrated gas properties
+        """
+        self.n_gasparticles = self.gas.nparticles
+
+        # Define integrated properties of this galaxy
+        if self.gas.masses is not None:
+            self.gas_mass = np.sum(self.gas.masses)
+        
+        if self.gas.star_forming is not None:
+            mask = self.gas.star_forming
+            if np.sum(mask) == 0:
+                self.sf_gas_mass = 0.
+                self.sf_gas_metallicity = 0.
+            else:
+                self.sf_gas_mass = np.sum(self.gas.masses[mask])
+
+                # mass weighted gas phase metallicity
+                self.sf_gas_metallicity = \
+                    np.sum(self.gas.masses[mask] *\
+                    self.gas.metallicities[mask]) / self.sf_gas_mass
 
     def load_stars(self, initial_masses, ages, metals, **kwargs):
+        """
+        Load arrays for star properties into a `Stars`  object, 
+        and attach to this galaxy object
+
+        Args:
+        initial_masses : array_like (float)
+            initial stellar particle masses (mass at birth), Msol
+        ages : array_like (float)
+            star particle age, Myr
+        metals : array_like (float)
+            star particle metallicity (total metal fraction)
+        **kwargs
+
+        Returns:
+        None
+
+        # TODO: this should be able to take a pre-existing stars object!
+        """
         self.stars = Stars(initial_masses, ages, metals, **kwargs)
-        self.nparticles = len(initial_masses)
+        self.calculate_integrated_stellar_properties()
 
-    # def load_gas(self, masses, metals, **kwargs):
-    #
-
-    def calculate_los_tauV(self, update=True):
+    def load_gas(self, masses, metals, **kwargs):
         """
-        Calculate tauV for each star particle based on the distribution of star/gas particles
-        """
+        Load arrays for gas particle properties into a `Gas` object, 
+        and attach to this galaxy object
 
-        # by default should update self.stars
+        Args:
+        masses : array_like (float)
+            gas particle masses, Msol
+        metals : array_like (float)
+            gas particle metallicity (total metal fraction)
+        **kwargs
+
+        Returns:
+        None
+
+        # TODO: this should be able to take a pre-existing stars object!
+        """
+        self.gas = Gas(masses, metals, **kwargs)
+        self.calculate_integrated_gas_properties()
     
     def generate_intrinsic_spectra(
         self,
@@ -56,7 +132,7 @@ class ParticleGalaxy(BaseGalaxy):
         update=True,
         young=False,
         old=False,
-        sed_object=False,
+        sed_object=True,
         return_wavelength=False
     ):
         """
@@ -108,8 +184,6 @@ class ParticleGalaxy(BaseGalaxy):
         # has not been requested it's necessarily all particles.
         s = self._get_masks(young, old)
 
-        # Calculate integrared spectra
-
         # Calculate the grid weights for all stellar particles
         weights_temp = self._calculate_weights(
             grid,
@@ -121,40 +195,32 @@ class ParticleGalaxy(BaseGalaxy):
         # Get the mask for grid cells we need to sum
         non0_inds = np.where(weights_temp > 0)
 
-        # print(np.unique(weights_temp[non0_inds]))
-
-        # Compute integrated stellar sed
+        # Compute stellar sed
         stellar_lum = np.sum(
             grid.spectra["stellar"][non0_inds[0], non0_inds[1], :]
             * weights_temp[non0_inds[0], non0_inds[1], None],
             axis=0,
         )
         
-        # print(np.sum(stellar_lum))
+        if "total" in list(grid.spectra.keys()):
+            # Compute the intrinsic sed
+            intrinsic_lum = np.sum(
+                (1.0 - fesc)
+                * grid.spectra["total"][non0_inds[0], non0_inds[1], :]
+                * weights_temp[non0_inds[0], non0_inds[1], None],
+                axis=0,
+            )
+        else:
+            # If no nebular emission the intrinsic emission is simply
+            # the stellar emission
+            intrinsic_lum = stellar_lum
 
-        # # TODO: perhaps should also check that fesc is not false
-        # if "total" in list(grid.spectra.keys()):
-
-        #     # Compute the integrated intrinsic sed
-        #     intrinsic_lum = np.sum(
-        #         (1.0 - fesc)
-        #         * grid.spectra["total"][non0_inds[0], non0_inds[1], :]
-        #         * weights_temp[non0_inds[0], non0_inds[1], None],
-        #         axis=0,
-        #     )
-
-        # else:
-
-        #     # If no nebular emission the intrinsic emission is simply
-        #     # the stellar emission
-        #     intrinsic_lum = stellar_lum
-
-        # # Update the SED's attributes
-        # if update:
+        # Update the SED's attributes
+        if update:
         #     self.stellar_lum = stellar_lum
         #     self.intrinsic_lum = intrinsic_lum
-        #     self.spectra["stellar"] = Sed(grid.lam, self.stellar_lum)
-        #     self.spectra["intrinsic"] = Sed(grid.lam, self.intrinsic_lum)
+            self.spectra["stellar"] = Sed(grid.lam, stellar_lum)
+            self.spectra["intrinsic"] = Sed(grid.lam, intrinsic_lum)
         #     self.lam = grid.lam
     
         if sed_object:
@@ -172,7 +238,7 @@ class ParticleGalaxy(BaseGalaxy):
         update=True,
         young=False,
         old=False,
-        sed_object=False,
+        sed_object=True,
         return_wavelength=False
     ):
         """
@@ -222,11 +288,11 @@ class ParticleGalaxy(BaseGalaxy):
     
         # # Initialise arrays to store SEDs
         # stellar_lum_array = np.zeros(
-        #     (self.nparticles, grid.spectra["stellar"].shape[-1])
+        #     (self.n_starparticles, grid.spectra["stellar"].shape[-1])
         # )
     
         stellar_lum_array = np.zeros(
-            (self.nparticles, grid.spectra["stellar"].shape[-1])
+            (self.n_starparticles, grid.spectra["stellar"].shape[-1])
         )
     
         # Loop over all stellar particles
@@ -304,7 +370,7 @@ class ParticleGalaxy(BaseGalaxy):
             else:
                 return stellar_lum_array
 
-    def _get_masks(self, young, old):
+    def _get_masks(self, young=None, old=None):
         """    
         Get masks for which components we are handling, if a sub-component
             has not been requested it's necessarily all particles.
@@ -319,37 +385,67 @@ class ParticleGalaxy(BaseGalaxy):
         elif old:
             s = self.stars.log10ages > np.log10(old)
         else:
-            s = np.ones(self.nparticles, dtype=bool)
+            s = np.ones(self.n_starparticles, dtype=bool)
 
         return s
+    
+    def calculate_los_tauV(self, update=True):
+        """
+        Calculate tauV for each star particle based on the distribution of star/gas particles
+        """
 
-    def get_screen(self, tauV, dust_curve=power_law({'slope': -1.}),
-                   integrated=True):
+        # by default should update self.stars
+
+    def apply_screen(self, tauV, 
+                     dust_curve=power_law({'slope': -1.}),
+                     sed_object=True, update=True, 
+                     intrinsic_lum=None, lam=None):
         """
         Get Sed object for intrinsic spectrum of individual star particles or
         entire galaxy
+
         Args
         tauV: numerical value of dust attenuation in the V-band
         dust_curve: instance of dust class
         """
 
-        T = np.exp(-tauV) * dust_curve.T(self.lam)
+        if intrinsic_lum is None:
+            if 'intrinsic' not in self.spectra:
+                raise ValueError(('No intrinsic luminosity provided, and'
+                                  ' no array previously calculated for this '
+                                  'galaxy object in `self.spectra`'))
 
-        # --- always calculate the integrated spectra since this is low overhead
-        # compared to doing the sed_array
-        sed = Sed(self.lam, self.intrinsic_lum * T)
-        self.spectra['attenuated'] = sed
-        # self.spectra['T'] = T
+            intrinsic_lum = self.spectra['intrinsic'].lnu
+            lam = self.spectra['intrinsic'].lam 
+        else:
+            if lam is None:
+                raise ValueError(('Must provide a wavelength `lam`'
+                                  ' if  `intrinsic_lum` provided'))
+            
+        # T = np.exp(-tauV) * dust_curve.tau(lam)
+        T = dust_curve.attenuate(tauV, lam)
+        _sed = intrinsic_lum * T
+        sed = Sed(lam.value, lnu=_sed.value)
 
-        if integrated:
+        if update:
+            self.spectra['attenuated'] = sed
+
+        if sed_object:
             return sed
         else:
-            sed_array = Sed(self.lam, self.intrinsic_lum_array * T)
-            self.spectra_array['attenuated'] = sed_array
-            return sed_array
+            return _sed
 
-    def get_CF00(self, grid, tauV_ISM, tauV_BC, alpha_ISM=-0.7, alpha_BC=-1.3,
-                 integrated=True, save_young_and_old=False):
+        # if integrated:
+        #     return sed
+        # else:
+        #     sed_array = Sed(self.lam, self.intrinsic_lum_array * T)
+        #     self.spectra_array['attenuated'] = sed_array
+        #     return sed_array
+
+    def apply_charlot_fall_00(self, grid, tauV_ISM, tauV_BC, 
+                              alpha_ISM=-0.7, alpha_BC=-1.3,
+                              intrinsic_young=None, intrinsic_old=None,
+                              save_young_and_old=False):
         """
         Calculates dust attenuated spectra assuming the Charlot & Fall (2000) dust model. In this model young star particles
         are embedded in a dusty birth cloud and thus feel more dust attenuation.
@@ -376,30 +472,33 @@ class ParticleGalaxy(BaseGalaxy):
              A Sed object containing the dust attenuated spectra
         """
 
-        _, stellar_sed_young, intrinsic_sed_young = self.generate_intrinsic_spectra(
-            grid, update=False, young=1E7, integrated=integrated)  # this does not return an Sed object
-        _, stellar_sed_old, intrinsic_sed_old = self.generate_intrinsic_spectra(
-            grid, update=False, old=1E7, integrated=integrated)  # this does not return an Sed object
-
+        # _, stellar_sed_young, intrinsic_sed_young = self.generate_intrinsic_spectra(
+        #     grid, update=False, young=1E7, integrated=integrated)  # this does not return an Sed object
+        # _, stellar_sed_old, intrinsic_sed_old = self.generate_intrinsic_spectra(
+        #     grid, update=False, old=1E7, integrated=integrated)  # this does not return an Sed object
+        
+        intrinsic_sed_young = self.generate_intrinsic_spectra(grid, update=False, young=1E7)  
+        intrinsic_sed_old = self.generate_intrinsic_spectra(grid, update=False, old=1e7)
+        
         if save_young_and_old:
 
             if integrated:
 
                 self.spectra['intrinsic_young'] = Sed(
-                    self.lam, intrinsic_sed_young)
+                    grid.lam, intrinsic_sed_young)
                 self.spectra['intrinsic_old'] = Sed(
-                    self.lam, intrinsic_sed_old)
+                    grid.lam, intrinsic_sed_old)
 
             else:
 
                 self.spectra_array['intrinsic_young'] = Sed(
-                    self.lam, intrinsic_sed_young)
+                    grid.lam, intrinsic_sed_young)
                 self.spectra_array['intrinsic_old'] = Sed(
-                    self.lam, intrinsic_sed_old)
+                    grid.lam, intrinsic_sed_old)
                 self.spectra['intrinsic_young'] = Sed(
-                    self.lam, np.sum(intrinsic_sed_young))
+                    grid.lam, np.sum(intrinsic_sed_young))
                 self.spectra['intrinsic_old'] = Sed(
-                    self.lam, np.sum(intrinsic_sed_old))
+                    grid.lam, np.sum(intrinsic_sed_old))
 
         T_ISM = power_law({'slope': alpha_ISM}).attenuate(tauV_ISM, grid.lam)
         T_BC = power_law({'slope': alpha_BC}).attenuate(tauV_BC, grid.lam)
@@ -414,30 +513,30 @@ class ParticleGalaxy(BaseGalaxy):
 
             if integrated:
 
-                self.spectra['attenuated_young'] = Sed(self.lam, sed_young)
-                self.spectra['attenuated_old'] = Sed(self.lam, sed_old)
+                self.spectra['attenuated_young'] = Sed(grid.lam, sed_young)
+                self.spectra['attenuated_old'] = Sed(grid.lam, sed_old)
 
             else:
 
                 self.spectra_array['attenuated_young'] = Sed(
-                    self.lam, sed_young)
-                self.spectra_array['attenuated_old'] = Sed(self.lam, sed_old)
+                    grid.lam, sed_young)
+                self.spectra_array['attenuated_old'] = Sed(grid.lam, sed_old)
                 self.spectra['attenuated_young'] = Sed(
-                    self.lam, np.sum(sed_young))
-                self.spectra['attenuated_old'] = Sed(self.lam, np.sum(sed_old))
+                    grid.lam, np.sum(sed_young))
+                self.spectra['attenuated_old'] = Sed(grid.lam, np.sum(sed_old))
 
         # --- total SED
-        sed = Sed(self.lam, sed_young + sed_old)
+        sed = Sed(grid.lam, sed_young + sed_old)
 
-        if integrated:
-            self.spectra['attenuated'] = sed
-        else:
-            self.spectra_array['attenuated'] = sed
-            self.spectra['attenuated'] = np.sum(sed)
+        # if integrated:
+        #     self.spectra['attenuated'] = sed
+        # else:
+        #     self.spectra_array['attenuated'] = sed
+        #     self.spectra['attenuated'] = np.sum(sed)
 
         return sed
 
-    def get_los(self, tauV, dust_curve=power_law({'slope': -1.}), integrated=True):
+    def apply_los(self, tauV, dust_curve=power_law({'slope': -1.}), integrated=True):
         """
         Generate
         tauV: V-band optical depth for every star particle
@@ -572,6 +671,42 @@ class ParticleGalaxy(BaseGalaxy):
                             pixel_values=self.stars.initial_masses)
 
         return img.get_hist_img()
+
+    def screen_dust_gamma_parameter(
+            self, beta=0.1, Z14=0.035, sf_gas_metallicity=None,
+            sf_gas_mass=None, stellar_mass=None
+        ):
+        """
+        Calculate the gamma parameter controlling the optical depth
+        due to dust from integrated galaxy properties
+
+        Args:
+        
+        """
+
+        if sf_gas_metallicity is None:
+            if self.sf_gas_metallicity is None:
+                raise ValueError('No sf_gas_metallicity provided')
+            else:
+                sf_gas_metallicity = self.sf_gas_metallicity
+
+        if sf_gas_mass is None:
+            if self.sf_gas_mass is None: 
+                raise ValueError('No sf_gas_mass provided')
+            else:
+                sf_gas_mass = self.sf_gas_mass
+
+        if stellar_mass is None:
+            if self.stellar_mass is None:
+                raise ValueError('No stellar_mass provided')
+            else:
+                stellar_mass = self.stellar_mass
+ 
+        gamma = (sf_gas_metallicity / Z14) *\
+                (sf_gas_mass / stellar_mass) *\
+                (1. / beta)
+
+        return gamma        
 
     def make_image(self, resolution, npix=None, fov=None, img_type="hist",
                    sed=None, survey=None, filters=(), pixel_values=None,
