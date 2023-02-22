@@ -5,6 +5,7 @@ SED for each particle and then generates images in a number of Webb bands.
 import os
 import time
 import numpy as np
+from scipy import signal
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -103,12 +104,18 @@ if __name__ == "__main__":
 
     print("Filters created, took:", time.time() - filter_start)
 
-    img_start = time.time()
-
     # Define image propertys
     redshift = 1
     resolution = ((width + 1) / 100) * kpc
     width = (width + 1) * kpc
+
+    # Create a fake PSF
+    psf = np.outer(
+        signal.windows.gaussian(50, 3), signal.windows.gaussian(50, 3)
+    )
+    psfs = {f: psf for f in filters.filter_codes}
+
+    img_start = time.time()
 
     # Get the image
     hist_img = galaxy.make_image(
@@ -117,12 +124,14 @@ if __name__ == "__main__":
         img_type="hist",
         sed=sed,
         filters=filters,
+        psfs=psfs,
         kernel_func=quintic,
         rest_frame=False,
         cosmo=cosmo,
     )
 
     print("Histogram images made, took:", time.time() - img_start)
+
     img_start = time.time()
 
     # Get the image
@@ -132,6 +141,7 @@ if __name__ == "__main__":
         img_type="smoothed",
         sed=sed,
         filters=filters,
+        psfs=psfs,
         kernel_func=quintic,
         rest_frame=False,
         cosmo=cosmo,
@@ -176,4 +186,6 @@ if __name__ == "__main__":
     axes[0].set_ylabel("Smoothed")
 
     # Plot the image
-    plt.savefig("../flux_in_filters_test.png", bbox_inches="tight", dpi=300)
+    plt.savefig(
+        "../flux_in_filters_with_PSF_test.png", bbox_inches="tight", dpi=300
+    )
