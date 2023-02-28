@@ -12,8 +12,8 @@ while IFS="" read -r p || [ -n "$p" ]
 do
   arrIN=(${p// / })
   sps=${arrIN[0]}
-  p=${arrIN[1]}
+  params=${arrIN[1]}
   printf '%s\n' "$sps"
   printf '%s\n' "$params"
-  python3 make_cloudy_input_grid.py -dir $synthesizer_dir -m $machine -sps $sps  -p $p.yaml  -c $c
+  python3 make_cloudy_input_grid.py -dir $synthesizer_dir -m $machine -sps $sps  -p $params.yaml  -c $c
 done < scripts/spsparams.txt
