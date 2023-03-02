@@ -122,10 +122,16 @@ def fix_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
                 try:
                     read_continuum(infile, return_dict=True)
                 except:
+
+                    if iZ > 0:
+                        nf = f'{ia}_{iZ-1}'
+                    else:
+                        nf = f'{ia-1}_{iZ}'
+
                     os.system(
-                        f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ-1}.cont {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.cont')
+                        f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{nf}.cont {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.cont')
                     os.system(
-                        f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ-1}.lines {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.lines')
+                        f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{nf}.lines {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.lines')
                     failed = True
                     failed_list.append((ia, iZ))
 
