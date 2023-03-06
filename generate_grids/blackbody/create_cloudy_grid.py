@@ -10,7 +10,7 @@ from unyt import c, h, angstrom, eV, erg, s, Hz, unyt_array
 
 
 from synthesizer.cloudy import calculate_Q_from_U
-from synthesizer.abundances_sw import Abundances
+from synthesizer.abundances import Abundances
 from write_submission_script import (apollo_submission_script,
                                      cosma7_submission_script)
 
