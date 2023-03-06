@@ -43,7 +43,7 @@ def create_cloudy_input(model_name, log10T, abundances, output_dir='./', **kwarg
     # --- Define the chemical composition
     for ele in ['He'] + abundances.metals:
         cinput.append((f'element abundance {abundances.name[ele]} '
-                       f'{abundances.a[ele]}\n'))
+                       f'{abundances[ele]}\n'))
 
     """
     add graphite and silicate grains
@@ -94,7 +94,7 @@ def create_cloudy_input(model_name, log10T, abundances, output_dir='./', **kwarg
     which will again introduce issues on mass conservation.
     """
 
-    if abundances.params['d2m'] > 0:
+    if abundances.d2m > 0:
         delta_C = 10**abundances.a_nodep['C'] - 10**abundances.a['C']
         delta_PAH = 0.01 * (10**abundances.a_nodep['C'])
         delta_graphite = delta_C - delta_PAH
