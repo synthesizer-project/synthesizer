@@ -76,41 +76,86 @@ def get_fancy_line_id(id):
     return f'{element}{get_roman_numeral(int(ion))}{wavelength: .4g}'
 
 
-@dataclass
 class LineRatios:
 
     """
     A dataclass holding useful line ratios (e.g. R23) and diagrams (pairs of ratios), e.g. BPT.
     """
-
     # short-hand
 
-    O3 = ['O 3 4960.29A', 'O 3 5008.24A']
-    O2 = ['O 2 3727.09A', 'O 2 3729.88A']
-    Hb = 'H 1 4862.69A'
-    Ha = 'H 1 6564.62A'
+    def __init__(self):
 
-    ratios = {}
+        O3 = ['O 3 4960.29A', 'O 3 5008.24A']
+        O2 = ['O 2 3727.09A', 'O 2 3729.88A']
+        Hb = 'H 1 4862.69A'
+        Ha = 'H 1 6564.62A'
 
-    ratios['BalmerDecrement'] = [[Ha], [Hb]]  # Balmer decrement, should be ~2.86 for dust free
-    ratios['N2'] = [['N 2 6585.27A'], [Ha]]  #  add reference
-    ratios['S2'] = [['S 2 6732.67A', 'S 2 6718.29A'], [Ha]]  #  add reference
-    ratios['O1'] = [['O 1 6302.05A'], [Ha]]  #  add reference
-    ratios['R2'] = [['O 2 3727.09A'], [Hb]]  #  add reference
-    ratios['R3'] = R3 = [['O 3 5008.24A'], [Hb]]  #  add reference
-    ratios['R23'] = [O3+O2, [Hb]]  #  add reference
-    ratios['O32'] = [['O 3 5008.24A'], ['O 2 3727.09A']]  #  add reference
-    ratios['Ne3O2'] = [['Ne 3 3968.59A'], ['O 2 3727.09A']]  #  add reference
+        self.ratios = {}
 
-    available_ratios = list(ratios.keys())
+        # Balmer decrement, should be ~2.86 for dust free
+        self.ratios['BalmerDecrement'] = [[Ha], [Hb]]
+        self.ratios['N2'] = [['N 2 6585.27A'], [Ha]]  #  add reference
+        self.ratios['S2'] = [['S 2 6732.67A', 'S 2 6718.29A'], [Ha]]  #  add reference
+        self.ratios['O1'] = [['O 1 6302.05A'], [Ha]]  #  add reference
+        self.ratios['R2'] = [['O 2 3727.09A'], [Hb]]  #  add reference
+        self.ratios['R3'] = R3 = [['O 3 5008.24A'], [Hb]]  #  add reference
+        self.ratios['R23'] = [O3+O2, [Hb]]  #  add reference
+        self.ratios['O32'] = [['O 3 5008.24A'], ['O 2 3727.09A']]  #  add reference
+        self.ratios['Ne3O2'] = [['Ne 3 3968.59A'], ['O 2 3727.09A']]  #  add reference
 
-    diagrams = {}
-    diagrams['OHNO'] = [R3, [['Ne 3 3869.86A'], O2]]  #  add reference
-    diagrams['BPT-NII'] = [[['N 2 6585.27A'], [Ha]], R3]  #  add reference
-    # diagrams['VO78'] = [[], []]
-    # diagrams['unVO78'] = [[], []]
+        self.available_ratios = tuple(self.ratios.keys())
 
-    available_diagrams = list(diagrams.keys())
+        self.diagrams = {}
+        self.diagrams['OHNO'] = [R3, [['Ne 3 3869.86A'], O2]]  #  add reference
+        self.diagrams['BPT-NII'] = [[['N 2 6585.27A'], [Ha]], R3]  #  add reference
+        # diagrams['VO78'] = [[], []]
+        # diagrams['unVO78'] = [[], []]
+
+        self.available_diagrams = tuple(self.diagrams.keys())
+
+    def get_ratio_label_(self, ab, fancy=False):
+        """
+        Get a line ratio label
+
+        Arguments
+        -------
+        ab
+            a list of lists of lines, e.g. [[l1,l2], [l3]]
+        fancy
+            flag to return fancy label instead
+
+        Returns
+        -------
+        str
+            a label
+        """
+
+        a, b = ab
+
+        if fancy:
+            a = map(get_fancy_line_id, a)
+            b = map(get_fancy_line_id, b)
+
+        return f"({'+'.join(a)})/({'+'.join(b)})"
+
+    def get_ratio_label(self, ratio_id, fancy=False):
+        """
+        Get a line ratio label
+
+        Arguments
+        -------
+        ratio_id
+            a ratio_id where the ratio lines are defined in LineRatios
+
+        Returns
+        -------
+        str
+            a label
+        """
+
+        ab = self.ratios[ratio_id]
+
+        return f'{ratio_id}={self.get_ratio_label_(ab, fancy = fancy)}'
 
 
 class LineCollection:
@@ -133,8 +178,11 @@ class LineCollection:
         self.line_ids = list(self.lines.keys())
 
         # these should be filtered to only show ones that are available for the availalbe line_ids
-        self.available_ratios = LineRatios.available_ratios
-        self.available_diagrams = LineRatios.available_diagrams
+
+        self.lineratios = LineRatios()
+
+        self.available_ratios = self.lineratios.available_ratios
+        self.available_diagrams = self.lineratios.available_diagrams
 
     def __getitem__(self, line_id):
 
@@ -199,7 +247,7 @@ class LineCollection:
             a line ratio
         """
 
-        ab = LineRatios.ratios[ratio_id]
+        ab = self.lineratios.ratios[ratio_id]
 
         return self.get_ratio_(ab)
 
@@ -242,7 +290,7 @@ class LineCollection:
         str
             a label
         """
-        ab = LineRatios.ratios[ratio_id]
+        ab = self.lineratios.ratios[ratio_id]
 
         return f'{ratio_id}={self.get_ratio_label_(ab, fancy = fancy)}'
 
@@ -278,7 +326,7 @@ class LineCollection:
         str
             a label
         """
-        ab, cd = LineRatios.diagrams[diagram_id]
+        ab, cd = self.lineratios.diagrams[diagram_id]
 
         return self.get_ratio_label_(ab, fancy=fancy), self.get_ratio_label_(cd, fancy=fancy)
 

@@ -192,7 +192,7 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
                    f'units Angstroms no clobber\n'))
     cinput.append((f'save last lines, array "{model_name}.lines" '
                   'units Angstroms no clobber\n'))
-    cinput.append(f'save abundances "{model_name}.abundances"\n')
+    cinput.append(f'save last abundances "{model_name}.abundances"\n')
     cinput.append(f'save overview  "{model_name}.ovr" last\n')
 
     # --- save input file
