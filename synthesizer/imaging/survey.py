@@ -329,7 +329,7 @@ class Survey:
         for ind, gal in enumerate(self.galaxies):
 
             # Are we getting a flux or rest frame?
-            _specs[ind, :] = gal.generate_intrinsic_spectra(grid)
+            _specs[ind, :] = gal.generate_intrinsic_spectra(grid, sed_object=False)
 
         # Create and store an SED object for these SEDs
         self.seds["stellar"] = Sed(lam=grid.lam, lnu=_specs)
