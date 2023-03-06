@@ -176,7 +176,7 @@ if __name__ == "__main__":
             # this will need changing
             abundances = Abundances().generate_abundances(Z)
 
-            create_cloudy_input(model_name, log10T, abundances, output_dir=output_dir):
+            create_cloudy_input(model_name, log10T, abundances, output_dir=output_dir)
 
             with open(f"{output_dir}/input_names.txt", "a") as myfile:
                 myfile.write(f'{model_name}\n')
