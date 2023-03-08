@@ -6,10 +6,16 @@ from synthesizer.sed import Sed
 from synthesizer.load_data import load_CAMELS_SIMBA
 from synthesizer.filters import UVJ
 
-# define and initialise grid
-grid_dir = '../../tests/test_grid'
-grid_name = 'test_grid'
-grid = grid.Grid(grid_name, grid_dir=grid_dir)
+from synthesizer.galaxy.particle import ParticleGalaxy
+
+
+if len(sys.argv) > 1:
+    grid_dir = str(sys.argv[1])
+else:
+    grid_dir = None
+
+# first load a spectral grid
+_grid = grid.Grid('bc03_chabrier03-0.1,100', grid_dir=grid_dir)
 
 # now load some example CAMELS data using the dedicated data loader
 gals = load_CAMELS_SIMBA('data/', snap='033')
@@ -25,12 +31,13 @@ plt.loglog(_spec.lam, _spec.lnu)
 plt.xlabel('$\lambda \,/\, \\AA$')
 plt.ylabel('$L_{\\nu} \,/\, \mathrm{erg \; s^{-1} \; Hz^{-1}}$')
 # plt.show()
-plt.savefig('../../docs/source/images/camels_single_spec.png', dpi=200); plt.close()
+plt.savefig('../../docs/source/images/camels_single_spec.png', dpi=200)
+plt.close()
 
 """ multiple galaxies
     Here we leave the `sed_object` flag as the default (False), 
     and combine into a single sed object afterwards """
-_specs = np.vstack([_g.generate_intrinsic_spectra(grid)
+_specs = np.vstack([_g.generate_intrinsic_spectra(_grid)
                     for _g in gals[:10]])
 
 _specs = Sed(lam=grid.lam, lnu=_specs)
@@ -39,7 +46,9 @@ plt.loglog(grid.lam, _specs.lnu.T)
 plt.xlabel('$\lambda \,/\, \\AA$')
 plt.ylabel('$L_{\\nu} \,/\, \mathrm{erg \; s^{-1} \; Hz^{-1}}$')
 # plt.show()
-plt.savefig('../../docs/source/images/camels_multiple_spec.png', dpi=200); plt.close()
+plt.savefig('../../docs/source/images/camels_multiple_spec.png', dpi=200)
+plt.close()
+
 
 """ calculate broadband luminosities """
 
@@ -55,10 +64,11 @@ print(_UVJ)
 """ do for multiple, plot UVJ diagram """
 
 # first filter by stellar mass
-mstar = np.log10(np.array([np.sum(_g.stars.masses) for _g in gals]) * 1e10)
+mstar = np.log10(np.array([np.sum(_g.stars.initial_masses)
+                           for _g in gals]) * 1e10)
 mask = np.where(mstar > 8)[0]
 
-_specs = np.vstack([gals[_g].integrated_stellar_spectrum(grid)
+_specs = np.vstack([gals[_g].generate_intrinsic_spectra(_grid)
                     for _g in mask])
 
 _specs = Sed(lam=grid.lam, lnu=_specs)
@@ -71,5 +81,7 @@ VJ = _UVJ['V'] / _UVJ['J']
 plt.scatter(VJ, UV, c=mstar[mask], s=4)
 plt.xlabel('VJ')
 plt.ylabel('UV')
+plt.colorbar(label='$\mathrm{log_{10}} \, M_{\star} \,/\, \mathrm{M_{\odot}}$')
 # plt.show()
-plt.savefig('../../docs/source/images/camels_UVJ.png', dpi=200); plt.close()
+plt.savefig('../../docs/source/images/camels_UVJ.png', dpi=200)
+plt.close()

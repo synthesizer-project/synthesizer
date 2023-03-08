@@ -10,8 +10,13 @@ from ..imaging.images import ParticleImage
 
 
 class ParticleGalaxy(BaseGalaxy):
-    def __init__(self, stars=None, gas=None):
-        self.name = 'galaxy'
+    def __init__(self, name="galaxy", stars=None, gas=None, redshift=None):
+
+        # Define a name for this galaxy
+        self.name = name
+
+        # What is the redshift of this galaxy?
+        self.redshift = redshift
 
         self.stellar_lum = None
         self.stellar_lum_array = None
@@ -24,8 +29,13 @@ class ParticleGalaxy(BaseGalaxy):
         self.stars = stars  # a star object
         self.gas = gas
 
+        # If we have them record how many stellar particles there are
         if self.stars:
             self.nparticles = stars.nparticles
+
+            # Define integrated properties of this galaxy
+            if stars.current_masses is not None:
+                self.stellar_mass = np.sum(stars.current_masses)
 
     # this should be able to take a pre-existing stars object!
 
@@ -43,8 +53,16 @@ class ParticleGalaxy(BaseGalaxy):
 
         # by default should update self.stars
 
-    def generate_intrinsic_spectra(self, grid, fesc=0.0, update=True,
-                                   young=False, old=False, integrated=True):
+    def generate_intrinsic_spectra(
+        self,
+        grid,
+        fesc=0.0,
+        update=True,
+        young=False,
+        old=False,
+        sed_object=False,
+        return_wavelength=False
+    ):
         """
         Calculate intrinsic spectra from stellar particles. The stellar SED
         component is always created, the intrinsic SED component is only
@@ -52,8 +70,7 @@ class ParticleGalaxy(BaseGalaxy):
 
         Either an integrated spectra or per-stellar particle SED can be
         requested. If an SED is requested then the integrated spectra is
-        automatically calculated anyway. 
-
+        automatically calculated anyway.
 
         Parameters
         ----------
@@ -67,22 +84,23 @@ class ParticleGalaxy(BaseGalaxy):
             Are we masking for only young stars?
         old : bool
             Are we masking for only old stars?
-        integrated : bool
-            Are we only calculating the integrated spectrum?
+        sed_object: bool
+            Flag for whether to retun an Sed object, or the individual 
+            numpy arrays
+        return wavelength : bool
+            if sed_object==False, Flag for whether to return grid wavelength
 
         Returns
         -------
-        grid.lam: array-like (float)
-            The wavelength array associated to grid (N_wavelength).
-        stellar_lum/stellar_lum_array : float/array-like (float)
-            If integrated == True: Integrated stellar spectrum.
-            If integrated == False: Stellar spectrum of each particle
-                                    (N_part, N_wavelength).
-        intrinsic_lum/intrinsic_lum_array :
-            If integrated == True: Integrated intrinsic spectrum.
-            If integrated == False: Intrinsic spectrum of each particle
-                                    (N_part, N_wavelength).
-        
+        if sed_object==True:
+            Sed object containing integrated intrinsic spectra
+        if return_wavelength==True:
+            grid.lam: array-like (float)
+                The wavelength array associated to grid (N_wavelength).
+        if sed_object==False:
+            stellar_lum : array-like (float)
+                Integrated stellar spectrum.
+
         Raises
         ------
         InconsistentArguments
@@ -92,9 +110,214 @@ class ParticleGalaxy(BaseGalaxy):
 
         # Get masks for which components we are handling, if a sub-component
         # has not been requested it's necessarily all particles.
+        s = self._get_masks(young, old)
+
+        # Calculate integrared spectra
+
+        # Calculate the grid weights for all stellar particles
+        weights_temp = self._calculate_weights(
+            grid,
+            self.stars.log10metallicities[s],
+            self.stars.log10ages[s],
+            self.stars.initial_masses[s],
+        )
+
+        # Get the mask for grid cells we need to sum
+        non0_inds = np.where(weights_temp > 0)
+
+        # print(np.unique(weights_temp[non0_inds]))
+
+        # Compute integrated stellar sed
+        stellar_lum = np.sum(
+            grid.spectra["stellar"][non0_inds[0], non0_inds[1], :]
+            * weights_temp[non0_inds[0], non0_inds[1], None],
+            axis=0,
+        )
+
+        # print(np.sum(stellar_lum))
+
+        # # TODO: perhaps should also check that fesc is not false
+        # if "total" in list(grid.spectra.keys()):
+
+        #     # Compute the integrated intrinsic sed
+        #     intrinsic_lum = np.sum(
+        #         (1.0 - fesc)
+        #         * grid.spectra["total"][non0_inds[0], non0_inds[1], :]
+        #         * weights_temp[non0_inds[0], non0_inds[1], None],
+        #         axis=0,
+        #     )
+
+        # else:
+
+        #     # If no nebular emission the intrinsic emission is simply
+        #     # the stellar emission
+        #     intrinsic_lum = stellar_lum
+
+        # # Update the SED's attributes
+        # if update:
+        #     self.stellar_lum = stellar_lum
+        #     self.intrinsic_lum = intrinsic_lum
+        #     self.spectra["stellar"] = Sed(grid.lam, self.stellar_lum)
+        #     self.spectra["intrinsic"] = Sed(grid.lam, self.intrinsic_lum)
+        #     self.lam = grid.lam
+
+        if sed_object:
+            return Sed(grid.lam, stellar_lum)
+        else:
+            if return_wavelength:
+                return grid.lam, stellar_lum
+            else:
+                return stellar_lum
+
+    def generate_intrinsic_particle_spectra(
+        self,
+        grid,
+        fesc=0.0,
+        update=True,
+        young=False,
+        old=False,
+        sed_object=False,
+        return_wavelength=False
+    ):
+        """
+        Calculate intrinsic spectra for all *individual* stellar particles. 
+        The stellar SED component is always created, the intrinsic SED 
+        component is only computed if the "total" grid is available form 
+        the passed grid.
+
+        Parameters
+        ----------
+        grid : obj (Grid)
+            The SPS grid object sampled by stellar particle to make the SED.
+        fesc : float
+            The Lyc escape fraction.
+        update : bool
+            Should we update the Galaxy's attributes?
+        young : bool
+            Are we masking for only young stars?
+        old : bool
+            Are we masking for only old stars?
+        sed_object : bool
+            Flag for whether to retun an Sed object, or the individual 
+            numpy arrays
+        return wavelength : bool
+            if sed_object==False, Flag for whether to return grid wavelength
+
+        Returns
+        -------
+        grid.lam: array-like (float)
+            The wavelength array associated to grid (N_wavelength).
+        stellar_lum/stellar_lum_array : float/array-like (float)
+            Stellar spectrum of each particle (N_part, N_wavelength).
+        intrinsic_lum/intrinsic_lum_array :
+            Intrinsic spectrum of each particle (N_part, N_wavelength).
+
+        Raises
+        ------
+        InconsistentArguments
+            Errors if both a young and old component is requested because these
+            directly contradict each other resulting in 0 particles in the mask.
+        """
+
+        s = self._get_masks(young, old)
+
+        # Calculate spectra for every particle individually. This is
+        # necessary for los calculation anyway.
+
+        # # Initialise arrays to store SEDs
+        # stellar_lum_array = np.zeros(
+        #     (self.nparticles, grid.spectra["stellar"].shape[-1])
+        # )
+
+        stellar_lum_array = np.zeros(
+            (self.nparticles, grid.spectra["stellar"].shape[-1])
+        )
+
+        # Loop over all stellar particles
+        for i, (mass, age, metal) in enumerate(
+            zip(
+                self.stars.initial_masses[s],
+                self.stars.log10ages[s],
+                self.stars.log10metallicities[s],
+            )
+        ):
+
+            # Calculate the grid weights for this particle
+            weights_temp = self._calculate_weights(grid, metal, age, mass)
+            non0_inds = np.where(weights_temp > 0)
+
+            # Get the mask for grid cells we need to sum
+            non0_inds = np.where(weights_temp > 0)
+
+            # Compute the stellar sed for this particle
+            stellar_lum_array[i] = np.sum(
+                grid.spectra["stellar"][non0_inds[0], non0_inds[1], :]
+                * weights_temp[non0_inds[0], non0_inds[1], None],
+                axis=0,
+            )
+
+            # # TODO: perhaps should also check that fesc is not false
+            # if "total" in list(grid.spectra.keys()):
+
+            #     # Calculate the intrinsic sed for this particle
+            #     # TODO: I'm not sure this will actually work if fesc is an array
+            #     intrinsic_lum_array[i] = np.sum(
+            #         (1.0 - fesc)
+            #         * grid.spectra["total"][non0_inds[0], non0_inds[1], :]
+            #         * weights_temp[non0_inds[0], non0_inds[1], None],
+            #         axis=0,
+            #     )
+
+            # else:
+            #     # If no nebular emission the intrinsic emission is simply
+            #     # the stellar emission
+            #     intrinsic_lum_array[i] = stellar_lum_array[i]
+
+        # # Update the SED's attributes
+        # if update:
+
+        #     # Store the values of the SED in arrays local to Galaxy.
+        #     # (These quantities are actually repeated, in the context
+        #     # of an SED object below.)
+        #     self.stellar_lum_array = stellar_lum_array
+        #     self.intrinsic_lum_array = intrinsic_lum_array
+
+        #     # Compute the integrated SEDs
+        #     self.stellar_lum = np.sum(stellar_lum_array, axis=0)
+        #     self.intrinsic_lum = np.sum(intrinsic_lum_array, axis=0)
+
+        #     # Create the SED objects and store them in the dictionaries
+        #     # TODO: Repititon of above, may want to consolidate
+        #     self.spectra["stellar"] = Sed(grid.lam, self.stellar_lum)
+        #     self.spectra_array["stellar"] = Sed(
+        #         grid.lam, self.stellar_lum_array
+        #     )
+        #     self.spectra["intrinsic"] = Sed(grid.lam, self.intrinsic_lum)
+        #     self.spectra_array["intrinsic"] = Sed(
+        #         grid.lam, self.intrinsic_lum_array
+        #     )
+
+        #     # Store the wavelength array
+        #     self.lam = grid.lam
+
+        if sed_object:
+            return Sed(grid.lam, stellar_lum_array)
+        else:
+            if return_wavelength:
+                return grid.lam, stellar_lum_array
+            else:
+                return stellar_lum_array
+
+    def _get_masks(self, young, old):
+        """    
+        Get masks for which components we are handling, if a sub-component
+            has not been requested it's necessarily all particles.
+        """
+
         if young and old:
             raise exceptions.InconsistentParameter(
-                'Galaxy sub-component can not be simultaneously young and old')
+                "Galaxy sub-component can not be simultaneously young and old"
+            )
         if young:
             s = self.stars.log10ages <= np.log10(young)
         elif old:
@@ -102,125 +325,7 @@ class ParticleGalaxy(BaseGalaxy):
         else:
             s = np.ones(self.nparticles, dtype=bool)
 
-        # Calculate integrared spectra
-        if integrated:
-
-            # Calculate the grid weights for all stellar particles
-            weights_temp = self._calculate_weights(
-                grid, self.stars.log10metallicities[s],
-                self.stars.log10ages[s], self.stars.initial_masses[s]
-            )
-
-            # Get the mask for grid cells we need to sum
-            non0_inds = np.where(weights_temp > 0)
-
-            # Compute integrated stellar sed
-            stellar_lum = np.sum(
-                grid.spectra['stellar'][non0_inds[0], non0_inds[1], :]
-                * weights_temp[non0_inds[0], non0_inds[1], None], axis=0
-            )
-
-            # TODO: perhaps should also check that fesc is not false
-            if 'total' in list(grid.spectra.keys()):
-
-                # Compute the integrated intrinsic sed
-                intrinsic_lum = np.sum(
-                    (1.-fesc)
-                    * grid.spectra['total'][non0_inds[0], non0_inds[1], :]
-                    * weights_temp[non0_inds[0], non0_inds[1], None], axis=0
-                )
-
-            else:
-
-                # If no nebular emission the intrinsic emission is simply
-                # the stellar emission
-                intrinsic_lum = stellar_lum
-
-            # Update the SED's attributes
-            if update:
-                self.stellar_lum = stellar_lum
-                self.intrinsic_lum = intrinsic_lum
-                self.spectra['stellar'] = Sed(grid.lam, self.stellar_lum)
-                self.spectra['intrinsic'] = Sed(grid.lam, self.intrinsic_lum)
-                self.lam = grid.lam
-
-            return grid.lam, stellar_lum, intrinsic_lum
-
-        # Else, calculate spectra for every particle individually. This is
-        # necessary for los calculation anyway.
-        else:
-
-            # Initialise arrays to store SEDs
-            stellar_lum_array = np.zeros((self.nparticles,
-                                          grid.spectra['stellar'].shape[-1]))
-
-            intrinsic_lum_array = np.zeros((self.nparticles,
-                                            grid.spectra['stellar'].shape[-1]))
-
-            # Loop over all stellar particles
-            for i, (mass, age, metal) in enumerate(zip(
-                    self.stars.initial_masses[s],
-                    self.stars.log10ages[s],
-                    self.stars.log10metallicities[s])):
-
-                # Calculate the grid weights for this particle
-                weights_temp = self._calculate_weights(grid, metal, age, mass)
-                non0_inds = np.where(weights_temp > 0)
-
-                 # Get the mask for grid cells we need to sum
-                non0_inds = np.where(weights_temp > 0)
-
-                # Compute the stellar sed for this particle
-                stellar_lum_array[i] = np.sum(
-                    grid.spectra['stellar'][non0_inds[0], non0_inds[1], :]
-                    * weights_temp[non0_inds[0], non0_inds[1], None], axis=0
-                )
-                
-                # TODO: perhaps should also check that fesc is not false
-                if 'total' in list(grid.spectra.keys()):
-
-                    # Calculate the intrinsic sed for this particle
-                    # TODO: I'm not sure this will actually work if fesc is an array
-                    intrinsic_lum_array[i] = np.sum(
-                        (1.-fesc)
-                        * grid.spectra['total'][non0_inds[0], non0_inds[1], :]
-                        * weights_temp[non0_inds[0], non0_inds[1], None],
-                        axis=0
-                    )
-
-                else:
-                    # If no nebular emission the intrinsic emission is simply
-                    # the stellar emission
-                    intrinsic_lum_array[i] = stellar_lum_array[i]
-
-            # Update the SED's attributes
-            if update:
-
-                # Store the values of the SED in arrays local to Galaxy.
-                # (These quantities are actually repeated, in the context
-                # of an SED object below.)
-                self.stellar_lum_array = stellar_lum_array
-                self.intrinsic_lum_array = intrinsic_lum_array
-                
-                # Compute the integrated SEDs
-                self.stellar_lum = np.sum(stellar_lum_array, axis=0)
-                self.intrinsic_lum = np.sum(intrinsic_lum_array, axis=0)
-
-                # Create the SED objects and store them in the dictionaries
-                # TODO: Repititon of above, may want to consolidate
-                self.spectra['stellar'] = Sed(grid.lam, self.stellar_lum)
-                self.spectra_array['stellar'] = Sed(
-                    grid.lam, self.stellar_lum_array
-                )
-                self.spectra['intrinsic'] = Sed(grid.lam, self.intrinsic_lum)
-                self.spectra_array['intrinsic'] = Sed(
-                    grid.lam, self.intrinsic_lum_array
-                )
-
-                # Store the wavelength array
-                self.lam = grid.lam
-
-            return grid.lam, stellar_lum_array, intrinsic_lum_array
+        return s
 
     def get_screen(self, tauV, dust_curve=power_law({'slope': -1.}),
                    integrated=True):
@@ -473,18 +578,18 @@ class ParticleGalaxy(BaseGalaxy):
         return img.get_hist_img()
 
     def make_image(self, resolution, npix=None, fov=None, img_type="hist",
-                   sed=None, survey=None, filters=(), pixel_values=None,
-                   with_psf=False,  with_noise=False, kernel_func=None,
-                   rest_frame=True, redshift=None, cosmo=None, igm=None):
+                   sed=None, filters=(), pixel_values=None, psfs=None,
+                   depths=None, snrs=None, aperture=None, noises=None,
+                   kernel_func=None, rest_frame=True, cosmo=None, igm=None,
+                   super_resolution_factor=None,
+                   ):
         """
         Makes images, either one or one per filter. This is a generic method
         that will make every sort of image using every possible combination of
         arguments allowed by the ParticleImage class. These methods can be
         either a simple histogram or smoothing particles over a kernel. Either
         of these operations can be done with or without a PSF and noise.
-
         NOTE: Either npix or fov must be defined.
-
         Parameters
         ----------
         resolution : float
@@ -506,17 +611,24 @@ class ParticleGalaxy(BaseGalaxy):
         pixel_values : array-like (float)
             The values to be sorted/smoothed into pixels. Only needed if an sed
             and filters are not used.
-        with_psf : bool
-            Are we applying a PSF? PLACEHOLDER
-        with_noise : bool
-            Are we adding noise? PLACEHOLDER
+        psfs : dict
+            A dictionary containing the psf in each filter where the key is
+            each filter code and the value is the psf in that filter.
+        depths : dict
+            A dictionary containing the depth of an observation in each filter
+            where the key is each filter code and the value is the depth in
+            that filter.
+        aperture : float/dict
+            Either a float describing the size of the aperture in which the
+            depth is defined or a dictionary containing the size of the depth
+            aperture in each filter.
         kernel_func : function
             A function describing the smoothing kernel that returns a single
             number between 0 and 1. This function can be imported from the
             options in kernel_functions.py or can be user defined. If user
             defined the function must return the kernel value corredsponding
             to the position of a particle with smoothing length h at distance
-            r from the centre of the kernel (r/h). 
+            r from the centre of the kernel (r/h).
         rest_frame : bool
             Are we making an observation in the rest frame?
         redshift : float
@@ -527,61 +639,67 @@ class ParticleGalaxy(BaseGalaxy):
             when converting rest frame luminosity to flux.
         igm : obj (Inoue14/Madau96)
             Object containing the absorbtion due to an intergalactic medium.
-
         Returns
         -------
         Image : array-like
             A 2D array containing the image.
-
         """
 
         # Instantiate the Image object.
-        img = ParticleImage(resolution=resolution, npix=npix, fov=fov, sed=sed,
-                            stars=self.stars, survey=survey, filters=filters,
-                            pixel_values=pixel_values, rest_frame=True,
-                            redshift=None, cosmo=None, igm=None)
-        
+        img = ParticleImage(
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            sed=sed,
+            stars=self.stars,
+            filters=filters,
+            pixel_values=pixel_values,
+            rest_frame=rest_frame,
+            redshift=self.redshift,
+            cosmo=cosmo,
+            igm=igm,
+            psfs=psfs,
+            depths=depths,
+            apertures=aperture,
+            snrs=snrs,
+            super_resolution_factor=super_resolution_factor,
+        )
+
         # Make the image, handling incorrect image types
-        if img_type == "hist" and not with_psf and not with_noise:
-            
-            # Compute image
+        if img_type == "hist":
+
+            # Compute the image
             img.get_hist_img()
 
+            if psfs is not None:
+
+                # Convolve the image/images
+                img.get_psfed_imgs()
+
+            if depths is not None:
+
+                img.get_noisy_imgs(noises)
+
             return img
-        
-        elif img_type == "hist" and with_psf and not with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "PSF functionality coming soon."
-            )
-        elif img_type == "hist" and not with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Noise functionality coming soon."
-            )
-        elif img_type == "hist" and with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "PSF and noise functionality coming soon."
-            )
-        elif img_type == "smoothed" and not with_psf and not with_noise:
-            
+
+        elif img_type == "smoothed":
+
             # Compute image
             img.get_smoothed_img(kernel_func)
 
+            if psfs is not None:
+
+                # Convolve the image/images
+                img.get_psfed_imgs()
+
+            if depths is not None:
+
+                img.get_noisy_imgs(noises)
+
             return img
-        
-        elif img_type == "smoothed" and with_psf and not with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Smothed functionality coming soon."
-            )
-        elif img_type == "smoothed" and not with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Smothed functionality coming soon."
-            )
-        elif img_type == "smoothed" and with_psf and with_noise:
-            raise exceptions.UnimplementedFunctionality(
-                "Smothed functionality coming soon."
-            )
+
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or 'smoothed')"
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
             )
-            
