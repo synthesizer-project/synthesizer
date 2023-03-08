@@ -153,6 +153,8 @@ def create_cloudy_input(model_name, log10T, abundances, output_dir='./', **kwarg
 
 if __name__ == "__main__":
 
+    # replace with arguments
+    machine = 'apollo'
     synthesizer_data_dir = "/research/astrodata/highz/synthesizer/"
     output_dir = f"{synthesizer_data_dir}/cloudy/blackbody"
 
@@ -168,15 +170,25 @@ if __name__ == "__main__":
     # metallicity grid
     metallicities = np.arange(-5., -1., 0.5)
 
+    # total number of models
+    N = len(log10Ts)*len(metallicities)
+
     for iT, log10T in enumerate(log10Ts):
-        for iZ, Z in enumerate(metallicities):
+        for iZ, log10Z in enumerate(metallicities):
 
             model_name = f"{iT}_{iZ}"
 
             # this will need changing
-            abundances = Abundances(Z)
+            abundances = Abundances(10**Z)
 
             create_cloudy_input(model_name, log10T, abundances, output_dir=output_dir)
 
             with open(f"{output_dir}/input_names.txt", "a") as myfile:
                 myfile.write(f'{model_name}\n')
+
+    if machine == 'apollo':
+        apollo_submission_script(N, output_dir, cloudy)
+    elif machine == 'cosma7':
+        cosma7_submission_script(N, output_dir, cloudy,
+                                 cosma_project='cosma7',
+                                 cosma_account='dp004')
