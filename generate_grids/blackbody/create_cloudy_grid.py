@@ -179,7 +179,7 @@ if __name__ == "__main__":
             model_name = f"{iT}_{iZ}"
 
             # this will need changing
-            abundances = Abundances(10**Z)
+            abundances = Abundances(10**log10Z)
 
             create_cloudy_input(model_name, log10T, abundances, output_dir=output_dir)
 
