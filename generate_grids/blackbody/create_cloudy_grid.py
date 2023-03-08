@@ -157,6 +157,7 @@ if __name__ == "__main__":
     machine = 'apollo'
     synthesizer_data_dir = "/research/astrodata/highz/synthesizer/"
     output_dir = f"{synthesizer_data_dir}/cloudy/blackbody"
+    cloudy = '/its/home/sw376/flare/software/cloudy/c17.03/source/cloudy.exe'
 
     # create path for cloudy runs
     Path(output_dir).mkdir(parents=True, exist_ok=True)
