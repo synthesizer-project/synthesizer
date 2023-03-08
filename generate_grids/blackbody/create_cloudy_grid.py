@@ -165,7 +165,7 @@ if __name__ == "__main__":
     Path(f'{output_dir}/output').mkdir(parents=True, exist_ok=True)
 
     # log10T grid
-    log10Ts = np.arange(5., 7., 0.1)
+    log10Ts = np.arange(4., 7., 0.1)
 
     # metallicity grid
     metallicities = np.arange(-5., -1., 0.5)
