@@ -35,10 +35,11 @@ class Sed:
         wavelength range
     """
 
-    lam = Quantity()
-    nu = Quantity()
-    lnu = Quantity()
-    fnu = Quantity()
+    # for details see units.py
+    lam = Quantity()  # Angstrom
+    nu = Quantity()   # Hz
+    lnu = Quantity()  # erg/s/Hz
+    fnu = Quantity()  # nJy
 
     def __init__(self, lam, lnu=None, description=False):
         """ Initialise an empty spectral energy distribution object """
@@ -194,12 +195,16 @@ class Sed:
     def get_fnu0(self):
         """
         Calculate a dummy observed frame spectral energy distribution.
-        Useful when you want rest-frame quantities.
+        Useful when you want rest-frame quantities. 
+        
+        Uses a standard distance of 10 pc
         """
         
         self.lamz = self._lam
-        self.fnu = self._lnu
-
+        self.fnu = self._lnu / (4 * np.pi * (10 * pc).to('cm').value)
+        self._fnu *= 1E23  # convert to Jy
+        self._fnu *= 1E9  # convert to nJy
+        
         self.nuz = c.value/self.lamz
 
     def get_fnu(self, cosmo, z, igm=None):
