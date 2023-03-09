@@ -191,18 +191,18 @@ if __name__ == "__main__":
 
     for iT, log10T in enumerate(log10Ts):
         for iZ, log10Z in enumerate(metallicities):
-            for iU, log10U in enumerate(log10Us)
+            for iU, log10U in enumerate(log10Us):
 
-            model_name = f"{iT}_{iZ}"
+                model_name = f"{iT}_{iZ}_{iU}"
 
-            # this will need changing
-            abundances = Abundances(10**log10Z)
+                # this will need changing
+                abundances = Abundances(10**log10Z)
 
-            create_cloudy_input(model_name, log10T, abundances,
-                                output_dir=output_dir, log10U=log10U)
+                create_cloudy_input(model_name, log10T, abundances,
+                                    output_dir=output_dir, log10U=log10U)
 
-            with open(f"{output_dir}/input_names.txt", "a") as myfile:
-                myfile.write(f'{model_name}\n')
+                with open(f"{output_dir}/input_names.txt", "a") as myfile:
+                    myfile.write(f'{model_name}\n')
 
     if machine == 'apollo':
         apollo_submission_script(N, output_dir, cloudy)
