@@ -49,7 +49,7 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
 
                 if not os.path.isfile(infile+'.cont'):  # attempt to open run.
                     failed = True
-                    failed_list.append((ia, iZ))
+                    failed_list.append((iT, iZ, iU))
                     # print(f'{ia}_{iZ}.cont missing')
                 if not os.path.isfile(infile+'.lines'):  # attempt to open run.
                     failed = True
@@ -114,7 +114,7 @@ def add_spectra(grid_name, synthesizer_data_dir):
                     for spec_name in spec_names:
 
                         # should perhaps normalise to unity and return the factor for use by lines
-                        spectra[spec_name][ia, iZ] = spec_dict[spec_name]
+                        spectra[spec_name][iT, iZ, iU] = spec_dict[spec_name]
 
 
 def get_default_line_list(interesting=True):
