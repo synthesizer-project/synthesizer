@@ -450,11 +450,11 @@ class ParticleGalaxy(BaseGalaxy):
     def apply_charlot_fall_00(self, grid, tauV_ISM, tauV_BC, 
                               alpha_ISM=-0.7, alpha_BC=-1.3,
                               intrinsic_young=None, intrinsic_old=None,
-                              save_young_and_old=False):
+                              save_young_and_old=False, sed_object=True, update=True):
         """
-        Calculates dust attenuated spectra assuming the Charlot & Fall (2000) dust model. In this model young star particles
-        are embedded in a dusty birth cloud and thus feel more dust attenuation.
-
+        Calculates dust attenuated spectra assuming the Charlot & Fall (2000) dust model. 
+        In this model young star particles are embedded in a dusty birth cloud, and thus 
+        feel more dust attenuation.
 
         Parameters
         ----------
@@ -488,22 +488,18 @@ class ParticleGalaxy(BaseGalaxy):
         if save_young_and_old:
 
             if integrated:
+                self.spectra['intrinsic_young'] = intrinsic_sed_young
+                self.spectra['intrinsic_old'] = intrinsic_sed_old
 
-                self.spectra['intrinsic_young'] = Sed(
-                    grid.lam, intrinsic_sed_young)
-                self.spectra['intrinsic_old'] = Sed(
-                    grid.lam, intrinsic_sed_old)
-
-            else:
-
-                self.spectra_array['intrinsic_young'] = Sed(
-                    grid.lam, intrinsic_sed_young)
-                self.spectra_array['intrinsic_old'] = Sed(
-                    grid.lam, intrinsic_sed_old)
-                self.spectra['intrinsic_young'] = Sed(
-                    grid.lam, np.sum(intrinsic_sed_young))
-                self.spectra['intrinsic_old'] = Sed(
-                    grid.lam, np.sum(intrinsic_sed_old))
+            # else:
+            #     self.spectra_array['intrinsic_young'] = Sed(
+            #         grid.lam, intrinsic_sed_young)
+            #     self.spectra_array['intrinsic_old'] = Sed(
+            #         grid.lam, intrinsic_sed_old)
+            #     self.spectra['intrinsic_young'] = Sed(
+            #         grid.lam, np.sum(intrinsic_sed_young))
+            #     self.spectra['intrinsic_old'] = Sed(
+            #         grid.lam, np.sum(intrinsic_sed_old))
 
         T_ISM = power_law({'slope': alpha_ISM}).attenuate(tauV_ISM, grid.lam)
         T_BC = power_law({'slope': alpha_BC}).attenuate(tauV_BC, grid.lam)
@@ -511,18 +507,16 @@ class ParticleGalaxy(BaseGalaxy):
         T_young = T_ISM * T_BC
         T_old = T_ISM
 
-        sed_young = intrinsic_sed_young * T_young
-        sed_old = intrinsic_sed_old * T_old
+        sed_young = intrinsic_sed_young.lnu * T_young
+        sed_old = intrinsic_sed_old.lnu * T_old
 
         if save_young_and_old:
 
             if integrated:
-
                 self.spectra['attenuated_young'] = Sed(grid.lam, sed_young)
                 self.spectra['attenuated_old'] = Sed(grid.lam, sed_old)
 
             else:
-
                 self.spectra_array['attenuated_young'] = Sed(
                     grid.lam, sed_young)
                 self.spectra_array['attenuated_old'] = Sed(grid.lam, sed_old)
@@ -530,18 +524,18 @@ class ParticleGalaxy(BaseGalaxy):
                     grid.lam, np.sum(sed_young))
                 self.spectra['attenuated_old'] = Sed(grid.lam, np.sum(sed_old))
 
-        # --- total SED
         sed = Sed(grid.lam, sed_young + sed_old)
+        
+        if update:
+            self.spectra['attenuated'] = sed
 
-        # if integrated:
-        #     self.spectra['attenuated'] = sed
-        # else:
-        #     self.spectra_array['attenuated'] = sed
-        #     self.spectra['attenuated'] = np.sum(sed)
+        if sed_object:
+            return sed
+        else:
+            return sed_young + sed_old
 
-        return sed
-
-    def apply_los(self, tauV, dust_curve=power_law({'slope': -1.}), integrated=True):
+    def apply_los(self, tauV, dust_curve=power_law({'slope': -1.}), 
+                  integrated=True, sed_object=True):
         """
         Generate
         tauV: V-band optical depth for every star particle
