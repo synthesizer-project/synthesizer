@@ -32,7 +32,7 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
     """
 
     # open the new grid
-    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'w') as hf:
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'r') as hf:
 
         log10Us = hf['log10U']
         log10Ts = hf['log10T']
