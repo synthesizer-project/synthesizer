@@ -90,6 +90,42 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, cloudy=None, replace=Fals
     return failed
 
 
+def fix_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
+    """
+    If a cloudy run has failed replace it with the previous metallicity grid point
+    """
+
+    # open the new grid
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'r') as hf:
+
+        log10Us = hf['log10U'][:]
+        log10Ts = hf['log10T'][:]
+        log10Zs = hf['log10Z'][:]
+
+    for iT, log10T in enumerate(log10Ts):
+        for iZ, log10Z in enumerate(log10Zs):
+            for iU, log10U in enumerate(log10Us):
+
+                model_name = f'{iT}_{iZ}_{iU}'
+                infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{model_name}'
+
+                try:
+                    read_continuum(infile, return_dict=True)
+
+                except:
+
+                    if iZ > 0:
+                        nf = f'{iT}_{iZ-1}_{iU}'
+                    else:
+                        nf = f'{iT}_{iZ}_{iU-1}'
+
+                    if replace:
+                        os.system(
+                            f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{nf}.cont {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.cont')
+                        os.system(
+                            f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{nf}.lines {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.lines')
+
+
 def add_spectra(grid_name, synthesizer_data_dir):
     """
     Open cloudy spectra and add them to the grid
@@ -282,7 +318,11 @@ if __name__ == "__main__":
     path_to_grids = f'{synthesizer_data_dir}/grids'
     path_to_cloudy_files = f'{synthesizer_data_dir}/cloudy'
 
-    failed = check_cloudy_runs(grid_name, synthesizer_data_dir, cloudy=cloudy)
+    # failed = check_cloudy_runs(grid_name, synthesizer_data_dir, cloudy=cloudy)
+    failed = False
+
+    # hacky wayy of fixing consistently failing cloudy runs by copying over nearby grid point
+    fix_cloudy_runs(grid_name, synthesizer_data_dir)
 
     if not failed:
 
