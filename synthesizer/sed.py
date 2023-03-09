@@ -196,7 +196,7 @@ class Sed:
         Calculate a dummy observed frame spectral energy distribution.
         Useful when you want rest-frame quantities.
         """
-
+        
         self.lamz = self._lam
         self.fnu = self._lnu
 
