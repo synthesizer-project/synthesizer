@@ -168,7 +168,7 @@ if __name__ == "__main__":
     Path(f'{output_dir}/output').mkdir(parents=True, exist_ok=True)
 
     # log10T grid
-    log10Ts = np.arange(4., 7., 0.1)
+    log10Ts = np.arange(4., 7., 0.2)
 
     # metallicity grid
     log10Zs = np.arange(-5., -1., 0.5)
@@ -177,7 +177,7 @@ if __name__ == "__main__":
     log10Us = np.array([-4., -3, -2, -1., 0.])
 
     # total number of models
-    N = len(log10Ts)*len(metallicities)*len(log10Us)
+    N = len(log10Ts)*len(log10Zs)*len(log10Us)
 
     # open the new grid
     with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'w') as hf:
@@ -190,7 +190,7 @@ if __name__ == "__main__":
         hf['log10Z'] = log10Zs
 
     for iT, log10T in enumerate(log10Ts):
-        for iZ, log10Z in enumerate(metallicities):
+        for iZ, log10Z in enumerate(log10Zs):
             for iU, log10U in enumerate(log10Us):
 
                 model_name = f"{iT}_{iZ}_{iU}"
