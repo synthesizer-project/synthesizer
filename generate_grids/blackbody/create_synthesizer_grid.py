@@ -249,6 +249,7 @@ if __name__ == "__main__":
 
     grid_name = 'blackbody'
 
+    synthesizer_data_dir = "/research/astrodata/highz/synthesizer/"
     path_to_grids = f'{synthesizer_data_dir}/grids'
     path_to_cloudy_files = f'{synthesizer_data_dir}/cloudy'
 
