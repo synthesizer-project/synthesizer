@@ -19,7 +19,7 @@ from write_submission_script import (apollo_submission_script,
                                      cosma7_submission_script)
 
 
-def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False, machine='apollo'):
+def check_cloudy_runs(grid_name, synthesizer_data_dir, cloudy=None, replace=False, machine='apollo'):
     """
     Check that all the cloudy runs have run properly
 
@@ -79,9 +79,9 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False, machine='a
     if N > 0:
 
         if machine == 'apollo':
-            apollo_submission_script(N, output_dir, cloudy)
+            apollo_submission_script(N, f'{synthesizer_data_dir}/cloudy/{grid_name}', cloudy)
         elif machine == 'cosma7':
-            cosma7_submission_script(N, output_dir, cloudy,
+            cosma7_submission_script(N, f'{synthesizer_data_dir}/cloudy/{grid_name}', cloudy,
                                      cosma_project='cosma7',
                                      cosma_account='dp004')
 
@@ -276,12 +276,13 @@ def add_lines(grid_name, synthesizer_data_dir, lines_to_include, normalisation=1
 if __name__ == "__main__":
 
     grid_name = 'blackbody'
+    cloudy = '/its/home/sw376/flare/software/cloudy/c17.03/source/cloudy.exe'
 
     synthesizer_data_dir = "/research/astrodata/highz/synthesizer/"
     path_to_grids = f'{synthesizer_data_dir}/grids'
     path_to_cloudy_files = f'{synthesizer_data_dir}/cloudy'
 
-    failed = check_cloudy_runs(grid_name, synthesizer_data_dir)
+    failed = check_cloudy_runs(grid_name, synthesizer_data_dir, cloudy=cloudy)
 
     if not failed:
 
