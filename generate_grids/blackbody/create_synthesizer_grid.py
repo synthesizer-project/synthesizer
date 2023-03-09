@@ -40,12 +40,11 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
         log10Ts = hf['log10T'][:]
         log10Zs = hf['log10Z'][:]
 
+    failed_list = []
+
     for iT, log10T in enumerate(log10Ts):
         for iZ, log10Z in enumerate(log10Zs):
             for iU, log10U in enumerate(log10Us):
-
-                failed = False
-                failed_list = []
 
                 model_name = f'{iT}_{iZ}_{iU}'
                 infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{model_name}'
@@ -67,16 +66,17 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
                 #     failed = True
 
                 if failed:
+
                     failed_list.append((iT, iZ, iU))
+
                     with open(f"{synthesizer_data_dir}/cloudy/{grid_name}/reprocess_names.txt", "a") as myfile:
                         myfile.write(f'{model_name}\n')
 
-                    print('FAILED')
-                    print(f'missing files: {failed_list}')
+                    print(f'FAILED: {model_name}')
 
-    if failed:
+    N = len(failed_list)
 
-        N = len(failed_list)
+    if N > 0:
 
         if machine == 'apollo':
             apollo_submission_script(N, output_dir, cloudy)
@@ -84,6 +84,8 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
             cosma7_submission_script(N, output_dir, cloudy,
                                      cosma_project='cosma7',
                                      cosma_account='dp004')
+
+        failed = True
 
     return failed
 
