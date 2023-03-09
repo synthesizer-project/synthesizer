@@ -7,7 +7,7 @@ import numpy as np
 from scipy import integrate
 from pathlib import Path
 from unyt import c, h, angstrom, eV, erg, s, Hz, unyt_array
-
+import h5py
 
 from synthesizer.cloudy import calculate_Q_from_U
 from synthesizer.abundances import Abundances
