@@ -189,24 +189,24 @@ if __name__ == "__main__":
         hf['log10T'] = log10Ts
         hf['log10Z'] = log10Zs
 
-    for iT, log10T in enumerate(log10Ts):
-        for iZ, log10Z in enumerate(log10Zs):
-            for iU, log10U in enumerate(log10Us):
-
-                model_name = f"{iT}_{iZ}_{iU}"
-
-                # this will need changing
-                abundances = Abundances(10**log10Z)
-
-                create_cloudy_input(model_name, log10T, abundances,
-                                    output_dir=output_dir, log10U=log10U)
-
-                with open(f"{output_dir}/input_names.txt", "a") as myfile:
-                    myfile.write(f'{model_name}\n')
-
-    if machine == 'apollo':
-        apollo_submission_script(N, output_dir, cloudy)
-    elif machine == 'cosma7':
-        cosma7_submission_script(N, output_dir, cloudy,
-                                 cosma_project='cosma7',
-                                 cosma_account='dp004')
+    # for iT, log10T in enumerate(log10Ts):
+    #     for iZ, log10Z in enumerate(log10Zs):
+    #         for iU, log10U in enumerate(log10Us):
+    #
+    #             model_name = f"{iT}_{iZ}_{iU}"
+    #
+    #             # this will need changing
+    #             abundances = Abundances(10**log10Z)
+    #
+    #             create_cloudy_input(model_name, log10T, abundances,
+    #                                 output_dir=output_dir, log10U=log10U)
+    #
+    #             with open(f"{output_dir}/input_names.txt", "a") as myfile:
+    #                 myfile.write(f'{model_name}\n')
+    #
+    # if machine == 'apollo':
+    #     apollo_submission_script(N, output_dir, cloudy)
+    # elif machine == 'cosma7':
+    #     cosma7_submission_script(N, output_dir, cloudy,
+    #                              cosma_project='cosma7',
+    #                              cosma_account='dp004')
