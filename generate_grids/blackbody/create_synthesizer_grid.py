@@ -68,7 +68,7 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
 
                 if failed:
                     failed_list.append((iT, iZ, iU))
-                    with open(f"{output_dir}/reprocess_names.txt", "a") as myfile:
+                    with open(f"{synthesizer_data_dir}/cloudy/{grid_name}/reprocess_names.txt", "a") as myfile:
                         myfile.write(f'{model_name}\n')
 
                     print('FAILED')
