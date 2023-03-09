@@ -52,7 +52,7 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
                 failed = False
 
                 try:
-                    _ = read_continuum(infile, return_dict=True)
+                    spec_dict = read_continuum(infile, return_dict=True)
                 except:
                     failed = True
 
