@@ -34,9 +34,9 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
     # open the new grid
     with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'r') as hf:
 
-        log10Us = hf['log10U']
-        log10Ts = hf['log10T']
-        log10Zs = hf['log10Z']
+        log10Us = hf['log10U'][:]
+        log10Ts = hf['log10T'][:]
+        log10Zs = hf['log10Z'][:]
 
     for iT, log10T in enumerate(log10Ts):
         for iZ, log10Z in enumerate(log10Zs):
