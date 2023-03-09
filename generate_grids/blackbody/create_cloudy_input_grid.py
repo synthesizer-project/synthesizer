@@ -153,6 +153,8 @@ def create_cloudy_input(model_name, log10T, abundances, output_dir='./', **kwarg
 
 if __name__ == "__main__":
 
+    grid_name = 'blackbody'
+
     # replace with arguments
     machine = 'apollo'
     synthesizer_data_dir = "/research/astrodata/highz/synthesizer/"
@@ -169,20 +171,35 @@ if __name__ == "__main__":
     log10Ts = np.arange(4., 7., 0.1)
 
     # metallicity grid
-    metallicities = np.arange(-5., -1., 0.5)
+    log10Zs = np.arange(-5., -1., 0.5)
+
+    # log10U
+    log10Us = np.array([-4., -3, -2, -1., 0.])
 
     # total number of models
-    N = len(log10Ts)*len(metallicities)
+    N = len(log10Ts)*len(metallicities)*len(log10Us)
+
+    # open the new grid
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'w') as hf:
+
+        # add attribute with the grid axes for future when using >2D grid or AGN grids
+        hf.attrs['grid_axes'] = ['log10T', 'log10Z', 'log10U']
+
+        hf['log10U'] = log10Us
+        hf['log10T'] = log10Ts
+        hf['log10Z'] = log10Zs
 
     for iT, log10T in enumerate(log10Ts):
         for iZ, log10Z in enumerate(metallicities):
+            for iU, log10U in enumerate(log10Us)
 
             model_name = f"{iT}_{iZ}"
 
             # this will need changing
             abundances = Abundances(10**log10Z)
 
-            create_cloudy_input(model_name, log10T, abundances, output_dir=output_dir)
+            create_cloudy_input(model_name, log10T, abundances,
+                                output_dir=output_dir, log10U=log10U)
 
             with open(f"{output_dir}/input_names.txt", "a") as myfile:
                 myfile.write(f'{model_name}\n')
