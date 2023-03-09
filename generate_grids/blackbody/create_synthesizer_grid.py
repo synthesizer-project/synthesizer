@@ -15,6 +15,8 @@ import argparse
 import numpy as np
 import h5py
 import yaml
+from write_submission_script import (apollo_submission_script,
+                                     cosma7_submission_script)
 
 
 def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
@@ -45,21 +47,45 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
                 failed = False
                 failed_list = []
 
-                infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{iT}_{iZ}_{iU}'
+                model_name = f'{iT}_{iZ}_{iU}'
+                infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{model_name}'
+                failed = False
 
-                if not os.path.isfile(infile+'.cont'):  # attempt to open run.
+                try:
+                    _ = read_continuum(infile, return_dict=True)
+                except:
                     failed = True
-                    failed_list.append((iT, iZ, iU))
-                    # print(f'{ia}_{iZ}.cont missing')
-                if not os.path.isfile(infile+'.lines'):  # attempt to open run.
+
+                try:
+                    id, blend, wavelength, intrinsic, emergent = read_lines(infile)
+                except:
                     failed = True
-                    # print(f'{ia}_{iZ}.lines missing')
+
+                # if not os.path.isfile(infile+'.cont'):  # attempt to open run.
+                #     failed = True
+                # if not os.path.isfile(infile+'.lines'):  # attempt to open run.
+                #     failed = True
 
                 if failed:
+                    failed_list.append((iT, iZ, iU))
+                    with open(f"{output_dir}/reprocess_names.txt", "a") as myfile:
+                        myfile.write(f'{model_name}\n')
+
                     print('FAILED')
                     print(f'missing files: {failed_list}')
 
-                return failed
+    if failed:
+
+        N = len(failed_list)
+
+        if machine == 'apollo':
+            apollo_submission_script(N, output_dir, cloudy)
+        elif machine == 'cosma7':
+            cosma7_submission_script(N, output_dir, cloudy,
+                                     cosma_project='cosma7',
+                                     cosma_account='dp004')
+
+    return failed
 
 
 def add_spectra(grid_name, synthesizer_data_dir):
