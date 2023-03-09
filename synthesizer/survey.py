@@ -2,13 +2,16 @@
 Survey functionality 
 """
 import numpy as np
+
+from astropy.cosmology import Planck18
+
 import synthesizer.exceptions as exceptions
 from synthesizer.imaging import images, spectral_cubes
 from synthesizer.galaxy.particle import ParticleGalaxy
 from synthesizer.galaxy.parametric import ParametricGalaxy
 from synthesizer.utils import m_to_flux, flux_to_luminosity
 from synthesizer.sed import Sed
-
+from synthesizer.igm import Inoue14
 
 class Instrument:
     """
@@ -97,7 +100,8 @@ class Survey:
     -------
     """
 
-    def __init__(self, galaxies=(), fov=None, super_resolution_factor=None):
+    def __init__(self, galaxies=(), fov=None, super_resolution_factor=None,
+                 cosmo=Planck18):
         """
         Initialise the Survey.
         Parameters
@@ -108,6 +112,7 @@ class Survey:
         self.ninstruments = 0
         self.nfilters = 0
         self.ngalaxies = 0
+        self.cosmo = cosmo
 
         # Information about the field/collection of images being observered
         self.fov = fov
@@ -257,7 +262,7 @@ class Survey:
         # Count how many galaxies we have
         self.ngalaxies = len(self.galaxies)
 
-    def convert_mag_depth_to_fnu0(self, redshift, cosmo):
+    def convert_mag_depth_to_fnu0(self, redshift):
         """
         Converts depths defined in absolute magnitude to the units of
         luminosity (erg / s /Hz).
@@ -267,13 +272,10 @@ class Survey:
         ----------
         redshift : float
             The redshift of the observation.
-        cosmo : obj (astropy.cosmology)
-            The cosmology object used to do the cosmological calculations
-            involved in the conversion.
         """
-        self.convert_mag_depth_to_lnu(redshift, cosmo)
+        self.convert_mag_depth_to_lnu(redshift, self.cosmo)
 
-    def convert_mag_depth_to_lnu(self, redshift, cosmo):
+    def convert_mag_depth_to_lnu(self, redshift):
         """
         Converts depths defined in apparent magnitude to the units of
         luminosity (erg / s /Hz).
@@ -281,9 +283,6 @@ class Survey:
         ----------
         redshift : float
             The redshift of the observation.
-        cosmo : obj (astropy.cosmology)
-            The cosmology object used to do the cosmological calculations
-            involved in the conversion.
         """
 
         # Convert the depths, looping over them if we have to.
@@ -292,7 +291,7 @@ class Survey:
                 for key in self.instruments[inst].depths:
                     flux = m_to_flux(self.instruments[inst].depths[key])
                     self.instruments[inst].depths[key] = flux_to_luminosity(
-                        flux, cosmo, redshift
+                        flux, self.cosmo, redshift
                     )
             else:
                 flux = m_to_flux(self.instruments[inst].depths)
@@ -318,10 +317,20 @@ class Survey:
                     self.instruments[inst].depths
                 )
 
-    def get_integrated_stellar_spectra(self, grid, rest_frame=False, cosmo=None,
-                                       redshift=None, igm=None):
+    def get_integrated_stellar_spectra(self, grid, redshift=None, igm=Inoue14):
         """
         Compute the integrated stellar spectra of each galaxy.
+
+        Args:
+        -----
+        - grid (obj): synthesizer grid object
+        - redshift (float): array of galaxy redshifts. If `None` (default), 
+                            all galaxies assumed to be in the rest frame
+        - igm (obj): synthesizer IGM object, defaults to Inoue+14
+
+        Returns:
+        --------
+        None
         """
 
         _specs = np.zeros((self.ngalaxies, grid.lam.size))
@@ -337,13 +346,87 @@ class Survey:
         # Get the flux
         # TODO: if galaxies differ in redshift this does not work!
         # TODO: catch error if improper arguments are handed
-        if rest_frame:
+        if redshift is None:
             self.seds["stellar"].get_fnu0()
         else:
-            self.seds["stellar"].get_fnu(cosmo, redshift, igm)
+            self.seds["stellar"].get_fnu(self.cosmo, redshift, igm)
+    
+    def get_integrated_spectra_screen(self, tauV, redshift=None, 
+                                      igm=None, name='attenuated'):
+        """
+        Compute the attenuated spectra of each galaxy using a dust screen model
+        
+        Args:
+        -----
+        - tauV (array, float): V-band optical depth
+        - redshift (float): array of galaxy redshifts. If `None` (default), 
+                            all galaxies assumed to be in the rest frame
+        - igm (obj): synthesizer IGM object, defaults to Inoue+14
 
-    def get_particle_stellar_spectra(self, grid, rest_frame=False, cosmo=None,
-                                     igm=None):
+        Returns:
+        --------
+        None
+        """
+
+        _lam = self.seds['stellar']._lam
+        _specs = np.zeros((self.ngalaxies, _lam.size))
+
+        for ind, gal in enumerate(self.galaxies):
+
+            # Are we getting a flux or rest frame?
+            _specs[ind, :] = gal.apply_screen(tauV, sed_object=False)
+
+        # Create and store an SED object for these SEDs
+        self.seds[name] = Sed(lam=_lam, lnu=_specs)
+
+        # Get the flux
+        # TODO: if galaxies differ in redshift this does not work!
+        # TODO: catch error if improper arguments are handed
+        if redshift is None:
+            self.seds[name].get_fnu0()
+        else:
+            self.seds[name].get_fnu(self.cosmo, redshift, igm)
+
+
+    def get_integrated_spectra_charlot_fall_00(self, grid, tauV_ISM, tauV_BC, 
+                                               redshift=None, igm=None, name='attenuated'):
+        """
+        Compute the attenuated spectra of each galaxy using a dust screen model
+        
+        Args:
+        -----
+        - grid (obj): synthesizer grid object
+        - tauV_ISM (array): V-band optical depth in the interstellar medium
+        - tauV_BC (array): birth cloud V-band optical depth
+        - redshift (float): array of galaxy redshifts. If `None` (default), 
+                            all galaxies assumed to be in the rest frame
+        - igm (obj): synthesizer IGM object, defaults to Inoue+14
+
+        Returns:
+        --------
+        None
+        """
+
+        _specs = np.zeros((self.ngalaxies, grid.lam.size))
+
+        for ind, gal in enumerate(self.galaxies):
+
+            # Are we getting a flux or rest frame?
+            _specs[ind, :] = gal.apply_charlot_fall_00(grid, tauV_ISM, tauV_BC, 
+                                                       sed_object=False)
+
+        # Create and store an SED object for these SEDs
+        self.seds[name] = Sed(lam=grid.lam, lnu=_specs)
+
+        # Get the flux
+        # TODO: if galaxies differ in redshift this does not work!
+        # TODO: catch error if improper arguments are handed
+        if redshift is None:
+            self.seds[name].get_fnu0()
+        else:
+            self.seds[name].get_fnu(self.cosmo, redshift, igm)
+
+    def get_particle_stellar_spectra(self, grid, igm=None):
         """
         Compute the integrated stellar spectra of each galaxy.
         """
@@ -357,12 +440,12 @@ class Survey:
 
             # Get the flux
             # TODO: catch error if improper arguments are handed
-            if rest_frame:
+            if redshift is None:
                 gal.spectra_array["stellar"].get_fnu0()
             else:
-                gal.spectra_array["stellar"].get_fnu(cosmo, gal.redshift, igm)
+                gal.spectra_array["stellar"].get_fnu(self.cosmo, gal.redshift, igm)
 
-    def get_photometry(self, spectra_type, cosmo=None, redshift=None, igm=None):
+    def get_photometry(self, spectra_type, redshift=None, igm=None):
         """
         Parameters
         ----------
@@ -374,9 +457,10 @@ class Survey:
         elif spectra_type == "stellar":
             pass
         elif spectra_type == "attenuated":
-            raise exceptions.UnimplementedFunctionality(
-                "Attenuated spectra coming soon!"
-            )
+            pass
+            # raise exceptions.UnimplementedFunctionality(
+            #     "Attenuated spectra coming soon!"
+            # )
         else:
             # TODO: make a UnknownSpectralType error
             raise exceptions.InconsistentArguments(
@@ -384,15 +468,21 @@ class Survey:
 
         # Loop over each instrument
         for key in self.instruments:
+            
+            _photometry = self.seds[spectra_type].\
+                    get_broadband_fluxes(self.instruments[key].filters)
+
+            for _k, _v in _photometry.items():
+                self.photometry[_k] = _v
 
             # Loop over filters in this instrument
-            for f in self.instruments[key].filters:
-
-                # Make an entry in the photometry dictionary for this filter
-                self.photometry[f.filter_code] = f.apply_filter(
-                    self.seds[spectra_type]._fnu,
-                    xs=self.seds[spectra_type].nuz
-                )
+            # for f in self.instruments[key].filters:
+            # 
+            #    # Make an entry in the photometry dictionary for this filter
+            #    self.photometry[f.filter_code] = f.apply_filter(
+            #        self.seds[spectra_type]._fnu,
+            #        xs=self.seds[spectra_type].nuz
+            #    )
 
         return self.photometry
 
