@@ -19,7 +19,7 @@ from write_submission_script import (apollo_submission_script,
                                      cosma7_submission_script)
 
 
-def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
+def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False, machine='apollo'):
     """
     Check that all the cloudy runs have run properly
 
