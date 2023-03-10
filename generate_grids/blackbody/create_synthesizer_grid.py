@@ -273,7 +273,7 @@ def add_lines(grid_name, synthesizer_data_dir, lines_to_include, normalisation=1
         nUs = len(log10Us)
 
         spectra = hf['spectra']
-        lam = spectra['lam'][:]
+        lam = spectra['wavelength'][:]
         lines = hf.create_group('lines')
 
         for line_id in lines_to_include:
