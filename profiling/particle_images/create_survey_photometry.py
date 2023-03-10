@@ -19,7 +19,7 @@ from synthesizer.particle.stars import Stars
 from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.filters import FilterCollection as Filters
-from synthesizer.imaging.survey import Survey
+from synthesizer.survey import Survey
 from astropy.cosmology import Planck18 as cosmo
 
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -44,18 +44,20 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 survey = Survey(super_resolution_factor=1)
 
 # Lets make filter sets for two different instruments
-hst_filter_codes = ["HST/WFC3_IR.F105W", "HST/WFC3_IR.F125W"]
-webb_filter_codes = [
-    "JWST/NIRCam.F090W",
-    "JWST/NIRCam.F150W",
-    "JWST/NIRCam.F200W",
-]
-hst_filters = Filters(hst_filter_codes, new_lam=grid.lam)
-webb_filters = Filters(webb_filter_codes, new_lam=grid.lam)
-
-# Let's add these instruments to the survey
-survey.add_photometric_instrument(filters=hst_filters, label="HST/WFC3_IR")
-survey.add_photometric_instrument(filters=webb_filters, label="JWST/NIRCam")
+# hst_filter_codes = ["HST/WFC3_IR.F105W", "HST/WFC3_IR.F125W"]
+# webb_filter_codes = [
+#     "JWST/NIRCam.F090W",
+#     "JWST/NIRCam.F150W",
+#     "JWST/NIRCam.F200W",
+# ]
+# hst_filters = Filters(hst_filter_codes, new_lam=grid.lam)
+# webb_filters = Filters(webb_filter_codes, new_lam=grid.lam)
+# 
+# # Let's add these instruments to the survey
+# survey.add_photometric_instrument(filters=hst_filters, label="HST/WFC3_IR")
+# survey.add_photometric_instrument(filters=webb_filters, label="JWST/NIRCam")
+from synthesizer.filters import UVJ
+survey.add_photometric_instrument(filters=UVJ(), label="UVJ")
 
 # Define the grid (normally this would be defined by an SPS grid)
 log10ages = np.arange(6.0, 10.5, 0.1)
@@ -84,7 +86,7 @@ for igal in range(ngalaxies):
     galaxy = Galaxy("Galaxy%d" % igal, stars=stars, redshift=1)
 
     # Calculate the SEDs of stars in this galaxy
-    galaxy.generate_intrinsic_spectra(grid, update=True, integrated=True)
+    galaxy.generate_intrinsic_spectra(grid, update=True)
 
     # Include this galaxy
     galaxies.append(galaxy)
