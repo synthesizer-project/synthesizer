@@ -324,7 +324,7 @@ if __name__ == "__main__":
     failed = False
 
     # hacky wayy of fixing consistently failing cloudy runs by copying over nearby grid point
-    fix_cloudy_runs(grid_name, synthesizer_data_dir)
+    fix_cloudy_runs(grid_name, synthesizer_data_dir, replace=True)
 
     if not failed:
 
