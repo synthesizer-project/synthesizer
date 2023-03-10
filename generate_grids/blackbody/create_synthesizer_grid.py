@@ -123,9 +123,9 @@ def fix_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
 
                     if replace:
                         os.system(
-                            f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{nf}.cont {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.cont')
+                            f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{nf}.cont {synthesizer_data_dir}/cloudy/{grid_name}/{model_name}.cont')
                         os.system(
-                            f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{nf}.lines {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.lines')
+                            f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{nf}.lines {synthesizer_data_dir}/cloudy/{grid_name}/{model_name}.lines')
 
 
 def add_spectra(grid_name, synthesizer_data_dir):
