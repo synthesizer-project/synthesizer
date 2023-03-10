@@ -303,7 +303,7 @@ def add_lines(grid_name, synthesizer_data_dir, lines_to_include, normalisation=1
 
                         line.attrs['wavelength'] = wavelength_
 
-                        line['luminosity'][iT, iZ, iU] = normlisation*10**(emergent_)  # erg s^-1
+                        line['luminosity'][iT, iZ, iU] = normalisation*10**(emergent_)  # erg s^-1
                         line['stellar_continuum'][iT, iZ, iU] = np.interp(
                             wavelength_, lam, spectra['transmitted'][iT, iZ, iU])  # erg s^-1 Hz^-1
                         line['nebular_continuum'][iT, iZ, iU] = np.interp(
