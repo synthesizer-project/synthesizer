@@ -114,6 +114,8 @@ def fix_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
 
                 except:
 
+                    print(model_name)
+
                     if iZ > 0:
                         nf = f'{iT}_{iZ-1}_{iU}'
                     else:
