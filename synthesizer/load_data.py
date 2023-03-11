@@ -79,9 +79,9 @@ def load_CAMELS_IllustrisTNG(_dir='.', LH='0', snap='033'):
                         s_oxygen, s_hydrogen, coods, masses,
                         g_masses, g_metals, star_forming)
 
-def load_CAMELS_SIMBA(_dir='.', LH='0', snap='033'):
+def load_CAMELS_SIMBA(_dir='.', snap_name='snap_033.hdf5', fof_name='fof_subhalo_tab_033.hdf5'):
 
-    with h5py.File(f'{_dir}/LH_{LH}_snap_{snap}.hdf5', 'r') as hf:
+    with h5py.File(f'{_dir}/{snap_name}', 'r') as hf:
         form_time = hf['PartType4/StellarFormationTime'][:]
         coods = hf['PartType4/Coordinates'][:]
         masses = hf['PartType4/Masses'][:]
@@ -112,7 +112,7 @@ def load_CAMELS_SIMBA(_dir='.', LH='0', snap='033'):
     _ages = cosmo.age(1./form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
-    with h5py.File(f'{_dir}/LH_{LH}_fof_subhalo_tab_{snap}.hdf5', 'r') as hf:
+    with h5py.File(f'{_dir}/{fof_name}', 'r') as hf:
         lens = hf['Subhalo/SubhaloLenType'][:]
 
     return _load_CAMELS(lens, imasses, ages, metals,
