@@ -39,14 +39,14 @@ def _load_CAMELS(lens, imasses, ages, metals,
 
     return galaxies
 
-def load_CAMELS_IllustrisTNG(_dir='.', LH='0', snap='033'):
+def load_CAMELS_IllustrisTNG(_dir='.', snap_name='snap_033.hdf5', fof_name='fof_subhalo_tab_033.hdf5'):
 
-    with h5py.File(f'{_dir}/LH_{LH}_snap_{snap}.hdf5', 'r') as hf:
-        form_time = hf['PartType4/StellarFormationTime'][:]
+    with h5py.File(f'{_dir}/{snap_name}', 'r') as hf:
+        form_time = hf['PartType4/GFM_StellarFormationTime'][:]
         coods = hf['PartType4/Coordinates'][:]
         masses = hf['PartType4/Masses'][:]
         imasses = hf['PartType4/GFM_InitialMass'][:]
-        _metals = hf['PartType4/Metallicity'][:]
+        _metals = hf['PartType4/GFM_Metals'][:]
         
         g_sfr = hf['PartType0/StarFormationRate'][:]
         g_masses = hf['PartType0/Masses'][:]
@@ -72,7 +72,7 @@ def load_CAMELS_IllustrisTNG(_dir='.', LH='0', snap='033'):
     _ages = cosmo.age(1./form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
-    with h5py.File(f'{_dir}/LH_{LH}_fof_subhalo_tab_{snap}.hdf5', 'r') as hf:
+    with h5py.File(f'{_dir}/{fof_name}', 'r') as hf:
         lens = hf['Subhalo/SubhaloLenType'][:]
 
     return _load_CAMELS(lens, imasses, ages, metals,
