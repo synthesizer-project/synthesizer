@@ -32,7 +32,8 @@ Contributors
 
    installation
    grids
-   parametric
+   parametric/parametric
    cosmo
    miscellany
    grid_generation
+   
