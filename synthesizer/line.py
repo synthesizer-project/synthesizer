@@ -93,12 +93,12 @@ class LineRatios:
     ratios = {}
 
     ratios['BalmerDecrement'] = [[Ha], [Hb]]  # Balmer decrement, should be ~2.86 for dust free
-
-    ratios['R23'] = [O3+O2, [Hb]]  #  add reference
-    ratios['R3'] = R3 = [['O 3 5008.24A'], [Hb]]  #  add reference
-
+    ratios['N2'] = [['N 2 6585.27A'], [Ha]]  #  add reference
+    ratios['S2'] = [['S 2 6732.67A', 'S 2 6718.29A'], [Ha]]  #  add reference
+    ratios['O1'] = [['O 1 6302.05A'], [Ha]]  #  add reference
     ratios['R2'] = [['O 2 3727.09A'], [Hb]]  #  add reference
-
+    ratios['R3'] = R3 = [['O 3 5008.24A'], [Hb]]  #  add reference
+    ratios['R23'] = [O3+O2, [Hb]]  #  add reference
     ratios['O32'] = [['O 3 5008.24A'], ['O 2 3727.09A']]  #  add reference
     ratios['Ne3O2'] = [['Ne 3 3968.59A'], ['O 2 3727.09A']]  #  add reference
 
