@@ -841,9 +841,8 @@ class ParticleImage(ParticleScene, Image):
 
             img_this_part = np.zeros((self.npix, self.npix))
 
-            print(ind, pos, delta_pix, self.pix_pos[ind, :])
+            print(ind, pos, delta_pix, self.pix_pos[ind, :], self.npix)
             
-
             # Loop over a square aperture around this particle
             # NOTE: This includes "pixels" in front of and behind the image
             #       plane since the kernel is by defintion 3D
