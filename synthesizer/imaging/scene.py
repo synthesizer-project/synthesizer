@@ -454,8 +454,6 @@ class ParticleScene(Scene):
 
         # TODO: missing redshift information in Scene
 
-        print(self.spatial_unit, self.coord_unit, self.smooth_unit)
-
         # Is there anything to do here?
         if self.coord_unit == self.spatial_unit:
             return
@@ -513,11 +511,9 @@ class ParticleScene(Scene):
             # If they are the same dimension do the conversion.
             if self.spatial_unit.same_dimensions_as(self.smooth_unit):
 
-                print(self.smoothing_lengths)
                 self.smoothing_lengths *= self.smooth_unit
                 self.smoothing_lengths.convert_to_units(self.spatial_unit)
                 self.smoothing_lengths = self.smoothing_lengths.value
-                print(self.smoothing_lengths)
 
             # # Otherwise, handle conversion between length and angle
             # elif self.spatial_unit.same_dimensions_as(
