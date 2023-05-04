@@ -100,6 +100,9 @@ extensions = [
         "synthesizer/imaging/extensions/ckernel_functions":
             "synthesizer/imaging/extensions/ckernel_functions.c",
     }.items()
+
+    # Extension("synthesizer.weights", ["synthesizer/weights.pyx"], 
+    #     define_macros=[('CYTHON_TRACE', '1')])
 ]
 
 setup(
