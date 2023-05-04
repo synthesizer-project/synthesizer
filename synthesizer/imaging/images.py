@@ -895,7 +895,7 @@ class ParticleImage(ParticleScene, Image):
                             self.pixel_values[ind] * kernel_val
                         )
 
-            print(kernel_sum)
+            # print(kernel_sum)
             if kernel_sum > 0:
                 img_this_part /= kernel_sum
 
