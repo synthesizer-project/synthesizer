@@ -676,7 +676,7 @@ class ParticleImage(ParticleScene, Image):
             filters=(),
             positions=None,
             pixel_values=None,
-            smoothing_lengths = None,
+            smoothing_lengths=None,
             centre=None,
             rest_frame=True,
             redshift=None,
@@ -741,6 +741,7 @@ class ParticleImage(ParticleScene, Image):
             sed=sed,
             stars=stars,
             positions=positions,
+            smoothing_lengths=smoothing_lengths,
             centre=centre,
             super_resolution_factor=super_resolution_factor,
             cosmo=cosmo,
@@ -827,10 +828,7 @@ class ParticleImage(ParticleScene, Image):
         for ind in range(self.npart):
 
             # Get this particles smoothing length and position
-            if self.stars is None:
-                smooth_length = self.smoothing_lengths[ind]
-            else:
-                smooth_length = self.stars.smoothing_lengths[ind]
+            smooth_length = self.smoothing_lengths[ind]
             pos = self.coords[ind]
 
             # How many pixels are in the smoothing length?
