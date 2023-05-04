@@ -667,25 +667,26 @@ class ParticleImage(ParticleScene, Image):
     """
 
     def __init__(
-        self,
-        resolution,
-        npix=None,
-        fov=None,
-        sed=None,
-        stars=None,
-        filters=(),
-        positions=None,
-        pixel_values=None,
-        smoothing_lengths = None,
-        rest_frame=True,
-        redshift=None,
-        cosmo=None,
-        igm=None,
-        psfs=None,
-        depths=None,
-        apertures=None,
-        snrs=None,
-        super_resolution_factor=None,
+            self,
+            resolution,
+            npix=None,
+            fov=None,
+            sed=None,
+            stars=None,
+            filters=(),
+            positions=None,
+            pixel_values=None,
+            smoothing_lengths = None,
+            centre=None,
+            rest_frame=True,
+            redshift=None,
+            cosmo=None,
+            igm=None,
+            psfs=None,
+            depths=None,
+            apertures=None,
+            snrs=None,
+            super_resolution_factor=None,
     ):
         """
         Intialise the ParticleImage.
@@ -716,6 +717,9 @@ class ParticleImage(ParticleScene, Image):
         smoothing_lengths : array-like (float)
             The values describing the size of the smooth kernel for each
             particle. Only needed if star objects are not passed.
+        centre : array-like (float)
+            The centre to use for the image if not the geometric centre of
+            the particle distribution.
         rest_frame : bool
             Are we making an observation in the rest frame?
         redshift : float
@@ -737,6 +741,7 @@ class ParticleImage(ParticleScene, Image):
             sed=sed,
             stars=stars,
             positions=positions,
+            centre=centre,
             super_resolution_factor=super_resolution_factor,
             cosmo=cosmo,
         )
