@@ -827,8 +827,6 @@ class ParticleImage(ParticleScene, Image):
         # Loop over positions including the sed
         for ind in range(self.npart):
 
-            print(ind)
-
             # Get this particles smoothing length and position
             smooth_length = self.smoothing_lengths[ind]
             pos = self.coords[ind]
@@ -891,6 +889,7 @@ class ParticleImage(ParticleScene, Image):
                             self.pixel_values[ind] * kernel_val
                         )
 
+            print(kernel_sum)
             if kernel_sum > 0:
                 img_this_part /= kernel_sum
 
@@ -960,7 +959,6 @@ class ParticleImage(ParticleScene, Image):
         # Handle the possible cases (multiple filters or single image)
         if self.pixel_values is not None:
 
-            print(self.pixel_values)
             return self._get_smoothed_img_single_filter(kernel_func)
 
         # Calculate IFU "image"
