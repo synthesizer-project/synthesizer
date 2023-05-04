@@ -454,6 +454,8 @@ class ParticleScene(Scene):
 
         # TODO: missing redshift information in Scene
 
+        print(self.spatial_unit, self.coord_unit, self.smooth_unit)
+
         # Is there anything to do here?
         if self.coord_unit == self.spatial_unit:
             return
