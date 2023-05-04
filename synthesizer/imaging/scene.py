@@ -241,7 +241,8 @@ class ParticleScene(Scene):
     """
 
     # Define slots to reduce memory overhead of this class
-    __slots__ = ["stars", "coords", "centre", "pix_pos", "npart"]
+    __slots__ = ["stars", "coords", "centre", "pix_pos", "npart",
+                 "smoothing_lengths"]
 
     def __init__(
         self,
@@ -251,6 +252,7 @@ class ParticleScene(Scene):
         sed=None,
         stars=None,
         positions=None,
+        smoothing_lengths=None,
         centre=None,
         super_resolution_factor=None,
         cosmo=None,
@@ -275,6 +277,9 @@ class ParticleScene(Scene):
             WorkInProgress
         positons : array-like (float)
             The position of particles to be sorted into the image.
+        smoothing_lengths : array-like (float)
+            The values describing the size of the smooth kernel for each
+            particle. Only needed if star objects are not passed.
         centre : array-like (float)
             The coordinates around which the image will be centered. The if one
             is not provided then the geometric centre is calculated and used.
@@ -316,7 +321,10 @@ class ParticleScene(Scene):
         self._centre_coords()
 
         # Store the smoothing lengths because we again need a copy
-        self.smoothing_lengths = np.copy(self.stars.smoothing_lengths)
+        if self.stars is not None:
+            self.smoothing_lengths = np.copy(self.stars.smoothing_lengths)
+        else:
+            self.smoothing_lengths = smoothing_lengths
 
         # Convert coordinates to the image's spatial units
         self._convert_to_img_units()
