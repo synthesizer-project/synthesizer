@@ -841,7 +841,7 @@ class ParticleImage(ParticleScene, Image):
 
             img_this_part = np.zeros((self.npix, self.npix))
 
-            print(ind, pos, delta_pix, self.pix_pos[ind, :], self.npix)
+            # print(ind, pos, delta_pix, self.pix_pos[ind, :], self.npix)
             
             # Loop over a square aperture around this particle
             # NOTE: This includes "pixels" in front of and behind the image
@@ -884,7 +884,7 @@ class ParticleImage(ParticleScene, Image):
                         # Compute the distance between the centre of this pixel
                         # and the particle.
                         dist = np.sqrt(x_dist**2 + y_dist**2 + z_dist**2)
-                        print(dist, smooth_length)
+                        # print(dist, smooth_length)
 
                         # Get the value of the kernel here
                         kernel_val = kernel_func(dist / smooth_length)
