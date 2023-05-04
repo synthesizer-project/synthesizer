@@ -776,7 +776,7 @@ class ParticleImage(ParticleScene, Image):
 
         # Set up standalone arrays used when Synthesizer objects are not
         # passed.
-        self.pixel_values = pixel_values
+        self.pixel_values = pixel_values.value
 
     def _get_hist_img_single_filter(self):
         """
