@@ -464,9 +464,11 @@ class ParticleScene(Scene):
         elif self.spatial_unit.same_dimensions_as(self.coord_unit):
 
             # First do the coordinates
+            print(self.coords)
             self.coords *= self.coord_unit
             self.coords.convert_to_units(self.spatial_unit)
             self.coords = self.coords.value
+            print(self.coords)
 
         # # Otherwise, handle conversion between length and angle
         # elif self.spatial_unit.same_dimensions_as(
