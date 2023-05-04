@@ -676,6 +676,7 @@ class ParticleImage(ParticleScene, Image):
         filters=(),
         positions=None,
         pixel_values=None,
+        smoothing_lengths = None,
         rest_frame=True,
         redshift=None,
         cosmo=None,
@@ -712,6 +713,9 @@ class ParticleImage(ParticleScene, Image):
         pixel_values : array-like (float)
             The values to be sorted/smoothed into pixels. Only needed if an sed
             and filters are not used.
+        smoothing_lengths : array-like (float)
+            The values describing the size of the smooth kernel for each
+            particle. Only needed if star objects are not passed.
         rest_frame : bool
             Are we making an observation in the rest frame?
         redshift : float
@@ -764,8 +768,10 @@ class ParticleImage(ParticleScene, Image):
                 super_resolution_factor=super_resolution_factor,
             )
 
-        # Set up pixel values
+        # Set up standalone arrays used when Synthesizer objects are not
+        # passed.
         self.pixel_values = pixel_values
+        self.smoothing_lengths = smoothing_lengths
 
     def _get_hist_img_single_filter(self):
         """
@@ -816,7 +822,10 @@ class ParticleImage(ParticleScene, Image):
         for ind in range(self.npart):
 
             # Get this particles smoothing length and position
-            smooth_length = self.stars.smoothing_lengths[ind]
+            if self.stars is None:
+                smooth_length = self.smoothing_lengths[ind]
+            else:
+                smooth_length = self.stars.smoothing_lengths[ind]
             pos = self.coords[ind]
 
             # How many pixels are in the smoothing length?
