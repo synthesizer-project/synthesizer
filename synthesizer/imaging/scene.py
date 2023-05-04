@@ -455,7 +455,7 @@ class ParticleScene(Scene):
         # TODO: missing redshift information in Scene
 
         # Is there anything to do here?
-        if self.stars.coord_units == self.spatial_unit:
+        if self.coord_unit == self.spatial_unit:
             return
 
         # If they are the same dimension do the conversion.
