@@ -824,6 +824,9 @@ class ParticleImage(ParticleScene, Image):
         # Get the size of a pixel
         res = self.resolution
 
+        # Set up the image
+        self.img = np.zeros((self.npix, self.npix))
+
         # Loop over positions including the sed
         for ind in range(self.npart):
 
@@ -837,6 +840,9 @@ class ParticleImage(ParticleScene, Image):
             kernel_sum = 0
 
             img_this_part = np.zeros((self.npix, self.npix))
+
+            print(ind, pos, delta_pix, self.pix_pos[ind, :])
+            
 
             # Loop over a square aperture around this particle
             # NOTE: This includes "pixels" in front of and behind the image
