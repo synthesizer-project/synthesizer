@@ -22,7 +22,7 @@ with h5py.File(f'{_dir}/{snap_name}', 'r') as hf:
 with h5py.File(f'{_dir}/{fof_name}', 'r') as hf:
     lens = hf['Subhalo/SubhaloLenType'][:]
 
-N = 100
+N = 10
 lens4 = np.cumsum(lens[:,4])[:N]
 lens0 = np.cumsum(lens[:,0])[:N]
 
