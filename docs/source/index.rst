@@ -31,7 +31,7 @@ Contributors
    :caption: Contents
 
    installation
-   grids
+   grids/grids
    parametric/parametric
    cosmo/cosmo
    miscellany
