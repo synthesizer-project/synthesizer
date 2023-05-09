@@ -402,6 +402,10 @@ class Image(Scene):
 
             self.img_psf = self._get_psfed_single_img(self.img, psfs)
 
+            # Now that we are done with the convolution return the original
+            # images to the native resolution.
+            self._super_to_native_resolution()
+
             return self.img_psf
 
         # Otherwise, we need to loop over filters and return a dictionary of
