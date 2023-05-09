@@ -527,7 +527,7 @@ class Image(Scene):
             isinstance(self.depths, dict)
             or isinstance(self.snrs, dict)
             or isinstance(self.apertures, dict)
-            or isinstance(self.noises, dict)
+            or isinstance(noises, dict)
         ):
             raise exceptions.InconsistentArguments(
                 "If there is a single image then noise arguments should be "
