@@ -840,8 +840,6 @@ class ParticleImage(ParticleScene, Image):
             # How many pixels are in the smoothing length?
             delta_pix = math.ceil(smooth_length / self.resolution) + 1
 
-            kernel_sum = 0
-
             img_this_part = np.zeros((self.npix, self.npix))
             
             # Loop over a square aperture around this particle
@@ -888,15 +886,13 @@ class ParticleImage(ParticleScene, Image):
 
                         # Get the value of the kernel here
                         kernel_val = kernel_func(dist / smooth_length)
-                        kernel_sum += kernel_val
 
                         # Add this pixel's contribution
-                        img_this_part[i, j] += (
-                            self.pixel_values[ind] * kernel_val
-                        )
+                        img_this_part[i, j] += kernel_val
 
             if kernel_sum > 0:
-                img_this_part /= kernel_sum
+                img_this_part /= np.sum(img_this_part)
+                img_this_part *= self.pixel_values[ind]
 
                 self.img += img_this_part
 
