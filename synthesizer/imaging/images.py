@@ -890,8 +890,9 @@ class ParticleImage(ParticleScene, Image):
                         # Add this pixel's contribution
                         img_this_part[i, j] += kernel_val
 
+            kernel_sum = np.sum(img_this_part)
             if kernel_sum > 0:
-                img_this_part /= np.sum(img_this_part)
+                img_this_part /= kernel_sum
                 img_this_part *= self.pixel_values[ind]
 
                 self.img += img_this_part
