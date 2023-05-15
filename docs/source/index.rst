@@ -34,5 +34,5 @@ Contributors
    grids/grids
    parametric/parametric
    cosmo/cosmo
-   miscellany
+   filters
    grid_generation
