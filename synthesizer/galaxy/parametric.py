@@ -326,8 +326,8 @@ class ParametricGalaxy(BaseGalaxy):
         T_young = T_ISM * T_BC
         T_old = T_ISM
 
-        sed_young = intrinsic_sed_young.lnu * T_young
-        sed_old = intrinsic_sed_old.lnu * T_old
+        sed_young = self.intrinsic_sed_young.lnu * T_young
+        sed_old = self.intrinsic_sed_old.lnu * T_old
 
         if save_young_and_old:
 
