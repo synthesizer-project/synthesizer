@@ -311,8 +311,8 @@ class ParametricGalaxy(BaseGalaxy):
         """
 
         # calculate intrinsic sed for young and old stars
-        intrinsic_sed_young = self.generate_lnu(self, grid, spectra_name=spectra_name, old=old, young=young)
-        intrinsic_sed_old = self.generate_lnu(self, grid, spectra_name=spectra_name, old=old, young=young)
+        intrinsic_sed_young = self.generate_lnu(grid, spectra_name=spectra_name, old=old, young=young)
+        intrinsic_sed_old = self.generate_lnu(grid, spectra_name=spectra_name, old=old, young=young)
 
         if save_young_and_old:
 
