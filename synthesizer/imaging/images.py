@@ -402,6 +402,10 @@ class Image(Scene):
 
             self.img_psf = self._get_psfed_single_img(self.img, psfs)
 
+            # Now that we are done with the convolution return the original
+            # images to the native resolution.
+            self._super_to_native_resolution()
+
             return self.img_psf
 
         # Otherwise, we need to loop over filters and return a dictionary of
@@ -527,7 +531,7 @@ class Image(Scene):
             isinstance(self.depths, dict)
             or isinstance(self.snrs, dict)
             or isinstance(self.apertures, dict)
-            or isinstance(self.noises, dict)
+            or isinstance(noises, dict)
         ):
             raise exceptions.InconsistentArguments(
                 "If there is a single image then noise arguments should be "
@@ -667,24 +671,26 @@ class ParticleImage(ParticleScene, Image):
     """
 
     def __init__(
-        self,
-        resolution,
-        npix=None,
-        fov=None,
-        sed=None,
-        stars=None,
-        filters=(),
-        positions=None,
-        pixel_values=None,
-        rest_frame=True,
-        redshift=None,
-        cosmo=None,
-        igm=None,
-        psfs=None,
-        depths=None,
-        apertures=None,
-        snrs=None,
-        super_resolution_factor=None,
+            self,
+            resolution,
+            npix=None,
+            fov=None,
+            sed=None,
+            stars=None,
+            filters=(),
+            positions=None,
+            pixel_values=None,
+            smoothing_lengths=None,
+            centre=None,
+            rest_frame=True,
+            redshift=None,
+            cosmo=None,
+            igm=None,
+            psfs=None,
+            depths=None,
+            apertures=None,
+            snrs=None,
+            super_resolution_factor=None,
     ):
         """
         Intialise the ParticleImage.
@@ -712,6 +718,12 @@ class ParticleImage(ParticleScene, Image):
         pixel_values : array-like (float)
             The values to be sorted/smoothed into pixels. Only needed if an sed
             and filters are not used.
+        smoothing_lengths : array-like (float)
+            The values describing the size of the smooth kernel for each
+            particle. Only needed if star objects are not passed.
+        centre : array-like (float)
+            The centre to use for the image if not the geometric centre of
+            the particle distribution.
         rest_frame : bool
             Are we making an observation in the rest frame?
         redshift : float
@@ -733,6 +745,8 @@ class ParticleImage(ParticleScene, Image):
             sed=sed,
             stars=stars,
             positions=positions,
+            smoothing_lengths=smoothing_lengths,
+            centre=centre,
             super_resolution_factor=super_resolution_factor,
             cosmo=cosmo,
         )
@@ -764,8 +778,9 @@ class ParticleImage(ParticleScene, Image):
                 super_resolution_factor=super_resolution_factor,
             )
 
-        # Set up pixel values
-        self.pixel_values = pixel_values
+        # Set up standalone arrays used when Synthesizer objects are not
+        # passed.
+        self.pixel_values = pixel_values.value
 
     def _get_hist_img_single_filter(self):
         """
@@ -812,20 +827,21 @@ class ParticleImage(ParticleScene, Image):
         # Get the size of a pixel
         res = self.resolution
 
+        # Set up the image
+        self.img = np.zeros((self.npix, self.npix))
+
         # Loop over positions including the sed
         for ind in range(self.npart):
 
             # Get this particles smoothing length and position
-            smooth_length = self.stars.smoothing_lengths[ind]
+            smooth_length = self.smoothing_lengths[ind]
             pos = self.coords[ind]
 
             # How many pixels are in the smoothing length?
             delta_pix = math.ceil(smooth_length / self.resolution) + 1
 
-            kernel_sum = 0
-
             img_this_part = np.zeros((self.npix, self.npix))
-
+            
             # Loop over a square aperture around this particle
             # NOTE: This includes "pixels" in front of and behind the image
             #       plane since the kernel is by defintion 3D
@@ -870,15 +886,14 @@ class ParticleImage(ParticleScene, Image):
 
                         # Get the value of the kernel here
                         kernel_val = kernel_func(dist / smooth_length)
-                        kernel_sum += kernel_val
 
                         # Add this pixel's contribution
-                        img_this_part[i, j] += (
-                            self.pixel_values[ind] * kernel_val
-                        )
+                        img_this_part[i, j] += kernel_val
 
+            kernel_sum = np.sum(img_this_part)
             if kernel_sum > 0:
                 img_this_part /= kernel_sum
+                img_this_part *= self.pixel_values[ind]
 
                 self.img += img_this_part
 
