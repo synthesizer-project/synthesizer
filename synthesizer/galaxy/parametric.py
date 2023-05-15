@@ -310,6 +310,15 @@ class ParametricGalaxy(BaseGalaxy):
              A Sed object containing the dust attenuated spectra
         """
 
+        # calculate intrinsic sed for young and old stars
+        intrinsic_sed_young = generate_lnu(self, grid, spectra_name, old=False, young=7.)
+        intrinsic_sed_old = generate_lnu(self, grid, spectra_name, old=7., young=False)
+
+        if save_young_and_old:
+
+            self.spectra['intrinsic_young'] = intrinsic_sed_young
+            self.spectra['intrinsic_old'] = intrinsic_sed_old
+
         # calculate dust attenuation for young and old components
         T_ISM = power_law({'slope': alpha_ISM}).attenuate(tauV_ISM, grid.lam)
         T_BC = power_law({'slope': alpha_BC}).attenuate(tauV_BC, grid.lam)
@@ -317,9 +326,25 @@ class ParametricGalaxy(BaseGalaxy):
         T_young = T_ISM * T_BC
         T_old = T_ISM
 
-        generate_lnu(self, grid, spectra_name, old=False, young=7.)
+        sed_young = intrinsic_sed_young.lnu * T_young
+        sed_old = intrinsic_sed_old.lnu * T_old
 
-        pass
+        if save_young_and_old:
+
+            # if integrated:
+            self.spectra['attenuated_young'] = Sed(grid.lam, sed_young)
+            self.spectra['attenuated_old'] = Sed(grid.lam, sed_old)
+
+        sed = Sed(grid.lam, sed_young + sed_old)
+
+        if update:
+            self.spectra['attenuated'] = sed
+
+        if sed_object:
+            return sed
+        else:
+            return sed_young + sed_old
+
 
     def get_intrinsic_line(self, grid, line_ids, fesc=0.0, update=True):
         """
