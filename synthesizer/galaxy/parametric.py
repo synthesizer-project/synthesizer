@@ -283,7 +283,7 @@ class ParametricGalaxy(BaseGalaxy):
 
         return self.spectra['total']
 
-    def get_CF00_spectra(self, grid, tauV_ISM, tauV_BC, alpha_ISM=-0.7, alpha_BC=-1.3, old=False, young=False, save_young_and_old=False):
+    def get_CF00_spectra(self, grid, tauV_ISM, tauV_BC, alpha_ISM=-0.7, alpha_BC=-1.3, old=False, young=False, save_young_and_old=False, spectra_name='intrinsic'):
         """
         Calculates dust attenuated spectra assuming the Charlot & Fall (2000) dust model. In this model young star particles
         are embedded in a dusty birth cloud and thus feel more dust attenuation.
@@ -311,8 +311,8 @@ class ParametricGalaxy(BaseGalaxy):
         """
 
         # calculate intrinsic sed for young and old stars
-        intrinsic_sed_young = generate_lnu(self, grid, spectra_name, old=old, young=young)
-        intrinsic_sed_old = generate_lnu(self, grid, spectra_name, old=old, young=young)
+        intrinsic_sed_young = self.generate_lnu(self, grid, spectra_name=spectra_name, old=old, young=young)
+        intrinsic_sed_old = self.generate_lnu(self, grid, spectra_name=spectra_name, old=old, young=young)
 
         if save_young_and_old:
 
