@@ -108,9 +108,7 @@ class Scene:
 
         # Do we need to make a super resoution image?
         if self.super_resolution_factor is not None:
-            print(self.npix, self.fov, self.resolution)
             self._native_to_super_resolution()
-            print(self.npix)
 
     def _check_obs_args(self, resolution, fov, npix):
         """

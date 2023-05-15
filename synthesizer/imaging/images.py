@@ -895,8 +895,6 @@ class ParticleImage(ParticleScene, Image):
                 img_this_part /= kernel_sum
                 img_this_part *= self.pixel_values[ind]
 
-                print(np.sum(img_this_part), self.pixel_values[ind])
-
                 self.img += img_this_part
 
         return self.img
