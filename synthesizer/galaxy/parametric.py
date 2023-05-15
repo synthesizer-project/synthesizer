@@ -36,6 +36,8 @@ class ParametricGalaxy(BaseGalaxy):
 
         self.sfzh = sfzh
         # add an extra dimension to the sfzh to allow the fast summation
+        # **** TODO: Get rid of this expression or
+        # use this throughout? 
         self.sfzh_ = np.expand_dims(self.sfzh.sfzh, axis=2)
 
         self.morph = morph
@@ -124,10 +126,20 @@ class ParametricGalaxy(BaseGalaxy):
 
         return np.sum(10**grid.log10Q * self.sfzh, axis=(0, 1))
 
-    def generate_lnu(self, grid, spectra_name):
+    def generate_lnu(self, grid, spectra_name, old=False, young=False):
 
         # calculate pure stellar emission
-        return np.sum(grid.spectra[spectra_name] * self.sfzh_, axis=(0, 1))
+        if old * young:
+            raise ValueError("Cannot provide old and young stars together")
+
+        if old:
+            sfzh_mask = (self.sfzh.log10ages>old)
+        elif young:
+            sfzh_mask = (self.sfzh.log10ages<=young)
+        else:
+            sfzh_mask = np.ones(len(self.sfzh.log10ages), dtype=bool)
+
+        return np.sum(grid.spectra[spectra_name] * self.sfzh_[sfzh_mask, :, :], axis=(0, 1))
 
     def get_stellar_spectra(self, grid, update=True):
         """ generate the pure stellar spectra using the provided grid"""
@@ -304,6 +316,8 @@ class ParametricGalaxy(BaseGalaxy):
 
         T_young = T_ISM * T_BC
         T_old = T_ISM
+
+        generate_lnu(self, grid, spectra_name, old=False, young=7.)
 
         pass
 
