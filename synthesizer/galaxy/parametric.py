@@ -284,10 +284,10 @@ class ParametricGalaxy(BaseGalaxy):
             self.spectra['total']._lnu = self.spectra['attenuated']._lnu
         
         elif ~np.scalar(tauV):
-            self.spectra['attenuated']._lnu = self.spectra['escape']._lnu +
+            self.spectra['attenuated']._lnu = self.spectra['escape']._lnu + \
                                               self.get_CharlotFall00_spectra(grid, tauV_ISM=tauV[0],
                                             tauV_BC=tauV[1], alpha_ISM=alpha[0], alpha_BC=alpha[1],
-                                            old=False, young=False, save_young_and_old=False,
+                                            old=old, young=young, save_young_and_old=save_young_and_old,
                                             spectra_name='reprocessed', sed_object=sed_object)
 
         else:
