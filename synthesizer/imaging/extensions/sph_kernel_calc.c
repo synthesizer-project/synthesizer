@@ -208,7 +208,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   PyArrayObject *np_pix_values;
   PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys, *np_zs;
 
-  if(!PyArg_ParseTuple(args, "OOOOOdiii", &np_pix_values,
+  if(!PyArg_ParseTuple(args, "OOOOOdii", &np_pix_values,
                        &np_smoothing_lengths, &np_xs,
                        &np_ys, &np_zs, &res, &npix, &npart))
     return NULL;
