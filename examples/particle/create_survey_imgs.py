@@ -19,7 +19,7 @@ from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.filters import FilterCollection as Filters
 from synthesizer.kernel_functions import quintic
-from synthesizer.imaging.survey import Survey
+from synthesizer.survey import Survey
 from astropy.cosmology import Planck18 as cosmo
 
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -27,6 +27,8 @@ plt.rcParams["font.serif"] = ["Times New Roman"]
 
 # Set the seed
 np.random.seed(42)
+
+start = time.time()
 
 # Get the location of this script, __file__ is the absolute path of this
 # script, however we just want to directory
@@ -37,8 +39,11 @@ grid_name = "test_grid"
 grid_dir = script_path + "/../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
+# What redshift are we testing?
+redshift = 4
+
 # Create an empty Survey object
-survey = Survey(super_resolution_factor=2, fov=8)
+survey = Survey(super_resolution_factor=2, fov=15)
 
 # Lets make filter sets for two different instruments
 hst_filter_codes = ["HST/WFC3_IR.F105W", "HST/WFC3_IR.F125W"]
@@ -52,42 +57,42 @@ webb_filters = Filters(webb_filter_codes, new_lam=grid.lam)
 
 # Create a fake PSF for each instrument (normalising the kernels)
 hst_psf = np.outer(
-    signal.windows.gaussian(25, 2), signal.windows.gaussian(25, 2)
+    signal.windows.gaussian(25, 4), signal.windows.gaussian(25, 5)
 )
 hst_psf /= np.sum(hst_psf)
 webb_psf = np.outer(
-    signal.windows.gaussian(50, 3), signal.windows.gaussian(50, 3)
+    signal.windows.gaussian(50, 6), signal.windows.gaussian(50, 6)
 )
 webb_psf /= np.sum(webb_psf)
 hst_psfs = {f: hst_psf for f in hst_filters.filter_codes}
 webb_psfs = {f: webb_psf for f in webb_filters.filter_codes}
 
 # Lets define some depths in magnitudes
-hst_depths = {f: 33.0 for f in hst_filters.filter_codes}
-webb_depths = {f: 33.0 for f in webb_filters.filter_codes}
+hst_depths = {f: 46.0 for f in hst_filters.filter_codes}
+webb_depths = {f: 46.0 for f in webb_filters.filter_codes}
 
 # Let's add these instruments to the survey
 survey.add_photometric_instrument(
     filters=hst_filters,
-    resolution=0.1 * arcsec,
+    resolution=0.5 * kpc,
     label="HST/WFC3_IR",
     psfs=hst_psfs,
     depths=hst_depths,
     snrs=5,
-    apertures=0.5,
+    apertures=3,
 )
 survey.add_photometric_instrument(
     filters=webb_filters,
-    resolution=0.05 * arcsec,
+    resolution=0.1 * kpc,
     label="JWST/NIRCam",
     psfs=webb_psfs,
     depths=webb_depths,
     snrs=5,
-    apertures=0.5,
+    apertures=3,
 )
 
 # We need to convert the our depths into flux to be consistent with the images.
-survey.convert_mag_depth_to_fnu()
+survey.convert_mag_depth_to_lnu(redshift)
 
 # Define the grid (normally this would be defined by an SPS grid)
 log10ages = np.arange(6.0, 10.5, 0.1)
@@ -101,7 +106,7 @@ sfh = SFH.Constant(sfh_p)  # constant star formation
 fov = survey.fov
 
 # Make some fake galaxies
-ngalaxies = 2
+ngalaxies = 5
 galaxies = []
 for igal in range(ngalaxies):
 
@@ -123,7 +128,7 @@ for igal in range(ngalaxies):
     )  # calculate radii
     rs[rs < 0.1] = 0.4  # Set a lower bound on the "smoothing length"
     stars.smoothing_lengths = rs / 4  # convert radii into smoothing lengths
-    stars.redshift = 1
+    stars.redshift = redshift
 
     # Compute width of stellar distribution
     width = np.max(coords) - np.min(coords)
@@ -139,8 +144,7 @@ for igal in range(ngalaxies):
     galaxies.append(galaxy)
 
 # Define image propertys
-redshift = 1
-fov = (width + 1) * cosmo.arcsec_per_kpc_proper(redshift).value * arcsec
+fov = (width + 1) * kpc
 
 # Set the fov in the survey
 print("Image FOV:", fov)
@@ -150,16 +154,19 @@ survey.fov = fov
 survey.add_galaxies(galaxies)
 
 # Calculate the SEDs
-survey.get_particle_stellar_spectra(grid, cosmo=cosmo)
+survey.get_particle_spectra(grid, "total", redshift=redshift, rest_frame=True)
 
 # Make images for each galaxy in this survey
 survey.make_images(
     img_type="smoothed",
-    spectra_type="stellar",
+    spectra_type="total",
     kernel_func=quintic,
-    rest_frame=False,
+    rest_frame=True,
     cosmo=cosmo,
 )
+
+print("Total runtime (including creation, not including plotting):",
+      time.time() - start)
 
 # Set up plot
 fig = plt.figure(figsize=(3.5 * survey.nfilters, 3.5 * survey.ngalaxies))
@@ -192,6 +199,8 @@ for inst in survey.imgs:
         # Loop over filters in this instrument
         for fcode in img.imgs:
             axes[i, j].imshow(img.imgs_noise[fcode], cmap="Greys_r")
+            print(img.imgs_noise[fcode].max())
+            print(img.noise_arrs[fcode].max())
 
             # Label the top row
             if i == 0:
