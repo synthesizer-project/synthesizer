@@ -20,7 +20,7 @@ from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.filters import FilterCollection as Filters
 from synthesizer.kernel_functions import quintic
-from synthesizer.imaging.survey import Survey
+from synthesizer.survey import Survey
 from astropy.cosmology import Planck18 as cosmo
 
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -40,6 +40,9 @@ script_path = os.path.abspath(os.path.dirname(__file__))
 grid_name = "test_grid"
 grid_dir = script_path + "/../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
+
+# What redshift are we testing?
+redshift = 4
 
 # Create an empty Survey object
 survey = Survey(super_resolution_factor=1)
@@ -67,7 +70,7 @@ sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(sfh_p)  # constant star formation
 
 # Make some fake galaxies
-ngalaxies = 100
+ngalaxies = 1000
 galaxies = []
 for igal in range(ngalaxies):
 
@@ -80,6 +83,7 @@ for igal in range(ngalaxies):
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
+    stars.initial_masses = np.random.normal(10**6, 10**5, n)
     stars.current_masses = stars.initial_masses
 
     # Create galaxy object
@@ -92,12 +96,14 @@ for igal in range(ngalaxies):
 survey.add_galaxies(galaxies)
 
 # Get the SEDs
-survey.get_integrated_stellar_spectra(grid, rest_frame=True)
+survey.get_spectra(grid, spectra_type="total", rest_frame=False,
+                   redshift=redshift)
 
 # Make images for each galaxy in this survey
-survey.get_photometry(spectra_type="stellar")
+survey.get_photometry(spectra_type="total")
 
-print("Total runtime:", time.time() - start)
+print("Total runtime (including creation, not including plotting):",
+      time.time() - start)
 
 # Get stellar masses
 ms = []
