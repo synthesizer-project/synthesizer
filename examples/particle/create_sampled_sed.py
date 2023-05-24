@@ -62,8 +62,9 @@ galaxy.generate_spectra(grid, fesc=0.0, spectra_type="total")
 # galaxy.get_CF00(grid, 0.5, 0.5) # grid, tauV_BC, tauV_ISM
 
 # --- generate for los model
-tauVs = np.ones(N) * 0.5
-galaxy.get_los(tauVs)  # grid, tauV_BC, tauV_ISM
+# TODO: to be implemented
+# tauVs = np.ones(N) * 0.5
+# galaxy.get_los(tauVs)  # grid, tauV_BC, tauV_ISM
 
 for sed_type, sed in galaxy.spectra.items():
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=sed_type)
