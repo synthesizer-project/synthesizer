@@ -190,5 +190,5 @@ if __name__ == "__main__":
 
     # Plot the image
     plt.savefig(
-        "../flux_in_filters_with_PSF_test.png", bbox_inches="tight", dpi=300
+        "plots/flux_in_filters_with_PSF_test.png", bbox_inches="tight", dpi=300
     )
