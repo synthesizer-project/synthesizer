@@ -590,24 +590,6 @@ class ParticleGalaxy(BaseGalaxy):
         else:
             return line_lums
 
-    def _calculate_weights(self, grid, metals, ages, imasses,
-                           young_stars=False):
-        """
-        Find weights of particles on grid
-
-        Will calculate for particles individually
-        """
-        in_arr = np.array([ages, metals, imasses], dtype=np.float64).T
-        if (not hasattr(metals, '__len__')):  # check it's an array
-            in_arr = in_arr[None, :]  # update dimensions if scalar
-
-        if young_stars:  # filter grid object
-            return calculate_weights(grid.log10ages[grid.ages <= grid.max_age],
-                                     grid.log10metallicities, in_arr)
-        else:
-            return calculate_weights(grid.log10ages, grid.log10metallicities,
-                                     in_arr)
-
     def create_stellarmass_hist(self, resolution, npix=None, fov=None):
         """
         Calculate a 2D histogram of the galaxy's mass distribution.
