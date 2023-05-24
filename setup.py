@@ -7,6 +7,11 @@ from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
 from distutils.errors import CompileError
+
+# We first need a numpy install to run setup.py
+from setuptools import dist
+dist.Distribution().fetch_build_eggs(['numpy==1.23.4'])
+
 import numpy as np
 
 # The below is taken from PySPHveiwer. Might need to change and adapt but
