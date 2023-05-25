@@ -53,7 +53,7 @@ int get_flat_index_subarray(const int *multi_index, int ndims) {
     for (int i = ndims - 1; i >= 0; i--) {
         index += stride * multi_index[i];
         if (index < 0) {
-          printf("index=%d stride=%d multi_index[i]=%d", index, stride, multi_index[i];);
+          printf("index=%d stride=%d multi_index[i]=%d", index, stride, multi_index[i]);
           fflush(stdout);
         }
         stride *= 2;
