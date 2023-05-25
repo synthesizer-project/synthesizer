@@ -27,8 +27,7 @@ plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
 
 # Set the seed
-np.random.seed(42)
-random.seed(42)
+np.random.seed(45)
 
 start = time.time()
 
@@ -137,4 +136,4 @@ ax.legend(
 )
 
 # Plot the image
-plt.savefig("plots/survey_photometry_test.png", bbox_inches="tight", dpi=300)
+plt.savefig("survey_photometry_test.png", bbox_inches="tight", dpi=300)
