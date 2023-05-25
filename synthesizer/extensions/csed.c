@@ -53,8 +53,7 @@ int get_flat_index_subarray(const int *multi_index, int ndims) {
     for (int i = ndims - 1; i >= 0; i--) {
         index += stride * multi_index[i];
         if (index < 0) {
-          printf("index=%d stride=%d multi_index[i]=%d",
-                 index, stride, multi_index[i]);
+          printf("index=%d stride=%d multi_index[i]=%d", index, stride, multi_index[i];);
           fflush(stdout);
         }
         stride *= 2;
@@ -309,10 +308,10 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
   double *fracs = malloc(ndim * sizeof(double));
-  int *frac_indices = malloc((ndim + 1) * sizeof(int));
-  int *low_indices = malloc((ndim + 1) * sizeof(int));
-  int *weight_indices = malloc(nweights * sizeof(int));
-  int *sub_indices = malloc(ndim * sizeof(double));
+  unsigned int *frac_indices = malloc((ndim + 1) * sizeof(int));
+  unsigned int *low_indices = malloc((ndim + 1) * sizeof(int));
+  unsigned int *weight_indices = malloc(nweights * sizeof(int));
+  short int *sub_indices = malloc(ndim * sizeof(double));
     
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -468,10 +467,10 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
   double *fracs = malloc(ndim * sizeof(double));
-  int *frac_indices = malloc((ndim + 1) * sizeof(int));
-  int *low_indices = malloc((ndim + 1) * sizeof(int));
-  int *weight_indices = malloc(nweights * sizeof(int));
-  int *sub_indices = malloc(ndim * sizeof(double));
+  unsigned int *frac_indices = malloc((ndim + 1) * sizeof(int));
+  unsigned int *low_indices = malloc((ndim + 1) * sizeof(int));
+  unsigned int *weight_indices = malloc(nweights * sizeof(int));
+  short int *sub_indices = malloc(ndim * sizeof(double));
     
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
