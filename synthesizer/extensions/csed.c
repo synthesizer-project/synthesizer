@@ -346,7 +346,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
       /* Get this weight and it's flattened index. */
       const double weight = weights[i];
-      const int spectra_ind = weight_indices[i];
+      const unsigned int spectra_ind = weight_indices[i];
 
       /* Skip zero weight cells. */
       if (weight <= 0) continue;
@@ -505,7 +505,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
       /* Get this weight and it's flattened index. */
       const double weight = weights[i];
-      const int spectra_ind = weight_indices[i];
+      const unsigned int = weight_indices[i];
 
       /* Skip zero weight cells. */
       if (weight <= 0) continue;
