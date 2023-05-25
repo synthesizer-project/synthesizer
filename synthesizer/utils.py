@@ -1,5 +1,7 @@
 import h5py
 import numpy as np
+from unyt import pc, cm, erg, s, Hz, nJy
+import unyt
 
 
 def write_data_h5py(filename, name, data, overwrite=False):
@@ -160,24 +162,24 @@ def fnu_to_m(fnu):
     else:
         fnu_ = fnu
 
-    return -2.5*np.log10(fnu_/1E9) + 8.9  # -- assumes flux in nJy
+    return -2.5 * np.log10(fnu_ / 1E9) + 8.9  # -- assumes flux in nJy
 
 
 def m_to_fnu(m):
     """ Convert AB magnitude to fnu """
 
-    return 1E9 * 10**(-0.4*(m - 8.9)) * nJy  # -- flux returned nJy
+    return 1E9 * 10 ** (-0.4*(m - 8.9)) * nJy  # -- flux returned nJy
 
 
 class constants:
     tenpc = 10*pc  # ten parsecs
     # the surface area (in cm) at 10 pc. I HATE the magnitude system
-    geo = 4*np.pi*(tenpc.to('cm').value)**2
+    geo = 4 * np.pi * (tenpc.to('cm').value) ** 2
 
 
 def M_to_Lnu(M):
     """ Convert absolute magnitude (M) to L_nu """
-    return 10**(-0.4*(M+48.6)) * constants.geo * erg/s/Hz
+    return 10 ** (-0.4 * (M + 48.6)) * constants.geo * erg / s / Hz
 
 
 def Lnu_to_M(Lnu_):
@@ -188,10 +190,10 @@ def Lnu_to_M(Lnu_):
     else:
         Lnu = Lnu_
 
-    return -2.5*np.log10(Lnu/constants.geo)-48.6
+    return -2.5 * np.log10(Lnu / constants.geo) - 48.6
 
 
-def rest_frame_flux_to_M(flux):
+def rest_frame_flux_to_M(flux, redshift):
     """
     Convert rest frame flux (nJy) to absolute AB magnitude
 
@@ -201,10 +203,10 @@ def rest_frame_flux_to_M(flux):
         singular value or array
     """
     # luminosity distance at standard 10 pc
-    lum_dist = (10*u.pc).to(u.cm)
+    lum_dist = (10 * pc).to(cm)
    
     # Calculate the luminosity in interim units 
-    lum = flux * 4 * np.pi * lum_dist**2
+    lum = flux * 4 * np.pi * lum_dist ** 2
 
     # And convert to erg / s / Hz
     lum *= 1 / (1e9 * 1e23 * (1 + redshift))
