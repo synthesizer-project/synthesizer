@@ -36,13 +36,6 @@ int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
         index += stride * multi_index[i];
         stride *= dims[i];
     }
-
-    if (index < 0) {
-      printf("spectra_ind=%d ", index);
-      for (int i = 0; i < ndims; i++)
-        printf("%d", multi_index[i]);
-      printf("\n");
-    }
     
     return index;
 }
@@ -173,6 +166,13 @@ void recursive_weight_loop(const double mass, int *sub_indices,
 
     /* Get the flattened index into the grid array. */
     weight_indices[weight_ind] = get_flat_index(frac_indices, dims, ndim + 1);
+
+    if (weight_indices[weight_ind] < 0) {
+      printf("spectra_ind=%d ", weight_indices[weight_ind]);
+      for (int i = 0; i < ndim; i++)
+        printf("(%d, %d) ", frac_indices[i], dims[i]);
+      printf("\n");
+    }
 
     /* Check whether we need a weight in this cell. */
     for (int i = 0; i < ndim; i++) {
