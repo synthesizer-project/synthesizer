@@ -52,10 +52,6 @@ int get_flat_index_subarray(const int *multi_index, int ndims) {
     int index = 0, stride = 1;
     for (int i = ndims - 1; i >= 0; i--) {
         index += stride * multi_index[i];
-        if (index < 0) {
-          printf("index=%d stride=%d multi_index[i]=%d", index, stride, multi_index[i]);
-          fflush(stdout);
-        }
         stride *= 2;
     }
     return index;
@@ -132,6 +128,7 @@ void frac_loop(const double *grid_props, const double *part_props,
        * the high cell. */
       fracs[dim] =
         (part_val - grid_props[low]) / (grid_props[high] - grid_props[low]);
+      printf("%.2f\n", fracs[dim]);
     }
 
     /* Set these indices. */
