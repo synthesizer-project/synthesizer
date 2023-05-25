@@ -254,7 +254,8 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   /* Extract a pointer to the particle masses. */
   const double *part_mass = PyArray_DATA(np_part_mass);
 
-  /* Compute the number of weights we need. */
+  /* Compute the number of weights we need. Adding on a buffer for
+   * accurate casting*/
   const int nweights = pow(2, ndim) + 0.1;
 
   /* Define an array to hold this particle's weights. */
@@ -305,10 +306,10 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
   double *fracs = malloc(ndim * sizeof(double));
-  unsigned int *frac_indices = malloc((ndim + 1) * sizeof(int));
-  unsigned int *low_indices = malloc((ndim + 1) * sizeof(int));
-  unsigned int *weight_indices = malloc(nweights * sizeof(int));
-  short int *sub_indices = malloc(ndim * sizeof(double));
+  unsigned int *frac_indices = malloc((ndim + 1) * sizeof(unsigned int));
+  unsigned int *low_indices = malloc((ndim + 1) * sizeof(unsigned int));
+  unsigned int *weight_indices = malloc(nweights * sizeof(unsigned int));
+  short int *sub_indices = malloc(ndim * sizeof(short int));
     
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -464,10 +465,10 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
   double *fracs = malloc(ndim * sizeof(double));
-  unsigned int *frac_indices = malloc((ndim + 1) * sizeof(int));
-  unsigned int *low_indices = malloc((ndim + 1) * sizeof(int));
-  unsigned int *weight_indices = malloc(nweights * sizeof(int));
-  short int *sub_indices = malloc(ndim * sizeof(double));
+  unsigned int *frac_indices = malloc((ndim + 1) * sizeof(unsigned int));
+  unsigned int *low_indices = malloc((ndim + 1) * sizeof(unsigned int));
+  unsigned int *weight_indices = malloc(nweights * sizeof(unsigned int));
+  short int *sub_indices = malloc(ndim * sizeof(short int));
     
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
