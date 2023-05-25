@@ -306,9 +306,9 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
   double *fracs = malloc(ndim * sizeof(double));
-  unsigned int *frac_indices = malloc((ndim + 1) * sizeof(unsigned int));
-  unsigned int *low_indices = malloc((ndim + 1) * sizeof(unsigned int));
-  unsigned int *weight_indices = malloc(nweights * sizeof(unsigned int));
+  int *frac_indices = malloc((ndim + 1) * sizeof(int));
+  int *low_indices = malloc((ndim + 1) * sizeof(int));
+  int *weight_indices = malloc(nweights * sizeof(int));
   short int *sub_indices = malloc(ndim * sizeof(short int));
     
   /* Loop over particles. */
@@ -344,7 +344,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
       /* Get this weight and it's flattened index. */
       const double weight = weights[i];
-      const unsigned int spectra_ind = weight_indices[i];
+      const int spectra_ind = weight_indices[i];
 
       /* Skip zero weight cells. */
       if (weight <= 0) continue;
@@ -465,10 +465,10 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
   double *fracs = malloc(ndim * sizeof(double));
-  unsigned int *frac_indices = malloc((ndim + 1) * sizeof(unsigned int));
-  unsigned int *low_indices = malloc((ndim + 1) * sizeof(unsigned int));
-  unsigned int *weight_indices = malloc(nweights * sizeof(unsigned int));
-  short int *sub_indices = malloc(ndim * sizeof(short int));
+  int *frac_indices = malloc((ndim + 1) * sizeof(int));
+  int *low_indices = malloc((ndim + 1) * sizeof(int));
+  int *weight_indices = malloc(nweights * sizeof(int));
+  short int *sub_indices = malloc(ndim * sizeof(double));
     
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -503,7 +503,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
       /* Get this weight and it's flattened index. */
       const double weight = weights[i];
-      const unsigned int spectra_ind = weight_indices[i];
+      const int spectra_ind = weight_indices[i];
 
       /* Skip zero weight cells. */
       if (weight <= 0) continue;
