@@ -128,11 +128,11 @@ void frac_loop(const double *grid_props, const double *part_props,
        * the high cell. */
       fracs[dim] =
         (part_val - grid_props[low]) / (grid_props[high] - grid_props[low]);
-      printf("%.2f\n", fracs[dim]);
     }
 
     /* Set these indices. */
     frac_indices[dim] = low - grid_start;
+    printf("%d %d %.2f\n", dim, frac_indices[dim], fracs[dim]);
     
   }
 }
