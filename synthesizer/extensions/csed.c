@@ -132,7 +132,7 @@ void frac_loop(const double *grid_props, const double *part_props,
 
     /* Set these indices. */
     frac_indices[dim] = low - grid_start;
-    printf("%d %d %.2f\n", dim, frac_indices[dim], fracs[dim]);
+    /* printf("%d %d %.2f\n", dim, frac_indices[dim], fracs[dim]); */
     
   }
 }
