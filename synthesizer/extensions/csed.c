@@ -350,12 +350,8 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
       for (int ilam = 0; ilam < nlam; ilam++) {
 
         /* Are we doing total or stellar? */
-        if (fesc >= 0) {
-          spectra[ilam] +=
-            grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight; 
-        } else {
-          spectra[ilam] += grid_spectra[spectra_ind + ilam] * weight;
-        }
+        spectra[ilam] +=
+          grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight; 
       }
     }
   }
@@ -513,13 +509,8 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
       for (int ilam = 0; ilam < nlam; ilam++) {
 
         /* Are we doing total or stellar? */
-        if (fesc >= 0) {
-          spectra[p * nlam + ilam] +=
-            grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight; 
-        } else {
-          spectra[p * nlam + ilam] +=
-            grid_spectra[spectra_ind + ilam] * weight;
-        }
+        spectra[p * nlam + ilam] +=
+          grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight; 
       }
     }
   }
