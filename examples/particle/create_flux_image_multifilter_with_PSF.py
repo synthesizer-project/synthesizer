@@ -55,7 +55,7 @@ if __name__ == "__main__":
     stars_start = time.time()
 
     # Create stars object
-    n = 100  # number of particles for sampling
+    n = 1000  # number of particles for sampling
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
@@ -86,7 +86,8 @@ if __name__ == "__main__":
     spectra_start = time.time()
 
     # Calculate the stars SEDs
-    sed = galaxy.generate_intrinsic_particle_spectra(grid, sed_object=True)
+    sed = galaxy.generate_particle_spectra(grid, sed_object=True,
+                                           spectra_type="total")
 
     print("Spectra created, took:", time.time() - spectra_start)
 
@@ -128,6 +129,7 @@ if __name__ == "__main__":
         kernel_func=quintic,
         rest_frame=False,
         cosmo=cosmo,
+        super_resolution_factor=2,
     )
 
     print("Histogram images made, took:", time.time() - img_start)
@@ -145,6 +147,7 @@ if __name__ == "__main__":
         kernel_func=quintic,
         rest_frame=False,
         cosmo=cosmo,
+        super_resolution_factor=2,
     )
 
     print("Smoothed images made, took:", time.time() - img_start)
@@ -187,5 +190,5 @@ if __name__ == "__main__":
 
     # Plot the image
     plt.savefig(
-        "../flux_in_filters_with_PSF_test.png", bbox_inches="tight", dpi=300
+        "plots/flux_in_filters_with_PSF_test.png", bbox_inches="tight", dpi=300
     )
