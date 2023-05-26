@@ -200,7 +200,7 @@ void recursive_weight_loop(const double mass, int *sub_indices,
   }
 
   /* Loop over this dimension */
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < ndim; i++) {
 
     /* Where are we in the sub_array? */
     sub_indices[dim] = i;
@@ -331,6 +331,10 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     for (int ind = 0; ind < ndim; ind++) {
       fracs[ind] = 0;
       sub_indices[ind] = 0;
+    }
+    for (int ind = 0; ind < ndim + 1; ind++) {
+      frac_indices[ind] = 0;
+      low_indices[ind] = 0;
     }
 
     /* Get this particle's mass. */
@@ -501,6 +505,10 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     for (int ind = 0; ind < ndim; ind++) {
       fracs[ind] = 0;
       sub_indices[ind] = 0;
+    }
+    for (int ind = 0; ind < ndim + 1; ind++) {
+      frac_indices[ind] = 0;
+      low_indices[ind] = 0;
     }
 
     /* Get this particle's mass. */
