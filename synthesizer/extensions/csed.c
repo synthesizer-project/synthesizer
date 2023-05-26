@@ -267,6 +267,11 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   for (int dim = 0; dim < ndim; dim++) nprops += dims[dim];
   double *grid_props = malloc(nprops * sizeof(double));
 
+  /* Get the grid size. */
+  int grid_size = nlam;
+  for (int dim = 0; dim < ndim; dim++)
+    grid_size *= dims[dim];
+
   /* Unpack the grid property arrays into a single contiguous array. */
   for (int idim = 0; idim < ndim; idim++) {
     
@@ -350,11 +355,11 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
       if (weight <= 0) continue;
 
       /* Skip badly behaved indices. */
-      if (spectra_ind < 0) {
-        printf("Stellar particle found outside grid!");
+      if (spectra_ind < 0 || spectra_ind > grid_size) {
+        printf("WARNING: Stellar particle found outside grid!\n");
         continue;
       }
-
+      
       /* Add this particle's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
 
@@ -431,6 +436,11 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   int nprops = 0;
   for (int dim = 0; dim < ndim; dim++) nprops += dims[dim];
   double *grid_props = malloc(nprops * sizeof(double));
+
+  /* Get the grid size. */
+  int grid_size = nlam;
+  for (int dim = 0; dim < ndim; dim++)
+    grid_size *= dims[dim];
 
   /* Unpack the grid property arrays into a single contiguous array. */
   for (int idim = 0; idim < ndim; idim++) {
@@ -512,8 +522,8 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
       const int spectra_ind = weight_indices[i];
 
       /* Skip badly behaved indices. */
-      if (spectra_ind < 0) {
-        printf("Stellar particle found outside grid!");
+      if (spectra_ind < 0 || spectra_ind > grid_size) {
+        printf("WARNING: Stellar particle found outside grid!\n");
         continue;
       }
 
