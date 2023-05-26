@@ -1,7 +1,7 @@
 
 # --- this example compares a sampled and binned (parametric) SED for different numbers of particles
 
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from unyt import yr, Myr
@@ -15,8 +15,17 @@ from synthesizer.galaxy.particle import ParticleGalaxy
 
 
 # --- initialise the SPS grid
-grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
-grid = Grid(grid_name)
+# grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
+# grid = Grid(grid_name)
+
+# Get the location of this script, __file__ is the absolute path of this
+# script, however we just want to directory
+script_path = os.path.abspath(os.path.dirname(__file__))
+
+# Define the grid
+grid_name = "test_grid"
+grid_dir = script_path + "/../../tests/test_grid/"
+grid = Grid(grid_name, grid_dir=grid_dir)
 
 # --- define the binned (parametric star formation history)
 
@@ -50,7 +59,11 @@ for N in [1, 10, 100, 1000]:
     particle_galaxy = ParticleGalaxy(stars=stars)
 
     # --- this generates stellar and intrinsic spectra
-    particle_galaxy.generate_intrinsic_spectra(grid, fesc=0.0, integrated=True)
+    # particle_galaxy.generate_spectra(grid, fesc=0.0, integrated=True)
+    
+    # Calculate the stars SEDs
+    particle_galaxy.generate_spectra(grid, sed_object=True, spectra_type='stellar')
+
 
     sed = particle_galaxy.spectra['stellar']
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=f'particle (N={N})')
@@ -59,4 +72,5 @@ for N in [1, 10, 100, 1000]:
 plt.legend()
 plt.xlim([2, 5])
 plt.ylim([10, 22])
-plt.show()
+plt.savefig('plots/compare_parametric_particle.png', dpi=200, bbox_inches='tight'); plt.close()
+# plt.show()
