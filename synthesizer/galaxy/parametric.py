@@ -139,7 +139,8 @@ class ParametricGalaxy(BaseGalaxy):
         else:
             sfzh_mask = np.ones(len(self.sfzh.log10ages), dtype=bool)
 
-        return np.sum(grid.spectra[spectra_name] * self.sfzh_[sfzh_mask, :, :], axis=(0, 1))
+        return np.sum(grid.spectra[spectra_name][sfzh_mask, :, :] * 
+                      self.sfzh_[sfzh_mask, :, :], axis=(0, 1))
 
     def get_stellar_spectra(self, grid, update=True):
         """ generate the pure stellar spectra using the provided grid"""
@@ -213,7 +214,16 @@ class ParametricGalaxy(BaseGalaxy):
 
         return sed
 
-    def get_pacman_spectra(self, grid, dust_curve=None, tauV=1., alpha=-1., old=False, young=False, save_young_and_old=False, spectra_name='total', fesc=0.0, fesc_LyA=1.0, update=True, sed_object=False):
+    def reduce_lya(self, grid, fesc_LyA, young=False, old=False):
+
+        # --- generate contribution of line emission alone and reduce the contribution of Lyman-alpha
+        linecont = self.generate_lnu(grid, spectra_name='linecont', old=old, young=young)
+        idx = grid.get_nearest_index(1216., grid.lam)  # get index of Lyman-alpha
+        linecont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
+
+        return linecont
+
+    def get_pacman_spectra(self, grid, dust_curve=power_law(), tauV=1., alpha=-1., CF00=False, old=7., young=7., save_young_and_old=False, spectra_name='total', fesc=0.0, fesc_LyA=1.0, update=True, sed_object=False):
         """
         Calculates dust attenuated spectra assuming the PACMAN dust/fesc model including variable Lyman-alpha transmission.
         In this model some fraction of the stellar emission is able to complete escape with no dust attenuation or nebular reprocessing.
@@ -240,59 +250,93 @@ class ParametricGalaxy(BaseGalaxy):
         """ in the PACMAN model some fraction (fesc) of the pure stellar emission is assumed to completely escape the galaxy without reprocessing by gas or dust. The rest is assumed to be reprocessed by both gas and a screen of dust. """
 
         # --- begin by generating the pure stellar spectra
-        stellar = self.get_stellar_spectra(grid, update=update)
+        self.spectra['stellar'] = self.get_stellar_spectra(grid, update=update)
 
         # --- this is the starlight that escapes any reprocessing
-        self.spectra['escape'] = Sed(grid.lam, fesc * stellar._lnu)
+        self.spectra['escape'] = Sed(grid.lam, fesc * self.spectra['stellar']._lnu)
 
         # --- this is the starlight after reprocessing by gas
-        self.spectra['reprocessed'] = Sed(grid.lam)
-        self.spectra['intrinsic'] = Sed(grid.lam)
-        self.spectra['attenuated'] = Sed(grid.lam)
+        self.spectra['reprocessed_intrinsic'] = Sed(grid.lam)
+        self.spectra['reprocessed_nebular'] = Sed(grid.lam)
+        self.spectra['reprocessed_attenuated'] = Sed(grid.lam)
         self.spectra['total'] = Sed(grid.lam)
+
+        if CF00:
+            self.spectra['reprocessed_intrinsic_old'] = Sed(grid.lam)
+            self.spectra['reprocessed_intrinsic_yng'] = Sed(grid.lam)
+            self.spectra['reprocessed_nebular_old'] = Sed(grid.lam)
+            self.spectra['reprocessed_nebular_yng'] = Sed(grid.lam)
+
+            nebcont_old = self.generate_lnu(grid, spectra_name='nebular_continuum',
+                                                 old=old, young=False)
+            nebcont_yng = self.generate_lnu(grid, spectra_name='nebular_continuum',
+                                                old=False, young=young)
+            
+            transmitted_old = self.generate_lnu(grid, spectra_name='transmitted',
+                                                old=old, young=False)
+            transmitted_yng = self.generate_lnu(grid, spectra_name='transmitted',
+                                                 old=False, young=young)
+        else:
+            nebcont = np.sum(grid.spectra['nebular_continuum'] * self.sfzh_,
+                              axis=(0, 1))
+            transmitted = np.sum(grid.spectra['transmitted'] * self.sfzh_,
+                                 axis=(0, 1))
 
         if fesc_LyA < 1.0:
             # if Lyman-alpha escape fraction is specified reduce LyA luminosity
+            if CF00:
+                linecont_old = self.reduce_lya(grid, fesc_LyA, young=False, old=old)
+                linecont_yng = self.reduce_lya(grid, fesc_LyA, young=young, old=False)
 
-            # --- generate contribution of line emission alone and reduce the contribution of Lyman-alpha
-            linecont = np.sum(grid.spectra['linecont'] * self.sfzh_, axis=(0, 1))
-            idx = grid.get_nearest_index(1216., grid.lam)  # get index of Lyman-alpha
-            linecont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
+                self.spectra['reprocessed_intrinsic_old']._lnu = (
+                    1.-fesc) * (linecont_old + nebcont_old + transmitted_old)
+                self.spectra['reprocessed_intrinsic_yng']._lnu = (
+                    1.-fesc) * (linecont_yng + nebcont_yng + transmitted_yng)
 
-            nebular_continuum = np.sum(
-                grid.spectra['nebular_continuum'] * self.sfzh_, axis=(0, 1))
-            transmitted = np.sum(grid.spectra['transmitted'] * self.sfzh_, axis=(0, 1))
-            self.spectra['reprocessed']._lnu = (
-                1.-fesc) * (linecont + nebular_continuum + transmitted)
+                self.spectra['reprocessed_nebular_old']._lnu = (
+                    1.-fesc) * (linecont_old + nebcont_old)
+                self.spectra['reprocessed_nebular_yng']._lnu = (
+                    1.-fesc) * (linecont_old + nebcont_yng)
+                
+            else:
+                linecont = self.reduce_lya(grid, fesc_LyA)
 
-        else:
-            self.spectra['reprocessed']._lnu = (
-                1.-fesc) * np.sum(grid.spectra['total'] * self.sfzh_, axis=(0, 1))
+                self.spectra['reprocessed_intrinsic']._lnu = (
+                    1.-fesc) * (linecont + nebcont + transmitted)
+                self.spectra['reprocessed_nebular']._lnu = (
+                    1.-fesc) * (linecont + nebcont)
 
-        self.spectra['intrinsic']._lnu = self.spectra['escape']._lnu + \
-            self.spectra['reprocessed']._lnu  # the light before reprocessing by dust
-        
-        if (dust_curve==None) * (tauV==None):
-            print ("Providing a dust curve and muliple dust screens (Charlot and Fall 2000) is incompatible")
-            ValueError("Cannot provide dust curve and multiple dust compenents together")
+        # self.spectra['intrinsic']._lnu = self.spectra['escape']._lnu + \
+        #     self.spectra['reprocessed']._lnu  # the light before reprocessing by dust
 
-        elif dust_curve: 
+        if np.isscalar(tauV):
+            # single screen dust, no separate birth cloud attenuation
             dust_curve.params['slope']=alpha
-            T_ISM = dust_curve.attenuate(tauV, grid.lam)  # calculate dust attenuation
-            self.spectra['attenuated']._lnu = self.spectra['escape']._lnu + \
-                T*self.spectra['reprocessed']._lnu
-            self.spectra['total']._lnu = self.spectra['attenuated']._lnu
+            T = dust_curve.attenuate(tauV, grid.lam)  # calculate dust attenuation
+            self.spectra['reprocessed_attenuated']._lnu = T*self.spectra['reprocessed_intrinsic']._lnu
+            self.spectra['total']._lnu = self.spectra['escape']._lnu + \
+                self.spectra['reprocessed_attenuated']._lnu
+            # self.spectra['total']._lnu = self.spectra['attenuated']._lnu
         
-        elif ~np.isscalar(tauV):
-            self.spectra['attenuated']._lnu = self.spectra['escape']._lnu + \
-                                              self.get_CharlotFall00_spectra(grid, tauV_ISM=tauV[0],
-                                            tauV_BC=tauV[1], alpha_ISM=alpha[0], alpha_BC=alpha[1],
-                                            old=old, young=young, save_young_and_old=save_young_and_old,
-                                            spectra_name='reprocessed', sed_object=sed_object)
+        elif np.isscalar(tauV)==False:
+            # Two screen dust, one for diffuse other for birth cloud dust.
+            if np.isscalar(alpha):
+                print ("Separate dust curve slopes for diffuse and birth cloud dust not given")
+                print ("Defaulting to alpha_ISM=-0.7 and alpha_BC=-1.4 (Charlot & Fall 2000)")
+                alpha = [-0.7, -1.4]
+
+            self.spectra['reprocessed_attenuated'] = Sed(grid.lam)
+            for ii, age in enumerate(['old', 'yng']):
+                dust_curve.params['slope']=alpha[ii]
+                _T = self.spectra[F'reprocessed_intrinsic_{age}']._lnu * dust_curve.attenuate(tauV[ii], grid.lam)
+                self.spectra['reprocessed_attenuated']._lnu+=_T
+
+            self.spectra['total']._lnu = self.spectra['escape']._lnu + \
+                self.spectra['reprocessed_attenuated']._lnu
 
         else:
             self.spectra['total']._lnu = self.spectra['escape']._lnu + \
-                self.spectra['reprocessed']._lnu
+                self.spectra['reprocessed_intrinsic']._lnu
 
         return self.spectra['total']
 
@@ -306,20 +350,21 @@ class ParametricGalaxy(BaseGalaxy):
 
         # calculate intrinsic sed for young and old stars
         intrinsic_sed = self.generate_lnu(grid, spectra_name=spectra_name, old=old, young=young)
-        
-        if np.scalar(tauV):
-            T_total = np.ones(len(intrinsic_sed))
-            for _tauV, _alpha in zip(tauV):
-                _T = power_law(params={'slope': _alpha}).attenuate(_tauV, grid.lam)
-                T_total*=_T
-        else:
+
+        if np.isscalar(tauV):
             dust_curve.params['slope']=alpha
-            T_total = dust_curve.attenuate(tauV, grid.lam)
+            T_total = dust_curve.attenuate(tauV, lam)
+        else:
+            T_total = np.ones(len(intrinsic_sed))
+            for _tauV, _alpha in zip(tauV, alpha):
+                dust_curve.params['slope']=_alpha
+                _T = dust_curve.attenuate(_tauV, lam)
+                T_total*=_T
+            
+        return intrinsic_sed * T_total
 
-        return intrinsic_sed.lnu * T_total
 
-
-    def get_CharlotFall00_spectra(self, grid, tauV_ISM, tauV_BC, alpha_ISM=-0.7, alpha_BC=-1.3, old=False, young=False, save_young_and_old=False, spectra_name='total', sed_object=True):
+    def get_CharlotFall00_spectra(self, grid, dust_curve, tauV_ISM, tauV_BC, alpha_ISM=-0.7, alpha_BC=-1.3, old=7., young=7., save_young_and_old=False, spectra_name='total', sed_object=True):
         """
         Calculates dust attenuated spectra assuming the Charlot & Fall (2000) dust model. In this model young star particles
         are embedded in a dusty birth cloud and thus feel more dust attenuation.
@@ -349,10 +394,11 @@ class ParametricGalaxy(BaseGalaxy):
         if spectra_name not in grid.spectra.keys():
             print (F"{spectra_name} not in the data spectra grids\n")
             print ("Available spectra_name values in grid are: ", grid.spectra.keys())
+            ValueError(F"{spectra_name} not in the data spectra grids\n")
 
-        sed_young = self.get_one_component_spectra(grid, tauV=[tauV_ISM, tauV_BC], alpha=[alpha_ISM, alpha_BC], old=False, young=young, spectra_name=spectra_name)
+        sed_young = self.get_one_component_spectra(grid, dust_curve, tauV=[tauV_ISM, tauV_BC], alpha=[alpha_ISM, alpha_BC], old=False, young=young, spectra_name=spectra_name)
         
-        sed_old = self.get_one_component_spectra(grid, tauV=tauV_ISM, alpha=alpha_ISM, old=old, young=False, spectra_name=spectra_name)
+        sed_old = self.get_one_component_spectra(grid, dust_curve, tauV=tauV_ISM, alpha=alpha_ISM, old=old, young=False, spectra_name=spectra_name)
 
         # calculate intrinsic sed for young and old stars
         # intrinsic_sed_young = self.generate_lnu(grid, spectra_name=spectra_name, old=old, young=young)
@@ -379,7 +425,7 @@ class ParametricGalaxy(BaseGalaxy):
         #     self.spectra['attenuated_young'] = Sed(grid.lam, sed_young)
         #     self.spectra['attenuated_old'] = Sed(grid.lam, sed_old)
 
-        sed = Sed(grid.lam, sed_young + sed_old)
+        sed = Sed(lam, sed_young + sed_old)
 
         # if update:
         #     self.spectra['attenuated'] = sed
