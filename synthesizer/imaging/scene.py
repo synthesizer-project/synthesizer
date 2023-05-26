@@ -424,7 +424,9 @@ class ParticleScene(Scene):
 
     def _centre_coords(self):
         """
-        Centre coordinates on the geometric mean or the user provided centre
+        Centre coordinates on the geometric mean or the user provided centre.
+
+        TODO: Fix angular conversion. Need to cleanly handle different cases.
         """
 
         # Calculate the centre if necessary

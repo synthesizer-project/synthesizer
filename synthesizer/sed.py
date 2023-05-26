@@ -55,6 +55,7 @@ class Sed:
 
         self.nu = (c/(self.lam)).to('Hz').value  # Hz
 
+        self.redshift = 0
         self.lamz = None
         self.nuz = None
         self.fnu = None
@@ -217,11 +218,14 @@ class Sed:
         if igm is None:
             igm = Inoue14()
 
+        # Store the redshift for later use
+        self.redshift = z
+
         self.lamz = self._lam * (1. + z)  # observed frame wavelength
         luminosity_distance = cosmo.luminosity_distance(
             z).to('cm').value  # the luminosity distance in cm
 
-        self.nuz = c.value/self.lamz
+        self.nuz = c.value / self.lamz
 
         self.fnu = self._lnu * (1.+z) / (4 * np.pi * luminosity_distance**2)
 
@@ -252,7 +256,7 @@ class Sed:
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
 
-            if not np.array_equal(f.lam, self.lamz):
+            if not np.array_equal(f.lam * (1. + self.redshift) , self.lamz):
                 print(('WARNING: filter wavelength grid is not '
                        'the same as the SED wavelength grid.'))
 
