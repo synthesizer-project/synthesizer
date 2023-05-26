@@ -211,4 +211,4 @@ for inst in survey.imgs:
             j += 1
 
 # Plot the image
-plt.savefig("plots/survey_img_test.png", bbox_inches="tight", dpi=300)
+plt.savefig("survey_img_test.png", bbox_inches="tight", dpi=300)
