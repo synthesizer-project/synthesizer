@@ -195,6 +195,9 @@ class ParticleGalaxy(BaseGalaxy):
         ----------
         grid : obj (Grid)
             The SPS grid object sampled by stellar particle to make the SED.
+        spectra_type : string
+            The spectra type stored in the grid. Will return an error if not
+            provided in the grid object
         fesc : float
             The Lyc escape fraction.
         update : bool
@@ -241,12 +244,12 @@ class ParticleGalaxy(BaseGalaxy):
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         spec = compute_integrated_sed(*args)
-
+        
         # Store the spectra in the galaxy
-        self.spectra[spectra_type] = spec
+        self.spectra[spectra_type] = Sed(grid.lam, spec)
 
         if sed_object:
-            return Sed(grid.lam, spec)
+            return self.spectra[spectra_type]
         else:
             if return_wavelength:
                 return grid.lam, spec
