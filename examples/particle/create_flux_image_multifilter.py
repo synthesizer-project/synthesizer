@@ -54,11 +54,12 @@ if __name__ == "__main__":
     stars_start = time.time()
 
     # Create stars object
-    n = 100  # number of particles for sampling
+    n = 100000  # number of particles for sampling
     coords = CoordinateGenerator.generate_3D_gaussian(n)
     stars = sample_sfhz(sfzh, n)
     stars.coordinates = coords
     stars.coord_units = kpc
+    stars.initial_masses = np.full(n, 10**9 / n)
     cent = np.mean(coords, axis=0)  # define geometric centre
     rs = np.sqrt(
         (coords[:, 0] - cent[0]) ** 2
@@ -68,7 +69,6 @@ if __name__ == "__main__":
     rs[rs < 0.1] = 0.4  # Set a lower bound on the "smoothing length"
     stars.smoothing_lengths = rs / 4  # convert radii into smoothing lengths
     stars.redshift = 1
-    print(stars)
 
     # Compute width of stellar distribution
     width = np.max(coords) - np.min(coords)
@@ -85,7 +85,8 @@ if __name__ == "__main__":
     spectra_start = time.time()
 
     # Calculate the stars SEDs
-    sed = galaxy.generate_intrinsic_particle_spectra(grid, sed_object=True)
+    sed = galaxy.generate_particle_spectra(grid, sed_object=True,
+                                           spectra_type="stellar")
 
     print("Spectra created, took:", time.time() - spectra_start)
 
@@ -176,4 +177,4 @@ if __name__ == "__main__":
     axes[0].set_ylabel("Smoothed")
 
     # Plot the image
-    plt.savefig("../flux_in_filters_test.png", bbox_inches="tight", dpi=300)
+    plt.savefig("plots/flux_in_filters_test.png", bbox_inches="tight", dpi=300)
