@@ -1,6 +1,10 @@
 import h5py
 import numpy as np
+from unyt import pc, cm, erg, s, Hz, nJy
+import unyt
 
+import unyt
+from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV,  unyt_array
 
 def write_data_h5py(filename, name, data, overwrite=False):
     check = check_h5py(filename, name)
@@ -149,3 +153,43 @@ def flux_to_luminosity(flux, cosmo, redshift):
     lum *= 1 / (1e9 * 1e23 * (1 + redshift))
 
     return lum
+
+
+def fnu_to_m(fnu):
+    """ Convert fnu to AB magnitude. If unyt quantity convert
+        to nJy else assume it's in nJy """
+
+    if type(fnu) == unyt.array.unyt_quantity:
+        fnu_ = fnu.to('nJy').value
+    else:
+        fnu_ = fnu
+
+    return -2.5 * np.log10(fnu_ / 1E9) + 8.9  # -- assumes flux in nJy
+
+
+def m_to_fnu(m):
+    """ Convert AB magnitude to fnu """
+
+    return 1E9 * 10 ** (-0.4*(m - 8.9)) * nJy  # -- flux returned nJy
+
+
+class constants:
+    tenpc = 10*pc  # ten parsecs
+    # the surface area (in cm) at 10 pc. I HATE the magnitude system
+    geo = 4 * np.pi * (tenpc.to('cm').value) ** 2
+
+
+def M_to_Lnu(M):
+    """ Convert absolute magnitude (M) to L_nu """
+    return 10 ** (-0.4 * (M + 48.6)) * constants.geo * erg / s / Hz
+
+
+def Lnu_to_M(Lnu_):
+    """ Convert L_nu to absolute magnitude (M). If no unit
+        provided assumes erg/s/Hz. """
+    if type(Lnu_) == unyt.array.unyt_quantity:
+        Lnu = Lnu_.to('erg/s/Hz').value
+    else:
+        Lnu = Lnu_
+
+    return -2.5 * np.log10(Lnu / constants.geo) - 48.6
