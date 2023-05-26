@@ -347,7 +347,13 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
       const int spectra_ind = weight_indices[i];
 
       /* Skip zero weight cells. */
-      if (weight <= 0 || spectra_ind < 0) continue;
+      if (weight <= 0) continue;
+
+      /* Skip badly behaved indices. */
+      if (spectra_ind < 0) {
+        printf("Stellar particle found outside grid!");
+        continue;
+      }
 
       /* Add this particle's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
@@ -505,8 +511,11 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
       const double weight = weights[i];
       const int spectra_ind = weight_indices[i];
 
-      /* Skip zero weight cells. */
-      if (weight <= 0 || spectra_ind < 0) continue;
+      /* Skip badly behaved indices. */
+      if (spectra_ind < 0) {
+        printf("Stellar particle found outside grid!");
+        continue;
+      }
 
       /* Add this particle's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
