@@ -35,6 +35,8 @@ int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
     for (int i = ndims - 1; i >= 0; i--) {
         index += stride * multi_index[i];
         stride *= dims[i];
+        printf("index=%d, stride=%d, multi_index[%d]=%d, dims[%d]=%d",
+               index, stride, i, multi_index[i], i, dims[i]);
     }
     
     return index;
