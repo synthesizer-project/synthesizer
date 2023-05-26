@@ -136,7 +136,8 @@ class ParticleGalaxy(BaseGalaxy):
         """
 
         # Set up the inputs to the C function.
-        grid_props = [grid.log10ages, grid.log10metallicities]
+        grid_props = [np.ascontiguousarray(grid.log10ages, dtype=np.float64),
+                      np.ascontiguousarray(grid.log10metallicities, dtype=np.float64)]
         part_props = [
             np.ascontiguousarray(
                 self.stars.log10ages, dtype=np.float64),
