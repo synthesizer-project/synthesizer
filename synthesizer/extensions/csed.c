@@ -35,8 +35,6 @@ int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
     for (int i = ndims - 1; i >= 0; i--) {
         index += stride * multi_index[i];
         stride *= dims[i];
-        printf("index=%d, stride=%d, multi_index[%d]=%d, dims[%d]=%d\n",
-               index, stride, i, multi_index[i], i, dims[i]);
     }
     
     return index;
@@ -134,9 +132,6 @@ void frac_loop(const double *grid_props, const double *part_props,
 
     /* Set these indices. */
     frac_indices[dim] = low - grid_start;
-
-    printf("dims[%d]=%d grid_start=%d high=%dm low=%d fracs[dim]=%.2f, frac_indices[dim]=%d\n",
-           dim, dims[dim], grid_start, high, low, fracs[dim], frac_indices[dim]);
     
   }
 }
@@ -171,8 +166,6 @@ void recursive_weight_loop(const double mass, int *sub_indices,
 
     /* Get the flattened index into the grid array. */
     weight_indices[weight_ind] = get_flat_index(frac_indices, dims, ndim + 1);
-    printf("weight_indices[%d]=%d frac_indices[0]=%d\n",
-           weight_ind, weight_indices[weight_ind], frac_indices[0]);
 
     /* Check whether we need a weight in this cell. */
     for (int i = 0; i < ndim; i++) {
