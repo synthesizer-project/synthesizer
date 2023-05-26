@@ -1,6 +1,8 @@
 import h5py
 import numpy as np
 
+import unyt
+from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV,  unyt_array
 
 def write_data_h5py(filename, name, data, overwrite=False):
     check = check_h5py(filename, name)
@@ -189,24 +191,3 @@ def Lnu_to_M(Lnu_):
         Lnu = Lnu_
 
     return -2.5*np.log10(Lnu/constants.geo)-48.6
-
-
-def rest_frame_flux_to_M(flux):
-    """
-    Convert rest frame flux (nJy) to absolute AB magnitude
-
-    Args:
-    flux : array-like (float)/float
-        the flux to be converted, in units of nJy, can either be a 
-        singular value or array
-    """
-    # luminosity distance at standard 10 pc
-    lum_dist = (10*u.pc).to(u.cm)
-   
-    # Calculate the luminosity in interim units 
-    lum = flux * 4 * np.pi * lum_dist**2
-
-    # And convert to erg / s / Hz
-    lum *= 1 / (1e9 * 1e23 * (1 + redshift))
-
-    return Lnu_to_M(lum)
