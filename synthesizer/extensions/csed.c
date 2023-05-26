@@ -124,7 +124,7 @@ void frac_loop(const double *grid_props, const double *part_props,
         diff = high - low;
       }
 
-      printf("high=%dm low=%d", high, low);
+      printf("grid_start=%d high=%dm low=%d\n", grid_start, high, low);
       
       /* Calculate the fraction. Note, this represents the mass fraction in
        * the high cell. */
