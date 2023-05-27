@@ -122,7 +122,7 @@ class ParametricGalaxy(BaseGalaxy):
     def get_Q(self, grid):
         """ return the ionising photon luminosity (log10Q) for a given SFZH. """
 
-        return np.sum(10**grid.log10Q * self.sfzh, axis=(0, 1))
+        return np.sum(10**grid.log10Q['HI'] * self.sfzh.sfzh, axis=(0, 1))
 
     def generate_lnu(self, grid, spectra_name):
 
