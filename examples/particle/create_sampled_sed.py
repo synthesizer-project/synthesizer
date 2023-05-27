@@ -1,7 +1,7 @@
 
 # --- this example generates a sample of star particles from a 2D SFZH. In this case it is generated from a parametric star formation history with constant star formation.
 
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from unyt import yr, Myr
@@ -25,7 +25,7 @@ Zh = ZH.deltaConstant(Z_p)
 sfh_p = {'duration': 100 * Myr}
 sfh = SFH.Constant(sfh_p)  # constant star formation
 sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh)
-sfzh.summary()
+print(sfzh)
 # sfzh.plot()
 
 
@@ -37,8 +37,14 @@ stars = sample_sfhz(sfzh, N)
 
 # --- open grid
 
-grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
-grid = Grid(grid_name)
+# Get the location of this script, __file__ is the absolute path of this
+# script, however we just want to directory
+script_path = os.path.abspath(os.path.dirname(__file__))
+
+# Define the grid
+grid_name = "test_grid"
+grid_dir = script_path + "/../../tests/test_grid/"
+grid = Grid(grid_name, grid_dir=grid_dir)
 
 # --- create galaxy object
 
@@ -47,7 +53,7 @@ galaxy = ParticleGalaxy(stars=stars)
 # --- this generates stellar and intrinsic spectra
 # galaxy.generate_intrinsic_spectra(grid, fesc=0.0) # calculate only integrated SEDs
 # calculates for every star particle, slow but necessary for LOS.
-galaxy.generate_intrinsic_spectra(grid, fesc=0.0, integrated=False)
+galaxy.generate_spectra(grid, fesc=0.0, spectra_type="total")
 
 # --- generate dust screen
 # galaxy.get_screen(0.5) # tauV
@@ -56,8 +62,9 @@ galaxy.generate_intrinsic_spectra(grid, fesc=0.0, integrated=False)
 # galaxy.get_CF00(grid, 0.5, 0.5) # grid, tauV_BC, tauV_ISM
 
 # --- generate for los model
-tauVs = np.ones(N) * 0.5
-galaxy.get_los(tauVs)  # grid, tauV_BC, tauV_ISM
+# TODO: to be implemented
+# tauVs = np.ones(N) * 0.5
+# galaxy.get_los(tauVs)  # grid, tauV_BC, tauV_ISM
 
 for sed_type, sed in galaxy.spectra.items():
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=sed_type)
