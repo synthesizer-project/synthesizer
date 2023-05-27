@@ -7,7 +7,7 @@ import ctypes
 from scipy import signal
 from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
-from unyt import unyt_quantity, kpc, mas
+from unyt import unyt_quantity, kpc, mas, unyt_array
 from unyt.dimensions import length, angle
 
 import synthesizer.exceptions as exceptions
@@ -402,6 +402,10 @@ class Image(Scene):
 
             self.img_psf = self._get_psfed_single_img(self.img, psfs)
 
+            # Now that we are done with the convolution return the original
+            # images to the native resolution.
+            self._super_to_native_resolution()
+
             return self.img_psf
 
         # Otherwise, we need to loop over filters and return a dictionary of
@@ -527,7 +531,7 @@ class Image(Scene):
             isinstance(self.depths, dict)
             or isinstance(self.snrs, dict)
             or isinstance(self.apertures, dict)
-            or isinstance(self.noises, dict)
+            or isinstance(noises, dict)
         ):
             raise exceptions.InconsistentArguments(
                 "If there is a single image then noise arguments should be "
@@ -667,24 +671,26 @@ class ParticleImage(ParticleScene, Image):
     """
 
     def __init__(
-        self,
-        resolution,
-        npix=None,
-        fov=None,
-        sed=None,
-        stars=None,
-        filters=(),
-        positions=None,
-        pixel_values=None,
-        rest_frame=True,
-        redshift=None,
-        cosmo=None,
-        igm=None,
-        psfs=None,
-        depths=None,
-        apertures=None,
-        snrs=None,
-        super_resolution_factor=None,
+            self,
+            resolution,
+            npix=None,
+            fov=None,
+            sed=None,
+            stars=None,
+            filters=(),
+            positions=None,
+            pixel_values=None,
+            smoothing_lengths=None,
+            centre=None,
+            rest_frame=True,
+            redshift=None,
+            cosmo=None,
+            igm=None,
+            psfs=None,
+            depths=None,
+            apertures=None,
+            snrs=None,
+            super_resolution_factor=1,
     ):
         """
         Intialise the ParticleImage.
@@ -712,6 +718,12 @@ class ParticleImage(ParticleScene, Image):
         pixel_values : array-like (float)
             The values to be sorted/smoothed into pixels. Only needed if an sed
             and filters are not used.
+        smoothing_lengths : array-like (float)
+            The values describing the size of the smooth kernel for each
+            particle. Only needed if star objects are not passed.
+        centre : array-like (float)
+            The centre to use for the image if not the geometric centre of
+            the particle distribution.
         rest_frame : bool
             Are we making an observation in the rest frame?
         redshift : float
@@ -733,6 +745,8 @@ class ParticleImage(ParticleScene, Image):
             sed=sed,
             stars=stars,
             positions=positions,
+            smoothing_lengths=smoothing_lengths,
+            centre=centre,
             super_resolution_factor=super_resolution_factor,
             cosmo=cosmo,
         )
@@ -764,8 +778,12 @@ class ParticleImage(ParticleScene, Image):
                 super_resolution_factor=super_resolution_factor,
             )
 
-        # Set up pixel values
-        self.pixel_values = pixel_values
+        # Set up standalone arrays used when Synthesizer objects are not
+        # passed.
+        if isinstance(pixel_values, unyt_array):
+            self.pixel_values = pixel_values.value
+        else:
+            self.pixel_values = pixel_values
 
     def _get_hist_img_single_filter(self):
         """
@@ -809,78 +827,21 @@ class ParticleImage(ParticleScene, Image):
             (npix, npix)
         """
 
-        # Get the size of a pixel
-        res = self.resolution
+        from .extensions.sph_kernel_calc import make_img
 
-        # Loop over positions including the sed
-        for ind in range(self.npart):
+        # Prepare the inputs, we need to make sure we are passing C contiguous
+        # arrays.
+        # TODO: more memory efficient to pass the position array and handle C
+        #       extraction.
+        pix_vals = np.ascontiguousarray(self.pixel_values, dtype=np.float64)
+        smls = np.ascontiguousarray(self.smoothing_lengths, dtype=np.float64)
+        xs = np.ascontiguousarray(self.coords[:, 0], dtype=np.float64)
+        ys = np.ascontiguousarray(self.coords[:, 1], dtype=np.float64)
+        zs = np.ascontiguousarray(self.coords[:, 2], dtype=np.float64)
 
-            # Get this particles smoothing length and position
-            smooth_length = self.stars.smoothing_lengths[ind]
-            pos = self.coords[ind]
-
-            # How many pixels are in the smoothing length?
-            delta_pix = math.ceil(smooth_length / self.resolution) + 1
-
-            kernel_sum = 0
-
-            img_this_part = np.zeros((self.npix, self.npix))
-
-            # Loop over a square aperture around this particle
-            # NOTE: This includes "pixels" in front of and behind the image
-            #       plane since the kernel is by defintion 3D
-            # TODO: Would be considerably more accurate to integrate over the
-            #       kernel in z axis since this is not quantised into pixels
-            #       like the axes in the image plane.
-            for i in range(
-                self.pix_pos[ind, 0] - delta_pix,
-                self.pix_pos[ind, 0] + delta_pix + 1,
-            ):
-
-                # Skip if outside of image
-                if i < 0 or i >= self.npix:
-                    continue
-
-                # Compute the x separation
-                x_dist = (i * res) + (res / 2) - pos[0]
-
-                for j in range(
-                    self.pix_pos[ind, 1] - delta_pix,
-                    self.pix_pos[ind, 1] + delta_pix + 1,
-                ):
-
-                    # Skip if outside of image
-                    if j < 0 or j >= self.npix:
-                        continue
-
-                    # Compute the y separation
-                    y_dist = (j * res) + (res / 2) - pos[1]
-
-                    for k in range(
-                        self.pix_pos[ind, 2] - delta_pix,
-                        self.pix_pos[ind, 2] + delta_pix + 1,
-                    ):
-
-                        # Compute the z separation
-                        z_dist = (k * res) + (res / 2) - pos[2]
-
-                        # Compute the distance between the centre of this pixel
-                        # and the particle.
-                        dist = np.sqrt(x_dist**2 + y_dist**2 + z_dist**2)
-
-                        # Get the value of the kernel here
-                        kernel_val = kernel_func(dist / smooth_length)
-                        kernel_sum += kernel_val
-
-                        # Add this pixel's contribution
-                        img_this_part[i, j] += (
-                            self.pixel_values[ind] * kernel_val
-                        )
-
-            if kernel_sum > 0:
-                img_this_part /= kernel_sum
-
-                self.img += img_this_part
+        self.img = make_img(pix_vals, smls, xs, ys, zs,
+                            self.resolution, self.npix,
+                            self.coords.shape[0])
 
         return self.img
 

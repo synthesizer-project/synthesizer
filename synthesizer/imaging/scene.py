@@ -108,9 +108,7 @@ class Scene:
 
         # Do we need to make a super resoution image?
         if self.super_resolution_factor is not None:
-            print(self.npix, self.fov, self.resolution)
             self._native_to_super_resolution()
-            print(self.npix)
 
     def _check_obs_args(self, resolution, fov, npix):
         """
@@ -241,7 +239,8 @@ class ParticleScene(Scene):
     """
 
     # Define slots to reduce memory overhead of this class
-    __slots__ = ["stars", "coords", "centre", "pix_pos", "npart"]
+    __slots__ = ["stars", "coords", "centre", "pix_pos", "npart",
+                 "smoothing_lengths"]
 
     def __init__(
         self,
@@ -251,6 +250,7 @@ class ParticleScene(Scene):
         sed=None,
         stars=None,
         positions=None,
+        smoothing_lengths=None,
         centre=None,
         super_resolution_factor=None,
         cosmo=None,
@@ -275,6 +275,9 @@ class ParticleScene(Scene):
             WorkInProgress
         positons : array-like (float)
             The position of particles to be sorted into the image.
+        smoothing_lengths : array-like (float)
+            The values describing the size of the smooth kernel for each
+            particle. Only needed if star objects are not passed.
         centre : array-like (float)
             The coordinates around which the image will be centered. The if one
             is not provided then the geometric centre is calculated and used.
@@ -308,15 +311,22 @@ class ParticleScene(Scene):
         # the original values
         if self.stars is not None:
             self.coords = np.copy(self.stars.coordinates)
+            self.coord_unit = self.stars.coord_units
         else:
             self.coords = np.copy(positions)
+            self.coord_unit = positions.units
 
         # If the positions are not already centred centre them
         self.centre = centre
         self._centre_coords()
 
         # Store the smoothing lengths because we again need a copy
-        self.smoothing_lengths = np.copy(self.stars.smoothing_lengths)
+        if self.stars is not None:
+            self.smoothing_lengths = np.copy(self.stars.smoothing_lengths)
+            self.smooth_unit = self.stars.coord_units
+        else:
+            self.smoothing_lengths = np.copy(smoothing_lengths)
+            self.smooth_unit = smoothing_lengths.units
 
         # Convert coordinates to the image's spatial units
         self._convert_to_img_units()
@@ -350,6 +360,8 @@ class ParticleScene(Scene):
            If the centre does not lie within the range of coordinates an error
            is raised.
         """
+
+        # TODO: check units work for array based images.
 
         # Get the spatial units
         spatial_unit = resolution.units
@@ -412,7 +424,9 @@ class ParticleScene(Scene):
 
     def _centre_coords(self):
         """
-        Centre coordinates on the geometric mean or the user provided centre
+        Centre coordinates on the geometric mean or the user provided centre.
+
+        TODO: Fix angular conversion. Need to cleanly handle different cases.
         """
 
         # Calculate the centre if necessary
@@ -438,48 +452,50 @@ class ParticleScene(Scene):
         spatial unit system.
         """
 
+        # TODO: missing redshift information in Scene
+
         # Is there anything to do here?
-        if self.stars.coord_units == self.spatial_unit:
+        if self.coord_unit == self.spatial_unit:
             return
 
         # If they are the same dimension do the conversion.
-        elif self.spatial_unit.same_dimensions_as(self.stars.coord_units):
+        elif self.spatial_unit.same_dimensions_as(self.coord_unit):
 
             # First do the coordinates
-            self.coords *= self.stars.coord_units
+            self.coords *= self.coord_unit
             self.coords.convert_to_units(self.spatial_unit)
             self.coords = self.coords.value
 
-        # Otherwise, handle conversion between length and angle
-        elif self.spatial_unit.same_dimensions_as(
-            arcsec
-        ) and self.stars.coord_units.same_dimensions_as(kpc):
+        # # Otherwise, handle conversion between length and angle
+        # elif self.spatial_unit.same_dimensions_as(
+        #     arcsec
+        # ) and self.stars.coord_units.same_dimensions_as(kpc):
 
-            # Convert coordinates from comoving to physical coordinates
-            self.coords *= 1 / (1 + self.stars.redshift)
+        #     # Convert coordinates from comoving to physical coordinates
+        #     self.coords *= 1 / (1 + self.stars.redshift)
 
-            # Get the conversion factor for arcsec and kpc at this redshift
-            arcsec_per_kpc_proper = self.cosmo.arcsec_per_kpc_proper(
-                self.stars.redshift
-            ).value
+        #     # Get the conversion factor for arcsec and kpc at this redshift
+        #     arcsec_per_kpc_proper = self.cosmo.arcsec_per_kpc_proper(
+        #         self.stars.redshift
+        #     ).value
 
-            # First we need to convert to kpc
-            if self.stars.coord_units != kpc:
+        #     # First we need to convert to kpc
+        #     if self.stars.coord_units != kpc:
 
-                # First do the coordinates
-                self.coords *= self.stars.coord_units
-                self.coords.convert_to_units(kpc)
-                self.coords = self.coords.value
+        #         # First do the coordinates
+        #         self.coords *= self.stars.coord_units
+        #         self.coords.convert_to_units(kpc)
+        #         self.coords = self.coords.value
 
-            # Now we can convert to arcsec
-            self.coords *= arcsec_per_kpc_proper * arcsec
+        #     # Now we can convert to arcsec
+        #     self.coords *= arcsec_per_kpc_proper * arcsec
 
-            # Finally convert to the image unit system if needed
-            if self.spatial_unit != arcsec:
-                self.coords.convert_to_units(self.spatial_unit)
+        #     # Finally convert to the image unit system if needed
+        #     if self.spatial_unit != arcsec:
+        #         self.coords.convert_to_units(self.spatial_unit)
 
-            # And strip off the unit
-            self.coords = self.coords.value
+        #     # And strip off the unit
+        #     self.coords = self.coords.value
 
         else:
             raise exceptions.UnimplementedFunctionality(
@@ -493,36 +509,36 @@ class ParticleScene(Scene):
         if self.smoothing_lengths is not None:
 
             # If they are the same dimension do the conversion.
-            if self.spatial_unit.same_dimensions_as(self.stars.coord_units):
-                self.smoothing_lengths *= self.stars.coord_units
+            if self.spatial_unit.same_dimensions_as(self.smooth_unit):
+
+                self.smoothing_lengths *= self.smooth_unit
                 self.smoothing_lengths.convert_to_units(self.spatial_unit)
                 self.smoothing_lengths = self.smoothing_lengths.value
 
-            # Otherwise, handle conversion between length and angle
-            elif self.spatial_unit.same_dimensions_as(
-                arcsec
-            ) and self.stars.coord_units.same_dimensions_as(kpc):
+            # # Otherwise, handle conversion between length and angle
+            # elif self.spatial_unit.same_dimensions_as(
+            #     arcsec
+            # ) and self.stars.coord_units.same_dimensions_as(kpc):
 
-                # Convert coordinates from comoving to physical coordinates
-                self.smoothing_lengths *= 1 / (1 + self.stars.redshift)
+            #     # Convert coordinates from comoving to physical coordinates
+            #     self.smoothing_lengths *= 1 / (1 + self.stars.redshift)
 
-                # First we need to convert to kpc
-                if self.stars.coord_units != kpc:
-                    self.smoothing_lengths *= self.stars.coord_units
-                    self.smoothing_lengths.convert_to_units(kpc)
-                    self.smoothing_lengths = self.smoothing_lengths.value
+            #     # First we need to convert to kpc
+            #     if self.stars.coord_units != kpc:
+            #         self.smoothing_lengths *= self.stars.coord_units
+            #         self.smoothing_lengths.convert_to_units(kpc)
+            #         self.smoothing_lengths = self.smoothing_lengths.value
 
-                # Now we can convert to arcsec
-                self.smoothing_lengths *= arcsec_per_kpc_proper * arcsec
+            #     # Now we can convert to arcsec
+            #     self.smoothing_lengths *= arcsec_per_kpc_proper * arcsec
 
-                # Finally convert to the image unit system if needed
-                if self.spatial_unit != arcsec:
-                    self.coords.convert_to_units(self.spatial_unit)
-                    self.smoothing_lengths.convert_to_units(self.spatial_unit)
+            #     # Finally convert to the image unit system if needed
+            #     if self.spatial_unit != arcsec:
+            #         self.coords.convert_to_units(self.spatial_unit)
+            #         self.smoothing_lengths.convert_to_units(self.spatial_unit)
 
-                # And strip off the unit
-                self.smoothing_lengths = self.smoothing_lengths.value
-
+            #     # And strip off the unit
+            #     self.smoothing_lengths = self.smoothing_lengths.value
 
 class ParametricScene(Scene):
     """
