@@ -1,6 +1,7 @@
 # custom
 examples/data/*.hdf5
 examples/cosmo/data/*.hdf5
+examples/particle/plots/*.png
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

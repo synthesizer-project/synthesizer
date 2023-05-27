@@ -1,4 +1,6 @@
-
+"""
+The definitions for Synthesizer specific errors.
+"""
 
 class InconsistentParameter(Exception):
     """
@@ -96,6 +98,7 @@ class InconsistentCoordinates(Exception):
         else:
             return 'Coordinates are inconsistent'
 
+        
 class SVOFilterNotFound(Exception):
     """
     Exception class for when an SVO filter code does not match one in
@@ -113,6 +116,7 @@ class SVOFilterNotFound(Exception):
         else:
             return 'Filter not found!'
 
+        
 class InconsistentWavelengths(Exception):
     """
     Exception class for when array dimensions don't
@@ -128,3 +132,20 @@ class InconsistentWavelengths(Exception):
             return '{0} '.format(self.message)
         else:
             return 'Coordinates are inconsistent'
+
+        
+class MissingSpectraType(Exception):
+    """
+    Exception class for when an SPS grid is missing 
+    """
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'Spectra type not in grid!'

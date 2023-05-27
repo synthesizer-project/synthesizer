@@ -261,6 +261,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         smoothed over a kernel, i.e. the full wavelength range of each
         particles spectrum is multiplied by the value of the kernel in each
         pixel it occupies.
+
         Parameters
         ----------
         kernel_func : function
@@ -270,6 +271,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             defined the function must return the kernel value corredsponding
             to the position of a particle with smoothing length h at distance
             r from the centre of the kernel (r/h).
+
         Returns
         -------
         img : array_like (float)
@@ -277,83 +279,21 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             pixels. [npix, npix, spectral_resolution]
         """
 
-        # Get the size of a pixel
-        res = self.resolution
+        from .extensions.sph_kernel_calc import make_ifu
 
-        # Loop over positions including the sed
-        for ind in range(self.npart):
+        # Prepare the inputs, we need to make sure we are passing C contiguous
+        # arrays.
+        # TODO: more memory efficient to pass the position array and handle C
+        #       extraction.
+        sed_vals = np.ascontiguousarray(self.sed_values, dtype=np.float64)
+        smls = np.ascontiguousarray(self.smoothing_lengths, dtype=np.float64)
+        xs = np.ascontiguousarray(self.coords[:, 0], dtype=np.float64)
+        ys = np.ascontiguousarray(self.coords[:, 1], dtype=np.float64)
+        zs = np.ascontiguousarray(self.coords[:, 2], dtype=np.float64)
 
-            # Get this particles smoothing length and position
-            smooth_length = self.stars.smoothing_lengths[ind]
-            pos = self.coords[ind]
-
-            # How many pixels are in the smoothing length?
-            delta_pix = math.ceil(smooth_length / self.resolution) + 1
-
-            kernel_sum = 0
-
-            img_this_part = np.zeros(
-                (self.npix, self.npix, self.spectral_resolution)
-            )
-
-            # Loop over a square aperture around this particle
-            # NOTE: This includes "pixels" in front of and behind the image
-            #       plane since the kernel is by defintion 3D
-            # TODO: Would be considerably more accurate to integrate over the
-            #       kernel in z axis since this is not quantised into pixels
-            #       like the axes in the image plane.
-            for i in range(
-                self.pix_pos[ind, 0] - delta_pix,
-                self.pix_pos[ind, 0] + delta_pix + 1,
-            ):
-
-                # Skip if outside of image
-                if i < 0 or i >= self.npix:
-                    continue
-
-                # Compute the x separation
-                x_dist = (i * res) + (res / 2) - pos[0]
-
-                for j in range(
-                    self.pix_pos[ind, 1] - delta_pix,
-                    self.pix_pos[ind, 1] + delta_pix + 1,
-                ):
-
-                    # Skip if outside of image
-                    if j < 0 or j >= self.npix:
-                        continue
-
-                    # Compute the y separation
-                    y_dist = (j * res) + (res / 2) - pos[1]
-
-                    for k in range(
-                        self.pix_pos[ind, 2] - delta_pix,
-                        self.pix_pos[ind, 2] + delta_pix + 1,
-                    ):
-
-                        # Compute the z separation
-                        z_dist = (k * res) + (res / 2) - pos[2]
-
-                        # Compute the distance between the centre of this pixel
-                        # and the particle.
-                        dist = np.sqrt(x_dist**2 + y_dist**2 + z_dist**2)
-
-                        # Get the value of the kernel here
-                        kernel_val = kernel_func(dist / smooth_length)
-                        kernel_sum += kernel_val
-                        # print(kernel_val, dist, pos, (i * res),
-                        #       ((i + 1) * res), (j * res), ((j + 1) * res),
-                        #       (k * res), ((k + 1) * res))
-
-                        # Add this pixel's contribution
-                        img_this_part[i, j, :] += (
-                            self.sed_values[ind, :] * kernel_val
-                        )
-
-            if kernel_sum > 0:
-                img_this_part /= kernel_sum
-
-                self.ifu += img_this_part
+        self.ifu = make_ifu(sed_vals, smls, xs, ys, zs,
+                            self.resolution, self.npix,
+                            self.coords.shape[0], self.spectral_resolution)
 
         return self.ifu
 
