@@ -55,6 +55,7 @@ class Sed:
 
         self.nu = (c/(self.lam)).to('Hz').value  # Hz
 
+        self.redshift = 0
         self.lamz = None
         self.nuz = None
         self.fnu = None
@@ -217,11 +218,14 @@ class Sed:
         if igm is None:
             igm = Inoue14()
 
+        # Store the redshift for later use
+        self.redshift = z
+
         self.lamz = self._lam * (1. + z)  # observed frame wavelength
         luminosity_distance = cosmo.luminosity_distance(
             z).to('cm').value  # the luminosity distance in cm
 
-        self.nuz = c.value/self.lamz
+        self.nuz = c.value / self.lamz
 
         self.fnu = self._lnu * (1.+z) / (4 * np.pi * luminosity_distance**2)
 
@@ -252,7 +256,7 @@ class Sed:
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
 
-            if not np.array_equal(f.lam, self.lamz):
+            if not np.array_equal(f.lam * (1. + self.redshift) , self.lamz):
                 print(('WARNING: filter wavelength grid is not '
                        'the same as the SED wavelength grid.'))
 
@@ -407,42 +411,3 @@ def rebin(l, f, n):  # rebin SED [currently destroys original]
 
     return nl, nf
 
-
-def fnu_to_m(fnu):
-    """ Convert fnu to AB magnitude. If unyt quantity convert
-        to nJy else assume it's in nJy """
-
-    if type(fnu) == unyt.array.unyt_quantity:
-        fnu_ = fnu.to('nJy').value
-    else:
-        fnu_ = fnu
-
-    return -2.5*np.log10(fnu_/1E9) + 8.9  # -- assumes flux in nJy
-
-
-def m_to_fnu(m):
-    """ Convert AB magnitude to fnu """
-
-    return 1E9 * 10**(-0.4*(m - 8.9)) * nJy  # -- flux returned nJy
-
-
-class constants:
-    tenpc = 10*pc  # ten parsecs
-    # the surface area (in cm) at 10 pc. I HATE the magnitude system
-    geo = 4*np.pi*(tenpc.to('cm').value)**2
-
-
-def M_to_Lnu(M):
-    """ Convert absolute magnitude (M) to L_nu """
-    return 10**(-0.4*(M+48.6)) * constants.geo * erg/s/Hz
-
-
-def Lnu_to_M(Lnu_):
-    """ Convert L_nu to absolute magnitude (M). If no unit
-        provided assumes erg/s/Hz. """
-    if type(Lnu_) == unyt.array.unyt_quantity:
-        Lnu = Lnu_.to('erg/s/Hz').value
-    else:
-        Lnu = Lnu_
-
-    return -2.5*np.log10(Lnu/constants.geo)-48.6

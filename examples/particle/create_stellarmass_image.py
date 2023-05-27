@@ -36,12 +36,12 @@ print(stars)
 # Create galaxy object
 galaxy = Galaxy(stars=stars)
 
-# Define image propertys
-resolution = 0.05
+# Define image properties
+resolution = 0.05 * kpc
 
 # Get the image
 img = galaxy.create_stellarmass_hist(resolution, npix=100)
 
 # Plot the image
 plt.imshow(img)
-plt.savefig("../stellarmass_test.png")
+plt.savefig("plots/stellarmass_test.png")

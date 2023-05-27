@@ -317,7 +317,8 @@ class Survey:
                     self.instruments[inst].depths
                 )
 
-    def get_integrated_stellar_spectra(self, grid, redshift=None, igm=Inoue14):
+    def get_spectra(self, grid, spectra_type, redshift=None, igm=None,
+                    rest_frame=True):
         """
         Compute the integrated stellar spectra of each galaxy.
 
@@ -333,118 +334,128 @@ class Survey:
         None
         """
 
+        # Initialise the IGM
+        if igm is None:
+            igm = Inoue14()
+
+        # Initialise spectra 
         _specs = np.zeros((self.ngalaxies, grid.lam.size))
 
         for ind, gal in enumerate(self.galaxies):
 
             # Are we getting a flux or rest frame?
-            _specs[ind, :] = gal.generate_intrinsic_spectra(
-                grid, sed_object=False)
-
+            _specs[ind, :] = gal.generate_spectra(
+                grid, sed_object=False, spectra_type=spectra_type)
+            
         # Create and store an SED object for these SEDs
-        self.seds["stellar"] = Sed(lam=grid.lam, lnu=_specs)
+        self.seds[spectra_type] = Sed(lam=grid.lam, lnu=_specs)
 
         # Get the flux
         # TODO: if galaxies differ in redshift this does not work!
         # TODO: catch error if improper arguments are handed
-        if redshift is None:
-            self.seds["stellar"].get_fnu0()
+        if rest_frame:
+            self.seds[spectra_type].get_fnu0()
         else:
-            self.seds["stellar"].get_fnu(self.cosmo, redshift, igm)
+            self.seds[spectra_type].get_fnu(self.cosmo, redshift, igm)
 
-    def get_integrated_spectra_screen(self, tauV, redshift=None,
-                                      igm=None, name='attenuated'):
-        """
-        Compute the attenuated spectra of each galaxy using a dust screen model
+    # def get_integrated_spectra_screen(self, tauV, redshift=None,
+    #                                   igm=None, name='attenuated'):
+    #     """
+    #     Compute the attenuated spectra of each galaxy using a dust screen model
 
-        Args:
-        -----
-        - tauV (array, float): V-band optical depth
-        - redshift (float): array of galaxy redshifts. If `None` (default),
-                            all galaxies assumed to be in the rest frame
-        - igm (obj): synthesizer IGM object, defaults to Inoue+14
+    #     Args:
+    #     -----
+    #     - tauV (array, float): V-band optical depth
+    #     - redshift (float): array of galaxy redshifts. If `None` (default),
+    #                         all galaxies assumed to be in the rest frame
+    #     - igm (obj): synthesizer IGM object, defaults to Inoue+14
 
-        Returns:
-        --------
-        None
-        """
+    #     Returns:
+    #     --------
+    #     None
+    #     """
 
-        _lam = self.seds['stellar']._lam
-        _specs = np.zeros((self.ngalaxies, _lam.size))
+    #     _lam = self.seds['stellar']._lam
+    #     _specs = np.zeros((self.ngalaxies, _lam.size))
 
-        for ind, gal in enumerate(self.galaxies):
+    #     for ind, gal in enumerate(self.galaxies):
 
-            # Are we getting a flux or rest frame?
-            _specs[ind, :] = gal.apply_screen(tauV, sed_object=False)
+    #         # Are we getting a flux or rest frame?
+    #         _specs[ind, :] = gal.apply_screen(tauV, sed_object=False)
 
-        # Create and store an SED object for these SEDs
-        self.seds[name] = Sed(lam=_lam, lnu=_specs)
+    #     # Create and store an SED object for these SEDs
+    #     self.seds[name] = Sed(lam=_lam, lnu=_specs)
 
-        # Get the flux
-        # TODO: if galaxies differ in redshift this does not work!
-        # TODO: catch error if improper arguments are handed
-        if redshift is None:
-            self.seds[name].get_fnu0()
-        else:
-            self.seds[name].get_fnu(self.cosmo, redshift, igm)
+    #     # Get the flux
+    #     # TODO: if galaxies differ in redshift this does not work!
+    #     # TODO: catch error if improper arguments are handed
+    #     if redshift is None:
+    #         self.seds[name].get_fnu0()
+    #     else:
+    #         self.seds[name].get_fnu(self.cosmo, redshift, igm)
 
-    def get_integrated_spectra_charlot_fall_00(self, grid, tauV_ISM, tauV_BC,
-                                               redshift=None, igm=None,
-                                               name='attenuated'):
-        """
-        Compute the attenuated spectra of each galaxy using a dust screen model
+    # def get_integrated_spectra_charlot_fall_00(self, grid, tauV_ISM, tauV_BC,
+    #                                            redshift=None, igm=None,
+    #                                            name='attenuated'):
+    #     """
+    #     Compute the attenuated spectra of each galaxy using a dust screen model
 
-        Args:
-        -----
-        - grid (obj): synthesizer grid object
-        - tauV_ISM (array): V-band optical depth in the interstellar medium
-        - tauV_BC (array): birth cloud V-band optical depth
-        - redshift (float): array of galaxy redshifts. If `None` (default),
-                            all galaxies assumed to be in the rest frame
-        - igm (obj): synthesizer IGM object, defaults to Inoue+14
+    #     Args:
+    #     -----
+    #     - grid (obj): synthesizer grid object
+    #     - tauV_ISM (array): V-band optical depth in the interstellar medium
+    #     - tauV_BC (array): birth cloud V-band optical depth
+    #     - redshift (float): array of galaxy redshifts. If `None` (default),
+    #                         all galaxies assumed to be in the rest frame
+    #     - igm (obj): synthesizer IGM object, defaults to Inoue+14
 
-        Returns:
-        --------
-        None
-        """
+    #     Returns:
+    #     --------
+    #     None
+    #     """
 
-        _specs = np.zeros((self.ngalaxies, grid.lam.size))
+    #     _specs = np.zeros((self.ngalaxies, grid.lam.size))
 
-        for ind, gal in enumerate(self.galaxies):
+    #     for ind, gal in enumerate(self.galaxies):
 
-            # Are we getting a flux or rest frame?
-            _specs[ind, :] = gal.apply_charlot_fall_00(grid, tauV_ISM, tauV_BC,
-                                                       sed_object=False)
+    #         # Are we getting a flux or rest frame?
+    #         _specs[ind, :] = gal.apply_charlot_fall_00(grid, tauV_ISM, tauV_BC,
+    #                                                    sed_object=False)
 
-        # Create and store an SED object for these SEDs
-        self.seds[name] = Sed(lam=grid.lam, lnu=_specs)
+    #     # Create and store an SED object for these SEDs
+    #     self.seds[name] = Sed(lam=grid.lam, lnu=_specs)
 
-        # Get the flux
-        # TODO: if galaxies differ in redshift this does not work!
-        # TODO: catch error if improper arguments are handed
-        if redshift is None:
-            self.seds[name].get_fnu0()
-        else:
-            self.seds[name].get_fnu(self.cosmo, redshift, igm)
+    #     # Get the flux
+    #     # TODO: if galaxies differ in redshift this does not work!
+    #     # TODO: catch error if improper arguments are handed
+    #     if redshift is None:
+    #         self.seds[name].get_fnu0()
+    #     else:
+    #         self.seds[name].get_fnu(self.cosmo, redshift, igm)
 
-    def get_particle_stellar_spectra(self, grid, redshift=None, igm=None):
+    def get_particle_spectra(self, grid, spectra_type, redshift=None,
+                             igm=None, rest_frame=True):
         """
         Compute the integrated stellar spectra of each galaxy.
         """
 
+        # Initialise the IGM
+        if igm is None:
+            igm = Inoue14()
+
         for ind, gal in enumerate(self.galaxies):
 
             # Are we getting a flux or rest frame?
-            sed = gal.generate_intrinsic_particle_spectra(grid,
-                                                          sed_object=True)
-            gal.spectra_array["stellar"] = sed
-
+            sed = gal.generate_particle_spectra(grid, sed_object=True,
+                                                spectra_type=spectra_type)
+            gal.spectra_array[spectra_type] = sed
+            
             # Get the flux
             # TODO: catch error if improper arguments are handed
-            if redshift is None:
-                gal.spectra_array["stellar"].get_fnu0()
+            if rest_frame:
+                gal.spectra_array[spectra_type].get_fnu0()
             else:
-                gal.spectra_array["stellar"].get_fnu(
+                gal.spectra_array[spectra_type].get_fnu(
                     self.cosmo, redshift, igm)
             # do we want to use redshift defined on the galaxy object?
             # need to update a lot of things to check this (and alow override)
@@ -460,6 +471,8 @@ class Survey:
         if spectra_type == "intrinsic":
             pass
         elif spectra_type == "stellar":
+            pass
+        elif spectra_type == "total":
             pass
         elif spectra_type == "attenuated":
             pass
