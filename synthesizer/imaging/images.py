@@ -506,6 +506,8 @@ class Image(Scene):
         if isinstance(img, unyt_array) and not isinstance(noise_arr, unyt_array):
             noisy_img = img.value + noise_arr
         else:
+            print(img)
+            print(noise_arr)
             noisy_img = img + noise_arr
 
         return noisy_img, weight_map, noise_arr
