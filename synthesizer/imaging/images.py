@@ -7,7 +7,7 @@ import ctypes
 from scipy import signal
 from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
-from unyt import unyt_quantity, kpc, mas, unyt_array
+from unyt import unyt_quantity, kpc, mas, unyt_array, unyt_quantity
 from unyt.dimensions import length, angle
 
 import synthesizer.exceptions as exceptions
@@ -499,15 +499,7 @@ class Image(Scene):
         noise_arr *= np.random.randn(self.npix, self.npix)
 
         # Add the noise to the image
-        if isinstance(img, unyt_array) and isinstance(noise_arr, unyt_array):
-            noisy_img = img.value + noise_arr.value
-        if not isinstance(img, unyt_array) and isinstance(noise_arr, unyt_array):
-            noisy_img = img + noise_arr.value
-        if isinstance(img, unyt_array) and not isinstance(noise_arr, unyt_array):
-            noisy_img = img.value + noise_arr
-        else:
-            print(type(noise_arr), isinstance(noise_arr, unyt_array))
-            noisy_img = img + noise_arr
+        noisy_img = img + noise_arr.value
 
         return noisy_img, weight_map, noise_arr
 
