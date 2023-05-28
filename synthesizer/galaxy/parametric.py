@@ -254,7 +254,8 @@ class ParametricGalaxy(BaseGalaxy):
         Raises
         ------
         InconsistentArguments
-           Errors when more than two values for tauV and alpha is passed.
+           Errors when more than two values for tauV and alpha is passed for CF00 dust screen.
+           In case of single dust screen, raises error for multiplt optical depths or dust curve slope.
 
         Returns
         -------
@@ -266,9 +267,12 @@ class ParametricGalaxy(BaseGalaxy):
         is assumed to completely escape the galaxy without reprocessing by gas or
         dust. The rest is assumed to be reprocessed by both gas and a screen of dust. """
 
-        if isinstance(tauV, (list, tuple, np.ndarray)) or isinstance(alpha, (list, tuple, np.ndarray)):
+        if CF00:
             if (len(tauV)>2) or (len(alpha)>2):
-                exceptions.InconsistentArguments("Only 2 values for the optical depth or dust curve slope are supported")
+                exceptions.InconsistentArguments("Only 2 values for the optical depth or dust curve slope are allowed for CF00")
+        else:
+            if isinstance(tauV, (list, tuple, np.ndarray)) or isinstance(alpha, (list, tuple, np.ndarray)):
+                exceptions.InconsistentArguments("Only single value supported for tauV and alpha in case of single dust screen")
 
         # --- begin by generating the pure stellar spectra
         self.spectra['stellar'] = self.get_stellar_spectra(grid, update=update)
@@ -387,18 +391,18 @@ class ParametricGalaxy(BaseGalaxy):
 
         if np.isscalar(tauV):
             dust_curve.params['slope']=alpha
-            T_total = dust_curve.attenuate(tauV, lam)
+            T_total = dust_curve.attenuate(tauV, grid.lam)
         else:
             T_total = np.ones(len(intrinsic_sed))
             for _tauV, _alpha in zip(tauV, alpha):
                 dust_curve.params['slope']=_alpha
-                _T = dust_curve.attenuate(_tauV, lam)
+                _T = dust_curve.attenuate(_tauV, grid.lam)
                 T_total*=_T
             
         return intrinsic_sed * T_total
 
 
-    def get_CharlotFall00_spectra(self, grid, dust_curve, tauV_ISM, tauV_BC, alpha_ISM=-0.7, alpha_BC=-1.3, old=7., young=7., save_young_and_old=False, spectra_name='total', sed_object=True):
+    def get_CharlotFall_spectra(self, grid, dust_curve=power_law(), tauV_ISM=1., tauV_BC=1., alpha_ISM=-0.7, alpha_BC=-1.3, old=7., young=7., save_young_and_old=False, spectra_name='total', sed_object=True, update=True):
         """
         Calculates dust attenuated spectra assuming the Charlot & Fall (2000) dust model. In this model young star particles
         are embedded in a dusty birth cloud and thus feel more dust attenuation.
@@ -434,35 +438,21 @@ class ParametricGalaxy(BaseGalaxy):
         
         sed_old = self.get_one_component_spectra(grid, dust_curve, tauV=tauV_ISM, alpha=alpha_ISM, old=old, young=False, spectra_name=spectra_name)
 
-        # calculate intrinsic sed for young and old stars
-        # intrinsic_sed_young = self.generate_lnu(grid, spectra_name=spectra_name, old=old, young=young)
-        # intrinsic_sed_old = self.generate_lnu(grid, spectra_name=spectra_name, old=old, young=young)
+        if save_young_and_old:
+            # calculate intrinsic sed for young and old stars
+            intrinsic_sed_young = self.generate_lnu(grid, spectra_name=spectra_name, old=False, young=young)
+            intrinsic_sed_old = self.generate_lnu(grid, spectra_name=spectra_name, old=old, young=False)
 
-        # if save_young_and_old:
+            self.spectra['intrinsic_young'] = intrinsic_sed_young
+            self.spectra['intrinsic_old'] = intrinsic_sed_old
 
-        #     self.spectra['intrinsic_young'] = intrinsic_sed_young
-        #     self.spectra['intrinsic_old'] = intrinsic_sed_old
-
-        # calculate dust attenuation for young and old components
-        # T_ISM = power_law({'slope': alpha_ISM}).attenuate(tauV_ISM, grid.lam)
-        # T_BC = power_law({'slope': alpha_BC}).attenuate(tauV_BC, grid.lam)
-
-        # T_young = T_ISM * T_BC
-        # T_old = T_ISM
-
-        # sed_young = self.intrinsic_sed_young.lnu * T_young
-        # sed_old = self.intrinsic_sed_old.lnu * T_old
-
-        # if save_young_and_old:
-
-        #     # if integrated:
-        #     self.spectra['attenuated_young'] = Sed(grid.lam, sed_young)
-        #     self.spectra['attenuated_old'] = Sed(grid.lam, sed_old)
+            self.spectra['attenuated_young'] = Sed(grid.lam, sed_young)
+            self.spectra['attenuated_old'] = Sed(grid.lam, sed_old)
 
         sed = Sed(grid.lam, sed_young + sed_old)
 
-        # if update:
-        #     self.spectra['attenuated'] = sed
+        if update:
+            self.spectra['attenuated'] = sed
 
         if sed_object:
             return sed
