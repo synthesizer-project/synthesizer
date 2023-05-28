@@ -499,7 +499,11 @@ class Image(Scene):
         noise_arr *= np.random.randn(self.npix, self.npix)
 
         # Add the noise to the image
-        if isinstance(img, unyt_array):
+        if isinstance(img, unyt_array) and isinstance(noise_arr, unyt_array):
+            noisy_img = img.value + noise_arr.value
+        if not isinstance(img, unyt_array) and isinstance(noise_arr, unyt_array):
+            noisy_img = img + noise_arr.value
+        if isinstance(img, unyt_array) and not isinstance(noise_arr, unyt_array):
             noisy_img = img.value + noise_arr
         else:
             noisy_img = img + noise_arr
