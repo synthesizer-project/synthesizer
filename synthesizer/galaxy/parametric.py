@@ -180,7 +180,7 @@ class ParametricGalaxy(BaseGalaxy):
 
         return sed
 
-    def get_screen_spectra(self, grid, tauV=None, dust_curve=power_law({'slope': -1.}), update=True):
+    def get_screen_spectra(self, grid, fesc=0.0, tauV=None, dust_curve=power_law({'slope': -1.}), update=True):
         """
         Calculates dust attenuated spectra assuming a simple screen
 
@@ -200,7 +200,7 @@ class ParametricGalaxy(BaseGalaxy):
         """
 
         # --- begin by calculating intrinsic spectra
-        intrinsic = self.get_intrinsic_spectra(grid, update=update)
+        intrinsic = self.get_intrinsic_spectra(grid, update=update, fesc=fesc)
 
         if tauV:
             T = dust_curve.attenuate(tauV, grid.lam)
