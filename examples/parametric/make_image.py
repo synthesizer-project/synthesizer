@@ -59,7 +59,7 @@ if __name__ == '__main__':
     npix = 25  # width of image in pixels
 
     # generate images, returns an Image object which is also associated with the Galaxy
-    images = galaxy.make_images('stellar', resolution, npix=npix)
+    images = galaxy.make_images('stellar', filter_collection, resolution=resolution, npix=npix)
 
     print(images)
 
