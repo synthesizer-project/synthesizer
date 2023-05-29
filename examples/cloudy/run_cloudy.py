@@ -17,6 +17,7 @@ from synthesizer.cloudy import create_cloudy_input
 grid_dir = '/Users/sw376/Dropbox/Research/data/synthesizer/grids/'
 grid_dir = '/its/home/sw376/astrodata/synthesizer/grids/'
 
+
 default_params = {
 
     # --- sps parameters
@@ -67,6 +68,10 @@ for k, v in params.items():
 
 
 
+# --- define cloudy path
+cloudy_path = f'~/Dropbox/Research/software/cloudy/{params["cloudy_version"]}/source/cloudy.exe'
+cloudy_path = f'/its/home/sw376/flare/software/cloudy/{params["cloudy_version"]}/source/cloudy.exe'
+
 
 
 # ---- load SPS grid
@@ -87,7 +92,7 @@ create_cloudy_input(model_name, lam, lnu, abundances, output_dir = './data/', **
 # --- define output filename
 
 
-cloudy_path = f'~/Dropbox/Research/software/cloudy/{params["cloudy_version"]}/source/cloudy.exe'
+
 
 os.chdir('./data')
 os.system(f'{cloudy_path} -r {model_name}')
