@@ -634,7 +634,8 @@ class ParametricGalaxy(BaseGalaxy):
 
     def make_images(self, spectra_type, filtercollection, resolution, npix=None, fov=None, update=True, rest_frame=True):
 
-        images = ParametricImage(self.morph, resolution, filters=filtercollection, npix=npix, fov=fov,
+        images = ParametricImage(self.morph, resolution=resolution,
+                                 filters=filtercollection, npix=npix, fov=fov,
                                  sed=self.spectra[spectra_type], rest_frame=rest_frame)
         images.create_images()
 
