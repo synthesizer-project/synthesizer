@@ -736,6 +736,10 @@ class ParticleImage(ParticleScene, Image):
             Object containing the absorbtion due to an intergalactic medium.
         """
 
+        # Clean up arguments
+        if filters is None:
+            filters = ()
+
         # Initilise the parent classes
         ParticleScene.__init__(
             self,
