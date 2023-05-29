@@ -88,7 +88,7 @@ class FilterCollection:
             {<filter_code1> : {"transmission": <transmission_array>}}.
             For generic filters new_lam must be provided.
         new_lam : array-like (float)
-            The wavelength array to define the tranmission curve on.
+            The wavelength array to define the transmission curve on.
         """
 
         # Define lists to hold our filters and filter codes
@@ -182,7 +182,7 @@ class FilterCollection:
             self.filters[_filter.filter_code] = _filter
             self.filter_codes.append(_filter.filter_code)
 
-    def _make_generic_colleciton(self, generic_dict):
+    def _make_generic_collection(self, generic_dict):
         """
         Populate the FilterCollection with user defined filters.
         Parameters
@@ -496,7 +496,7 @@ class Filter:
         self.original_lam = new_lam
         self.original_t = transmission
 
-        # Is this a generic filter? (Everything other the label is defined
+        # Is this a generic filter? (Everything other than the label is defined
         # above.)
         if transmission is not None and new_lam is not None:
             self.filter_type = "Generic"
