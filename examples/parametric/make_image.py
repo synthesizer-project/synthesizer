@@ -63,7 +63,8 @@ if __name__ == '__main__':
 
     print(images)
 
+    images.plot()  #  plot base image
+    images.plot('U')  #  plot U-band image
+    images.plot_rgb(['J', 'V', 'U'])  #  plot RGB image
+
     images.make_ascii()
-    # images.plot()  #  plot base image
-    # images.plot('U')  #  plot U-band image
-    # images.plot_rgb(['J', 'V', 'U'])  #  plot RGB image
