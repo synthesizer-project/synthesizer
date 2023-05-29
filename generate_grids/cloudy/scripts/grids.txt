@@ -1,2 +1,1 @@
-bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-v17.03-U_modelfixed
-bpass-2.2.1-bin_chabrier03-0.1,100.0_cloudy-v17.03-U_modelfixed
+bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-v17.03
