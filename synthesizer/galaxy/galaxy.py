@@ -86,7 +86,7 @@ class BaseGalaxy:
 
             if fc:
                 sed.get_broadband_fluxes(fc)
-                for f in fc.filters:
+                for f in fc:
                     wv = f.pivwv()
                     filter_ax.plot(f.lam, f.t)
                     ax.scatter(wv, sed.broadband_fluxes[f.filter_code])
