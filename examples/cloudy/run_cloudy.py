@@ -9,16 +9,16 @@ import sys
 import argparse
 import numpy as np
 
-from synthesizer.abundances_sw import Abundances
-from synthesizer.grid import SpectralGrid
-from synthesizer.cloudy_sw import create_cloudy_input
+from synthesizer.abundances import Abundances
+from synthesizer.grid import Grid
+from synthesizer.cloudy import create_cloudy_input
 
 
 
 default_params = {
 
     # --- sps parameters
-    'sps_grid' : 'bpass-v2.2.1-bin_chab-100',
+    'sps_grid' : 'bpass-2.2.1-bin_chabrier03-0.1,300.0',
     'ia' : 0, # 1 Myr
     'iZ' : 8, # Z = 0.01
 
@@ -41,16 +41,20 @@ default_params = {
     'log10n_H': 2, # Hydrogen density
     'z': 0.,
     'CMB': False,
-    'cosmic_rays': False
+    'cosmic_rays': False,
+    'resolution': 0.1, # relative resolution
     }
 
 
 params = {
-    'log10U' : -1
+    'resolution': 1.0, # relative resolution
 }
 
 
-model_name = '_'.join(['default']+[f'{k}-{v}' for k, v in params.items()])
+model_name = '_'.join(['default']+[f'{k}:{v}' for k, v in params.items()])
+
+
+
 
 print(model_name)
 
@@ -64,13 +68,13 @@ for k, v in params.items():
 
 
 # ---- load SPS grid
-grid = SpectralGrid(params['sps_grid'])
+grid = Grid(params['sps_grid'], grid_dir='/Users/sw376/Dropbox/Research/data/synthesizer/grids/')
 
 # --- get metallicity
 Z = grid.metallicities[params['iZ']]
 
 # ---- initialise abundances object
-abundances = Abundances().generate_abundances(Z, params['alpha'], params['CO'], params['d2m'], scaling = params['scaling']) # abundances object
+abundances = Abundances(Z=Z, alpha=params['alpha'], CO=params['CO'], d2m=params['d2m']) # abundances object
 
 
 lam = grid.lam
@@ -81,7 +85,7 @@ create_cloudy_input(model_name, lam, lnu, abundances, output_dir = './data/', **
 # --- define output filename
 
 
-cloudy_path = f'/Users/stephenwilkins/Dropbox/Research/software/cloudy/{params["cloudy_version"]}/source/cloudy.exe'
+cloudy_path = f'~/Dropbox/Research/software/cloudy/{params["cloudy_version"]}/source/cloudy.exe'
 
 os.chdir('./data')
 os.system(f'{cloudy_path} -r {model_name}')
