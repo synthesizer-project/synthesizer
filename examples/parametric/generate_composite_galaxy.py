@@ -56,7 +56,7 @@ if __name__ == '__main__':
     sed = disk.spectra['stellar'].get_broadband_luminosities(filter_collection)
 
     # make images
-    images = disk.make_images('stellar', resolution, npix=npix)
+    images = disk.make_images('stellar', filter_collection, resolution, npix=npix)
 
     print(disk)
 
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     sed = bulge.spectra['stellar'].get_broadband_luminosities(filter_collection)
 
     # make images
-    images = bulge.make_images('stellar', resolution, npix=npix)
+    images = bulge.make_images('stellar', filter_collection, resolution, npix=npix)
 
     print(bulge)
 
@@ -88,8 +88,8 @@ if __name__ == '__main__':
     print(total)
 
     # images = bulge.make_images('stellar', filter_collection, resolution, npix=npix)
-    #
-    # images.plot_rgb(['J', 'V', 'U'])
+    
+    images.plot_rgb(['J', 'V', 'U'])
 
     # total = disk.images['stellar'].rgb_img + bulge.images['stellar'].rgb_img
     #
