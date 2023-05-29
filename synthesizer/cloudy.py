@@ -60,7 +60,8 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
         'CMB': False,
         'cosmic_rays': False,
         'grains': False,
-        'geometry': 'planeparallel'
+        'geometry': 'planeparallel',
+        'resolution': 0.1, # relative resolution the saved continuum spectra
     }
 
     for key, value in list(kwargs.items()):
@@ -188,6 +189,7 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
 
     # --- output commands
     cinput.append(f'print line vacuum\n')  # output vacuum wavelengths
+    cinput.append(f'set continuum resolution {params["resolution"]}\n') # set the continuum resolution
     cinput.append((f'save last continuum "{model_name}.cont" '
                    f'units Angstroms no clobber\n'))
     cinput.append((f'save last lines, array "{model_name}.lines" '
