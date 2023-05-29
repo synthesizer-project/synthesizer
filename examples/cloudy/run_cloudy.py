@@ -50,7 +50,7 @@ default_params = {
 
 
 params = {
-    'resolution': 1.0, # relative resolution
+    'resolution': 0.1, # relative resolution
 }
 
 
