@@ -14,6 +14,8 @@ from synthesizer.grid import Grid
 from synthesizer.cloudy import create_cloudy_input
 
 
+grid_dir = '/Users/sw376/Dropbox/Research/data/synthesizer/grids/'
+grid_dir = '/its/home/sw376/astrodata/synthesizer/grids/'
 
 default_params = {
 
@@ -68,7 +70,7 @@ for k, v in params.items():
 
 
 # ---- load SPS grid
-grid = Grid(params['sps_grid'], grid_dir='/Users/sw376/Dropbox/Research/data/synthesizer/grids/')
+grid = Grid(params['sps_grid'], grid_dir=grid_dir)
 
 # --- get metallicity
 Z = grid.metallicities[params['iZ']]
