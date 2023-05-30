@@ -178,4 +178,16 @@ if __name__ == "__main__":
     axes[0].set_ylabel("Smoothed")
 
     # Plot the image
-    plt.savefig("flux_in_filters_test.png", bbox_inches="tight", dpi=300)
+    plt.savefig(script_path + "/plots/flux_in_filters_test.png",
+                bbox_inches="tight", dpi=300)
+
+    # Also, lets make an RGB image
+    fig, ax, rgb_img = smooth_img.plot_rgb_image(
+        rgb_filters={"R": ["JWST/NIRCam.F200W",],
+                     "G": ["JWST/NIRCam.F150W",],
+                     "B": ["JWST/NIRCam.F090W",]},
+        img_type="standard",
+    )
+
+    fig.savefig(script_path + "/plots/flux_in_filters_RGB_test.png",
+                bbox_inches="tight", dpi=300)
