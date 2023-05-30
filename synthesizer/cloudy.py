@@ -61,7 +61,7 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
         'cosmic_rays': False,
         'grains': False,
         'geometry': 'planeparallel',
-        'resolution': 0.1, # relative resolution the saved continuum spectra
+        'resolution': 1.0, # relative resolution the saved continuum spectra
     }
 
     for key, value in list(kwargs.items()):

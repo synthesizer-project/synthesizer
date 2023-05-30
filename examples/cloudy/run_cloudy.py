@@ -45,7 +45,7 @@ default_params = {
     'z': 0.,
     'CMB': False,
     'cosmic_rays': False,
-    'resolution': 0.1, # relative resolution
+    'resolution': 1.0, # relative resolution
     }
 
 
