@@ -1,8 +1,7 @@
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from synthesizer import grid
+from synthesizer.grid import Grid
 from synthesizer.sed import Sed
 from synthesizer.load_data import load_CAMELS_SIMBA
 from synthesizer.filters import UVJ
@@ -10,81 +9,96 @@ from synthesizer.filters import UVJ
 from synthesizer.galaxy.particle import ParticleGalaxy
 
 
-if len(sys.argv) > 1:
-    grid_dir = str(sys.argv[1])
-else:
-    grid_dir = None
+if __name__ == '__main__':
 
-# first load a spectral grid
-_grid = grid.Grid('bc03_chabrier03-0.1,100', grid_dir=grid_dir)
+    grid_dir = '../../tests/test_grid'
+    grid_name = 'test_grid'
 
-# now load some example CAMELS data using the dedicated data loader
-gals = load_CAMELS_SIMBA('data/', snap='033')
+    grid = Grid(grid_name, grid_dir=grid_dir)
 
-""" calculate the spectra for a single galaxy
-    here we set the `sed_object` flag to automatically assign
-    to an sed object """
-_g = gals[0]
+    # now load some example CAMELS data using the dedicated data loader
+    gals = load_CAMELS_SIMBA('../../tests/', 
+                             snap_name='camels_snap.hdf5', 
+                             fof_name='camels_subhalo.hdf5')
 
-_g.generate_intrinsic_spectra(_grid)
+    """ calculate the spectra for a single galaxy
+        here we set the `sed_object` flag to automatically assign
+        to an sed object """
+    _g = gals[0]
 
-_spec = _g.generate_intrinsic_spectra(_grid, sed_object=True)
+    _spec = _g.get_stellar_spectra(grid, sed_object=True)
+    _g.plot_spectra()
+    plt.show()
+    
+    # for label, _spec in _g.spectra.items():
+    #     plt.loglog(_spec.lam, _spec.lnu, label=label)
+    # plt.xlabel('$\lambda \,/\, \\AA$')
+    # plt.ylabel('$L_{\\nu} \,/\, \mathrm{erg \; s^{-1} \; Hz^{-1}}$')
+    # plt.legend()
+    # plt.show()
 
-plt.loglog(_spec.lam, _spec.lnu)
-plt.xlabel('$\lambda \,/\, \\AA$')
-plt.ylabel('$L_{\\nu} \,/\, \mathrm{erg \; s^{-1} \; Hz^{-1}}$')
-# plt.show()
-plt.savefig('../../docs/source/images/camels_single_spec.png', dpi=200)
-plt.close()
+    spec = _g.get_nebular_spectra(grid)
+    _g.plot_spectra()
+    plt.show()
 
-""" multiple galaxies
-    Here we leave the `sed_object` flag as the default (False), 
-    and combine into a single sed object afterwards """
-_specs = np.vstack([_g.generate_intrinsic_spectra(_grid)
-                    for _g in gals[:10]])
+    spec = _g.get_intrinsic_spectra(grid, fesc=0.1)
+    _g.plot_spectra()
+    plt.show()
 
-_specs = Sed(lam=_grid.lam, lnu=_specs)
+    spec = _g.get_screen_spectra(grid, tauV=0.32, fesc=0.1)
+    _g.plot_spectra()
+    plt.show()
 
-plt.loglog(_grid.lam, _specs.lnu.T)
-plt.xlabel('$\lambda \,/\, \\AA$')
-plt.ylabel('$L_{\\nu} \,/\, \mathrm{erg \; s^{-1} \; Hz^{-1}}$')
-# plt.show()
-plt.savefig('../../docs/source/images/camels_multiple_spec.png', dpi=200)
-plt.close()
+    spec = _g.get_CharlotFall_spectra(grid, tauV_ISM=0.33, tauV_BC=0.67)
+    _g.plot_spectra()
+    plt.show()
 
+    """ multiple galaxies
+        Here we leave the `sed_object` flag as the default (False), 
+        and combine into a single sed object afterwards """
+    _specs = np.vstack([_g.get_CharlotFall_spectra(
+        grid, tauV_ISM=0.33, tauV_BC=0.67,
+        sed_object=False)
+            for _g in gals])
 
-""" calculate broadband luminosities """
+    _specs = Sed(lam=grid.lam, lnu=_specs)
 
-# first get rest frame 'flux'
-_spec.get_fnu0()
+    plt.loglog(grid.lam, _specs.lnu.T)
+    plt.xlabel('$\lambda \,/\, \\AA$')
+    plt.ylabel('$L_{\\nu} \,/\, \mathrm{erg \; s^{-1} \; Hz^{-1}}$')
+    plt.show()
 
-# define a filter collection object (UVJ default)
-fc = UVJ(new_lam=_grid.lam)
+    """ calculate broadband luminosities """
+    # first get rest frame 'flux'
+    _spec.get_fnu0()
 
-_UVJ = _spec.get_broadband_fluxes(fc)
-print(_UVJ)
+    # define a filter collection object (UVJ default)
+    fc = UVJ(new_lam=grid.lam)
 
-""" do for multiple, plot UVJ diagram """
+    _UVJ = _spec.get_broadband_fluxes(fc)
+    print(_UVJ)
 
-# first filter by stellar mass
-mstar = np.log10(np.array([np.sum(_g.stars.initial_masses)
-                           for _g in gals]) * 1e10)
-mask = np.where(mstar > 8)[0]
+    """ do for multiple, plot UVJ diagram """
 
-_specs = np.vstack([gals[_g].generate_intrinsic_spectra(_grid)
-                    for _g in mask])
+    # first filter by stellar mass
+    mstar = np.log10(np.array([np.sum(_g.stars.initial_masses)
+                            for _g in gals]) * 1e10)
+    mask = np.where(mstar > 8)[0]
 
-_specs = Sed(lam=_grid.lam, lnu=_specs)
-_specs.get_fnu0()
-_UVJ = _specs.get_broadband_fluxes(fc)
+    _specs = np.vstack([gals[_g].get_CharlotFall_spectra(
+        grid, tauV_ISM=0.33, tauV_BC=0.67,
+        sed_object=False)
+            for _g in mask])
 
-UV = _UVJ['U'] / _UVJ['V']
-VJ = _UVJ['V'] / _UVJ['J']
+    _specs = Sed(lam=grid.lam, lnu=_specs)
+    _specs.get_fnu0()
+    _UVJ = _specs.get_broadband_fluxes(fc)
 
-plt.scatter(VJ, UV, c=mstar[mask], s=4)
-plt.xlabel('VJ')
-plt.ylabel('UV')
-plt.colorbar(label='$\mathrm{log_{10}} \, M_{\star} \,/\, \mathrm{M_{\odot}}$')
-# plt.show()
-plt.savefig('../../docs/source/images/camels_UVJ.png', dpi=200)
-plt.close()
+    UV = _UVJ['U'] / _UVJ['V']
+    VJ = _UVJ['V'] / _UVJ['J']
+
+    plt.scatter(VJ, UV, c=mstar[mask], s=40)
+    plt.xlabel('VJ')
+    plt.ylabel('UV')
+    plt.colorbar(label='$\mathrm{log_{10}} \, M_{\star} \,/\, \mathrm{M_{\odot}}$')
+    plt.show()
