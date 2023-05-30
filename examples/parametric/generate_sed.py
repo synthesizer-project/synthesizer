@@ -42,32 +42,44 @@ if __name__ == '__main__':
     galaxy = Galaxy(sfzh)
 
     # # --- generate pure stellar spectra alone
-    # galaxy.get_stellar_spectra(grid)
-    # galaxy.plot_spectra()
+    galaxy.get_stellar_spectra(grid)
+    print("Pure stellar spectra")
+    galaxy.plot_spectra()
 
     # # --- generate intrinsic spectra (which includes reprocessing by gas)
-    # galaxy.get_intrinsic_spectra(grid, fesc = 0.5)
-    # galaxy.plot_spectra()
+    galaxy.get_intrinsic_spectra(grid, fesc = 0.5)
+    print("Intrinsic spectra")
+    galaxy.plot_spectra()
 
     # # --- simple dust and gas screen
-    # galaxy.get_screen_spectra(grid, tauV = 0.1, fesc = 0.5)
-    # galaxy.plot_spectra()
+    galaxy.get_screen_spectra(grid, tauV = 0.1, fesc = 0.5)
+    print("Simple dust and gas screen")
+    galaxy.plot_spectra()
+
+    # --- CF00 model
+    galaxy.get_CharlotFall_spectra(grid, tauV_ISM=0.1, tauV_BC=0.1, alpha_ISM=-0.7, alpha_BC=-1.3)
+    print("CF00 model")
+    galaxy.plot_spectra()
 
     # # --- pacman model
-    # galaxy.get_pacman_spectra(grid, tauV = 0.1, fesc = 0.5)
-    # galaxy.plot_spectra()
+    galaxy.get_pacman_spectra(grid, tauV = 0.1, fesc = 0.5)
+    print("Pacman model")
+    galaxy.plot_spectra()
 
-    # # --- pacman model (no Lyman-alpha escapes and no dust)
-    # galaxy.get_pacman_spectra(grid, fesc = 0.0, fesc_LyA = 0.0)
-    # galaxy.plot_spectra()
+    # # --- pacman model (no Lyman-alpha escape and no dust)
+    galaxy.get_pacman_spectra(grid, fesc = 0.0, fesc_LyA = 0.0)
+    print("Pacman model (no Ly-alpha escape, and no dust)")
+    galaxy.plot_spectra()
 
     # # --- pacman model (complex)
     galaxy.get_pacman_spectra(grid, fesc=0.0, fesc_LyA=0.5, tauV=0.6)
+    print("Pacman model (complex)")
     galaxy.plot_spectra()
 
-    # # --- CF00 model NOT YET IMPLEMENTED
-    # galaxy.get_pacman_spectra(grid, tauV = 0.1, fesc = 0.5)
-    # galaxy.plot_spectra()
+    # --- CF00 model implemented within pacman model
+    galaxy.get_pacman_spectra(grid, fesc = 0.1, fesc_LyA = 0.1, tauV=[1.,1.], alpha = [-1,-1], CF00=True)
+    print("CF00 implemented within the Pacman model")
+    galaxy.plot_spectra()
 
     # print galaxy summary
     print(galaxy)
