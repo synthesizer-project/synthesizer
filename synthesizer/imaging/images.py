@@ -485,10 +485,7 @@ class Image():
         noise_arr *= np.random.randn(self.npix, self.npix)
 
         # Add the noise to the image
-        if isinstance(noise_arr, np.ndarray):
-            noisy_img = img + noise_arr
-        else:
-            noisy_img = img + noise_arr.value
+        noisy_img = img + noise_arr.value
 
         return noisy_img, weight_map, noise_arr
 
