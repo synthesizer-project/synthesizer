@@ -7,7 +7,7 @@ import warnings
 from synthesizer.imaging.scene import Scene, ParticleScene, ParametricScene
 
 
-class SpectralCube(Scene):
+class SpectralCube():
     """
     The generic parent IFU/Spectral data cube object, containing common
     attributes and methods for both particle and parametric sIFUs.
@@ -22,13 +22,7 @@ class SpectralCube(Scene):
     def __init__(
         self,
         sed,
-        resolution,
         npix=None,
-        fov=None,
-        depths=None,
-        apertures=None,
-        snrs=None,
-        super_resolution_factor=None,
     ):
         """
         Intialise the SpectralCube.
@@ -51,11 +45,6 @@ class SpectralCube(Scene):
         InconsistentArguments
            Errors when an incorrect combination of arguments is passed.
         """
-
-        # Initilise the parent class
-        Scene.__init__(self, resolution=resolution,
-                       npix=npix, fov=fov, sed=sed,
-                       super_resolution_factor=super_resolution_factor)
 
         # Set up the data cube dimensions
         self.spectral_resolution = sed.lam.size
@@ -173,13 +162,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         SpectralCube.__init__(
             self,
             sed=sed,
-            resolution=resolution,
             npix=npix,
-            fov=fov,
-            depths=depths,
-            apertures=apertures,
-            snrs=snrs,
-            super_resolution_factor=super_resolution_factor,
         )
 
         # Lets get the right SED from the object
@@ -319,6 +302,7 @@ class ParametricSpectralCube(ParametricScene, SpectralCube):
         npix=None,
         fov=None,
         snrs=None,
+        rest_frame=True,
     ):
 
         # Initilise the parent class
@@ -333,10 +317,5 @@ class ParametricSpectralCube(ParametricScene, SpectralCube):
         SpectralCube.__init__(
             self,
             sed=sed,
-            resolution=resolution,
             npix=npix,
-            fov=fov,
-            depths=depths,
-            apertures=apertures,
-            snrs=snrs,
         )
