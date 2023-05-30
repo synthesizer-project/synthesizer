@@ -262,7 +262,7 @@ class ParticleScene(Scene):
         centre=None,
         super_resolution_factor=None,
         cosmo=None,
-        rest_frame=rest_frame,
+        rest_frame=True,
     ):
         """
         Intialise the ParticleObservation.
@@ -574,7 +574,7 @@ class ParametricScene(Scene):
         fov=None,
         sed=None,
         super_resolution_factor=None,
-        rest_frame=rest_frame,
+        rest_frame=True,
     ):
         """
         Intialise the ParametricObservation.
