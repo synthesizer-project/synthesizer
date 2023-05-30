@@ -132,6 +132,7 @@ class Image():
         self.imgs = {}
         self.imgs_psf = {}
         self.imgs_noise = {}
+        self.rgb_img = None
 
         # Set up a list to hold combined images.
         self.combined_imgs = []
