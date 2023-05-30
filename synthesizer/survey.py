@@ -11,6 +11,7 @@ from synthesizer.galaxy.parametric import ParametricGalaxy
 from synthesizer.utils import m_to_flux, flux_to_luminosity
 from synthesizer.sed import Sed
 from synthesizer.igm import Inoue14
+from synthesizer.utils import m_to_fnu
 
 
 class Instrument:
@@ -309,11 +310,11 @@ class Survey:
         for inst in self.instruments:
             if isinstance(self.instruments[inst].depths, dict):
                 for key in self.instruments[inst].depths:
-                    self.instruments[inst].depths[key] = m_to_flux(
+                    self.instruments[inst].depths[key] = m_to_fnu(
                         self.instruments[inst].depths[key]
                     )
             else:
-                self.instruments[inst].depths = m_to_flux(
+                self.instruments[inst].depths = m_to_fnu(
                     self.instruments[inst].depths
                 )
 
