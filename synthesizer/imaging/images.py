@@ -388,6 +388,12 @@ class Image():
 
             self.img_psf = self._get_psfed_single_img(self.img, psfs)
 
+            # Downsample the original image back to native resolution.
+            self.img = self.resample_img(
+                self.img,
+                1 / self.super_resolution_factor
+            )
+
             # Now that we are done with the convolution return the original
             # images to the native resolution.
             self._super_to_native_resolution()
@@ -407,6 +413,12 @@ class Image():
             # Apply the PSF to this image
             self.imgs_psf[f.filter_code] = self._get_psfed_single_img(
                 self.imgs[f.filter_code], psf
+            )
+
+            # Downsample the image back to native resolution.
+            self.imgs[f.filter_code] = self.resample_img(
+                self.imgs[f.filter_code],
+                1 / self.super_resolution_factor
             )
 
         # Now that we are done with the convolution return the original images
@@ -984,6 +996,7 @@ class ParticleImage(ParticleScene, Image):
                 self.imgs[f.filter_code] = f.apply_filter(
                     self.ifu, self.ifu_obj.sed.nu
                 )
+
             else:
                 self.imgs[f.filter_code] = f.apply_filter(
                     self.ifu, self.ifu_obj.sed.nuz
