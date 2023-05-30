@@ -87,6 +87,7 @@ if __name__ == "__main__":
     # Calculate the stars SEDs
     sed = galaxy.generate_particle_spectra(grid, sed_object=True,
                                            spectra_type="stellar")
+    sed.get_fnu(cosmo, stars.redshift, igm=None)
 
     print("Spectra created, took:", time.time() - spectra_start)
 
@@ -177,4 +178,4 @@ if __name__ == "__main__":
     axes[0].set_ylabel("Smoothed")
 
     # Plot the image
-    plt.savefig("plots/flux_in_filters_test.png", bbox_inches="tight", dpi=300)
+    plt.savefig("flux_in_filters_test.png", bbox_inches="tight", dpi=300)
