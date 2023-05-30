@@ -670,12 +670,14 @@ class Image():
         """
 
         # Handle the case where we haven't been passed weights
-        for rgb in enumerate(rgb_filters):
-            for f in rgb_filters[rgb]:
-                weights[f] = 1.0
+        if weights is None:
+            weights = {}
+            for rgb in rgb_filters:
+                for f in rgb_filters[rgb]:
+                    weights[f] = 1.0
 
         # Ensure weights sum to 1.0
-        for rgb in enumerate(rgb_filters):
+        for rgb in rgb_filters:
             w_sum = 0
             for f in rgb_filters[rgb]:
                 w_sum += weights[f]
@@ -686,7 +688,7 @@ class Image():
         rgb_img = np.zeros((self.npix, self.npix, 3), dtype=np.float64)
 
         for rgb_ind, rgb in enumerate(rgb_filters):
-            for f in rgb:
+            for f in rgb_filters[rgb]:
                 if img_type == "standard":
                     rgb_img[:, :, rgb_ind] += weights[f] * self.imgs[f]
                 elif img_type == "psf":
@@ -704,7 +706,7 @@ class Image():
         return rgb_img
 
     def plot_rgb_image(self, rgb_filters, img_type="intrinsic", weights=None,
-                 show=False):
+                       show=False, vmin=None, vmax=None):
         """
         Plot an RGB image.
 
@@ -732,14 +734,22 @@ class Image():
             The figure object containing the plot
         matplotlib.pyplot.figure.axis
             The axis object containing the image.
+        array_like (float)
+            The rgb image array itself.
         """
 
+        # If the image hasn't been made, make it
         if self.rgb_img is None:
-            self.make_rgb_image(rgb_filters)
+            _ = self.make_rgb_image(rgb_filters)
+
+        # Set up minima and maxima
+        if vmin is None:
+            vmin = np.min(self.rgb_img)
+        if vmax is None:
+            vmax = np.max(self.rgb_img)
 
         # Normalise the image.
-        # TODO: allow the user to state minima and maxima
-        rgb_img /= np.max(rgb_img)
+        rgb_img = (self.rgb_img - vmin) / (vmax - vmin)
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -749,7 +759,7 @@ class Image():
         if show:
             plt.show()
 
-        return fig, ax
+        return fig, ax, rgb_img
 
 
 class ParticleImage(ParticleScene, Image):
