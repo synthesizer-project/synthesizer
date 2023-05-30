@@ -617,7 +617,7 @@ class Filter:
             self.lam, self.original_lam, self.original_t, left=0.0, right=0.0
         )
 
-    def apply_filter(self, arr, xs=None):
+    def apply_filter(self, arr):
         """
         Apply this filter's transmission curve to an arbitrary dimensioned
         array returning the sum of the array convolved with the filter
@@ -640,39 +640,30 @@ class Filter:
         """
 
         # Check dimensions are ok
-        if xs is None:
-            if self.lam.size != arr.shape[-1]:
-                raise ValueError(
-                    "Final dimension of array did not match "
-                    "wavelength array size (arr.shape[-1]=%d, "
-                    "transmission.size=%d)" % (arr.shape[-1], self.lam.size)
-                )
-        else:
-            if xs.size != arr.shape[-1]:
-                raise ValueError(
-                    "Final dimension of array did not match "
-                    "wavelength array size (arr.shape[-1]=%d, "
-                    "xs.size=%d)" % (arr.shape[-1], xs.size)
-                )
+        if xs.size != arr.shape[-1]:
+            raise ValueError(
+            "Final dimension of array did not match "
+                "wavelength array size (arr.shape[-1]=%d, "
+                "xs.size=%d)" % (arr.shape[-1], xs.size)
+            )
 
         # Get the mask that removes wavelengths we don't currently care about
         in_band = self.t > 0
 
-        # Multiply the IFU by the filter transmission curve
-        arr_in_band = arr.compress(in_band, axis=-1) * self.t[in_band]
+        # Mask out wavelengths that don't contribute to this band
+        arr_in_band = arr.compress(in_band, axis=-1)
+        xs_in_band = xs[in_band]
+        t_in_band = self.t[in_band]
 
-        # Get the xs in the band, this could be lam or nu.
-        if xs is not None:
-            xs_in_band = xs[in_band]
-        else:
-            xs_in_band = self.lam[in_band]
+        # Multiply the IFU by the filter transmission curve
+        transmission = arr_in_band * t_in_band
 
         # Sum over the final axis to "collect" transmission in this filer
         sum_per_x = integrate.trapezoid(
-            arr_in_band * self.t[in_band] / xs_in_band, xs_in_band, axis=-1
+            transmission / xs_in_band, xs_in_band, axis=-1
         )
         sum_den = integrate.trapezoid(
-            self.t[in_band] / xs_in_band, xs_in_band, axis=-1
+            t_in_band / xs_in_band, xs_in_band, axis=-1
         )
         sum_in_band = sum_per_x / sum_den
 
