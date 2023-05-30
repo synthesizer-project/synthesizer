@@ -43,7 +43,7 @@ if __name__ == '__main__':
     galaxy = Galaxy(sfzh)
 
     # generate spectra using pacman model (complex)
-    sed = galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1)
+    sed = galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1, sed_object=True)
 
     # now calculate the observed frame spectra
     z = 10.  # redshift
@@ -67,4 +67,4 @@ if __name__ == '__main__':
         print(f'{filter}: {flux:.2f}')
 
     # make plot of observed including broadband fluxes (if filter collection object given)
-    # galaxy.plot_observed_spectra(cosmo, z, fc=fc, spectra_to_plot=['total'])
+    galaxy.plot_observed_spectra(cosmo, z, fc=fc, spectra_to_plot=['total'])

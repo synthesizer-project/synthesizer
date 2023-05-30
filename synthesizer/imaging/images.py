@@ -993,7 +993,8 @@ class ParametricImage(ParametricScene, Image):
 
         # If we have a list of filters make an IFU
         if len(filters) > 0:
-            self._ifu_obj = ParametricSpectralCube(sed, resolution, npix, fov)
+            self._ifu_obj = ParametricSpectralCube(sed, resolution, 
+                                                   npix=npix, fov=fov)
 
         self.rest_frame = rest_frame
 
