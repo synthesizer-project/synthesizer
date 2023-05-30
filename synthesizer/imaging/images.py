@@ -753,6 +753,7 @@ class ParticleImage(ParticleScene, Image):
             centre=centre,
             super_resolution_factor=super_resolution_factor,
             cosmo=cosmo,
+            rest_frame=rest_frame,
         )
         Image.__init__(
             self,
@@ -993,6 +994,7 @@ class ParametricImage(ParametricScene, Image):
             fov=fov,
             sed=sed,
             super_resolution_factor=super_resolution_factor,
+            rest_frame=rest_frame,
         )
         Image.__init__(
             self,
