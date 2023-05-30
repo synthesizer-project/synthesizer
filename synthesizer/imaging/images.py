@@ -72,7 +72,6 @@ class Image():
     def __init__(
         self,
         filters=(),
-        sed=None,
         psfs=None,
         depths=None,
         apertures=None,
@@ -485,7 +484,10 @@ class Image():
         noise_arr *= np.random.randn(self.npix, self.npix)
 
         # Add the noise to the image
-        noisy_img = img + noise_arr.value
+        if isinstance(noise_arr, np.ndarray):
+            noisy_img = img + noise_arr
+        else:
+            noisy_img = img + noise_arr.value
 
         return noisy_img, weight_map, noise_arr
 
@@ -494,6 +496,10 @@ class Image():
         Make and add a noise array to each image in this Image object. The
         noise is defined by either a depth and signal-to-noise in an aperture
         or by an explicit noise pixel value.
+
+        Note that the noise will be applied to the psfed images by default
+        if they exist (those stored in self.imgs_psf). If those images do not
+        exist then it will be applied to the standard images in self.imgs.
         Parameters
         ----------
         noises : float/dict
@@ -623,6 +629,7 @@ class Image():
                 noise = noises
 
             # Calculate and apply noise to this image
+            if len(self.imgs_psf) > 
             noise_tuple = self._get_noisy_single_img(
                 self.imgs_psf[f.filter_code], depth, snr, aperture, noise
             )
@@ -633,6 +640,103 @@ class Image():
             self.noise_arrs[f.filter_code] = noise_tuple[2]
 
         return self.imgs_noise, self.weight_maps, self.noise_arrs
+
+    def make_rgb_image(self, rgb_filters, img_type="intrinsic", weights=None):
+        """
+        Makes an rgb image of specified filters.
+        
+        Parameters
+        ----------
+        r_filters : dict (str: array_like (str))
+            A dictionary containing lists of each filter to combine to create
+            the red, green, and blue channels. e.g. {"R": "Webb/NIRCam.F277W",
+            "G": "Webb/NIRCam.F150W", "B": "Webb/NIRCam.F090W"}.
+        img_type : str
+            The type of images to combine. Can be "standard" for noiseless
+            and psfless images (self.imgs), "psf" for images with psf
+            (self.imgs_psf), or "noise" for images with noise \
+            (self.imgs_noise).
+        weights : dict (str: array_like (str))
+            A dictionary of weights for each filter. Defaults to equal weights.
+        Returns
+        ----------
+        array_like (float)
+            The image array itself
+        """
+
+        # Handle the case where we haven't been passed weights
+        for rgb in enumerate(rgb_filters):
+            for f in rgb_filters[rgb]:
+                weights[f] = 1.0
+
+        # Set up the rgb image
+        rgb_img = np.zeros((self.npix, self.npix, 3), dtype=np.float64)
+
+        for rgb_ind, rgb in enumerate(rgb_filters):
+            for f in rgb:
+                if img_type == "standard":
+                    rgb_img[:, :, rgb_ind] += weights[f] * self.imgs[f]
+                elif img_type == "psf":
+                    rgb_img[:, :, rgb_ind] += weights[f] * self.imgs_psf[f]
+                elif img_type == "noise":
+                    rgb_img[:, :, rgb_ind] += weights[f] * self.imgs_noise[f]
+                else:
+                    raise exceptions.UnknownImageType(
+                        "img_type can be 'standard', 'psf', or 'noise' "
+                        "not '%s'" % img_type
+                    )
+
+        self.rgb_img = rgb_img
+
+        return rgb_img
+
+    def plot_rgb(self, rgb_filters, img_type="intrinsic", weights=None,
+                 show=False):
+        """
+        Plot an RGB image.
+
+        If one has not already been created one will be made.
+        
+        Parameters
+        ----------
+        r_filters : dict (str: array_like (str))
+            A dictionary containing lists of each filter to combine to create
+            the red, green, and blue channels. e.g. {"R": "Webb/NIRCam.F277W",
+            "G": "Webb/NIRCam.F150W", "B": "Webb/NIRCam.F090W"}.
+        img_type : str
+            The type of images to combine. Can be "standard" for noiseless
+            and psfless images (self.imgs), "psf" for images with psf
+            (self.imgs_psf), or "noise" for images with noise \
+            (self.imgs_noise).
+        weights : dict (str: array_like (str))
+            A dictionary of weights for each filter. Defaults to equal weights.
+        show : bool
+            Whether to show the plot or not (Default False).
+
+        Returns
+        ----------
+        matplotlib.pyplot.figure
+            The figure object containing the plot
+        matplotlib.pyplot.figure.axis
+            The axis object containing the image.
+        """
+
+        if self.rgb_img is None:
+            self.make_rgb_image(rgb_filters)
+
+        # Normalise the image.
+        # TODO: allow the user to state minima and maxima
+        rgb_img /= np.max(rgb_img)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.imshow(rgb_img, origin="lower", interpolation="nearest")
+        ax.axis("off")
+
+        if show:
+            plt.show()
+
+        return fig, ax
 
 
 class ParticleImage(ParticleScene, Image):
@@ -671,7 +775,6 @@ class ParticleImage(ParticleScene, Image):
             rest_frame=True,
             redshift=None,
             cosmo=None,
-            igm=None,
             psfs=None,
             depths=None,
             apertures=None,
@@ -744,7 +847,6 @@ class ParticleImage(ParticleScene, Image):
         Image.__init__(
             self,
             filters=filters,
-            sed=sed,
             psfs=psfs,
             depths=depths,
             apertures=apertures,
@@ -761,7 +863,6 @@ class ParticleImage(ParticleScene, Image):
                 stars=self.stars,
                 rest_frame=rest_frame,
                 cosmo=cosmo,
-                igm=igm,
                 super_resolution_factor=super_resolution_factor,
             )
 
@@ -984,7 +1085,6 @@ class ParametricImage(ParametricScene, Image):
             npix=npix,
             fov=fov,
             filters=filters,
-            sed=sed,
             psfs=psfs,
             depths=depths,
             apertures=apertures,
@@ -1137,37 +1237,4 @@ class ParametricImage(ParametricScene, Image):
 
         print(ascii_img)
 
-    def make_rgb_image(self, rgb_filters, update=True):
-        """
-        Make an rgb image
-        Parameters
-        ----------
-        filter_code : str
-            rgb_filters
-        """
 
-        rgb_img = np.array(
-            [self.imgs[filter_code] for filter_code in rgb_filters]
-        ).T
-
-        if update:
-            self.rgb_img = rgb_img
-
-        return rgb_img
-
-    def plot_rgb(self, rgb_filters):
-        """
-        Make a simple rgb plot
-        Parameters
-        ----------
-        filter_code : str
-            rgb_filters
-        """
-
-        rgb_img = self.make_rgb_image(rgb_filters)
-
-        rgb_img /= np.max(rgb_img)
-
-        plt.figure()
-        plt.imshow(rgb_img, origin="lower", interpolation="nearest")
-        plt.show()

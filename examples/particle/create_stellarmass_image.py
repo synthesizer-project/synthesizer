@@ -44,4 +44,4 @@ img = galaxy.create_stellarmass_hist(resolution, npix=100)
 
 # Plot the image
 plt.imshow(img)
-plt.savefig("plots/stellarmass_test.png")
+plt.savefig("stellarmass_test.png")
