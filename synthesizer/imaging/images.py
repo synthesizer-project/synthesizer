@@ -641,7 +641,7 @@ class Image():
 
         return self.imgs_noise, self.weight_maps, self.noise_arrs
 
-    def make_rgb_image(self, rgb_filters, img_type="intrinsic", weights=None):
+    def make_rgb_image(self, rgb_filters, img_type="standard", weights=None):
         """
         Makes an rgb image of specified filters.
         
