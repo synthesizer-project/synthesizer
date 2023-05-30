@@ -669,6 +669,14 @@ class Image():
             for f in rgb_filters[rgb]:
                 weights[f] = 1.0
 
+        # Ensure weights sum to 1.0
+        for rgb in enumerate(rgb_filters):
+            w_sum = 0
+            for f in rgb_filters[rgb]:
+                w_sum += weights[f]
+            for f in rgb_filters[rgb]:
+                weights[f] /= w_sum
+
         # Set up the rgb image
         rgb_img = np.zeros((self.npix, self.npix, 3), dtype=np.float64)
 
