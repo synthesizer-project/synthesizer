@@ -8,10 +8,9 @@ from astropy.cosmology import Planck18
 import synthesizer.exceptions as exceptions
 from synthesizer.galaxy.particle import ParticleGalaxy
 from synthesizer.galaxy.parametric import ParametricGalaxy
-from synthesizer.utils import m_to_flux, flux_to_luminosity
+from synthesizer.utils import m_to_fnu, flux_to_luminosity
 from synthesizer.sed import Sed
 from synthesizer.igm import Inoue14
-from synthesizer.utils import m_to_fnu
 
 
 class Instrument:
