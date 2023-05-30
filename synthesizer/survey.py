@@ -518,7 +518,6 @@ class Survey:
             kernel_func=None,
             rest_frame=False,
             cosmo=None,
-            igm=None,
     ):
         """
         Parameters
@@ -556,7 +555,6 @@ class Survey:
                     kernel_func=kernel_func,
                     rest_frame=rest_frame,
                     cosmo=cosmo,
-                    igm=igm,
                     super_resolution_factor=self.super_resolution_factor,
                 )
 
