@@ -18,3 +18,4 @@ stop_efrac: -2  # limiting ratio of electron to H densities
 z: 0.0  # redshift
 geometry: spherical
 grains: true # include grains
+resolution: 1.0 # energy resolution relative to the default
