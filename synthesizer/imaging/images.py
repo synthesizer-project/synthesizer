@@ -714,7 +714,7 @@ class Image():
 
         return rgb_img
 
-    def plot_rgb_image(self, rgb_filters, img_type="intrinsic", weights=None,
+    def plot_rgb_image(self, rgb_filters, img_type="standard", weights=None,
                        show=False, vmin=None, vmax=None):
         """
         Plot an RGB image.
@@ -749,7 +749,9 @@ class Image():
 
         # If the image hasn't been made, make it
         if self.rgb_img is None:
-            _ = self.make_rgb_image(rgb_filters)
+            _ = self.make_rgb_image(rgb_filters,
+                                    img_type=img_type,
+                                    weights=weights)
 
         # Set up minima and maxima
         if vmin is None:
