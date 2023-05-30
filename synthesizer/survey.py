@@ -289,12 +289,12 @@ class Survey:
         for inst in self.instruments:
             if isinstance(self.instruments[inst].depths, dict):
                 for key in self.instruments[inst].depths:
-                    flux = m_to_flux(self.instruments[inst].depths[key])
+                    flux = m_to_fnu(self.instruments[inst].depths[key])
                     self.instruments[inst].depths[key] = flux_to_luminosity(
                         flux, self.cosmo, redshift
                     )
             else:
-                flux = m_to_flux(self.instruments[inst].depths)
+                flux = m_to_fnu(self.instruments[inst].depths)
                 self.instruments[inst].depths = flux_to_luminosity(
                     flux, self.cosmo, redshift
                 )
