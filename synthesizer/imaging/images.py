@@ -18,7 +18,7 @@ from synthesizer.imaging.spectral_cubes import (
 )
 
 
-class Image(Scene):
+class Image():
     """
     The generic Image object, containing attributes and methods for calculating
     and manipulating images.
@@ -71,16 +71,12 @@ class Image(Scene):
 
     def __init__(
         self,
-        resolution,
-        npix=None,
-        fov=None,
         filters=(),
         sed=None,
         psfs=None,
         depths=None,
         apertures=None,
         snrs=None,
-        super_resolution_factor=None,
     ):
         """
         Intialise the Image.
@@ -118,16 +114,6 @@ class Image(Scene):
         # Sanitize inputs
         if filters is None:
             filters = ()
-
-        # Initilise the parent class
-        Scene.__init__(
-            self,
-            resolution=resolution,
-            npix=npix,
-            fov=fov,
-            sed=sed,
-            super_resolution_factor=super_resolution_factor,
-        )
 
         # Define attributes to hold the PSF information
         self.psfs = psfs
@@ -757,16 +743,12 @@ class ParticleImage(ParticleScene, Image):
         )
         Image.__init__(
             self,
-            resolution=resolution,
-            npix=npix,
-            fov=fov,
             filters=filters,
             sed=sed,
             psfs=psfs,
             depths=depths,
             apertures=apertures,
             snrs=snrs,
-            super_resolution_factor=super_resolution_factor,
         )
 
         # If we have a list of filters make an IFU
