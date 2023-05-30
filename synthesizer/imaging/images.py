@@ -702,7 +702,7 @@ class Image():
 
         return rgb_img
 
-    def plot_rgb(self, rgb_filters, img_type="intrinsic", weights=None,
+    def plot_rgb_image(self, rgb_filters, img_type="intrinsic", weights=None,
                  show=False):
         """
         Plot an RGB image.
