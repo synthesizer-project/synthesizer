@@ -629,10 +629,14 @@ class Image():
                 noise = noises
 
             # Calculate and apply noise to this image
-            if len(self.imgs_psf) > 
-            noise_tuple = self._get_noisy_single_img(
-                self.imgs_psf[f.filter_code], depth, snr, aperture, noise
-            )
+            if len(self.imgs_psf) > 0:
+                noise_tuple = self._get_noisy_single_img(
+                    self.imgs_psf[f.filter_code], depth, snr, aperture, noise
+                )
+            else:
+                noise_tuple = self._get_noisy_single_img(
+                    self.imgs[f.filter_code], depth, snr, aperture, noise
+                )
 
             # Store the resulting noisy image, weight, and noise arrays
             self.imgs_noise[f.filter_code] = noise_tuple[0]
