@@ -168,6 +168,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             positions=positions,
             super_resolution_factor=super_resolution_factor,
             cosmo=cosmo,
+            rest_frame=rest_frame,
         )
         SpectralCube.__init__(
             self,
@@ -185,7 +186,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         self.sed_values = None
         if rest_frame:
 
-            # Get the rest frame SED (this is both sed.fnu0 and sed.lnu)
+            # Get the rest frame SED
             self.sed_values = self.sed._lnu
 
         elif self.stars.redshift is not None and self.cosmo is not None:
@@ -322,7 +323,12 @@ class ParametricSpectralCube(ParametricScene, SpectralCube):
 
         # Initilise the parent class
         ParametricScene.__init__(
-            self, resolution=resolution, npix=npix, fov=fov, sed=sed
+            self,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            sed=sed,
+            rest_frame=rest_frame,
         )
         SpectralCube.__init__(
             self,
