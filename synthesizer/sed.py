@@ -235,7 +235,7 @@ class Sed:
         if igm:
             self._fnu *= igm.T(z, self.lamz)
 
-    def get_broadband_fluxes(self, fc):  # broad band flux/nJy
+    def get_broadband_fluxes(self, fc, verbose=True):  # broad band flux/nJy
         """
         Calculate broadband luminosities using a FilterCollection object
 
@@ -257,8 +257,9 @@ class Sed:
             # and the spectral grid are the same array
 
             if not np.array_equal(f.lam * (1. + self.redshift) , self.lamz):
-                print(('WARNING: filter wavelength grid is not '
-                       'the same as the SED wavelength grid.'))
+                if verbose:
+                    print(('WARNING: filter wavelength grid is not '
+                           'the same as the SED wavelength grid.'))
 
             # Calculate broadband fluxes by multiplying the observed spetra by
             # the filter transmission curve and dividing by the normalisation

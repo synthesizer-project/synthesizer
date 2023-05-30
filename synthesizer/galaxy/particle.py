@@ -129,11 +129,14 @@ class ParticleGalaxy(BaseGalaxy):
         self.gas = Gas(masses, metals, **kwargs)
         self.calculate_integrated_gas_properties()
 
-    def _prepare_args(self, grid, fesc, spectra_type):
+    def _prepare_args(self, grid, fesc, spectra_type, mask=None):
         """
         A method to prepare the arguments for SED computation with the C
         functions.
         """
+
+        if mask is None:
+            mask = np.ones(self.stars.nparticles, dtype=bool)
 
         # Set up the inputs to the C function.
         grid_props = [
@@ -142,12 +145,12 @@ class ParticleGalaxy(BaseGalaxy):
         ]
         part_props = [
             np.ascontiguousarray(
-                self.stars.log10ages, dtype=np.float64),
+                self.stars.log10ages[mask], dtype=np.float64),
             np.ascontiguousarray(
-                self.stars.log10metallicities, dtype=np.float64),
+                self.stars.log10metallicities[mask], dtype=np.float64),
         ]
         part_mass = np.ascontiguousarray(
-            self.stars.initial_masses, dtype=np.float64)
+            self.stars.initial_masses[mask], dtype=np.float64)
         npart = np.int32(part_mass.size)
         nlam = np.int32(grid.spectra[spectra_type].shape[-1])
 
@@ -181,15 +184,10 @@ class ParticleGalaxy(BaseGalaxy):
         return_wavelength=False
     ):
         """
-        Calculate intrinsic spectra from stellar particles. The stellar SED
-        component is always created, the intrinsic SED component is only
-        computed if the "total" grid is available form the passed grid.
 
-        Either an integrated spectra or per-stellar particle SED can be
-        requested. If an SED is requested then the integrated spectra is
-        automatically calculated anyway.
+        TODO: DEPRECATED, left to avoid compatibility issues (for now)
 
-        TODO: need to be able to apply masks to get young and old stars.
+        Calculate spectra from stellar particles.
 
         Parameters
         ----------
@@ -236,11 +234,16 @@ class ParticleGalaxy(BaseGalaxy):
             raise MissingSpectraType(
                 "The Grid does not contain the key '%s'" % spectra_type
             )
+        
+        # get particle age masks
+        mask = self._get_masks(young, old)
 
         from ..extensions.csed import compute_integrated_sed
 
         # Prepare the arguments for the C function.
-        args = self._prepare_args(grid, fesc=fesc, spectra_type=spectra_type)
+        args = self._prepare_args(grid, fesc=fesc, 
+                                  spectra_type=spectra_type,
+                                  mask=mask)
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         spec = compute_integrated_sed(*args)
@@ -255,7 +258,329 @@ class ParticleGalaxy(BaseGalaxy):
                 return grid.lam, spec
             else:
                 return spec
+            
+    def generate_lnu(
+                    self,
+                    grid,
+                    spectra_name,
+                    fesc=0.0,
+                    young=False,
+                    old=False,
+                    verbose=False
+    ):
 
+        # Ensure we have a total key in the grid. If not error.
+        if spectra_name not in list(grid.spectra.keys()):
+            raise MissingSpectraType(
+                "The Grid does not contain the key '%s'" % spectra_name
+            )
+        
+        # get particle age masks
+        mask = self._get_masks(young, old)
+
+        if np.sum(mask) == 0:
+            if verbose:
+                print('Age mask has filtered out all particles')
+
+            return np.zeros(len(grid.lam))
+
+        from ..extensions.csed import compute_integrated_sed
+
+        # Prepare the arguments for the C function.
+        args = self._prepare_args(grid, fesc=fesc, 
+                                  spectra_type=spectra_name,
+                                  mask=mask)
+
+        # Get the integrated spectra in grid units (erg / s / Hz)
+        spec = compute_integrated_sed(*args)
+
+        return spec
+        
+        # # Store the spectra in the galaxy
+        # self.spectra[spectra_name] = Sed(grid.lam, spec)
+
+        # if sed_object:
+        #     return self.spectra[spectra_name]
+        # else:
+        #     if return_wavelength:
+        #         return grid.lam, spec
+        #     else:
+        #         return spec
+
+    def get_stellar_spectra(self, grid, 
+                            update=True, 
+                            sed_object=True,
+                            young=False,
+                            old=False,
+                            return_wavelength=False):
+
+        lnu = self.generate_lnu(grid, 'stellar', 
+                                young=young,
+                                old=old)
+
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra['stellar'] = sed
+
+        if sed_object:
+            return sed
+        else:
+            if return_wavelength:
+                return grid.lam, lnu
+            else:
+                return lnu
+
+    def get_nebular_spectra(self, grid, fesc=0.0, 
+                            update=True,
+                            young=False,
+                            old=False,
+                            sed_object=True,
+                            return_wavelength=False):
+
+        lnu = self.generate_lnu(grid, 'nebular',
+                                young=young,
+                                old=old)
+
+        lnu *= (1-fesc)
+
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra['nebular'] = sed
+
+        if sed_object:
+            return sed
+        else:
+            if return_wavelength:
+                return grid.lam, lnu
+            else:
+                return lnu
+
+    def get_intrinsic_spectra(self, grid, fesc=0.0, 
+                              update=True,
+                              young=False,
+                              old=False,
+                              sed_object=True,
+                              return_wavelength=False):
+
+        stellar = self.get_stellar_spectra(grid, update=update,
+                                           young=young,
+                                           old=old)
+        
+        nebular = self.get_nebular_spectra(grid, fesc, 
+                                           update=update,
+                                           young=young,
+                                           old=old)
+
+        lnu = stellar._lnu + nebular._lnu
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra['intrinsic'] = sed
+
+        if sed_object:
+            return sed
+        else:
+            if return_wavelength:
+                return grid.lam, lnu
+            else:
+                return lnu
+
+    def get_screen_spectra(self, grid, fesc=0.0, tauV=None, 
+                           dust_curve=power_law({'slope': -1.}), 
+                           update=True,
+                           young=False,
+                           old=False,
+                           sed_object=True,
+                           return_wavelength=False):
+        
+        # --- begin by calculating intrinsic spectra
+        intrinsic = self.get_intrinsic_spectra(grid, 
+                                               update=update, 
+                                               fesc=fesc,
+                                               young=young,
+                                               old=old)
+
+        if tauV:
+            T = dust_curve.attenuate(tauV, grid.lam)
+        else:
+            T = 1.0
+
+        lnu = T * intrinsic._lnu
+        sed = Sed(grid.lam, T * intrinsic._lnu)
+
+        if update:
+            self.spectra['attenuated'] = sed
+
+        if sed_object:
+            return sed
+        else:
+            if return_wavelength:
+                return grid.lam, lnu
+            else:
+                return lnu
+
+    def _get_masks(self, young=None, old=None):
+        """
+        Get masks for which components we are handling, if a sub-component
+        has not been requested it's necessarily all particles.
+        """
+
+        if young and old:
+            raise exceptions.InconsistentParameter(
+                "Galaxy sub-component can not be simultaneously young and old"
+            )
+        if young:
+            s = self.stars.log10ages <= np.log10(young)
+        elif old:
+            s = self.stars.log10ages > np.log10(old)
+        else:
+            s = np.ones(self.n_starparticles, dtype=bool)
+
+        return s
+
+    def get_CharlotFall_spectra(self, grid, 
+                                tauV_ISM, 
+                                tauV_BC,
+                                alpha_ISM=-0.7, 
+                                alpha_BC=-1.3,
+                                intrinsic_young=None, 
+                                intrinsic_old=None,
+                                save_young_and_old=False, 
+                                sed_object=True,
+                                update=True,
+                                return_wavelength=False):
+        """
+        Calculates dust attenuated spectra assuming the Charlot & Fall (2000)
+        dust model. In this model young star particles are embedded in a dusty
+        birth cloud, and thus feel more dust attenuation.
+
+        Parameters
+        ----------
+        grid : obj (Grid)
+            The spectral frid
+        tauV_ISM: float
+            numerical value of dust attenuation due to the ISM in the V-band
+        tauV_BC: float
+            numerical value of dust attenuation due to the BC in the V-band
+        alpha_ISM: float
+            slope of the ISM dust curve, -0.7 in MAGPHYS
+        alpha_BC: float
+            slope of the BC dust curve, -1.3 in MAGPHYS
+        save_young_and_old: boolean
+            flag specifying whether to save young and old
+
+        Returns
+        -------
+        obj (Sed)
+             A Sed object containing the dust attenuated spectra
+        """
+
+        # _, stellar_sed_young, intrinsic_sed_young = \
+        #         self.generate_intrinsic_spectra(
+        #     grid, update=False, young=1E7, integrated=integrated)
+        # this does not return an Sed object
+        # _, stellar_sed_old, intrinsic_sed_old = \
+        #         self.generate_intrinsic_spectra(
+        # grid, update=False, old=1E7, integrated=integrated)  # this does not
+        # return an Sed object
+
+        intrinsic_sed_young = self.get_intrinsic_spectra(
+            grid, update=False, young=1E7)
+        intrinsic_sed_old = self.get_intrinsic_spectra(
+            grid, update=False, old=1e7)
+
+        if save_young_and_old:
+
+            # if integrated:
+            self.spectra['intrinsic_young'] = intrinsic_sed_young
+            self.spectra['intrinsic_old'] = intrinsic_sed_old
+
+            # else:
+            #     self.spectra_array['intrinsic_young'] = Sed(
+            #         grid.lam, intrinsic_sed_young)
+            #     self.spectra_array['intrinsic_old'] = Sed(
+            #         grid.lam, intrinsic_sed_old)
+            #     self.spectra['intrinsic_young'] = Sed(
+            #         grid.lam, np.sum(intrinsic_sed_young))
+            #     self.spectra['intrinsic_old'] = Sed(
+            #         grid.lam, np.sum(intrinsic_sed_old))
+
+        T_ISM = power_law({'slope': alpha_ISM}).attenuate(tauV_ISM, grid.lam)
+        T_BC = power_law({'slope': alpha_BC}).attenuate(tauV_BC, grid.lam)
+
+        T_young = T_ISM * T_BC
+        T_old = T_ISM
+
+        lnu_young = intrinsic_sed_young.lnu * T_young
+        lnu_old = intrinsic_sed_old.lnu * T_old
+
+        if save_young_and_old:
+
+            # if integrated:
+            self.spectra['attenuated_young'] = Sed(grid.lam, lnu_young)
+            self.spectra['attenuated_old'] = Sed(grid.lam, lnu_old)
+
+            # else:
+            #     self.spectra_array['attenuated_young'] = Sed(
+            #         grid.lam, sed_young)
+            #     self.spectra_array['attenuated_old'] = Sed(grid.lam, sed_old)
+            #     self.spectra['attenuated_young'] = Sed(
+            #         grid.lam, np.sum(sed_young))
+            #     self.spectra['attenuated_old'] = \
+            #         Sed(grid.lam, np.sum(sed_old))
+
+        lnu = lnu_young + lnu_old
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra['attenuated'] = sed
+        
+        if sed_object:
+            return sed
+        else:
+            if return_wavelength:
+                return grid.lam, lnu
+            else:
+                return lnu
+
+    def calculate_los_tauV(self, update=True):
+        """
+        Calculate tauV for each star particle based on the distribution of
+        star/gas particles
+        """
+
+        # by default should update self.stars
+        
+        pass
+
+    def apply_los(self, tauV, 
+                  spectra_type,
+                  dust_curve=power_law({'slope': -1.}),
+                  integrated=True, sed_object=True):
+        """
+        Generate
+        tauV: V-band optical depth for every star particle
+        dust_curve: instance of the dust class
+        """
+
+        T = np.outer(tauV, dust_curve.T(self.lam))
+
+        # need exception
+        # if not self.intrinsic_lum_array:
+        #     print('Must generate spectra for individual star particles')
+
+        # these two should have the same shape so should work?
+        sed = self.spectra_array[spectra_type] * T
+        self.spectra_array['attenuated'] = Sed(self.lam, sed)
+        self.spectra['attenuated'] = Sed(self.lam, np.sum(sed, axis=0))
+
+        if integrated:
+            return self.spectra['attenuated']
+        else:
+            return self.spectra_array['attenuated']
+        
     def generate_particle_spectra(
         self,
         grid,
@@ -270,7 +595,7 @@ class ParticleGalaxy(BaseGalaxy):
         """
         Calculate intrinsic spectra for all *individual* stellar particles.
         The stellar SED component is always created, the intrinsic SED
-        component is only computed if the "total" grid is available form
+        component is only computed if the "total" grid is available from
         the passed grid.
 
         TODO: need to be able to apply masks to get young and old stars.
@@ -288,7 +613,7 @@ class ParticleGalaxy(BaseGalaxy):
         old : bool
             Are we masking for only old stars?
         sed_object : bool
-            Flag for whether to retun an Sed object, or the individual
+            Flag for whether to return an Sed object, or the individual
             numpy arrays
         return wavelength : bool
             if sed_object==False, Flag for whether to return grid wavelength
@@ -334,198 +659,6 @@ class ParticleGalaxy(BaseGalaxy):
                 return grid.lam, spec_arr
             else:
                 return spec_arr
-
-    def _get_masks(self, young=None, old=None):
-        """
-        Get masks for which components we are handling, if a sub-component
-        has not been requested it's necessarily all particles.
-        """
-
-        if young and old:
-            raise exceptions.InconsistentParameter(
-                "Galaxy sub-component can not be simultaneously young and old"
-            )
-        if young:
-            s = self.stars.log10ages <= np.log10(young)
-        elif old:
-            s = self.stars.log10ages > np.log10(old)
-        else:
-            s = np.ones(self.n_starparticles, dtype=bool)
-
-        return s
-
-    def calculate_los_tauV(self, update=True):
-        """
-        Calculate tauV for each star particle based on the distribution of
-        star/gas particles
-        """
-
-        # by default should update self.stars
-
-    def apply_screen(self, tauV,
-                     dust_curve=power_law({'slope': -1.}),
-                     sed_object=True, update=True,
-                     intrinsic_lum=None, lam=None):
-        """
-        Get Sed object for intrinsic spectrum of individual star particles or
-        entire galaxy
-
-        Args
-        tauV: numerical value of dust attenuation in the V-band
-        dust_curve: instance of dust class
-        """
-
-        if intrinsic_lum is None:
-            if 'intrinsic' not in self.spectra:
-                raise ValueError(('No intrinsic luminosity provided, and'
-                                  ' no array previously calculated for this '
-                                  'galaxy object in `self.spectra`'))
-
-            intrinsic_lum = self.spectra['intrinsic'].lnu
-            lam = self.spectra['intrinsic'].lam
-        else:
-            if lam is None:
-                raise ValueError(('Must provide a wavelength `lam`'
-                                  ' if  `intrinsic_lum` provided'))
-
-        # T = np.exp(-tauV) * dust_curve.tau(lam)
-        T = dust_curve.attenuate(tauV, lam)
-        _sed = intrinsic_lum * T
-        sed = Sed(lam.value, lnu=_sed.value)
-
-        if update:
-            self.spectra['attenuated'] = sed
-
-        if sed_object:
-            return sed
-        else:
-            return _sed
-
-        # if integrated:
-        #     return sed
-        # else:
-        #     sed_array = Sed(self.lam, self.intrinsic_lum_array * T)
-        #     self.spectra_array['attenuated'] = sed_array
-        #     return sed_array
-
-    def apply_charlot_fall_00(self, grid, tauV_ISM, tauV_BC,
-                              alpha_ISM=-0.7, alpha_BC=-1.3,
-                              intrinsic_young=None, intrinsic_old=None,
-                              save_young_and_old=False, sed_object=True,
-                              update=True):
-        """
-        Calculates dust attenuated spectra assuming the Charlot & Fall (2000)
-        dust model. In this model young star particles are embedded in a dusty
-        birth cloud, and thus feel more dust attenuation.
-
-        Parameters
-        ----------
-        grid : obj (Grid)
-            The spectral frid
-        tauV_ISM: float
-            numerical value of dust attenuation due to the ISM in the V-band
-        tauV_BC: float
-            numerical value of dust attenuation due to the BC in the V-band
-        alpha_ISM: float
-            slope of the ISM dust curve, -0.7 in MAGPHYS
-        alpha_BC: float
-            slope of the BC dust curve, -1.3 in MAGPHYS
-        save_young_and_old: boolean
-            flag specifying whether to save young and old
-
-        Returns
-        -------
-        obj (Sed)
-             A Sed object containing the dust attenuated spectra
-        """
-
-        # _, stellar_sed_young, intrinsic_sed_young = \
-        #         self.generate_intrinsic_spectra(
-        #     grid, update=False, young=1E7, integrated=integrated)
-        # this does not return an Sed object
-        # _, stellar_sed_old, intrinsic_sed_old = \
-        #         self.generate_intrinsic_spectra(
-        # grid, update=False, old=1E7, integrated=integrated)  # this does not
-        # return an Sed object
-
-        intrinsic_sed_young = self.generate_intrinsic_spectra(
-            grid, update=False, young=1E7)
-        intrinsic_sed_old = self.generate_intrinsic_spectra(
-            grid, update=False, old=1e7)
-
-        if save_young_and_old:
-
-            # if integrated:
-            self.spectra['intrinsic_young'] = intrinsic_sed_young
-            self.spectra['intrinsic_old'] = intrinsic_sed_old
-
-            # else:
-            #     self.spectra_array['intrinsic_young'] = Sed(
-            #         grid.lam, intrinsic_sed_young)
-            #     self.spectra_array['intrinsic_old'] = Sed(
-            #         grid.lam, intrinsic_sed_old)
-            #     self.spectra['intrinsic_young'] = Sed(
-            #         grid.lam, np.sum(intrinsic_sed_young))
-            #     self.spectra['intrinsic_old'] = Sed(
-            #         grid.lam, np.sum(intrinsic_sed_old))
-
-        T_ISM = power_law({'slope': alpha_ISM}).attenuate(tauV_ISM, grid.lam)
-        T_BC = power_law({'slope': alpha_BC}).attenuate(tauV_BC, grid.lam)
-
-        T_young = T_ISM * T_BC
-        T_old = T_ISM
-
-        sed_young = intrinsic_sed_young.lnu * T_young
-        sed_old = intrinsic_sed_old.lnu * T_old
-
-        if save_young_and_old:
-
-            # if integrated:
-            self.spectra['attenuated_young'] = Sed(grid.lam, sed_young)
-            self.spectra['attenuated_old'] = Sed(grid.lam, sed_old)
-
-            # else:
-            #     self.spectra_array['attenuated_young'] = Sed(
-            #         grid.lam, sed_young)
-            #     self.spectra_array['attenuated_old'] = Sed(grid.lam, sed_old)
-            #     self.spectra['attenuated_young'] = Sed(
-            #         grid.lam, np.sum(sed_young))
-            #     self.spectra['attenuated_old'] = \
-            #         Sed(grid.lam, np.sum(sed_old))
-
-        sed = Sed(grid.lam, sed_young + sed_old)
-
-        if update:
-            self.spectra['attenuated'] = sed
-
-        if sed_object:
-            return sed
-        else:
-            return sed_young + sed_old
-
-    def apply_los(self, tauV, dust_curve=power_law({'slope': -1.}),
-                  integrated=True, sed_object=True):
-        """
-        Generate
-        tauV: V-band optical depth for every star particle
-        dust_curve: instance of the dust class
-        """
-
-        T = np.outer(tauV, dust_curve.T(self.lam))
-
-        # need exception
-        # if not self.intrinsic_lum_array:
-        #     print('Must generate spectra for individual star particles')
-
-        # these two should have the same shape so should work?
-        sed = self.intrinsic_lum_array * T
-        self.spectra_array['attenuated'] = Sed(self.lam, sed)
-        self.spectra['attenuated'] = Sed(self.lam, np.sum(sed, axis=0))
-
-        if integrated:
-            return self.spectra['attenuated']
-        else:
-            return self.spectra_array['attenuated']
 
     def stellar_particle_line_luminosities(self, grid):
         """
