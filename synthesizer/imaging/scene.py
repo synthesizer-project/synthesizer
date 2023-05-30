@@ -51,7 +51,7 @@ class Scene:
         fov=None,
         sed=None,
         super_resolution_factor=None,
-        rest_frame=True
+        rest_frame=True,
     ):
         """
         Intialise the Observation.
@@ -262,6 +262,7 @@ class ParticleScene(Scene):
         centre=None,
         super_resolution_factor=None,
         cosmo=None,
+        rest_frame=rest_frame,
     ):
         """
         Intialise the ParticleObservation.
@@ -307,6 +308,7 @@ class ParticleScene(Scene):
             fov=fov,
             sed=sed,
             super_resolution_factor=super_resolution_factor,
+            rest_frame=rest_frame,
         )
 
         # Store the cosmology object
@@ -572,6 +574,7 @@ class ParametricScene(Scene):
         fov=None,
         sed=None,
         super_resolution_factor=None,
+        rest_frame=rest_frame,
     ):
         """
         Intialise the ParametricObservation.
@@ -599,4 +602,5 @@ class ParametricScene(Scene):
             fov,
             sed,
             super_resolution_factor=super_resolution_factor,
+            rest_frame=rest_frame,
         )
