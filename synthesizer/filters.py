@@ -617,7 +617,7 @@ class Filter:
             self.lam, self.original_lam, self.original_t, left=0.0, right=0.0
         )
 
-    def apply_filter(self, arr):
+    def apply_filter(self, arr, xs=None):
         """
         Apply this filter's transmission curve to an arbitrary dimensioned
         array returning the sum of the array convolved with the filter
@@ -627,6 +627,9 @@ class Filter:
         arr :  array-like (float)
             The array to convolve with the filter's transmission curve. Can
             be any dimension but wavelength must be the final axis.
+        xs :  array-like (float)
+            The wavelength/frequency array to integrate with respect to.
+            Defaults to the rest frame wavelength if not provided.
         Returns
         -------
         sum_in_band : array-like (float)
@@ -638,6 +641,10 @@ class Filter:
             If the shape of the transmission and wavelength array differ the
             convolution cannot be done.
         """
+
+        # Handle the default x array to integrate w.r.t
+        if xs is None:
+            xs = self.lam
 
         # Check dimensions are ok
         if xs.size != arr.shape[-1]:
