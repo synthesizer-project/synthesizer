@@ -51,6 +51,7 @@ class Scene:
         fov=None,
         sed=None,
         super_resolution_factor=None,
+        rest_frame=True
     ):
         """
         Intialise the Observation.
@@ -66,8 +67,12 @@ class Scene:
             the image this should have the same units as those coordinates.
         sed : obj (SED)
             An sed object containing the spectra for this observation.
-        survey : obj (Survey)
-            WorkInProgress
+        super_resolution_factor : float 
+            The amount to rescale the image by (>1 increases resolution,
+            <1 decreases resolution).
+        rest_frame : bool
+            Is the observation in the rest frame or observer frame. Default
+            is rest frame (True).
         Raises
         ------
         InconsistentArguments
@@ -109,6 +114,9 @@ class Scene:
         # Do we need to make a super resoution image?
         if self.super_resolution_factor is not None:
             self._native_to_super_resolution()
+
+        # What frame are we observing in?
+        self.rest_frame = rest_frame
 
     def _check_obs_args(self, resolution, fov, npix):
         """
