@@ -38,6 +38,9 @@ from synthesizer.sed import calculate_Q
 
 
 def download_data(synthesizer_data_dir, ver, fcov):
+    """
+        Function access Yggdrasil spectra from website
+    """
 
     filename = F"PopIII{ver}_fcov_{fcov}_SFR_inst_Spectra"
     url = F"https://www.astro.uu.se/~ez/yggdrasil/YggdrasilSpectra/{filename}"
@@ -52,10 +55,10 @@ def download_data(synthesizer_data_dir, ver, fcov):
 
 
 def convertPOPIII(synthesizer_data_dir, ver, fcov):
-    """Convert POPIII outputs for Yggdrasil
-       Wavelength in Angstrom
-       Flux is in erg/s/AA
-
+    """
+        Convert POPIII outputs for Yggdrasil
+        Wavelength in Angstrom
+        Flux is in erg/s/AA
     """
 
     fileloc = download_data(synthesizer_data_dir, ver, fcov)
@@ -88,7 +91,8 @@ def convertPOPIII(synthesizer_data_dir, ver, fcov):
 
     seds = np.zeros((len(ageBins), len(metalBins), lam_num[0]))
 
-    """ Format of the file is 10 header lines at begining followed by
+    """ 
+        Format of the file is 10 header lines at begining followed by
         lam_num lines of wavelength and flux, then one empty line and
         7 string lines giving the ages 
     """
@@ -150,7 +154,7 @@ def make_grid(synthesizer_data_dir, ver, fcov):
     L_nu = L_lam (lam)^2 / c
     c in units of AA/s for conversion
     """
-    
+
     light_speed = c.to(Angstrom/s).value #in AA/s
     spec = out[0]
 
