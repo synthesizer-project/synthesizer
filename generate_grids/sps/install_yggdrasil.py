@@ -32,6 +32,7 @@ import re
 import subprocess
 import argparse
 from utils import write_data_h5py, write_attribute
+from unyt import c, Angstrom, s
 
 from synthesizer.sed import calculate_Q
 
@@ -51,7 +52,9 @@ def download_data(synthesizer_data_dir, ver, fcov):
 
 
 def convertPOPIII(synthesizer_data_dir, ver, fcov):
-    """Convert POPIII outputs
+    """Convert POPIII outputs for Yggdrasil
+       Wavelength in Angstrom
+       Flux is in erg/s/AA
 
     """
 
@@ -87,7 +90,8 @@ def convertPOPIII(synthesizer_data_dir, ver, fcov):
 
     """ Format of the file is 10 header lines at begining followed by
         lam_num lines of wavelength and flux, then one empty line and
-        7 string lines giving the ages """
+        7 string lines giving the ages 
+    """
     data = open(fileloc, 'r')
     tmp = data.readlines()
     mass = np.float(re.findall(r"\d+\.\d+", tmp[0])[0])
@@ -139,11 +143,18 @@ def make_grid(synthesizer_data_dir, ver, fcov):
     log10ages = np.log10(ages)
 
     lam = out[3]
-    nu = 3E8/(lam*1E-10)
 
+    """
+    Converting L_lam to L_nu using 
+    L_lam dlam = L_nu dnu
+    L_nu = L_lam (lam)^2 / c
+    c in units of AA/s for conversion
+    """
+    
+    light_speed = c.to(Angstrom/s).value #in AA/s
     spec = out[0]
 
-    spec *= lam/nu  # erg s^-1 Hz^-1 Msol^-1
+    spec *= (lam**2) / light_speed  # now in erg s^-1 Hz^-1 Msol^-1
 
     na = len(ages)
     nZ = len(metallicities)
