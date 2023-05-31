@@ -31,7 +31,7 @@ import pathlib
 import re
 import subprocess
 import argparse
-from utils import write_data_h5py, write_attribute
+from utils import write_data_h5py, write_attribute, add_log10Q
 from unyt import c, Angstrom, s
 
 from synthesizer.sed import calculate_Q
@@ -98,7 +98,7 @@ def convertPOPIII(synthesizer_data_dir, ver, fcov):
     """
     data = open(fileloc, 'r')
     tmp = data.readlines()
-    mass = np.float(re.findall(r"\d+\.\d+", tmp[0])[0])
+    mass = float(re.findall(r"\d+\.\d+", tmp[0])[0])
     begin = 9
     end = begin + lam_num[0]
     for ii in range(len(ageBins)):
@@ -134,8 +134,8 @@ def make_grid(synthesizer_data_dir, ver, fcov):
     if not os.path.exists(f'{synthesizer_data_dir}/grids/'):
         os.makedirs(f'{synthesizer_data_dir}/grids/')
 
-    model_name = F'yggdrasil{ver}_fcov_{fcov}'
-    fname = f'{synthesizer_data_dir}/grids/{model_name}.h5'
+    model_name = F'yggdrasil_POPIII{ver}'
+    fname = f'{synthesizer_data_dir}/grids/{model_name}.hdf5'
 
     # Get spectra and attributes
     out = convertPOPIII(synthesizer_data_dir, ver, fcov)
@@ -165,56 +165,61 @@ def make_grid(synthesizer_data_dir, ver, fcov):
 
     log10Q = np.zeros((na, nZ))  # the ionising photon production rate
 
-    for iZ, metallicity in enumerate(metallicities):
-        for ia, log10age in enumerate(log10ages):
+    # for iZ, metallicity in enumerate(metallicities):
+    #     for ia, log10age in enumerate(log10ages):
 
-            # --- calcualte ionising photon luminosity
-            log10Q[ia, iZ] = np.log10(calculate_Q(lam, spec[ia, iZ, :]))
-
-    write_data_h5py(fname, 'ages', data=ages, overwrite=True)
-    write_attribute(fname, 'ages', 'Description',
-                    'Stellar population ages years')
-    write_attribute(fname, 'ages', 'Units', 'yr')
-
-    write_data_h5py(fname, 'log10ages', data=log10ages, overwrite=True)
-    write_attribute(fname, 'log10ages', 'Description',
-                    'Stellar population ages in log10 years')
-    write_attribute(fname, 'log10ages', 'Units', 'log10(yr)')
-
-    write_data_h5py(fname, 'metallicities', data=metallicities, overwrite=True)
-    write_attribute(fname, 'metallicities', 'Description',
-                    'raw abundances')
-    write_attribute(fname, 'metallicities', 'Units', 'dimensionless [Z]')
-
-    write_data_h5py(fname, 'log10metallicities', data=log10metallicities,
-                    overwrite=True)
-    write_attribute(fname, 'log10metallicities', 'Description',
-                    'raw abundances in log10')
-    write_attribute(fname, 'log10metallicities', 'Units',
-                    'dimensionless [log10(Z)]')
-
-    write_data_h5py(fname, 'log10Q', data=log10Q, overwrite=True)
-    write_attribute(fname, 'log10Q', 'Description',
-                    ("Two-dimensional ionising photon "
-                     "production rate grid, [age,Z]"))
-
-    write_data_h5py(fname, 'spectra/wavelength', data=lam, overwrite=True)
-    write_attribute(fname, 'spectra/wavelength', 'Description',
-                    'Wavelength of the spectra grid')
-    write_attribute(fname, 'spectra/wavelength', 'Units', 'AA')
-
+    #         # --- calcualte ionising photon luminosity
+    #         log10Q[ia, iZ] = np.log10(calculate_Q(lam, spec[ia, iZ, :]))
+    
     if fcov == '0':
+        write_data_h5py(fname, 'ages', data=ages, overwrite=True)
+        write_attribute(fname, 'ages', 'Description',
+                        'Stellar population ages years')
+        write_attribute(fname, 'ages', 'Units', 'yr')
+
+        write_data_h5py(fname, 'log10ages', data=log10ages, overwrite=True)
+        write_attribute(fname, 'log10ages', 'Description',
+                        'Stellar population ages in log10 years')
+        write_attribute(fname, 'log10ages', 'Units', 'log10(yr)')
+
+        write_data_h5py(fname, 'metallicities', data=metallicities, overwrite=True)
+        write_attribute(fname, 'metallicities', 'Description',
+                        'raw abundances')
+        write_attribute(fname, 'metallicities', 'Units', 'dimensionless [Z]')
+
+        write_data_h5py(fname, 'log10metallicities', data=log10metallicities,
+                        overwrite=True)
+        write_attribute(fname, 'log10metallicities', 'Description',
+                        'raw abundances in log10')
+        write_attribute(fname, 'log10metallicities', 'Units',
+                        'dimensionless [log10(Z)]')
+
+        write_data_h5py(fname, 'log10Q', data=log10Q, overwrite=True)
+        write_attribute(fname, 'log10Q', 'Description',
+                        ("Two-dimensional ionising photon "
+                        "production rate grid, [age,Z]"))
+
+        write_data_h5py(fname, 'spectra/wavelength', data=lam, overwrite=True)
+        write_attribute(fname, 'spectra/wavelength', 'Description',
+                        'Wavelength of the spectra grid')
+        write_attribute(fname, 'spectra/wavelength', 'Units', 'AA')
+
+    
         write_data_h5py(fname, 'spectra/stellar', data=spec, overwrite=True)
         write_attribute(fname, 'spectra/stellar', 'Description',
                         """Three-dimensional spectra grid, [age, metallicity
                         , wavelength]""")
         write_attribute(fname, 'spectra/stellar', 'Units', 'erg s^-1 Hz^-1')
     else:
-        write_data_h5py(fname, 'spectra/nebular', data=spec, overwrite=True)
-        write_attribute(fname, 'spectra/nebular', 'Description',
+        if fcov=='1':
+            add = ''
+        else:
+            add = F'_fcov_{fcov}'
+        write_data_h5py(fname, F'spectra/nebular{add}', data=spec, overwrite=True)
+        write_attribute(fname, F'spectra/nebular{add}', 'Description',
                         """Three-dimensional spectra grid, [age, metallicity
                         , wavelength]""")
-        write_attribute(fname, 'spectra/nebular', 'Units', 'erg s^-1 Hz^-1')
+        write_attribute(fname, F'spectra/nebular{add}', 'Units', 'erg s^-1 Hz^-1')
 
 
 if __name__ == "__main__":
@@ -234,3 +239,4 @@ if __name__ == "__main__":
     for ver in vers:
         for fcov in fcovs:
             make_grid(synthesizer_data_dir, ver, fcov)
+        add_log10Q(f'{synthesizer_data_dir}/grids/yggdrasil_POPIII{ver}.hdf5', limit=500)
