@@ -491,6 +491,9 @@ class ParticleGalaxy(BaseGalaxy):
         intrinsic_sed_old = self.get_intrinsic_spectra(
             grid, update=False, old=1e7)
 
+        # save combined intrinsic spectra 
+        self.spectra['intrinsic'] = intrinsic_sed_young + intrinsic_sed_old
+
         if save_young_and_old:
 
             # if integrated:
