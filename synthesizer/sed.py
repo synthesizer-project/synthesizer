@@ -371,6 +371,10 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
         luminosity grid (erg/s/Hz)
     ionisation_energy: unyt_array
         ionisation energy
+    limit: float or int, optional
+        An upper bound on the number of subintervals 
+        used in the integration adaptive algorithm.
+
 
     Returns
     ----------
