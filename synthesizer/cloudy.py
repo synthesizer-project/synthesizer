@@ -62,6 +62,9 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
         'grains': False,
         'geometry': 'planeparallel',
         'resolution': 1.0, # relative resolution the saved continuum spectra
+        'output_abundances': True, # output abundances
+        'output_cont': True, # output continuum
+        'output_lines': True, # output lines
     }
 
     for key, value in list(kwargs.items()):
@@ -190,12 +193,21 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     # --- output commands
     cinput.append(f'print line vacuum\n')  # output vacuum wavelengths
     cinput.append(f'set continuum resolution {params["resolution"]}\n') # set the continuum resolution
-    cinput.append((f'save last continuum "{model_name}.cont" '
-                   f'units Angstroms no clobber\n'))
-    cinput.append((f'save last lines, array "{model_name}.lines" '
-                  'units Angstroms no clobber\n'))
-    cinput.append(f'save last abundances "{model_name}.abundances"\n')
     cinput.append(f'save overview  "{model_name}.ovr" last\n')
+
+    # output abundances
+    if params['output_abundances']:
+        cinput.append(f'save last abundances "{model_name}.abundances"\n')
+
+    # output continuum (i.e. spectra)
+    if params['output_cont']:
+        cinput.append((f'save last continuum "{model_name}.cont" '
+                   f'units Angstroms no clobber\n'))
+    # output lines
+    if params['output_lines']:
+        cinput.append((f'save last lines, array "{model_name}.lines" '
+                  'units Angstroms no clobber\n'))
+    
 
     # --- save input file
     open(f'{output_dir}/{model_name}.in', 'w').writelines(cinput)
