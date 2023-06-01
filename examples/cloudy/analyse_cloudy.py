@@ -65,33 +65,33 @@ def compare_with_grid(model, grid_name, ia = 0, iZ = 8, spectra = 'total', show 
     return fig, ax
 
 
-def compare_linecont(model, show = True):
+# def compare_linecont(model, show = True):
 
-    """ build a nebular emission grid based on line lists and compare with that produced by linecont"""
+#     """ build a nebular emission grid based on line lists and compare with that produced by linecont"""
 
-    fig, ax = single((5., 3.5))
-
-
-    # get linecont from continuum
-
-    spec_dict = read_continuum(model, return_dict = True)
-
-    ax.plot(np.log10(spec_dict['lam']), np.log10(spec_dict['linecont']), alpha = 0.5)
-
-    linecont = make_linecont(model, spec_dict['lam'])
-
-    ax.plot(np.log10(spec_dict['lam']), np.log10(linecont), alpha = 0.5)
+#     fig, ax = single((5., 3.5))
 
 
-    ax.set_xlim([3., 4.5])
-    ax.set_ylim([15, 19])
-    ax.legend(fontsize = 8, labelspacing = 0.0)
-    ax.set_xlabel(r'$\rm log_{10}(\lambda/\AA)$')
-    ax.set_ylabel(r'$\rm log_{10}(L_{\nu}/erg s^{-1} Hz^{-1})$')
+#     # get linecont from continuum
 
-    if show: plt.show()
+#     spec_dict = read_continuum(model, return_dict = True)
 
-    return fig, ax
+#     ax.plot(np.log10(spec_dict['lam']), np.log10(spec_dict['linecont']), alpha = 0.5)
+
+#     linecont = make_linecont(model, spec_dict['lam'])
+
+#     ax.plot(np.log10(spec_dict['lam']), np.log10(linecont), alpha = 0.5)
+
+
+#     ax.set_xlim([3., 4.5])
+#     ax.set_ylim([15, 19])
+#     ax.legend(fontsize = 8, labelspacing = 0.0)
+#     ax.set_xlabel(r'$\rm log_{10}(\lambda/\AA)$')
+#     ax.set_ylabel(r'$\rm log_{10}(L_{\nu}/erg s^{-1} Hz^{-1})$')
+
+#     if show: plt.show()
+
+#     return fig, ax
 
 
 
@@ -211,5 +211,3 @@ if __name__ == '__main__':
     # grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
     # compare_with_grid(f'data/{model}', grid_name)
 
-
-    # compare_linecont(f'data/default')
