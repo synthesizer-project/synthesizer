@@ -57,10 +57,6 @@ params = {
 model_name = '_'.join(['default']+[f'{k}:{v}' for k, v in params.items()])
 
 
-
-
-print(model_name)
-
 params =  default_params | params
 
 for k, v in params.items():
