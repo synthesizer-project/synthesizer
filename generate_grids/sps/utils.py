@@ -28,7 +28,7 @@ from decimal import Decimal
 #                 hf['log10Q'][ia, iZ] = np.log10(calculate_Q(lam, hf['spectra/stellar'][ia, iZ, :]))
 
 
-def add_log10Q(grid_filename, ions=['HI', 'HeII']):
+def add_log10Q(grid_filename, ions=['HI', 'HeII'], limit=100):
     """
     A function to calculate the ionising photon luminosity for different ions.
 
@@ -38,6 +38,9 @@ def add_log10Q(grid_filename, ions=['HI', 'HeII']):
         the filename of the HDF5 grid
     ions : list
         a list of ions to calculate Q for
+    limit: float or int, optional
+        An upper bound on the number of subintervals 
+        used in the integration adaptive algorithm.
 
     """
 
@@ -68,7 +71,7 @@ def add_log10Q(grid_filename, ions=['HI', 'HeII']):
 
                     lnu = hf['spectra/stellar'][ia, iZ, :]
 
-                    Q = calculate_Q(lam, lnu, ionisation_energy=ionisation_energy)
+                    Q = calculate_Q(lam, lnu, ionisation_energy=ionisation_energy, limit=limit)
 
                     hf[f'log10Q/{ion}'][ia, iZ] = np.log10(Q)
 
