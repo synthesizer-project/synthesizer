@@ -959,6 +959,7 @@ class ParametricImage(ParametricScene, Image):
         apertures=None,
         snrs=None,
         super_resolution_factor=None,
+        pixel_values=None,
     ):
         """
         Intialise the ParametricImage.
@@ -1057,6 +1058,8 @@ class ParametricImage(ParametricScene, Image):
         # define the base image
         self.img = morphology.img(self.xx, self.yy, units=resolution.units)
         self.img /= np.sum(self.img)  # normalise this image to 1
+
+        self.pixel_values=None # fix for now, without this parts of Image won't work, but this is specific to ParticleImage
 
     def create_images(self, sed=None):
         """
