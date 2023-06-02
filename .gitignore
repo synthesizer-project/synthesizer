@@ -134,4 +134,5 @@ dmypy.json
 
 
 # cloudy example datafiles
-examples/cloudy/data/* 
+examples/cloudy/data/*
+
