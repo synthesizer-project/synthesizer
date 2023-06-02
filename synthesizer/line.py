@@ -83,6 +83,10 @@ class LineRatios:
     """
     # short-hand
 
+
+
+
+
     def __init__(self):
 
         O3 = ['O 3 4960.29A', 'O 3 5008.24A']
@@ -308,7 +312,7 @@ class LineCollection:
         tuple (float)
             a pair of line ratios
         """
-        ab, cd = LineRatios.diagrams[diagram_id]
+        ab, cd = self.lineratios.diagrams[diagram_id]
 
         return self.get_ratio_(ab), self.get_ratio_(cd)
 
