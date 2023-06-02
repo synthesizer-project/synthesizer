@@ -796,7 +796,7 @@ class ParticleGalaxy(BaseGalaxy):
     def make_image(self, resolution, npix=None, fov=None, img_type="hist",
                    sed=None, filters=(), pixel_values=None, psfs=None,
                    depths=None, snrs=None, aperture=None, noises=None,
-                   kernel_func=None, rest_frame=True, cosmo=None, igm=None,
+                   kernel_func=None, rest_frame=True, cosmo=None,
                    super_resolution_factor=1,
                    ):
         """
@@ -873,7 +873,6 @@ class ParticleGalaxy(BaseGalaxy):
             rest_frame=rest_frame,
             redshift=self.redshift,
             cosmo=cosmo,
-            igm=igm,
             psfs=psfs,
             depths=depths,
             apertures=aperture,
