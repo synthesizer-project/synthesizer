@@ -132,3 +132,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+# cloudy example datafiles
+examples/cloudy/data/*
+
