@@ -55,6 +55,8 @@ if __name__ == '__main__':
     # generate broadband luminosities
     sed = disk.spectra['stellar'].get_broadband_luminosities(filter_collection)
 
+    
+
     # make images
     images = disk.make_images('stellar', filtercollection=filter_collection,
                               resolution=resolution, npix=npix)
@@ -68,7 +70,7 @@ if __name__ == '__main__':
     morph = Sersic2D(morphology_parameters)
 
     # define the parameters of the star formation and metal enrichment histories
-    stellar_mass = 1E9
+    stellar_mass = 1E10
     sfzh = generate_instant_sfzh(
         grid.log10ages, grid.metallicities, 10., 0.01, stellar_mass=stellar_mass)
 
@@ -87,9 +89,9 @@ if __name__ == '__main__':
 
     # TOTAL
 
-    total = disk + bulge
+    combined = disk + bulge
 
-    print(total)
+    print(combined)
 
     # images = total.make_images('stellar', filter_collection, resolution, npix=npix)
     
@@ -102,3 +104,25 @@ if __name__ == '__main__':
     plt.figure()
     plt.imshow(total, origin='lower', interpolation='nearest')
     plt.show()
+
+
+
+    # plot spectra of both components
+
+    sed = disk.spectra['stellar']
+    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c='b', label='disk')
+
+    sed = bulge.spectra['stellar']
+    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c='r', label='bulge')
+
+    sed = combined.spectra['stellar']
+    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=2, alpha=0.8, c='k', label='combined')
+
+    plt.xlim(3., 4.3)
+    plt.legend(fontsize=8, labelspacing=0.0)
+    plt.xlabel(r'$\rm log_{10}(\lambda_{obs}/\AA)$')
+    plt.ylabel(r'$\rm log_{10}(f_{\nu}/nJy)$')
+
+    plt.show()
+
+    
