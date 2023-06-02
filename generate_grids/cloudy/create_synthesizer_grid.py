@@ -8,7 +8,7 @@ This reads in a cloudy grid of models and creates a new SPS grid including the v
 from scipy import integrate
 import os
 import shutil
-from synthesizer.utils import read_params, explore_hdf5_grid
+from synthesizer.utils import read_params
 from synthesizer.cloudy import read_wavelength, read_continuum, read_lines
 from synthesizer.sed import calculate_Q
 from unyt import eV
@@ -92,6 +92,48 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
                 if not os.path.isfile(infile+'.lines'):  # attempt to open run.
                     failed = True
                     # print(f'{ia}_{iZ}.lines missing')
+
+        if failed:
+            print('FAILED')
+            print(f'missing files: {failed_list}')
+
+        return failed
+
+
+def fix_cloudy_runs(grid_name, synthesizer_data_dir, replace=False):
+    """
+    If a cloudy run has failed replace it with the previous metallicity grid point
+    """
+
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'r') as hf:
+
+        # --- short hand for later
+        nZ = len(hf['metallicities'][:])  # number of metallicity grid points
+        na = len(hf['log10ages'][:])  # number of age grid points
+
+        failed = False
+        failed_list = []
+
+        for ia in range(na):
+            for iZ in range(nZ):
+
+                infile = f'{synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}'
+
+                try:
+                    read_continuum(infile, return_dict=True)
+                except:
+
+                    if iZ > 0:
+                        nf = f'{ia}_{iZ-1}'
+                    else:
+                        nf = f'{ia-1}_{iZ}'
+
+                    os.system(
+                        f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{nf}.cont {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.cont')
+                    os.system(
+                        f'cp {synthesizer_data_dir}/cloudy/{grid_name}/{nf}.lines {synthesizer_data_dir}/cloudy/{grid_name}/{ia}_{iZ}.lines')
+                    failed = True
+                    failed_list.append((ia, iZ))
 
         if failed:
             print('FAILED')
@@ -322,8 +364,13 @@ if __name__ == "__main__":
         print('-'*50)
         print(grid_name)
 
+        failed = False
+
         create_new_grid(grid_name, synthesizer_data_dir)
-        failed = check_cloudy_runs(grid_name, synthesizer_data_dir)
+        # failed = check_cloudy_runs(grid_name, synthesizer_data_dir)
+
+        # fix failed cloudy runs by replacing with nearest metallicity grid point
+        fix_cloudy_runs(grid_name, synthesizer_data_dir)
 
         if not failed:
             dlog10Q = add_spectra(grid_name, synthesizer_data_dir)
