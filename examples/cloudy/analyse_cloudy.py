@@ -2,8 +2,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from synthesizer.grid import SpectralGrid
-from synthesizer.cloudy_sw import read_continuum, read_lines, make_linecont
+from synthesizer.grid import Grid
+from synthesizer.cloudy import read_continuum, read_lines
 from synthesizer.plt import single
 from synthesizer.sed import calculate_Q
 
@@ -11,13 +11,20 @@ def plot_model_spectra(models, spectra = 'total', show = True):
 
     fig, ax = single((6., 3.5))
 
+    n_wv = 1500. # normalisation wavelength
+
     for model in models:
+        print(model)
         spec_dict = read_continuum(model, return_dict = True)
-        ax.plot(np.log10(spec_dict['lam']), np.log10(spec_dict[spectra]), lw =1, alpha = 0.5)
+
+        n = np.interp(n_wv, spec_dict['lam'], spec_dict[spectra]) # normalisation
+
+        ax.plot(np.log10(spec_dict['lam']), np.log10(spec_dict[spectra]/n), lw =1, alpha = 0.5)
 
 
-    ax.set_xlim([3., 4.5])
-    ax.set_ylim([15, 19])
+    ax.set_xlim([3.3, 3.5])
+
+    ax.set_ylim([-0.5, 0.5])
     ax.legend(fontsize = 8, labelspacing = 0.0)
     ax.set_xlabel(r'$\rm log_{10}(\lambda/\AA)$')
     ax.set_ylabel(r'$\rm log_{10}(L_{\nu}/L_{\nu}()}^1)$')
@@ -33,7 +40,7 @@ def compare_with_grid(model, grid_name, ia = 0, iZ = 8, spectra = 'total', show 
 
     fig, ax = single((5., 3.5))
 
-    grid = SpectralGrid(grid_name)
+    grid = Grid(grid_name)
     lnu = grid.spectra[spectra][ia, iZ]
 
     ax.plot(np.log10(grid.lam), np.log10(lnu))
@@ -58,33 +65,33 @@ def compare_with_grid(model, grid_name, ia = 0, iZ = 8, spectra = 'total', show 
     return fig, ax
 
 
-def compare_linecont(model, show = True):
+# def compare_linecont(model, show = True):
 
-    """ build a nebular emission grid based on line lists and compare with that produced by linecont"""
+#     """ build a nebular emission grid based on line lists and compare with that produced by linecont"""
 
-    fig, ax = single((5., 3.5))
-
-
-    # get linecont from continuum
-
-    spec_dict = read_continuum(model, return_dict = True)
-
-    ax.plot(np.log10(spec_dict['lam']), np.log10(spec_dict['linecont']), alpha = 0.5)
-
-    linecont = make_linecont(model, spec_dict['lam'])
-
-    ax.plot(np.log10(spec_dict['lam']), np.log10(linecont), alpha = 0.5)
+#     fig, ax = single((5., 3.5))
 
 
-    ax.set_xlim([3., 4.5])
-    ax.set_ylim([15, 19])
-    ax.legend(fontsize = 8, labelspacing = 0.0)
-    ax.set_xlabel(r'$\rm log_{10}(\lambda/\AA)$')
-    ax.set_ylabel(r'$\rm log_{10}(L_{\nu}/erg s^{-1} Hz^{-1})$')
+#     # get linecont from continuum
 
-    if show: plt.show()
+#     spec_dict = read_continuum(model, return_dict = True)
 
-    return fig, ax
+#     ax.plot(np.log10(spec_dict['lam']), np.log10(spec_dict['linecont']), alpha = 0.5)
+
+#     linecont = make_linecont(model, spec_dict['lam'])
+
+#     ax.plot(np.log10(spec_dict['lam']), np.log10(linecont), alpha = 0.5)
+
+
+#     ax.set_xlim([3., 4.5])
+#     ax.set_ylim([15, 19])
+#     ax.legend(fontsize = 8, labelspacing = 0.0)
+#     ax.set_xlabel(r'$\rm log_{10}(\lambda/\AA)$')
+#     ax.set_ylabel(r'$\rm log_{10}(L_{\nu}/erg s^{-1} Hz^{-1})$')
+
+#     if show: plt.show()
+
+#     return fig, ax
 
 
 
@@ -183,7 +190,10 @@ if __name__ == '__main__':
 
 
 
-    model = 'default'
+    models = ['data/default', 'data/default_resolution:1.0']
+
+
+    plot_model_spectra(models)
 
     # fig, ax = plot_lines(f'data/{model}', show = False, filter = ('HI6563', -1.5))
     # fig.savefig(f'figs/lines_{model}.pdf')
@@ -201,5 +211,3 @@ if __name__ == '__main__':
     # grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
     # compare_with_grid(f'data/{model}', grid_name)
 
-
-    compare_linecont(f'data/default')

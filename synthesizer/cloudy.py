@@ -48,19 +48,23 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
 
     params = {
         'log10U': -2,
-        'log10radius': -2,  # radius in log10 parsecs
-
+        'log10radius': -2,  # radius in log10 parsecs, only important for spherical geometry
         # covering factor. Keep as 1 as it is more
         # efficient to simply combine SEDs to get != 1.0 values
         'covering_factor': 1.0,
-
         'stop_T': 4000,  # K
         'stop_efrac': -2,
         'T_floor': 100,  # K
         'log10n_H': 2.5,  # Hydrogen density
         'z': 0.,
         'CMB': False,
-        'cosmic_rays': False
+        'cosmic_rays': False,
+        'grains': False,
+        'geometry': 'planeparallel',
+        'resolution': 1.0, # relative resolution the saved continuum spectra
+        'output_abundances': True, # output abundances
+        'output_cont': True, # output continuum
+        'output_lines': True, # output lines
     }
 
     for key, value in list(kwargs.items()):
@@ -85,7 +89,7 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     # --- Define the chemical composition
     for ele in ['He'] + abundances.metals:
         cinput.append((f'element abundance {abundances.name[ele]} '
-                       f'{abundances.a[ele]}\n'))
+                       f'{abundances.a[ele]} no grains\n'))
 
     """
     add graphite and silicate grains
@@ -136,7 +140,7 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     which will again introduce issues on mass conservation.
     """
 
-    if abundances.params['d2m'] > 0:
+    if (abundances.d2m > 0) & params['grains']:
         delta_C = 10**abundances.a_nodep['C'] - 10**abundances.a['C']
         delta_PAH = 0.01 * (10**abundances.a_nodep['C'])
         delta_graphite = delta_C - delta_PAH
@@ -156,12 +160,18 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
 
     # cinput.append('element off limit -7') # should speed up the code
 
-    # # --- Define the ionising luminosity
-    # # log10Q = np.log10(calculate_Q(10**log10U,
-    #                     R_inner=10**params['log10radius'] * 3.086e18))
-    log10Q = np.log10(calculate_Q_from_U(10**log10U, 10**params["log10n_H"]))
-    cinput.append(f'Q(H) = {log10Q}\n')
-    # # cinput.append(f'ionization parameter = {log10U} log\n')
+    # plane parallel geometry
+    if params['geometry'] == 'planeparallel':
+        cinput.append(f'ionization parameter = {log10U:.3f}\n')
+        # inner radius = 10^30 cm and thickness = 10^21.5 cm (==1 kpc) this is essentially plane parallel geometry
+        cinput.append(f'radius 30.0 21.5\n')
+
+    if params['geometry'] == 'spherical':
+        # in the spherical geometry case I think U is some average U, not U at the inner face of the cloud.
+        log10Q = np.log10(calculate_Q_from_U(10**log10U, 10**params["log10n_H"]))
+        cinput.append(f'Q(H) = {log10Q}\n')
+        cinput.append(f'radius {params["log10radius"]} log parsecs\n')
+        cinput.append('sphere\n')
 
     # add background continuum
     if params['cosmic_rays']:
@@ -169,11 +179,10 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     if params['CMB']:
         cinput.append(f'CMB {params["z"]}\n')
 
-    # --- Define the geometry
+    # define hydrogend density
     cinput.append(f'hden {params["log10n_H"]} log constant density\n')
-    cinput.append(f'radius {params["log10radius"]} log parsecs\n')
-    cinput.append('sphere\n')
-    cinput.append(f'covering factor {params["covering_factor"]} linear\n')
+
+    # cinput.append(f'covering factor {params["covering_factor"]} linear\n')
 
     # --- Processing commands
     cinput.append('iterate to convergence\n')
@@ -183,11 +192,22 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
 
     # --- output commands
     cinput.append(f'print line vacuum\n')  # output vacuum wavelengths
-    cinput.append((f'save last continuum "{model_name}.cont" '
-                   f'units Angstroms no clobber\n'))
-    cinput.append((f'save last lines, array "{model_name}.lines" '
-                  'units Angstroms no clobber\n'))
+    cinput.append(f'set continuum resolution {params["resolution"]}\n') # set the continuum resolution
     cinput.append(f'save overview  "{model_name}.ovr" last\n')
+
+    # output abundances
+    if params['output_abundances']:
+        cinput.append(f'save last abundances "{model_name}.abundances"\n')
+
+    # output continuum (i.e. spectra)
+    if params['output_cont']:
+        cinput.append((f'save last continuum "{model_name}.cont" '
+                   f'units Angstroms no clobber\n'))
+    # output lines
+    if params['output_lines']:
+        cinput.append((f'save last lines, array "{model_name}.lines" '
+                  'units Angstroms no clobber\n'))
+    
 
     # --- save input file
     open(f'{output_dir}/{model_name}.in', 'w').writelines(cinput)
