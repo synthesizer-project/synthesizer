@@ -469,7 +469,15 @@ class ParticleGalaxy(BaseGalaxy):
         alpha_BC: float
             slope of the BC dust curve, -1.3 in MAGPHYS
         save_young_and_old: boolean
-            flag specifying whether to save young and old
+            flag specifying whether to save young and old spectra individually
+        sed_object: bool
+            flag whether to return an SED object
+        update: bool
+            flag for whether to update the `intrinsic` and `attenuated` spectra
+            inside the galaxy object `spectra` dictionary. These are the combined values
+            of young and old.
+        return_wavelength: bool
+            return wavelenght numpy array
 
         Returns
         -------
@@ -490,6 +498,10 @@ class ParticleGalaxy(BaseGalaxy):
             grid, update=False, young=1E7)
         intrinsic_sed_old = self.get_intrinsic_spectra(
             grid, update=False, old=1e7)
+
+        # save combined intrinsic spectra 
+        if update:
+            self.spectra['intrinsic'] = intrinsic_sed_young + intrinsic_sed_old
 
         if save_young_and_old:
 
