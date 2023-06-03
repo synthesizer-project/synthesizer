@@ -43,48 +43,130 @@ class Ions:
     }
 
 
-def create_cloudy_input(model_name, lam, lnu, abundances,
+
+
+
+class ShapeCommands:
+
+    """
+    A class for holding different cloudy shape commands
+    
+    """
+
+
+
+
+    def table_sed(model_name, lam, lnu, output_dir='./'):
+        
+        """
+        A function for creating a cloudy input file using a tabulated SED.
+
+        Arguments
+        ----------
+        model_name: str
+            User defined name of the model used for cloudy inputs and outputs.
+        lam: array or unyt_array
+            Wavelength grid with or without units (via unyt)
+        lnu: array
+            Spectral luminosity density
+        output_dir: str
+            Output directory path
+            
+        Returns
+        -------
+        list
+            a list of strings with the cloudy input commands
+        
+
+        TODO
+        -------
+        - allow the user to instead specify nu and to automatically convert units if provided
+
+        """
+
+        # if lam is not a unyt_array assume it has units of angstrom and convert to a unyt_array
+        if type(lam) != unyt_array:
+            lam *= angstrom
+
+        # define frequency
+        nu = c/lam
+
+        # define energy
+        E = h*nu
+
+        # define energy in units of Rydbergs
+        E_Ryd = E.to('Ry').value
+
+        # get rid of negative/zero luminosities, which are unphysical and seem to make cloudy break
+        lnu[lnu <= 0.0] = 1E-100  
+
+        # save tabulated spectrum
+        np.savetxt(f'{output_dir}/{model_name}.sed',
+                np.array([E_Ryd[::-1], lnu[::-1]]).T)
+
+        # collect cloudy shape commands
+        shape_commands = []
+        shape_commands.append(f'table SED "{model_name}.sed" \n')
+
+        return shape_commands
+
+
+
+
+
+def create_cloudy_input(model_name, shape_commands, abundances,
                         output_dir='./', **kwargs):
 
-    params = {
-        'log10U': -2,
+    """
+    A generic function for creating a cloudy input file 
+
+    Arguments
+    ----------
+    model_name: str
+        The model name. Used in the naming of the outputs
+    shape_commands: list
+        List of strings describing the cloudy input commands
+    abundances: obj
+        A synthsizer Abundances object
+    output_dir: str
+        The output dir
+
+    Returns
+    -------
+    """
+
+    default_params = {
+        'log10U': -2, # ionisation parameter
         'log10radius': -2,  # radius in log10 parsecs, only important for spherical geometry
-        # covering factor. Keep as 1 as it is more
-        # efficient to simply combine SEDs to get != 1.0 values
-        'covering_factor': 1.0,
-        'stop_T': 4000,  # K
-        'stop_efrac': -2,
+        'covering_factor': 1.0, # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
+        'stop_T': 4000, # K
+        'stop_efrac': -2, 
         'T_floor': 100,  # K
         'log10n_H': 2.5,  # Hydrogen density
-        'z': 0.,
-        'CMB': False,
-        'cosmic_rays': False,
-        'grains': False,
-        'geometry': 'planeparallel',
+        'z': 0., # redshift
+        'CMB': False, # include CMB heating
+        'cosmic_rays': False, # include cosmic rays
+        'grains': False, # include dust grains
+        'geometry': 'planeparallel', # the geometry 
         'resolution': 1.0, # relative resolution the saved continuum spectra
         'output_abundances': True, # output abundances
         'output_cont': True, # output continuum
         'output_lines': True, # output lines
     }
 
-    for key, value in list(kwargs.items()):
-        params[key] = value
+    # update default_params with kwargs
+    params = default_params | kwargs
 
-    log10U = params['log10U']
+    # old approach for updated parameters
+    # for key, value in list(kwargs.items()):
+    #     params[key] = value
 
-    nu = c/(lam * angstrom)
-    E = h*nu
-    E_Ryd = E.to('Ry').value
 
-    lnu[lnu <= 0.0] = 1E-10  #  get rid of negative models
-
-    np.savetxt(f'{output_dir}/{model_name}.sed',
-               np.array([E_Ryd[::-1], lnu[::-1]]).T)
-
-    # ----- start CLOUDY input file (as a list)
+    # begin input list
     cinput = []
 
-    cinput.append(f'table SED "{model_name}.sed" \n')
+    # add spectral shape commands
+    cinput += shape_commands
 
     # --- Define the chemical composition
     for ele in ['He'] + abundances.metals:
@@ -159,6 +241,8 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
         f_graphite, f_Si, f_pah = 0, 0, 0
 
     # cinput.append('element off limit -7') # should speed up the code
+
+    log10U = params['log10U']
 
     # plane parallel geometry
     if params['geometry'] == 'planeparallel':
