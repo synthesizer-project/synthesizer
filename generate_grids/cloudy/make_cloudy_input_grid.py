@@ -8,7 +8,7 @@ import yaml
 
 from synthesizer.abundances import Abundances
 from synthesizer.grid import Grid
-from synthesizer.cloudy import create_cloudy_input
+from synthesizer.cloudy import create_cloudy_input, ShapeCommands
 
 from write_submission_script import (apollo_submission_script,
                                      cosma7_submission_script)
@@ -266,8 +266,15 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
 
             cloudy_params['log10U'] = float(log10U)
 
-            create_cloudy_input(model_name, lam, lnu, abundances,
-                                output_dir=output_dir, **cloudy_params)
+            # this returns the relevant shape commands, in this case for a tabulated SED
+            shape_commands = ShapeCommands.table_sed(model_name, lam, lnu, output_dir = './data/')
+
+            # create cloudy input file
+            create_cloudy_input(model_name, shape_commands, abundances, output_dir = output_dir, **cloudy_params)
+
+            # # old function left in for now for reference
+            # create_cloudy_input(model_name, lam, lnu, abundances,
+            #                     output_dir=output_dir, **cloudy_params)
 
             # write filename out
             with open(f"{output_dir}/input_names.txt", "a") as myfile:
