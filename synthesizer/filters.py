@@ -675,7 +675,7 @@ class Filter:
             old_xs = self.original_lam
             need_shift = not lam[0] == self.lam[0]
         else:
-            xs = self.lam
+            xs = self.nu
             need_shift = False
 
         # Handle the shift of the transmission curve to the observed frame
