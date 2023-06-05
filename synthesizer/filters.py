@@ -627,7 +627,7 @@ class Filter:
         transmission curve along the wavelength axis (final axis).
 
         If no wavelength or frequency array is provided then the filters rest
-        frame wavelength is assumed.
+        frame frequency is assumed.
         
         Parameters
         ----------
@@ -636,11 +636,11 @@ class Filter:
             be any dimension but wavelength must be the final axis.
         lams :  array-like (float)
             The wavelength array to integrate with respect to.
-            Defaults to the rest frame wavelength if neither lams or nus are
+            Defaults to the rest frame frequency if neither lams or nus are
             provided.
         nus :  array-like (float)
             The frequency array to integrate with respect to.
-            Defaults to the rest frame wavelength if neither lams or nus are
+            Defaults to the rest frame frequency if neither lams or nus are
             provided.
         verbose : bool
             Are we talking?
