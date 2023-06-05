@@ -494,10 +494,9 @@ class Filter:
         # this filter
         self.t = transmission
         self.lam = new_lam
-        self.nu = c / (self.lam * angstrom).to("m")
         self.original_lam = new_lam
-        self.original_nu =  c / (self.original_lam * angstrom).to("m")
         self.original_t = transmission
+        self._shifted_t = None
 
         # Is this a generic filter? (Everything other than the label is defined
         # above.)
@@ -530,6 +529,10 @@ class Filter:
         if self.original_lam is None:
             self.original_lam = self.lam
             self.original_t = self.t
+
+        # Calculate frequencies
+        self.nu = (c / (self.lam * angstrom).to("m")).value
+        self.original_nu =  (c / (self.original_lam * angstrom).to("m")).value
 
     def _make_top_hat_filter(self):
         """
@@ -668,11 +671,9 @@ class Filter:
         # to shift the transmission curve.
         if nu is not None:
             xs = nu
-            old_xs = self.original_nu
             need_shift = not nu[0] == self.nu[0]
         elif lam is not None:
             xs = lam
-            old_xs = self.original_lam
             need_shift = not lam[0] == self.lam[0]
         else:
             xs = self.nu
@@ -684,9 +685,16 @@ class Filter:
 
             # Ok, shift the tranmission curve by interpolating onto the
             # provided xs array
-            t = np.interp(
-                xs, old_xs, self.original_t, left=0.0, right=0.0
-            )
+            if lam is not None:
+                t = np.interp(
+                    xs, self.original_lam, self.original_t,
+                    left=0.0, right=0.0
+                )
+            else:
+                t = np.interp(
+                    xs, self.original_nu, self.original_t,
+                    left=0.0, right=0.0
+                )
             
         else:
 
@@ -701,6 +709,9 @@ class Filter:
                 "x array shape (arr.shape[-1]=%d, "
                 "xs.size=%d)" % (arr.shape[-1], xs.size)
             )
+
+        # Store this observed frame transmission
+        self._shifted_t = t
 
         # Get the mask that removes wavelengths we don't currently care about
         in_band = t > 0
