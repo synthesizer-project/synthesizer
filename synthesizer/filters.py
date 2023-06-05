@@ -2,6 +2,7 @@ import numpy as np
 import urllib.request
 import matplotlib.pyplot as plt
 from scipy import integrate
+from unyt import angstrom, c
 
 import synthesizer.exceptions as exceptions
 
@@ -493,7 +494,9 @@ class Filter:
         # this filter
         self.t = transmission
         self.lam = new_lam
+        self.nu = c / (self.lam * angstrom).to("m")
         self.original_lam = new_lam
+        self.original_nu =  c / (self.original_lam * angstrom).to("m")
         self.original_t = transmission
 
         # Is this a generic filter? (Everything other than the label is defined
@@ -617,22 +620,33 @@ class Filter:
             self.lam, self.original_lam, self.original_t, left=0.0, right=0.0
         )
 
-    def apply_filter(self, arr, xs=None):
+    def apply_filter(self, arr, lam=None, nu=None, verbose=True):
         """
         Apply this filter's transmission curve to an arbitrary dimensioned
         array returning the sum of the array convolved with the filter
-        transmission curve along the wavelength axis.
+        transmission curve along the wavelength axis (final axis).
+
+        If no wavelength or frequency array is provided then the filters rest
+        frame wavelength is assumed.
+        
         Parameters
         ----------
         arr :  array-like (float)
             The array to convolve with the filter's transmission curve. Can
             be any dimension but wavelength must be the final axis.
-        xs :  array-like (float)
-            The wavelength/frequency array to integrate with respect to.
-            Defaults to the rest frame wavelength if not provided.
+        lams :  array-like (float)
+            The wavelength array to integrate with respect to.
+            Defaults to the rest frame wavelength if neither lams or nus are
+            provided.
+        nus :  array-like (float)
+            The frequency array to integrate with respect to.
+            Defaults to the rest frame wavelength if neither lams or nus are
+            provided.
+        verbose : bool
+            Are we talking?
         Returns
         -------
-        sum_in_band : array-like (float)
+        float
             The array (arr) convolved with the transmission curve and summed
             along the wavelength axis.
         Raises
@@ -642,25 +656,59 @@ class Filter:
             convolution cannot be done.
         """
 
-        # Handle the default x array to integrate w.r.t
-        if xs is None:
+        # Warn the user that frequencies take precedence over wavelengths
+        # if both are provided
+        if lam is not None and nu is not None:
+            if verbose:
+                print(('WARNING: Both wavelengths and frequencies were '
+                       'provided, frequencies take priority over wavelengths'
+                       ' for filter convolution.'))
+
+        # Get the correct x array to integrate w.r.t and work out if we need
+        # to shift the transmission curve.
+        if nu is not None:
+            xs = nu
+            old_xs = self.original_nu
+            need_shift = not nu[0] == self.nu[0]
+        elif lam is not None:
+            xs = lam
+            old_xs = self.original_lam
+            need_shift = not lam[0] == self.lam[0]
+        else:
             xs = self.lam
+            need_shift = False
+
+        # Handle the shift of the transmission curve to the observed frame
+        # we've been passed.
+        if need_shift:
+
+            # Ok, shift the tranmission curve by interpolating onto the
+            # provided xs array
+            t = np.interp(
+                xs, old_xs, self.original_t, left=0.0, right=0.0
+            )
+            
+        else:
+
+            # We can use the standard transmission array
+            t = self.t
+        
 
         # Check dimensions are ok
         if xs.size != arr.shape[-1]:
             raise ValueError(
-            "Final dimension of array did not match "
-                "wavelength array size (arr.shape[-1]=%d, "
+                "Final dimension of array did not match "
+                "x array shape (arr.shape[-1]=%d, "
                 "xs.size=%d)" % (arr.shape[-1], xs.size)
             )
 
         # Get the mask that removes wavelengths we don't currently care about
-        in_band = self.t > 0
+        in_band = t > 0
 
         # Mask out wavelengths that don't contribute to this band
         arr_in_band = arr.compress(in_band, axis=-1)
         xs_in_band = xs[in_band]
-        t_in_band = self.t[in_band]
+        t_in_band = t[in_band]
 
         # Multiply the IFU by the filter transmission curve
         transmission = arr_in_band * t_in_band

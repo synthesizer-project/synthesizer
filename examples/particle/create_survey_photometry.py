@@ -44,7 +44,7 @@ print("Grid dimensions: (%d, %d)" % (grid.log10ages.size,
                                      grid.log10metallicities.size))
 
 # What redshift are we testing?
-redshift = 4
+redshift = 8
 
 # Create an empty Survey object
 survey = Survey(super_resolution_factor=1)
@@ -127,7 +127,7 @@ for f in survey.photometry:
     # Plot the scatter for this filter
     ax.scatter(ms, phot, marker=".", label=f)
 
-ax.set_ylabel("$L /$ [erg / s / Hz] ")
+ax.set_ylabel("$F /$ [nJy] ")
 ax.set_xlabel("$M / \mathrm{M}_\odot$")
 
 ax.legend(
@@ -139,4 +139,4 @@ ax.legend(
 )
 
 # Plot the image
-plt.savefig("plots/survey_photometry_test.png", bbox_inches="tight", dpi=300)
+plt.savefig(script_path + "/plots/survey_photometry_test.png", bbox_inches="tight", dpi=300)
