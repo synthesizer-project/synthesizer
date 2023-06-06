@@ -2,7 +2,7 @@ import numpy as np
 import urllib.request
 import matplotlib.pyplot as plt
 from scipy import integrate
-from unyt import angstrom, c
+from unyt import angstrom, c, Hz
 
 import synthesizer.exceptions as exceptions
 
@@ -531,8 +531,8 @@ class Filter:
             self.original_t = self.t
 
         # Calculate frequencies
-        self.nu = (c / (self.lam * angstrom).to("m")).value
-        self.original_nu =  (c / (self.original_lam * angstrom).to("m")).value
+        self.nu = (c / (self.lam * angstrom)).to("Hz").value
+        self.original_nu =  (c / (self.original_lam * angstrom)).to("Hz").value
 
     def _make_top_hat_filter(self):
         """
@@ -670,37 +670,46 @@ class Filter:
         # Get the correct x array to integrate w.r.t and work out if we need
         # to shift the transmission curve.
         if nu is not None:
+
+            # Define the integration xs
             xs = nu
+
+            # Do we need to shift?
             need_shift = not nu[0] == self.nu[0]
+
+            # To shift the transmission we need the corresponding wavelength
+            lam = (c / (nu * Hz)).to(angstrom).value
+            
         elif lam is not None:
+
+            # Define the integration xs
             xs = lam
+
+            # Do we need to shift?
             need_shift = not lam[0] == self.lam[0]
+            
         else:
+            
+            # Define the integration xs
             xs = self.nu
+
+            # No shift needed
             need_shift = False
 
-        # Handle the shift of the transmission curve to the observed frame
-        # we've been passed.
+        # Do we need to shift?
         if need_shift:
 
             # Ok, shift the tranmission curve by interpolating onto the
-            # provided xs array
-            if lam is not None:
-                t = np.interp(
-                    xs, self.original_lam, self.original_t,
-                    left=0.0, right=0.0
-                )
-            else:
-                t = np.interp(
-                    xs, self.original_nu, self.original_t,
-                    left=0.0, right=0.0
-                )
+            # provided wavelengths
+            t = np.interp(
+                lam, self.original_lam, self.original_t,
+                left=0.0, right=0.0
+            )
             
         else:
 
             # We can use the standard transmission array
             t = self.t
-        
 
         # Check dimensions are ok
         if xs.size != arr.shape[-1]:
