@@ -206,7 +206,7 @@ class Sed:
         self._fnu *= 1E23  # convert to Jy
         self._fnu *= 1E9  # convert to nJy
         
-        self.nuz = c.value/self.lamz
+        self.nuz = (c / (self.lam)).to('Hz').value
 
     def get_fnu(self, cosmo, z, igm=None):
         """
@@ -225,9 +225,9 @@ class Sed:
         luminosity_distance = cosmo.luminosity_distance(
             z).to('cm').value  # the luminosity distance in cm
 
-        self.nuz = c.value / self.lamz
+        self.nuz = (c / (self.lamz * angstrom)).to('Hz').value
 
-        self.fnu = self._lnu * (1.+z) / (4 * np.pi * luminosity_distance**2)
+        self.fnu = self._lnu * (1.+ z) / (4 * np.pi * luminosity_distance**2)
 
         self._fnu *= 1E23  # convert to Jy
         self._fnu *= 1E9  # convert to nJy
