@@ -87,7 +87,7 @@ def make_grid():
             ages_, _, lam_, flam_ = np.loadtxt(fn).T
 
             flam = flam_[ages_==age_Gyr]
-            fnu = convert_flam_to_fnu(lam, flam)
+            fnu = flam_to_fnu(lam, flam)
             spec[ia, iZ] = fnu
 
 
