@@ -195,13 +195,15 @@ class Sed:
         
         Uses a standard distance of 10 pc
         """
-        
+
+        # Get the observed wavelength and frequency arrays
         self.lamz = self._lam
+        self.nuz = self._nu
+
+        # Compute the flux SED and apply unit conversions to get to nJy
         self.fnu = self._lnu / (4 * np.pi * (10 * pc).to('cm').value)
         self._fnu *= 1E23  # convert to Jy
         self._fnu *= 1E9  # convert to nJy
-        
-        self.nuz = self._nu 
 
     def get_fnu(self, cosmo, z, igm=None):
         """
@@ -216,17 +218,20 @@ class Sed:
         # Store the redshift for later use
         self.redshift = z
 
-        self.lamz = self._lam * (1. + z)  # observed frame wavelength
-        luminosity_distance = cosmo.luminosity_distance(
-            z).to('cm').value  # the luminosity distance in cm
-
+        # Get the observed wavelength and frequency arrays
+        self.lamz = self._lam * (1. + z)
         self.nuz = self._nu / (1.+ z)
 
-        self.fnu = self._lnu * (1.+ z) / (4 * np.pi * luminosity_distance**2)
+        # Compute the luminosity distance
+        luminosity_distance = cosmo.luminosity_distance(z).to('cm').value
 
+        # Finally, compute the flux SED and apply unit conversions to get
+        # to nJy
+        self.fnu = self._lnu * (1.+ z) / (4 * np.pi * luminosity_distance**2)
         self._fnu *= 1E23  # convert to Jy
         self._fnu *= 1E9  # convert to nJy
 
+        # If we are applying an IGM model apply it
         if igm:
             self._fnu *= igm.T(z, self.lamz)
 
