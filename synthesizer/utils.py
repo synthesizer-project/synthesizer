@@ -164,6 +164,32 @@ def m_to_fnu(m):
     return 1E9 * 10 ** (-0.4 * (m - 8.9)) * nJy
 
 
+def flam_to_fnu(lam, flam):
+    """ convert f_lam to f_nu
+
+    arguments:
+    lam -- wavelength / \\AA
+    flam -- spectral luminosity density/erg/s/\\AA
+    """
+
+    lam_m = lam * 1E-10
+
+    return flam * lam/(c.value/lam_m)
+
+
+def fnu_to_flam(lam, fnu):
+    """ convert f_nu to f_lam
+
+    arguments:
+    lam -- wavelength/\\AA
+    flam -- spectral luminosity density/erg/s/\\AA
+    """
+
+    lam_m = lam * 1E-10
+
+    return fnu * (c.value/lam_m)/lam
+
+
 class constants:
     tenpc = 10*pc  # ten parsecs
     # the surface area (in cm) at 10 pc. I HATE the magnitude system
