@@ -10,12 +10,13 @@ from unyt import yr, erg, Hz, s, cm, angstrom
 from .galaxy import BaseGalaxy
 from .. import exceptions
 from ..dust import power_law
-from ..sed import Sed, convert_fnu_to_flam
+from ..sed import Sed
 from ..line import Line
 from ..plt import single_histxy, mlabel
 from ..stats import weighted_median, weighted_mean
 from ..imaging.images import ParametricImage
 from ..art import Art
+from synthesizer.utils import fnu_to_flam
 
 
 class ParametricGalaxy(BaseGalaxy):
