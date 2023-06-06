@@ -105,30 +105,6 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-def flux_to_m(flux):
-    """
-    Converts flux in nJy to apparent magnitude.
-    Parameters
-    ----------
-    flux : array-like (float)/float
-        The flux to be converted, can either be a singular value or array.
-    """
-    return -2.5 * np.log10(flux / 1e9) + 8.9
-
-
-def m_to_flux(m):
-    """
-    Converts apparent magnitude to flux in nJy.
-    Parameters
-    ----------
-    m : array-like (float)/float
-        The apparent magnitude to be converted, can either be a singular value
-        or array.
-    """
-
-    return 1e9 * 10 ** (-0.4 * (m - 8.9))
-
-
 def flux_to_luminosity(flux, cosmo, redshift):
     """
     Converts flux in nJy to luminosity in erg / s / Hz.
@@ -156,10 +132,17 @@ def flux_to_luminosity(flux, cosmo, redshift):
 
 
 def fnu_to_m(fnu):
-    """ Convert fnu to AB magnitude. If unyt quantity convert
-        to nJy else assume it's in nJy """
+    """
+    Converts flux in nJy to apparent magnitude.
+    
+    Parameters
+    ----------
+    flux : array-like (float)/float
+        The flux to be converted, can either be a singular value or array.
+    """
 
-    if type(fnu) == unyt.array.unyt_quantity:
+    # Check whether we have units, if so convert to nJy
+    if isinstance(fnu, unyt.array.unyt_quantity):
         fnu_ = fnu.to('nJy').value
     else:
         fnu_ = fnu
@@ -168,9 +151,17 @@ def fnu_to_m(fnu):
 
 
 def m_to_fnu(m):
-    """ Convert AB magnitude to fnu """
+    """
+    Converts apparent magnitude to flux in nJy.
+    
+    Parameters
+    ----------
+    m : array-like (float)/float
+        The apparent magnitude to be converted, can either be a singular value
+        or array.
+    """
 
-    return 1E9 * 10 ** (-0.4*(m - 8.9)) * nJy  # -- flux returned nJy
+    return 1E9 * 10 ** (-0.4 * (m - 8.9)) * nJy
 
 
 class constants:
