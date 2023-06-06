@@ -8,13 +8,12 @@ import sys
 import re
 import wget
 import argparse
-from utils import write_data_h5py, write_attribute
+from synthesizer.utils import write_data_h5py, write_attribute, flam_to_fnu
 import tarfile
 import glob
 import gzip
 import shutil
 
-from synthesizer.sed import convert_flam_to_fnu
 from synthesizer.sed import calculate_Q
 
 from pathlib import Path
