@@ -903,7 +903,7 @@ class ParticleGalaxy(BaseGalaxy):
                 # Convolve the image/images
                 img.get_psfed_imgs()
 
-            if depths is not None:
+            if depths is not None or noises is not None:
 
                 img.get_noisy_imgs(noises)
 
@@ -919,7 +919,7 @@ class ParticleGalaxy(BaseGalaxy):
                 # Convolve the image/images
                 img.get_psfed_imgs()
 
-            if depths is not None:
+            if depths is not None or noises is not None:
 
                 img.get_noisy_imgs(noises)
 
