@@ -96,10 +96,10 @@ if __name__ == '__main__':
         
         # Plot the SED
         if ind == 0:
-            ax.plot(seds[z].lamz, seds[z]._fnu, color="k", linestyle="--",
+            ax.plot(seds[z].obslam, seds[z]._fnu, color="k", linestyle="--",
                     label="SED", zorder=0)
         else:
-            ax.plot(seds[z].lamz, seds[z]._fnu, color="k", linestyle="--",
+            ax.plot(seds[z].obslam, seds[z]._fnu, color="k", linestyle="--",
                     zorder=0)
             
         # Make the first legend
@@ -124,11 +124,11 @@ if __name__ == '__main__':
 
             # Plot the transmitted portion of the SED
             if ind == len(zs) - 1:
-                ax.plot(seds[z].lamz, seds[z]._fnu * f._shifted_t,
+                ax.plot(seds[z].obslam, seds[z]._fnu * f._shifted_t,
                         color=colors[f.filter_code], label=f.filter_code,
                         zorder=1)
             else:
-                ax.plot(seds[z].lamz, seds[z]._fnu * f._shifted_t,
+                ax.plot(seds[z].obslam, seds[z]._fnu * f._shifted_t,
                         color=colors[f.filter_code], zorder=1)
 
             # Plot the photometry
