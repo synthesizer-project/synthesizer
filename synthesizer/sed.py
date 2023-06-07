@@ -56,7 +56,7 @@ class Sed:
         self.nu = (c/(self.lam)).to('Hz').value  # Hz
 
         self.redshift = 0
-        self.lamz = None
+        self.obslam = None
         self.nuz = None
         self.fnu = None
         self.broadband_luminosities = None
@@ -197,7 +197,7 @@ class Sed:
         """
 
         # Get the observed wavelength and frequency arrays
-        self.lamz = self._lam
+        self.obslam = self._lam
         self.nuz = self._nu
 
         # Compute the flux SED and apply unit conversions to get to nJy
@@ -219,7 +219,7 @@ class Sed:
         self.redshift = z
 
         # Get the observed wavelength and frequency arrays
-        self.lamz = self._lam * (1. + z)
+        self.obslam = self._lam * (1. + z)
         self.nuz = self._nu / (1.+ z)
 
         # Compute the luminosity distance
@@ -233,7 +233,7 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm:
-            self._fnu *= igm.T(z, self.lamz)
+            self._fnu *= igm.T(z, self.obslam)
 
     def get_broadband_fluxes(self, fc, verbose=True):  # broad band flux/nJy
         """
@@ -243,7 +243,7 @@ class Sed:
         fc: a FilterCollection object
         """
 
-        if (self.lamz is None) | (self.fnu is None):
+        if (self.obslam is None) | (self.fnu is None):
             return ValueError(('Fluxes not calculated, run `get_fnu` or '
                                '`get_fnu0` for observer frame or rest-frame '
                                'fluxes, respectively'))
