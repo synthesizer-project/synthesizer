@@ -469,7 +469,15 @@ class ParticleGalaxy(BaseGalaxy):
         alpha_BC: float
             slope of the BC dust curve, -1.3 in MAGPHYS
         save_young_and_old: boolean
-            flag specifying whether to save young and old
+            flag specifying whether to save young and old spectra individually
+        sed_object: bool
+            flag whether to return an SED object
+        update: bool
+            flag for whether to update the `intrinsic` and `attenuated` spectra
+            inside the galaxy object `spectra` dictionary. These are the combined values
+            of young and old.
+        return_wavelength: bool
+            return wavelenght numpy array
 
         Returns
         -------
@@ -490,6 +498,10 @@ class ParticleGalaxy(BaseGalaxy):
             grid, update=False, young=1E7)
         intrinsic_sed_old = self.get_intrinsic_spectra(
             grid, update=False, old=1e7)
+
+        # save combined intrinsic spectra 
+        if update:
+            self.spectra['intrinsic'] = intrinsic_sed_young + intrinsic_sed_old
 
         if save_young_and_old:
 
@@ -796,7 +808,7 @@ class ParticleGalaxy(BaseGalaxy):
     def make_image(self, resolution, npix=None, fov=None, img_type="hist",
                    sed=None, filters=(), pixel_values=None, psfs=None,
                    depths=None, snrs=None, aperture=None, noises=None,
-                   kernel_func=None, rest_frame=True, cosmo=None, igm=None,
+                   kernel_func=None, rest_frame=True, cosmo=None,
                    super_resolution_factor=1,
                    ):
         """
@@ -873,7 +885,6 @@ class ParticleGalaxy(BaseGalaxy):
             rest_frame=rest_frame,
             redshift=self.redshift,
             cosmo=cosmo,
-            igm=igm,
             psfs=psfs,
             depths=depths,
             apertures=aperture,
@@ -892,7 +903,7 @@ class ParticleGalaxy(BaseGalaxy):
                 # Convolve the image/images
                 img.get_psfed_imgs()
 
-            if depths is not None:
+            if depths is not None or noises is not None:
 
                 img.get_noisy_imgs(noises)
 
@@ -908,7 +919,7 @@ class ParticleGalaxy(BaseGalaxy):
                 # Convolve the image/images
                 img.get_psfed_imgs()
 
-            if depths is not None:
+            if depths is not None or noises is not None:
 
                 img.get_noisy_imgs(noises)
 

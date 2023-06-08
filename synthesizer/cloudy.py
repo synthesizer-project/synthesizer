@@ -43,49 +43,135 @@ class Ions:
     }
 
 
-def create_cloudy_input(model_name, lam, lnu, abundances,
+
+
+
+class ShapeCommands:
+
+    """
+    A class for holding different cloudy shape commands
+    
+    """
+
+
+
+
+    def table_sed(model_name, lam, lnu, output_dir='./'):
+        
+        """
+        A function for creating a cloudy input file using a tabulated SED.
+
+        Arguments
+        ----------
+        model_name: str
+            User defined name of the model used for cloudy inputs and outputs.
+        lam: array or unyt_array
+            Wavelength grid with or without units (via unyt)
+        lnu: array
+            Spectral luminosity density
+        output_dir: str
+            Output directory path
+            
+        Returns
+        -------
+        list
+            a list of strings with the cloudy input commands
+        
+
+        TODO
+        -------
+        - allow the user to instead specify nu and to automatically convert units if provided
+
+        """
+
+        # if lam is not a unyt_array assume it has units of angstrom and convert to a unyt_array
+        if type(lam) != unyt_array:
+            lam *= angstrom
+
+        # define frequency
+        nu = c/lam
+
+        # define energy
+        E = h*nu
+
+        # define energy in units of Rydbergs
+        E_Ryd = E.to('Ry').value
+
+        # get rid of negative/zero luminosities, which are unphysical and seem to make cloudy break
+        lnu[lnu <= 0.0] = 1E-100  
+
+        # save tabulated spectrum
+        np.savetxt(f'{output_dir}/{model_name}.sed',
+                np.array([E_Ryd[::-1], lnu[::-1]]).T)
+
+        # collect cloudy shape commands
+        shape_commands = []
+        shape_commands.append(f'table SED "{model_name}.sed" \n')
+
+        return shape_commands
+
+
+
+
+
+def create_cloudy_input(model_name, shape_commands, abundances,
                         output_dir='./', **kwargs):
 
-    params = {
-        'log10U': -2,
-        'log10radius': -2,  # radius in log10 parsecs
+    """
+    A generic function for creating a cloudy input file 
 
-        # covering factor. Keep as 1 as it is more
-        # efficient to simply combine SEDs to get != 1.0 values
-        'covering_factor': 1.0,
+    Arguments
+    ----------
+    model_name: str
+        The model name. Used in the naming of the outputs
+    shape_commands: list
+        List of strings describing the cloudy input commands
+    abundances: obj
+        A synthsizer Abundances object
+    output_dir: str
+        The output dir
 
-        'stop_T': 4000,  # K
-        'stop_efrac': -2,
+    Returns
+    -------
+    """
+
+    default_params = {
+        'log10U': -2, # ionisation parameter
+        'log10radius': -2,  # radius in log10 parsecs, only important for spherical geometry
+        'covering_factor': 1.0, # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
+        'stop_T': 4000, # K
+        'stop_efrac': -2, 
         'T_floor': 100,  # K
         'log10n_H': 2.5,  # Hydrogen density
-        'z': 0.,
-        'CMB': False,
-        'cosmic_rays': False
+        'z': 0., # redshift
+        'CMB': False, # include CMB heating
+        'cosmic_rays': False, # include cosmic rays
+        'grains': False, # include dust grains
+        'geometry': 'planeparallel', # the geometry 
+        'resolution': 1.0, # relative resolution the saved continuum spectra
+        'output_abundances': True, # output abundances
+        'output_cont': True, # output continuum
+        'output_lines': True, # output lines
     }
 
-    for key, value in list(kwargs.items()):
-        params[key] = value
+    # update default_params with kwargs
+    params = default_params | kwargs
 
-    log10U = params['log10U']
+    # old approach for updated parameters
+    # for key, value in list(kwargs.items()):
+    #     params[key] = value
 
-    nu = c/(lam * angstrom)
-    E = h*nu
-    E_Ryd = E.to('Ry').value
 
-    lnu[lnu <= 0.0] = 1E-10  #  get rid of negative models
-
-    np.savetxt(f'{output_dir}/{model_name}.sed',
-               np.array([E_Ryd[::-1], lnu[::-1]]).T)
-
-    # ----- start CLOUDY input file (as a list)
+    # begin input list
     cinput = []
 
-    cinput.append(f'table SED "{model_name}.sed" \n')
+    # add spectral shape commands
+    cinput += shape_commands
 
     # --- Define the chemical composition
     for ele in ['He'] + abundances.metals:
         cinput.append((f'element abundance {abundances.name[ele]} '
-                       f'{abundances.a[ele]}\n'))
+                       f'{abundances.a[ele]} no grains\n'))
 
     """
     add graphite and silicate grains
@@ -136,7 +222,7 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     which will again introduce issues on mass conservation.
     """
 
-    if abundances.params['d2m'] > 0:
+    if (abundances.d2m > 0) & params['grains']:
         delta_C = 10**abundances.a_nodep['C'] - 10**abundances.a['C']
         delta_PAH = 0.01 * (10**abundances.a_nodep['C'])
         delta_graphite = delta_C - delta_PAH
@@ -156,12 +242,20 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
 
     # cinput.append('element off limit -7') # should speed up the code
 
-    # # --- Define the ionising luminosity
-    # # log10Q = np.log10(calculate_Q(10**log10U,
-    #                     R_inner=10**params['log10radius'] * 3.086e18))
-    log10Q = np.log10(calculate_Q_from_U(10**log10U, 10**params["log10n_H"]))
-    cinput.append(f'Q(H) = {log10Q}\n')
-    # # cinput.append(f'ionization parameter = {log10U} log\n')
+    log10U = params['log10U']
+
+    # plane parallel geometry
+    if params['geometry'] == 'planeparallel':
+        cinput.append(f'ionization parameter = {log10U:.3f}\n')
+        # inner radius = 10^30 cm and thickness = 10^21.5 cm (==1 kpc) this is essentially plane parallel geometry
+        cinput.append(f'radius 30.0 21.5\n')
+
+    if params['geometry'] == 'spherical':
+        # in the spherical geometry case I think U is some average U, not U at the inner face of the cloud.
+        log10Q = np.log10(calculate_Q_from_U(10**log10U, 10**params["log10n_H"]))
+        cinput.append(f'Q(H) = {log10Q}\n')
+        cinput.append(f'radius {params["log10radius"]} log parsecs\n')
+        cinput.append('sphere\n')
 
     # add background continuum
     if params['cosmic_rays']:
@@ -169,11 +263,10 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
     if params['CMB']:
         cinput.append(f'CMB {params["z"]}\n')
 
-    # --- Define the geometry
+    # define hydrogend density
     cinput.append(f'hden {params["log10n_H"]} log constant density\n')
-    cinput.append(f'radius {params["log10radius"]} log parsecs\n')
-    cinput.append('sphere\n')
-    cinput.append(f'covering factor {params["covering_factor"]} linear\n')
+
+    # cinput.append(f'covering factor {params["covering_factor"]} linear\n')
 
     # --- Processing commands
     cinput.append('iterate to convergence\n')
@@ -183,11 +276,22 @@ def create_cloudy_input(model_name, lam, lnu, abundances,
 
     # --- output commands
     cinput.append(f'print line vacuum\n')  # output vacuum wavelengths
-    cinput.append((f'save last continuum "{model_name}.cont" '
-                   f'units Angstroms no clobber\n'))
-    cinput.append((f'save last lines, array "{model_name}.lines" '
-                  'units Angstroms no clobber\n'))
+    cinput.append(f'set continuum resolution {params["resolution"]}\n') # set the continuum resolution
     cinput.append(f'save overview  "{model_name}.ovr" last\n')
+
+    # output abundances
+    if params['output_abundances']:
+        cinput.append(f'save last abundances "{model_name}.abundances"\n')
+
+    # output continuum (i.e. spectra)
+    if params['output_cont']:
+        cinput.append((f'save last continuum "{model_name}.cont" '
+                   f'units Angstroms no clobber\n'))
+    # output lines
+    if params['output_lines']:
+        cinput.append((f'save last lines, array "{model_name}.lines" '
+                  'units Angstroms no clobber\n'))
+    
 
     # --- save input file
     open(f'{output_dir}/{model_name}.in', 'w').writelines(cinput)

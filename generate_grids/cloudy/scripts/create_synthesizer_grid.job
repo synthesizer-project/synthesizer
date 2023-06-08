@@ -1,0 +1,38 @@
+######################################################################
+# Options for the batch system
+# These options are not executed by the script, but are instead read by the
+# batch system before submitting the job. Each option is preceeded by '#$' to
+# signify that it is for grid engine.
+#
+# All of these options are the same as flags you can pass to qsub on the
+# command line and can be **overriden** on the command line. see man qsub for
+# all the details
+######################################################################
+# -- The shell used to interpret this script
+#$ -S /bin/bash
+# -- Execute this job from the current working directory.
+#$ -cwd
+# -- Job output to stderr will be merged into standard out. Remove this line if
+# -- you want to have separate stderr and stdout log files
+#$ -j y
+#$ -o output/
+# -- Send email when the job exits, is aborted or suspended
+# #$ -m eas
+# #$ -M sw376@sussex.ac.uk
+######################################################################
+# Job Script
+# Here we are writing in bash (as we set bash as our shell above). In here you
+# should set up the environment for your program, copy around any data that
+# needs to be copied, and then execute the program
+######################################################################
+
+# increment array task ID so not zero indexed
+let index=$SGE_TASK_ID
+
+# access line at index from input_names file
+grid=$(sed "${index}q;d" grids.txt)
+
+synthesizer_dir="/research/astrodata/highz/synthesizer/" # apollo
+
+cd ..
+python3 create_synthesizer_grid.py -grid $grid -dir $synthesizer_dir

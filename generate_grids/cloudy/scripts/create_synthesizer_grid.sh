@@ -30,8 +30,12 @@ grid=""
 # bc03
 # grid=$grid" bc03-2016-BaSeL_chabrier03-0.1,100_cloudy bc03-2016-Miles_chabrier03-0.1,100_cloudy bc03-2016-Stelib_chabrier03-0.1,100 bc03_chabrier03-0.1,100_cloudy"
 
-grid=$grid" bc03-2016-Stelib_chabrier03-0.1,100_cloudy bc03_chabrier03-0.1,100_cloudy"
-# FSPS high-mass slope variants
+
+
+
+
+
+
 
 cd ..
-python3 convert_cloudy_grid_to_hdf5.py -grid $grid -dir $synthesizer_dir
+python3 create_synthesizer_grid.py -grid $grid -dir $synthesizer_dir

@@ -7,7 +7,7 @@ import warnings
 from synthesizer.imaging.scene import Scene, ParticleScene, ParametricScene
 
 
-class SpectralCube(Scene):
+class SpectralCube():
     """
     The generic parent IFU/Spectral data cube object, containing common
     attributes and methods for both particle and parametric sIFUs.
@@ -22,13 +22,7 @@ class SpectralCube(Scene):
     def __init__(
         self,
         sed,
-        resolution,
-        npix=None,
-        fov=None,
-        depths=None,
-        apertures=None,
-        snrs=None,
-        super_resolution_factor=None,
+        rest_frame=True,
     ):
         """
         Intialise the SpectralCube.
@@ -52,18 +46,32 @@ class SpectralCube(Scene):
            Errors when an incorrect combination of arguments is passed.
         """
 
-        # Initilise the parent class
-        Scene.__init__(self, resolution=resolution,
-                       npix=npix, fov=fov, sed=sed,
-                       super_resolution_factor=super_resolution_factor)
-
         # Set up the data cube dimensions
         self.spectral_resolution = sed.lam.size
 
-        # Set up the image itself (populated later)
-        self.ifu = np.zeros(
-            (self.npix, self.npix, self.spectral_resolution), dtype=np.float64
-        )
+        # Attribute to hold the IFU array. This is populated later and
+        # allocated in the C extensions or when needed.
+        self.ifu = None
+
+        # Lets get the right SED from the object
+        self.sed_values = None
+        if rest_frame:
+
+            # Get the rest frame SED
+            self.sed_values = self.sed._lnu
+
+        elif self.sed._fnu is not None:
+
+            # Assign the flux
+            self.sed_values = self.sed._fnu
+
+        else:
+
+            # Raise that we have inconsistent arguments
+            raise exceptions.InconsistentArguments(
+                "If rest_frame=False, i.e. an observed (flux) SED is requested"
+                ",The flux must have been calculated with SED.get_fnu()"
+            )
 
     def get_psfed_ifu(self):
         pass
@@ -112,7 +120,6 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         snrs=None,
         rest_frame=True,
         cosmo=None,
-        igm=None,
         super_resolution_factor=None,
     ):
         """
@@ -168,43 +175,13 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             positions=positions,
             super_resolution_factor=super_resolution_factor,
             cosmo=cosmo,
+            rest_frame=rest_frame,
         )
         SpectralCube.__init__(
             self,
             sed=sed,
-            resolution=resolution,
-            npix=npix,
-            fov=fov,
-            depths=depths,
-            apertures=apertures,
-            snrs=snrs,
-            super_resolution_factor=super_resolution_factor,
+            rest_frame=rest_frame,
         )
-
-        # Lets get the right SED from the object
-        self.sed_values = None
-        if rest_frame:
-
-            # Get the rest frame SED (this is both sed.fnu0 and sed.lnu)
-            self.sed_values = self.sed._lnu
-
-        elif self.stars.redshift is not None and self.cosmo is not None:
-
-            # Check if we need to calculate sed.fnu, if not calculate it
-            if self.sed._fnu is None:
-                self.sed.get_fnu(self.cosmo, self.stars.redshift, igm)
-
-            # Assign the flux
-            self.sed_values = self.sed._fnu
-
-        else:
-
-            # Raise that we have inconsistent arguments
-            raise exceptions.InconsistentArguments(
-                "If rest_frame=False, i.e. an observed (flux) SED is requested"
-                ", both an cosmo object (from astropy) and the redshift of the"
-                " particles must be supplied."
-            )
 
     def _check_flux_args(self, rest_frame, cosmo, redshift):
         """
@@ -247,6 +224,11 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             pixels. [npix, npix, spectral_resolution]
         """
 
+        # Set up the IFU array
+        self.ifu = np.zeros(
+            (self.npix, self.npix, self.spectral_resolution), dtype=np.float64
+        )
+
         # Loop over positions including the sed
         for ind in range(self.npart):
             self.ifu[
@@ -283,8 +265,8 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
 
         # Prepare the inputs, we need to make sure we are passing C contiguous
         # arrays.
-        # TODO: more memory efficient to pass the position array and handle C
-        #       extraction.
+        # TODO: Would be more memory efficient to pass the position array
+        #       and handle C extraction.
         sed_vals = np.ascontiguousarray(self.sed_values, dtype=np.float64)
         smls = np.ascontiguousarray(self.smoothing_lengths, dtype=np.float64)
         xs = np.ascontiguousarray(self.coords[:, 0], dtype=np.float64)
@@ -318,19 +300,19 @@ class ParametricSpectralCube(ParametricScene, SpectralCube):
         npix=None,
         fov=None,
         snrs=None,
+        rest_frame=True,
     ):
 
         # Initilise the parent class
         ParametricScene.__init__(
-            self, resolution=resolution, npix=npix, fov=fov, sed=sed
+            self,
+            resolution=resolution,
+            npix=npix,
+            fov=fov,
+            sed=sed,
+            rest_frame=rest_frame,
         )
         SpectralCube.__init__(
             self,
             sed=sed,
-            resolution=resolution,
-            npix=npix,
-            fov=fov,
-            depths=depths,
-            apertures=apertures,
-            snrs=snrs,
         )

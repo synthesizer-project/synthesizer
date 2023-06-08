@@ -154,14 +154,14 @@ survey.fov = fov
 survey.add_galaxies(galaxies)
 
 # Calculate the SEDs
-survey.get_particle_spectra(grid, "total", redshift=redshift, rest_frame=True)
+survey.get_particle_spectra(grid, "total", redshift=redshift, rest_frame=False)
 
 # Make images for each galaxy in this survey
 survey.make_images(
     img_type="smoothed",
     spectra_type="total",
     kernel_func=quintic,
-    rest_frame=True,
+    rest_frame=False,
     cosmo=cosmo,
 )
 
@@ -211,4 +211,4 @@ for inst in survey.imgs:
             j += 1
 
 # Plot the image
-plt.savefig("plots/survey_img_test.png", bbox_inches="tight", dpi=300)
+plt.savefig(script_path + "/plots/survey_img_test.png", bbox_inches="tight", dpi=300)
