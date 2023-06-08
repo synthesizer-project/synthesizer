@@ -1,2 +1,0 @@
-bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-v17.03
-bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-v17.03-resolution0.1
