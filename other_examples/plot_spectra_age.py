@@ -4,7 +4,7 @@
 
 
 import flare.plt as fplt
-from synthesizer.sed import convert_fnu_to_flam
+from synthesizer.utils import fnu_to_flam
 from synthesizer.grid import Grid
 import numpy as np
 import matplotlib as mpl
@@ -49,7 +49,7 @@ def plot_spectra_age(grid, log10Z=-2.0, spec_name='stellar'):
 
     for ia, log10age in enumerate(grid.log10ages):
         Lnu = grid.spectra[spec_name][ia, iZ, :]
-        # Lnu = convert_fnu_to_flam(grid.lam, Lnu)
+        # Lnu = fnu_to_flam(grid.lam, Lnu)
         ax.plot(np.log10(grid.lam), np.log10(Lnu), c=cmap(norm(log10age)), lw=1, alpha=0.8)
 
     for wv in [912., 3646.]:
