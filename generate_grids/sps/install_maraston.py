@@ -8,13 +8,12 @@ import sys
 import re
 import wget
 import argparse
-from utils import write_data_h5py, write_attribute
+from synthesizer.utils import write_data_h5py, write_attribute, flam_to_fnu
 import tarfile
 import glob
 import gzip
 import shutil
 
-from synthesizer.sed import convert_flam_to_fnu
 from synthesizer.sed import calculate_Q
 
 from pathlib import Path
@@ -88,7 +87,7 @@ def make_grid():
             ages_, _, lam_, flam_ = np.loadtxt(fn).T
 
             flam = flam_[ages_==age_Gyr]
-            fnu = convert_flam_to_fnu(lam, flam)
+            fnu = flam_to_fnu(lam, flam)
             spec[ia, iZ] = fnu
 
 
