@@ -34,5 +34,8 @@ Contributors
    grids/grids
    parametric/parametric
    cosmo/cosmo
+   imaging/imaging
    filters
    grid_generation
+   API
+
