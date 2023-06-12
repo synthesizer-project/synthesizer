@@ -30,6 +30,10 @@ extensions = [
 ]
 
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
+html_show_sourcelink = False  # Remove 'view source code' from top of page (for html, not python)
+autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
+set_type_checking_flag = True  # Enable 'expensive' imports for sphinx_autodoc_typehints
+nbsphinx_allow_errors = True  # Continue through Jupyter errors
 
 templates_path = ['templates']
 exclude_patterns = []
