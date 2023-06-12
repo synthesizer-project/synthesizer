@@ -17,13 +17,16 @@ release = '0.1'
 import os
 import sys
 sys.path.insert(0, os.path.abspath('../../synthesizer'))  # Source code dir relative to this file
-# sys.path.insert(0, os.path.abspath('../../'))  # Source code dir relative to this file
+sys.path.insert(0, os.path.abspath('../../'))  # Source code dir relative to this file
 sys.path.insert(0, os.path.abspath("."))
 
 extensions = [
 	"nbsphinx",
     'sphinx.ext.autodoc',  # Core library for html generation from docstrings
     'sphinx.ext.autosummary',  # Create neat summary tables
+    'sphinx.ext.viewcode',  # Add a link to the Python source code for classes, functions etc.
+    'sphinx_autodoc_typehints', # Automatically document param types (less noise in class signature)
+    'IPython.sphinxext.ipython_console_highlighting'
 ]
 
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
