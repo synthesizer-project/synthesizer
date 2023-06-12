@@ -17,7 +17,7 @@ release = '0.1'
 import os
 import sys
 sys.path.insert(0, os.path.abspath('../../synthesizer'))  # Source code dir relative to this file
-# sys.path.insert(0, os.path.abspath('../../'))  # Source code dir relative to this file
+sys.path.insert(0, os.path.abspath('../../'))  # Source code dir relative to this file
 sys.path.insert(0, os.path.abspath("."))
 
 extensions = [
