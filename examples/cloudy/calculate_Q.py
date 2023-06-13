@@ -4,7 +4,8 @@
 
 from synthesizer.cloudy import measure_Q
 import timeit
-from synthesizer.sed import convert_fnu_to_flam, calculate_Q
+from synthesizer.sed import calculate_Q
+from synthesizer.utils import fnu_to_flam
 from synthesizer.grid import Grid
 
 from unyt import c, h, angstrom, erg, s, Hz, eV, unyt_array
