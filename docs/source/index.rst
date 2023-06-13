@@ -8,13 +8,22 @@ Welcome to Synthesizer's documentation!
 
 Synthesizer is a python package for generating synthetic astrophysical spectra. It is intended to be modular, flexible and fast.
 
+Contents
+--------
 
-License
--------
-
-Synthesizer is free software made available under the GNU General Public License v3.0. For details see the `LICENSE <https://github.com/flaresimulations/synthesizer/blob/main/LICENSE.md>`_.
-
-
+.. toctree::
+   :maxdepth: 2
+   
+   installation
+   grids/grids
+   parametric/parametric
+   cosmo/cosmo
+   imaging/imaging
+   filters
+   grid_generation
+   API
+   
+   
 Acknowledgement
 ---------------
 
@@ -25,17 +34,7 @@ Contributors
 
 .. include:: ../../AUTHORS.rst
 
+License
+-------
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents
-
-   installation
-   grids/grids
-   parametric/parametric
-   cosmo/cosmo
-   imaging/imaging
-   filters
-   grid_generation
-   API
-
+Synthesizer is free software made available under the GNU General Public License v3.0. For details see the `LICENSE <https://github.com/flaresimulations/synthesizer/blob/main/LICENSE.md>`_.
