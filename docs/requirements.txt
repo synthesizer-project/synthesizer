@@ -1,0 +1,5 @@
+# Defining the exact version will make sure things don't break
+sphinx==7.0.1
+furo==2023.05.20
+sphinx_autodoc_typehints==1.23.0
+ipython==8.13.1

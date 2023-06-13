@@ -7,7 +7,7 @@ import numpy as np
 import h5py
 
 from . import __file__ as filepath
-from .sed import Sed, convert_fnu_to_flam
+from .sed import Sed
 from .line import Line, LineCollection
 
 
