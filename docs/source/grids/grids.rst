@@ -4,7 +4,7 @@ Grids
 
 Most of the functionality of `synthesizer` is reliant on Stellar Population Synthesis (SPS) grids. These are precomputed grids of spectra (and lines) for a range of ages and metallicities.
 
-Most users will use pre-computed grids, available from dropbox `here <https://www.dropbox.com/sh/ipo6pox1sigjnqt/AADXfPvu7NbiWYiSGiooC_L0a?dl=0>`_. See details below on where to download these grids and how to load them. 
+Most users will use pre-computed grids, available from dropbox `here <https://www.dropbox.com/sh/a3idy8zg553hoc3/AACqVnpE1jj16Bj3PAB1TwRva?dl=0>`_. See details below on where to download these grids and how to load them. 
 
 For advanced users, Synthesizer contains scripts for creating your own grids from popular SPS codes, and running these through CLOUDY. These are contained within the `generate_grids` directory of synthesizer. You will need a working installation of synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. CLOUDY, python-FSPS). Please reach out to us if you have questions about the pre-computed grids or grid creation.
 

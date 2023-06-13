@@ -1,7 +1,7 @@
 Parametric models
 =================
 
-Synthesizer can be used to generate spectra for simple parametric star formation histories.
+Synthesizer can be used to generate spectra for simple parametric star formation and metal enrichment (SFZH) histories.
 In the following we show some examples.
 
 .. toctree::
@@ -11,5 +11,7 @@ In the following we show some examples.
    generate_sed
    generate_observed_sed
    generate_lines
-   generate_composite_galaxy
-   make_image
+   
+.. TODO: fix imaging examples
+.. generate_composite_galaxy
+.. make_image
