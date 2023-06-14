@@ -358,7 +358,7 @@ class Image():
         psfs = self.psfs
 
         # Check we have a valid set of PSFs
-        if self.pixel_values is not None and isinstance(psfs, dict):
+        if len(filters) == 0 and isinstance(psfs, dict):
             raise exceptions.InconsistentArguments(
                 "To convolve with a single image an array should be "
                 "provided for the PSF not a dictionary."
@@ -384,7 +384,7 @@ class Image():
                 )
 
         # Handle the possible cases (multiple filters or single image)
-        if self.pixel_values is not None:
+        if len(filters) == 0:
 
             self.img_psf = self._get_psfed_single_img(self.img, psfs)
 
@@ -529,7 +529,7 @@ class Image():
 
         # Check we have a valid set of PSFs
         # TODO: could move these to a check args function.
-        if self.pixel_values is not None and (
+        if len(filters) == 0 and (
             isinstance(self.depths, dict)
             or isinstance(self.snrs, dict)
             or isinstance(self.apertures, dict)
@@ -539,7 +539,7 @@ class Image():
                 "If there is a single image then noise arguments should be "
                 "floats not dictionaries."
             )
-        if self.filters is not None and isinstance(self.depths, dict):
+        if len(self.filters) > 0 and isinstance(self.depths, dict):
 
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
@@ -555,7 +555,7 @@ class Image():
                     "[" + ", ".join(list(filter_codes)) + "]"
                 )
 
-        if self.filters is not None and isinstance(self.snrs, dict):
+        if len(self.filters) > 0 and isinstance(self.snrs, dict):
 
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
@@ -571,7 +571,7 @@ class Image():
                     "[" + ", ".join(list(filter_codes)) + "]"
                 )
 
-        if self.filters is not None and isinstance(self.apertures, dict):
+        if len(self.filters) > 0 and isinstance(self.apertures, dict):
 
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
@@ -588,7 +588,7 @@ class Image():
                     "[" + ", ".join(list(filter_codes)) + "]"
                 )
 
-        if self.filters is not None and isinstance(noises, dict):
+        if len(self.filters) > 0 and isinstance(noises, dict):
 
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
@@ -605,7 +605,7 @@ class Image():
                 )
 
         # Handle the possible cases (multiple filters or single image)
-        if self.pixel_values is not None:
+        if len(filters) == 0:
 
             # Apply noise to the image
             noise_tuple = self._get_noisy_single_img(
@@ -983,7 +983,7 @@ class ParticleImage(ParticleScene, Image):
         """
 
         # Handle the possible cases (multiple filters or single image)
-        if self.pixel_values is not None:
+        if len(filters) == 0:
 
             return self._get_hist_img_single_filter()
 
@@ -1033,7 +1033,7 @@ class ParticleImage(ParticleScene, Image):
         """
 
         # Handle the possible cases (multiple filters or single image)
-        if self.pixel_values is not None:
+        if len(filters) == 0:
 
             return self._get_smoothed_img_single_filter(kernel_func)
 
