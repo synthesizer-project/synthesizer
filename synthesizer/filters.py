@@ -333,6 +333,30 @@ class FilterCollection:
 
         return equal
 
+    def __getitem__(self, key):
+        """
+        Enables the extraction of filter objects from the FilterCollection by
+        getitem syntax (FilterCollection[key] rather than
+        FilterCollection.filters[key]).
+        
+        Parameters
+        ----------
+        key : string
+            The filter code of the desired filter.
+        
+        Returns
+        -------
+        Filter 
+             The Filter object stored at self.filters[key].
+
+        Raises
+        -------
+        KeyError
+             When the filter does not exist in self.filters an error is raised.
+        """
+
+        return self.filters[key]
+
     def _transmission_curve_ax(self, ax, add_filter_label=True):
         """
         Add filter transmission curves to a give axes
