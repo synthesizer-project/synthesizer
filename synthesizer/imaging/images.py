@@ -1116,9 +1116,6 @@ class ParametricImage(ParametricScene, Image):
         )
         Image.__init__(
             self,
-            resolution=resolution,
-            npix=npix,
-            fov=fov,
             filters=filters,
             psfs=psfs,
             depths=depths,
