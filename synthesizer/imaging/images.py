@@ -7,6 +7,7 @@ import ctypes
 from scipy import signal
 from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 from unyt import unyt_quantity, kpc, mas, unyt_array, unyt_quantity
 from unyt.dimensions import length, angle
 
@@ -655,9 +656,173 @@ class Image():
 
         return self.imgs_noise, self.weight_maps, self.noise_arrs
 
-    def make_rgb_image(self, rgb_filters, img_type="standard", weights=None):
+    def plot_image(self, img_type="standard", filter_code=None, show=False,
+                   vmin=None, vmax=None, scaling_func=None, cmap="Greys_r"):
         """
-        Makes an rgb image of specified filters.
+        Plot an image.
+
+        If this image object contains multiple filters each with an image and
+        the filter_code argument is not specified, then all images will be
+        plotted in a grid of images. If only a single image exists within the
+        image object or a filter has been specified via the filter_code
+        argument, then only a single image will be plotted.
+
+        Note: When plotting images in multiple filters, if normalisation
+        (vmin, vmax) are not provided then the normalisation will be unique
+        to each filter. If they are provided then then they will be global
+        across all filters.
+        
+        Parameters
+        ----------
+        img_type : str
+            The type of images to combine. Can be "standard" for noiseless
+            and psfless images (self.imgs), "psf" for images with psf
+            (self.imgs_psf), or "noise" for images with noise 
+            (self.imgs_noise).
+        filter_code : str
+            The filter code of the image to be plotted. If provided a plot is
+            made only for this filter. This is not needed if the image object
+            only contains a single image.
+        show : bool
+            Whether to show the plot or not (Default False).
+        vmin : float
+            The minimum value of the normalisation range.
+        vmax : float
+            The maximum value of the normalisation range.
+        scaling_func : function
+            A function to scale the image by. This function should take a
+            single array and produce an array of the same shape but scaled in
+            the desired manner.
+        cmap : str
+            The name of the matplotlib colormap for image plotting. Can be any
+            valid string that can be passed to the cmap argument of imshow.
+            Defaults to "Greys_r".
+        
+        Returns
+        ----------
+        matplotlib.pyplot.figure
+            The figure object containing the plot
+        matplotlib.pyplot.figure.axis
+            The axis object containing the image.
+
+        Raises
+        ----------
+        MissingImage
+            If the requested image type has not yet been created and stored in
+            this image object an exception is raised.
+        """
+
+        # Handle the scaling function for less branches
+        if scaling_func is None:
+            scaling_func = lambda x: x
+
+        # What type of image are we plotting?
+        if img_type == "standard":
+            img = self.img
+            imgs = self.imgs
+        elif img_type == "psf":
+            img = self.img_psf
+            imgs = self.imgs_psf
+        elif img_type == "noise":
+            img = self.img_noise
+            imgs = self.imgs_noise
+        else:
+            raise exceptions.UnknownImageType(
+                "img_type can be 'standard', 'psf', or 'noise' "
+                "not '%s'" % img_type
+            )
+
+        # Are we only plotting a single image from a set?
+        if filter_code is not None:
+
+            # Get that image
+            img = imgs[filter_code]
+
+        # Plot the single image
+        if img is not None:
+
+            # Set up the figure
+            fig = plt.figure(figsize=(3.5, 3.5))
+
+            # Create the axis
+            ax = fig.add_subplot(111)
+
+            # Set up minima and maxima
+            if vmin is None:
+                vmin = np.min(img)
+            if vmax is None:
+                vmax = np.max(img)
+
+            # Normalise the image.
+            img = (img - vmin) / (vmax - vmin)
+
+            # Scale the image
+            img = scaling_func(img)
+
+            # Plot the image and remove the surrounding axis
+            ax.imshow(img, origin="lower", interpolation="nearest",
+                      cmap=cmap)
+            ax.axis("off")
+            
+        else:
+            # Ok, plot a grid of filter images
+
+            # Do we need to find the normalisation for each filter?
+            unique_norm_min = vmin is None
+            unique_norm_max = vmax is None
+
+            # Set up the figure
+            fig = plt.figure(
+                figsize=(4 * 3.5, int(np.ceil(len(self.filters) / 4)) * 3.5)
+            )
+
+            # Create a gridspec grid
+            gs = gridspec.GridSpec(int(np.ceil(len(self.filters) / 4)), 4,
+                                   hspace=0.0, wspace=0.0)
+
+            # Loop over filters making each image
+            for ind, f in enumerate(self.filters):
+
+                # Get the image
+                img = imgs[f.filter_code]
+                
+                # Create the axis
+                ax = fig.add_subplot(gs[int(np.floor(ind / 4)),
+                                        ind % 4])
+
+                # Set up minima and maxima
+                if unique_norm_min:
+                    vmin = np.min(img)
+                if unique_norm_max:
+                    vmax = np.max(img)
+
+                # Normalise the image.
+                img = (img - vmin) / (vmax - vmin)
+
+                # Scale the image
+                img = scaling_func(img)
+
+                # Plot the image and remove the surrounding axis
+                ax.imshow(img, origin="lower", interpolation="nearest",
+                          cmap=cmap)
+                ax.axis("off")
+
+                # Place a label for which filter this ised_ASCII
+                ax.text(0.95, 0.9, f.filter_code,
+                        bbox=dict(boxstyle="round,pad=0.3", fc='w', ec="k",
+                                  lw=1, alpha=0.8), transform=ax.transAxes,
+                        horizontalalignment='right')
+
+        if show:
+            plt.show()
+
+        return fig, ax
+
+    def make_rgb_image(self, rgb_filters, img_type="standard", weights=None,
+                       scaling_func=None):
+        """
+        Makes an rgb image of specified filters with optional weights in
+        each filter.
         
         Parameters
         ----------
@@ -668,15 +833,23 @@ class Image():
         img_type : str
             The type of images to combine. Can be "standard" for noiseless
             and psfless images (self.imgs), "psf" for images with psf
-            (self.imgs_psf), or "noise" for images with noise \
+            (self.imgs_psf), or "noise" for images with noise 
             (self.imgs_noise).
         weights : dict (str: array_like (str))
             A dictionary of weights for each filter. Defaults to equal weights.
+        scaling_func : function
+            A function to scale the image by. Defaults to arcsinh. This
+            function should take a single array and produce an array of the
+            same shape but scaled in the desired manner.
         Returns
         ----------
         array_like (float)
             The image array itself
         """
+
+        # Handle the scaling function for less branches
+        if scaling_func is None:
+            scaling_func = lambda x: x
 
         # Handle the case where we haven't been passed weights
         if weights is None:
@@ -699,11 +872,17 @@ class Image():
         for rgb_ind, rgb in enumerate(rgb_filters):
             for f in rgb_filters[rgb]:
                 if img_type == "standard":
-                    rgb_img[:, :, rgb_ind] += weights[f] * self.imgs[f]
+                    rgb_img[:, :, rgb_ind] += scaling_func(
+                        weights[f] * self.imgs[f]
+                    )
                 elif img_type == "psf":
-                    rgb_img[:, :, rgb_ind] += weights[f] * self.imgs_psf[f]
+                    rgb_img[:, :, rgb_ind] += scaling_func(
+                        weights[f] * self.imgs_psf[f]
+                    )
                 elif img_type == "noise":
-                    rgb_img[:, :, rgb_ind] += weights[f] * self.imgs_noise[f]
+                    rgb_img[:, :, rgb_ind] += scaling_func(
+                        weights[f] * self.imgs_noise[f]
+                    )
                 else:
                     raise exceptions.UnknownImageType(
                         "img_type can be 'standard', 'psf', or 'noise' "
@@ -714,29 +893,19 @@ class Image():
 
         return rgb_img
 
-    def plot_rgb_image(self, rgb_filters, img_type="standard", weights=None,
-                       show=False, vmin=None, vmax=None):
+    def plot_rgb_image(self, show=False, vmin=None, vmax=None):
         """
         Plot an RGB image.
-
-        If one has not already been created one will be made.
         
         Parameters
         ----------
-        r_filters : dict (str: array_like (str))
-            A dictionary containing lists of each filter to combine to create
-            the red, green, and blue channels. e.g. {"R": "Webb/NIRCam.F277W",
-            "G": "Webb/NIRCam.F150W", "B": "Webb/NIRCam.F090W"}.
-        img_type : str
-            The type of images to combine. Can be "standard" for noiseless
-            and psfless images (self.imgs), "psf" for images with psf
-            (self.imgs_psf), or "noise" for images with noise \
-            (self.imgs_noise).
-        weights : dict (str: array_like (str))
-            A dictionary of weights for each filter. Defaults to equal weights.
         show : bool
             Whether to show the plot or not (Default False).
-
+        vmin : float
+            The minimum value of the normalisation range.
+        vmax : float
+            The maximum value of the normalisation range.
+        
         Returns
         ----------
         matplotlib.pyplot.figure
@@ -745,13 +914,21 @@ class Image():
             The axis object containing the image.
         array_like (float)
             The rgb image array itself.
+
+        Raises
+        ----------
+        MissingImage
+            If the RGB image has not yet been created and stored in this image
+            object an exception is raised.
         """
 
-        # If the image hasn't been made, make it
+        # If the image hasn't been made throw an error
         if self.rgb_img is None:
-            _ = self.make_rgb_image(rgb_filters,
-                                    img_type=img_type,
-                                    weights=weights)
+            raise exceptions.MissingImage(
+                "The rgb image hasn't been computed yet. Run "
+                "Image.make_rgb_image to compute the RGB image before "
+                "plotting."
+            )
 
         # Set up minima and maxima
         if vmin is None:
