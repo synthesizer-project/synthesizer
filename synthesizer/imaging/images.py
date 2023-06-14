@@ -363,7 +363,7 @@ class Image():
                 "To convolve with a single image an array should be "
                 "provided for the PSF not a dictionary."
             )
-        elif self.filters is not None and isinstance(psfs, dict):
+        elif len(self.filters) > 0 and isinstance(psfs, dict):
 
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
@@ -858,10 +858,6 @@ class ParticleImage(ParticleScene, Image):
         igm : obj (Inoue14/Madau96)
             Object containing the absorbtion due to an intergalactic medium.
         """
-
-        # Clean up arguments
-        if filters is None:
-            filters = ()
 
         # Initilise the parent classes
         ParticleScene.__init__(
