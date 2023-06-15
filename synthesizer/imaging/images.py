@@ -1173,12 +1173,12 @@ class ParticleImage(ParticleScene, Image):
             # Apply this filter to the IFU
             if self.rest_frame:
                 self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, self.ifu_obj.sed.nu
+                    self.ifu, nu=self.ifu_obj.sed.nu
                 )
 
             else:
                 self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, self.ifu_obj.sed.nuz
+                    self.ifu, nu=self.ifu_obj.sed.nuz
                 )
 
         return self.imgs
@@ -1223,11 +1223,11 @@ class ParticleImage(ParticleScene, Image):
             # Apply this filter to the IFU
             if self.rest_frame:
                 self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, self.ifu_obj.sed.nu
+                    self.ifu, nu=self.ifu_obj.sed.nu
                 )
             else:
                 self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, self.ifu_obj.sed.nuz
+                    self.ifu, nu=self.ifu_obj.sed.nuz
                 )
 
         return self.imgs
