@@ -11,7 +11,7 @@ class Units:
     """
 
     lam = Angstrom
-    lamz = Angstrom
+    obslam = Angstrom
     wavelength = Angstrom
     nu = Hz
     nuz = Hz

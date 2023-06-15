@@ -56,7 +56,7 @@ class Sed:
         self.nu = (c/(self.lam)).to('Hz').value  # Hz
 
         self.redshift = 0
-        self.lamz = None
+        self.obslam = None
         self.nuz = None
         self.fnu = None
         self.broadband_luminosities = None
@@ -169,7 +169,7 @@ class Sed:
 
         """ measure the balmer break strength """
 
-    def get_broadband_luminosities(self, fc):  # broad band flux/nJy
+    def get_broadband_luminosities(self, filters): 
         """
         Calculate broadband luminosities using a FilterCollection object
 
@@ -179,17 +179,12 @@ class Sed:
 
         self.broadband_luminosities = {}
 
-        for _filter in fc:
+        for f in filters:
 
-            # Calculate broadband fluxes by multiplying the observed spectra
-            # by the filter transmission curve and dividing by the
-            # normalisation.
-            int_num = integrate.trapezoid(self._lnu * _filter.t / self.nu,
-                                          self.nu)
-            int_den = integrate.trapezoid(_filter.t / self.nu, self.nu)
-
-            self.broadband_luminosities[_filter.filter_code] = (
-                int_num / int_den) * erg / s / Hz
+            # Apply the filter transmission curve and store the resulting
+            # luminosity
+            bb_lum = f.apply_filter(self._lnu, nu=self._nu) * erg / s / Hz
+            self.broadband_luminosities[f.filter_code] = bb_lum
 
         return self.broadband_luminosities
 
@@ -200,13 +195,15 @@ class Sed:
         
         Uses a standard distance of 10 pc
         """
-        
-        self.lamz = self._lam
+
+        # Get the observed wavelength and frequency arrays
+        self.obslam = self._lam
+        self.nuz = self._nu
+
+        # Compute the flux SED and apply unit conversions to get to nJy
         self.fnu = self._lnu / (4 * np.pi * (10 * pc).to('cm').value)
         self._fnu *= 1E23  # convert to Jy
         self._fnu *= 1E9  # convert to nJy
-        
-        self.nuz = c.value/self.lamz
 
     def get_fnu(self, cosmo, z, igm=None):
         """
@@ -221,19 +218,22 @@ class Sed:
         # Store the redshift for later use
         self.redshift = z
 
-        self.lamz = self._lam * (1. + z)  # observed frame wavelength
-        luminosity_distance = cosmo.luminosity_distance(
-            z).to('cm').value  # the luminosity distance in cm
+        # Get the observed wavelength and frequency arrays
+        self.obslam = self._lam * (1. + z)
+        self.nuz = self._nu / (1.+ z)
 
-        self.nuz = c.value / self.lamz
+        # Compute the luminosity distance
+        luminosity_distance = cosmo.luminosity_distance(z).to('cm').value
 
-        self.fnu = self._lnu * (1.+z) / (4 * np.pi * luminosity_distance**2)
-
+        # Finally, compute the flux SED and apply unit conversions to get
+        # to nJy
+        self.fnu = self._lnu * (1.+ z) / (4 * np.pi * luminosity_distance**2)
         self._fnu *= 1E23  # convert to Jy
         self._fnu *= 1E9  # convert to nJy
 
+        # If we are applying an IGM model apply it
         if igm:
-            self._fnu *= igm.T(z, self.lamz)
+            self._fnu *= igm.T(z, self.obslam)
 
     def get_broadband_fluxes(self, fc, verbose=True):  # broad band flux/nJy
         """
@@ -243,7 +243,7 @@ class Sed:
         fc: a FilterCollection object
         """
 
-        if (self.lamz is None) | (self.fnu is None):
+        if (self.obslam is None) | (self.fnu is None):
             return ValueError(('Fluxes not calculated, run `get_fnu` or '
                                '`get_fnu0` for observer frame or rest-frame '
                                'fluxes, respectively'))
@@ -255,30 +255,14 @@ class Sed:
 
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
-
-            if not np.array_equal(f.lam * (1. + self.redshift) , self.lamz):
+            if not np.array_equal(f.lam, self.lam):
                 if verbose:
                     print(('WARNING: filter wavelength grid is not '
                            'the same as the SED wavelength grid.'))
 
-            # Calculate broadband fluxes by multiplying the observed spetra by
-            # the filter transmission curve and dividing by the normalisation
-
-            # NOTE: All of these versions seem to work. I suspect the first one
-            # won't work for different wavelength grids.
-
-            # int_num = integrate.trapezoid(self.fnu * fc.filter[f].t)
-            # int_den = integrate.trapezoid(fc.filter[f].t)
-
-            int_num = integrate.trapezoid(self._fnu * f.t/self.nuz,
-                                          self.nuz)
-            int_den = integrate.trapezoid(f.t/self.nuz, self.nuz)
-
-            # int_num = integrate.simpson(self.fnu * fc.filter[f].t/self.nu,
-            #                             self.nu)
-            # int_den = integrate.simpson(fc.filter[f].t/self.nu, self.nu)
-
-            self.broadband_fluxes[f.filter_code] = int_num / int_den * nJy
+            # Calculate and store the broadband flux in this filter 
+            bb_flux = f.apply_filter(self._lnu, nu=self.nuz) * nJy
+            self.broadband_fluxes[f.filter_code] = bb_flux
 
         return self.broadband_fluxes
 
