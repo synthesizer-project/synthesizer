@@ -90,7 +90,7 @@ class BaseGalaxy:
         for sed_name in spectra_to_plot:
             sed = self.spectra[sed_name]
             sed.get_fnu(cosmo, z)
-            ax.plot(sed.lamz, sed.fnu, lw=1, alpha=0.8, label=sed_name)
+            ax.plot(sed.obslam, sed.fnu, lw=1, alpha=0.8, label=sed_name)
             print(sed_name)
 
             if fc:
