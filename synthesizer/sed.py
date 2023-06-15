@@ -235,6 +235,19 @@ class Sed:
         if igm:
             self._fnu *= igm.T(z, self.obslam)
 
+    def apply_igm_to_lnu(self, igm):
+        """
+        Apply an IGM transmission curve to the rest frame SED.
+        
+        Args:
+          igm:
+            IGM object from which the tranmission can be extracted. These can
+            be found in synthesizer.igm.
+        """
+
+        self._lnu *= igm.T(z, self.lam)
+        
+
     def get_broadband_fluxes(self, fc, verbose=True):  # broad band flux/nJy
         """
         Calculate broadband luminosities using a FilterCollection object
