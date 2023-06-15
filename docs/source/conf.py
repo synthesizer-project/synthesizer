@@ -26,7 +26,8 @@ extensions = [
     'sphinx.ext.autosummary',  # Create neat summary tables
     'sphinx.ext.viewcode',  # Add a link to the Python source code for classes, functions etc.
     'sphinx_autodoc_typehints', # Automatically document param types (less noise in class signature)
-    'IPython.sphinxext.ipython_console_highlighting'
+    'IPython.sphinxext.ipython_console_highlighting',
+    'sphinxcontrib.napoleon'
 ]
 
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
