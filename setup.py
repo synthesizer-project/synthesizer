@@ -96,13 +96,13 @@ class BuildExt(build_ext):
 extensions = [
     Extension(path, sources=[source])
     for path, source in {
-        "synthesizer/extensions/csed":
+        "synthesizer.extensions.csed":
             "synthesizer/extensions/csed.c",
-        "synthesizer/extensions/weights":
+        "synthesizer.extensions.weights":
             "synthesizer/extensions/weights.c",
-        "synthesizer/imaging/extensions/sph_kernel_calc":
+        "synthesizer.imaging.extensions.sph_kernel_calc":
             "synthesizer/imaging/extensions/sph_kernel_calc.c",
-        "synthesizer/imaging/extensions/ckernel_functions":
+        "synthesizer.imaging.extensions.ckernel_functions":
             "synthesizer/imaging/extensions/ckernel_functions.c",
     }.items()
 
