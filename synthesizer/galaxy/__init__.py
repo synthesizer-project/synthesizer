@@ -1,3 +1,0 @@
-
-
-from .parametric import ParametricGalaxy
