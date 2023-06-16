@@ -106,7 +106,7 @@ class FilterCollection:
         if tophat_dict is not None:
             self._make_top_hat_collection(tophat_dict)
         if generic_dict is not None:
-            self._make_generic_colleciton(generic_dict)
+            self._make_generic_collection(generic_dict)
 
         # Atrributes to enable looping
         self._current_ind = 0
