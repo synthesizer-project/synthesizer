@@ -5,7 +5,7 @@ import cmasher as cmr
 from .sed import Sed
 from .dust import power_law
 from . import exceptions
-from ..line import Line
+from .line import Line
 
 
 class BaseGalaxy:
