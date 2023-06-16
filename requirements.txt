@@ -1,3 +1,4 @@
+nbmake=1.4.1
 astropy==5.1.1
 Cython==0.29.32
 h5py==3.7.0
