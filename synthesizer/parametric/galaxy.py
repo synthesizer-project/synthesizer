@@ -94,7 +94,7 @@ class Galaxy(BaseGalaxy):
         """
 
         new_sfzh = self.sfzh + second_galaxy.sfzh
-        new_galaxy = ParametricGalaxy(new_sfzh)
+        new_galaxy = Galaxy(new_sfzh)
 
         # add together spectra
         for spec_name, spectra in self.spectra.items():

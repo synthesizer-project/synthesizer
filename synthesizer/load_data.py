@@ -142,7 +142,7 @@ def load_FLARES(f, region, tag):
 
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
-        galaxies[i] = ParticleGalaxy()
+        galaxies[i] = Galaxy()
         galaxies[i].load_stars(
             mass[b:e],
             ages[b:e],
