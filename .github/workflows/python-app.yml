@@ -40,4 +40,8 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
-        pytest --nbmake docs/source/*ipynb
+        pytest --nbmake docs/source/*.ipynb
+        pytest --nbmake docs/source/cosmo/*.ipynb
+        pytest --nbmake docs/source/grids/*.ipynb
+        pytest --nbmake docs/source/imaging/*.ipynb
+        pytest --nbmake docs/source/parametric/*.ipynb
