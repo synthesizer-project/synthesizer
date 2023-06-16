@@ -185,7 +185,7 @@ class BaseGalaxy:
         """
 
         # --- begin by calculating intrinsic spectra
-        intrinsic = self.get_intrinsic_spectra(grid, update=update,
+        intrinsic = self.get_spectra_intrinsic(grid, update=update,
                                                fesc=fesc, young=young, old=old)
 
         if tauV:
@@ -268,7 +268,7 @@ class BaseGalaxy:
                      "case of single dust screen"))
 
         # --- begin by generating the pure stellar spectra
-        self.spectra['stellar'] = self.get_stellar_spectra(grid, update=update)
+        self.spectra['stellar'] = self.get_spectra_stellar(grid, update=update)
 
         # --- this is the starlight that escapes any reprocessing
         self.spectra['escape'] = \
@@ -662,7 +662,7 @@ class BaseGalaxy:
         # if the intrinsic lines haven't already been calculated and saved 
         # then generate them
         if 'intrinsic' not in self.lines:
-            intrinsic_lines = self.get_intrinsic_line(grid, line_ids,
+            intrinsic_lines = self.get_line_intrinsic(grid, line_ids,
                                                       fesc=fesc, update=update)
         else:
             intrinsic_lines = self.lines['intrinsic']
@@ -733,7 +733,7 @@ class BaseGalaxy:
                 A dictionary containing line objects.
         """
 
-        return self.get_attenuated_line(
+        return self.get_line_attenuated(
             grid, line_ids, fesc=fesc,
             tauV_nebular=tauV, tauV_stellar=tauV,
             dust_curve_nebular=dust_curve,
