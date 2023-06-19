@@ -12,7 +12,7 @@ from unyt import unyt_quantity, kpc, mas, unyt_array, unyt_quantity
 from unyt.dimensions import length, angle
 
 import synthesizer.exceptions as exceptions
-from synthesizer.imaging.scene import Scene, ParticleScene, ParametricScene
+from synthesizer.imaging.scene import Scene, ParticleScene
 from synthesizer.imaging.spectral_cubes import (
     ParticleSpectralCube,
     ParametricSpectralCube,
@@ -378,10 +378,10 @@ class Image():
         # Handle the possible cases (multiple filters or single image)
         if len(filters) == 0:
 
-            return self._get_img_single_filter(kernel_func)
+            return self._get_img_single_filter()
 
         # Calculate IFU "image"
-        self.ifu = self.ifu_obj.get_ifu(kernel_func)
+        self.ifu = self.ifu_obj.get_ifu()
 
         # Otherwise, we need to loop over filters and return a dictionary
         for f in self.filters:
@@ -1254,15 +1254,6 @@ class ParticleImage(ParticleScene, Image):
         a kernel. This uses C extensions to calculate the image for each
         particle efficiently.
         
-        Parameters
-        ----------
-        kernel_func : function
-            A function describing the smoothing kernel that returns a single
-            number between 0 and 1. This function can be imported from the
-            options in kernel_functions.py or can be user defined. If user
-            defined the function must return the kernel value corredsponding
-            to the position of a particle with smoothing length h at distance
-            r from the centre of the kernel (r/h).
         Returns
         -------
         img : array_like (float)
@@ -1289,14 +1280,17 @@ class ParticleImage(ParticleScene, Image):
         return self.img
 
 
-class ParametricImage(ParametricScene, Image):
+class ParametricImage(Scene, Image):
     """
-    The Image object, containing attributes and methods for calculating images.
-    WorkInProgress
+    The Image object, containing attributes and methods for calculating images
+    from parametric morphologies.
+    
     Attributes
     ----------
+    
     Methods
     -------
+    
     """
 
     def __init__(
@@ -1318,6 +1312,7 @@ class ParametricImage(ParametricScene, Image):
     ):
         """
         Intialise the ParametricImage.
+        
         Parameters
         ----------
         resolution : float
@@ -1356,12 +1351,39 @@ class ParametricImage(ParametricScene, Image):
             snrs=snrs,
         )
 
-        # If we have a list of filters make an IFU
-        if len(filters) > 0:
-            self._ifu_obj = ParametricSpectralCube(sed, resolution, 
-                                                   npix=npix, fov=fov)
+        # Check our inputs
+        self._check_parametric_img_args(morphology)
 
-        # check morphology has the correct method
+        # Store the morphology object
+        self.morphology = morphology
+        
+        # Make the IFU, even if we only have 1 filter this is a minor overhead
+        self._ifu_obj = ParametricSpectralCube(morphology, sed, resolution, 
+                                               npix=npix, fov=fov,
+                                               rest_frame=rest_frame)
+
+    def _check_parametric_img_args(self, morphology):
+        """
+        Checks all arguments agree and do not conflict.
+
+        Raises
+        ----------
+        """
+
+        # For now ensure we have filters. Filterless images are not currently
+        # supported.
+        if self.filters is None:
+            raise exceptions.UnimplementedFunctionality(
+                "Parametric images are currently only supported for "
+                "photometry when using filters. Provide a FilterCollection."
+            )
+        if len(self.filters) == 0:
+            raise exceptions.UnimplementedFunctionality(
+                "Parametric images are currently only supported for "
+                "photometry when using filters. Provide a FilterCollection."
+            )
+        
+        # Check morphology has the correct method
         # this might not be generic enough
         if (self.spatial_unit == kpc) & (not morphology.model_kpc):
 
@@ -1382,77 +1404,6 @@ class ParametricImage(ParametricScene, Image):
                 resolution in mas. Please provide cosmology (cosmo) and redshift.
                 """
                 pass
-
-        # Define 1D bin centres of each pixel
-        bin_centres = _resolution * np.linspace(
-            -(npix - 1) / 2, (npix - 1) / 2, npix
-        )
-
-        # As above but for the 2D grid
-        self.xx, self.yy = np.meshgrid(bin_centres, bin_centres)
-
-        # define the base image
-        self.img = morphology.img(self.xx, self.yy, units=resolution.units)
-        self.img /= np.sum(self.img)  # normalise this image to 1
-
-    def create_images(self, sed=None):
-        """
-        Create multiband images
-        Parameters
-        ----------
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
-        Returns
-        ----------
-        dictionary array
-            a dictionary of images
-        """
-
-        if not sed:
-            if self.sed:
-                sed = self.sed
-            else:
-                # raise exception if no Sed object available
-                pass
-
-        # check if all filters have fluxes calculated
-        if self.rest_frame:
-            if sed.broadband_luminosities:
-                filters = list(sed.broadband_luminosities.keys())
-            else:
-                # raise exception if broadband luminosities not generated
-                pass
-        else:
-            if sed.broadband_fluxes:
-                filters = list(sed.broadband_fluxes.keys())
-            else:
-                # raise exception if broadband fluxes not generated
-                pass
-
-        for filter_ in filters:
-            self.imgs[filter_] = sed.broadband_luminosities[filter_] * self.img
-
-        return self.imgs
-
-    def plot(self, filter_code=None):
-        """
-        Make a simple plot of the image
-        Parameters
-        ----------
-        filter_code : str
-            The filter code
-        """
-
-        # if filter code provided use broadband image, else use base image
-        if filter_code:
-            img = self.imgs[filter_code]
-        else:
-            img = self.img
-
-        plt.figure()
-
-        plt.imshow(np.log10(img), origin="lower", interpolation="nearest")
-        plt.show()
 
 
 
