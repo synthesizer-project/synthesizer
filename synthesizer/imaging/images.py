@@ -324,7 +324,7 @@ class Image():
             # Apply this filter to the IFU
             if self.rest_frame:
                 self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, nu=self.ifu_obj.sed.nu
+                    self.ifu, nu=self.ifu_obj.sed._nu
                 )
 
             else:
@@ -365,7 +365,7 @@ class Image():
             # Apply this filter to the IFU
             if self.rest_frame:
                 self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, nu=self.ifu_obj.sed.nu
+                    self.ifu, nu=self.ifu_obj.sed._nu
                 )
             else:
                 self.imgs[f.filter_code] = f.apply_filter(
@@ -1031,6 +1031,10 @@ class Image():
         if filter_code:
             img = self.imgs[filter_code]
         else:
+            if self.img is None:
+                raise exceptions.InconsistentArguments(
+                    "A filter code needs to be supplied"
+                )
             img = self.img
 
         # Map the image onto a range of 0 -> nscale - 1
@@ -1318,9 +1322,9 @@ class ParametricImage(Scene, Image):
         self.morphology = morphology
         
         # Make the IFU, even if we only have 1 filter this is a minor overhead
-        self._ifu_obj = ParametricSpectralCube(morphology, sed, resolution, 
-                                               npix=npix, fov=fov,
-                                               rest_frame=rest_frame)
+        self.ifu_obj = ParametricSpectralCube(morphology, sed, resolution, 
+                                              npix=npix, fov=fov,
+                                              rest_frame=rest_frame)
 
     def _check_parametric_img_args(self, morphology):
         """
@@ -1342,28 +1346,6 @@ class ParametricImage(Scene, Image):
                 "Parametric images are currently only supported for "
                 "photometry when using filters. Provide a FilterCollection."
             )
-        
-        # Check morphology has the correct method
-        # this might not be generic enough
-        if (self.spatial_unit == kpc) & (not morphology.model_kpc):
-
-            if (cosmo != None) & (redshift != None):
-                morphology.update(morphology.p, cosmo=cosmo, z=redshift)
-            else:
-                """raise exception, morphology is defined in mas but image
-                resolution in kpc. Please provide cosmology (cosmo) and redshift.
-                """
-                pass
-
-        if (resolution.units == mas) & (not morphology.model_mas):
-
-            if (cosmo != None) & (redshift != None):
-                morphology.update(morphology.p, cosmo=cosmo, z=redshift)
-            else:
-                """raise exception, morphology is defined in kpc but image
-                resolution in mas. Please provide cosmology (cosmo) and redshift.
-                """
-                pass
 
 
 
