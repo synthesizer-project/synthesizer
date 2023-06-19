@@ -120,7 +120,6 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         snrs=None,
         rest_frame=True,
         cosmo=None,
-        super_resolution_factor=None,
     ):
         """
         Intialise the ParticleSpectralCube.
@@ -153,8 +152,6 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         cosmo : obj (astropy.cosmology)
             A cosmology object from astropy, used for cosmological calculations
             when converting rest frame luminosity to flux.
-        igm : obj (Inoue14/Madau96)
-            Object containing the absorbtion due to an intergalactic medium.
         Raises
         ------
         InconsistentArguments
@@ -173,7 +170,6 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             sed=sed,
             stars=stars,
             positions=positions,
-            super_resolution_factor=super_resolution_factor,
             cosmo=cosmo,
             rest_frame=rest_frame,
         )
