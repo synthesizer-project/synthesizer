@@ -4,7 +4,7 @@ import synthesizer.exceptions as exceptions
 import numpy as np
 import math
 import warnings
-from synthesizer.imaging.scene import Scene, ParticleScene, ParametricScene
+from synthesizer.imaging.scene import Scene, ParticleScene
 
 
 class SpectralCube():
@@ -237,7 +237,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
 
         return self.ifu
 
-    def get_ifu(self, kernel_func):
+    def get_ifu(self):
         """
         A method to calculate an IFU with smoothing. Here the particles are
         smoothed over a kernel, i.e. the full wavelength range of each
@@ -284,26 +284,29 @@ class ParametricSpectralCube(ParametricScene, SpectralCube):
     """
     The IFU/Spectral data cube object, used when creating parametric
     observations.
-    WorkInProgress
+    
     Attributes
     ----------
+    
     Methods
     -------
+    
     """
 
     def __init__(
         self,
+        morphology,
         sed,
         resolution,
-        depths=None,
-        apertures=None,
+        # depths=None,
+        # apertures=None,
         npix=None,
         fov=None,
-        snrs=None,
+        # snrs=None,
         rest_frame=True,
     ):
 
-        # Initilise the parent class
+        # Initilise the parent classes
         Scene.__init__(
             self,
             resolution=resolution,
@@ -316,3 +319,90 @@ class ParametricSpectralCube(ParametricScene, SpectralCube):
             self,
             sed=sed,
         )
+
+        # Store the morphology object
+        self.morphology = morphology
+
+        # Compute the density grid based on the associated morphology
+        self.density_grid = None
+        self._get_density_grid()
+
+    def _check_parametric_ifu_args(self, morphology):
+        """
+        Checks all arguments agree and do not conflict.
+
+        Raises
+        ----------
+        """
+        
+        # check morphology has the correct method
+        # this might not be generic enough
+        if (self.spatial_unit == kpc) & (not morphology.model_kpc):
+
+            if (cosmo != None) & (redshift != None):
+                morphology.update(morphology.p, cosmo=cosmo, z=redshift)
+            else:
+                """raise exception, morphology is defined in mas but image
+                resolution in kpc. Please provide cosmology (cosmo) and redshift.
+                """
+                pass
+
+        if (resolution.units == mas) & (not morphology.model_mas):
+
+            if (cosmo != None) & (redshift != None):
+                morphology.update(morphology.p, cosmo=cosmo, z=redshift)
+            else:
+                """raise exception, morphology is defined in kpc but image
+                resolution in mas. Please provide cosmology (cosmo) and redshift.
+                """
+                pass
+
+    def _get_density_grid(self):
+        
+        # Define 1D bin centres of each pixel
+        bin_centres = self.resolution * np.linspace(
+            -self.npix / 2, self.npix / 2, self.npix
+        )
+
+        # Convert the 1D grid into 2D grids coordinate grids
+        self._xx, self._yy = np.meshgrid(bin_centres, bin_centres)
+
+        # Extract the density grid from the morphology function
+        self.density_grid = morphology.compute_density_grid(
+            self._xx, self._yy, units=self.spatial_unit
+        )
+
+        # And normalise it...
+        self.density_grid /= np.sum(self.density_grid)
+
+    def get_ifu(self):
+        """
+        A method to calculate an IFU with smoothing. Here the particles are
+        smoothed over a kernel, i.e. the full wavelength range of each
+        particles spectrum is multiplied by the value of the kernel in each
+        pixel it occupies.
+
+        Parameters
+        ----------
+        kernel_func : function
+            A function describing the smoothing kernel that returns a single
+            number between 0 and 1. This function can be imported from the
+            options in kernel_functions.py or can be user defined. If user
+            defined the function must return the kernel value corredsponding
+            to the position of a particle with smoothing length h at distance
+            r from the centre of the kernel (r/h).
+
+        Returns
+        -------
+        img : array_like (float)
+            A 3D array containing the pixel values sorted into individual
+            pixels. [npix, npix, spectral_resolution]
+        """
+
+        # Multiply the density grid by the sed to get the IFU
+        self.ifu = self.density_grid * self.sed_values
+
+        return self.ifu
+        
+
+        
