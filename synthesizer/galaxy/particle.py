@@ -932,6 +932,11 @@ class ParticleGalaxy(BaseGalaxy):
                 # Convolve the image/images
                 img.get_psfed_imgs()
 
+                # Downsample to the native resolution if we need to.
+                if psf_resample_factor is not None:
+                    if psf_resample_factor != 1:
+                        img.downsample(1 / psf_resample_factor)
+
             if depths is not None or noises is not None:
 
                 img.get_noisy_imgs(noises)
