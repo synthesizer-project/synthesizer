@@ -904,7 +904,7 @@ class ParticleGalaxy(BaseGalaxy):
         if img_type == "hist":
 
             # Compute the image
-            img.get_hist_img()
+            img.get_hist_imgs()
 
             if psfs is not None:
 
@@ -925,7 +925,7 @@ class ParticleGalaxy(BaseGalaxy):
         elif img_type == "smoothed":
 
             # Compute image
-            img.get_img()
+            img.get_imgs()
 
             if psfs is not None:
 
