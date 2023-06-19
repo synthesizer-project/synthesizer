@@ -50,7 +50,6 @@ class Scene:
         npix=None,
         fov=None,
         sed=None,
-        super_resolution_factor=None,
         rest_frame=True,
     ):
         """
@@ -67,9 +66,6 @@ class Scene:
             the image this should have the same units as those coordinates.
         sed : obj (SED)
             An sed object containing the spectra for this observation.
-        super_resolution_factor : float 
-            The amount to rescale the image by (>1 increases resolution,
-            <1 decreases resolution).
         rest_frame : bool
             Is the observation in the rest frame or observer frame. Default
             is rest frame (True).
@@ -93,10 +89,6 @@ class Scene:
         # Check unit consistency
         self._convert_scene_coords()
 
-        # Define the super resolution (used to resample the scene to a higher
-        # resolution if convolving with a PSF)
-        self.super_resolution_factor = super_resolution_factor
-
         # Attributes containing data
         self.sed = sed
 
@@ -111,12 +103,12 @@ class Scene:
         elif fov is None:
             self._compute_fov()
 
-        # Do we need to make a super resoution image?
-        if self.super_resolution_factor is not None:
-            self._native_to_super_resolution()
-
         # What frame are we observing in?
         self.rest_frame = rest_frame
+
+        # Define the resample factor. This is overwritten whenever resampling
+        # is performed.
+        self.resample_factor = 1
 
     def _check_obs_args(self, resolution, fov, npix):
         """
@@ -145,26 +137,6 @@ class Scene:
             raise exceptions.InconsistentArguments(
                 "Either fov or npix must be specified!"
             )
-
-    def _super_to_native_resolution(self):
-        """
-        Converts the super resolution resolution and npix into the native
-        equivalents after PSF convolution.
-        """
-
-        # Perform conversion
-        self.resolution *= self.super_resolution_factor
-        self.npix //= self.super_resolution_factor
-
-    def _native_to_super_resolution(self):
-        """
-        Converts the native resolution and npix into the super resolution
-        equivalents used in PSF convolution.
-        """
-
-        # Perform conversion
-        self.resolution /= self.super_resolution_factor
-        self.npix *= self.super_resolution_factor
 
     def _compute_npix(self):
         """
@@ -218,6 +190,110 @@ class Scene:
         # Strip off the units
         self.fov = self.fov.value
 
+    def _resample(self, factor):
+        """
+        Helper function to resample all images contained within this instance
+        by the stated factor using interpolation.
+        
+        Parameters
+        ----------
+        factor : float
+            The factor by which to resample the image, >1 increases resolution,
+            <1 decreases resolution.
+        """
+
+        # Perform the conversion on the basic image properties
+        self.resolution /= factor
+        self.npix *= factor
+
+        # Resample the image/s using the scipy default cubic order for
+        # interpolation.
+        # NOTE: skimage.transform.pyramid_gaussian is more efficient but adds
+        #       another dependency.
+        if self.img is not None:
+            self.img = zoom(self.img, factor)
+        if len(self.imgs) > 0:
+            for f in self.imgs:
+                self.imgs[f] = zoom(self.imgs[f], factor)
+        if self.img_psf is not None:
+            self.img_psf = zoom(self.img_psf, factor)
+        if len(self.imgs_psf) > 0:
+            for f in self.imgs_psf:
+                self.imgs_psf[f] = zoom(self.imgs_psf[f], factor)
+        if self.img_noise is not None:
+            self.img_noise = zoom(self.img_noise, factor)
+        if len(self.imgs_noise) > 0:
+            for f in self.imgs_noise:
+                self.imgs_noise[f] = zoom(self.imgs_noise[f], factor)
+
+        return resampled_img
+
+    def downsample(self, factor):
+        """
+        Supersamples all images contained within this instance by the stated
+        factor using interpolation. Useful when applying a PSF to get more
+        accurate convolution results.
+
+        NOTE: It is more robust to create the initial "standard" image at high
+        resolution and then downsample it after done with the high resolution
+        version.
+        
+        Parameters
+        ----------
+        factor : float
+            The factor by which to resample the image, >1 increases resolution,
+            <1 decreases resolution.
+        Raises
+        -------
+        ValueError
+            If the incorrect resample function is called an error is raised to
+            ensure the user does not erroneously resample.
+        """
+
+        # Check factor (NOTE: this doesn't actually cause an issue
+        # mechanically but will ensure users are literal about resampling and
+        # can't mistakenly resample in unintended ways).
+        if factor > 1:
+            raise ValueError(
+                "Using downsample method to supersample!"
+            )
+
+        # Resample the images
+        self._resample(factor)
+
+    def supersample(self, factor):
+        """
+        Supersamples all images contained within this instance by the stated
+        factor using interpolation. Useful when applying a PSF to get more
+        accurate convolution results.
+
+        NOTE: It is more robust to create the initial "standard" image at high
+        resolution and then downsample it after done with the high resolution
+        version.
+        
+        Parameters
+        ----------
+        factor : float
+            The factor by which to resample the image, >1 increases resolution,
+            <1 decreases resolution.
+        Raises
+        -------
+        ValueError
+            If the incorrect resample function is called an error is raised to
+            ensure the user does not erroneously resample.
+        """
+
+        # Check factor (NOTE: this doesn't actually cause an issue
+        # mechanically but will ensure users are literal about resampling and
+        # can't mistakenly resample in unintended ways).
+        if factor < 1:
+            raise ValueError(
+                "Using supersample method to downsample!"
+            )
+
+        # Resample the images
+        self._resample(factor)
+        
 
 class ParticleScene(Scene):
     """
@@ -260,7 +336,6 @@ class ParticleScene(Scene):
         positions=None,
         smoothing_lengths=None,
         centre=None,
-        super_resolution_factor=None,
         cosmo=None,
         rest_frame=True,
     ):
@@ -307,7 +382,6 @@ class ParticleScene(Scene):
             npix=npix,
             fov=fov,
             sed=sed,
-            super_resolution_factor=super_resolution_factor,
             rest_frame=rest_frame,
         )
 
@@ -573,7 +647,6 @@ class ParametricScene(Scene):
         npix=None,
         fov=None,
         sed=None,
-        super_resolution_factor=None,
         rest_frame=True,
     ):
         """
@@ -601,6 +674,5 @@ class ParametricScene(Scene):
             npix,
             fov,
             sed,
-            super_resolution_factor=super_resolution_factor,
             rest_frame=rest_frame,
         )
