@@ -216,11 +216,11 @@ class Image():
 
         # Initialise the composite image
         composite_img = Image(
-            self.resolution * self.spatial_unit,
-            npix=self.npix,
-            fov=self.fov * self.spatial_unit,
             filters=composite_filters,
-            sed=None,
+            psfs=self.psfs,
+            depths=self.depths,
+            apertures=self.apertures,
+            snrs=self.snrs,
         )
 
         # Store the original images in the composite extracting any
