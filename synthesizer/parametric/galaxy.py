@@ -711,7 +711,7 @@ class Galaxy(BaseGalaxy):
                 A dictionary containing line objects.
         """
 
-        return self.get_attenuated_line(grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
+        return self.get_line_attenuated(grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
 
     def reduce_lya(self, grid, fesc_LyA, young=False, old=False):
 
