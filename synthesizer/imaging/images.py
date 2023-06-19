@@ -59,13 +59,13 @@ class Image():
         be a single radius or a radius per filter in a dictionary.
     Methods
     -------
-    get_hist_img
+    get_hist_imgs
         Sorts particles into singular pixels. If an array of pixel_values is
         passed then this is just a wrapper for numpy.histogram2d. Based on the
         inputs this function will either create multiple images (when filters
         is not None), storing them in a dictionary that is returned, or create
         a single image which is returned as an array.
-    get_smoothed_img
+    get_imgs
         Sorts particles into pixels, smoothing by a user provided kernel. Based
         on the inputs this function will either create multiple images (when
         filters is not None), storing them in a dictionary that is returned,
@@ -274,6 +274,105 @@ class Image():
                 self.psfs[key] /= np.sum(self.psfs[key])
         else:
             self.psfs /= np.sum(self.psfs)
+
+   def _get_hist_img_single_filter(self):
+        """
+        A place holder to be overloaded on child classes for making histogram
+        images.
+        """
+        raise exceptions.UnimplementedFunctionality(
+            "Image._get_hist_img_single_filter should be overloaded by child "
+            "class. It is not designed to be called directly."
+        )
+
+    def _get_img_single_filter(self):
+        """
+        A place holder to be overloaded on child classes for making smoothed
+        images.
+        """
+        raise exceptions.UnimplementedFunctionality(
+            "Image._get_img_single_filter should be overloaded by "
+            "child class. It is not designed to be called directly."
+        )
+
+    def get_hist_imgs(self):
+        """
+        A generic function to calculate an image with no smoothing.
+        Parameters
+        ----------
+        None
+        Returns
+        -------
+        img/imgs : array_like (float)/dictionary
+            If pixel_values is provided: A 2D array containing particles
+            smoothed and sorted into an image. (npix, npix)
+            If a filter list is provided: A dictionary containing 2D array with
+            particles smoothed and sorted into the image. (npix, npix)
+        """
+
+        # Handle the possible cases (multiple filters or single image)
+        if len(filters) == 0:
+
+            return self._get_hist_img_single_filter()
+
+        # Calculate IFU "image"
+        self.ifu = self.ifu_obj.get_hist_ifu()
+
+        # Otherwise, we need to loop over filters and return a dictionary
+        for f in self.filters:
+
+            # Apply this filter to the IFU
+            if self.rest_frame:
+                self.imgs[f.filter_code] = f.apply_filter(
+                    self.ifu, nu=self.ifu_obj.sed.nu
+                )
+
+            else:
+                self.imgs[f.filter_code] = f.apply_filter(
+                    self.ifu, nu=self.ifu_obj.sed.nuz
+                )
+
+        return self.imgs
+
+    def get_imgs(self):
+        """
+        A generic method to calculate an image where particles are smoothed over
+        a kernel.
+        If pixel_values is defined then a single image is made and returned,
+        if a filter list has been provided a image is made for each filter and
+        returned in a dictionary. If neither of these situations has happened
+        an error will have been produced at earlier stages.
+        Returns
+        -------
+        img/imgs : array_like (float)/dictionary
+            If pixel_values is provided: A 2D array containing particles
+            smoothed and sorted into an image. (npix, npix)
+            If a filter list is provided: A dictionary containing 2D array with
+            particles smoothed and sorted into the image. (npix, npix)
+        """
+
+        # Handle the possible cases (multiple filters or single image)
+        if len(filters) == 0:
+
+            return self._get_img_single_filter()
+
+        # Calculate IFU "image"
+        self.ifu = self.ifu_obj.get_ifu()
+
+        # Otherwise, we need to loop over filters and return a dictionary
+        for f in self.filters:
+
+            # Apply this filter to the IFU
+            if self.rest_frame:
+                self.imgs[f.filter_code] = f.apply_filter(
+                    self.ifu, nu=self.ifu_obj.sed.nu
+                )
+            else:
+                self.imgs[f.filter_code] = f.apply_filter(
+                    self.ifu, nu=self.ifu_obj.sed.nuz
+                )
+
+        return self.imgs
 
     def _get_psfed_single_img(self, img, psf):
         """
