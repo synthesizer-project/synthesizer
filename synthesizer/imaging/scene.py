@@ -228,8 +228,6 @@ class Scene:
             for f in self.imgs_noise:
                 self.imgs_noise[f] = zoom(self.imgs_noise[f], factor)
 
-        return resampled_img
-
     def downsample(self, factor):
         """
         Supersamples all images contained within this instance by the stated
