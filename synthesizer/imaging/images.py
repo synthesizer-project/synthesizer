@@ -949,6 +949,52 @@ class Image():
 
         return fig, ax, rgb_img
 
+    def print_ascii(self, filter_code=None, img_type="standard"):
+        """
+        Print an ASCII representation of an image. 
+        
+        Parameters
+        ----------
+        img_type : str
+            The type of images to combine. Can be "standard" for noiseless
+            and psfless images (self.imgs), "psf" for images with psf
+            (self.imgs_psf), or "noise" for images with noise 
+            (self.imgs_noise).
+        filter_code : str
+            The filter code of the image to be plotted. If provided a plot is
+            made only for this filter. This is not needed if the image object
+            only contains a single image.
+        """
+
+        # Define the possible ASCII symbols in density order
+        scale = ("$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft|()1{}[]?-_+~<>"
+                 "i!lI;:,\"^`'. "[::-1])
+
+        # Define the number of symbols
+        nscale = len(scale)
+
+        # If a filter code has been provided extract that image, otherwise use
+        # the standalone image
+        if filter_code:
+            img = self.imgs[filter_code]
+        else:
+            img = self.img
+
+        # Map the image onto a range of 0 -> nscale - 1
+        img = (nscale - 1) * img / np.max(img)
+
+        # Convert to integers for indexing
+        img = img.astype(int)
+
+        # Create the ASCII string image
+        ascii_img = ""
+        for i in range(img.shape[0]):
+            for j in range(img.shape[1]):
+                ascii_img += 2 * scale[img[i, j]]
+            ascii_img += "\n"
+
+        print(ascii_img)
+
 
 class ParticleImage(ParticleScene, Image):
     """
@@ -1105,7 +1151,9 @@ class ParticleImage(ParticleScene, Image):
     def _get_smoothed_img_single_filter(self, kernel_func):
         """
         A generic method to calculate an image where particles are smoothed over
-        a kernel.
+        a kernel. This uses C extensions to calculate the image for each
+        particle efficiently.
+        
         Parameters
         ----------
         kernel_func : function
@@ -1301,25 +1349,9 @@ class ParametricImage(ParametricScene, Image):
             self._ifu_obj = ParametricSpectralCube(sed, resolution, 
                                                    npix=npix, fov=fov)
 
-        self.rest_frame = rest_frame
-
-        # check resolution has units and convert to desired units
-        if isinstance(resolution, unyt_quantity):
-            if resolution.units.dimensions == angle:
-                resolution = resolution.to("mas")
-            elif resolution.units.dimensions == length:
-                resolution = resolution.to("kpc")
-            else:
-                # raise exception, don't understand units
-                pass
-            _resolution = resolution.value
-        else:
-            # raise exception, resolution must have units
-            pass
-
         # check morphology has the correct method
         # this might not be generic enough
-        if (resolution.units == kpc) & (not morphology.model_kpc):
+        if (self.spatial_unit == kpc) & (not morphology.model_kpc):
 
             if (cosmo != None) & (redshift != None):
                 morphology.update(morphology.p, cosmo=cosmo, z=redshift)
@@ -1410,36 +1442,6 @@ class ParametricImage(ParametricScene, Image):
         plt.imshow(np.log10(img), origin="lower", interpolation="nearest")
         plt.show()
 
-    def make_ascii(self, filter_code=None):
-        """
-        Make an ascii art image
-        Parameters
-        ----------
-        filter_code : str
-            The filter code
-        """
 
-        scale = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft|()1{}[]?-_+~<>i!lI;:,\"^`'. "[
-            ::-1
-        ]
-        # scale = " .:-=+*#%@"
-        nscale = len(scale)
-
-        # if filter code provided use broadband image, else use base image
-        if filter_code:
-            img = self.imgs[filter_code]
-        else:
-            img = self.img
-
-        img = (nscale - 1) * img / np.max(img)  # maps image onto a
-        img = img.astype(int)
-
-        ascii_img = ""
-        for i in range(img.shape[0]):
-            for j in range(img.shape[1]):
-                ascii_img += 2 * scale[img[i, j]]
-            ascii_img += "\n"
-
-        print(ascii_img)
 
 
