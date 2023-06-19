@@ -275,7 +275,7 @@ class Image():
         else:
             self.psfs /= np.sum(self.psfs)
 
-   def _get_hist_img_single_filter(self):
+    def _get_hist_img_single_filter(self):
         """
         A place holder to be overloaded on child classes for making histogram
         images.
@@ -311,7 +311,7 @@ class Image():
         """
 
         # Handle the possible cases (multiple filters or single image)
-        if len(filters) == 0:
+        if len(self.filters) == 0:
 
             return self._get_hist_img_single_filter()
 
@@ -352,7 +352,7 @@ class Image():
         """
 
         # Handle the possible cases (multiple filters or single image)
-        if len(filters) == 0:
+        if len(self.filters) == 0:
 
             return self._get_img_single_filter()
 
@@ -432,7 +432,7 @@ class Image():
         psfs = self.psfs
 
         # Check we have a valid set of PSFs
-        if len(filters) == 0 and isinstance(psfs, dict):
+        if len(self.filters) == 0 and isinstance(psfs, dict):
             raise exceptions.InconsistentArguments(
                 "To convolve with a single image an array should be "
                 "provided for the PSF not a dictionary."
@@ -458,7 +458,7 @@ class Image():
                 )
 
         # Handle the possible cases (multiple filters or single image)
-        if len(filters) == 0:
+        if len(self.filters) == 0:
 
             self.img_psf = self._get_psfed_single_img(self.img, psfs)
 
