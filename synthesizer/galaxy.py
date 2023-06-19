@@ -21,6 +21,13 @@ class BaseGalaxy:
                        "`parametric.galaxy.Galaxy`\n")
                       )
 
+    def generate_lnu(self):
+        raise Warning(("generate_lnu should be overloaded by child classes:\n"
+                       "`particle.galaxy.Galaxy`\n"
+                       "`parametric.galaxy.Galaxy`\n"
+                       "You should not be seeing this!!!")
+                      )
+
     def get_spectra_stellar(
             self,
             grid,
