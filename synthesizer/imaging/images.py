@@ -5,7 +5,6 @@ import math
 import numpy as np
 import ctypes
 from scipy import signal
-from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from unyt import unyt_quantity, kpc, mas, unyt_array, unyt_quantity
@@ -106,9 +105,6 @@ class Image():
             The radius of the aperture depth is defined in, if not a point
             source depth, in the same units as the image resolution. Can either
             be a single radius or a radius per filter in a dictionary.
-        super_resolution_factor : int
-            The factor by which the resolution is divided to make the super
-            resolution image used for PSF convolution.
         """
 
         # Sanitize inputs
@@ -268,36 +264,6 @@ class Image():
         else:
             self.psfs /= np.sum(self.psfs)
 
-    @staticmethod
-    def resample_img(img, factor):
-        """
-        Convolve an image with a PSF using scipy.signal.fftconvolve.
-        Parameters
-        ----------
-        img : array-like (float)
-            The image to resample.
-        factor : float
-            The factor by which to resample the image, >1 increases resolution,
-            <1 decreases resolution.
-        spline_order : int
-            The order of the spline used during interpolation of the image onto
-            the resampled resolution.
-        Returns
-        -------
-        resampled_img : array_like (float)
-            The image resampled by factor.
-        """
-
-        # Resample the image. (uses the default cubic order for interpolation)
-        # NOTE: skimage.transform.pyramid_gaussian is more efficient but adds
-        #       another dependency.
-        if factor != 1:
-            resampled_img = zoom(img, factor)
-        else:
-            resampled_img = img
-
-        return resampled_img
-
     def _get_psfed_single_img(self, img, psf):
         """
         Convolve an image with a PSF using scipy.signal.fftconvolve.
@@ -316,11 +282,6 @@ class Image():
         # Perform the convolution
         convolved_img = signal.fftconvolve(img, psf, mode="same")
 
-        # Downsample the image back to native resolution.
-        convolved_img = self.resample_img(
-            convolved_img, 1 / self.super_resolution_factor
-        )
-
         return convolved_img
 
     def get_psfed_imgs(self):
@@ -332,11 +293,13 @@ class Image():
         unless a single psf is provided in which case each filter will be
         convolved with the singular psf. If the Image only contains a single
         image it will convolve the psf with that image.
-        To more accurately apply the PSF a super resolution image is
-        automatically used. If psfs are supplied the resolution of the original
-        image is increased by Image.super_resolution_factor. Once the PSF is
-        completed the original image and PSFed images are downsampled back to
-        native resolution.
+        
+        To more accurately apply the PSF we recommend using a super resolution
+        image. This can be done via the supersample method and then
+        downsampling to the native pixel scale after resampling. However, it
+        is more efficient and robust to start at the super resolution initially
+        and then downsample after the fact.
+        
         Parameters
         ----------
         psfs : array-like (float)/dict
@@ -389,16 +352,6 @@ class Image():
 
             self.img_psf = self._get_psfed_single_img(self.img, psfs)
 
-            # Downsample the original image back to native resolution.
-            self.img = self.resample_img(
-                self.img,
-                1 / self.super_resolution_factor
-            )
-
-            # Now that we are done with the convolution return the original
-            # images to the native resolution.
-            self._super_to_native_resolution()
-
             return self.img_psf
 
         # Otherwise, we need to loop over filters and return a dictionary of
@@ -415,16 +368,6 @@ class Image():
             self.imgs_psf[f.filter_code] = self._get_psfed_single_img(
                 self.imgs[f.filter_code], psf
             )
-
-            # Downsample the image back to native resolution.
-            self.imgs[f.filter_code] = self.resample_img(
-                self.imgs[f.filter_code],
-                1 / self.super_resolution_factor
-            )
-
-        # Now that we are done with the convolution return the original images
-        # to the native resolution.
-        self._super_to_native_resolution()
 
         return self.imgs_psf
 
@@ -990,7 +933,6 @@ class ParticleImage(ParticleScene, Image):
             depths=None,
             apertures=None,
             snrs=None,
-            super_resolution_factor=1,
     ):
         """
         Intialise the ParticleImage.
@@ -1051,7 +993,6 @@ class ParticleImage(ParticleScene, Image):
             positions=positions,
             smoothing_lengths=smoothing_lengths,
             centre=centre,
-            super_resolution_factor=super_resolution_factor,
             cosmo=cosmo,
             rest_frame=rest_frame,
         )
@@ -1074,7 +1015,6 @@ class ParticleImage(ParticleScene, Image):
                 stars=self.stars,
                 rest_frame=rest_frame,
                 cosmo=cosmo,
-                super_resolution_factor=super_resolution_factor,
             )
 
         # Set up standalone arrays used when Synthesizer objects are not
@@ -1258,7 +1198,6 @@ class ParametricImage(ParametricScene, Image):
         depths=None,
         apertures=None,
         snrs=None,
-        super_resolution_factor=None,
     ):
         """
         Intialise the ParametricImage.
@@ -1288,7 +1227,6 @@ class ParametricImage(ParametricScene, Image):
             npix=npix,
             fov=fov,
             sed=sed,
-            super_resolution_factor=super_resolution_factor,
             rest_frame=rest_frame,
         )
         Image.__init__(
