@@ -881,7 +881,7 @@ class ParticleGalaxy(BaseGalaxy):
         # Handle a super resolution image
         if psf_resample_factor is not None:
             if psf_resample_factor != 1:
-                resolution *= psf_resample_factor
+                resolution /= psf_resample_factor
 
         # Instantiate the Image object.
         img = ParticleImage(
