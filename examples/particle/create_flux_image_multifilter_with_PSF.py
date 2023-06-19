@@ -19,7 +19,6 @@ from synthesizer.particle.stars import Stars
 from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.filters import FilterCollection as Filters
-from synthesizer.kernel_functions import quintic
 
 
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -127,7 +126,6 @@ if __name__ == "__main__":
         sed=sed,
         filters=filters,
         psfs=psfs,
-        kernel_func=quintic,
         rest_frame=False,
         cosmo=cosmo,
         psf_resample_factor=2,
@@ -145,7 +143,6 @@ if __name__ == "__main__":
         sed=sed,
         filters=filters,
         psfs=psfs,
-        kernel_func=quintic,
         rest_frame=False,
         cosmo=cosmo,
         psf_resample_factor=2,
