@@ -631,17 +631,102 @@ class ParametricGalaxy(BaseGalaxy):
              A dictionary containing line objects.
         """
 
-        return self.get_attenuated_line(grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
+        return self.get_attenuated_line(
+            grid, line_ids, fesc=fesc,
+            tauV_nebular=tauV, tauV_stellar=tauV,
+            dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve
+        )
 
-    def make_images(self, spectra_type, filtercollection, resolution, npix=None, fov=None, update=True, rest_frame=True):
+    def make_image(self, resolution, fov=None, sed=None, filters=(),
+                   psfs=None, depths=None, snrs=None, aperture=None,
+                   noises=None, rest_frame=True, cosmo=None, redshift=None,
+                   psf_resample_factor=1,
+                   ):
+        """
+        Makes images in each filter provided in filters. Additionally an image
+        can be made with or without a PSF and noise.
+        NOTE: Either npix or fov must be defined.
+        
+        Parameters
+        ----------
+        resolution : float
+           The size of a pixel.
+           (Ignoring any supersampling defined by psf_resample_factor)
+        npix : int
+            The number of pixels along an axis.
+        fov : float
+            The width of the image in image coordinates.
+        sed : obj (SED)
+            An sed object containing the spectra for this image.
+        filters : obj (FilterCollection)
+            An imutable collection of Filter objects. If provided images are 
+            made for each filter.
+        psfs : dict
+            A dictionary containing the psf in each filter where the key is
+            each filter code and the value is the psf in that filter.
+        depths : dict
+            A dictionary containing the depth of an observation in each filter
+            where the key is each filter code and the value is the depth in
+            that filter.
+        aperture : float/dict
+            Either a float describing the size of the aperture in which the
+            depth is defined or a dictionary containing the size of the depth
+            aperture in each filter.
+        rest_frame : bool
+            Are we making an observation in the rest frame?
+        cosmo : obj (astropy.cosmology)
+            A cosmology object from astropy, used for cosmological calculations
+            when converting rest frame luminosity to flux.
+        redshift : float
+            The redshift of the observation. Used when converting between
+            physical cartesian coordinates and angular coordinates.
+        psf_resample_factor : float
+            The factor by which the image should be resampled for robust PSF
+            convolution. Note the images after PSF application will be
+            downsampled to the native pixel scale.
+        Returns
+        -------
+        Image : array-like
+            A 2D array containing the image.
+        """
 
-        images = ParametricImage(self.morph, resolution=resolution,
-                                 filters=filtercollection, npix=npix, fov=fov,
-                                 sed=self.spectra[spectra_type], rest_frame=rest_frame)
-        images.create_images()
+        # Handle a super resolution image
+        if psf_resample_factor is not None:
+            if psf_resample_factor != 1:
+                resolution /= psf_resample_factor
 
-        if update:
-            self.images[spectra_type] = images
+        # Instantiate the Image object.
+        img = ParametricImage(
+            morphology=self.morph,
+            resolution=resolution,
+            fov=fov,
+            sed=sed,
+            filters=filters,
+            rest_frame=rest_frame,
+            redshift=redshift,
+            cosmo=cosmo,
+            psfs=psfs,
+            depths=depths,
+            apertures=aperture,
+            snrs=snrs,
+        )
 
-        return images
+        # Compute image
+        img.get_imgs()
+
+        if psfs is not None:
+
+            # Convolve the image/images
+            img.get_psfed_imgs()
+            
+            # Downsample to the native resolution if we need to.
+            if psf_resample_factor is not None:
+                if psf_resample_factor != 1:
+                    img.downsample(1 / psf_resample_factor)
+                    
+        if depths is not None or noises is not None:
+            
+            img.get_noisy_imgs(noises)
+
+        return img
 

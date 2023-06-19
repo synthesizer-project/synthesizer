@@ -832,8 +832,6 @@ class ParticleGalaxy(BaseGalaxy):
             "smoothed" -> particles smoothed over a kernel.
         sed : obj (SED)
             An sed object containing the spectra for this image.
-        survey : obj (Survey)
-            WorkInProgress
         filters : obj (FilterCollection)
             An imutable collection of Filter objects. If provided images are 
             made for each filter.
@@ -851,23 +849,11 @@ class ParticleGalaxy(BaseGalaxy):
             Either a float describing the size of the aperture in which the
             depth is defined or a dictionary containing the size of the depth
             aperture in each filter.
-        kernel_func : function
-            A function describing the smoothing kernel that returns a single
-            number between 0 and 1. This function can be imported from the
-            options in kernel_functions.py or can be user defined. If user
-            defined the function must return the kernel value corredsponding
-            to the position of a particle with smoothing length h at distance
-            r from the centre of the kernel (r/h).
         rest_frame : bool
             Are we making an observation in the rest frame?
-        redshift : float
-            The redshift of the observation. Used when converting rest frame
-            luminosity to flux.
         cosmo : obj (astropy.cosmology)
             A cosmology object from astropy, used for cosmological calculations
             when converting rest frame luminosity to flux.
-        igm : obj (Inoue14/Madau96)
-            Object containing the absorbtion due to an intergalactic medium.
         psf_resample_factor : float
             The factor by which the image should be resampled for robust PSF
             convolution. Note the images after PSF application will be
