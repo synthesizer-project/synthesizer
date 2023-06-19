@@ -75,4 +75,13 @@ if __name__ == '__main__':
     fig.savefig(script_path + "/plots/parametric_rgb_img.png",
                 bbox_inches="tight", dpi=100)
 
+    # We can also do the same with a helper function on the galaxy object
+    img = galaxy.make_image(
+        resolution=resolution,
+        filters=filters,
+        sed=galaxy.spectra["stellar"],
+        fov=fov,
+    )
+
+    # and... print an ASCII representation
     img.print_ascii(filter_code="U")
