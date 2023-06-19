@@ -60,6 +60,17 @@ class Image():
         be a single radius or a radius per filter in a dictionary.
     Methods
     -------
+    get_hist_img
+        Sorts particles into singular pixels. If an array of pixel_values is
+        passed then this is just a wrapper for numpy.histogram2d. Based on the
+        inputs this function will either create multiple images (when filters
+        is not None), storing them in a dictionary that is returned, or create
+        a single image which is returned as an array.
+    get_smoothed_img
+        Sorts particles into pixels, smoothing by a user provided kernel. Based
+        on the inputs this function will either create multiple images (when
+        filters is not None), storing them in a dictionary that is returned,
+        or create a single image which is returned as an array.
     get_psfed_imgs
         Applies a user provided PSF to the images contained within this object.
         Note that a PSF for each filter must be provided in a dictionary if
@@ -1102,19 +1113,6 @@ class ParticleImage(ParticleScene, Image):
     This can either be used by passing explict arrays of positions and values
     to sort into pixels or by passing SED and Stars Synthesizer objects. Images
     can be created with or without a PSF and noise.
-    Methods
-    -------
-    get_hist_img
-        Sorts particles into singular pixels. If an array of pixel_values is
-        passed then this is just a wrapper for numpy.histogram2d. Based on the
-        inputs this function will either create multiple images (when filters
-        is not None), storing them in a dictionary that is returned, or create
-        a single image which is returned as an array.
-    get_smoothed_img
-        Sorts particles into pixels, smoothing by a user provided kernel. Based
-        on the inputs this function will either create multiple images (when
-        filters is not None), storing them in a dictionary that is returned,
-        or create a single image which is returned as an array.
     """
 
     def __init__(
@@ -1174,7 +1172,7 @@ class ParticleImage(ParticleScene, Image):
             Are we making an observation in the rest frame?
         redshift : float
             The redshift of the observation. Used when converting rest frame
-            luminosity to flux.bserv
+            luminosity to flux.
         cosmo : obj (astropy.cosmology)
             A cosmology object from astropy, used for cosmological calculations
             when converting rest frame luminosity to flux.
@@ -1287,9 +1285,9 @@ class ParametricImage(Scene, Image):
     
     Attributes
     ----------
-    
-    Methods
-    -------
+    morphology : obj (BaseMorphology and children)
+        The object that describes the parameters and creates the density grid
+        for a particular morphology.
     
     """
 
@@ -1315,21 +1313,46 @@ class ParametricImage(Scene, Image):
         
         Parameters
         ----------
+        morphology : obj (Morphology)
+            The object that describes the parameters and creates the density
+            grid for the desired morphology to be imaged.
         resolution : float
             The size a pixel.
-        filter_collection : obj (FilterCollection)
+        filters : obj (FilterCollection)
             An object containing a collection of filters.
+        sed : obj (SED)
+            An sed object containing the spectra for this observation.
         npix : int
             The number of pixels along an axis of the image or number of
             spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
-        filters : obj (FilterCollection)
-            An object containing the Filter objects for which images are
-            required.
-        survey : obj (Survey)
-            WorkInProgress
+        cosmo : obj (astropy.cosmology)
+            A cosmology object from astropy, used for cosmological calculations
+            when converting rest frame luminosity to flux.
+        redshift : float
+            The redshift of the observation. Used when converting rest frame
+            luminosity to flux.
+        rest_frame : bool
+            Are we making an observation in the rest frame?
+        psfs : array-like (float)/dict
+            The Point Spread Function to convolve with the image. Can be a
+            single array or a dictionary with a PSF for each Filter.
+        depths : float/dict
+            The depth of this observation. Can either be a single value or a
+            value per filter in a dictionary.
+        apertures : float/dict
+            The radius of the aperture depth is defined in, if not a point
+            source depth, in the same units as the image resolution. Can either
+            be a single radius or a radius per filter in a dictionary.
+        snrs : float/dict
+            The desired signal to noise of this observation. Assuming a
+            signal-to-noise ratio of the form SN R= S / N = S / sqrt(sigma).
+            Can either be a single SNR or a SNR per filter in a dictionary.
+        super_resolution_factor : int
+            The factor by which the resolution is divided to make the super
+            resolution image used for PSF convolution.
         """
 
         # Initilise the parent classes
