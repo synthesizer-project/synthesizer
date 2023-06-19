@@ -237,7 +237,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
 
         return self.ifu
 
-    def get_smoothed_ifu(self, kernel_func):
+    def get_ifu(self, kernel_func):
         """
         A method to calculate an IFU with smoothing. Here the particles are
         smoothed over a kernel, i.e. the full wavelength range of each
