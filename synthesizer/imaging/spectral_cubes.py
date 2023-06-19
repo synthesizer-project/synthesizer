@@ -364,7 +364,7 @@ class ParametricSpectralCube(Scene, SpectralCube):
         self._xx, self._yy = np.meshgrid(bin_centres, bin_centres)
 
         # Extract the density grid from the morphology function
-        self.density_grid = morphology.compute_density_grid(
+        self.density_grid = self.morphology.compute_density_grid(
             self._xx, self._yy, units=self.spatial_unit
         )
 
@@ -396,7 +396,7 @@ class ParametricSpectralCube(Scene, SpectralCube):
         """
 
         # Multiply the density grid by the sed to get the IFU
-        self.ifu = self.density_grid * self.sed_values
+        self.ifu = self.density_grid[:, :, None] * self.sed_values
 
         return self.ifu
         
