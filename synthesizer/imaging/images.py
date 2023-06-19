@@ -1248,7 +1248,7 @@ class ParticleImage(ParticleScene, Image):
 
         return self.img
 
-    def _get_smoothed_img_single_filter(self, kernel_func):
+    def _get_img_single_filter(self):
         """
         A generic method to calculate an image where particles are smoothed over
         a kernel. This uses C extensions to calculate the image for each
