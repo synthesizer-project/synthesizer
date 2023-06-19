@@ -51,17 +51,13 @@ default_params = {
     'output_abundances': True, # output abundances
     'output_cont': True, # output continuum
     'output_lines': True, # output lines
+    'output_linelist': 'linelist.dat', # output lines
     }
 
-
+# any non-default parameters
 params = {
-    'resolution': 0.1, # relative resolution
+
 }
-
-
-
-
-
 
 model_name = '_'.join(['default']+[f'{k}:{v}' for k, v in params.items()])
 
@@ -73,31 +69,28 @@ for k, v in params.items():
 
 
 
-# --- define cloudy path
+# define cloudy path
 cloudy_path = f'~/Dropbox/Research/software/cloudy/{params["cloudy_version"]}/source/cloudy.exe'
-# cloudy_path = f'/its/home/sw376/flare/software/cloudy/{params["cloudy_version"]}/source/cloudy.exe'
 
-
-
-# ---- load SPS grid
+# load SPS grid
 grid = Grid(params['sps_grid'], grid_dir=grid_dir)
 
-# --- get metallicity
+# get metallicity
 Z = grid.metallicities[params['iZ']]
 
-# ---- initialise abundances object
-abundances = Abundances(Z=Z, alpha=params['alpha'], CO=params['CO'], d2m=params['d2m']) # abundances object
+# initialise abundances object
+abundances = Abundances(Z=Z) # abundances object
 
 
 lam = grid.lam
 lnu = grid.spectra['stellar'][params['ia'], params['iZ']]
 
 # this returns the relevant shape commands, in this case for a tabulated SED
-shape_commands = ShapeCommands.table_sed(model_name, lam, lnu, output_dir = './data/')
+shape_commands = ShapeCommands.table_sed(model_name, lam, lnu, output_dir = './output/')
 
-create_cloudy_input(model_name, shape_commands, abundances, output_dir = './data/', **params)
+create_cloudy_input(model_name, shape_commands, abundances, output_dir = './output/', **params)
 
 # --- define output filename
 
-os.chdir('./data')
+os.chdir('./output')
 os.system(f'{cloudy_path} -r {model_name}')
