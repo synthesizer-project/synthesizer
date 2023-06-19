@@ -4,7 +4,7 @@ import numpy as np
 
 from astropy.cosmology import FlatLambdaCDM
 
-from .galaxy.particle import ParticleGalaxy
+from .particle.galaxy import Galaxy
 
 
 def _load_CAMELS(lens, imasses, ages, metals, 
@@ -17,7 +17,7 @@ def _load_CAMELS(lens, imasses, ages, metals,
     begin, end = get_len(lens[:, 4])
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
-        galaxies[i] = ParticleGalaxy()
+        galaxies[i] = Galaxy()
         
         galaxies[i].load_stars(
             imasses[b:e],
@@ -142,7 +142,7 @@ def load_FLARES(f, region, tag):
 
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
-        galaxies[i] = ParticleGalaxy()
+        galaxies[i] = Galaxy()
         galaxies[i].load_stars(
             mass[b:e],
             ages[b:e],
