@@ -130,7 +130,7 @@ if __name__ == "__main__":
         kernel_func=quintic,
         rest_frame=False,
         cosmo=cosmo,
-        super_resolution_factor=2,
+        psf_resample_factor=2,
     )
 
     print("Histogram images made, took:", time.time() - img_start)
@@ -148,7 +148,7 @@ if __name__ == "__main__":
         kernel_func=quintic,
         rest_frame=False,
         cosmo=cosmo,
-        super_resolution_factor=2,
+        psf_resample_factor=2,
     )
 
     print("Smoothed images made, took:", time.time() - img_start)
