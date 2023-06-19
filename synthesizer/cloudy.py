@@ -171,7 +171,7 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     # --- Define the chemical composition
     for ele in ['He'] + abundances.metals:
         cinput.append((f'element abundance {abundances.name[ele]} '
-                       f'{abundances.a[ele]} no grains\n'))
+                       f'{abundances.gas[ele]} no grains\n'))
 
     """
     add graphite and silicate grains
