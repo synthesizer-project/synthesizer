@@ -95,7 +95,9 @@ if __name__ == "__main__":
 
     # Define filter list
     filter_codes = [
+        "JWST/NIRCam.F070W",
         "JWST/NIRCam.F090W",
+        "JWST/NIRCam.F115W",
         "JWST/NIRCam.F150W",
         "JWST/NIRCam.F200W",
     ]
@@ -148,46 +150,37 @@ if __name__ == "__main__":
 
     print("Total runtime (not including plotting):", time.time() - start)
 
-    # Set up plot
-    fig = plt.figure(figsize=(4 * len(filters), 4 * 2))
-    gs = gridspec.GridSpec(2, len(filters))
+    # Lets make a plot of the histogram images
+    fig, ax = hist_img.plot_image(img_type="standard")
 
-    # Create top row
-    axes = []
-    for i in range(len(filters)):
-        axes.append(fig.add_subplot(gs[0, i]))
-
-    # Loop over images plotting them
-    for ax, fcode in zip(axes, filter_codes):
-        ax.imshow(hist_imgs[fcode])
-        ax.set_title(fcode)
-
-    # Set y axis label on left most plot
-    axes[0].set_ylabel("Histogram")
-
-    # Create bottom row
-    axes = []
-    for i in range(len(filters)):
-        axes.append(fig.add_subplot(gs[1, i]))
-
-    # Loop over images plotting them
-    for ax, fcode in zip(axes, filter_codes):
-        ax.imshow(smooth_imgs[fcode])
-
-    # Set y axis label on left most plot
-    axes[0].set_ylabel("Smoothed")
-
-    # Plot the image
-    plt.savefig(script_path + "/plots/flux_in_filters_test.png",
+    fig.savefig(script_path + "/plots/flux_in_filters_RGB_test_hist.png",
                 bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+    # Lets make a plot of the smoothed images
+    fig, ax = smooth_img.plot_image(img_type="standard")
+
+    fig.savefig(script_path + "/plots/flux_in_filters_RGB_test_hist_smoothed.png",
+                bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+    # Lets make a plot of a single filter image with arcsinh scaling
+    fig, ax = smooth_img.plot_image(img_type="standard",
+                                    filter_code=filter_codes[0],
+                                    scaling_func=np.arcsinh)
+    fig.savefig(script_path + "/plots/flux_in_filters_RGB_test_hist_smoothed_"
+                "single_filter.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
 
     # Also, lets make an RGB image
-    fig, ax, rgb_img = smooth_img.plot_rgb_image(
+    smooth_img.make_rgb_image(
         rgb_filters={"R": ["JWST/NIRCam.F200W",],
                      "G": ["JWST/NIRCam.F150W",],
                      "B": ["JWST/NIRCam.F090W",]},
         img_type="standard",
     )
-
+    fig, ax, rgb_img = smooth_img.plot_rgb_image()
     fig.savefig(script_path + "/plots/flux_in_filters_RGB_test.png",
                 bbox_inches="tight", dpi=300)
+    plt.close(fig)
