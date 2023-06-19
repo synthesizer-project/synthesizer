@@ -1,17 +1,15 @@
 """
-Create a Grid object
+Initialise a Grid object
 """
 
 import os
 import numpy as np
 import h5py
+from collections.abc import Iterable
 
 from . import __file__ as filepath
 from .sed import Sed
 from .line import Line, LineCollection
-
-
-from collections.abc import Iterable
 
 
 def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
@@ -143,15 +141,37 @@ class Grid:
 
     def __init__(self, grid_name, grid_dir=None, verbose=False, read_spectra=True, read_lines=False):
 
+        """
+        Initialise the basic Grid object the core part of Synthesizer.
+        
+        Parameters:
+        ------------
+        grid_name : str
+            filename of grid 
+
+        grid_dir : tuple (int)
+            directory of the grid
+
+        read_spectra: boolean
+            flag indicating whether to read spectra
+        
+        read_lines: boolean
+            flag indicating whether to read lines
+
+        """
+
+        # default to in-built grids
         if not grid_dir:
             grid_dir = os.path.join(os.path.dirname(filepath), 'data/grids')
 
         self.grid_dir = grid_dir
         self.grid_name = grid_name
+
+        # join together to get the full filename and path to the grid
         self.grid_filename = f'{self.grid_dir}/{self.grid_name}.hdf5'
 
         self.read_lines = read_lines
-        self.read_spectra = read_spectra  #  not used
+        self.read_spectra = read_spectra 
 
         self.spectra = None
         self.lines = None
@@ -174,7 +194,7 @@ class Grid:
             self.naxes = len(self.axes)
 
             # the centres of the bins
-            self.bin_centres = {}
+            self.bin_centres = {} # I don't like "bin_centres"
 
             for axis in self.axes:
                 self.bin_centres[axis] = hf[axis][:]
@@ -200,6 +220,8 @@ class Grid:
         if read_lines:
             self.get_lines()
 
+
+
     def __str__(self):
         """
         Function to print a basic summary of the Grid object.
@@ -216,8 +238,8 @@ class Grid:
         # Add the content of the summary to the string to be printed
         pstr += "-"*30 + "\n"
         pstr += f"SUMMARY OF GRID" + "\n"
-        pstr += f"log10ages: {self.log10ages}\n"
-        pstr += f"metallicities: {self.metallicities}\n"
+        for k,v in self.bin_centres.items():
+            pstr += f"{k}: {v} \n"
         for k, v in self.parameters.items():
             pstr += f"{k}: {v} \n"
         if self.spectra:
@@ -230,12 +252,7 @@ class Grid:
 
     def get_spectra(self):
         """
-        Function to read in spectra from the HDF5 grid
-
-        Returns
-        -------
-        str
-
+        Function to read in spectra from the HDF5 grid.
         """
 
         self.spectra = {}
@@ -249,7 +266,9 @@ class Grid:
             for spec_name in self.spec_names:
 
                 self.lam = hf['spectra/wavelength'][:]
-                self.nu = 3E8/(self.lam*1E-10)  # used?
+
+                # define frequency
+                self.nu = 3E8/(self.lam*1E-10)  
 
                 self.spectra[spec_name] = hf['spectra'][spec_name][:]
 
@@ -266,15 +285,11 @@ class Grid:
 
             self.spectra['nebular_continuum'] = self.spectra['nebular'] -\
                 self.spectra['linecont']
+            
 
     def get_lines(self):
         """
-        Function to read in lines from the HDF5 grid
-
-        Returns
-        -------
-        str
-
+        Function to read in lines from the HDF5 grid.
         """
 
         self.lines = {}
@@ -313,23 +328,6 @@ class Grid:
 
         return (np.abs(array - value)).argmin()
 
-    def get_grid_point(self, values):
-        """
-        Identify the nearest grid point for a tuple of values
-
-        Parameters
-        ----------
-        value : float
-            The target value
-
-        Returns
-        -------
-        int
-             The index of the closet point in the grid (array)
-        """
-
-        return tuple([self.get_nearest_index(value, self.bin_centres[axis]) for axis, value in zip(self.axes, values)])
-
     def get_nearest(self, value, array):
         """
         Simple function for calculating the closest index in an array for a given value
@@ -351,6 +349,23 @@ class Grid:
         idx = self.get_nearest_index(value, array)
 
         return idx, array[idx]
+    
+    def get_grid_point(self, values):
+        """
+        Identify the nearest grid point for a tuple of values
+
+        Parameters
+        ----------
+        values : tuple
+            The target values in the same order as axes.
+
+        Returns
+        -------
+        int
+             The index of the closet point in the grid (array)
+        """
+
+        return tuple([self.get_nearest_index(value, self.bin_centres[axis]) for axis, value in zip(self.axes, values)])
 
     def get_nearest_log10Z(self, log10metallicity):
 
@@ -360,19 +375,14 @@ class Grid:
 
         return self.get_nearest(log10age, self.log10ages)
 
-    def get_sed(self, grid_point, spec_name='stellar'):
+    def get_sed(self, grid_point, spec_name='total'):
         """
-        Simple function for calculating the closest index in an array for a given value
-
-        NOTE: ONLY WORKS FOR 2D GRIDS
+        Returns the an Sed object of a given spectra type for a given grid point.
 
         Parameters
         ----------
-        ia : int
-            the age grid point
-
-        iZ : int
-            the metallicity grid point
+        grid_point: tuple (int)
+            A tuple of the grid point indices
 
         Returns
         -------
@@ -389,9 +399,7 @@ class Grid:
 
     def get_line_info(self, line_id, grid_point):
         """
-        Return a line object for a given line and metallicity/age index
-
-        NOTE: ONLY WORKS FOR 2D GRIDS
+        Return a line object for a given line and grid point.
 
         Parameters:
         ------------
@@ -428,16 +436,14 @@ class Grid:
 
     def get_lines_info(self, line_ids, grid_point):
         """
-        Return a LineCollection object for a given line and metallicity/age index
+        Return a LineCollection object for a given set of line_ids and a given grid_point.
         Parameters:
         ------------
-        line_ids : list:
-            list of unique line identification string
-        ia : int
-            age grid point index
-        iZ : int
-            metallicity grid point index
-        Returns:
+        line_id : (list or str):
+            unique line identification string
+
+        grid_point : tuple (int)
+            the grid point to select
         ------------
         obj (Line)
         """
