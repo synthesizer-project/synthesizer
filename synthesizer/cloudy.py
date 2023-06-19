@@ -5,7 +5,7 @@ grid. Can optionally generate an array of input files for selected parameters.
 
 import numpy as np
 from scipy import integrate
-
+import shutil
 from unyt import c, h, angstrom, eV, erg, s, Hz, unyt_array
 
 
@@ -151,7 +151,8 @@ def create_cloudy_input(model_name, shape_commands, abundances,
         'resolution': 1.0, # relative resolution the saved continuum spectra
         'output_abundances': True, # output abundances
         'output_cont': True, # output continuum
-        'output_lines': True, # output lines
+        'output_lines': False, # output full list of all available lines
+        'output_linelist': 'linelist.dat', # output linelist
     }
 
     # update default_params with kwargs
@@ -292,6 +293,12 @@ def create_cloudy_input(model_name, shape_commands, abundances,
         cinput.append((f'save last lines, array "{model_name}.lines" '
                   'units Angstroms no clobber\n'))
     
+    # output linelist
+    if params['output_linelist']:
+        cinput.append(f'save linelist column emergent absolute last units angstroms "{model_name}.elin" "linelist.dat"\n')
+        
+        # make copy of linelist
+        shutil.copyfile(params['output_linelist'], f'{output_dir}/linelist.dat')
 
     # --- save input file
     open(f'{output_dir}/{model_name}.in', 'w').writelines(cinput)
@@ -377,22 +384,92 @@ def calculate_U_from_Q(Q_avg, n_h=100):
 #         return [e+ion+str(wv), False]
 
 
-def read_lines(filename):
+def read_lines(filename, extension = 'lines'):
 
+    """
+    Read a full line list from cloudy
+    
+    """
+
+    # open file and read columns
     wavelengths, cloudy_ids, intrinsic, emergent = np.loadtxt(
-        f'{filename}.lines', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
+        f'{filename}.{extension}', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
 
     wavelengths = wavelengths.astype(float)
-    intrinsic = intrinsic.astype(float) - 7.  # erg s^{-1} magic number
-    emergent = emergent.astype(float) - 7.  # erg s^{-1} magic number
+    intrinsic = intrinsic.astype(float) - 7.  # erg s^{-1} 
+    emergent = emergent.astype(float) - 7.  # erg s^{-1} 
 
-    new_cloudy_ids = np.array([' '.join(list(filter(None, id.split(' ')))) for id in cloudy_ids])
+    # make a new cloudy ID e.g. "H I 4861.33A"
+    line_ids = np.array([' '.join(list(filter(None, id.split(' ')))) for id in cloudy_ids])
+    
+    # find out the length of the line id when split
     lenid = np.array([len(list(filter(None, id.split(' ')))) for id in cloudy_ids])
 
+    # define a blend as a line with only two entries
     blends = np.ones(len(wavelengths), dtype=bool)
     blends[lenid == 3] = False
 
-    return new_cloudy_ids, blends, wavelengths, intrinsic, emergent
+    return line_ids, blends, wavelengths, intrinsic, emergent
+
+
+def convert_cloudy_wavelength(x):
+
+    """
+    Convert a cloudy wavelength string (e.g. 6562.81A, 1.008m) to a wavelength float in units of angstroms.
+    """
+
+    value = float(x[:-1])
+    unit = x[-1]
+
+    # if Angstroms
+    if unit == 'A':
+        return value
+    
+    # if microns
+    if unit == 'm':
+        return 1E4*value
+
+    
+
+
+
+def read_linelist(filename, extension = 'elin'):
+
+    """ 
+    Read a cloudy linelist file.
+    """
+
+    # read file
+    with open(f'{filename}.{extension}','r') as f:
+        d = f.readlines()
+    
+    line_ids = []
+    luminosities = []
+    wavelengths = []
+
+    for row in d:
+
+        # ignore invalid rows 
+        if len(row.split('\t')) > 1:
+
+            # split each row using tab character
+            id, lum = row.split('\t')
+
+            # reformat line id to be ELEMENT ION WAVELENGTH
+            id = ' '.join(list(filter(None, id.split(' '))))
+
+            wavelength = convert_cloudy_wavelength(id.split(' ')[-1])
+
+            # convert luminosity to float
+            lum = float(lum)
+
+            print(id, wavelength, lum)
+
+            line_ids.append(id)
+            wavelengths.append(wavelength)
+            luminosities.append(lum)
+
+    return np.array(line_ids), np.array(wavelengths), np.array(luminosities)
 
 
 # I DON'T BELIEVE THIS IS USED ANYMORE. I BELIEVE THIS WAS TO GENERATE SPECTRA FROM JUST LINES.
