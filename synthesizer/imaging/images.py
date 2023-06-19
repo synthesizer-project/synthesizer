@@ -1278,7 +1278,7 @@ class ParametricImage(ParametricScene, Image):
         """
 
         # Initilise the parent classes
-        ParametricScene.__init__(
+        Scene.__init__(
             self,
             resolution=resolution,
             npix=npix,

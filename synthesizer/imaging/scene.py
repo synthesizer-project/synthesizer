@@ -80,7 +80,7 @@ class Scene:
         """
 
         # Check what we've been given
-        self._check_obs_args(resolution, fov, npix)
+        self._check_scene_args(resolution, fov, npix)
 
         # Define the spatial units of the image
         self.spatial_unit = resolution.units
@@ -118,7 +118,7 @@ class Scene:
         # What frame are we observing in?
         self.rest_frame = rest_frame
 
-    def _check_obs_args(self, resolution, fov, npix):
+    def _check_scene_args(self, resolution, fov, npix):
         """
         Ensures we have a valid combination of inputs.
         Parameters
@@ -549,58 +549,3 @@ class ParticleScene(Scene):
 
             #     # And strip off the unit
             #     self.smoothing_lengths = self.smoothing_lengths.value
-
-class ParametricScene(Scene):
-    """
-    The parent class for all parametric "observations". These include:
-    - Flux/rest frame luminosity images in photometric bands.
-    - Images of underlying properties such as SFR, stellar mass, etc.
-    - Data cubes (IFUs) containing spatially resolved spectra.
-    This parent contains all functionality needed for parametric observations.
-    WorkInProgress
-    Attributes
-    ----------
-    Raises
-    ----------
-    InconsistentArguments
-        If an incompatible combination of arguments is provided an error is
-        raised.
-    """
-
-    def __init__(
-        self,
-        resolution,
-        npix=None,
-        fov=None,
-        sed=None,
-        super_resolution_factor=None,
-        rest_frame=True,
-    ):
-        """
-        Intialise the ParametricObservation.
-        Parameters
-        ----------
-        resolution : float
-            The size a pixel.
-        npix : int
-            The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU.
-        fov : float
-            The width of the image/ifu. If coordinates are being used to make
-            the image this should have the same units as those coordinates.
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
-        survey : obj (Survey)
-            WorkInProgress
-        """
-
-        # Initilise the parent class
-        Scene.__init__(
-            self,
-            resolution,
-            npix,
-            fov,
-            sed,
-            super_resolution_factor=super_resolution_factor,
-            rest_frame=rest_frame,
-        )

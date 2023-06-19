@@ -304,7 +304,7 @@ class ParametricSpectralCube(ParametricScene, SpectralCube):
     ):
 
         # Initilise the parent class
-        ParametricScene.__init__(
+        Scene.__init__(
             self,
             resolution=resolution,
             npix=npix,
