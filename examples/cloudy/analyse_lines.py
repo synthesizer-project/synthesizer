@@ -126,8 +126,9 @@ if __name__ == '__main__':
 
     # read lines from a full .lines file
 
-    reference_line = 'H 1 4862.69A' # Hbeta
-    relative_threshold = 2.5 # log
+    # reference_line = 'H 1 4862.69A' # Hbeta (vacuum)
+    reference_line = 'H 1 4861.33A' # Hbeta (air)
+    relative_threshold = 2.0 # log
 
     line_ids, blends, wavelengths, intrinsic, emergent = read_lines(
         f'{output_dir}/{model_name}')
@@ -136,6 +137,8 @@ if __name__ == '__main__':
     luminosities = emergent
 
     threshold = luminosities[line_ids == reference_line] - relative_threshold
+
+    print(threshold)
 
     # select line meeting various conditions
     s = (luminosities > threshold) & (blends == False) & (wavelengths < 50000)
