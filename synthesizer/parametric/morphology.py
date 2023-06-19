@@ -27,7 +27,7 @@ class MorphologyBase:
             wavelength, expected mwith units
         """
 
-        bins = resolution * np.arange(-npix/2, npix/2)
+        bins = resolution * np.arange(-npix / 2, npix / 2)
 
         xx, yy = np.meshgrid(bins, bins)
 
@@ -51,58 +51,80 @@ class Sersic2D(MorphologyBase):
         Calculates and returns the density grid defined by this Morphology
     """
 
-    def __init__(self, params, cosmo=None, z=None):
+    def __init__(self, r_eff_kpc=None, r_eff_mas=None, n=1, ellip=0, theta=0.0,
+                 cosmo=None, redshift=None):
+        """
+        """
 
-        # Define the initial parameter set
-        self.parameters = {
-            'r_eff_kpc': None,
-            'r_eff_mas': None,
-            'n': 1,
-            'ellip': 0,
-            'theta': 0,
-        }
+        # Define the parameter set
+        self.r_eff_kpc = r_eff_kpc
+        self.r_eff_mas = r_eff_mas
+        self.n = n
+        self.ellip = ellip
+        self.theta = theta
 
-        # Initialise the Morphology object based on the 
-        self.update(params, cosmo=cosmo, z=z)
+        # Associate the cosmology and redshift to this object
+        self.cosmo = cosmo
+        self.redshift = redshift
 
-    def update(self, p, cosmo=None, z=None):
+        # Check inputs
+        self.check_args()
 
-        for key, value in list(p.items()):
-            self.parameters[key] = value
+        # If cosmology and redshift have been provided we can calculate both
+        # models
+        if cosmo is not None and redshift is not None:
 
-        if p['r_eff'].units.dimensions == angle:
-            self.parameters['r_eff_mas'] = p['r_eff'].to('mas').value
-        elif p['r_eff'].units.dimensions == length:
-            self.parameters['r_eff_kpc'] = p['r_eff'].to('kpc').value
+            # Compute conversion
+            kpc_proper_per_mas = self.cosmo.kpc_proper_per_arcmin(z).to(
+                'kpc/mas'
+            ).value
 
-        # If cosmology and redshift provided calculate the conversion of pkpc to mas
-        if cosmo and z:
-            self.kpc_proper_per_mas = cosmo.kpc_proper_per_arcmin(z).to('kpc/mas').value
-
-            if self.parameters['r_eff_kpc']:
-                self.parameters['r_eff_mas'] = self.parameters['r_eff_kpc'] / \
-                    self.kpc_proper_per_mas
+            # Calculate one effective radius from the other depending on what
+            # we've been given.
+            if self.r_eff_kpc is not None:
+                self.r_eff_mas = self.r_eff_kpc / self.kpc_proper_per_mas
             else:
-                self.parameters['r_eff_kpc'] = self.parameters['r_eff_mas'] * \
-                    self.kpc_proper_per_mas
+                self.r_eff_kpc = self.r_eff_mas * self.kpc_proper_per_mas
 
-        if self.parameters['r_eff_kpc']:
+        # Intialise the kpc model 
+        if self.r_eff_kpc is not None:
             self.model_kpc = Sersic2D_(
-                amplitude=1, r_eff=self.parameters['r_eff_kpc'],
-                n=self.parameters['n'], ellip=self.parameters['ellip'],
-                theta=self.parameters['theta']
+                amplitude=1, r_eff=self.r_eff_kpc,
+                n=self.n, ellip=self.ellip,
+                theta=self.theta
             )
         else:
             self.model_kpc = None
 
-        if self.parameters['r_eff_mas']:
+        # Intialise the miliarcsecond model 
+        if self.r_eff_mas is not None:
             self.model_mas = Sersic2D_(
-                amplitude=1, r_eff=self.parameters['r_eff_mas'],
-                n=self.parameters['n'], ellip=self.parameters['ellip'],
-                theta=self.parameters['theta']
+                amplitude=1, r_eff=self.r_eff_mas,
+                n=self.n, ellip=self.ellip,
+                theta=self.theta
             )
         else:
             self.model_mas = None
+
+    def _check_args(self):
+        """
+        Tests the inputs to ensure they are a valid combination.
+        """
+
+        # Ensure at least one effective radius has been passed
+        if self.r_eff_kpc is None and self.r_eff_mas is None:
+            raise exceptions.InconsistentArguments(
+                "An effective radius must be defined in either kpc (r_eff_kpc) "
+                "or milliarcseconds (mas)"
+            )
+
+        # Ensure cosmo has been provided if redshift has been passed
+        if self.redshift is not None and self.cosmo is None:
+            raise exceptions.InconsistentArguments(
+                "Astropy.cosmology object is missing, cannot perform "
+                "comoslogical calculations."
+            )
+            
 
     def compute_density_grid(self, xx, yy, units=kpc):
         """
@@ -126,6 +148,18 @@ class Sersic2D(MorphologyBase):
         density_grid : np.ndarray
             The density grid produced
         """
+
+        # Ensure we have the model corresponding to the requested units
+        if units == kpc and self.model_kpc is None:
+            raise exceptions.InconsistentArguments(
+                "Morphology has not been initialised with a kpc method. "
+                "Reinitialise the model or use milliarcseconds."
+            )
+        elif units == mas and self.model_mas is None:
+            raise exceptions.InconsistentArguments(
+                "Morphology has not been initialised with a milliarcsecond "
+                "method. Reinitialise the model or use kpc."
+            )
 
         # Call the appropriate model function
         if units == kpc:
