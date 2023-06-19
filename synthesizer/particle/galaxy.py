@@ -617,11 +617,11 @@ class Galaxy(BaseGalaxy):
 
         return img.get_hist_img()
 
-    def make_image(self, resolution, npix=None, fov=None, img_type="hist",
+    def make_image(self, resolution, fov=None, img_type="hist",
                    sed=None, filters=(), pixel_values=None, psfs=None,
                    depths=None, snrs=None, aperture=None, noises=None,
                    kernel_func=None, rest_frame=True, cosmo=None,
-                   super_resolution_factor=1,
+                   psf_resample_factor=1,
                    ):
         """
         Makes images, either one or one per filter. This is a generic method
@@ -634,6 +634,7 @@ class Galaxy(BaseGalaxy):
         ----------
         resolution : float
            The size of a pixel.
+           (Ignoring any supersampling defined by psf_resample_factor)
         npix : int
             The number of pixels along an axis.
         fov : float
@@ -679,16 +680,24 @@ class Galaxy(BaseGalaxy):
             when converting rest frame luminosity to flux.
         igm : obj (Inoue14/Madau96)
             Object containing the absorbtion due to an intergalactic medium.
+        psf_resample_factor : float
+            The factor by which the image should be resampled for robust PSF
+            convolution. Note the images after PSF application will be
+            downsampled to the native pixel scale.
         Returns
         -------
         Image : array-like
             A 2D array containing the image.
         """
 
+        # Handle a super resolution image
+        if psf_resample_factor is not None:
+            if psf_resample_factor != 1:
+                resolution /= psf_resample_factor
+
         # Instantiate the Image object.
         img = ParticleImage(
             resolution=resolution,
-            npix=npix,
             fov=fov,
             sed=sed,
             stars=self.stars,
@@ -701,7 +710,6 @@ class Galaxy(BaseGalaxy):
             depths=depths,
             apertures=aperture,
             snrs=snrs,
-            super_resolution_factor=super_resolution_factor,
         )
 
         # Make the image, handling incorrect image types
@@ -714,6 +722,11 @@ class Galaxy(BaseGalaxy):
 
                 # Convolve the image/images
                 img.get_psfed_imgs()
+
+                # Downsample to the native resolution if we need to.
+                if psf_resample_factor is not None:
+                    if psf_resample_factor != 1:
+                        img.downsample(1 / psf_resample_factor)
 
             if depths is not None or noises is not None:
 
@@ -730,6 +743,11 @@ class Galaxy(BaseGalaxy):
 
                 # Convolve the image/images
                 img.get_psfed_imgs()
+
+                # Downsample to the native resolution if we need to.
+                if psf_resample_factor is not None:
+                    if psf_resample_factor != 1:
+                        img.downsample(1 / psf_resample_factor)
 
             if depths is not None or noises is not None:
 
