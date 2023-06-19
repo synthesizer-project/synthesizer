@@ -68,7 +68,7 @@ class Sersic2D(MorphologyBase):
         self.redshift = redshift
 
         # Check inputs
-        self.check_args()
+        self._check_args()
 
         # If cosmology and redshift have been provided we can calculate both
         # models
