@@ -5,7 +5,6 @@ import math
 import numpy as np
 import ctypes
 from scipy import signal
-from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from unyt import unyt_quantity, kpc, mas, unyt_array, unyt_quantity
