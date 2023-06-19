@@ -149,8 +149,9 @@ class Scene:
         """
 
         # Compute how many pixels fall in the FOV
-        self.npix = math.ceil(self.fov / self.resolution)
-        self.orig_npix = math.ceil(self.fov / self.resolution)
+        self.npix = int(math.ceil(self.fov / self.resolution))
+        if self.orig_npix is None:
+            self.orig_npix = int(math.ceil(self.fov / self.resolution))
 
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
@@ -206,7 +207,7 @@ class Scene:
 
         # Perform the conversion on the basic image properties
         self.resolution /= factor
-        self.npix *= factor
+        self._compute_npix()
 
         # Resample the image/s using the scipy default cubic order for
         # interpolation.
@@ -214,9 +215,11 @@ class Scene:
         #       another dependency.
         if self.img is not None:
             self.img = zoom(self.img, factor)
+            new_shape = self.img.shape
         if len(self.imgs) > 0:
             for f in self.imgs:
                 self.imgs[f] = zoom(self.imgs[f], factor)
+                new_shape = self.imgs[f].shape
         if self.img_psf is not None:
             self.img_psf = zoom(self.img_psf, factor)
         if len(self.imgs_psf) > 0:
@@ -227,6 +230,12 @@ class Scene:
         if len(self.imgs_noise) > 0:
             for f in self.imgs_noise:
                 self.imgs_noise[f] = zoom(self.imgs_noise[f], factor)
+
+        # Handle the edge case where the conversion between resolutions has
+        # messed with Scene properties.
+        if self.npix != new_shape[0]:
+            self.npix = new_shape
+            self._compute_fov()
 
     def downsample(self, factor):
         """
