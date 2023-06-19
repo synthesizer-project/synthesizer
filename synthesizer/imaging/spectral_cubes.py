@@ -276,7 +276,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         return self.ifu
 
 
-class ParametricSpectralCube(ParametricScene, SpectralCube):
+class ParametricSpectralCube(Scene, SpectralCube):
     """
     The IFU/Spectral data cube object, used when creating parametric
     observations.
