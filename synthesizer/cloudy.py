@@ -276,7 +276,7 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     cinput.append(f'stop efrac {params["stop_efrac"]}\n')
 
     # --- output commands
-    cinput.append(f'print line vacuum\n')  # output vacuum wavelengths
+    # cinput.append(f'print line vacuum\n')  # output vacuum wavelengths
     cinput.append(f'set continuum resolution {params["resolution"]}\n') # set the continuum resolution
     cinput.append(f'save overview  "{model_name}.ovr" last\n')
 
