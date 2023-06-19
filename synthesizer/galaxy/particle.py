@@ -808,7 +808,7 @@ class ParticleGalaxy(BaseGalaxy):
     def make_image(self, resolution, npix=None, fov=None, img_type="hist",
                    sed=None, filters=(), pixel_values=None, psfs=None,
                    depths=None, snrs=None, aperture=None, noises=None,
-                   kernel_func=None, rest_frame=True, cosmo=None,
+                   rest_frame=True, cosmo=None,
                    super_resolution_factor=1,
                    ):
         """
@@ -912,7 +912,7 @@ class ParticleGalaxy(BaseGalaxy):
         elif img_type == "smoothed":
 
             # Compute image
-            img.get_smoothed_img(kernel_func)
+            img.get_img()
 
             if psfs is not None:
 

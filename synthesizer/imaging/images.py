@@ -298,6 +298,106 @@ class Image():
 
         return resampled_img
 
+    def _get_hist_img_single_filter(self):
+        """
+        A place holder to be overloaded on child classes for making histogram
+        images.
+        """
+        raise exceptions.UnimplementedFunctionality(
+            "Image._get_hist_img_single_filter should be overloaded by child "
+            "class. It is not designed to be called directly."
+        )
+
+    def _get_img_single_filter(self):
+        """
+        A place holder to be overloaded on child classes for making smoothed
+        images.
+        """
+        raise exceptions.UnimplementedFunctionality(
+            "Image._get_img_single_filter should be overloaded by "
+            "child class. It is not designed to be called directly."
+        )
+
+    def get_hist_img(self):
+        """
+        A generic function to calculate an image with no smoothing.
+        Parameters
+        ----------
+        None
+        Returns
+        -------
+        img/imgs : array_like (float)/dictionary
+            If pixel_values is provided: A 2D array containing particles
+            smoothed and sorted into an image. (npix, npix)
+            If a filter list is provided: A dictionary containing 2D array with
+            particles smoothed and sorted into the image. (npix, npix)
+        """
+
+        # Handle the possible cases (multiple filters or single image)
+        if len(filters) == 0:
+
+            return self._get_hist_img_single_filter()
+
+        # Calculate IFU "image"
+        self.ifu = self.ifu_obj.get_hist_ifu()
+
+        # Otherwise, we need to loop over filters and return a dictionary
+        for f in self.filters:
+
+            # Apply this filter to the IFU
+            if self.rest_frame:
+                self.imgs[f.filter_code] = f.apply_filter(
+                    self.ifu, nu=self.ifu_obj.sed.nu
+                )
+
+            else:
+                self.imgs[f.filter_code] = f.apply_filter(
+                    self.ifu, nu=self.ifu_obj.sed.nuz
+                )
+
+        return self.imgs
+
+    def get_img(self):
+        """
+        A generic method to calculate an image where particles are smoothed over
+        a kernel.
+        If pixel_values is defined then a single image is made and returned,
+        if a filter list has been provided a image is made for each filter and
+        returned in a dictionary. If neither of these situations has happened
+        an error will have been produced at earlier stages.
+
+        Returns
+        -------
+        img/imgs : array_like (float)/dictionary
+            If pixel_values is provided: A 2D array containing particles
+            smoothed and sorted into an image. (npix, npix)
+            If a filter list is provided: A dictionary containing 2D array with
+            particles smoothed and sorted into the image. (npix, npix)
+        """
+
+        # Handle the possible cases (multiple filters or single image)
+        if len(filters) == 0:
+
+            return self._get_img_single_filter(kernel_func)
+
+        # Calculate IFU "image"
+        self.ifu = self.ifu_obj.get_ifu(kernel_func)
+
+        # Otherwise, we need to loop over filters and return a dictionary
+        for f in self.filters:
+
+            # Apply this filter to the IFU
+            if self.rest_frame:
+                self.imgs[f.filter_code] = f.apply_filter(
+                    self.ifu, nu=self.ifu_obj.sed.nu
+                )
+            else:
+                self.imgs[f.filter_code] = f.apply_filter(
+                    self.ifu, nu=self.ifu_obj.sed.nuz
+                )
+
+        return self.imgs
+
     def _get_psfed_single_img(self, img, psf):
         """
         Convolve an image with a PSF using scipy.signal.fftconvolve.
@@ -1187,94 +1287,6 @@ class ParticleImage(ParticleScene, Image):
                             self.coords.shape[0])
 
         return self.img
-
-    def get_hist_img(self):
-        """
-        A generic function to calculate an image with no smoothing.
-        Parameters
-        ----------
-        None
-        Returns
-        -------
-        img/imgs : array_like (float)/dictionary
-            If pixel_values is provided: A 2D array containing particles
-            smoothed and sorted into an image. (npix, npix)
-            If a filter list is provided: A dictionary containing 2D array with
-            particles smoothed and sorted into the image. (npix, npix)
-        """
-
-        # Handle the possible cases (multiple filters or single image)
-        if len(filters) == 0:
-
-            return self._get_hist_img_single_filter()
-
-        # Calculate IFU "image"
-        self.ifu = self.ifu_obj.get_hist_ifu()
-
-        # Otherwise, we need to loop over filters and return a dictionary
-        for f in self.filters:
-
-            # Apply this filter to the IFU
-            if self.rest_frame:
-                self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, nu=self.ifu_obj.sed.nu
-                )
-
-            else:
-                self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, nu=self.ifu_obj.sed.nuz
-                )
-
-        return self.imgs
-
-    def get_smoothed_img(self, kernel_func):
-        """
-        A generic method to calculate an image where particles are smoothed over
-        a kernel.
-        If pixel_values is defined then a single image is made and returned,
-        if a filter list has been provided a image is made for each filter and
-        returned in a dictionary. If neither of these situations has happened
-        an error will have been produced at earlier stages.
-        Parameters
-        ----------
-        kernel_func : function
-            A function describing the smoothing kernel that returns a single
-            number between 0 and 1. This function can be imported from the
-            options in kernel_functions.py or can be user defined. If user
-            defined the function must return the kernel value corredsponding
-            to the position of a particle with smoothing length h at distance
-            r from the centre of the kernel (r/h).
-        Returns
-        -------
-        img/imgs : array_like (float)/dictionary
-            If pixel_values is provided: A 2D array containing particles
-            smoothed and sorted into an image. (npix, npix)
-            If a filter list is provided: A dictionary containing 2D array with
-            particles smoothed and sorted into the image. (npix, npix)
-        """
-
-        # Handle the possible cases (multiple filters or single image)
-        if len(filters) == 0:
-
-            return self._get_smoothed_img_single_filter(kernel_func)
-
-        # Calculate IFU "image"
-        self.ifu = self.ifu_obj.get_smoothed_ifu(kernel_func)
-
-        # Otherwise, we need to loop over filters and return a dictionary
-        for f in self.filters:
-
-            # Apply this filter to the IFU
-            if self.rest_frame:
-                self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, nu=self.ifu_obj.sed.nu
-                )
-            else:
-                self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, nu=self.ifu_obj.sed.nuz
-                )
-
-        return self.imgs
 
 
 class ParametricImage(ParametricScene, Image):
