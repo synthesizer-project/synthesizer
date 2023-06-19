@@ -4,6 +4,8 @@ import math
 import numpy as np
 import unyt
 from unyt import arcsec, kpc
+from scipy.ndimage import zoom
+
 import synthesizer.exceptions as exceptions
 
 
