@@ -212,11 +212,11 @@ class Image():
 
         # Initialise the composite image
         composite_img = Image(
-            self.resolution * self.spatial_unit,
-            npix=self.npix,
-            fov=self.fov * self.spatial_unit,
+            # self.resolution * self.spatial_unit,
+            # npix=self.npix,
+            # fov=self.fov * self.spatial_unit,
             filters=composite_filters,
-            sed=None,
+            # sed=None,
         )
 
         # Store the original images in the composite extracting any
@@ -1231,9 +1231,9 @@ class ParametricImage(ParametricScene, Image):
         )
         Image.__init__(
             self,
-            resolution=resolution,
-            npix=npix,
-            fov=fov,
+            # resolution=resolution,
+            # npix=npix,
+            # fov=fov,
             filters=filters,
             psfs=psfs,
             depths=depths,
