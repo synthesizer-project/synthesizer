@@ -12,13 +12,14 @@ from synthesizer.survey import Survey
 from synthesizer.particle.galaxy import Galaxy
 
 
-if len(sys.argv) > 1:
-    grid_dir = str(sys.argv[1])
-else:
-    grid_dir = None
+# Get the location of this script, __file__ is the absolute path of this
+# script, however we just want to directory
+script_path = os.path.abspath(os.path.dirname(__file__))
 
-# First load a spectral grid
-_grid = grid.Grid('bc03_chabrier03-0.1,100', grid_dir=grid_dir)
+# Define the grid
+grid_name = "test_grid"
+grid_dir = script_path + "/../../tests/test_grid/"
+grid = Grid(grid_name, grid_dir=grid_dir)
 
 # now load some example CAMELS data using the dedicated data loader
 gals = load_CAMELS_SIMBA('data/', snap='033')

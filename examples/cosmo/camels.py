@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -11,13 +12,17 @@ from synthesizer.particle.galaxy import Galaxy
 
 if __name__ == '__main__':
 
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
 
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # now load some example CAMELS data using the dedicated data loader
-    gals = load_CAMELS_SIMBA('../../tests/', 
+    gals = load_CAMELS_SIMBA(script_path + '/../../tests/', 
                              snap_name='camels_snap.hdf5', 
                              fof_name='camels_subhalo.hdf5')
 
@@ -56,9 +61,8 @@ if __name__ == '__main__':
     """ multiple galaxies
         Here we leave the `sed_object` flag as the default (False), 
         and combine into a single sed object afterwards """
-    _specs = np.vstack([_g.get_CharlotFall_spectra(
-        grid, tauV_ISM=0.33, tauV_BC=0.67,
-        sed_object=False)
+    _specs = np.vstack([_g.get_spectra_CharlotFall(
+        grid, tauV_ISM=0.33, tauV_BC=0.67)._lnu
             for _g in gals])
 
     _specs = Sed(lam=grid.lam, lnu=_specs)
@@ -85,9 +89,8 @@ if __name__ == '__main__':
                             for _g in gals]) * 1e10)
     mask = np.where(mstar > 8)[0]
 
-    _specs = np.vstack([gals[_g].get_CharlotFall_spectra(
-        grid, tauV_ISM=0.33, tauV_BC=0.67,
-        sed_object=False)
+    _specs = np.vstack([gals[_g].get_spectra_CharlotFall(
+        grid, tauV_ISM=0.33, tauV_BC=0.67)._lnu
             for _g in mask])
 
     _specs = Sed(lam=grid.lam, lnu=_specs)
