@@ -159,10 +159,15 @@ class Image():
     def __add__(self, other_img):
         """
         Adds two img objects together, combining all images in all filters (or
-        single band/property images).
+        single band/property images). The resulting image object inherits its
+        attributes from self, i.e in img = img1 + img2, img will inherit the
+        attributes of img1.
+        
         If the images are incompatible in dimension an error is thrown.
+        
         Note: Once a new composite Image object is returned this will contain
-        the combined images in the combined_imgs dictionary.
+        the combined image objects in the combined_imgs dictionary.
+        
         Parameters
         ----------
         other_img : obj (Image/ParticleImage/ParametricImage)
@@ -221,14 +226,43 @@ class Image():
         if len(composite_filters) == 0:
             composite_filters = other_img.filters
 
-        # Initialise the composite image
-        composite_img = Image(
-            filters=composite_filters,
-            psfs=self.psfs,
-            depths=self.depths,
-            apertures=self.apertures,
-            snrs=self.snrs,
-        )
+        # Initialise the composite image with the right type
+        if isinstance(self, ParametricImage):
+            composite_img = ParametricImage(
+                morphology=None,
+                resolution=self.resolution * self.spatial_unit,
+                filters=composite_filters,
+                sed=self.sed,
+                npix=None,
+                fov=self.fov * self.spatial_unit,
+                cosmo=self.cosmo,
+                redshift=self.redshift,
+                rest_frame=self.rest_frame,
+                psfs=self.psfs,
+                depths=self.depths,
+                apertures=self.apertures,
+                snrs=self.snrs,
+            )
+        else:
+            composite_img = ParticleImage(
+                resolution=self.resolution * self.spatial_unit,
+                npix=None,
+                fov=self.fov * self.spatial_unit,
+                sed=self.sed,
+                stars=None,
+                filters=composite_filters,
+                positions=None,
+                pixel_values=None,
+                smoothing_lengths=None,
+                centre=None,
+                rest_frame=self.rest_frame,
+                cosmo=self.cosmo,
+                redshift=self.redshift,
+                psfs=self.psfs,
+                depths=self.depths,
+                apertures=self.apertures,
+                snrs=self.snrs,
+            )
 
         # Store the original images in the composite extracting any
         # nested images.
@@ -583,7 +617,7 @@ class Image():
 
         # Check we have a valid set of PSFs
         # TODO: could move these to a check args function.
-        if len(filters) == 0 and (
+        if len(self.filters) == 0 and (
             isinstance(self.depths, dict)
             or isinstance(self.snrs, dict)
             or isinstance(self.apertures, dict)
@@ -659,7 +693,7 @@ class Image():
                 )
 
         # Handle the possible cases (multiple filters or single image)
-        if len(filters) == 0:
+        if len(self.filters) == 0:
 
             # Apply noise to the image
             noise_tuple = self._get_noisy_single_img(
@@ -1137,6 +1171,7 @@ class ParticleImage(ParticleScene, Image):
             smoothing_lengths=smoothing_lengths,
             centre=centre,
             cosmo=cosmo,
+            redshift=redshift,
             rest_frame=rest_frame,
         )
         Image.__init__(
@@ -1305,6 +1340,8 @@ class ParametricImage(Scene, Image):
             fov=fov,
             sed=sed,
             rest_frame=rest_frame,
+            cosmo=cosmo,
+            redshift=redshift,
         )
         Image.__init__(
             self,
