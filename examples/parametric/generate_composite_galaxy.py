@@ -50,7 +50,7 @@ if __name__ == '__main__':
     disk = Galaxy(morph=morph, sfzh=sfzh)
 
     # generate stellar spectra
-    disk.get_stellar_spectra(grid)
+    disk.get_spectra_stellar(grid)
 
     # generate broadband luminosities
     sed = disk.spectra['stellar'].get_broadband_luminosities(filter_collection)
@@ -74,7 +74,7 @@ if __name__ == '__main__':
 
     bulge = Galaxy(morph=morph, sfzh=sfzh)
 
-    bulge.get_stellar_spectra(grid)
+    bulge.get_spectra_stellar(grid)
 
     sed = bulge.spectra['stellar'].get_broadband_luminosities(filter_collection)
 
