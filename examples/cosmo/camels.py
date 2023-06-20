@@ -6,7 +6,7 @@ from synthesizer.sed import Sed
 from synthesizer.load_data import load_CAMELS_SIMBA
 from synthesizer.filters import UVJ
 
-from synthesizer.galaxy.particle import ParticleGalaxy
+from synthesizer.particle.galaxy import Galaxy
 
 
 if __name__ == '__main__':
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     _spec = _g.get_spectra_stellar(grid)
     _g.plot_spectra()
     plt.show()
-    
+    x
     # for label, _spec in _g.spectra.items():
     #     plt.loglog(_spec.lam, _spec.lnu, label=label)
     # plt.xlabel('$\lambda \,/\, \\AA$')

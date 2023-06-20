@@ -118,7 +118,7 @@ if __name__ == "__main__":
     img_start = time.time()
 
     # Get the image
-    hist_img = galaxy.make_image(
+    hist_img = galaxy.make_images(
         resolution,
         fov=width,
         img_type="hist",
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     img_start = time.time()
 
     # Get the image
-    smooth_img = galaxy.make_image(
+    smooth_img = galaxy.make_images(
         resolution,
         fov=width,
         img_type="smoothed",

@@ -1,9 +1,8 @@
 import numpy as np
 from synthesizer.plt import single
-from synthesizer.filters import TopHatFilterCollection
 from synthesizer.grid import Grid, parse_grid_id
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh, generate_instant_sfzh
-from synthesizer.galaxy.parametric import Galaxy
+from synthesizer.parametric.galaxy import Galaxy
 from unyt import yr, Myr
 
 
@@ -57,7 +56,7 @@ if __name__ == '__main__':
             # --- define galaxy object
             # by default this automatically calculates the pure stellar spectra
             galaxy = Galaxy(sfzh)
-            galaxy.get_pacman_spectra(grid)  # adds nebular emission
+            galaxy.get_spectra_pacman(grid)  # adds nebular emission
 
             # --- get quanitities
 

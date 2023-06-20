@@ -4,14 +4,14 @@ photometry. This example will:
 - build a parametric galaxy (see make_sfzh)
 - calculate spectral luminosity density
 """
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.galaxy.parametric import Galaxy
+from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr
 from astropy.cosmology import Planck18 as cosmo
@@ -19,9 +19,13 @@ from astropy.cosmology import Planck18 as cosmo
 
 if __name__ == '__main__':
 
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
 
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # --- define the parameters of the star formation and metal enrichment histories
@@ -47,37 +51,37 @@ if __name__ == '__main__':
     galaxy.plot_spectra()
 
     # # --- generate intrinsic spectra (which includes reprocessing by gas)
-    galaxy.get_intrinsic_spectra(grid, fesc = 0.5)
+    galaxy.get_spectra_intrinsic(grid, fesc = 0.5)
     print("Intrinsic spectra")
     galaxy.plot_spectra()
 
     # # --- simple dust and gas screen
-    galaxy.get_screen_spectra(grid, tauV = 0.1, fesc = 0.5)
+    galaxy.get_spectra_screen(grid, tauV = 0.1, fesc = 0.5)
     print("Simple dust and gas screen")
     galaxy.plot_spectra()
 
     # --- CF00 model
-    galaxy.get_CharlotFall_spectra(grid, tauV_ISM=0.1, tauV_BC=0.1, alpha_ISM=-0.7, alpha_BC=-1.3)
+    galaxy.get_spectra_CharlotFall(grid, tauV_ISM=0.1, tauV_BC=0.1, alpha_ISM=-0.7, alpha_BC=-1.3)
     print("CF00 model")
     galaxy.plot_spectra()
 
     # # --- pacman model
-    galaxy.get_pacman_spectra(grid, tauV = 0.1, fesc = 0.5)
+    galaxy.get_spectra_pacman(grid, tauV = 0.1, fesc = 0.5)
     print("Pacman model")
     galaxy.plot_spectra()
 
     # # --- pacman model (no Lyman-alpha escape and no dust)
-    galaxy.get_pacman_spectra(grid, fesc = 0.0, fesc_LyA = 0.0)
+    galaxy.get_spectra_pacman(grid, fesc = 0.0, fesc_LyA = 0.0)
     print("Pacman model (no Ly-alpha escape, and no dust)")
     galaxy.plot_spectra()
 
     # # --- pacman model (complex)
-    galaxy.get_pacman_spectra(grid, fesc=0.0, fesc_LyA=0.5, tauV=0.6)
+    galaxy.get_spectra_pacman(grid, fesc=0.0, fesc_LyA=0.5, tauV=0.6)
     print("Pacman model (complex)")
     galaxy.plot_spectra()
 
     # --- CF00 model implemented within pacman model
-    galaxy.get_pacman_spectra(grid, fesc = 0.1, fesc_LyA = 0.1, tauV=[1.,1.], alpha = [-1,-1], CF00=True)
+    galaxy.get_spectra_pacman(grid, fesc = 0.1, fesc_LyA = 0.1, tauV=[1.,1.], alpha = [-1,-1], CF00=True)
     print("CF00 implemented within the Pacman model")
     galaxy.plot_spectra()
 
@@ -91,7 +95,7 @@ if __name__ == '__main__':
     tophats = {'U': {'lam_eff': 3650, 'lam_fwhm': 660},
                'V': {'lam_eff': 5510, 'lam_fwhm': 880},
                'J': {'lam_eff': 12200, 'lam_fwhm': 2130}}
-    fc = FilterCollection(tophat_dict=tophats, new_lam=sed.lam)
+    fc = FilterCollection(tophat_dict=tophats, new_lam=grid.lam)
 
     bb_lnu = sed.get_broadband_luminosities(fc)
     print(bb_lnu)
