@@ -7,7 +7,7 @@ import numpy as np
 from scipy import integrate
 from unyt import yr, erg, Hz, s, cm, angstrom
 
-from ..galaxy import BaseGalaxy
+from ..base_galaxy import BaseGalaxy
 from .. import exceptions
 from ..dust import power_law
 from ..sed import Sed
@@ -368,11 +368,11 @@ class Galaxy(BaseGalaxy):
 
         return linecont
 
-    def make_image(self, resolution, fov=None, sed=None, filters=(),
-                   psfs=None, depths=None, snrs=None, aperture=None,
-                   noises=None, rest_frame=True, cosmo=None, redshift=None,
-                   psf_resample_factor=1,
-                   ):
+    def make_images(self, resolution, fov=None, sed=None, filters=(),
+                    psfs=None, depths=None, snrs=None, aperture=None,
+                    noises=None, rest_frame=True, cosmo=None, redshift=None,
+                    psf_resample_factor=1,
+                    ):
         """
         Makes images in each filter provided in filters. Additionally an image
         can be made with or without a PSF and noise.
