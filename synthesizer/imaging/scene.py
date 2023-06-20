@@ -54,6 +54,7 @@ class Scene:
         sed=None,
         rest_frame=True,
         cosmo=None,
+        redshift=None,
     ):
         """
         Intialise the Observation.
@@ -95,8 +96,9 @@ class Scene:
         # Attributes containing data
         self.sed = sed
 
-        # Store the cosmology object
+        # Store the cosmology object and redshift
         self.cosmo = cosmo
+        self.redshift = redshift
 
         # Keep track of the input resolution and and npix so we can handle
         # super resolution correctly.
@@ -346,6 +348,7 @@ class ParticleScene(Scene):
         smoothing_lengths=None,
         centre=None,
         cosmo=None,
+        redshift=None,
         rest_frame=True,
     ):
         """
@@ -393,6 +396,7 @@ class ParticleScene(Scene):
             sed=sed,
             rest_frame=rest_frame,
             cosmo=cosmo,
+            redshift=redshift,
         )
 
         # Initialise stars attribute
