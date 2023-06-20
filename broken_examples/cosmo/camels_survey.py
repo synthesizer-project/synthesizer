@@ -7,19 +7,20 @@ from synthesizer import grid
 from synthesizer.sed import Sed
 from synthesizer.load_data import load_CAMELS_SIMBA
 from synthesizer.filters import UVJ
-# from synthesizer.imaging.survey import Survey
 from synthesizer.survey import Survey
+from synthesizer.grid import Grid
 
 from synthesizer.particle.galaxy import Galaxy
 
 
-if len(sys.argv) > 1:
-    grid_dir = str(sys.argv[1])
-else:
-    grid_dir = None
+# Get the location of this script, __file__ is the absolute path of this
+# script, however we just want to directory
+script_path = os.path.abspath(os.path.dirname(__file__))
 
-# First load a spectral grid
-_grid = grid.Grid('bc03_chabrier03-0.1,100', grid_dir=grid_dir)
+# Define the grid
+grid_name = "test_grid"
+grid_dir = script_path + "/../../tests/test_grid/"
+grid = Grid(grid_name, grid_dir=grid_dir)
 
 # now load some example CAMELS data using the dedicated data loader
 gals = load_CAMELS_SIMBA('data/', snap='033')
@@ -32,7 +33,7 @@ mask = np.where(mstar > 8)[0]
 # ========================= Using a Survey =========================
 
 # Set up a filter collection object (UVJ default)
-fc = UVJ(new_lam=_grid.lam)
+fc = UVJ(new_lam=grid.lam)
 
 # Convert gals to an array
 gals = np.array(gals)
@@ -47,11 +48,11 @@ survey.add_photometric_instrument(filters=fc, label="UVJ")
 survey.add_galaxies(gals[mask])
 
 # Get the SEDs
-survey.get_integrated_stellar_spectra(_grid)
+survey.get_integrated_stellar_spectra(grid)
 
 survey.get_integrated_spectra_screen(tauV=0.33)
 
-survey.get_integrated_spectra_charlot_fall_00(_grid, tauV_ISM=0.33, tauV_BC=0.67)
+survey.get_integrated_spectra_charlot_fall_00(grid, tauV_ISM=0.33, tauV_BC=0.67)
 
 # Compute the photometry in UVJ filters
 
