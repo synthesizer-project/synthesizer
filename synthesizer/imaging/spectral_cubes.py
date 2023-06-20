@@ -4,7 +4,7 @@ import synthesizer.exceptions as exceptions
 import numpy as np
 import math
 import warnings
-from unyt import kpc
+from unyt import kpc, mas
 from unyt.dimensions import length, angle
 from synthesizer.imaging.scene import Scene, ParticleScene
 

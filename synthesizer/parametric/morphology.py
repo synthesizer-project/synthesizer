@@ -76,7 +76,7 @@ class Sersic2D(MorphologyBase):
         if cosmo is not None and redshift is not None:
 
             # Compute conversion
-            kpc_proper_per_mas = self.cosmo.kpc_proper_per_arcmin(z).to(
+            kpc_proper_per_mas = self.cosmo.kpc_proper_per_arcmin(redshift).to(
                 'kpc/mas'
             ).value
 
