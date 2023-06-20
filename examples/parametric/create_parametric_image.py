@@ -45,7 +45,7 @@ if __name__ == '__main__':
     galaxy = Galaxy(sfzh, morph=morph)
 
     # Generate stellar spectra
-    galaxy.get_stellar_spectra(grid)
+    galaxy.get_spectra_stellar(grid)
 
     # Get a UVJ filter set
     filters = UVJ(new_lam=grid.lam)
