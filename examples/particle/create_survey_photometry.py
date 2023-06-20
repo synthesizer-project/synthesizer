@@ -16,7 +16,7 @@ from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
-from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
+from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.filters import FilterCollection as Filters
 from synthesizer.kernel_functions import quintic
@@ -98,11 +98,11 @@ for igal in range(ngalaxies):
 survey.add_galaxies(galaxies)
 
 # Get the SEDs
-survey.get_spectra(grid, spectra_type="total", rest_frame=False,
+survey.get_spectra(grid, spectra_type="stellar", rest_frame=False,
                    redshift=redshift)
 
 # Make images for each galaxy in this survey
-survey.get_photometry(spectra_type="total")
+survey.get_photometry(spectra_type="stellar")
 
 print("Total runtime (including creation, not including plotting):",
       time.time() - start)

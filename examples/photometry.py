@@ -16,7 +16,7 @@ import matplotlib.gridspec as gridspec
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
+from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr, c, angstrom
 from synthesizer.igm import Madau96, Inoue14
@@ -69,8 +69,8 @@ if __name__ == '__main__':
     for z in zs:
         
         # Generate spectra using pacman model (complex)
-        seds[z] = galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5,
-                                            tauV=0.1, sed_object=True)
+        seds[z] = galaxy.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5,
+                                            tauV=0.1)
 
         # Generate observed frame spectra
         seds[z].get_fnu(cosmo, z, igm=Madau96())

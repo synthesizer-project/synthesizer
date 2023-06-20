@@ -8,3 +8,5 @@ In the following we show some examples using particles sampled from parametric s
    :maxdepth: 2
 
    particle_imaging
+
+   parametric_imaging

@@ -15,7 +15,7 @@ from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
-from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
+from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.filters import FilterCollection as Filters
 from synthesizer.kernel_functions import quintic
@@ -154,12 +154,12 @@ survey.fov = fov
 survey.add_galaxies(galaxies)
 
 # Calculate the SEDs
-survey.get_particle_spectra(grid, "total", redshift=redshift, rest_frame=False)
+survey.get_particle_spectra(grid, "stellar", redshift=redshift, rest_frame=False)
 
 # Make images for each galaxy in this survey
 survey.make_images(
     img_type="smoothed",
-    spectra_type="total",
+    spectra_type="stellar",
     kernel_func=quintic,
     rest_frame=False,
     cosmo=cosmo,
