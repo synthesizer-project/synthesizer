@@ -559,7 +559,6 @@ class Survey:
                     snrs=inst.snrs,
                     rest_frame=rest_frame,
                     cosmo=cosmo,
-                    super_resolution_factor=self.super_resolution_factor,
                 )
 
                 # Store this result

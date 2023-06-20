@@ -10,8 +10,8 @@ from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
-from synthesizer.galaxy.parametric import ParametricGalaxy
-from synthesizer.galaxy.particle import ParticleGalaxy
+from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 
 
 # --- initialise the SPS grid
@@ -62,7 +62,7 @@ for N in [1, 10, 100, 1000]:
     # particle_galaxy.generate_spectra(grid, fesc=0.0, integrated=True)
     
     # Calculate the stars SEDs
-    particle_galaxy.generate_spectra(grid, sed_object=True, spectra_type='stellar')
+    particle_galaxy.get_spectra_stellar(grid)
 
 
     sed = particle_galaxy.spectra['stellar']
@@ -72,5 +72,5 @@ for N in [1, 10, 100, 1000]:
 plt.legend()
 plt.xlim([2, 5])
 plt.ylim([10, 22])
-plt.savefig('plots/compare_parametric_particle.png', dpi=200, bbox_inches='tight'); plt.close()
+plt.savefig(script_path + '/plots/compare_parametric_particle.png', dpi=200, bbox_inches='tight'); plt.close()
 # plt.show()

@@ -76,7 +76,7 @@ if __name__ == '__main__':
                 bbox_inches="tight", dpi=100)
 
     # We can also do the same with a helper function on the galaxy object
-    img = galaxy.make_image(
+    img = galaxy.make_images(
         resolution=resolution,
         filters=filters,
         sed=galaxy.spectra["stellar"],

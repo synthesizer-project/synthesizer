@@ -5,20 +5,24 @@ Example for generating a emission lines for a parametric galaxy. This example wi
 - calculate intrinsic line properties
 - calculate dust-attenuated line properties
 """
-
+import os
 
 from synthesizer.units import Units
 from synthesizer.grid import get_available_lines, Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.galaxy.parametric import Galaxy
+from synthesizer.parametric.galaxy import Galaxy
 from unyt import yr, Myr
 
 
 if __name__ == '__main__':
 
-    # location and name of the grid
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
+
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
 
     # to see what lines are available in a grid we can use this helper function
     available_lines = get_available_lines(grid_name, grid_dir)
@@ -47,21 +51,21 @@ if __name__ == '__main__':
     print(galaxy)
 
     # --- create the Lines dictionary which contains line objects
-    lines = galaxy.get_intrinsic_line(grid, line_ids)
+    lines = galaxy.get_line_intrinsic(grid, line_ids)
     print('-'*50)
     print('INTRINSIC')
     for line_id, line in lines.items():
         print(line)
 
     # --- calculate attenuated line properties assuming uniform dust (should leave EW unchanged)
-    lines = galaxy.get_screen_line(grid, line_ids, tauV=0.5)
+    lines = galaxy.get_line_screen(grid, line_ids, tauV=0.5)
     print('-'*50)
     print('SCREEN')
     for line_id, line in lines.items():
         print(line)
 
     # --- calculate attenuated line properties assuming different dust affecting stellar and nebular components
-    lines = galaxy.get_attenuated_line(grid, line_ids, tauV_stellar=0.1, tauV_nebular=0.5)
+    lines = galaxy.get_line_attenuated(grid, line_ids, tauV_stellar=0.1, tauV_nebular=0.5)
     print('-'*50)
     print('ATTENUATED')
     for line_id, line in lines.items():
