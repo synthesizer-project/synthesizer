@@ -118,10 +118,6 @@ class Image():
             be a single radius or a radius per filter in a dictionary.
         """
 
-        # Sanitize inputs
-        if filters is None:
-            filters = ()
-
         # Define attributes to hold the PSF information
         self.psfs = psfs
         self._normalise_psfs
@@ -219,19 +215,12 @@ class Image():
                     + " ]"
                 )
 
-        # Get the filter set for the composite, we have to handle the case
-        # where one of the images is a single band/property image so can't
-        # just take self.filters
-        composite_filters = self.filters
-        if len(composite_filters) == 0:
-            composite_filters = other_img.filters
-
         # Initialise the composite image with the right type
         if isinstance(self, ParametricImage):
             composite_img = ParametricImage(
                 morphology=None,
                 resolution=self.resolution * self.spatial_unit,
-                filters=composite_filters,
+                filters=self.filters,
                 sed=self.sed,
                 npix=None,
                 fov=self.fov * self.spatial_unit,
@@ -249,9 +238,9 @@ class Image():
                 npix=None,
                 fov=self.fov * self.spatial_unit,
                 sed=self.sed,
-                stars=None,
-                filters=composite_filters,
-                positions=None,
+                stars=self.stars,
+                filters=None,
+                positions=self.coords * self.coord_unit,
                 pixel_values=None,
                 smoothing_lengths=None,
                 centre=None,
@@ -263,6 +252,16 @@ class Image():
                 apertures=self.apertures,
                 snrs=self.snrs,
             )
+
+        # Get the filter set for the composite, we have to handle the case
+        # where one of the images is a single band/property image so can't
+        # just take self.filters
+        composite_filters = self.filters
+        if len(composite_filters) == 0:
+            composite_filters = other_img.filters
+        elif len(other_img.filters) > 0:
+            composite_filters += other_img.filters
+        composite_img.filters = composite_filters
 
         # Store the original images in the composite extracting any
         # nested images.
@@ -1159,6 +1158,10 @@ class ParticleImage(ParticleScene, Image):
             Object containing the absorbtion due to an intergalactic medium.
         """
 
+        # Sanitize inputs
+        if filters is None:
+            filters = ()
+
         # Initilise the parent classes
         ParticleScene.__init__(
             self,
@@ -1331,6 +1334,10 @@ class ParametricImage(Scene, Image):
             The factor by which the resolution is divided to make the super
             resolution image used for PSF convolution.
         """
+
+        # Sanitize inputs
+        if filters is None:
+            filters = ()
 
         # Initilise the parent classes
         Scene.__init__(
