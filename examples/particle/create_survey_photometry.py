@@ -16,7 +16,7 @@ from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
-from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
+from synthesizer.galaxy.particle import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.filters import FilterCollection as Filters
 from synthesizer.kernel_functions import quintic
