@@ -16,10 +16,9 @@ from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
-from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
+from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.filters import FilterCollection as Filters
-from synthesizer.kernel_functions import quintic
 
 
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -86,8 +85,7 @@ if __name__ == "__main__":
     spectra_start = time.time()
 
     # Calculate the stars SEDs
-    sed = galaxy.generate_particle_spectra(grid, sed_object=True,
-                                           spectra_type="total")
+    sed = galaxy.get_particle_spectra_stellar(grid)
     sed.get_fnu(cosmo, stars.redshift, igm=None)
 
     print("Spectra created, took:", time.time() - spectra_start)
@@ -120,14 +118,13 @@ if __name__ == "__main__":
     img_start = time.time()
 
     # Get the image
-    hist_img = galaxy.make_image(
+    hist_img = galaxy.make_images(
         resolution,
         fov=width,
         img_type="hist",
         sed=sed,
         filters=filters,
         psfs=psfs,
-        kernel_func=quintic,
         rest_frame=False,
         cosmo=cosmo,
         psf_resample_factor=2,
@@ -138,14 +135,13 @@ if __name__ == "__main__":
     img_start = time.time()
 
     # Get the image
-    smooth_img = galaxy.make_image(
+    smooth_img = galaxy.make_images(
         resolution,
         fov=width,
         img_type="smoothed",
         sed=sed,
         filters=filters,
         psfs=psfs,
-        kernel_func=quintic,
         rest_frame=False,
         cosmo=cosmo,
         psf_resample_factor=2,

@@ -1,7 +1,7 @@
 from synthesizer import grid
 from synthesizer.load_data import load_FLARES
 
-_grid = grid.SpectralGrid(f'../../synthesizer_data/grids/bc03_chabrier03.h5')
+_grid = grid.Grid(f'../../synthesizer_data/grids/bc03_chabrier03.h5')
 
 region = '00'
 tag = '010_z005p000'

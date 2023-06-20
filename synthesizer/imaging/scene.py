@@ -53,6 +53,8 @@ class Scene:
         fov=None,
         sed=None,
         rest_frame=True,
+        cosmo=None,
+        redshift=None,
     ):
         """
         Intialise the Observation.
@@ -78,7 +80,7 @@ class Scene:
         """
 
         # Check what we've been given
-        self._check_obs_args(resolution, fov, npix)
+        self._check_scene_args(resolution, fov, npix)
 
         # Define the spatial units of the image
         self.spatial_unit = resolution.units
@@ -94,6 +96,10 @@ class Scene:
         # Attributes containing data
         self.sed = sed
 
+        # Store the cosmology object and redshift
+        self.cosmo = cosmo
+        self.redshift = redshift
+
         # Keep track of the input resolution and and npix so we can handle
         # super resolution correctly.
         self.orig_resolution = resolution
@@ -108,11 +114,7 @@ class Scene:
         # What frame are we observing in?
         self.rest_frame = rest_frame
 
-        # Define the resample factor. This is overwritten whenever resampling
-        # is performed.
-        self.resample_factor = 1
-
-    def _check_obs_args(self, resolution, fov, npix):
+    def _check_scene_args(self, resolution, fov, npix):
         """
         Ensures we have a valid combination of inputs.
         Parameters
@@ -346,6 +348,7 @@ class ParticleScene(Scene):
         smoothing_lengths=None,
         centre=None,
         cosmo=None,
+        redshift=None,
         rest_frame=True,
     ):
         """
@@ -392,10 +395,9 @@ class ParticleScene(Scene):
             fov=fov,
             sed=sed,
             rest_frame=rest_frame,
+            cosmo=cosmo,
+            redshift=redshift,
         )
-
-        # Store the cosmology object
-        self.cosmo = cosmo
 
         # Initialise stars attribute
         self.stars = stars
@@ -418,8 +420,12 @@ class ParticleScene(Scene):
             self.smoothing_lengths = np.copy(self.stars.smoothing_lengths)
             self.smooth_unit = self.stars.coord_units
         else:
-            self.smoothing_lengths = np.copy(smoothing_lengths)
-            self.smooth_unit = smoothing_lengths.units
+            if smoothing_lengths is not None:
+                self.smoothing_lengths = np.copy(smoothing_lengths)
+                self.smooth_unit = smoothing_lengths.units
+            else:
+                self.smoothing_lengths = None
+                self.smooth_unit = None
 
         # Convert coordinates to the image's spatial units
         self._convert_to_img_units()
@@ -660,55 +666,3 @@ class ParticleScene(Scene):
             #     # And strip off the unit
             #     self.smoothing_lengths = self.smoothing_lengths.value
 
-class ParametricScene(Scene):
-    """
-    The parent class for all parametric "observations". These include:
-    - Flux/rest frame luminosity images in photometric bands.
-    - Images of underlying properties such as SFR, stellar mass, etc.
-    - Data cubes (IFUs) containing spatially resolved spectra.
-    This parent contains all functionality needed for parametric observations.
-    WorkInProgress
-    Attributes
-    ----------
-    Raises
-    ----------
-    InconsistentArguments
-        If an incompatible combination of arguments is provided an error is
-        raised.
-    """
-
-    def __init__(
-        self,
-        resolution,
-        npix=None,
-        fov=None,
-        sed=None,
-        rest_frame=True,
-    ):
-        """
-        Intialise the ParametricObservation.
-        Parameters
-        ----------
-        resolution : float
-            The size a pixel.
-        npix : int
-            The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU.
-        fov : float
-            The width of the image/ifu. If coordinates are being used to make
-            the image this should have the same units as those coordinates.
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
-        survey : obj (Survey)
-            WorkInProgress
-        """
-
-        # Initilise the parent class
-        Scene.__init__(
-            self,
-            resolution,
-            npix,
-            fov,
-            sed,
-            rest_frame=rest_frame,
-        )
