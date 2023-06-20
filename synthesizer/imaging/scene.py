@@ -420,8 +420,12 @@ class ParticleScene(Scene):
             self.smoothing_lengths = np.copy(self.stars.smoothing_lengths)
             self.smooth_unit = self.stars.coord_units
         else:
-            self.smoothing_lengths = np.copy(smoothing_lengths)
-            self.smooth_unit = smoothing_lengths.units
+            if smoothing_lengths is not None:
+                self.smoothing_lengths = np.copy(smoothing_lengths)
+                self.smooth_unit = smoothing_lengths.units
+            else:
+                self.smoothing_lengths = None
+                self.smooth_unit = None
 
         # Convert coordinates to the image's spatial units
         self._convert_to_img_units()
