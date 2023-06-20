@@ -33,7 +33,7 @@ mask = np.where(mstar > 8)[0]
 # ========================= Using a Survey =========================
 
 # Set up a filter collection object (UVJ default)
-fc = UVJ(new_lam=_grid.lam)
+fc = UVJ(new_lam=grid.lam)
 
 # Convert gals to an array
 gals = np.array(gals)
@@ -48,11 +48,11 @@ survey.add_photometric_instrument(filters=fc, label="UVJ")
 survey.add_galaxies(gals[mask])
 
 # Get the SEDs
-survey.get_integrated_stellar_spectra(_grid)
+survey.get_integrated_stellar_spectra(grid)
 
 survey.get_integrated_spectra_screen(tauV=0.33)
 
-survey.get_integrated_spectra_charlot_fall_00(_grid, tauV_ISM=0.33, tauV_BC=0.67)
+survey.get_integrated_spectra_charlot_fall_00(grid, tauV_ISM=0.33, tauV_BC=0.67)
 
 # Compute the photometry in UVJ filters
 
