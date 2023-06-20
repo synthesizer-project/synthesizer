@@ -617,12 +617,12 @@ class Galaxy(BaseGalaxy):
 
         return img.get_hist_img()
 
-    def make_image(self, resolution, fov=None, img_type="hist",
-                   sed=None, filters=(), pixel_values=None, psfs=None,
-                   depths=None, snrs=None, aperture=None, noises=None,
-                   rest_frame=True, cosmo=None,
-                   psf_resample_factor=1,
-                   ):
+    def make_images(self, resolution, fov=None, img_type="hist",
+                    sed=None, filters=(), pixel_values=None, psfs=None,
+                    depths=None, snrs=None, aperture=None, noises=None,
+                    rest_frame=True, cosmo=None,
+                    psf_resample_factor=1,
+                    ):
         """
         Makes images, either one or one per filter. This is a generic method
         that will make every sort of image using every possible combination of
