@@ -5,7 +5,7 @@ from ..particle.stars import Stars
 from ..particle.gas import Gas
 from ..sed import Sed
 from ..dust import power_law
-from ..galaxy import BaseGalaxy
+from ..base_galaxy import BaseGalaxy
 from .. import exceptions
 from ..imaging.images import ParticleImage
 
