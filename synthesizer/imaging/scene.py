@@ -385,7 +385,7 @@ class ParticleScene(Scene):
         """
 
         # Check what we've been given
-        self._check_part_args(resolution, stars, positions, centre, cosmo)
+        self._check_part_args(resolution, stars, positions, centre, cosmo, sed)
 
         # Initilise the parent class
         Scene.__init__(
@@ -436,7 +436,8 @@ class ParticleScene(Scene):
         # How many particle are there?
         self.npart = self.coords.shape[0]
 
-    def _check_part_args(self, resolution, stars, positions, centre, cosmo):
+    def _check_part_args(self, resolution, stars, positions, centre, cosmo,
+                         sed):
         """
         Ensures we have a valid combination of inputs.
         Parameters
@@ -461,6 +462,14 @@ class ParticleScene(Scene):
         # Get the spatial units
         spatial_unit = resolution.units
 
+        # Have we been given an integrated SED by accident?
+        if sed is not None:
+            if len(sed.lnu.shape) == 1:
+                raise exceptions.InconsistentArguments(
+                    "Particle Spectra are required for imaging, an integrated "
+                    "spectra has been passed."
+                )
+
         # Check the stars we have been given.
         if stars is not None:
 
@@ -484,6 +493,15 @@ class ParticleScene(Scene):
                     " can either be a single redshift for all stars or an "
                     "array of redshifts for each star."
                 )
+
+            # Need to ensure we have a per particle SED
+            if sed is not None:
+                if sed.lnu.shape[0] != stars.nparticles:
+                    raise exceptions.InconsistentArguments(
+                        "The shape of the SED array:", sed.lnu.shape,
+                        "does not agree with the number of stellar particles "
+                        "(%d)" % stars.nparticles
+                    )
 
         # Missing cosmology
         if spatial_unit.same_dimensions_as(arcsec) and cosmo is None:
@@ -516,6 +534,15 @@ class ParticleScene(Scene):
                         "The centre lies outside of the coordinate range. "
                         "Are they already centred?"
                     )
+
+        # Need to ensure we have a per particle SED
+        if sed is not None and positions is not None:
+            if sed.lnu.shape[0] != positions.shape[0]:
+                raise exceptions.InconsistentArguments(
+                    "The shape of the SED array:", sed.lnu.shape,
+                    "does not agree with the number of coordinates "
+                    "(%d)" % positions.shape[0]
+                )
 
     def _centre_coords(self):
         """
