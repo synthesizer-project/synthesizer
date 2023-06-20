@@ -615,7 +615,7 @@ class Galaxy(BaseGalaxy):
         img = ParticleImage(resolution, npix, fov, stars=self.stars,
                             pixel_values=self.stars.initial_masses)
 
-        return img.get_hist_img()
+        return img.get_hist_imgs()
 
     def make_images(self, resolution, fov=None, img_type="hist",
                     sed=None, filters=(), pixel_values=None, psfs=None,
