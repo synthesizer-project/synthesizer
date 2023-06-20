@@ -344,8 +344,10 @@ class Survey:
         for ind, gal in enumerate(self.galaxies):
 
             # Are we getting a flux or rest frame?
-            _specs[ind, :] = gal.generate_spectra(
-                grid, sed_object=False, spectra_type=spectra_type)
+            if spectra_type == "stellar":
+                _specs[ind, :] = gal.get_spectra_stellar(grid)._lnu
+            elif spectra_type == "intrinsic":
+                _specs[ind, :] = gal.get_spectra_intrinsic(grid)._lnu
             
         # Create and store an SED object for these SEDs
         self.seds[spectra_type] = Sed(lam=grid.lam, lnu=_specs)
@@ -446,9 +448,12 @@ class Survey:
         for ind, gal in enumerate(self.galaxies):
 
             # Are we getting a flux or rest frame?
-            sed = gal.generate_particle_spectra(grid, sed_object=True,
-                                                spectra_type=spectra_type)
-            gal.spectra_array[spectra_type] = sed
+            if spectra_type == "stellar":
+                sed = gal.get_particle_spectra_stellar(grid)
+                gal.spectra_array[spectra_type] = sed
+            elif spectra_type == "intrinsic":
+                sed = gal.get_particle_spectra_intrinsic(grid)
+                gal.spectra_array[spectra_type] = sed
             
             # Get the flux
             # TODO: catch error if improper arguments are handed
@@ -542,7 +547,7 @@ class Survey:
             for gal in self.galaxies:
 
                 # Get images of this galaxy with this instrument
-                img = gal.make_image(
+                img = gal.make_images(
                     inst.resolution,
                     fov=self.fov,
                     img_type=img_type,
@@ -552,7 +557,6 @@ class Survey:
                     depths=inst.depths,
                     aperture=inst.aperture,
                     snrs=inst.snrs,
-                    kernel_func=kernel_func,
                     rest_frame=rest_frame,
                     cosmo=cosmo,
                     super_resolution_factor=self.super_resolution_factor,
