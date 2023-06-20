@@ -16,7 +16,7 @@ from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
-from synthesizer.galaxy.particle import ParticleGalaxy as Galaxy
+from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.filters import FilterCollection as Filters
 
@@ -85,8 +85,7 @@ if __name__ == "__main__":
     spectra_start = time.time()
 
     # Calculate the stars SEDs
-    sed = galaxy.generate_particle_spectra(grid, sed_object=True,
-                                           spectra_type="total")
+    sed = galaxy.get_particle_spectra_stellar(grid)
     sed.get_fnu(cosmo, stars.redshift, igm=None)
 
     print("Spectra created, took:", time.time() - spectra_start)

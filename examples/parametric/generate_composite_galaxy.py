@@ -10,7 +10,7 @@ TODO: add image creation
 from synthesizer.grid import Grid
 from synthesizer.parametric.morphology import Sersic2D
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh, generate_instant_sfzh
-from synthesizer.galaxy import ParametricGalaxy as Galaxy
+from synthesizer.galaxy import Galaxy
 from synthesizer.filters import UVJ
 from unyt import yr, Myr, kpc, mas
 import matplotlib.pyplot as plt
