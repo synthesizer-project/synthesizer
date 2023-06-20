@@ -112,6 +112,11 @@ class FilterCollection:
         self._current_ind = 0
         self.nfilters = len(self.filter_codes)
 
+        # Placeholder attributes for storing filter properties that can be
+        # calculated in methods.
+        self.mean_lams = None
+        self.piv_lams = None
+
     def _make_svo_collection(self, filter_codes):
         """
         Populate the FilterCollection with filters from SVO.
@@ -358,7 +363,7 @@ class FilterCollection:
 
         return self.filters[key]
 
-    def _transmission_curve_ax(self, ax, add_filter_label=True):
+    def _transmission_curve_ax(self, ax):
         """
         Add filter transmission curves to a give axes
         Parameters
@@ -375,8 +380,6 @@ class FilterCollection:
         for key in self.filters:
             f = self.filters[key]
             ax.plot(f.lam, f.t, label=f.filter_code)
-
-            # TODO: Add label with automatic placement
 
         # Label the axes
         ax.set_xlabel(r"$\rm \lambda/\AA$")
@@ -408,13 +411,187 @@ class FilterCollection:
         ax = fig.add_axes((left, bottom, width, height))
 
         # Make plot
-        self._transmission_curve_ax(ax, add_filter_label=True)
+        self._transmission_curve_ax(ax)
+
+        ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.2),
+            fancybox=True,
+            shadow=True,
+            ncol=3,
+        )
 
         # Are we showing?
         if show:
             plt.show()
 
         return fig, ax
+
+    def calc_pivot_lams(self):
+        """
+        Calculates the rest frame pivot wavelengths of all filters in this
+        FilterCollection.
+
+        Returns:
+            piv_lams (ndarray: float)
+                An array containing the rest frame pivot wavelengths of each
+                filter in the same order as self.filter_codes.
+        """
+
+        # Calculate each filters pivot wavelength
+        self.piv_lams = np.zeros(len(self))
+        for ind, f in enumerate(self):
+            self.piv_lams[ind] = f.pivwv()
+
+        return self.piv_lams
+
+    def calc_mean_lams(self):
+        """
+        Calculates the rest frame mean wavelengths of all filters in this
+        FilterCollection.
+
+        Returns:
+            mean_lams (ndarray: float)
+                An array containing the rest frame mean wavelengths of each
+                filter in the same order as self.filter_codes.
+        """
+
+        # Calculate each filters pivot wavelength
+        self.mean_lams = np.zeros(len(self))
+        for ind, f in enumerate(self):
+            self.mean_lams[ind] = f.meanwv()
+
+        return self.mean_lams
+
+    def find_filter(self, rest_frame_lam, redshift=None,
+                            method="pivot"):
+        """
+        Takes a rest frame target wavelength and returns the filter that probes
+        that wavelength.
+
+        If a redshift is provided then the wavelength is shifted into the
+        observer frame and the filter that probes that wavelength in the
+        observed frame is returned.
+
+        Three Methods are provided to decide which filter to return:
+            "pivot" (default)  - The filter with the closest pivot wavelength
+                                 is returned.
+            "mean"             - The filter with the closest mean wavelength is
+                                 returned.
+            "transmission"     - The filter with the peak transmission at the
+                                 wavelength is returned.
+        
+        Args:
+            rest_frame_lam (float):
+                The wavelength to find the nearest filter to.
+            redshift (float):
+                The redshift of the observation. None for rest_frame, defaults
+                to None.
+            method (str):
+                The method to decide which filter to return. Either "pivot"
+                (default), "mean", or "transmission". 
+
+        Returns:
+            synthesizer.Filter
+                The closest Filter in this FilterCollection. The filter-code
+                of this filter is also printed. 
+
+        Raises:
+            WavelengthOutOfRange:
+                If the passed wavelength is out of range of any of the filters
+                then an error is thrown.
+        """
+
+        # Are we working in a shifted frame or not?
+        if redshift is not None:
+
+            # Get the shifted wavelength
+            lam = rest_frame_lam * (1 + redshift)
+
+        else:
+
+            # Get the rest frame wavelength
+            lam = rest_frame_lam
+
+        # Which method are we using?
+        if method == "pivot":
+
+            # Calculate each filters pivot wavelength
+            piv_lams = self.calc_pivot_lams()
+
+            # Find the index of the closest pivot wavelength to lam
+            ind = np.argmin(np.abs(piv_lams - lam))
+
+        elif method == "mean":
+
+            # Calculate each filters mean wavelength
+            mean_lams = self.calc_mean_lams()
+
+            # Find the index of the closest mean wavelength to lam
+            ind = np.argmin(np.abs(mean_lams - lam))
+
+        elif method == "transmission":
+
+            # Compute the transmission in each filter at lam
+            transmissions = np.zeros(len(self))
+            for ind, f in enumerate(self):
+                transmissions[ind] = f.t[np.argmin(np.abs(self.lam - lam))]
+
+            # Find the index of the filter with the peak transmission
+            ind = np.argmax(transmissions)
+
+        else:
+            raise exceptions.InconsistentArguments(
+                "Method not recognised! Can be either 'pivot', "
+                "'mean'' or 'transmission'"
+            )
+
+        # Get the filter code and object for the found filter
+        fcode = self.filter_codes[ind]
+        f = self.filters[fcode]
+
+        # Get the transmission
+        transmission = f.t[np.argmin(np.abs(self.lam - lam))]
+
+        # Ensure the transmission is non-zero at the desired wavelength
+        if transmission == 0:
+            if method == "pivot" or method == "mean":
+                if redshift is None:
+                    raise exceptions.WavelengthOutOfRange(
+                        "The wavelength (rest_frame_lam=%.2e " % rest_frame_lam
+                        + "Angstrom) has 0 transmission in the closest "
+                        "Filter (%s). Try method='transmission'." % fcode
+                    )
+                else:
+                    raise exceptions.WavelengthOutOfRange(
+                        "The wavelength (rest_frame_lam=%.2e " % rest_frame_lam
+                        + "Angstrom, observed_lam=%.2e Angstrom)" % lam
+                        + " has 0 transmission in the closest "
+                        + "Filter (%s). Try method='transmission'." % fcode
+                    )
+            else:
+                if redshift is None:
+                    raise exceptions.WavelengthOutOfRange(
+                        "The wavelength (rest_frame_lam=%.2e " % rest_frame_lam
+                        + "Angstrom) does not fall in any Filters." 
+                    )
+                else:
+                    raise exceptions.WavelengthOutOfRange(
+                        "The wavelength (rest_frame_lam=%.2e " % rest_frame_lam
+                        + "Angstrom, observed_lam=%.2e Angstrom)" % lam
+                        + " does not fall in any Filters." 
+                    )
+                
+            
+        if redshift is None:
+            print("Filter containing rest_frame_lam=%.2e Angstrom: %s"
+                  % (lam, fcode))
+        else:
+            print("Filter containing rest_frame_lam=%.2e Angstrom "
+                  "(with observed wavelength=%.2e Angstrom): %s"
+                  % (rest_frame_lam, lam, fcode))
+
+        return f
 
 
 class Filter:
@@ -552,6 +729,7 @@ class Filter:
         # calculation later.
         if self.original_lam is None:
             self.original_lam = self.lam
+        if self.original_t is None:
             self.original_t = self.t
 
         # Calculate frequencies
