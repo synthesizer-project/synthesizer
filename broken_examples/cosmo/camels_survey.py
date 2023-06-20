@@ -7,8 +7,8 @@ from synthesizer import grid
 from synthesizer.sed import Sed
 from synthesizer.load_data import load_CAMELS_SIMBA
 from synthesizer.filters import UVJ
-# from synthesizer.imaging.survey import Survey
 from synthesizer.survey import Survey
+from synthesizer.grid import Grid
 
 from synthesizer.particle.galaxy import Galaxy
 
