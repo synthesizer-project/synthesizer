@@ -14,3 +14,4 @@ In the following we show some examples.
    
 
    generate_composite_galaxy
+   
