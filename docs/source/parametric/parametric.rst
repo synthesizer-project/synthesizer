@@ -11,7 +11,5 @@ In the following we show some examples.
    generate_sed
    generate_observed_sed
    generate_lines
-   
-
    generate_composite_galaxy
    
