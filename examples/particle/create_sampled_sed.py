@@ -10,7 +10,7 @@ from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
-from synthesizer.galaxy.particle import ParticleGalaxy
+from synthesizer.particle.galaxy import Galaxy 
 
 
 # --- define the grid (normally this would be defined by an SPS grid)
@@ -48,12 +48,12 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 
 # --- create galaxy object
 
-galaxy = ParticleGalaxy(stars=stars)
+galaxy = Galaxy(stars=stars)
 
 # --- this generates stellar and intrinsic spectra
 # galaxy.generate_intrinsic_spectra(grid, fesc=0.0) # calculate only integrated SEDs
 # calculates for every star particle, slow but necessary for LOS.
-galaxy.generate_spectra(grid, fesc=0.0, spectra_type="total")
+galaxy.get_spectra_stellar(grid)
 
 # --- generate dust screen
 # galaxy.get_screen(0.5) # tauV
