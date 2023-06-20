@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from unyt import kpc, yr, Myr, mas
 
 from synthesizer.filters import UVJ
-from synthesizer.galaxy import ParametricGalaxy as Galaxy
+from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.parametric.morphology import Sersic2D
 from synthesizer.grid import Grid

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
+from synthesizer.galaxy.parametric import Galaxy
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr
 from astropy.cosmology import Planck18 as cosmo
