@@ -261,7 +261,7 @@ class Sed:
                            'the same as the SED wavelength grid.'))
 
             # Calculate and store the broadband flux in this filter 
-            bb_flux = f.apply_filter(self._lnu, nu=self.nuz) * nJy
+            bb_flux = f.apply_filter(self._fnu, nu=self.nuz) * nJy
             self.broadband_fluxes[f.filter_code] = bb_flux
 
         return self.broadband_fluxes
