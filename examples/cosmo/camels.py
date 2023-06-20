@@ -6,7 +6,7 @@ from synthesizer.sed import Sed
 from synthesizer.load_data import load_CAMELS_SIMBA
 from synthesizer.filters import UVJ
 
-from synthesizer.galaxy.particle import ParticleGalaxy
+from synthesizer.particle.galaxy import Galaxy
 
 
 if __name__ == '__main__':
@@ -26,7 +26,7 @@ if __name__ == '__main__':
         to an sed object """
     _g = gals[0]
 
-    _spec = _g.get_stellar_spectra(grid, sed_object=True)
+    _spec = _g.get_spectra_stellar(grid)
     _g.plot_spectra()
     plt.show()
     
@@ -37,19 +37,19 @@ if __name__ == '__main__':
     # plt.legend()
     # plt.show()
 
-    spec = _g.get_nebular_spectra(grid)
+    spec = _g.get_spectra_nebular(grid)
     _g.plot_spectra()
     plt.show()
 
-    spec = _g.get_intrinsic_spectra(grid, fesc=0.1)
+    spec = _g.get_spectra_intrinsic(grid, fesc=0.1)
     _g.plot_spectra()
     plt.show()
 
-    spec = _g.get_screen_spectra(grid, tauV=0.32, fesc=0.1)
+    spec = _g.get_spectra_screen(grid, tauV=0.32, fesc=0.1)
     _g.plot_spectra()
     plt.show()
 
-    spec = _g.get_CharlotFall_spectra(grid, tauV_ISM=0.33, tauV_BC=0.67)
+    spec = _g.get_spectra_CharlotFall(grid, tauV_ISM=0.33, tauV_BC=0.67)
     _g.plot_spectra()
     plt.show()
 

@@ -9,7 +9,7 @@ from synthesizer.filters import UVJ
 # from synthesizer.imaging.survey import Survey
 from synthesizer.survey import Survey
 
-from synthesizer.galaxy.particle import ParticleGalaxy
+from synthesizer.particle.galaxy import Galaxy
 
 
 if len(sys.argv) > 1:

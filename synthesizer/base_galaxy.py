@@ -222,7 +222,6 @@ class BaseGalaxy:
             fesc=0.0,
             fesc_LyA=1.0,
             update=True,
-            sed_object=False
     ):
         """
         Calculates dust attenuated spectra assuming the PACMAN dust/fesc model
@@ -397,13 +396,8 @@ class BaseGalaxy:
                 Sed(grid.lam, reprocessed_nebular_old)
             self.spectra['reprocessed_nebular_yng'] = \
                 Sed(grid.lam, reprocessed_nebular_yng)
-
-        if sed_object:
-            sed = self.spectra['total']
-        else:
-            sed = self.spectra['total']._lnu
         
-        return sed
+        return self.spectra['total']
     
     def get_spectra_one_component(
             self,
@@ -454,7 +448,6 @@ class BaseGalaxy:
             young=7.,
             save_young_and_old=False,
             spectra_name='total',
-            sed_object=True,
             update=True
     ):
         """
@@ -516,10 +509,7 @@ class BaseGalaxy:
         if update:
             self.spectra['attenuated'] = sed
 
-        if sed_object:
-            return sed
-        else:
-            return sed_young + sed_old
+        return sed
 
     def get_line_intrinsic(
             self,

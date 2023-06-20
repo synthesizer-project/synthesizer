@@ -6,14 +6,14 @@ photometry. This example will:
 - calculate observed frame spectra (requires comsology and redshift)
 - calculate observed frame fluxes
 """
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
+from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr
 from synthesizer.igm import Madau96, Inoue14
@@ -22,10 +22,20 @@ from astropy.cosmology import Planck18 as cosmo
 
 if __name__ == '__main__':
 
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
 
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
+
+    # define filters
+    filter_codes = [f'JWST/NIRCam.{f}' for f in ['F090W', 'F115W', 'F150W',
+                                                 'F200W', 'F277W', 'F356W', 'F444W']]  # define a list of filter codes
+    filter_codes += [f'JWST/MIRI.{f}' for f in ['F770W']]
+    fc = FilterCollection(filter_codes, new_lam=grid.lam)
 
     # define the parameters of the star formation and metal enrichment histories
     sfh_p = {'duration': 10 * Myr}
@@ -43,17 +53,11 @@ if __name__ == '__main__':
     galaxy = Galaxy(sfzh)
 
     # generate spectra using pacman model (complex)
-    sed = galaxy.get_pacman_spectra(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1, sed_object=True)
+    sed = galaxy.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1)
 
     # now calculate the observed frame spectra
     z = 10.  # redshift
     sed.get_fnu(cosmo, z, igm=Madau96())  # generate observed frame spectra
-
-    # define filters
-    filter_codes = [f'JWST/NIRCam.{f}' for f in ['F090W', 'F115W', 'F150W',
-                                                 'F200W', 'F277W', 'F356W', 'F444W']]  # define a list of filter codes
-    filter_codes += [f'JWST/MIRI.{f}' for f in ['F770W']]
-    fc = FilterCollection(filter_codes, new_lam=sed.obslam)
 
     # print(sed.fnu)
     # print(sed.lnu)
