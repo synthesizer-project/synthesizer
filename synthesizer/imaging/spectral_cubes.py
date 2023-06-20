@@ -4,6 +4,7 @@ import synthesizer.exceptions as exceptions
 import numpy as np
 import math
 import warnings
+from unyt.dimensions import length, angle
 from synthesizer.imaging.scene import Scene, ParticleScene
 
 
@@ -298,6 +299,7 @@ class ParametricSpectralCube(Scene, SpectralCube):
         # apertures=None,
         npix=None,
         fov=None,
+        cosmo=None,
         # snrs=None,
         rest_frame=True,
     ):
@@ -310,6 +312,7 @@ class ParametricSpectralCube(Scene, SpectralCube):
             fov=fov,
             sed=sed,
             rest_frame=rest_frame,
+            cosmo=cosmo,
         )
         SpectralCube.__init__(
             self,
@@ -356,9 +359,16 @@ class ParametricSpectralCube(Scene, SpectralCube):
     def _get_density_grid(self):
         
         # Define 1D bin centres of each pixel
-        bin_centres = self.resolution * np.linspace(
-            -self.npix / 2, self.npix / 2, self.npix
-        )
+        if self.spatial_unit.dimensions == angle:
+            res = (self.resolution * self.spatial_unit).to("mas").value
+            bin_centres = res * np.linspace(
+                -self.npix / 2, self.npix / 2, self.npix
+            )
+        else:
+            res = (self.resolution * self.spatial_unit).to("kpc").value
+            bin_centres = res * np.linspace(
+                -self.npix / 2, self.npix / 2, self.npix
+            )
 
         # Convert the 1D grid into 2D grids coordinate grids
         self._xx, self._yy = np.meshgrid(bin_centres, bin_centres)
