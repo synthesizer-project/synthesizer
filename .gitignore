@@ -2,6 +2,7 @@
 examples/data/*.hdf5
 examples/cosmo/data/*.hdf5
 examples/particle/plots/*.png
+examples/parametric/plots/*.png
 examples/plots/*.png
 docs/source/_autosummary
 
