@@ -165,3 +165,20 @@ class MissingImage(Exception):
             return '{0} '.format(self.message)
         else:
             return 'Image not yet created!'
+
+        
+class WavelengthOutOfRange(Exception):
+    """
+    Exception class for when an image has not yet been made
+    """
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'The provided wavelength is out of the filter range!'
