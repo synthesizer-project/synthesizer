@@ -53,6 +53,7 @@ class Scene:
         fov=None,
         sed=None,
         rest_frame=True,
+        cosmo=None,
     ):
         """
         Intialise the Observation.
@@ -93,6 +94,9 @@ class Scene:
 
         # Attributes containing data
         self.sed = sed
+
+        # Store the cosmology object
+        self.cosmo = cosmo
 
         # Keep track of the input resolution and and npix so we can handle
         # super resolution correctly.
@@ -388,10 +392,8 @@ class ParticleScene(Scene):
             fov=fov,
             sed=sed,
             rest_frame=rest_frame,
+            cosmo=cosmo,
         )
-
-        # Store the cosmology object
-        self.cosmo = cosmo
 
         # Initialise stars attribute
         self.stars = stars
