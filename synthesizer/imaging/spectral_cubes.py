@@ -328,7 +328,8 @@ class ParametricSpectralCube(Scene, SpectralCube):
 
         # Compute the density grid based on the associated morphology
         self.density_grid = None
-        self._get_density_grid()
+        if morphology is not None:
+            self._get_density_grid()
 
     def _check_parametric_ifu_args(self, morphology):
         """
