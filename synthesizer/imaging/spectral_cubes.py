@@ -121,6 +121,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         snrs=None,
         rest_frame=True,
         cosmo=None,
+        redshift=None,
     ):
         """
         Intialise the ParticleSpectralCube.
@@ -172,6 +173,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             stars=stars,
             positions=positions,
             cosmo=cosmo,
+            redshift=redshift,
             rest_frame=rest_frame,
         )
         SpectralCube.__init__(
@@ -300,6 +302,7 @@ class ParametricSpectralCube(Scene, SpectralCube):
         npix=None,
         fov=None,
         cosmo=None,
+        redshift=None,
         # snrs=None,
         rest_frame=True,
     ):
@@ -313,6 +316,7 @@ class ParametricSpectralCube(Scene, SpectralCube):
             sed=sed,
             rest_frame=rest_frame,
             cosmo=cosmo,
+            redshift=redshift,
         )
         SpectralCube.__init__(
             self,
