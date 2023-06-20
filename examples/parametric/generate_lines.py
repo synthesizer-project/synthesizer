@@ -10,7 +10,7 @@ Example for generating a emission lines for a parametric galaxy. This example wi
 from synthesizer.units import Units
 from synthesizer.grid import get_available_lines, Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
+from synthesizer.galaxy.parametric import Galaxy
 from unyt import yr, Myr
 
 

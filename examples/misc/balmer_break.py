@@ -3,7 +3,7 @@ from synthesizer.plt import single
 from synthesizer.filters import TopHatFilterCollection
 from synthesizer.grid import Grid, parse_grid_id
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh, generate_instant_sfzh
-from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
+from synthesizer.galaxy.parametric import Galaxy
 from unyt import yr, Myr
 
 
