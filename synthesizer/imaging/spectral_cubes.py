@@ -160,8 +160,11 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
            Errors when an incorrect combination of arguments is passed.
         """
 
-        # Check what we've been given
-        self._check_flux_args(rest_frame, cosmo, stars.redshift)
+        # Check what we've been given handling Nones
+        if stars is not None:
+            self._check_flux_args(rest_frame, cosmo, stars.redshift)
+        else:
+            self._check_flux_args(rest_frame, cosmo, None)
 
         # Initilise the parent class
         ParticleScene.__init__(
