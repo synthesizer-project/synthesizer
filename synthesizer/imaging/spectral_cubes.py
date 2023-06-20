@@ -4,6 +4,7 @@ import synthesizer.exceptions as exceptions
 import numpy as np
 import math
 import warnings
+from unyt import kpc
 from unyt.dimensions import length, angle
 from synthesizer.imaging.scene import Scene, ParticleScene
 
@@ -346,23 +347,21 @@ class ParametricSpectralCube(Scene, SpectralCube):
         # this might not be generic enough
         if (self.spatial_unit == kpc) & (not morphology.model_kpc):
 
-            if (cosmo != None) & (redshift != None):
-                morphology.update(morphology.p, cosmo=cosmo, z=redshift)
-            else:
-                """raise exception, morphology is defined in mas but image
-                resolution in kpc. Please provide cosmology (cosmo) and redshift.
-                """
-                pass
+            raise exceptions.InconsistentArguments(
+                "To create an image in kpc the morphology object must have a "
+                "model defined in kpc. This can be achieved from a "
+                "milliarcsecond input as long as a cosmology and redshift "
+                "is provided to the Morphology object for the conversion."
+            )
 
-        if (resolution.units == mas) & (not morphology.model_mas):
+        if (self.spatial_unit == mas) & (not morphology.model_mas):
 
-            if (cosmo != None) & (redshift != None):
-                morphology.update(morphology.p, cosmo=cosmo, z=redshift)
-            else:
-                """raise exception, morphology is defined in kpc but image
-                resolution in mas. Please provide cosmology (cosmo) and redshift.
-                """
-                pass
+            raise exceptions.InconsistentArguments(
+                "To create an image in milliarcsecond the morphology object "
+                "must have a model defined in milliarcseconds. This can be "
+                "achieved from a kpc input as long as a cosmology and redshift"
+                " is provided to the Morphology object for the conversion."
+            )
 
     def _get_density_grid(self):
         
