@@ -12,6 +12,5 @@ In the following we show some examples.
    generate_observed_sed
    generate_lines
    
-.. TODO: fix imaging examples
-.. generate_composite_galaxy
-.. make_image
+
+   generate_composite_galaxy
