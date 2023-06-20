@@ -3,7 +3,8 @@ from astropy.modeling.models import Sersic2D as Sersic2D_
 from unyt import kpc, mas
 from unyt.dimensions import length, angle
 import matplotlib.pyplot as plt
-import synthesizer.exceptions
+
+from synthesizer import exceptions
 
 
 class MorphologyBase:
