@@ -2,6 +2,7 @@
 
 ![workflow](https://github.com/flaresimulations/synthesizer/actions/workflows/python-app.yml/badge.svg)
 [![Documentation Status](https://readthedocs.org/projects/synthesizer-docs/badge/?version=latest)](https://synthesizer-docs.readthedocs.io/en/latest/?badge=latest)
+[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/flaresimulations/synthesizer/blob/main/docs/CONTRIBUTING.md)
 
 Synthesizer is a python package for generating synthetic astrophysical spectra. It is intended to be modular, flexible and fast.
 
