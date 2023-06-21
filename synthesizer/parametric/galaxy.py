@@ -138,7 +138,7 @@ class Galaxy(BaseGalaxy):
 
         Args:
             grid (object, Grid):
-                The SPS Grid object from which to extract SEDS. 
+                The SPS Grid object from which to extract spectra. 
 
         Returns:
             Log of the ionising photon luminosity over the grid dimensions
