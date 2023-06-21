@@ -14,7 +14,6 @@ from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr
-from astropy.cosmology import Planck18 as cosmo
 
 
 if __name__ == '__main__':
