@@ -6,6 +6,7 @@ Example for generating a rest-frame physical scale image. This example will:
 - Make an image of the galaxy, including an RGB image.
 """
 import os
+import time
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -45,7 +46,9 @@ if __name__ == '__main__':
     galaxy = Galaxy(sfzh, morph=morph)
 
     # Generate stellar spectra
+    start = time.time()
     galaxy.get_spectra_stellar(grid)
+    print("Got spectra, took %.5f seconds" % (time.time() - start))
 
     # Get a UVJ filter set
     filters = UVJ(new_lam=grid.lam)
@@ -64,7 +67,9 @@ if __name__ == '__main__':
     )
 
     # Get the photometric images
+    start = time.time()
     img.get_imgs()
+    print("Got Images, took %.5f seconds" % (time.time() - start))
 
     # Make and plot an rgb image
     img.make_rgb_image(rgb_filters={"R" : 'J',
