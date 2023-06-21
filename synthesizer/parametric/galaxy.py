@@ -138,7 +138,7 @@ class Galaxy(BaseGalaxy):
 
         Args:
             grid (object, Grid):
-                Grid object
+                The SPS Grid object from which to extract SEDS. 
 
         Returns:
             Log of the ionising photon luminosity over the grid dimensions
@@ -148,12 +148,37 @@ class Galaxy(BaseGalaxy):
 
     def generate_lnu(self, grid, spectra_name, old=False, young=False):
         """
-        calculate pure stellar emission
+        Calculate rest frame spectra from an SPS Grid.
+
+        This is a flexible base method which extracts the rest frame spectra of
+        this galaxy from the SPS grid based on the passed arguments. More
+        sophisticated types of spectra are produced by the get_spectra_*
+        methods on BaseGalaxy, which call this method.
+
+        Args:
+            grid (object, Grid):
+                The SPS Grid object from which to extract spectra.
+            spectra_name (str):
+                A string denoting the desired type of spectra. Must match a
+                key on the Grid.
+            old (bool/float):
+                Are we extracting only old stars? If so only SFZH bins with
+                log10(Ages) > old will be included in the spectra. Defaults to
+                False.
+            young (bool/float):
+                Are we extracting only young stars? If so only SFZH bins with
+                log10(Ages) <= young will be included in the spectra. Defaults
+                to False.
+
+        Returns:
+            The Galaxy's rest frame spectra in erg / s / Hz.
         """
 
+        # Ensure arguments make sense
         if old * young:
             raise ValueError("Cannot provide old and young stars together")
 
+        # MAke the mask for relevent SFZH bins
         if old:
             sfzh_mask = (self.sfzh.log10ages > old)
         elif young:
