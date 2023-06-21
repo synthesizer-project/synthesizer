@@ -398,7 +398,6 @@ class Grid:
             wavelength.append(line_['wavelength'])
             luminosity.append(line_['luminosity'][grid_point])
             continuum.append(line_['continuum'][grid_point])
-            print(line_['luminosity'][grid_point])
 
         return Line(line_id, wavelength, luminosity, continuum)
 
