@@ -1,6 +1,6 @@
 # Synthesizer
 
-![workflow](https://github.com/flaresimulations/synthesizer/actions/workflows/python-app.yml/badge.svg)
+[![workflow](https://github.com/flaresimulations/synthesizer/actions/workflows/python-app.yml/badge.svg)](https://github.com/flaresimulations/synthesizer/actions)
 [![Documentation Status](https://readthedocs.org/projects/synthesizer-docs/badge/?version=latest)](https://synthesizer-docs.readthedocs.io/en/latest/?badge=latest)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/flaresimulations/synthesizer/blob/main/docs/CONTRIBUTING.md)
 
