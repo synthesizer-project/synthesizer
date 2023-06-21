@@ -178,16 +178,30 @@ class Galaxy(BaseGalaxy):
         if old * young:
             raise ValueError("Cannot provide old and young stars together")
 
-        # MAke the mask for relevent SFZH bins
-        if old:
-            sfzh_mask = (self.sfzh.log10ages > old)
-        elif young:
-            sfzh_mask = (self.sfzh.log10ages <= young)
-        else:
-            sfzh_mask = np.ones(len(self.sfzh.log10ages), dtype=bool)
+        # Get the indices of non-zero entries in the SFZH
+        non_zero_inds = np.where(self.sfzh_ > 0)
 
-        return np.sum(grid.spectra[spectra_name][sfzh_mask, :, :] * 
-                      self.sfzh_[sfzh_mask, :, :], axis=(0, 1))
+        # Make the mask for relevent SFZH bins
+        if old:
+            sfzh_mask = (self.sfzh.log10ages[non_zero_inds[0]] > old)
+        elif young:
+            sfzh_mask = (self.sfzh.log10ages[non_zero_inds[0]] <= young)
+        else:
+            sfzh_mask = np.ones(len(self.sfzh.log10ages[non_zero_inds[0]]),
+                                dtype=bool)
+
+        # Account for the SFZH mask in the non-zero indices 
+        non_zero_inds = (non_zero_inds[0][sfzh_mask],
+                         non_zero_inds[1][sfzh_mask])
+
+        # Compute the spectra
+        spectra = np.sum(
+            grid.spectra[spectra_name][non_zero_inds[0], non_zero_inds[1], :]
+            * self.sfzh_[non_zero_inds[0], non_zero_inds[1], :],
+            axis=0
+        )
+
+        return spectra
 
     def get_line_intrinsic(self, grid, line_ids, fesc=0.0, update=True):
         """
