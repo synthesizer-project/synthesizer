@@ -169,7 +169,8 @@ class MissingImage(Exception):
         
 class WavelengthOutOfRange(Exception):
     """
-    Exception class for when an image has not yet been made
+    Exception class for when a wavelength is not accessible to 
+    Filters in a FilterCollection.
     """
     def __init__(self, *args):
         if args:
