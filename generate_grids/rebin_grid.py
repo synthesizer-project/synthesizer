@@ -1,7 +1,6 @@
 
 """ Create a rebinned grid for testing. This test grid should not be used for science """
 
-import matplotlib.pyplot as plt
 import argparse
 import numpy as np
 import h5py
