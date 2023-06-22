@@ -29,7 +29,6 @@ if __name__ == '__main__':
     sfzh = generate_sfzh_from_array(log10ages, metallicities, sfh, Z)
     print(sfzh)
     sfzh.plot()
-    print(sfzh.sfzh.shape)
 
     # --- define the parameters of the star formation and metal enrichment histories
 
