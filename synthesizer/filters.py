@@ -438,17 +438,18 @@ class FilterCollection:
             new_lam = np.arange(min_lam, max_lam + resolution, resolution)
 
             if verbose:
-                print("Wavelength array found: \n"
-                      + "    min=%.2e Angstrom\n" % min_lam
-                      + "    max=%.2e\n" % max_lam
-                      + "    size=%d" % new_lam.size)
+                print("Calcualted wavelength array: \n"
+                      + "min = %.2e Angstrom\n" % min_lam
+                      + "max = %.2e Angstrom\n" % max_lam
+                      + "FilterCollection.lam.size = %d" % new_lam.size)
 
         # Set the wavelength array
         self.lam = new_lam
 
         # Loop over filters unifying them onto this wavelength array
-        for f in self.filters:
-            self.filters[f]._interpolate_wavelength(self.lam)
+        for fcode in self.filters:
+            f = self.filters[fcode]
+            f.t = f._interpolate_wavelength(self.lam)
 
     def _transmission_curve_ax(self, ax):
         """
