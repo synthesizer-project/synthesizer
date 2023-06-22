@@ -391,7 +391,7 @@ class FilterCollection:
 
         return self.filters[key]
 
-    def resample_filters(self, new_lam=None):
+    def resample_filters(self, new_lam=None, verbose=True):
         """
         Resamples all filters onto a single wavelength array. If no wavelength
         grid is provided a grid encompassing all filter transmission curves is
@@ -408,7 +408,47 @@ class FilterCollection:
                 wavelength array on which to sample filters. Wavelengths
                 should be in Angstrom. Defaults to None and an array is
                 derived.
+            verbose (bool)
+                Are we talking? 
         """
+
+        # Do we need to find a wavelength array from the filters?
+        if new_lam is None:
+
+            # Set up values for looping
+            resolution = np.inf
+            min_lam = np.inf
+            max_lam = 0
+
+            # Loop over filters getting the minimum and maximum wavelengths,
+            # and highest resolution from the individual filters.
+            for f in self.filters:
+                this_min = np.min(self.filters[f].lam)
+                this_max = np.max(self.filters[f].lam)
+                this_res = np.min(self.filters[f].lam[1:]
+                                  - self.filters[f].lam[:-1])
+                if this_min < min_lam:
+                    min_lam = this_min
+                if this_max > max_lam:
+                    max_lam = this_max
+                if this_res < resolution:
+                    resolution = this_res
+
+            # Create wavelength array
+            new_lam = np.arange(min_lam, max_lam + resolution, resolution)
+
+            if verbose:
+                print("Wavelength array found: \n"
+                      + "    min=%.2e Angstrom\n" % min_lam
+                      + "    max=%.2e\n" % max_lam
+                      + "    size=%d" % new_lam.size)
+
+        # Set the wavelength array
+        self.lam = new_lam
+
+        # Loop over filters unifying them onto this wavelength array
+        for f in self.filters:
+            self.filters[f]._interpolate_wavelength(self.lam)
 
     def _transmission_curve_ax(self, ax):
         """
@@ -865,16 +905,27 @@ class Filter:
             self.lam = self.original_lam
             self.t = self.original_t
 
-    def _interpolate_wavelength(self):
+    def _interpolate_wavelength(self, new_lam=None):
         """
         Interpolates a filter transmission curve onto the Filter's wavelength
         array.
+
+        Args:
+            new_lam (array-like, float)
+                The wavelength array to interpolate onto. If None self.lam
+                is used.
         
         Returns:
             array-like (float)
                 Transmission curve interpolated onto the new wavelength array.
         """
 
+        # If we've been handed a wavelength array we must overwrite the
+        # current one
+        if new_lam is not None:
+            self.lam = new_lam
+
+        # Perform interpolation 
         return np.interp(
             self.lam, self.original_lam, self.original_t, left=0.0, right=0.0
         )
