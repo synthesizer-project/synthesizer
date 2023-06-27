@@ -1,19 +1,27 @@
-# -*- coding: utf-8 -*-
-"""
+"""A module for working with arrays of stellar particles.
+
 Contains the Stars class for use with particle based systems. This houses all
-the data detailing collections of stellar particles, where each property is
-stored as arrays for efficiency.
+the data detailing collections of stellar particles. Each property is
+stored in (N_star, ) shaped arrays for efficiency.
 
-There are also functions for sampling "fake" stellar distributions by
-sampling a SFHZ.
+We also provide functions for creating "fake" stellar distributions by
+sampling a SFZH.
 
-Notes
------
-    Some reformating neceesary with TODOs flagging needed commenting.
+In both cases a myriad of extra optional properties can be set by providing
+them as keyword arguments.
+
+Example usages:
+
+    stars = Stars(initial_masses, ages, metallicities,
+                  redshift=redshift, current_masses=current_masses, ...)
+    stars = sample_sfhz(sfzh, n, total_initial_mass, 
+                        smoothing_lengths=smoothing_lengths,
+                        tau_v=tau_vs, coordinates=coordinates, ...)
 """
 import warnings
 import numpy as np
 from .particles import Particles
+from synthesizer import exceptions
 
 
 class Stars(Particles):
@@ -23,118 +31,168 @@ class Stars(Particles):
     methods common to all particle types.
 
     The Stars class can be handed to methods elsewhere to pass information
-    about the stars needed in other computations. A galaxy object should have a
-    link to the stars object containing its stars, for example.
+    about the stars needed in other computations. For example a Galaxy object
+    can be passed a stars object for use with any of the Galaxy helper methods.
 
     Note that due to the many possible operations, this class has a large number
     of optional attributes which are set to None if not provided.
 
-    Attributes
-    ----------
-    initial_masses : array-like (float)
-        The intial stellar mass of each particle in Msun.
-    ages : array-like (float)
-        The age of each stellar particle in Myrs.
-    metallicities : array-like (float)
-        The metallicity of each stellar particle.
-    nparticle : int
-        How many stars are there?
-    tauV : float
-        V-band dust optical depth.
-    alpha : float
-        The alpha enhancement [alpha/Fe].
-    imf_hmass_slope : float
-        The slope of high mass end of the initial mass function (WIP)
-    log10ages : float
-        Convnience attribute containing log10(age).
-    log10metallicities : float
-        Convnience attribute containing log10(metallicity).
-    resampled : bool
-        Flag for whether the young particles have been resampled.
-    coordinates : array-like (float)
-        The coordinates of each stellar particle in simulation length
-        units.
-    velocities : array-like (float)
-        The velocity of each stellar particle in km/s.
-    current_masses : array-like (float)
-        The current mass of each stellar particle in Msun.
-    smoothing_lengths : array-like (float)
-        The smoothing lengths (describing the sph kernel) of each stellar
-        particle in simulation length units.
-    s_oxygen : array-like (float)
-        fractional oxygen abundance
-    s_hydrogen : array-like (float)
-        fractional hydrogen abundance
+    Attributes:
+        initial_masses (array-like, float)
+            The intial stellar mass of each particle in Msun.
+        ages (array-like, float)
+            The age of each stellar particle in Myrs.
+        metallicities (array-like, float)
+            The metallicity of each stellar particle.
+        tauV (array-like, float)
+            V-band dust optical depth of each stellar particle.
+        alpha_enhancement (array-like, float)
+            The alpha enhancement [alpha/Fe] of each stellar particle.
+        log10ages (array-like, float)
+            Convnience attribute containing log10(age).
+        log10metallicities (array-like, float)
+            Convnience attribute containing log10(metallicity).
+        resampled (bool)
+            Flag for whether the young particles have been resampled.
+        current_masses (array-like, float)
+            The current mass of each stellar particle in Msun.
+        smoothing_lengths (array-like, float)
+            The smoothing lengths (describing the sph kernel) of each stellar
+            particle in simulation length units.
+        s_oxygen (array-like, float)
+            fractional oxygen abundance.
+        s_hydrogen (array-like, float)
+            fractional hydrogen abundance.
+        imf_hmass_slope (float)
+            The slope of high mass end of the initial mass function (WIP).
+        nstars (int)
+            The number of stellar particles in the object.
     """
 
     # Define the allowed attributes
     __slots__ = ["initial_masses", "ages", "metallicities", "nparticles",
-                 "tauV", "alpha", "imf_hmass_slope", "log10ages",
-                 "log10metallicities", "resampled", "coordinates",
+                 "redshift", "tauV", "alpha_enhancement", "imf_hmass_slope",
+                 "log10ages", "log10metallicities", "resampled", "coordinates",
                  "velocities", "current_masses", "smoothing_lengths",
-                 "s_oxygen", "s_hydrogen"]
+                 "s_oxygen", "s_hydrogen", "nstars"]
 
-    def __init__(self, initial_masses, ages, metallicities, **kwargs):
+    def __init__(self, initial_masses, ages, metallicities, redshift=None,
+                 tauV=None, alpha_enhancement=None, coordinates=None,
+                 velocities=None, current_masses=None, smoothing_lengths=None,
+                 s_oxygen=None, s_hydrogen=None, imf_hmass_slope=None):
         """
         Intialise the Stars instance. The first 3 arguments are always required.
-        All other attributes are optional.
+        All other arguments are optional attributes applicable in different
+        situations.
+
+        Args:
+            initial_masses (array-like, float)
+                The intial stellar mass of each particle in Msun.
+            ages (array-like, float)
+                The age of each stellar particle in Myrs.
+            metallicities (array-like, float)
+                The metallicity of each stellar particle.
+            redshift (float)
+                The redshift/s of the stellar particles.
+            tauV (array-like, float)
+                V-band dust optical depth of each stellar particle.
+            alpha_enhancement (array-like, float)
+                The alpha enhancement [alpha/Fe] of each stellar particle.
+            coordinates (array-like, float)
+                The 3D positions of the particles.
+            velocities (array-like, float)
+                The 3D velocities of the particles.
+            current_masses (array-like, float)
+                The current mass of each stellar particle in Msun.
+            smoothing_lengths (array-like, float)
+                The smoothing lengths (describing the sph kernel) of each
+                stellar particle in simulation length units.
+            s_oxygen (array-like, float)
+                The fractional oxygen abundance.
+            s_hydrogen (array-like, float)
+                The fractional hydrogen abundance.
+            imf_hmass_slope (float)
+                The slope of high mass end of the initial mass function (WIP)
         """
+
+        # Instantiate parent
+        Particles.__init__(
+            self,
+            coordinates=coordinates,
+            velocities=velocities,
+            masses=current_masses,
+            redshift=redshift,
+            nparticles=len(self.initial_masses)
+        )
 
         # Set always required stellar particle properties
         self.initial_masses = initial_masses
         self.ages = ages
         self.metallicities = metallicities
 
-        # TODO: need to add check for particle array length
+        # Set the optional keyword arguments
 
-        # How many particles are there?
-        self.nparticles = len(self.initial_masses)
+        # Set the SPH kernel smoothing lengths
+        self.smoothing_lengths = smoothing_lengths
 
-        # Intialise stellar emission quantities (updated later)
-        self.tauV = None  # V-band dust optical depth
-        self.alpha = None  # alpha-enhancement [alpha/Fe]
+        # Stellar particles also have a current mass, set it
+        self.current_masses = self.masses
 
-        # IMF properties
-        self.imf_hmass_slope = None  # slope of the imf
+        # Set the V band optical depths
+        self.tauV = tauV
 
-        # Useful logged quantities
+        # Set the alpha enhancement [alpha/Fe] (only used for >2 dimensional
+        # SPS grids)
+        self.alpha_enhancement = alpha_enhancement
+
+        # Set the fractional abundance of elements
+        self.s_oxygen = s_oxygen
+        self.s_hydrogen = s_hydrogen
+
+        # Compute useful logged quantities
         self.log10ages = np.log10(self.ages)
         self.log10metallicities = np.log10(self.metallicities)
+
+        # Set up IMF properties (updated later)
+        self.imf_hmass_slope = None  # slope of the imf
 
         # Intialise the flag for resampling
         self.resampled = False
 
-        # Ensure all attributes are intialised to None
-        # NOTE (Will): I don't like this but can't think of something cleaner
-        for attr in Stars.__slots__:
-            try:
-                getattr(self, attr)
-            except AttributeError:
-                setattr(self, attr, None)
+        # Set a frontfacing clone of the number of particles with clearer naming
+        self.nstars = self.nparticles
 
-        # Handle kwargs
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+        # Check the arguments we've been given
+        self._check_star_args()
 
-    def renormalise_mass(self, stellar_mass):
+    def _check_star_args(self):
         """
-        Renormalises the masses and stores them in the initial_mass attribute.
+        Sanitizes the inputs ensuring all arguments agree and are compatible.
 
-        TODO: But why? What's the usage? Is it not dangerous to overwrite
-        the intial mass?
-
-        Parameters
-        ----------
-        stellar_mass : array-like (float)
-            The stellar mass array to be renormalised.
+        Raises:
+            InconsistentArguments
+                If any arguments are incompatible or not as expected an error
+                is thrown.
         """
 
-        self.initial_masses *= stellar_mass/np.sum(self.initial_masses)
+        # Ensure all arrays are the expected length
+        for key in self.__dict__:
+            attr = getattr(self, key)
+            if isinstance(attr, np.ndarray):
+                if attr.shape[0] != self.nparticles:
+                    raise exceptions.InconsistentArguments(
+                        "Inconsistent stellar array sizes! (nparticles=%d, "
+                        "%s=%d)" % (self.nparticles, key, attr.shape[0])
+                    )
 
     def __str__(self):
         """
-        Overloads the __str__ operator. A summary can be achieved by
-        print(stars) where stars is an instance of Stars.
+        Overloads the __str__ operator, enabling the printing of a summary of
+        the Stars with print(stars) syntax, where stars is an instance of Stars.
+
+        Returns:
+            pstr (str)
+                The summary string to be printed.
         """
 
         # Set up string for printing
@@ -151,32 +209,45 @@ class Stars(Particles):
 
         return pstr
 
+    def renormalise_mass(self, stellar_mass):
+        """
+        Renormalises and overwrites the initial masses. Useful when rescaling
+        the mass of the system of stellar particles.
+
+        Args:
+            stellar_mass (array-like, float)
+                The stellar mass array to be renormalised.
+        """
+
+        self.initial_masses *= stellar_mass / np.sum(self.initial_masses)
+
     def _power_law_sample(self, low_lim, upp_lim, g, size=1):
         """
         Sample from a power law over an interval not containing zero.
         
         Power-law gen for pdf(x) propto x^{g-1} for a<=x<=b
 
-        Parameters
-        ----------
-        low_lim : float
-            lower bound
-        upp_lim : float
-            upper bound
-        g : float
-            power law index
-        size : int
-            number of samples
+        Args:
+            low_lim (float)
+                The lower bound of the interval over which to calulcate the
+                power law.
+            upp_lim (float)
+                The upper bound of the interval over which to calulcate the
+                power law.
+            g (float)
+                The power law index.
+            size (int)
+                The number of samples in the interval.
 
-        Returns
-        -------
-        array-like (float)
-             desired samples
+        Returns:
+            array-like (float)
+                The samples derived from the power law.
         """
 
         # Get a random sample
         rand = np.random.random(size=size)
 
+        # Compute the value of the power law at the lower and upper bounds
         low_lim_g, upp_lim_g = low_lim ** g, low_lim ** g
 
         return (low_lim_g + (upp_lim_g - low_lim_g) * rand) ** (1 / g)
@@ -192,28 +263,32 @@ class Stars(Particles):
         This function overwrites the properties stored in attributes with the
         resampled properties.
 
-        Currently resampling and imaging are not supported. An error is thrown.
+        Note: Resampling and imaging are not supported. If attempted an error
+              is thrown.
 
-        Parameters
-        ----------
-        min_age : float
-            ???
-        min_mass : float
-            ???
-        max_mass : float
-            ???
-        power_law_index : float
-            ???
-        n_samples : int
-            ???
-        force_resample : bool
-            ???
-        verbose : bool
-            Are we talking?
+        Args:
+            min_age (float)
+                The age below which stars will be resampled, in yrs.
+            min_mass (float)
+                The lower bound of the mass interval used in the power law
+                sampling, in Msun.
+            max_mass (float)
+                The upper bound of the mass interval used in the power law
+                sampling, in Msun.
+            power_law_index (float)
+                The index of the power law from which to sample stellar
+            n_samples (int)
+                The number of samples to generate for each stellar particles
+                younger than min_age.
+            force_resample (bool)
+                A flag for whether resampling should be forced. Only applicable
+                if trying to resample and already resampled Stars object.
+            verbose (bool)
+                Are we talking?
         """
 
         # Warn the user we are resampling a resampled population
-        if self.resampled & (~force_resample):
+        if self.resampled and not force_resample:
             warnings.warn("Warning, galaxy stars already resampled. \
                     To force resample, set force_resample=True. Returning...")
             return None
@@ -316,33 +391,28 @@ class Stars(Particles):
         self.resampled = True
 
 
-def sample_sfhz(sfzh, n, initial_mass=1):
+def sample_sfhz(sfzh, nstar, initial_mass=1, **kwargs):
     """
-    Create "fake" stellar particles by sampling a SFHZ.
+    Create "fake" stellar particles by sampling a SFZH.
 
-    Parameters
-    ----------
-    sfhz : ???
-        ???
-    N : int
-        Number of samples?
-    intial_mass : int
-        The intial mass of the fake stellar particles.
+    Args:
+        sfhz (BinnedSFZH)
+            The Star Formation Z (Metallicity) History object. 
+        nstar (int)
+            The number of stellar particles to produce.
+        intial_mass (int)
+            The intial mass of the fake stellar particles.
 
-    Returns
-    -------
-    stars : obj (Stars)
-        An instance of Stars containing the fake stellar particles.
+    Returns:
+        stars (Stars)
+            An instance of Stars containing the fake stellar particles.
     """
 
-    # Normalise the sfhz to produce a histogram (binned in time)
-    hist = sfzh.sfzh/np.sum(sfzh.sfzh)
+    # Normalise the sfhz to produce a histogram (binned in time) between 0
+    # and 1.
+    hist = sfzh.sfzh / np.sum(sfzh.sfzh)
 
-    # Get the midpoints of x and y to...
-    x_bin_midpoints = sfzh.log10ages
-    y_bin_midpoints = sfzh.log10metallicities
-
-    # Define the cumaltive distribution function
+    # Compute the cumaltive distribution function
     cdf = np.cumsum(hist.flatten())
     cdf = cdf / cdf[-1]
 
@@ -350,17 +420,21 @@ def sample_sfhz(sfzh, n, initial_mass=1):
     values = np.random.rand(n)
     value_bins = np.searchsorted(cdf, values)
 
-    # Convert indices to correct shape and extract the ages (x) and
-    # metallicites (y) from the random sample
-    x_idx, y_idx = np.unravel_index(value_bins,
-                                    (len(x_bin_midpoints),
-                                     len(y_bin_midpoints)))
-    random_from_cdf = np.column_stack((x_bin_midpoints[x_idx],
-                                       y_bin_midpoints[y_idx]))
+    # Convert 1D random indices to 2D indices
+    x_idx, y_idx = np.unravel_index(
+        value_bins, (len(sfzh.log10ages), len(sfzh.log10metallicities))
+    )
+
+    # Extract the sampled ages and metallicites and create an array
+    random_from_cdf = np.column_stack(
+        (sfzh.log10ages[x_idx], sfzh.log10metallicities[y_idx])
+    )
+
+    # Extract the individual logged quantities
     log10ages, log10metallicities = random_from_cdf.T
 
-    # Instantiate Stars object
+    # Instantiate Stars object with extra keyword arguments
     stars = Stars(initial_mass * np.ones(n), 10 ** log10ages,
-                  10 ** log10metallicities)
+                  10 ** log10metallicities, **kwargs)
 
     return stars
