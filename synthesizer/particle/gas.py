@@ -1,15 +1,20 @@
-# -*- coding: utf-8 -*-
-"""
+"""A module for working with arrays of gas particles.
+
 Contains the Gas class for use with particle based systems. This houses all
-the data detailing collections of gas particles, where each property is
-stored as arrays for efficiency.
+the data detailing collections of gas particles. Each property is
+stored in (N_gas, ) shaped arrays for efficiency.
 
-Notes
------
+Extra optional properties can be set by providing
+them as keyword arguments.
+
+Example usages:
+
+    gas = Gas(masses, metallicities,
+              redshift=redshift, coordinates=coordinates, ...)
 """
 
-from .particles import Particles
-
+from synthesizer.particles import Particles
+from synthesizer import exceptions
 
 class Gas(Particles):
     """
@@ -25,51 +30,85 @@ class Gas(Particles):
     this class has a large number of optional attributes which are set to 
     None if not provided.
 
-    Attributes
-    ----------
-    metallicities : array-like (float)
-        The gas phase metallicity of each particle (integrated)
-    star_forming : array-like (bool)
-        Flag for whether a gas particle is star forming or not
-    nparticle : int
-        How many gas particles are there?
-    log10metallicities : float
-        Convnience attribute containing log10(metallicity).
-    coordinates : array-like (float)
-        The coordinates of each gas particle in simulation length
-        units.
-    velocities : array-like (float)
-        The velocity of each gas particle (km/s.)
-    masses : array-like (float)
-        The mass of each gas particle in Msun.
-    smoothing_lengths : array-like (float)
-        The smoothing lengths (describing the sph kernel) of each gas
-        particle in simulation length units.
-    s_oxygen : array-like (float)
-        fractional oxygen abundance
-    s_hydrogen : array-like (float)
-        fractional hydrogen abundance
+    Attributes:
+        metallicities (array-like, float)
+            The gas phase metallicity of each particle (integrated)
+        star_forming (array-like, bool)
+            Flag for whether each gas particle is star forming or not.
+        log10metallicities (float)
+            Convnience attribute containing log10(metallicity).
+        smoothing_lengths (array-like, float)
+            The smoothing lengths (describing the sph kernel) of each gas
+            particle in simulation length units.
     """
 
-        # Define the allowed attributes
-    __slots__ = ["metallicities", "star_forming", "nparticles",
-                 "log10metallicities", "coordinates",
-                 "velocities", "masses", "smoothing_lengths",
-                 "s_oxygen", "s_hydrogen"]
+    # Define the allowed attributes
+    __slots__ = ["metallicities", "star_forming", 
+                 "log10metallicities", "smoothing_lengths"]
 
-    def __init__(self, masses, metallicities, **kwargs):
-        self.masses = masses
+    def __init__(self, masses, metallicities, star_forming=None, redshift=None,
+                 coordinates=None, velocities=None, smoothing_lengths=None):
+        """
+        Initialise the gas object.
+
+        Args:
+            masses (array-like, float)
+                The mass of each particle in Msun.
+            metallicities (array-like, float)
+                The metallicity of each gas particle.
+            star_forming (array-like, bool)
+                Flag for whether each gas particle is star forming or not.
+            redshift (float)
+                The redshift/s of the stellar particles.
+            coordinates (array-like, float)
+                The 3D positions of the particles.
+            velocities (array-like, float)
+                The 3D velocities of the particles.
+            smoothing_lengths (array-like, float)
+                The smoothing lengths (describing the sph kernel) of each
+                stellar particle in simulation length units.
+        """
+
+        # Instantiate parent
+        Particles.__init__(
+            self,
+            coordinates=coordinates,
+            velocities=velocities,
+            masses=masses,
+            redshift=redshift,
+            nparticles=len(self.masses)
+        )
+
+        # Set the metallicites and log10 equivalent
         self.metallicities = metallicities
+        self.log10metallicities = np.log10(self.metallicities)
 
-        # Ensure all attributes are intialised to None
-        # NOTE (Will): I don't like this but can't think of something cleaner
-        for attr in Gas.__slots__:
-            try:
-                getattr(self, attr)
-            except AttributeError:
-                setattr(self, attr, None)
+        # Set the star forming boolean mask array
+        self.star_forming = star_forming
 
-        # Handle kwargs
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+        # Set the smoothing lengths for these gas particles
+        self.smoothing_lengths = smoothing_lengths
+
+        # Check the arguments we've been given
+        self._check_gas_args()
+
+    def _check_gas_args(self):
+        """
+        Sanitizes the inputs ensuring all arguments agree and are compatible.
+
+        Raises:
+            InconsistentArguments
+                If any arguments are incompatible or not as expected an error
+                is thrown.
+        """
+
+        # Ensure all arrays are the expected length
+        for key in self.__dict__:
+            attr = getattr(self, key)
+            if isinstance(attr, np.ndarray):
+                if attr.shape[0] != self.nparticles:
+                    raise exceptions.InconsistentArguments(
+                        "Inconsistent stellar array sizes! (nparticles=%d, "
+                        "%s=%d)" % (self.nparticles, key, attr.shape[0])
+                    )
 
