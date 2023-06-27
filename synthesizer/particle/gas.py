@@ -14,6 +14,7 @@ Example usages:
 """
 
 from synthesizer.particles import Particles
+from synthesizer.units import Quantity
 from synthesizer import exceptions
 
 class Gas(Particles):
@@ -41,6 +42,10 @@ class Gas(Particles):
             The smoothing lengths (describing the sph kernel) of each gas
             particle in simulation length units.
     """
+
+    # Define class level Quantity attributes
+    smoothing_lengths = Quantity()
+    
 
     # Define the allowed attributes
     __slots__ = ["metallicities", "star_forming", 

@@ -6,7 +6,9 @@ directly instantiated.
 """
 import numpy as np
 from numpy.random import multivariate_normal
+from unyt import unyt_quantity, unyt_array
 
+from synthesizer.units import Quantity
 from synthesizer import exceptions
 
 
@@ -33,9 +35,15 @@ class Particles:
             How many particles are there?
     """
 
+    # Define class level Quantity attributes
+    coordinates = Quantity()
+    velocities = Quantity()
+    masses = Quantity()
+    softening_length = Quantity()
+
     # Define the allowed attributes
-    __slots__ = ["coordinates", "velocities", "masses", "softening_length",
-                 "redshift", "nparticles"]
+    __slots__ = ["coordinates", "velocities", "masses",
+                 "softening_length", "redshift", "nparticles"]
     
     def __init__(self, coordinates, velocities, masses, redshift,
                  softening_length, nparticles):
@@ -57,9 +65,14 @@ class Particles:
                 How many particles are there?
         """
 
+        # Check arguments are valid
+        
+
         # Set phase space coordinates
         self.coordinates = coordinates
         self.velocities = velocities
+
+        # Set unit information
 
         # Set the softening length
         self.softening_lengths = softening_length
@@ -72,6 +85,36 @@ class Particles:
 
         # How many particles are there?
         self.nparticles = nparticles
+
+    def _check_part_args(self, coordinates, velocities, masses,
+                         softening_length):
+        """
+        Sanitizes the inputs ensuring all arguments agree and are compatible.
+
+        Raises:
+            InconsistentArguments
+                If any arguments are incompatible or not as expected an error
+                is thrown.
+        """
+
+        # Ensure all quantities have units
+        if not isinstance(coordinates, unyt_array):
+            raise exceptions.InconsistentArguments(
+                "coordinates must have unyt units associated to them."
+            )
+        if not isinstance(velocities, unyt_array):
+            raise exceptions.InconsistentArguments(
+                "velocities must have unyt units associated to them."
+            )
+        if not isinstance(masses, unyt_array):
+            raise exceptions.InconsistentArguments(
+                "masses must have unyt units associated to them."
+            )
+        if not isinstance(softening_length, unyt_qunatity):
+            raise exceptions.InconsistentArguments(
+                "softening_length must have unyt units associated to them."
+            )
+        
 
     def rotate_particles(self):
         raise execeptions.UnimplementedFunctionality(
