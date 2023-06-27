@@ -66,7 +66,7 @@ class Gas(Particles):
                 The 3D velocities of the particles.
             smoothing_lengths (array-like, float)
                 The smoothing lengths (describing the sph kernel) of each
-                stellar particle in simulation length units.
+                gas particle in simulation length units.
         """
 
         # Instantiate parent
@@ -108,7 +108,7 @@ class Gas(Particles):
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
                     raise exceptions.InconsistentArguments(
-                        "Inconsistent stellar array sizes! (nparticles=%d, "
+                        "Inconsistent gas array sizes! (nparticles=%d, "
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
 
