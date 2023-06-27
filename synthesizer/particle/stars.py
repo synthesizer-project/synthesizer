@@ -19,8 +19,10 @@ Example usages:
                         tau_v=tau_vs, coordinates=coordinates, ...)
 """
 import warnings
+
 import numpy as np
-from .particles import Particles
+
+from synthesizer.particles import Particles
 from synthesizer import exceptions
 
 
@@ -70,10 +72,10 @@ class Stars(Particles):
     """
 
     # Define the allowed attributes
-    __slots__ = ["initial_masses", "ages", "metallicities", "nparticles",
-                 "redshift", "tauV", "alpha_enhancement", "imf_hmass_slope",
-                 "log10ages", "log10metallicities", "resampled", "coordinates",
-                 "velocities", "current_masses", "smoothing_lengths",
+    __slots__ = ["initial_masses", "ages", "metallicities", 
+                 "tauV", "alpha_enhancement", "imf_hmass_slope",
+                 "log10ages", "log10metallicities", "resampled", 
+                 "current_masses", "smoothing_lengths",
                  "s_oxygen", "s_hydrogen", "nstars"]
 
     def __init__(self, initial_masses, ages, metallicities, redshift=None,
