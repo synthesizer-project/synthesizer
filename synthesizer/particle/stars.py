@@ -23,6 +23,7 @@ import warnings
 import numpy as np
 
 from synthesizer.particles import Particles
+from synthesizer.units import Quantity
 from synthesizer import exceptions
 
 
@@ -70,6 +71,12 @@ class Stars(Particles):
         nstars (int)
             The number of stellar particles in the object.
     """
+
+    # Define class level Quantity attributes
+    initial_masses = Quantity()
+    ages = Quantity()
+    current_masses = Quantity()
+    smoothing_lengths = Quantity()
 
     # Define the allowed attributes
     __slots__ = ["initial_masses", "ages", "metallicities", 
