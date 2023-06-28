@@ -35,15 +35,15 @@ class Particles:
             How many particles are there?
     """
 
+    # # Define the allowed attributes
+    # __slots__ = ["coordinates", "velocities", "masses",
+    #              "softening_length", "redshift", "nparticles"]
+
     # Define class level Quantity attributes
     coordinates = Quantity()
     velocities = Quantity()
     masses = Quantity()
     softening_length = Quantity()
-
-    # Define the allowed attributes
-    __slots__ = ["coordinates", "velocities", "masses",
-                 "softening_length", "redshift", "nparticles"]
     
     def __init__(self, coordinates, velocities, masses, redshift,
                  softening_length, nparticles):
@@ -188,7 +188,7 @@ class CoordinateGenerator:
             np.fill_diagonal(cov, 1.)
 
         # Get the coordinates 
-        coords = multivariate_normal(mean, cov, N)
+        coords = multivariate_normal(mean, cov, n)
 
         return coords
 

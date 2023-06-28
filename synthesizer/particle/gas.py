@@ -13,7 +13,7 @@ Example usages:
               redshift=redshift, coordinates=coordinates, ...)
 """
 
-from synthesizer.particles import Particles
+from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer import exceptions
 
@@ -43,16 +43,16 @@ class Gas(Particles):
             particle in simulation length units.
     """
 
+    # # Define the allowed attributes
+    # __slots__ = ["metallicities", "star_forming", 
+    #              "log10metallicities", "smoothing_lengths"]
+
     # Define class level Quantity attributes
     smoothing_lengths = Quantity()
-    
-
-    # Define the allowed attributes
-    __slots__ = ["metallicities", "star_forming", 
-                 "log10metallicities", "smoothing_lengths"]
 
     def __init__(self, masses, metallicities, star_forming=None, redshift=None,
-                 coordinates=None, velocities=None, smoothing_lengths=None):
+                 coordinates=None, velocities=None, smoothing_lengths=None,
+                 softening_length=None):
         """
         Initialise the gas object.
 
@@ -81,6 +81,7 @@ class Gas(Particles):
             velocities=velocities,
             masses=masses,
             redshift=redshift,
+            softening_length=softening_length,
             nparticles=len(self.masses)
         )
 
