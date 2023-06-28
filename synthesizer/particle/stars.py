@@ -14,6 +14,7 @@ Notes
 import warnings
 import numpy as np
 from .particles import Particles
+from synthesizer.units import Quantity
 
 
 class Stars(Particles):
@@ -68,11 +69,16 @@ class Stars(Particles):
     """
 
     # Define the allowed attributes
-    __slots__ = ["initial_masses", "ages", "metallicities", "nparticles",
+    __slots__ = ["metallicities", "nparticles",
                  "tauV", "alpha", "imf_hmass_slope", "log10ages",
-                 "log10metallicities", "resampled", "coordinates",
-                 "velocities", "current_masses", "smoothing_lengths",
+                 "log10metallicities", "resampled", 
+                 "velocities", "current_masses",
                  "s_oxygen", "s_hydrogen"]
+
+    initial_masses = Quantity()
+    coordinates = Quantity()
+    ages = Quantity()
+    smoothing_lengths = Quantity()
 
     def __init__(self, initial_masses, ages, metallicities, **kwargs):
         """
