@@ -96,6 +96,9 @@ def load_CAMELS_IllustrisTNG(
             snapshot filename
         fof_name (string):
             subfind / FOF filename
+        fof_dir (string):
+            optional argument specifying lcoation of fof file 
+            if different to snapshot
 
     Returns:
         galaxies (object):
@@ -224,6 +227,9 @@ def load_CAMELS_SIMBA(
             snapshot filename
         fof_name (string):
             subfind / FOF filename
+        fof_dir (string):
+            optional argument specifying lcoation of fof file 
+            if different to snapshot
 
     Returns:
         galaxies (object): 
