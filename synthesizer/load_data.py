@@ -83,7 +83,8 @@ def _load_CAMELS(
 def load_CAMELS_IllustrisTNG(
     _dir='.',
     snap_name='snap_033.hdf5',
-    fof_name='fof_subhalo_tab_033.hdf5'
+    fof_name='fof_subhalo_tab_033.hdf5',
+    fof_dir=None
 ):
     """
     Load CAMELS-IllustrisTNG galaxies
@@ -131,7 +132,9 @@ def load_CAMELS_IllustrisTNG(
     universe_age = cosmo.age(1. / scale_factor - 1)
     _ages = cosmo.age(1./form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
-
+    
+    if fof_dir:
+        _dir = fof_dir  # replace if symlinks for fof files are broken
     with h5py.File(f'{_dir}/{fof_name}', 'r') as hf:
         lens = hf['Subhalo/SubhaloLenType'][:]
 
@@ -208,7 +211,8 @@ def load_CAMELS_Astrid(
 def load_CAMELS_SIMBA(
     _dir='.',
     snap_name='snap_033.hdf5',
-    fof_name='fof_subhalo_tab_033.hdf5'
+    fof_name='fof_subhalo_tab_033.hdf5',
+    fof_dir=None
 ):
     """
     Load CAMELS-SIMBA galaxies
@@ -257,6 +261,8 @@ def load_CAMELS_SIMBA(
     _ages = cosmo.age(1./form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
+    if fof_dir:
+        _dir = fof_dir  # replace if symlinks for fof files are broken
     with h5py.File(f'{_dir}/{fof_name}', 'r') as hf:
         lens = hf['Subhalo/SubhaloLenType'][:]
 
