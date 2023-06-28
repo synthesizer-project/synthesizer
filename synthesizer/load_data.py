@@ -7,30 +7,52 @@ from astropy.cosmology import FlatLambdaCDM
 from .particle.galaxy import Galaxy
 
 
-def _load_CAMELS(lens, imasses, ages, metals, 
-                 s_oxygen, s_hydrogen, coods, masses, 
-                 g_masses, g_metallicities, star_forming):
+def _load_CAMELS(
+    lens,
+    imasses,
+    ages,
+    metals, 
+    s_oxygen,
+    s_hydrogen,
+    coods,
+    masses, 
+    g_masses,
+    g_metallicities,
+    star_forming
+):
     """
     Load CAMELS galaxies into a galaxy object
 
     Arbitrary back end for different CAMELS simulation suites
 
-    Parameters:
-    lens (array): subhalo particle length array
-    imasses (array): initial masses particle array
-    ages (array): particle ages array
-    metals (array): particle summed metallicities array
-    s_oxygen (array): particle oxygen abundance array
-    s_hydrogen (array): particle hydrogen abundance array
-    coods (array): particle coordinates array, comoving
-    masses (array): current mass particle array
-    g_masses (array): gas particle masses array
-    g_metallicities (array): gas particle overall metallicities array
-    star_forming (array): boolean array flagging star forming gas particles
+    Args:
+        lens (array):
+            subhalo particle length array
+        imasses (array):
+            initial masses particle array
+        ages (array):
+            particle ages array
+        metals (array):
+            particle summed metallicities array
+        s_oxygen (array):
+            particle oxygen abundance array
+        s_hydrogen (array):
+            particle hydrogen abundance array
+        coods (array):
+            particle coordinates array, comoving
+        masses (array): 
+            current mass particle array
+        g_masses (array): 
+            gas particle masses array
+        g_metallicities (array): 
+            gas particle overall metallicities array
+        star_forming (array):
+            boolean array flagging star forming gas particles
 
     Returns:
-    galaxies (object): `ParticleGalaxy` object containing specified
-                       stars and gas objects
+        galaxies (object): 
+            `ParticleGalaxy` object containing specified
+            stars and gas objects
     """
      
     begin, end = get_len(lens[:, 4])
@@ -58,17 +80,25 @@ def _load_CAMELS(lens, imasses, ages, metals,
 
     return galaxies
 
-def load_CAMELS_IllustrisTNG(_dir='.', snap_name='snap_033.hdf5', fof_name='fof_subhalo_tab_033.hdf5'):
+def load_CAMELS_IllustrisTNG(
+    _dir='.',
+    snap_name='snap_033.hdf5',
+    fof_name='fof_subhalo_tab_033.hdf5'
+):
     """
     Load CAMELS-IllustrisTNG galaxies
 
-    Parameters:
-    dir (string): data location
-    snap_name (string): snapshot filename
-    fof_name (string): subfind / FOF filename
+    Args:
+        dir (string): 
+            data location
+        snap_name (string):
+            snapshot filename
+        fof_name (string):
+            subfind / FOF filename
 
     Returns:
-    galaxies (object): `ParticleGalaxy` object containing star and gas particle
+        galaxies (object):
+            `ParticleGalaxy` object containing star and gas particle
     """    
 
     with h5py.File(f'{_dir}/{snap_name}', 'r') as hf:
@@ -110,19 +140,29 @@ def load_CAMELS_IllustrisTNG(_dir='.', snap_name='snap_033.hdf5', fof_name='fof_
                         g_masses, g_metals, star_forming)
 
 
-def load_CAMELS_Astrid(_dir='.', snap_name='snap_090.hdf5', fof_name='fof_subhalo_tab_090.hdf5', fof_dir=None):
+def load_CAMELS_Astrid(
+    _dir='.',
+    snap_name='snap_090.hdf5',
+    fof_name='fof_subhalo_tab_090.hdf5',
+    fof_dir=None
+):
     """
     Load CAMELS-Astrid galaxies
 
-    Parameters:
-    dir (string): data location
-    snap_name (string): snapshot filename
-    fof_name (string): subfind / FOF filename
-    fof_dir (string): optional argument specifying lcoation of fof file 
-                      if different to snapshot
+    Args:
+        dir (string):
+            data location
+        snap_name (string):
+            snapshot filename
+        fof_name (string):
+            subfind / FOF filename
+        fof_dir (string):
+            optional argument specifying lcoation of fof file 
+            if different to snapshot
 
     Returns:
-    galaxies (object): `ParticleGalaxy` object containing star and gas particle
+        galaxies (object):
+            `ParticleGalaxy` object containing star and gas particle
     """
 
     with h5py.File(f'{_dir}/{snap_name}', 'r') as hf:
@@ -165,17 +205,25 @@ def load_CAMELS_Astrid(_dir='.', snap_name='snap_090.hdf5', fof_name='fof_subhal
                         s_oxygen, s_hydrogen, coods, masses,
                         g_masses, g_metals, star_forming)
 
-def load_CAMELS_SIMBA(_dir='.', snap_name='snap_033.hdf5', fof_name='fof_subhalo_tab_033.hdf5'):
+def load_CAMELS_SIMBA(
+    _dir='.',
+    snap_name='snap_033.hdf5',
+    fof_name='fof_subhalo_tab_033.hdf5'
+):
     """
     Load CAMELS-SIMBA galaxies
 
-    Parameters:
-    dir (string): data location
-    snap_name (string): snapshot filename
-    fof_name (string): subfind / FOF filename
+    Args:
+        dir (string):
+            data location
+        snap_name (string):
+            snapshot filename
+        fof_name (string):
+            subfind / FOF filename
 
     Returns:
-    galaxies (object): `ParticleGalaxy` object containing star and gas particle
+        galaxies (object): 
+            `ParticleGalaxy` object containing star and gas particle
     """
 
     with h5py.File(f'{_dir}/{snap_name}', 'r') as hf:
@@ -216,17 +264,25 @@ def load_CAMELS_SIMBA(_dir='.', snap_name='snap_033.hdf5', fof_name='fof_subhalo
                         s_oxygen, s_hydrogen, coods, masses,
                         g_masses, g_metals, star_forming)
 
-def load_FLARES(f, region, tag):
+def load_FLARES(
+    f,
+    region,
+    tag
+):
     """
     Load FLARES galaxies from a FLARES master file
 
-    Parameters:
-    f (string): master file location
-    region (string): FLARES region to load
-    tag (string): snapshot tag to load
+    Args:
+        f (string):
+            master file location
+        region (string):
+            FLARES region to load
+        tag (string):
+            snapshot tag to load
 
     Returns:
-    galaxies (object): `ParticleGalaxy` object containing stars
+        galaxies (object):
+            `ParticleGalaxy` object containing stars
     """
 
     with h5py.File(f, 'r') as hf:
@@ -264,16 +320,21 @@ def load_FLARES(f, region, tag):
     return galaxies
 
 
-def get_len(Length):
+def get_len(
+    Length
+):
     """
     Find the beginning and ending indices from a length array
 
-    Parameters:
-    Length (array): array of number of particles 
+    Args:
+        Length (array):
+            array of number of particles
 
     Returns:
-    begin (array): beginning indices
-    end (array): ending indices
+        begin (array):
+            beginning indices
+        end (array):
+            ending indices
     """
 
     begin = np.zeros(len(Length), dtype=np.int64)
