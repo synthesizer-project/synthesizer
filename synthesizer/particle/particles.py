@@ -110,14 +110,14 @@ class Particles:
             raise exceptions.InconsistentArguments(
                 "masses must have unyt units associated to them."
             )
-        if not isinstance(softening_length, unyt_qunatity):
+        if not isinstance(softening_length, unyt_quantity):
             raise exceptions.InconsistentArguments(
                 "softening_length must have unyt units associated to them."
             )
         
 
     def rotate_particles(self):
-        raise execeptions.UnimplementedFunctionality(
+        raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
             "https://github.com/flaresimulations/synthesizer/blob/main/"
@@ -134,7 +134,7 @@ class Particles:
         Since smoothing lengths are not universal quantities their existence is
         checked before trying to convert them.
         """
-        raise execeptions.UnimplementedFunctionality(
+        raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
             "https://github.com/flaresimulations/synthesizer/blob/main/"
@@ -151,7 +151,7 @@ class Particles:
         Since smoothing lengths are not universal quantities their existence is
         checked before trying to convert them.
         """
-        raise execeptions.UnimplementedFunctionality(
+        raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
             "https://github.com/flaresimulations/synthesizer/blob/main/"
@@ -193,7 +193,7 @@ class CoordinateGenerator:
         return coords
 
     def generate_2D_Sersic(N):
-        raise execeptions.UnimplementedFunctionality(
+        raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
             "https://github.com/flaresimulations/synthesizer/blob/main/"
@@ -201,7 +201,7 @@ class CoordinateGenerator:
         )
 
     def generate_3D_spline(N, kernel_func):
-        raise execeptions.UnimplementedFunctionality(
+        raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
             "https://github.com/flaresimulations/synthesizer/blob/main/"
