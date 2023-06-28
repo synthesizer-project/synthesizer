@@ -97,8 +97,6 @@ class Quantity:
     """
 
     def __init__(self):
-        # I suppose this could be a parameter allowing you to change the
-        # implementation of units, e.g. swapping to astropy
         self.units = Units()  
 
     def __set_name__(self, owner, name):
@@ -108,6 +106,12 @@ class Quantity:
     def __get__(self, obj, type=None):
         value = getattr(obj, self.private_name)
         unit = getattr(self.units, self.public_name)
+
+        # If we have an uninitialised attribute avoid the multiplying NoneType
+        # error and just return None
+        if value is None:
+            return None
+
         return value * unit
 
     def __set__(self, obj, value):
