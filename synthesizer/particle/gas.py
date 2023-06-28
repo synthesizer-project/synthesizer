@@ -17,6 +17,7 @@ from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer import exceptions
 
+
 class Gas(Particles):
     """
     The base Gas class. This contains all data a collection of gas particles
@@ -82,7 +83,7 @@ class Gas(Particles):
             masses=masses,
             redshift=redshift,
             softening_length=softening_length,
-            nparticles=len(self.masses)
+            nparticles=len(masses)
         )
 
         # Set the metallicites and log10 equivalent
