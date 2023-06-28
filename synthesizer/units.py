@@ -24,7 +24,7 @@ Example usage:
     
 """
 from unyt import (nJy, erg, s, Hz, Angstrom, cm, Mpc, yr, km, Msun,
-                  unyt_quantity, unyt_array)
+                  unyt_quantity, unyt_array, dimensionless)
 
 
 # Define an importable dictionary with the default unit system
@@ -329,8 +329,11 @@ class Quantity:
         # Do we need to perform a unit conversion? If not we assume value
         # is already in the default unit system
         if isinstance(value, unyt_quantity) or isinstance(value, unyt_array):
-            if value.units != getattr(self.units, self.public_name):
+            if (value.units != getattr(self.units, self.public_name) and
+                value.units != dimensionless):
                 value = value.to(getattr(self.units, self.public_name)).value
-            
+            else:
+                value = value.value
+                
         # Set the attribute
         setattr(obj, self.private_name, value)
