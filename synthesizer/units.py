@@ -24,7 +24,7 @@ Example usage:
     
 """
 from dataclasses import dataclass
-from unyt import nJy, erg, s, Hz, Angstrom, cm, km, Msun, yr
+from unyt import nJy, erg, s, Hz, Angstrom, cm, km, Msun, yr, Mpc
 
 
 @dataclass
