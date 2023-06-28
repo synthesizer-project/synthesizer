@@ -328,9 +328,9 @@ class Quantity:
 
         # Do we need to perform a unit conversion? If not we assume value
         # is already in the default unit system
-        # Note: this is not dangerous if already in the correct units.
         if isinstance(value, unyt_quantity) or isinstance(value, unyt_array):
-            value = value.to(getattr(self.units, self.public_name)).value
+            if value.units != getattr(self.units, self.public_name):
+                value = value.to(getattr(self.units, self.public_name)).value
             
         # Set the attribute
         setattr(obj, self.private_name, value)
