@@ -12,6 +12,7 @@ Example usages:
     gas = Gas(masses, metallicities,
               redshift=redshift, coordinates=coordinates, ...)
 """
+import numpy as np
 
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
