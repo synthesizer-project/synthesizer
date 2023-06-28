@@ -22,7 +22,7 @@ import warnings
 
 import numpy as np
 
-from synthesizer.particles import Particles
+from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer import exceptions
 
@@ -72,23 +72,24 @@ class Stars(Particles):
             The number of stellar particles in the object.
     """
 
+    # # Define the allowed attributes
+    # __slots__ = ["initial_masses", "ages", "metallicities", 
+    #              "tauV", "alpha_enhancement", "imf_hmass_slope",
+    #              "log10ages", "log10metallicities", "resampled", 
+    #              "current_masses", "smoothing_lengths",
+    #              "s_oxygen", "s_hydrogen", "nstars"]
+
     # Define class level Quantity attributes
     initial_masses = Quantity()
     ages = Quantity()
     current_masses = Quantity()
     smoothing_lengths = Quantity()
 
-    # Define the allowed attributes
-    __slots__ = ["initial_masses", "ages", "metallicities", 
-                 "tauV", "alpha_enhancement", "imf_hmass_slope",
-                 "log10ages", "log10metallicities", "resampled", 
-                 "current_masses", "smoothing_lengths",
-                 "s_oxygen", "s_hydrogen", "nstars"]
-
     def __init__(self, initial_masses, ages, metallicities, redshift=None,
                  tauV=None, alpha_enhancement=None, coordinates=None,
                  velocities=None, current_masses=None, smoothing_lengths=None,
-                 s_oxygen=None, s_hydrogen=None, imf_hmass_slope=None):
+                 s_oxygen=None, s_hydrogen=None, imf_hmass_slope=None,
+                 softening_length=None):
         """
         Intialise the Stars instance. The first 3 arguments are always required.
         All other arguments are optional attributes applicable in different
@@ -131,7 +132,8 @@ class Stars(Particles):
             velocities=velocities,
             masses=current_masses,
             redshift=redshift,
-            nparticles=len(self.initial_masses)
+            softening_length=softening_length,
+            nparticles=len(initial_masses)
         )
 
         # Set always required stellar particle properties
@@ -426,7 +428,7 @@ def sample_sfhz(sfzh, nstar, initial_mass=1, **kwargs):
     cdf = cdf / cdf[-1]
 
     # Get a random sample from the cdf
-    values = np.random.rand(n)
+    values = np.random.rand(nstar)
     value_bins = np.searchsorted(cdf, values)
 
     # Convert 1D random indices to 2D indices
@@ -443,7 +445,7 @@ def sample_sfhz(sfzh, nstar, initial_mass=1, **kwargs):
     log10ages, log10metallicities = random_from_cdf.T
 
     # Instantiate Stars object with extra keyword arguments
-    stars = Stars(initial_mass * np.ones(n), 10 ** log10ages,
+    stars = Stars(initial_mass * np.ones(nstar), 10 ** log10ages,
                   10 ** log10metallicities, **kwargs)
 
     return stars
