@@ -113,10 +113,9 @@ def import_indices():
 
 
 if __name__ == '__main__':
-    grid_dir = 'grid_dir/grids'  # Change this directory to your own.
+    grid_dir = '../../tests/test_grid' # Change this directory to your own.
+    grid_name = 'test_grid'     # Change this to the appropriate .hdf5
 
-    # Change this to the appropriate .hdf5
-    grid_name = 'insert grid name here'
 
     indices, uv_index = import_indices()  # Retrieve UV indices
 
