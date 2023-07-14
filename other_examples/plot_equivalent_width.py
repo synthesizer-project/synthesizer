@@ -92,7 +92,7 @@ def import_indices():
     temp = []
     uv_index = []
 
-    with open('C:/Users/conno/Documents/PhD ISSA/PhD data notes/UV_Indices_Sythesizer.csv', newline='') \
+    with open('test indices/indices.csv', newline='') \
             as csvfile:
         csvreader = csv.reader(csvfile, delimiter=',', quotechar='|')
         next(csvreader)
@@ -113,10 +113,10 @@ def import_indices():
 
 
 if __name__ == '__main__':
-    grid_dir = 'C:/Users/conno/Documents/PhD ISSA/synthesizer_data/grids'  # Change this directory to your own.
+    grid_dir = 'grid_dir/grids'  # Change this directory to your own.
 
     # Change this to the appropriate .hdf5
-    grid_name = 'bpass-2.3-bin_chabrier03-0,300_alpha0.2_cloudy-v17.03-resolution0.1'
+    grid_name = 'insert grid name here'
 
     indices, uv_index = import_indices()  # Retrieve UV indices
 
