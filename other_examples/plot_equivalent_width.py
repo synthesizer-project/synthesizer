@@ -92,7 +92,7 @@ def import_indices():
     temp = []
     uv_index = []
 
-    with open('test indices/indices.csv', newline='') \
+    with open('../synthesizer/data/UV_Indices.csv', newline='') \
             as csvfile:
         csvreader = csv.reader(csvfile, delimiter=',', quotechar='|')
         next(csvreader)
