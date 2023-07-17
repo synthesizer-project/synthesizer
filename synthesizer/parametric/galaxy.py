@@ -517,8 +517,8 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def get_equivalent_width(self, index, spectra_to_plot=None):
-        """ gets all equivalent widths associated with a galaxy object """
+     def get_equivalent_width(self, index, spectra_to_plot=None):
+        """ gets all equivalent widths associated with a sed object """
         equivalent_width = None
 
         if type(spectra_to_plot) != list:
@@ -529,7 +529,9 @@ class Galaxy(BaseGalaxy):
             lam_arr = sed.lam
             lnu_arr = sed.lnu
 
-            equivalent_width = ew.calculate_ew(lam_arr, lnu_arr, index)
+            # Compute equivalent width
+            equivalent_width = sed.calculate_ew(lam_arr, lnu_arr, index)
 
         return equivalent_width
+
 
