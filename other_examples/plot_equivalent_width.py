@@ -1,8 +1,7 @@
 """
-Example for generating the rest-frame spectrum for a parametric galaxy including
-photometry. This example will:
+Example for generating the equivalent width for a set of UV indices from a parametric galaxy
 - build a parametric galaxy (see make_sfzh)
-- calculate spectral luminosity density
+- calculate equivalent width (see sed.py)
 """
 
 import numpy as np
@@ -88,6 +87,7 @@ def equivalent_width(grids, index, index_uv):
 
 
 def import_indices():
+    # -- Extract indices and pseudo continuum window from external csv file
     import_grid = []
     temp = []
     uv_index = []
