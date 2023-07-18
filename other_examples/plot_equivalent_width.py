@@ -113,7 +113,7 @@ def import_indices():
 
 
 if __name__ == '__main__':
-    grid_dir = '../../tests/test_grid' # Change this directory to your own.
+    grid_dir = '../tests/test_grid' # Change this directory to your own.
     grid_name = 'test_grid'     # Change this to the appropriate .hdf5
 
 
