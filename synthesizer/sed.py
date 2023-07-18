@@ -336,8 +336,6 @@ class Sed:
         ew = np.trapz((continuum[continuum_indices] - flux[continuum_indices]) / continuum[continuum_indices],
                       wavelength[continuum_indices])
 
-        print("The EW of the absorption feature is:", ew, index)
-
         return ew
 
 
