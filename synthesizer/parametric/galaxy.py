@@ -500,7 +500,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-     def get_equivalent_width(self, index, spectra_to_plot=None):
+    def get_equivalent_width(self, index, spectra_to_plot=None):
         """ gets all equivalent widths associated with a sed object """
         equivalent_width = None
 
