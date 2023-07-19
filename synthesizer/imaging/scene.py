@@ -405,8 +405,8 @@ class ParticleScene(Scene):
         # Handle the particle positions, here we make a copy to avoid changing
         # the original values
         if self.stars is not None:
-            self.coords = np.copy(self.stars.coordinates)
-            self.coord_unit = self.stars.coord_units
+            self.coords = np.copy(self.stars._coordinates)
+            self.coord_unit = self.stars.coordinates.units
         else:
             self.coords = np.copy(positions)
             self.coord_unit = positions.units
@@ -417,8 +417,8 @@ class ParticleScene(Scene):
 
         # Store the smoothing lengths because we again need a copy
         if self.stars is not None:
-            self.smoothing_lengths = np.copy(self.stars.smoothing_lengths)
-            self.smooth_unit = self.stars.coord_units
+            self.smoothing_lengths = np.copy(self.stars._smoothing_lengths)
+            self.smooth_unit = self.stars.smoothing_lengths.units
         else:
             if smoothing_lengths is not None:
                 self.smoothing_lengths = np.copy(smoothing_lengths)

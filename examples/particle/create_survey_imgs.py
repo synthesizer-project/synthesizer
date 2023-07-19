@@ -9,7 +9,7 @@ from scipy import signal
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from unyt import yr, Myr, kpc, arcsec
+from unyt import yr, Myr, kpc, arcsec, Mpc
 
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
@@ -74,7 +74,7 @@ webb_depths = {f: 46.0 for f in webb_filters.filter_codes}
 # Let's add these instruments to the survey
 survey.add_photometric_instrument(
     filters=hst_filters,
-    resolution=0.5 * kpc,
+    resolution=0.5 * Mpc,
     label="HST/WFC3_IR",
     psfs=hst_psfs,
     depths=hst_depths,
@@ -83,7 +83,7 @@ survey.add_photometric_instrument(
 )
 survey.add_photometric_instrument(
     filters=webb_filters,
-    resolution=0.1 * kpc,
+    resolution=0.1 * Mpc,
     label="JWST/NIRCam",
     psfs=webb_psfs,
     depths=webb_depths,
@@ -114,24 +114,30 @@ for igal in range(ngalaxies):
     mass = 10**10
     sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=mass)
 
-    # Create stars object
+    # Define the number of stars
     n = 1000
+    
+    # Generate some random coordinates
     coords = CoordinateGenerator.generate_3D_gaussian(n)
-    stars = sample_sfhz(sfzh, n)
-    stars.coordinates = coords
-    stars.coord_units = kpc
-    cent = np.mean(coords, axis=0)  # define geometric centre
+
+    # Calculate the smoothing lengths from radii
+    cent = np.mean(coords, axis=0)
     rs = np.sqrt(
-        (coords[:, 0] - cent[0]) ** 2
-        + (coords[:, 1] - cent[1]) ** 2
-        + (coords[:, 2] - cent[2]) ** 2
-    )  # calculate radii
-    rs[rs < 0.1] = 0.4  # Set a lower bound on the "smoothing length"
-    stars.smoothing_lengths = rs / 4  # convert radii into smoothing lengths
-    stars.redshift = redshift
+            (coords[:, 0] - cent[0]) ** 2
+            + (coords[:, 1] - cent[1]) ** 2
+            + (coords[:, 2] - cent[2]) ** 2
+    )
+    rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
+
+    # Sample the SFZH, producing a Stars object
+    # we will also pass some keyword arguments for attributes
+    # we will need for imaging
+    stars = sample_sfhz(sfzh, n, coordinates=coords, 
+                        current_masses=np.full(n, 10**8.7 / n), 
+                        smoothing_lengths=rs / 2, redshift=1)
 
     # Compute width of stellar distribution
-    width = np.max(coords) - np.min(coords)
+    width = (np.max(coords) - np.min(coords)) * Mpc
 
     # Update the FOV
     if width > fov:
@@ -144,7 +150,7 @@ for igal in range(ngalaxies):
     galaxies.append(galaxy)
 
 # Define image properties
-fov = (width + 1) * kpc
+fov = (width.value + 1) * Mpc
 
 # Set the fov in the survey
 print("Image FOV:", fov)
