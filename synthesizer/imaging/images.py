@@ -1101,7 +1101,7 @@ class ParticleImage(ParticleScene, Image):
             fov=None,
             sed=None,
             stars=None,
-            filters=(),
+            filters=None,
             positions=None,
             pixel_values=None,
             smoothing_lengths=None,
