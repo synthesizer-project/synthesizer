@@ -11,6 +11,34 @@ from .igm import Inoue14
 from . import exceptions
 
 
+def uv_indices():
+    """
+       A function to define a dictionary of uv indices
+        - Each index has a defined absorption window.
+        - A pseudo-continuum is defined, made up of a blue and red shifted window.
+
+       Returns
+       ----------
+       int array
+           index, absorption start, absorption end, blue star, blue end, red start, red end
+
+       """
+
+    uv_dict = [
+        [1370, 1360, 1380, 1345, 1354, 1436, 1447],
+        [1400, 1385, 1410, 1345, 1354, 1436, 1447],
+        [1425, 1413, 1435, 1345, 1354, 1436, 1447],
+        [1460, 1450, 1470, 1436, 1447, 1482, 1491],
+        [1501, 1496, 1506, 1482, 1491, 1583, 1593],
+        [1533, 1530, 1537, 1482, 1491, 1583, 1593],
+        [1550, 1530, 1560, 1482, 1491, 1583, 1593],
+        [1719, 1705, 1729, 1675, 1684, 1751, 1761],
+        [1853, 1838, 1858, 1797, 1807, 1871, 1883]
+    ]
+
+    return uv_dict
+
+
 class Sed:
 
     """
@@ -278,8 +306,7 @@ class Sed:
 
         return 2.5*np.log10(self.broadband_fluxes[f2] /
                             self.broadband_fluxes[f1])
-   
-    
+
     def calculate_ew(self, lam, lnu, index):
         """
            An function to calculate the equivalent width.
