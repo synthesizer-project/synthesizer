@@ -71,5 +71,5 @@ for sed_type, sed in galaxy.spectra.items():
 
 plt.legend()
 plt.xlim([2, 5])
-plt.ylim([10, 22])
+plt.ylim([10, 24])
 plt.show()
