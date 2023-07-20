@@ -4,14 +4,13 @@ Example for generating the equivalent width for a set of UV indices from a param
 - calculate equivalent width (see sed.py)
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
 
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.galaxy.parametric import ParametricGalaxy as Galaxy
+from synthesizer.particle.galaxy import Galaxy as Galaxy
+from synthesizer.sed import uv_indices as index
 from unyt import yr, Myr
-import csv
 
 
 def get_ew(index, Z, imf, grid, EqW, mode):
@@ -34,9 +33,9 @@ def get_ew(index, Z, imf, grid, EqW, mode):
 
     # --- generate equivalent widths
     if mode == 0:
-        galaxy.get_stellar_spectra(grid)
+        galaxy.get_particle_spectra_stellar(grid)
     else:
-        galaxy.get_intrinsic_spectra(grid, fesc=0.5)
+        galaxy.get_particle_spectra_intrinsic(grid, fesc=0.5)
 
     EqW.append(galaxy.get_equivalent_width(index))
     return EqW
@@ -86,37 +85,25 @@ def equivalent_width(grids, index, index_uv):
             plt.show()
 
 
-def import_indices():
+def get_indices():
     # -- Extract indices and pseudo continuum window from external csv file
-    import_grid = []
+    index_grid = index()
     temp = []
-    uv_index = []
+    key = []
 
-    with open('../synthesizer/data/UV_Indices.csv', newline='') \
-            as csvfile:
-        csvreader = csv.reader(csvfile, delimiter=',', quotechar='|')
-        next(csvreader)
-        for row in csvreader:
-            import_grid.append(row)
+    for i in range(0, len(index_grid)):
+        temp.append(index_grid[i][1:])
+        key.append(index_grid[i][0])
 
-    for i in range(0, len(import_grid)):
-        temp.append(import_grid[i][1:])
-        uv_index.append(import_grid[i][0])
+    index_grid = temp
 
-    temp = [[int(element) for element in row] for row in temp]
-    import_grid = temp
-
-    int_index = [int(item) for item in uv_index]
-    uv_index = int_index
-
-    return import_grid, uv_index
+    return index_grid, key
 
 
 if __name__ == '__main__':
-    grid_dir = '../tests/test_grid' # Change this directory to your own.
-    grid_name = 'test_grid'     # Change this to the appropriate .hdf5
+    grid_dir = '../tests/test_grid'  # Change this directory to your own.
+    grid_name = 'test_grid'  # Change this to the appropriate .hdf5
 
-
-    indices, uv_index = import_indices()  # Retrieve UV indices
+    indices, uv_index = get_indices()  # Retrieve UV indices
 
     equivalent_width(grid_name, indices, uv_index)
