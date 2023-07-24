@@ -82,11 +82,25 @@ for igal in range(ngalaxies):
 
     # Create stars object
     n = random.randint(100, 1000)
+    
+    # Generate some random coordinates
     coords = CoordinateGenerator.generate_3D_gaussian(n)
-    stars = sample_sfhz(sfzh, n)
-    stars.coordinates = coords
-    stars.initial_masses = np.random.normal(10**6, 10**5, n)
-    stars.current_masses = stars.initial_masses
+
+    # Calculate the smoothing lengths from radii
+    cent = np.mean(coords, axis=0)
+    rs = np.sqrt(
+            (coords[:, 0] - cent[0]) ** 2
+            + (coords[:, 1] - cent[1]) ** 2
+            + (coords[:, 2] - cent[2]) ** 2
+    )
+    rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
+
+    # Sample the SFZH, producing a Stars object
+    # we will also pass some keyword arguments for attributes
+    # we will need for imaging
+    stars = sample_sfhz(sfzh, n, coordinates=coords, 
+                        current_masses=np.full(n, 10**8.7 / n), 
+                        smoothing_lengths=rs / 2, redshift=1)
 
     # Create galaxy object
     galaxy = Galaxy(name="Galaxy%d" % igal, stars=stars, redshift=1)
