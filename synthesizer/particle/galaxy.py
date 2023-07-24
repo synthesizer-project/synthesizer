@@ -154,7 +154,7 @@ class Galaxy(BaseGalaxy):
                 self.stars.log10metallicities[mask], dtype=np.float64),
         ]
         part_mass = np.ascontiguousarray(
-            self.stars.initial_masses[mask], dtype=np.float64)
+            self.stars._initial_masses[mask], dtype=np.float64)
         npart = np.int32(part_mass.size)
         nlam = np.int32(grid.spectra[spectra_type].shape[-1])
 
