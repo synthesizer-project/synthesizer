@@ -8,7 +8,7 @@ from ..dust import power_law
 from ..base_galaxy import BaseGalaxy
 from .. import exceptions
 from ..imaging.images import ParticleImage
-
+from ..extensions.csed import compute_particle_seds
 
 class Galaxy(BaseGalaxy):
 
@@ -319,8 +319,6 @@ class Galaxy(BaseGalaxy):
             the mask.
         """
 
-        from ..extensions.csed import compute_particle_seds
-
         # Prepare the arguments for the C function.
         args = self._prepare_args(grid, fesc=0.0, spectra_type='stellar')
 
@@ -382,7 +380,6 @@ class Galaxy(BaseGalaxy):
                 "The Grid does not contain the key '%s'" % 'intrinsic'
             )
         
-        from ..extensions.csed import compute_particle_seds
 
         # Prepare the arguments for the C function.
         args = self._prepare_args(grid, fesc=fesc, spectra_type='stellar')
@@ -618,7 +615,25 @@ class Galaxy(BaseGalaxy):
         return img.get_hist_imgs()
 
     def get_equivalent_width(self, index, spectra_to_plot=None):
-        """ gets all equivalent widths associated with a sed object """
+        """
+         Gets all equivalent widths associated with a sed object
+
+         NOTE: index and pseudo continuum windows must be defined.
+
+         Parameters
+         ----------
+         index: float
+            the index to be used in the computation of equivalent width.
+         spectra_to_plot: float array
+             An empty list of spectra to be populated.
+
+         Returns
+         -------
+         equivalent_width : float
+             The calculated equivalent width at the current index.
+
+         """
+
         equivalent_width = None
 
         if type(spectra_to_plot) != list:
