@@ -76,8 +76,7 @@ class Stars(Particles):
     __slots__ = ["metallicities", "nparticles",
                  "tauV", "alpha", "imf_hmass_slope", "log10ages",
                  "log10metallicities", "resampled", 
-                 "velocities", "current_masses",
-                 "s_oxygen", "s_hydrogen"]
+                 "velocities", "s_oxygen", "s_hydrogen"]
 
     # Define class level Quantity attributes
     initial_masses = Quantity()
