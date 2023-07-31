@@ -72,12 +72,11 @@ class Stars(Particles):
             The number of stellar particles in the object.
     """
 
-    # # Define the allowed attributes
-    # __slots__ = ["initial_masses", "ages", "metallicities", 
-    #              "tauV", "alpha_enhancement", "imf_hmass_slope",
-    #              "log10ages", "log10metallicities", "resampled", 
-    #              "current_masses", "smoothing_lengths",
-    #              "s_oxygen", "s_hydrogen", "nstars"]
+    # Define the allowed attributes
+    __slots__ = ["metallicities", "nparticles",
+                 "tauV", "alpha", "imf_hmass_slope", "log10ages",
+                 "log10metallicities", "resampled", 
+                 "velocities", "s_oxygen", "s_hydrogen"]
 
     # Define class level Quantity attributes
     initial_masses = Quantity()
