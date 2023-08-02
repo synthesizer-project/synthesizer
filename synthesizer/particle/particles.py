@@ -42,7 +42,7 @@ class Particles:
     coordinates = Quantity()
     velocities = Quantity()
     masses = Quantity()
-    softening_length = Quantity()
+    softening_lengths = Quantity()
     
     def __init__(self, coordinates, velocities, masses, redshift,
                  softening_length, nparticles):
