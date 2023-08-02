@@ -58,14 +58,14 @@ if __name__ == '__main__':
         print(line)
 
     # --- calculate attenuated line properties assuming uniform dust (should leave EW unchanged)
-    lines = galaxy.get_line_screen(grid, line_ids, tauV=0.5)
+    lines = galaxy.get_line_screen(grid, line_ids, tau_v=0.5)
     print('-'*50)
     print('SCREEN')
     for line_id, line in lines.items():
         print(line)
 
     # --- calculate attenuated line properties assuming different dust affecting stellar and nebular components
-    lines = galaxy.get_line_attenuated(grid, line_ids, tauV_stellar=0.1, tauV_nebular=0.5)
+    lines = galaxy.get_line_attenuated(grid, line_ids, tau_v_stellar=0.1, tau_v_nebular=0.5)
     print('-'*50)
     print('ATTENUATED')
     for line_id, line in lines.items():

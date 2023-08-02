@@ -56,17 +56,17 @@ if __name__ == '__main__':
     galaxy.plot_spectra()
 
     # # --- simple dust and gas screen
-    galaxy.get_spectra_screen(grid, tauV = 0.1, fesc = 0.5)
+    galaxy.get_spectra_screen(grid, tau_v = 0.1, fesc = 0.5)
     print("Simple dust and gas screen")
     galaxy.plot_spectra()
 
     # --- CF00 model
-    galaxy.get_spectra_CharlotFall(grid, tauV_ISM=0.1, tauV_BC=0.1, alpha_ISM=-0.7, alpha_BC=-1.3)
+    galaxy.get_spectra_CharlotFall(grid, tau_v_ISM=0.1, tau_v_BC=0.1, alpha_ISM=-0.7, alpha_BC=-1.3)
     print("CF00 model")
     galaxy.plot_spectra()
 
     # # --- pacman model
-    galaxy.get_spectra_pacman(grid, tauV = 0.1, fesc = 0.5)
+    galaxy.get_spectra_pacman(grid, tau_v = 0.1, fesc = 0.5)
     print("Pacman model")
     galaxy.plot_spectra()
 
@@ -76,12 +76,12 @@ if __name__ == '__main__':
     galaxy.plot_spectra()
 
     # # --- pacman model (complex)
-    galaxy.get_spectra_pacman(grid, fesc=0.0, fesc_LyA=0.5, tauV=0.6)
+    galaxy.get_spectra_pacman(grid, fesc=0.0, fesc_LyA=0.5, tau_v=0.6)
     print("Pacman model (complex)")
     galaxy.plot_spectra()
 
     # --- CF00 model implemented within pacman model
-    galaxy.get_spectra_pacman(grid, fesc = 0.1, fesc_LyA = 0.1, tauV=[1.,1.], alpha = [-1,-1], CF00=True)
+    galaxy.get_spectra_pacman(grid, fesc = 0.1, fesc_LyA = 0.1, tau_v=[1.,1.], alpha = [-1,-1], CF00=True)
     print("CF00 implemented within the Pacman model")
     galaxy.plot_spectra()
 

@@ -56,15 +56,15 @@ galaxy = Galaxy(stars=stars)
 galaxy.get_spectra_stellar(grid)
 
 # --- generate dust screen
-# galaxy.get_screen(0.5) # tauV
+# galaxy.get_screen(0.5) # tau_v
 
 # --- generate CF00 variable dust screen
-# galaxy.get_CF00(grid, 0.5, 0.5) # grid, tauV_BC, tauV_ISM
+# galaxy.get_CF00(grid, 0.5, 0.5) # grid, tau_v_BC, tau_v_ISM
 
 # --- generate for los model
 # TODO: to be implemented
-# tauVs = np.ones(N) * 0.5
-# galaxy.get_los(tauVs)  # grid, tauV_BC, tauV_ISM
+# tau_vs = np.ones(N) * 0.5
+# galaxy.get_los(tau_vs)  # grid, tau_v_BC, tau_v_ISM
 
 for sed_type, sed in galaxy.spectra.items():
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=sed_type)
