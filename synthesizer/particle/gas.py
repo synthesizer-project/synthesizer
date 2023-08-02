@@ -45,9 +45,9 @@ class Gas(Particles):
             particle in simulation length units.
     """
 
-    # # Define the allowed attributes
-    # __slots__ = ["metallicities", "star_forming", 
-    #              "log10metallicities", "smoothing_lengths"]
+    # Define the allowed attributes
+    __slots__ = ["metallicities", "star_forming", 
+                 "log10metallicities"]
 
     # Define class level Quantity attributes
     smoothing_lengths = Quantity()
