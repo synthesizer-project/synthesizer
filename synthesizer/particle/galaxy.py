@@ -220,18 +220,18 @@ class Galaxy(BaseGalaxy):
 
         # Set up the stellar inputs to the C function.
         star_pos = np.ascontiguousarray(
-            self.stars.coordinates[mask, :],
+            self.stars._coordinates[mask, :],
             dtype=np.float64
         )
-        nstar = self.stars.coordinates[mask, :].shape[0]
+        nstar = self.stars._coordinates[mask, :].shape[0]
 
         # Set up the gas inputs to the C function.
         gas_pos =  np.ascontiguousarray(
-            self.gas.coordinates,
+            self.gas._coordinates,
             dtype=np.float64
         )
         gas_sml = np.ascontiguousarray(
-            self.gas.smoothing_lengths,
+            self.gas._smoothing_lengths,
             dtype=np.float64
         )
         gas_met = np.ascontiguousarray(
@@ -239,13 +239,13 @@ class Galaxy(BaseGalaxy):
             dtype=np.float64
         )
         gas_mass = np.ascontiguousarray(
-            self.gas.masses,
+            self.gas._masses,
             dtype=np.float64
         )
         if isinstance(self.gas.dust_to_metal_ratio, float):
             gas_dtm = np.ascontiguousarray(
                 np.full_like(
-                    gas_mass, dust_to_metal_ratio
+                    gas_mass, self.gas.dust_to_metal_ratio
                 ),
                 dtype=np.float64
             )
@@ -601,7 +601,7 @@ class Galaxy(BaseGalaxy):
             kappa,
             kernel,
             mask=None,
-            threshold=1
+            threshold=1,
     ):
         """
         Calculate tau_v for each star particle based on the distribution of
