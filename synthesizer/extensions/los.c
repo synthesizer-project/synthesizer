@@ -30,14 +30,14 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
   const PyArrayObject *np_gas_met, *np_gas_mass, *np_gas_dtm;
 
   if(!PyArg_ParseTuple(args, "OOOOOOOiiid", &np_kernel, &np_star_pos,
-                       np_gas_pos, &np_gas_sml, &np_gas_met, &np_gas_mass,
+                       &np_gas_pos, &np_gas_sml, &np_gas_met, &np_gas_mass,
                        &np_gas_dtm, &nstar, &ngas, &kdim, &threshold))
     return NULL;
 
-  /* Quick check to make sure our inputs are valid. */
-  if (nstar == 0) return NULL;
-  if (ngas == 0) return NULL;
-  if (kdim == 0) return NULL;
+  /* /\* Quick check to make sure our inputs are valid. *\/ */
+  /* if (nstar == 0) return NULL; */
+  /* if (ngas == 0) return NULL; */
+  /* if (kdim == 0) return NULL; */
 
   /* Set up arrays to hold the surface densities themselves. */
   double *los_dustsds = malloc(nstar * sizeof(double));
