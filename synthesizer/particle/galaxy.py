@@ -133,7 +133,7 @@ class Galaxy(BaseGalaxy):
         self.gas = Gas(masses, metals, **kwargs)
         self.calculate_integrated_gas_properties()
 
-    def _prepare_args(self, grid, fesc, spectra_type, mask=None):
+    def _prepare_sed_args(self, grid, fesc, spectra_type, mask=None):
         """
         A method to prepare the arguments for SED computation with the C
         functions.
@@ -174,6 +174,71 @@ class Galaxy(BaseGalaxy):
 
         return (grid_spectra, grid_props, part_props, part_mass, fesc,
                 grid_dims, len(grid_props), npart, nlam)
+
+    def _prepare_los_args(self, grid, fesc, spectra_type, mask=None):
+        """
+        A method to prepare the arguments for SED computation with the C
+        functions.
+        """
+
+        # If we have no gas, throw an error
+        if self.gas is None:
+            raise exceptions.InconsistentArguments(
+                "No Gas object has been provided! We can't calculate line of "
+                "sight dust attenuation with at Gas object containing the "
+                "dust!"
+            )
+
+        if mask is None:
+            mask = np.ones(self.stars.nparticles, dtype=bool)
+
+        # Set up the kernel inputs to the C function.
+        kernel =  np.ascontiguousarray(kernel)
+        kdim = kernel.size
+
+        # Set up the stellar inputs to the C function.
+        star_pos = np.ascontiguousarray(
+            self.stars.coordinates[mask, :],
+            dtype=np.float64
+        )
+        nstar = self.stars.coordinates[mask, :].shape[0]
+
+        # Set up the gas inputs to the C function.
+        gas_pos =  np.ascontiguousarray(
+            self.gas.coordinates,
+            dtype=np.float64
+        )
+        gas_sml = np.ascontiguousarray(
+            self.gas.smoothing_lengths,
+            dtype=np.float64
+        )
+        gas_met = np.ascontiguousarray(
+            self.gas.metallicities,
+            dtype=np.float64
+        )
+        gas_mass = np.ascontiguousarray(
+            self.gas.masses,
+            dtype=np.float64
+        )
+        ngas = self.gas.coordinates.shape[0]
+
+        # Slice the spectral grids and pad them with copies of the edges.
+        grid_spectra = np.ascontiguousarray(
+            grid.spectra[spectra_type], np.float64)
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+        grid_dims[ind + 1] = nlam
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        return (grid_spectra, grid_props, part_props, part_mass, fesc,
+                grid_dims, len(grid_props), npart, nlam)
+
 
     def generate_lnu(
                     self,
@@ -230,7 +295,7 @@ class Galaxy(BaseGalaxy):
         from ..extensions.csed import compute_integrated_sed
 
         # Prepare the arguments for the C function.
-        args = self._prepare_args(grid, fesc=fesc, 
+        args = self._prepare_sed_args(grid, fesc=fesc, 
                                   spectra_type=spectra_name,
                                   mask=mask)
 
@@ -322,7 +387,7 @@ class Galaxy(BaseGalaxy):
         from ..extensions.csed import compute_particle_seds
 
         # Prepare the arguments for the C function.
-        args = self._prepare_args(grid, fesc=0.0, spectra_type='stellar')
+        args = self._prepare_sed_args(grid, fesc=0.0, spectra_type='stellar')
 
         # Get the integrated stellar SED
         spec_arr = compute_particle_seds(*args)
@@ -385,7 +450,7 @@ class Galaxy(BaseGalaxy):
         from ..extensions.csed import compute_particle_seds
 
         # Prepare the arguments for the C function.
-        args = self._prepare_args(grid, fesc=fesc, spectra_type='stellar')
+        args = self._prepare_sed_args(grid, fesc=fesc, spectra_type='stellar')
 
         # Get the integrated stellar SED
         spec_arr = compute_particle_seds(*args)
@@ -449,7 +514,7 @@ class Galaxy(BaseGalaxy):
         # from ..extensions.csed import compute_particle_seds
 
         # # Prepare the arguments for the C function.
-        # args = self._prepare_args(grid, fesc=fesc, spectra_type='stellar')
+        # args = self._prepare_sed_args(grid, fesc=fesc, spectra_type='stellar')
 
         # # Get the integrated stellar SED
         # spec_arr = compute_particle_seds(*args)
@@ -513,19 +578,29 @@ class Galaxy(BaseGalaxy):
 
     def calculate_los_tauV(
             self,
-            update=True
+            dust_to_metal_ratio,
+            kappa
     ):
         """
         Calculate tauV for each star particle based on the distribution of
-        star/gas particles
+        stellar and gas particles.
 
-        Args:
-            update (bool):
+        Note: the resulting tauVs will be associated to the stars object at
+        self.stars.tauV
         """
 
-        # by default should update self.stars
+        from ..extensions.los import compute_metal_surface_dens
+
+        # Prepare the arguments
+        args = self._prepare_los_args()
+
+        # Compute the metal surface densities
+        los_msds = compute_metal_surface_dens(*args)
         
-        pass
+
+        tauV =
+        
+        return tauV
 
     def apply_los(self, tauV, 
                   spectra_type,
