@@ -137,6 +137,18 @@ class Galaxy(BaseGalaxy):
         """
         A method to prepare the arguments for SED computation with the C
         functions.
+
+        Args:
+        grid (Grid)
+            The SPS grid object to extract spectra from.
+        fesc (float)
+            The escape fraction.
+        spectra_type (str)
+            The type of spectra to extract from the Grid. This must match a
+            type of spectra stored in the Grid.
+        mask (bool)
+            A mask to be applied to the stars. Spectra will only be computed
+            and returned for stars with True in the mask.
         """
 
         if mask is None:
@@ -175,10 +187,20 @@ class Galaxy(BaseGalaxy):
         return (grid_spectra, grid_props, part_props, part_mass, fesc,
                 grid_dims, len(grid_props), npart, nlam)
 
-    def _prepare_los_args(self, grid, fesc, spectra_type, mask=None):
+    def _prepare_los_args(self, kernel, mask=None):
         """
-        A method to prepare the arguments for SED computation with the C
-        functions.
+        A method to prepare the arguments for line of sight metal surface
+        density computation with the C function.
+
+        Args:
+        kernel (array_like/float)
+            A 1D description of the SPH kernel. Values must be in ascending
+            order such that a k element array can be indexed for the value of
+            impact parameter q via kernel[int(k*q)]. Note, this can be an
+            arbitrary kernel.
+        mask (bool)
+            A mask to be applied to the stars. Surface densities will only be
+            computed and returned for stars with True in the mask.
         """
 
         # If we have no gas, throw an error
@@ -220,21 +242,7 @@ class Galaxy(BaseGalaxy):
             self.gas.masses,
             dtype=np.float64
         )
-        ngas = self.gas.coordinates.shape[0]
-
-        # Slice the spectral grids and pad them with copies of the edges.
-        grid_spectra = np.ascontiguousarray(
-            grid.spectra[spectra_type], np.float64)
-
-        # Get the grid dimensions after slicing what we need
-        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
-        for ind, g in enumerate(grid_props):
-            grid_dims[ind] = len(g)
-        grid_dims[ind + 1] = nlam
-
-        # Convert inputs to tuples
-        grid_props = tuple(grid_props)
-        part_props = tuple(part_props)
+        ngas = gas_mass.size
 
         return (grid_spectra, grid_props, part_props, part_mass, fesc,
                 grid_dims, len(grid_props), npart, nlam)
