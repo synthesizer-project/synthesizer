@@ -48,7 +48,9 @@ class Gas(Particles):
     # Define the allowed attributes
     __slots__ = ["metallicities", "star_forming", 
                  "log10metallicities",
-                 "dust_to_metal_ratio"]
+                 "dust_to_metal_ratio", "_coordinates",
+                 "_velocities", "_smoothing_lengths",
+                 "_softening_lengths", "_masses"]
 
     # Define class level Quantity attributes
     smoothing_lengths = Quantity()
@@ -120,7 +122,7 @@ class Gas(Particles):
         """
 
         # Ensure all arrays are the expected length
-        for key in self.__dict__:
+        for key in self.__slots__:
             attr = getattr(self, key)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
