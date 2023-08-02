@@ -96,12 +96,12 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
     (PyArrayObject *) PyArray_SimpleNewFromData(1, np_dims, NPY_FLOAT64,
                                                 los_dustsds);
 
-  return Py_BuildValue("N", out_los_metsds);
+  return Py_BuildValue("N", out_los_dustsds);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef LosMethods[] = {
-  {"compute_dust_surface_dens", compute_metal_surface_dens, METH_VARARGS,
+  {"compute_dust_surface_dens", compute_dust_surface_dens, METH_VARARGS,
    "Method for calculating line of sight metal surface densities."},
   {NULL, NULL, 0, NULL} 
 };
