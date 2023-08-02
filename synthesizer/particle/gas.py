@@ -47,14 +47,15 @@ class Gas(Particles):
 
     # Define the allowed attributes
     __slots__ = ["metallicities", "star_forming", 
-                 "log10metallicities"]
+                 "log10metallicities",
+                 "dust_to_metal_ratio"]
 
     # Define class level Quantity attributes
     smoothing_lengths = Quantity()
 
     def __init__(self, masses, metallicities, star_forming=None, redshift=None,
                  coordinates=None, velocities=None, smoothing_lengths=None,
-                 softening_length=None):
+                 softening_length=None, dust_to_metal_ratio=None):
         """
         Initialise the gas object.
 
@@ -74,6 +75,10 @@ class Gas(Particles):
             smoothing_lengths (array-like, float)
                 The smoothing lengths (describing the sph kernel) of each
                 gas particle in simulation length units.
+            dust_to_metal_ratio (array_like, float or float)
+                The ratio between dust and total metal content in a gas
+                particle. This can either be a single float or an array of
+                values for each gas particle.
         """
 
         # Instantiate parent
@@ -96,6 +101,10 @@ class Gas(Particles):
 
         # Set the smoothing lengths for these gas particles
         self.smoothing_lengths = smoothing_lengths
+
+        # The dust to metal ratio for gas particles. Either 1 value or a value
+        # per gas particle.
+        self.dust_to_metal_ratio = dust_to_metal_ratio
 
         # Check the arguments we've been given
         self._check_gas_args()
