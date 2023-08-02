@@ -119,10 +119,10 @@ class Galaxy(BaseGalaxy):
         and attach to this galaxy object
 
         Args:
-        masses : array_like (float)
-            gas particle masses, Msol
-        metals : array_like (float)
-            gas particle metallicity (total metal fraction)
+            masses : array_like (float)
+                gas particle masses, Msol
+            metals : array_like (float)
+                gas particle metallicity (total metal fraction)
         **kwargs
 
         Returns:
@@ -139,16 +139,16 @@ class Galaxy(BaseGalaxy):
         functions.
 
         Args:
-        grid (Grid)
-            The SPS grid object to extract spectra from.
-        fesc (float)
-            The escape fraction.
-        spectra_type (str)
-            The type of spectra to extract from the Grid. This must match a
-            type of spectra stored in the Grid.
-        mask (bool)
-            A mask to be applied to the stars. Spectra will only be computed
-            and returned for stars with True in the mask.
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            fesc (float)
+                The escape fraction.
+            spectra_type (str)
+                The type of spectra to extract from the Grid. This must match a
+                type of spectra stored in the Grid.
+            mask (bool)
+                A mask to be applied to the stars. Spectra will only be computed
+                and returned for stars with True in the mask.
         """
 
         if mask is None:
@@ -187,20 +187,23 @@ class Galaxy(BaseGalaxy):
         return (grid_spectra, grid_props, part_props, part_mass, fesc,
                 grid_dims, len(grid_props), npart, nlam)
 
-    def _prepare_los_args(self, kernel, mask=None):
+    def _prepare_los_args(self, kernel, mask, threshold=1):
         """
         A method to prepare the arguments for line of sight metal surface
         density computation with the C function.
 
         Args:
-        kernel (array_like/float)
-            A 1D description of the SPH kernel. Values must be in ascending
-            order such that a k element array can be indexed for the value of
-            impact parameter q via kernel[int(k*q)]. Note, this can be an
-            arbitrary kernel.
-        mask (bool)
-            A mask to be applied to the stars. Surface densities will only be
-            computed and returned for stars with True in the mask.
+            kernel (array_like, float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value of
+                impact parameter q via kernel[int(k*q)]. Note, this can be an
+                arbitrary kernel.
+            mask (bool)
+                A mask to be applied to the stars. Surface densities will only be
+                computed and returned for stars with True in the mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
         """
 
         # If we have no gas, throw an error
@@ -211,11 +214,8 @@ class Galaxy(BaseGalaxy):
                 "dust!"
             )
 
-        if mask is None:
-            mask = np.ones(self.stars.nparticles, dtype=bool)
-
         # Set up the kernel inputs to the C function.
-        kernel =  np.ascontiguousarray(kernel)
+        kernel =  np.ascontiguousarray(kernel, dtype=np.float64)
         kdim = kernel.size
 
         # Set up the stellar inputs to the C function.
@@ -242,10 +242,22 @@ class Galaxy(BaseGalaxy):
             self.gas.masses,
             dtype=np.float64
         )
+        if isinstance(self.gas.dust_to_metal_ratio, float):
+            gas_dtm = np.ascontiguousarray(
+                np.full_like(
+                    gas_mass, dust_to_metal_ratio
+                ),
+                dtype=np.float64
+            )
+        else:
+            gas_dtm = np.ascontiguousarray(
+                self.gas.dust_to_metal_ratio,
+                dtype=np.float64
+            )
         ngas = gas_mass.size
 
-        return (grid_spectra, grid_props, part_props, part_mass, fesc,
-                grid_dims, len(grid_props), npart, nlam)
+        return (kernel, star_pos, gas_pos, gas_sml, gas_met,
+                gas_mass, gas_dtm, nstar, ngas, kdim, threshold)
 
 
     def generate_lnu(
@@ -584,43 +596,69 @@ class Galaxy(BaseGalaxy):
 
         pass
 
-    def calculate_los_tauV(
+    def calculate_los_tau_v(
             self,
-            dust_to_metal_ratio,
-            kappa
+            kappa,
+            kernel,
+            mask=None,
+            threshold=1
     ):
         """
-        Calculate tauV for each star particle based on the distribution of
+        Calculate tau_v for each star particle based on the distribution of
         stellar and gas particles.
 
-        Note: the resulting tauVs will be associated to the stars object at
-        self.stars.tauV
+        Note: the resulting tau_vs will be associated to the stars object at
+        self.stars.tau_v.
+
+        Args:
+            kappa (float)
+                ...
+            kernel (array_like/float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value of
+                impact parameter q via kernel[int(k*q)]. Note, this can be an
+                arbitrary kernel.
+            mask (bool)
+                A mask to be applied to the stars. Surface densities will only be
+                computed and returned for stars with True in the mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
         """
 
-        from ..extensions.los import compute_metal_surface_dens
+        from ..extensions.los import compute_dust_surface_dens
+
+        # If we don't have a mask make a fake one for consistency
+        if mask is None:
+            mask = np.ones(self.stars.nparticles, dtype=bool)
 
         # Prepare the arguments
-        args = self._prepare_los_args()
+        args = self._prepare_los_args(kernel, mask, threshold)
 
-        # Compute the metal surface densities
-        los_msds = compute_metal_surface_dens(*args)
+        # Compute the dust surface densities
+        los_dustsds = compute_dust_surface_dens(*args)
         
+        # Finalise the calculation
+        tau_v = kappa * los_dustsds
 
-        tauV =
+        # Store the result in self.stars
+        if self.stars.tau_v is None:
+            self.stars.tau_v = np.zeros(self.stars.nparticles)
+        self.stars.tau_v[mask] = tau_v
         
-        return tauV
+        return tau_v
 
-    def apply_los(self, tauV, 
+    def apply_los(self, tau_v, 
                   spectra_type,
                   dust_curve=power_law({'slope': -1.}),
                   integrated=True, sed_object=True):
         """
         Generate
-        tauV: V-band optical depth for every star particle
+        tau_v: V-band optical depth for every star particle
         dust_curve: instance of the dust class
         """
 
-        T = np.outer(tauV, dust_curve.T(self.lam))
+        T = np.outer(tau_v, dust_curve.T(self.lam))
 
         # need exception
         # if not self.intrinsic_lum_array:

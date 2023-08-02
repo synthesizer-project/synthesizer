@@ -297,8 +297,8 @@ class Galaxy(BaseGalaxy):
 
         return lines
 
-    def get_line_attenuated(self, grid, line_ids, fesc=0.0, tauV_nebular=None,
-                            tauV_stellar=None, dust_curve_nebular=power_law({'slope': -1.}),
+    def get_line_attenuated(self, grid, line_ids, fesc=0.0, tau_v_nebular=None,
+                            tau_v_stellar=None, dust_curve_nebular=power_law({'slope': -1.}),
                             dust_curve_stellar=power_law({'slope': -1.}), update=True):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a set
@@ -315,9 +315,9 @@ class Galaxy(BaseGalaxy):
         fesc : float
             The Lyman continuum escape fraction, the fraction of
             ionising photons that entirely escape
-        tauV_nebular : float
+        tau_v_nebular : float
             V-band optical depth of the nebular emission
-        tauV_stellar : float
+        tau_v_stellar : float
             V-band optical depth of the stellar emission
         dust_curve_nebular : obj (dust_curve)
             A dust_curve object specifying the dust curve
@@ -346,9 +346,9 @@ class Galaxy(BaseGalaxy):
 
             # calculate attenuation
             T_nebular = dust_curve_nebular.attenuate(
-                tauV_nebular, intrinsic_line._wavelength)
+                tau_v_nebular, intrinsic_line._wavelength)
             T_stellar = dust_curve_stellar.attenuate(
-                tauV_stellar, intrinsic_line._wavelength)
+                tau_v_stellar, intrinsic_line._wavelength)
 
             luminosity = intrinsic_line._luminosity * T_nebular
             continuum = intrinsic_line._continuum * T_stellar
@@ -368,7 +368,7 @@ class Galaxy(BaseGalaxy):
 
         return lines
 
-    def get_line_screen(self, grid, line_ids, fesc=0.0, tauV=None, dust_curve=power_law({'slope': -1.}), update=True):
+    def get_line_screen(self, grid, line_ids, fesc=0.0, tau_v=None, dust_curve=power_law({'slope': -1.}), update=True):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a set 
         of lines assuming a simple dust screen (i.e. both nebular and stellar 
@@ -385,7 +385,7 @@ class Galaxy(BaseGalaxy):
             fesc : float
                 The Lyman continuum escape fraction, the fraction of
                 ionising photons that entirely escape
-            tauV : float
+            tau_v : float
                 V-band optical depth
             dust_curve : obj (dust_curve)
                 A dust_curve object specifying the dust curve for
@@ -396,7 +396,7 @@ class Galaxy(BaseGalaxy):
                 A dictionary containing line objects.
         """
 
-        return self.get_line_attenuated(grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
+        return self.get_line_attenuated(grid, line_ids, fesc=fesc, tau_v_nebular=tau_v, tau_v_stellar=tau_v, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
 
     def reduce_lya(self, grid, fesc_LyA, young=False, old=False):
 
