@@ -15,11 +15,12 @@ Contents
    :maxdepth: 2
    
    installation
+   units
    grids/grids
+   filters
    parametric/parametric
    cosmo/cosmo
    imaging/imaging
-   filters
    grid_generation
    API
    
