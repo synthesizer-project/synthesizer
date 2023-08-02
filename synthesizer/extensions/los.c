@@ -107,7 +107,7 @@ static struct PyModuleDef moduledef = {
         "los_met_surface_dens",                                /* m_name */
         "A module to calculate los metal surface densities",   /* m_doc */
         -1,                                                    /* m_size */
-        SedMethods,                                            /* m_methods */
+        LosMethods,                                            /* m_methods */
         NULL,                                                  /* m_reload */
         NULL,                                                  /* m_traverse */
         NULL,                                                  /* m_clear */
