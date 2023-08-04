@@ -78,7 +78,7 @@ class Stars(Particles):
                  "log10metallicities", "resampled", 
                  "velocities", "s_oxygen", "s_hydrogen",
                  "tau_v", "_coordinates", "_smoothing_lengths",
-                 "_softening_lengths", "_masses", "_intial_masses",
+                 "_softening_lengths", "_masses", "_initial_masses",
                  "_ages", "_current_masses"]
 
     # Define class level Quantity attributes
