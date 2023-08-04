@@ -76,7 +76,7 @@ class Stars(Particles):
     __slots__ = ["metallicities", "nparticles",
                  "tau_v", "alpha_enhancement", "imf_hmass_slope", "log10ages",
                  "log10metallicities", "resampled", 
-                 "velocities", "s_oxygen", "s_hydrogen",
+                 "velocities", "s_oxygen", "s_hydrogen", "nstars",
                  "tau_v", "_coordinates", "_smoothing_lengths",
                  "_softening_lengths", "_masses", "_initial_masses",
                  "_ages", "_current_masses"]
