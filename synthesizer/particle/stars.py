@@ -77,7 +77,7 @@ class Stars(Particles):
                  "tau_v", "alpha", "imf_hmass_slope", "log10ages",
                  "log10metallicities", "resampled", 
                  "velocities", "s_oxygen", "s_hydrogen",
-                 "tau_v"]
+                 "tau_v", "_coordinates"]
 
     # Define class level Quantity attributes
     initial_masses = Quantity()
