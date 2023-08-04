@@ -74,7 +74,7 @@ class Stars(Particles):
 
     # Define the allowed attributes
     __slots__ = ["metallicities", "nparticles",
-                 "tau_v", "alpha", "imf_hmass_slope", "log10ages",
+                 "tau_v", "alpha_enhancement", "imf_hmass_slope", "log10ages",
                  "log10metallicities", "resampled", 
                  "velocities", "s_oxygen", "s_hydrogen",
                  "tau_v", "_coordinates", "_smoothing_lengths",
