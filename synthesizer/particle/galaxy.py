@@ -187,7 +187,7 @@ class Galaxy(BaseGalaxy):
         return (grid_spectra, grid_props, part_props, part_mass, fesc,
                 grid_dims, len(grid_props), npart, nlam)
 
-    def _prepare_los_args(self, kernel, mask, threshold=1):
+    def _prepare_los_args(self, kernel, mask, threshold, force_loop):
         """
         A method to prepare the arguments for line of sight metal surface
         density computation with the C function.
@@ -257,7 +257,8 @@ class Galaxy(BaseGalaxy):
         ngas = gas_mass.size
 
         return (kernel, star_pos, gas_pos, gas_sml, gas_met,
-                gas_mass, gas_dtm, nstar, ngas, kdim, threshold)
+                gas_mass, gas_dtm, nstar, ngas, kdim, threshold,
+                np.max(gas_sml), force_loop)
 
 
     def generate_lnu(
@@ -602,6 +603,7 @@ class Galaxy(BaseGalaxy):
             kernel,
             mask=None,
             threshold=1,
+            force_loop=0,
     ):
         """
         Calculate tau_v for each star particle based on the distribution of
@@ -633,7 +635,7 @@ class Galaxy(BaseGalaxy):
             mask = np.ones(self.stars.nparticles, dtype=bool)
 
         # Prepare the arguments
-        args = self._prepare_los_args(kernel, mask, threshold)
+        args = self._prepare_los_args(kernel, mask, threshold, force_loop)
 
         # Compute the dust surface densities
         los_dustsds = compute_dust_surface_dens(*args)
