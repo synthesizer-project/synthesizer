@@ -189,7 +189,7 @@ class Stars(Particles):
         """
 
         # Ensure all arrays are the expected length
-        for key in self.__dict__:
+        for key in self.__slots__:
             attr = getattr(self, key)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
