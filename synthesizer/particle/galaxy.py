@@ -8,7 +8,6 @@ from ..dust import power_law
 from ..base_galaxy import BaseGalaxy
 from .. import exceptions
 from ..imaging.images import ParticleImage
-from ..extensions.csed import compute_particle_seds
 
 class Galaxy(BaseGalaxy):
 
@@ -319,6 +318,8 @@ class Galaxy(BaseGalaxy):
             the mask.
         """
 
+        from ..extensions.csed import compute_particle_seds
+
         # Prepare the arguments for the C function.
         args = self._prepare_args(grid, fesc=0.0, spectra_type='stellar')
 
@@ -379,7 +380,8 @@ class Galaxy(BaseGalaxy):
             raise MissingSpectraType(
                 "The Grid does not contain the key '%s'" % 'intrinsic'
             )
-        
+
+        from ..extensions.csed import compute_particle_seds
 
         # Prepare the arguments for the C function.
         args = self._prepare_args(grid, fesc=fesc, spectra_type='stellar')
