@@ -1,10 +1,4 @@
-"""
-This example demonstrates how to:
-- get a list of lines associated with a grid
-- initialise a grid object with lines
-- get line quantities for a single grid point
-- ad hoc load an additional line
-"""
+
 
 import os
 import matplotlib.pyplot as plt
@@ -12,6 +6,15 @@ import numpy as np
 from synthesizer.grid import Grid, get_available_lines
 
 if __name__ == '__main__':
+
+    """
+    This example demonstrates how to:
+    - get a list of lines associated with a grid
+    - initialise a grid object with lines
+    - get line quantities for a single grid point
+    - ad hoc load an additional line
+    """
+
 
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
