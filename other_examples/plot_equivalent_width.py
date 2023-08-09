@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.particle.galaxy import Galaxy as Galaxy
+from synthesizer.parametric.galaxy import Galaxy as Galaxy
 from synthesizer.sed import uv_indices as index
 from unyt import yr, Myr
 
@@ -33,9 +33,9 @@ def get_ew(index, Z, imf, grid, EqW, mode):
 
     # --- generate equivalent widths
     if mode == 0:
-        galaxy.get_particle_spectra_stellar(grid)
+        galaxy.get_spectra_stellar(grid)
     else:
-        galaxy.get_particle_spectra_intrinsic(grid, fesc=0.5)
+        galaxy.get_spectra_intrinsic(grid, fesc=0.5)
 
     EqW.append(galaxy.get_equivalent_width(index))
     return EqW
