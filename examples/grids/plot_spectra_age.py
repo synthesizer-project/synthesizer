@@ -28,8 +28,8 @@ def plot_spectra_age(grid, target_Z, spec_name='stellar'):
 
     # get actual metallicity for that grid point and print it
     Z = grid.metallicity[iZ]
-    print(f'target metallicity: {target_Z:.2f}')
-    print(f'metallicity: {Z:.2f}')
+    # print(f'target metallicity: {target_Z:.2f}')
+    # print(f'metallicity: {Z:.2f}')
 
     # initialise plot
     fig = plt.figure(figsize=(3.5, 5.))
@@ -66,6 +66,9 @@ def plot_spectra_age(grid, target_Z, spec_name='stellar'):
     # plot Lyman and Balmer limits for reference
     for wv in [912., 3646.]:
         ax.axvline(np.log10(wv), c='k', lw=1, alpha=0.5)
+
+    # add model name
+    ax.text(2.1, 21.5, grid.grid_name, fontsize = 8)
 
     # set wavelength range (log(Angstrom))
     ax.set_xlim([2., 4.])
@@ -106,13 +109,13 @@ if __name__ == '__main__':
     parser.add_argument("-Z", "--Z", type=float, required=False, default=0.01)
     
     # Flag whether to show the figure. Figure is saved in current directory using "spectra_age_{grid_name}"
-    parser.add_argument("-show", "--show", type=bool, required=False, default=True)
+    parser.add_argument("-show", "--show", action=argparse.BooleanOptionalAction)
 
     # Flag whether to save the figure.
-    parser.add_argument("-save", "--save", type=bool, required=False, default=False)
+    parser.add_argument("-save", "--save", action=argparse.BooleanOptionalAction)
 
     # Flag whether to analyse all grids in the provided directory.
-    parser.add_argument("-all", "--all", type=bool, required=False, default=False)
+    parser.add_argument("-all", "--all", action=argparse.BooleanOptionalAction)
 
     # Get dictionary of arguments
     args = parser.parse_args()
@@ -122,8 +125,12 @@ if __name__ == '__main__':
 
         grid_filenames = list(map(os.path.basename, glob.glob(args.grid_dir+'*.hdf5')))
 
+        print(grid_filenames)
+
         # Remove extension
         grid_names = list(map(lambda x: '.'.join(x.split('.')[:-1]), grid_filenames))
+
+        print(grid_names)
 
     # Else use the provided grid name
     else:
@@ -132,6 +139,8 @@ if __name__ == '__main__':
 
     # loop over all grid_names
     for grid_name in grid_names:
+
+        print(grid_name)
 
         # Initialise grid
         grid = Grid(grid_name, grid_dir=args.grid_dir)
