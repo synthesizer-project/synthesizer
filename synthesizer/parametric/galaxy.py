@@ -11,7 +11,7 @@ from ..base_galaxy import BaseGalaxy
 from .. import exceptions
 from ..dust import power_law
 from ..sed import Sed
-from ..line import Line
+from ..line import Line, LineCollection
 from ..plt import single_histxy, mlabel
 from ..stats import weighted_median, weighted_mean
 from ..imaging.images import ParametricImage
@@ -253,10 +253,15 @@ class Galaxy(BaseGalaxy):
             line = Line(line_id, wavelength, luminosity, continuum)
             lines[line.id] = line
 
-        if update:
-            self.lines[line.id] = line
+        # create a line collection
+        line_collection = LineCollection(lines)
 
-        return lines
+        # associate that line collection with the galaxy object
+
+        self.lines['intrinsic'] = line_collection
+
+        # return collection
+        return line_collection
 
     def get_line_attenuated(self, grid, line_ids, fesc=0.0, tauV_nebular=None,
                             tauV_stellar=None, dust_curve_nebular=power_law({'slope': -1.}),
@@ -324,10 +329,15 @@ class Galaxy(BaseGalaxy):
 
             lines[line.id] = line
 
-        if update:
-            self.lines['attenuated'] = lines
+        # create a line collection
+        line_collection = LineCollection(lines)
 
-        return lines
+        # associate that line collection with the galaxy object
+
+        self.lines['intrinsic'] = line_collection
+
+        # return collection
+        return line_collection
 
     def get_line_screen(self, grid, line_ids, fesc=0.0, tauV=None, dust_curve=power_law({'slope': -1.}), update=True):
         """
