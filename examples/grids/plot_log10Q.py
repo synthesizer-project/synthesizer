@@ -11,7 +11,6 @@ if __name__ == '__main__':
     Makes a plot of the specific ionising luminosity for a given choice of grid and ion
     """
 
-
     # Get the location of this script, __file__ is the absolute path of this script, however we just want to directory
     script_path = os.path.abspath(os.path.dirname(__file__))
 
