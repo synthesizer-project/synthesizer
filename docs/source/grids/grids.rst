@@ -18,7 +18,7 @@ Within this we will additionally create another directory to hold our grids::
 
     mkdir /our/synthesizer/data_directory/synthesizer_data/grids
 
-Pre-computed grids can be downloaded `here <https://www.dropbox.com/sh/ipo6pox1sigjnqt/AADXfPvu7NbiWYiSGiooC_L0a?dl=0>`_. We recommend downloading the following for the examples below:
+Pre-computed grids can be downloaded `here <https://www.dropbox.com/sh/a3idy8zg553hoc3/AACqVnpE1jj16Bj3PAB1TwRva?dl=0>`_. We recommend downloading the following for the examples below:
 
 * bc03_chabrier03_cloudy-v17.03_log10Uref-2.h5
 * bc03_chabrier03.h5

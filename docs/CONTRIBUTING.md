@@ -1,8 +1,15 @@
-# Contributing to the Documentation
+# Contributing 
+
+Please feel free to submit issues and pull requests to this repository. 
+The github workflow will automatically run [flake8](https://flake8.pycqa.org/en/latest/) and [pytest](https://docs.pytest.org/en/7.2.x/) on any contributions; builds that fail these tests will not be accepted.
+
+We use the [Google docstring format](https://google.github.io/styleguide/pyguide.html#s3.8-comments-and-docstrings).
+
+## Contributing to the Documentation
 The synthesizer documentation is written in a combination of restructuredText and Jupyter notebooks. 
 Adding content should be relatively simple, if you follow the instructions below.
 
-## Getting set up
+### Getting set up
 
 First we're going to make some small changes to the git configuration to prevent excessive git diffs in the future when contributing changes to notebooks.
 
@@ -23,7 +30,7 @@ This will reset all instances of `execution_count` with `null`, and replace the 
     "metadata": {},
     ...
 
-## Adding notebooks
+### Adding notebooks
 To add jupyter notebooks to the documentation:
 
 1. Add your jupyter notebook to the `source` directory. Make sure that you 'Restart Kernel and run all cells' to ensure that the notebook is producing up to date, consistent outputs.
@@ -59,5 +66,3 @@ Example toctree:
        imaging/imaging
        filters
        grid_generation
-
-
