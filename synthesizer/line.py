@@ -187,6 +187,10 @@ class LineCollection:
 
         # these should be filtered to only show ones that are available for the availalbe line_ids
 
+        # Atrributes to enable looping
+        self._current_ind = 0
+        self.nlines = len(self.line_ids)
+
         self.lineratios = LineRatios()
 
         self.available_ratios = self.lineratios.available_ratios
@@ -219,6 +223,30 @@ class LineCollection:
         pstr += "-"*10
 
         return pstr
+
+    def __iter__(self):
+        """
+        Overload iteration to allow simple looping over Line objects,
+        combined with __next__ this enables for l in LineCollection syntax
+        """
+        return self
+
+    def __next__(self):
+        """
+        Overload iteration to allow simple looping over Line objects,
+        combined with __iter__ this enables for l in LineCollection syntax
+        """
+
+        # Check we haven't finished
+        if self._current_ind >= self.nlines:
+            self._current_ind = 0
+            raise StopIteration
+        else:
+            # Increment index
+            self._current_ind += 1
+
+            # Return the filter
+            return self.lines[self.line_ids[self._current_ind - 1]]
 
     def get_ratio_(self, ab):
         """
