@@ -1,0 +1,22 @@
+CMB: false  # include CMB heating
+T_floor: 100  # lower gas temperature floor
+model: cloudy
+cloudy_version: v17.03
+cosmic_rays: false  # flag for inclusion of cosmic ray heating
+covering_factor: 1.0  #
+d2m: 0.3  # dust to metals ratio in the cloud
+scaling: null
+stop_T: 500  # stopping temperature
+stop_efrac: -2  # limiting ratio of electron to H densities
+z: 0.0  # redshift
+geometry: planeparallel
+grains: true # include grains
+resolution: 1.0 # energy resolution relative to the default
+auv: -0.5
+ax: -1.35
+log10T: [4.0,5.0,6.0,7.0]
+aox: [-1.2,-1.4,-1.7,-2.0]
+# log10Z: [-4.0, -3.0, -2.0]
+log10Z: [-2.2, -2.1, -2., -1.85, -1.7, -1.52, -1.4] # used by Calabro 
+log10U: [-4.0,-3.0,-2.0,-1.0]
+log10n_H: [2.,3.,4.]
