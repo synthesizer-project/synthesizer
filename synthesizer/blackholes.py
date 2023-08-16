@@ -88,7 +88,7 @@ class Feltre16:
         return None
 
 
-    def intrinsic(lam, alpha, luminosity = 1):
+    def incident(self, lam, alpha, luminosity = 1):
 
         """
         Create intrinsic narrow-line AGN spectra as utilised by Feltre et al. (2016). This is utilised to build the cloudy grid.
