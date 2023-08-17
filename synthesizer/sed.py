@@ -11,6 +11,34 @@ from .igm import Inoue14
 from . import exceptions
 
 
+def uv_indices():
+    """
+       A function to define a dictionary of uv indices
+        - Each index has a defined absorption window.
+        - A pseudo-continuum is defined, made up of a blue and red shifted window.
+
+       Returns
+       ----------
+       int array
+           index, absorption start, absorption end, blue star, blue end, red start, red end
+
+       """
+
+    uv_dict = [
+        [1370, 1360, 1380, 1345, 1354, 1436, 1447],
+        [1400, 1385, 1410, 1345, 1354, 1436, 1447],
+        [1425, 1413, 1435, 1345, 1354, 1436, 1447],
+        [1460, 1450, 1470, 1436, 1447, 1482, 1491],
+        [1501, 1496, 1506, 1482, 1491, 1583, 1593],
+        [1533, 1530, 1537, 1482, 1491, 1583, 1593],
+        [1550, 1530, 1560, 1482, 1491, 1583, 1593],
+        [1719, 1705, 1729, 1675, 1684, 1751, 1761],
+        [1853, 1838, 1858, 1797, 1807, 1871, 1883]
+    ]
+
+    return uv_dict
+
+
 class Sed:
 
     """
@@ -278,6 +306,65 @@ class Sed:
 
         return 2.5*np.log10(self.broadband_fluxes[f2] /
                             self.broadband_fluxes[f1])
+
+    def calculate_ew(self, lam, lnu, index):
+        """
+           An function to calculate the equivalent width.
+
+           Parameters
+           ----------
+           lam : float array
+               wavelength grid
+           lnu: float array
+               luminosity grid (erg/s/Hz)
+           index: int array
+               wavelength indices
+
+           Returns
+           ----------
+           float array
+               equivalent width (Å)
+
+           """
+
+        # Define the wavelength and flux arrays
+        wavelength = np.array(lam)
+        flux = np.array(lnu)
+        flux = flux * (wavelength ** 2)
+
+        # Define the wavelength range of the absorption feature
+        absorption_start = index[0]
+        absorption_end = index[1]
+
+        # Define the wavelength ranges of the two sets of continuum
+        blue_start = index[2]
+        blue_end = index[3]
+
+        red_start = index[4]
+        red_end = index[5]
+
+        # Compute the average continuum level
+        continuum_indices = np.where((wavelength >= absorption_start) & (wavelength <= absorption_end))[0]
+
+        blue_indices = np.where((wavelength >= blue_start) & (wavelength <= blue_end))[0]
+        red_indices = np.where((wavelength >= red_start) & (wavelength <= red_end))[0]
+
+        blue_mean = np.mean(flux[blue_indices])
+        red_mean = np.mean(flux[red_indices])
+
+        avg_blue = 0.5 * (blue_start + blue_end)
+        avg_red = 0.5 * (red_start + red_end)
+
+        line = np.polyfit([avg_blue, avg_red], [blue_mean, red_mean], 1)
+
+        continuum = (line[0] * wavelength) + line[1]
+
+        # Calculate the equivalent width
+        ew = np.trapz((continuum[continuum_indices] - flux[continuum_indices]) / continuum[continuum_indices],
+                      wavelength[continuum_indices])
+
+        return ew
+
 
     # def return_log10Q(self):
     #     """
