@@ -397,7 +397,7 @@ class Galaxy(BaseGalaxy):
         """
 
         return self.get_line_attenuated(grid, line_ids, fesc=fesc, tauV_nebular=tauV, tauV_stellar=tauV, dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve)
-
+    
     def reduce_lya(self, grid, fesc_LyA, young=False, old=False):
 
         # --- generate contribution of line emission alone and reduce the contribution of Lyman-alpha
@@ -499,3 +499,22 @@ class Galaxy(BaseGalaxy):
             img.get_noisy_imgs(noises)
 
         return img
+
+    def get_equivalent_width(self, index, spectra_to_plot=None):
+        """ gets all equivalent widths associated with a sed object """
+        equivalent_width = None
+
+        if type(spectra_to_plot) != list:
+            spectra_to_plot = list(self.spectra.keys())
+
+        for sed_name in spectra_to_plot:
+            sed = self.spectra[sed_name]
+            lam_arr = sed.lam
+            lnu_arr = sed.lnu
+
+            # Compute equivalent width
+            equivalent_width = sed.calculate_ew(lam_arr, lnu_arr, index)
+
+        return equivalent_width
+
+
