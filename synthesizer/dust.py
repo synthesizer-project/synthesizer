@@ -316,8 +316,12 @@ class GrainsWD01():
 
 
 
+
+
 from scipy import integrate
-from unyt import h, c, kb, um 
+from unyt import h, c, kb, um, nJy
+from unyt import accepts, returns
+from unyt.dimensions import length, time, temperature
 
 
 def planck(nu, T):
@@ -328,57 +332,141 @@ def planck(nu, T):
 
     return (2.*h*(nu**3)*(c**-2))*(1./(np.exp(h*nu/(kb*T))-1.))
 
-def normalise(lnu):
-        # normalise by integrating the function from 8->1000 um
-        return integrate.quad(lnu, c/(1000*um), c/(8*um), full_output=False, limit = 100)[0]
 
 
-
-class EmissionSpectrum():
+class EmissionBase():
 
     """
-    A class for holding dust emission models.
+    Dust emission base class for holding common methods.
     """
 
-    def blackbody(lam, T):
+    def normalise(self):
+
+        """
+        Provide normalisation of lnu_ by integrating the function from 8->1000 um
+        """ 
+        return integrate.quad(self.lnu_, c/(1000*um), c/(8*um), full_output=False, limit = 100)[0]
+
+    # @accepts(lam=length)
+    def lnu(self, lam):
+
+        """
+        Returns the normalised lnu for the provided wavelength grid
+
+        Parameters
+        ----------
+        lam: unyt_array
+            Wavelength grid
+
+        """
+
+        return nJy*self.lnu_(c/lam).value/self.normalise()
+
+
+
+
+class Blackbody(EmissionBase):
+    
+    """
+    A class to generate a blackbody emission spectrum.
+    """
+
+    @accepts(T=temperature) # check T has dimensions of temperature
+    def __init__(self, T):
 
         """
         A function to generate a simple blackbody spectrum.
         
         Parameters
         ----------
-        lam: unyt_array
-            wavelength
-
         T: unyt_array
             Temperature
 
-        Returns 
+        """
+
+        self.T = T
+
+    # @accepts(nu=1/time)
+    def lnu_(self, nu):
+        
+        """
+        Generate unnormalised spectrum for given frequency (nu) grid.
+        
+        Parameters
         ----------
-        spectral flux density: unyt_array
+        nu: unyt_array
+            frequency
+
+        Returns
+        ----------
+        lnu: unyt_array
+            spectral luminosity density
 
         """
 
-        # need to add exception for lam and T not having units
+        return planck(nu, self.T)
 
-        # define frequency array
-        nu = c/lam
-        
-        # define lnu
-        lnu = lambda x: planck(x, T)
-
-        # normalise integral to unity. 
-        # It might be better seperate the function and normalise it using the integral of the function
-        # lnu /= -np.trapz(nu[::-1], lnu[::-1])
-
-        return lnu(nu)/normalise(lnu)
+    
 
 
-    def greybody(lam, T, emissivity):
+class Greybody(EmissionBase):
+
+    """
+    A class to generate a greybody emission spectrum.
+    """
+
+    @accepts(T=temperature) # check T has dimensions of temperature
+    def __init__(self, T, emissivity):
 
         """
-        A function to generate a greybody spectrum.
+        Initialise class
         
+        Parameters
+        ----------
+        T: unyt_array
+            Temperature
+
+        emissivity: float
+            Emissivity (dimensionless)
+
+        """
+
+        self.T = T
+        self.emissivity = emissivity
+
+
+    # @accepts(nu=1/time)
+    def lnu_(self, nu):
+        
+        """
+        Generate unnormalised spectrum for given frequency (nu) grid.
+        
+        Parameters
+        ----------
+        nu: unyt_array
+            frequency
+
+        Returns
+        ----------
+        lnu: unyt_array
+            spectral luminosity density
+
+        """
+
+        return nu**self.emissivity * planck(nu, self.T)
+
+
+class Casey12(EmissionBase):
+    
+    """
+    A class to generate a dust emission spectrum using the Casey (2012) model.
+    https://ui.adsabs.harvard.edu/abs/2012MNRAS.425.3094C/abstract
+    """
+
+    @accepts(T=temperature) # check T has dimensions of temperature
+    def __init__(self, T, emissivity, alpha, N_bb = 1.0, lam_0 = 200.*um):
+
+        """
         Parameters
         ----------
         lam: unyt_array
@@ -388,76 +476,63 @@ class EmissionSpectrum():
             Temperature
 
         emissivity: float
-            Emissivity (dimensionless)
-
-        Returns 
-        ----------
-        spectral flux density: unyt_array
-
-        """
-
-
-        # need to add exception for lam and T not having units
-
-        kappa = lambda x: x**emissivity
-        lnu = lambda x: kappa(x) * planck(x, T)
-                
-        return lnu(c/lam)/normalise(lnu)
-
-
-    def casey12(lam, T, emissivity, alpha, N_bb = 1.0, lam_0 = 200.*um):
-
-        """
-        A function to generate an IR spectrum using the Casey (2012) model.
-        
-        Parameters
-        ----------
-        lam: unyt_array
-            wavelength
-
-        T: unyt_array
-            Temperature
-
-        emissivity: float
-            Emissivity (dimensionless)
+            Emissivity (dimensionless) [good value = 1.6]
 
         alpha: float
+            Power-law slope (dimensionless)  [good value = 2.0]
 
         N_Bb: float
+            Normalisation of the blackbody component [default 1.0]
 
         lam_0: float
-
-        Returns 
-        ----------
-        spectral flux density: unyt_array
-
         """
 
+        self.T = T
+        self.emissivity = emissivity
+        self.alpha = alpha
+        self.N_bb = N_bb 
+        self.lam_0 = lam_0
 
-        # need to add exception for lam and T not having units
-
-        # define frequency array
-        nu = c/lam
-
+        # calculate the powerlaw turnover wavelength
 
         b1 = 26.68
         b2 = 6.246
         b3 = 0.0001905
         b4 = 0.00007243
         L = ( (b1+b2*alpha)**-2 + (b3+b4*alpha)*T.to('K').value)**-1
-        lam_c = (3./4.)*L * um
-        
-        A1 = (c/lam_c)**(emissivity+3.)
-        A2 = np.exp((h*c)/(lam_c*kb*T)) - 1.0
-        B = lam_c**alpha
-        
-        N_pl = A1/(A2*B)
-        
-        PL = lambda x: N_pl*(x**alpha)*np.exp(-(x/lam_c)**2) # x is wavelength NOT frequency
 
-        BB = lambda x: N_bb * (c/x)**(emissivity+3) / (np.exp((h*c)/(x*kb*T)) - 1.0) # x is wavelength NOT frequency
-        
-        lnu = lambda x: BB(c/x) + PL(c/x) # x is frequency
+        self.lam_c = (3./4.)*L * um
 
-        return lnu(c/lam)/normalise(lnu)
+        # calculate normalisation of the power-law term
+
+        # THIS IS WHAT IS PROVIDED BUT IT IS NOT DIMENSIONLESS
+        # self.N_pl = (1 - np.exp(-(lam_0/self.lam_c)**emissivity)) * self.lam_c**-3 / (np.exp(h*c/(self.lam_c*kb*T))-1) 
+
+        # AS ABOVE BUT MADE DIMENSIONLESS 
+        self.N_pl = (1 - np.exp(-(lam_0/self.lam_c)**emissivity)) * self.lam_c.to('um').value**-3 / (np.exp(h*c/(self.lam_c*kb*T))-1) 
+
+    # @accepts(nu=1/time)
+    def lnu_(self, nu):
+
+        """
+        Generate unnormalised spectrum for given frequency (nu) grid.
         
+        Parameters
+        ----------
+        nu: unyt_array
+            frequency
+
+        Returns
+        ----------
+        lnu: unyt_array
+            spectral luminosity density
+
+        """
+
+        PL = lambda x: self.N_pl*(x**self.alpha)*np.exp(-(x/self.lam_c)**2) # x is wavelength NOT frequency
+
+        BB = lambda x: self.N_bb * (1-np.exp(-(self.lam_0/x)**self.emissivity)) * (c/x)**(self.emissivity+3) / (np.exp((h*c)/(x*kb*self.T)) - 1.0) # x is wavelength NOT frequency
+        
+        # NOTE: THE ABOVE DOESN'T WORK WITH DIMENSIONS, I.E. BOTH PARTS ARE NOT DIMENSIONALLY CONSISTENT HENCE BELOW.
+        return  (BB(c/nu).value + PL(c/nu).value) * nJy 
+    
