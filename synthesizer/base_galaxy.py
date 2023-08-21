@@ -511,6 +511,51 @@ class BaseGalaxy:
 
         return sed
 
+
+    def get_spectra_dust(self, emissionmodel):
+
+        """
+        Calculates dust emission spectra using the attenuated and intrinsic spectra that have already been generated and an emission model.
+
+        Parameters
+        ----------
+        emissionmodel : obj 
+            The spectral frid
+    
+        Returns
+        -------
+        obj (Sed)
+             A Sed object containing the dust attenuated spectra
+        """
+
+        # use wavelength grid from attenuated spectra
+        # NOTE: in future it might be good to allow a custom wavelength grid
+
+        lam = self.spectra['attenuated'].lam
+
+        print(lam)
+
+        # calculate the bolometric dust lunminosity as the difference between the intrinsic and attenuated
+
+        dust_bolometric_luminosity = self.spectra['intrinsic'].get_bolometric_luminosity() - self.spectra['attenuated'].get_bolometric_luminosity()
+
+        # get the spectrum and normalise it properly
+        lnu = dust_bolometric_luminosity.to('erg/s').value * emissionmodel.lnu(lam)
+
+        print(lnu)
+
+        # create new Sed object containing dust spectra
+        sed = Sed(lam, lnu=lnu)
+
+        # associate that with the component's spectra dictionarity
+        self.spectra['dust'] = sed
+
+        return sed
+
+
+
+
+
     def get_line_intrinsic(
             self,
             grid,
