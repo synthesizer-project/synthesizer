@@ -549,6 +549,7 @@ class BaseGalaxy:
 
         # associate that with the component's spectra dictionarity
         self.spectra['dust'] = sed
+        self.spectra['total'] = self.spectra['dust'] + self.spectra['attenuated']
 
         return sed
 
