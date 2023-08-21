@@ -141,6 +141,16 @@ class Sed:
     def _spec_dims(self):
         return np.ndim(self.lnu)
 
+    def get_bolometric_luminosity(self):
+
+        """
+        Calculate the bolometric luminosity of the SED.
+        """
+
+        return np.trapz(self.lnu[::-1], x=self.nu[::-1])
+
+
+
     def return_beta(self, wv=[1500., 2500.]):
         """ Return the UV continuum slope (\beta) based on measurements
             at two wavelength. """
