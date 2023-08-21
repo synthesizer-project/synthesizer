@@ -319,7 +319,7 @@ class GrainsWD01():
 
 
 from scipy import integrate
-from unyt import h, c, kb, um, nJy
+from unyt import h, c, kb, um, erg, s, Hz
 from unyt import accepts, returns
 from unyt.dimensions import length, time, temperature
 
@@ -360,7 +360,7 @@ class EmissionBase():
 
         """
 
-        return nJy*self.lnu_(c/lam).value/self.normalise()
+        return (erg/s/Hz)*self.lnu_(c/lam).value/self.normalise()
 
 
 
@@ -534,5 +534,5 @@ class Casey12(EmissionBase):
         BB = lambda x: self.N_bb * (1-np.exp(-(self.lam_0/x)**self.emissivity)) * (c/x)**(self.emissivity+3) / (np.exp((h*c)/(x*kb*self.T)) - 1.0) # x is wavelength NOT frequency
         
         # NOTE: THE ABOVE DOESN'T WORK WITH DIMENSIONS, I.E. BOTH PARTS ARE NOT DIMENSIONALLY CONSISTENT HENCE BELOW.
-        return  (BB(c/nu).value + PL(c/nu).value) * nJy 
+        return  (BB(c/nu).value + PL(c/nu).value) * (erg/s/Hz) 
     
