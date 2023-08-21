@@ -92,7 +92,7 @@ if __name__ == "__main__":
     opt_wavs = np.arange(lmin, lmax, deltal)
 
     # add MIR/FIR points
-    ir_wavs = np.arange(21000., 500000, 1000.)
+    ir_wavs = np.arange(21000., 5000000, 1000.)
     new_wavs = np.hstack((opt_wavs, ir_wavs))
 
     # alias
