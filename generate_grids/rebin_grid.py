@@ -89,8 +89,11 @@ if __name__ == "__main__":
 
     # define the new wavelength grid
     lmin, lmax, deltal = 100., 20000., 20.  # min wavelength, max wavelength, resolution
-    new_wavs = np.arange(lmin, lmax, deltal)
+    opt_wavs = np.arange(lmin, lmax, deltal)
 
+    # add MIR/FIR points
+    ir_wavs = np.arange(21000., 500000, 1000.)
+    new_wavs = np.hstack((opt_wavs, ir_wavs))
 
     # alias
     original_spectra = original_grid['spectra']
