@@ -506,10 +506,10 @@ class Casey12(EmissionBase):
         # calculate normalisation of the power-law term
 
         # THIS IS WHAT IS PROVIDED BUT IT IS NOT DIMENSIONLESS
-        # self.N_pl = (1 - np.exp(-(lam_0/self.lam_c)**emissivity)) * self.lam_c**-3 / (np.exp(h*c/(self.lam_c*kb*T))-1) 
+        # self.N_pl = self.N_bb * (1 - np.exp(-(lam_0/self.lam_c)**emissivity)) * self.lam_c**-3 / (np.exp(h*c/(self.lam_c*kb*T))-1) 
 
         # AS ABOVE BUT MADE DIMENSIONLESS 
-        self.N_pl = (1 - np.exp(-(lam_0/self.lam_c)**emissivity)) * self.lam_c.to('um').value**-3 / (np.exp(h*c/(self.lam_c*kb*T))-1) 
+        self.N_pl = self.N_bb * (1 - np.exp(-(lam_0/self.lam_c)**emissivity)) * self.lam_c.to('um').value**-3 / (np.exp(h*c/(self.lam_c*kb*T))-1) 
 
     # @accepts(nu=1/time)
     def lnu_(self, nu):
