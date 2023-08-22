@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cosmos-synthesizer"
+version = "0.0.1"
+authors = [
+  { name="Chris Lovell", email="christopher.lovell@port.ac.uk" },
+  { name="Will Roper", email="w.roper@sussex.ac.uk" },
+  { name="Aswin Vijayan", email="author@example.com" },
+  { name="Stephen Wilkins", email="apavi@space.dtu.dk" },
+]
+description = "A package for producing synthetic observations"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU GENERAL PUBLIC LICENSE",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/flaresimulations/synthesizer"
+"Bug Tracker" = "https://github.com/flaresimulations/synthesizer/issues"
