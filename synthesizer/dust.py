@@ -485,6 +485,7 @@ class Casey12(EmissionBase):
             Normalisation of the blackbody component [default 1.0]
 
         lam_0: float
+            Wavelength at where the dust optical depth is unity
         """
 
         self.T = T
@@ -505,11 +506,10 @@ class Casey12(EmissionBase):
 
         # calculate normalisation of the power-law term
 
-        # THIS IS WHAT IS PROVIDED BUT IT IS NOT DIMENSIONLESS
-        # self.N_pl = self.N_bb * (1 - np.exp(-(lam_0/self.lam_c)**emissivity)) * self.lam_c**-3 / (np.exp(h*c/(self.lam_c*kb*T))-1) 
+        # See Casey+2012, Table 1 for the expression
+        # Missing factors of lam_c and c in some places
 
-        # AS ABOVE BUT MADE DIMENSIONLESS 
-        self.N_pl = self.N_bb * (1 - np.exp(-(lam_0/self.lam_c)**emissivity)) * self.lam_c.to('um').value**-3 / (np.exp(h*c/(self.lam_c*kb*T))-1) 
+        self.N_pl = self.N_bb * (1 - np.exp(-(self.lam_0/self.lam_c)**emissivity)) * (c/self.lam_c)**3 / (np.exp(h*c/(self.lam_c*kb*T))-1) 
 
     # @accepts(nu=1/time)
     def lnu_(self, nu):
@@ -528,11 +528,13 @@ class Casey12(EmissionBase):
             spectral luminosity density
 
         """
+        
+        if np.isscalar(nu): nu*=Hz
+        
+        PL = lambda x: self.N_pl * ((x/self.lam_c)**(self.alpha)) * np.exp(-(x/self.lam_c)**2) # x is wavelength NOT frequency
 
-        PL = lambda x: self.N_pl*(x**self.alpha)*np.exp(-(x/self.lam_c)**2) # x is wavelength NOT frequency
-
-        BB = lambda x: self.N_bb * (1-np.exp(-(self.lam_0/x)**self.emissivity)) * (c/x)**(self.emissivity+3) / (np.exp((h*c)/(x*kb*self.T)) - 1.0) # x is wavelength NOT frequency
+        BB = lambda x: self.N_bb * (1-np.exp(-(self.lam_0/x)**self.emissivity)) * (c/x)**3 / (np.exp((h*c)/(x*kb*self.T)) - 1.0) # x is wavelength NOT frequency
         
         # NOTE: THE ABOVE DOESN'T WORK WITH DIMENSIONS, I.E. BOTH PARTS ARE NOT DIMENSIONALLY CONSISTENT HENCE BELOW.
-        return  (BB(c/nu).value + PL(c/nu).value) * (erg/s/Hz) 
+        return  PL(c/nu) + BB(c/nu) 
     
