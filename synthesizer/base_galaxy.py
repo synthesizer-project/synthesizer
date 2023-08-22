@@ -64,6 +64,80 @@ class BaseGalaxy:
             self.spectra['stellar'] = sed
 
         return sed
+    
+    def get_spectra_incident(
+            self,
+            grid,
+            young=False,
+            old=False,
+            update=True
+    ):
+        """
+        Generate the incident (pure stellar for stars) spectra using the provided Grid
+
+        Args:
+            grid (obj):
+                spectral grid object
+            update (bool):
+                flag for whether to update the `stellar` spectra
+                inside the galaxy object `spectra` dictionary.
+                These are the combined values of young and old.
+            young (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for young star particles
+            old (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for old star particles
+
+        Returns:
+            An Sed object containing the stellar spectra
+        """
+
+        lnu = self.generate_lnu(grid, 'incident', young=young, old=old)
+
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra['incident'] = sed
+
+        return sed
+    
+    def get_spectra_transmitted(
+        self,
+        grid,
+        young=False,
+        old=False,
+        update=True
+    ):
+        """
+        Generate the transmitted spectra using the provided Grid
+
+        Args:
+            grid (obj):
+                spectral grid object
+            update (bool):
+                flag for whether to update the `stellar` spectra
+                inside the galaxy object `spectra` dictionary.
+                These are the combined values of young and old.
+            young (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for young star particles
+            old (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for old star particles
+
+        Returns:
+            An Sed object containing the stellar spectra
+        """
+
+        lnu = self.generate_lnu(grid, 'transmitted', young=young, old=old)
+
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra['transmitted'] = sed
+
+        return sed
 
     def get_spectra_nebular(
             self,
@@ -142,7 +216,7 @@ class BaseGalaxy:
             An Sed object containing the intrinsic spectra
         """
 
-        stellar = self.get_spectra_stellar(grid, update=update,
+        stellar = self.get_spectra_transmitted(grid, update=update,
                                            young=young, old=old)
         nebular = self.get_spectra_nebular(grid, fesc, update=update,
                                            young=young, old=old)
