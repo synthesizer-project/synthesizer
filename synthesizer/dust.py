@@ -529,12 +529,13 @@ class Casey12(EmissionBase):
 
         """
         
+        # Essential, when using scipy.integrate, since
+        # the integration limits are passed unitless 
         if np.isscalar(nu): nu*=Hz
         
         PL = lambda x: self.N_pl * ((x/self.lam_c)**(self.alpha)) * np.exp(-(x/self.lam_c)**2) # x is wavelength NOT frequency
 
         BB = lambda x: self.N_bb * (1-np.exp(-(self.lam_0/x)**self.emissivity)) * (c/x)**3 / (np.exp((h*c)/(x*kb*self.T)) - 1.0) # x is wavelength NOT frequency
         
-        # NOTE: THE ABOVE DOESN'T WORK WITH DIMENSIONS, I.E. BOTH PARTS ARE NOT DIMENSIONALLY CONSISTENT HENCE BELOW.
         return  PL(c/nu) + BB(c/nu) 
     
