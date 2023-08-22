@@ -117,14 +117,29 @@ setup(
     # WILL NOTE: Lists of authors are not actually allowed by setuptools...
     # There are better package management solutions these days that do,
     # but I haven't deleved into those depths
-    author="Chris Lovell, Jussi Kuusisto, Will Roper, Stephen Wilkins",
-    author_email="FILL EMAILS, w.roper@sussex.ac.uk",
+    author="Chris Lovell, Will Roper, Aswin Vijayan, Stephen Wilkins",
+    author_email="christopher.lovell@port.ac.uk, w.roper@sussex.ac.uk, apavi@space.dtu.dk, s.wilkins@sussex.ac.uk",
     url="https://github.com/flaresimulations/synthesizer",
     packages=find_packages(),
-    install_requires=[  # Need to actually write the module to know this...
+    install_requires=[  
         "numpy>=1.14.5",
         "scipy>=1.7",
-
+        "nbmake",
+        "astropy",
+        "Cython",
+        "h5py",
+        "mpmath",
+        "packaging",
+        "pyerfa",
+        "pyparsing",
+        "PyYAML",
+        "sympy",
+        "unyt",
+        "cmasher",
+        "numba",
+        "dust_extinction",
+        "nbsphinx",
+        "matplotlib",
     ],
     # extras_require={"plotting": ["matplotlib>=2.2.0", "jupyter"]},
     # setup_requires=["pytest-runner", "flake8"],
