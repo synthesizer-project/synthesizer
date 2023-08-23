@@ -1,4 +1,7 @@
 """
+Generate parametric SFZH
+========================
+
 Example for generating a parametric star formation and metal enrichment history
 - shows how to generate star formation histories assuming diffferent parameterisations
 - shows how to combine star formation histories

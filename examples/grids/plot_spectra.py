@@ -1,3 +1,12 @@
+"""
+Plot spectra example
+====================
+
+This example demonstrates how to extract a spectra directly from a grid and plots all the available spectra.
+
+NOTE: this only works on 2D grids at the moment
+"""
+
 import argparse
 from synthesizer.grid import Grid
 import numpy as np
@@ -12,18 +21,13 @@ import sys
 
 if __name__ == '__main__':
 
-    """
-    This example demonstrates how to extract a spectra directly from a grid and plots all the available spectra.
-
-    NOTE: this only works on 2D grids at the moment
-    """
-
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
-    script_path = os.path.abspath(os.path.dirname(__file__))
+    # script_path = os.path.abspath(os.path.dirname(__file__))
 
     # define the test grid dir
-    test_grid_dir = script_path + "/../../tests/test_grid/"
+    # test_grid_dir = script_path + "/../../tests/test_grid/"
+    test_grid_dir = "../../tests/test_grid/"
 
     # initialise argument parser
     parser = argparse.ArgumentParser(description=('Create a plot of all spectra types for a given metallicity and age'))

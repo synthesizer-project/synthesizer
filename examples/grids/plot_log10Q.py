@@ -1,3 +1,9 @@
+"""
+Plot ionising luminosity
+========================
+
+Makes a plot of the specific ionising luminosity for a given choice of grid and ion
+"""
 
 import os
 import argparse
@@ -7,15 +13,12 @@ from synthesizer.plots import plot_log10Q
 
 if __name__ == '__main__':
 
-    """
-    Makes a plot of the specific ionising luminosity for a given choice of grid and ion
-    """
-
     # Get the location of this script, __file__ is the absolute path of this script, however we just want to directory
-    script_path = os.path.abspath(os.path.dirname(__file__))
+    # script_path = os.path.abspath(os.path.dirname(__file__))
 
     # define the test grid dir
-    test_grid_dir = script_path + "/../../tests/test_grid/"
+    # test_grid_dir = script_path + "/../../tests/test_grid/"
+    test_grid_dir = "../../tests/test_grid/"
 
     # initialise argument parser
     parser = argparse.ArgumentParser(description=('Create a plot of all spectra types for a given metallicity and age'))

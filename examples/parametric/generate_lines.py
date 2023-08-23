@@ -1,10 +1,14 @@
 """
+Generate lines from parametric galaxy
+=====================================
+
 Example for generating a emission lines for a parametric galaxy. This example will:
 - show the available lines to a grid
 - build a parametric galaxy (see make_sfzh and make_sed)
 - calculate intrinsic line properties
 - calculate dust-attenuated line properties
 """
+
 import os
 
 from synthesizer.units import Units

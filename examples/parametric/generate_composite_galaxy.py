@@ -1,10 +1,14 @@
 """
+Generate composite image example
+================================
+
 Example for generating a composite galaxy
 photometry. This example will:
 - build two parametric "galaxies" (see make_sfzh)
 - calculate spectral luminosity density of each
 - make images of both
 """
+
 import os
 from unyt import yr, Myr, kpc, mas
 import matplotlib.pyplot as plt

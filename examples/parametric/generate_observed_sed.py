@@ -1,4 +1,7 @@
 """
+Generate parametric observed SED
+================================
+
 Example for generating the *observed* spectrum for a parametric galaxy including
 photometry. This example will:
 - build a parametric galaxy (see make_sfzh and make_sed)
