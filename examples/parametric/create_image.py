@@ -1,10 +1,14 @@
 """
+Create image example
+====================
+
 Example for generating a rest-frame physical scale image. This example will:
 - Build a parametric galaxy (see make_sfzh and make_sed)
 - Define its morphology
 - Calculate rest-frame luminosities for the UVJ bands
 - Make an image of the galaxy, including an RGB image.
 """
+
 import os
 import numpy as np
 
