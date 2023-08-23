@@ -6,7 +6,7 @@ from synthesizer.grid import Grid
 if __name__ == "__main__":
 
     """
-    This example allows us to explore a HDF5 and the correspinding Grid object.
+    This example allows us to load a HDF5 grid file and explore the corresponding Grid object.
     """
 
     # Get the location of this script, __file__ is the absolute path of this
