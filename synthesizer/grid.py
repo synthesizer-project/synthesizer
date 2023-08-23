@@ -345,7 +345,7 @@ class Grid:
 
     def get_sed(self, grid_point, spec_name='stellar'):
         """
-        Returns the an Sed object of a given spectra type for a given grid point.
+        Returns an Sed object for a given spectra type for a given grid point.
 
         Parameters
         ----------
@@ -368,7 +368,7 @@ class Grid:
 
     def get_line_info(self, line_id, grid_point):
         """
-        Returns the a Line object for a given line_id and grid_point
+        Returns a Line object for a given line_id and grid_point
 
         Parameters
         ----------
