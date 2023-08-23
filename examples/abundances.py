@@ -1,4 +1,7 @@
 """
+Abundances example
+==================
+
 Demonstrate the use of the abundances module
 """
 
