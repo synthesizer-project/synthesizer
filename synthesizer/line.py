@@ -89,8 +89,12 @@ class LineRatios:
 
     def __init__(self):
 
-        O3 = ['O 3 4960.29A', 'O 3 5008.24A']
-        O2 = ['O 2 3727.09A', 'O 2 3729.88A']
+        O3b = 'O 3 4958.91A'
+        O3r = 'O 3 5006.84A'
+        O3 = [O3b, O3r]
+        O2b = 'O 2 3726.03A'
+        O2r = 'O 2 3728.81A'
+        O2 = [O2b, O2r]
         Hb = 'H 1 4862.69A'
         Ha = 'H 1 6564.62A'
 
@@ -98,20 +102,20 @@ class LineRatios:
 
         # Balmer decrement, should be ~2.86 for dust free
         self.ratios['BalmerDecrement'] = [[Ha], [Hb]]
-        self.ratios['N2'] = [['N 2 6585.27A'], [Ha]]  #  add reference
-        self.ratios['S2'] = [['S 2 6732.67A', 'S 2 6718.29A'], [Ha]]  #  add reference
-        self.ratios['O1'] = [['O 1 6302.05A'], [Ha]]  #  add reference
-        self.ratios['R2'] = [['O 2 3727.09A'], [Hb]]  #  add reference
-        self.ratios['R3'] = R3 = [['O 3 5008.24A'], [Hb]]  #  add reference
+        self.ratios['N2'] = [['N 2 6583.45A'], [Ha]]  #  add reference
+        self.ratios['S2'] = [['S 2 6730.82A', 'S 2 6716.44A'], [Ha]]  #  add reference
+        self.ratios['O1'] = [['O 1 6300.30A'], [Ha]]  #  add reference
+        self.ratios['R2'] = [[O2b], [Hb]]  #  add reference
+        self.ratios['R3'] = R3 = [[O3r], [Hb]]  #  add reference
         self.ratios['R23'] = [O3+O2, [Hb]]  #  add reference
-        self.ratios['O32'] = [['O 3 5008.24A'], ['O 2 3727.09A']]  #  add reference
-        self.ratios['Ne3O2'] = [['Ne 3 3968.59A'], ['O 2 3727.09A']]  #  add reference
+        self.ratios['O32'] = [[O3r], [O2b]]  #  add reference
+        self.ratios['Ne3O2'] = [['NE 3 3868.76A'], [O2b]]  #  add reference
 
         self.available_ratios = tuple(self.ratios.keys())
 
         self.diagrams = {}
-        self.diagrams['OHNO'] = [R3, [['Ne 3 3869.86A'], O2]]  #  add reference
-        self.diagrams['BPT-NII'] = [[['N 2 6585.27A'], [Ha]], R3]  #  add reference
+        self.diagrams['OHNO'] = [R3, [['NE 3 3868.76A'], O2]]  #  add reference
+        self.diagrams['BPT-NII'] = [[['N 2 6583.45A'], [Ha]], R3]  #  add reference
         # diagrams['VO78'] = [[], []]
         # diagrams['unVO78'] = [[], []]
 
