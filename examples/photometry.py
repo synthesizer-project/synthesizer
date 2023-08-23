@@ -1,6 +1,9 @@
 """
-An example demonstrating the observed spectrum for a parametric galaxy including
-photometry. This example will:
+Photometry example
+==================
+
+An example demonstrating the observed spectrum for a parametric galaxy 
+including photometry. This example will:
 - build a parametric galaxy (see make_sfzh and make_sed).
 - calculate spectral luminosity density (see make_sed).
 - calculate observed frame spectra (requires comsology and redshift).

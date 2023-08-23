@@ -1,3 +1,10 @@
+"""
+CAMELS example
+==============
+
+Load CAMELS example data into a galaxy object
+"""
+
 import os
 import numpy as np
 import matplotlib.pyplot as plt

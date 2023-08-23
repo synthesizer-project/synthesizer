@@ -1,5 +1,9 @@
+"""
+Compare parametric and particle SEDs
+=====================================
 
-# --- this example compares a sampled and binned (parametric) SED for different numbers of particles
+This example compares a sampled and binned (parametric) SED for different numbers of particles
+"""
 
 import os
 import numpy as np
