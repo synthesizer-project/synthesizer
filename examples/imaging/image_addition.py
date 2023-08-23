@@ -1,4 +1,7 @@
 """
+Image addition example
+======================
+
 An example of how to do image addition and testing error functionality.
 """
 import os

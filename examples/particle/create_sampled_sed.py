@@ -1,5 +1,10 @@
 
-# --- this example generates a sample of star particles from a 2D SFZH. In this case it is generated from a parametric star formation history with constant star formation.
+"""
+Create sampled SED
+==================
+
+this example generates a sample of star particles from a 2D SFZH. In this case it is generated from a parametric star formation history with constant star formation.
+"""
 
 import os
 import numpy as np
