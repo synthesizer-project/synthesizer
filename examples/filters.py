@@ -1,4 +1,7 @@
 """
+Filters example
+===============
+
 A demonstration of filter and filter collections creation and usage.
 """
 import numpy as np

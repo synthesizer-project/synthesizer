@@ -1,4 +1,7 @@
 """
+Generate parametric observed SED
+================================
+
 Example for generating the *observed* spectrum for a parametric galaxy including
 photometry. This example will:
 - build a parametric galaxy (see make_sfzh and make_sed)
@@ -14,7 +17,6 @@ from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.parametric.galaxy import Galaxy
-from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr
 from synthesizer.igm import Madau96, Inoue14
 from astropy.cosmology import Planck18 as cosmo
@@ -35,7 +37,7 @@ if __name__ == '__main__':
     filter_codes = [f'JWST/NIRCam.{f}' for f in ['F090W', 'F115W', 'F150W',
                                                  'F200W', 'F277W', 'F356W', 'F444W']]  # define a list of filter codes
     filter_codes += [f'JWST/MIRI.{f}' for f in ['F770W']]
-    fc = FilterCollection(filter_codes, new_lam=grid.lam)
+    fc = FilterCollection(filter_codes)
 
     # define the parameters of the star formation and metal enrichment histories
     sfh_p = {'duration': 10 * Myr}
@@ -47,7 +49,7 @@ if __name__ == '__main__':
     Zh = ZH.deltaConstant(Z_p)  # constant metallicity
 
     # get the 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
-    sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh, stellar_mass=stellar_mass)
+    sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, Zh, stellar_mass=stellar_mass)
 
     # create a galaxy object
     galaxy = Galaxy(sfzh)
@@ -57,11 +59,7 @@ if __name__ == '__main__':
 
     # now calculate the observed frame spectra
     z = 10.  # redshift
-    sed.get_fnu(cosmo, z, igm=Madau96())  # generate observed frame spectra
-
-    # print(sed.fnu)
-    # print(sed.lnu)
-    # print(sed._lnu)
+    sed.get_fnu(cosmo, z, igm=Madau96())  # generate observed frame spectra, assume Madau96 IGM model
 
     # measure broadband fluxes
     fluxes = sed.get_broadband_fluxes(fc)
@@ -71,4 +69,4 @@ if __name__ == '__main__':
         print(f'{filter}: {flux:.2f}')
 
     # make plot of observed including broadband fluxes (if filter collection object given)
-    galaxy.plot_observed_spectra(cosmo, z, fc=fc, spectra_to_plot=['total'])
+    galaxy.plot_observed_spectra(cosmo, z, fc=fc, spectra_to_plot=['total'], show=True)

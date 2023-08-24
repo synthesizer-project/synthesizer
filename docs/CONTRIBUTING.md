@@ -6,7 +6,7 @@ The github workflow will automatically run [flake8](https://flake8.pycqa.org/en/
 We use the [Google docstring format](https://google.github.io/styleguide/pyguide.html#s3.8-comments-and-docstrings).
 
 ## Contributing to the Documentation
-The synthesizer documentation is written in a combination of restructuredText and Jupyter notebooks. 
+The synthesizer documentation is written in a combination of restructuredText, Jupyter notebooks and Python scripts. 
 Adding content should be relatively simple, if you follow the instructions below.
 
 ### Getting set up
@@ -23,7 +23,7 @@ First we're going to make some small changes to the git configuration to prevent
     *.ipynb filter=strip-notebook-output
 
 
-This will reset all instances of `execution_count` with `null`, and replace the `metatdata` tag with an empty dictionary, and prevent spurious git diffs to notebooks when they have been run multiple times.
+This will reset all instances of `execution_count` with `null`, and replace the `metadata` tag with an empty dictionary, and prevent spurious git diffs to notebooks when they have been run multiple times.
 
     ...
     "execution_count": null,
@@ -41,7 +41,6 @@ To add jupyter notebooks to the documentation:
 2. Update `source/index.rst` with the path to that `.rst` file
 3. Add a line to the *pytest* section of `.github/workflows/python-app.yml` to add the ntoebooks to the testing suite. It should look something like this
 
-    ```
     ...
     name: Test with pytest
       run: |
@@ -66,3 +65,22 @@ Example toctree:
        imaging/imaging
        filters
        grid_generation
+
+### Adding example scripts
+
+The `examples/` top level directory contains a number of self contained example scripts for particular use cases that may not belong in the main documentation, but are still useful for many users. We use the [sphinx-gallery](https://sphinx-gallery.github.io/stable/index.html) extension to build a gallery of our examples in the documentation.
+
+Each script should have a top level docstring written in reST, with a header. Further details are provided [here](https://sphinx-gallery.github.io/stable/syntax.html). For example:
+
+    """
+    "This" is my example-script
+    ===========================
+
+    This example doesn't do much, it just makes a simple plot
+    """
+
+
+Subfolders of examples should contain a `README.rst` with a section heading (please follow the template in other subfolders).
+
+If an example is named `plot_*.py` then `sphinx-gallery` will attempt to run the script and use any images generated in the gallery thumbnail.
+
