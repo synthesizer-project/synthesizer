@@ -9,8 +9,8 @@ be set by providing them as keyword arguments.
 
 Example usages:
 
-    stars = Stars(initial_masses, ages, metallicities,
-                  redshift=redshift, current_masses=current_masses, ...)
+    bhs = BlackHoles(masses, metallicities,
+                     redshift=redshift, accretion_rate=accretion_rate, ...)
 """
 import numpy as np
 from unyt import c
