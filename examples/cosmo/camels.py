@@ -57,11 +57,11 @@ if __name__ == '__main__':
     _g.plot_spectra()
     plt.show()
 
-    spec = _g.get_spectra_screen(grid, tauV=0.32, fesc=0.1)
+    spec = _g.get_spectra_screen(grid, tau_v=0.32, fesc=0.1)
     _g.plot_spectra()
     plt.show()
 
-    spec = _g.get_spectra_CharlotFall(grid, tauV_ISM=0.33, tauV_BC=0.67)
+    spec = _g.get_spectra_CharlotFall(grid, tau_v_ISM=0.33, tau_v_BC=0.67)
     _g.plot_spectra()
     plt.show()
 
@@ -69,7 +69,7 @@ if __name__ == '__main__':
         Here we leave the `sed_object` flag as the default (False), 
         and combine into a single sed object afterwards """
     _specs = np.vstack([_g.get_spectra_CharlotFall(
-        grid, tauV_ISM=0.33, tauV_BC=0.67)._lnu
+        grid, tau_v_ISM=0.33, tau_v_BC=0.67)._lnu
             for _g in gals])
 
     _specs = Sed(lam=grid.lam, lnu=_specs)
@@ -97,7 +97,7 @@ if __name__ == '__main__':
     mask = np.where(mstar > 8)[0]
 
     _specs = np.vstack([gals[_g].get_spectra_CharlotFall(
-        grid, tauV_ISM=0.33, tauV_BC=0.67)._lnu
+        grid, tau_v_ISM=0.33, tau_v_BC=0.67)._lnu
             for _g in mask])
 
     _specs = Sed(lam=grid.lam, lnu=_specs)

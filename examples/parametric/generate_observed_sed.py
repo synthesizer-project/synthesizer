@@ -55,7 +55,7 @@ if __name__ == '__main__':
     galaxy = Galaxy(sfzh)
 
     # generate spectra using pacman model (complex)
-    sed = galaxy.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tauV=0.1)
+    sed = galaxy.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1)
 
     # now calculate the observed frame spectra
     z = 10.  # redshift
