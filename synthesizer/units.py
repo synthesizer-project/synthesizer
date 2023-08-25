@@ -235,6 +235,12 @@ class Units(metaclass=UnitSingleton):
         # Time quantities
         self.ages = yr  # Stellar ages
 
+        # Black holes quantities
+        self.accretion_rate = Msun / yr
+        self.bol_luminosity = erg / s / Angstrom
+        self.bb_temperature = K
+
+
         # Do we have any modifications to the default unit system
         if units is not None:
             print("Redefining unit system:")
