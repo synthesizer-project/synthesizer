@@ -30,15 +30,15 @@ from ..imaging.images import ParticleImage
 
 
 class Galaxy(BaseGalaxy):
-""" The Particle based Galaxy object.
+    """ The Particle based Galaxy object.
 
-When working with particles this object provides interfaces for calculating
-spectra, theoretical galaxy properties and images. A galaxy can be comproised of
-any combination of particle.Stars, particle.Gas, or particle.BlackHoles objects.
+    When working with particles this object provides interfaces for calculating
+    spectra, theoretical galaxy properties and images. A galaxy can be comproised of
+    any combination of particle.Stars, particle.Gas, or particle.BlackHoles objects.
 
-Attributes:
+    Attributes:
 
-"""
+    """
     __slots__ = [
         "spectra", "spectra_array", "lam",
         "stars", "gas",
@@ -244,27 +244,27 @@ Attributes:
                                      r=self.gas._smoothing_lengths.max())
 
         # Loop over black holes
-        metals = np.zeros(self.blackholes.nbh)
-        for ind, gas_in_range enumerate(inds):
+        metals = np.zeros(self.black_holes.nbh)
+        for ind, gas_in_range in enumerate(inds):
 
             # Handle black holes with no neighbouring gas
             if len(gas_in_range) == 0:
                 metals[ind] = default_metallicity
 
             # Calculate the separation between the black hole and gas particles
-            sep = (
-                self.gas_coordinates[gas_in_range, :]
-                - self.blackholes._coordinates[ind, :]
-            )
-            dists = np.sqrt(sep[0] ** 2 + sep[1] ** 2 + sep[2] ** 2)
+            sep = self.gas._coordinates[gas_in_range, :] \
+                - self.black_holes._coordinates[ind, :]
+
+            dists = np.sqrt(sep[:, 0] ** 2 + sep[:, 1] ** 2 + sep[:, 2] ** 2)
 
             # Get only the gas particles with smoothing lengths that intersect
             okinds = dists < self.gas._smoothing_lengths[gas_in_range]
-            gas_in_range = gas_in_range[okinds]
+            gas_in_range = np.array(gas_in_range, dtype=int)[okinds]
 
             # The above operation can remove all gas neighbours...
             if len(gas_in_range) == 0:
                 metals[ind] = default_metallicity
+                continue
 
             # Calculate the mass weight metallicity of this black holes region
             metals[ind] = np.average(
@@ -272,8 +272,8 @@ Attributes:
                 weights=self.gas._masses[gas_in_range]
             )
 
-        # Assign the metallicity we have found.
-        self.black_holes.metallicites = metals
+        # Assign the metallicity we have found
+        self.black_holes.metallicities = metals
 
     def generate_lnu(
                     self,

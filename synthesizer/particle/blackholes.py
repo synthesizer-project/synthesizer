@@ -49,7 +49,7 @@ class BlackHoles(Particles):
     """
 
     # Define the allowed attributes
-    __slots__ = ["masses", "metallicities", "nparticles",
+    __slots__ = ["_masses", "metallicities", "nparticles",
                  "redshift", "_accretion_rate", "_bb_temperature",
                  "_bol_luminosity", "nbh"]
 
@@ -57,6 +57,7 @@ class BlackHoles(Particles):
     accretion_rate = Quantity()
     bol_luminosity = Quantity()
     bb_temperature = Quantity()
+    masses = Quantity()
 
     def __init__(self, masses, metallicities=None, redshift=None,
                  accretion_rate=None, coordinates=None,
@@ -106,7 +107,7 @@ class BlackHoles(Particles):
 
         # Calculate the big bump temperature
         self.bb_temperature = 2.24E9 * \
-            self._accretion_rate ** (1 / 4) * self._masses * -0.5
+            self._accretion_rate ** (1 / 4) * self._masses ** -0.5
 
         # The metallicity of the region surrounding the black hole.
         self.metallicities = metallicities
