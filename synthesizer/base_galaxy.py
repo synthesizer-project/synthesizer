@@ -62,12 +62,12 @@ class BaseGalaxy:
             An Sed object containing the stellar spectra
         """
 
-        lnu = self.generate_lnu(grid, 'stellar', young=young, old=old)
+        lnu = self.generate_lnu(grid, "incident", young=young, old=old)
 
         sed = Sed(grid.lam, lnu)
 
         if update:
-            self.spectra['stellar'] = sed
+            self.spectra["incident"] = sed
 
         return sed
     
@@ -377,11 +377,11 @@ class BaseGalaxy:
                      "case of single dust screen"))
 
         # --- begin by generating the pure stellar spectra
-        self.spectra['stellar'] = self.get_spectra_stellar(grid, update=update)
+        self.spectra["incident"] = self.get_spectra_stellar(grid, update=update)
 
         # --- this is the starlight that escapes any reprocessing
         self.spectra['escape'] = \
-            Sed(grid.lam, fesc * self.spectra['stellar']._lnu)
+            Sed(grid.lam, fesc * self.spectra["incident"]._lnu)
 
         # --- this is the starlight after reprocessing by gas
         self.spectra['reprocessed_intrinsic'] = Sed(grid.lam)

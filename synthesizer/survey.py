@@ -377,7 +377,7 @@ class Survey:
     #     None
     #     """
 
-    #     _lam = self.seds['stellar']._lam
+    #     _lam = self.seds["incident"]._lam
     #     _specs = np.zeros((self.ngalaxies, _lam.size))
 
     #     for ind, gal in enumerate(self.galaxies):
