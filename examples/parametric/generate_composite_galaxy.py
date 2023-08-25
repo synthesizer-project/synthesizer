@@ -73,7 +73,7 @@ if __name__ == '__main__':
     disk_img = disk.make_images(
         resolution=resolution,
         filters=filters,
-        sed=disk.spectra["stellar"],
+        sed=disk.spectra["incident"],
         fov=fov,
     )
 
@@ -106,7 +106,7 @@ if __name__ == '__main__':
     bulge_img = bulge.make_images(
         resolution=resolution,
         filters=filters,
-        sed=bulge.spectra["stellar"],
+        sed=bulge.spectra["incident"],
         fov=fov,
     )
 
