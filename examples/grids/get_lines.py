@@ -1,4 +1,7 @@
 """
+Get lines example
+=================
+
 This example demonstrates how to:
 - get a list of lines associated with a grid
 - initialise a grid object with lines
@@ -6,47 +9,50 @@ This example demonstrates how to:
 - ad hoc load an additional line
 """
 
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 from synthesizer.grid import Grid, get_available_lines
 
 if __name__ == '__main__':
 
-    grid_dir = '../../tests/test_grid'
-    grid_name = 'test_grid'
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
+    script_path = os.path.abspath(os.path.dirname(__file__))
 
-    # get list of available lines for the grid
-    line_ids = get_available_lines(grid_name, grid_dir=grid_dir)
+    # Define the grid
+    grid_name = "test_grid"
+    grid_dir = script_path + "/../../tests/test_grid/"
 
-    # print this list of lines
-    for line_id in line_ids:
-        print(line_id)
+    # initialise grid
+    grid = Grid(grid_name, grid_dir=grid_dir, read_lines=True)
 
-    # read in just some specific lines (excluding spectra), note any line inside the nested brackets is interpreted as a doublet
-    # lines = ['H 1 4862.69A', 'O 3 4960.29A', 'O 3 5008.24A',
-    #          ['O 3 4960.29A', 'O 3 5008.24A'], 'H 1 6564.62A']
-    # grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=lines)
-
-    # alternatively we could read in all lines by simply setting read_lines to be True
-    grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=True)
-
+    # get list of lines
     print(grid.line_list)
 
-    # we can also calculate luminosities and equivalent widths for a single line ...
-    grid_point = (5, 6)  # ia, iZ the age and metallicity grid point
+    # choose age and metallicity
+    log10age = 6.0  # log10(age/yr)
+    metallicity = 0.01  # metallicity
 
+    # get the grid point for this log10age and metallicity
+    grid_point = grid.get_grid_point((log10age, metallicity))
+
+    # get information on one line
     line = grid.get_line_info('H 1 4862.69A', grid_point)
     print(line)
 
-    # or a combination combination of lines, e.g. a doublet
-    line = grid.get_lines_info(['H 1 4862.69A', 'O 3 4960.29A', 'O 3 5008.24A'], grid_point)
+    # or a combination of lines, e.g. a doublet 
+    line = grid.get_lines_info(['H 1 4862.69A', 'O 3 4958.91A', 'O 3 5006.84A'], grid_point)
     print(line)
 
-    lines = grid.get_lines_info(line_ids, grid_point)
+    # create a line collection from all lines
+    lines = grid.get_lines_info(grid.line_list, grid_point)
     print(lines)
 
     # we can measure line ratios
-    ratio = lines.get_ratio('BalmerDecrement')  # R23, R2, R3, ...
+    ratio_id = 'BalmerDecrement'
+    ratio = lines.get_ratio(ratio_id)  # R23, R2, R3, ...
+    print(f'{ratio_id}: {ratio:.2f}')
 
     # or loop over availalable ratios
     for ratio_id in lines.available_ratios:
@@ -57,12 +63,12 @@ if __name__ == '__main__':
     ratio_id = 'R23'
     ia = 0  # 1 Myr old for test grid
     ratios = []
-    for iZ, Z in enumerate(grid.metallicities):
+    for iZ, Z in enumerate(grid.metallicity):
         grid_point = (ia, iZ)
-        lines = grid.get_lines_info(line_ids, grid_point)
+        lines = grid.get_lines_info(grid.line_list, grid_point)
         ratios.append(lines.get_ratio(ratio_id))
 
-    Zsun = grid.metallicities/0.0124
+    Zsun = grid.metallicity/0.0124
     plt.plot(Zsun, ratios)
     plt.xlim([0.01, 1])
     plt.ylim([1, 20])
@@ -77,9 +83,9 @@ if __name__ == '__main__':
     ia = 0  # 1 Myr old for test grid
     x = []
     y = []
-    for iZ, Z in enumerate(grid.metallicities):
+    for iZ, Z in enumerate(grid.metallicity):
         grid_point = (ia, iZ)
-        lines = grid.get_lines_info(line_ids, grid_point)
+        lines = grid.get_lines_info(grid.line_list, grid_point)
         x_, y_ = lines.get_diagram(diagram_id)
         x.append(x_)
         y.append(y_)
