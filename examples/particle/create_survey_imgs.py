@@ -1,4 +1,7 @@
 """
+Create survey images
+====================
+
 This example shows how to create a survey of fake galaxies generated using a
 2D SFZH, and make images of each of these galaxies.
 """
