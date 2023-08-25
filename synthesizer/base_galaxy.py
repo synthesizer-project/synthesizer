@@ -252,7 +252,7 @@ class BaseGalaxy:
             update=True
     ):
         """
-        Calculates dust attenuated spectra assuming a simple screen
+        Calculates dust attenuated spectra assuming a simple screen. This simply operates on the intrinsic spectrum.
 
         Args:
             grid (object, Grid):
