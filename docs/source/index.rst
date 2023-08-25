@@ -23,6 +23,7 @@ Contents
    cosmo/cosmo
    imaging/imaging
    grid_generation
+   auto_examples/index
    API
    
    

@@ -27,8 +27,15 @@ extensions = [
     'sphinx.ext.viewcode',  # Add a link to the Python source code for classes, functions etc.
     'sphinx_autodoc_typehints', # Automatically document param types (less noise in class signature)
     'IPython.sphinxext.ipython_console_highlighting',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinx_gallery.gen_gallery',
 ]
+
+sphinx_gallery_conf = {
+     'examples_dirs': '../../examples',   # path to your example scripts
+     'gallery_dirs': 'auto_examples',  # path to where to save gallery generated output
+     'nested_sections': True,
+}
 
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
 html_show_sourcelink = False  # Remove 'view source code' from top of page (for html, not python)

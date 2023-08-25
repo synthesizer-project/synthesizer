@@ -1,4 +1,7 @@
 """
+Generate parametric SFZH
+========================
+
 Example for generating a parametric star formation and metal enrichment history
 - shows how to generate star formation histories assuming diffferent parameterisations
 - shows how to combine star formation histories
@@ -29,7 +32,6 @@ if __name__ == '__main__':
     sfzh = generate_sfzh_from_array(log10ages, metallicities, sfh, Z)
     print(sfzh)
     sfzh.plot()
-    print(sfzh.sfzh.shape)
 
     # --- define the parameters of the star formation and metal enrichment histories
 
