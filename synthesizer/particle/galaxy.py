@@ -372,7 +372,7 @@ class Galaxy(BaseGalaxy):
         Generate the luminosity for a given grid key spectra for all
         stars in this galaxy object. Can optionally apply masks.
 
-        Base class for :func:`~particle.ParticleGalaxy.get_spectra_stellar` 
+        Base class for :func:`~particle.ParticleGalaxy.get_spectra_incident`
         and other related methods
 
         Args:

@@ -345,7 +345,7 @@ class Survey:
 
             # Are we getting a flux or rest frame?
             if spectra_type == "stellar":
-                _specs[ind, :] = gal.get_spectra_stellar(grid)._lnu
+                _specs[ind, :] = gal.get_spectra_incident(grid)._lnu
             elif spectra_type == "intrinsic":
                 _specs[ind, :] = gal.get_spectra_intrinsic(grid)._lnu
             
