@@ -136,15 +136,15 @@ if __name__ == '__main__':
 
     # Plot the spectra of both components
 
-    sed = disk.spectra['stellar']
+    sed = disk.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c='b',
              label='disk')
 
-    sed = bulge.spectra['stellar']
+    sed = bulge.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c='r',
              label='bulge')
 
-    sed = combined.spectra['stellar']
+    sed = combined.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=2, alpha=0.8, c='k',
              label='combined')
 

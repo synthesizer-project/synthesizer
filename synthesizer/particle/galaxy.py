@@ -506,7 +506,7 @@ class Galaxy(BaseGalaxy):
         from ..extensions.csed import compute_particle_seds
 
         # Prepare the arguments for the C function.
-        args = self._prepare_sed_args(grid, fesc=0.0, spectra_type='stellar')
+        args = self._prepare_sed_args(grid, fesc=0.0, spectra_type="incident")
 
         # Get the integrated stellar SED
         spec_arr = compute_particle_seds(*args)
@@ -515,7 +515,7 @@ class Galaxy(BaseGalaxy):
 
         if update:
             # Store the spectra in the galaxy
-            self.spectra_array['stellar'] = sed
+            self.spectra_array["incident"] = sed
 
         return sed
 
@@ -569,7 +569,7 @@ class Galaxy(BaseGalaxy):
         from ..extensions.csed import compute_particle_seds
 
         # Prepare the arguments for the C function.
-        args = self._prepare_sed_args(grid, fesc=fesc, spectra_type='stellar')
+        args = self._prepare_sed_args(grid, fesc=fesc, spectra_type="incident")
 
         # Get the integrated stellar SED
         spec_arr = compute_particle_seds(*args)
@@ -578,7 +578,7 @@ class Galaxy(BaseGalaxy):
 
         if update:
             # Store the spectra in the galaxy
-            self.spectra_array['stellar'] = sed
+            self.spectra_array["incident"] = sed
 
         return sed
 
@@ -633,7 +633,7 @@ class Galaxy(BaseGalaxy):
         # from ..extensions.csed import compute_particle_seds
 
         # # Prepare the arguments for the C function.
-        # args = self._prepare_sed_args(grid, fesc=fesc, spectra_type='stellar')
+        # args = self._prepare_sed_args(grid, fesc=fesc, spectra_type="incident")
 
         # # Get the integrated stellar SED
         # spec_arr = compute_particle_seds(*args)
@@ -642,7 +642,7 @@ class Galaxy(BaseGalaxy):
 
         # if update:
         #     # Store the spectra in the galaxy
-        #     self.spectra_array['stellar'] = sed
+        #     self.spectra_array["incident"] = sed
 
         # return sed
 

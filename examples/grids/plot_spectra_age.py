@@ -26,7 +26,7 @@ cmap = cmr.bubblegum
 norm = mpl.colors.Normalize(vmin=5., vmax=11.)
 
 
-def plot_spectra_age(grid, target_Z, spec_name='stellar'):
+def plot_spectra_age(grid, target_Z, spec_name="incident"):
 
     # get closest metallicity grid point
     grid_point = grid.get_grid_point((grid.log10age[0], target_Z))
