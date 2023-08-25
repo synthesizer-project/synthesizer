@@ -9,6 +9,11 @@ Despite its name a Particle based Galaxy can be used for any collection of
 particles to enable certain functionality (e.g. imaging of a galaxy group, or
 spectra for all particles in a simualtion.)
 
+Example usage:
+
+    galaxy = Galaxy(stars, gas, black_holes, ...)
+    galaxy.get_spectra_incident(...)
+
 """
 import numpy as np
 
