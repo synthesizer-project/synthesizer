@@ -1,3 +1,15 @@
+""" A module containing all the funtionality for Particle based galaxies.
+
+Like it's parametric variant this module contains the Galaxy object defition
+from which all galaxy focused functionality can be performed. This variant uses
+Particle objects which can either be derived from simulation data or generated
+from parametric models. A Galaxy can contain Stars, Gas, and BlackHoles.
+
+Despite its name a Particle based Galaxy can be used for any collection of
+particles to enable certain functionality (e.g. imaging of a galaxy group, or
+spectra for all particles in a simualtion.)
+
+"""
 import numpy as np
 
 from ..exceptions import MissingSpectraType
