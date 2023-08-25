@@ -209,20 +209,19 @@ Attributes:
         return (grid_spectra, grid_props, part_props, part_mass, fesc,
                 grid_dims, len(grid_props), npart, nlam)
 
-    def calculate_black_hole_metallicity(self, local_region_radius=0.1 * kpc):
+    def calculate_black_hole_metallicity(self, ngas_neighbours=8):
         """
         Calculates the metallicity of the region surrounding a black hole. This
-        is defined as the mass weighted average metallicity of gas particles
-        within local_region_radius of the black hole.
+        is defined as the mass weighted average metallicity of the nearest
+        ngas_neighbour gas particles.
 
         Args:
-            local_region_radius (unyt_quantity)
-                The radius of the spherical region surrounding black holes in
-                which gas particles are considered for the calulcation of the
-                black hole's metallicity.
+            ngas_neighbours (int)
+                The number of gas neighbours to consider for the metallcity of
+                the region surrounding a black hole.
         """
 
-        # Ensure we actually have Gas and black holes, and the distance has units
+        # Ensure we actually have Gas and black holes
         if self.gas is None:
             raise exceptions.InconsistentArguments(
                 "Calculating the metallicity of the region surrounding the black"
@@ -232,31 +231,18 @@ Attributes:
             raise exceptions.InconsistentArguments(
                 "This Galaxy does not have a black holes object!"
             )
-        if not instance(local_region_radius, unyt_quantity):
-            raise exceptions.InconsistentArguments(
-                "local_region_radius must have unyt units associated to it to"
-                " ensure consistency!"
-            )
-
-        # Ensure the search radius we have been handed is in the correct units
-        if self.gas.coordinates.units != local_region_radius.units:
-            local_region_radius
 
         # Construct a KD-Tree to efficiently get particle within
         # local_region_radius
         tree = cKDTree(self.gas._coordinates)
 
         # Query the tree for gas particles in range of each black hole
-        inds = tree.query_ball_point(self.black_holes._coordinates,
-                                     r=local_region_radius.value)
+        inds = tree.query(self.black_holes._coordinates,
+                          k=ngas_neighbours)
 
         # Loop over black holes
         metals = np.zeros(self.blackholes.nbh)
         for ind, gas_in_range enumerate(inds):
-
-            # Handle the case where there is no gas in range
-            if len(gas_in_range) == 0:
-                continue
 
             # Calculate the mass weight metallicity of this black holes region
             metals[ind] = np.average(
