@@ -32,7 +32,7 @@ class BaseGalaxy:
                        "You should not be seeing this!!!")
                       )
 
-    def get_spectra_incident(
+    def get_spectra_stellar(
             self,
             grid,
             young=False,
