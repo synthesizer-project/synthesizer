@@ -106,7 +106,7 @@ class BlackHoles(Particles):
 
         # Calculate the big bump temperature
         self.bb_temperature = 2.24E9 * \
-            self.accretion_rate ** (1 / 4) * self.masses * -0.5
+            self._accretion_rate ** (1 / 4) * self._masses * -0.5
 
         # The metallicity of the region surrounding the black hole.
         self.metallicities = metallicities
