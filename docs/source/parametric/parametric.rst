@@ -2,7 +2,7 @@ Parametric models
 =================
 
 Synthesizer can be used to generate spectra for simple parametric star formation and metal enrichment (SFZH) histories.
-In the following we show some examples.
+In the following we show some examples of how to do this:
 
 .. toctree::
    :maxdepth: 2
