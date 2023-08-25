@@ -47,7 +47,7 @@ class Stars(Particles):
             The age of each stellar particle in Myrs.
         metallicities (array-like, float)
             The metallicity of each stellar particle.
-        tauV (array-like, float)
+        tau_v (array-like, float)
             V-band dust optical depth of each stellar particle.
         alpha_enhancement (array-like, float)
             The alpha enhancement [alpha/Fe] of each stellar particle.
@@ -74,9 +74,12 @@ class Stars(Particles):
 
     # Define the allowed attributes
     __slots__ = ["metallicities", "nparticles",
-                 "tauV", "alpha", "imf_hmass_slope", "log10ages",
+                 "tau_v", "alpha_enhancement", "imf_hmass_slope", "log10ages",
                  "log10metallicities", "resampled", 
-                 "velocities", "s_oxygen", "s_hydrogen"]
+                 "velocities", "s_oxygen", "s_hydrogen", "nstars",
+                 "tau_v", "_coordinates", "_smoothing_lengths",
+                 "_softening_lengths", "_masses", "_initial_masses",
+                 "_ages", "_current_masses"]
 
     # Define class level Quantity attributes
     initial_masses = Quantity()
@@ -85,7 +88,7 @@ class Stars(Particles):
     smoothing_lengths = Quantity()
 
     def __init__(self, initial_masses, ages, metallicities, redshift=None,
-                 tauV=None, alpha_enhancement=None, coordinates=None,
+                 tau_v=None, alpha_enhancement=None, coordinates=None,
                  velocities=None, current_masses=None, smoothing_lengths=None,
                  s_oxygen=None, s_hydrogen=None, imf_hmass_slope=None,
                  softening_length=None):
@@ -103,7 +106,7 @@ class Stars(Particles):
                 The metallicity of each stellar particle.
             redshift (float)
                 The redshift/s of the stellar particles.
-            tauV (array-like, float)
+            tau_v (array-like, float)
                 V-band dust optical depth of each stellar particle.
             alpha_enhancement (array-like, float)
                 The alpha enhancement [alpha/Fe] of each stellar particle.
@@ -149,7 +152,7 @@ class Stars(Particles):
         self.current_masses = self.masses
 
         # Set the V band optical depths
-        self.tauV = tauV
+        self.tau_v = tau_v
 
         # Set the alpha enhancement [alpha/Fe] (only used for >2 dimensional
         # SPS grids)
@@ -186,7 +189,7 @@ class Stars(Particles):
         """
 
         # Ensure all arrays are the expected length
-        for key in self.__dict__:
+        for key in self.__slots__:
             attr = getattr(self, key)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:

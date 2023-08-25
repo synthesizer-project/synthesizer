@@ -333,15 +333,15 @@ class Sed:
         flux = flux * (wavelength ** 2)
 
         # Define the wavelength range of the absorption feature
-        absorption_start = index[0]
-        absorption_end = index[1]
+        absorption_start = index[1]
+        absorption_end = index[2]
 
         # Define the wavelength ranges of the two sets of continuum
-        blue_start = index[2]
-        blue_end = index[3]
+        blue_start = index[3]
+        blue_end = index[4]
 
-        red_start = index[4]
-        red_end = index[5]
+        red_start = index[5]
+        red_end = index[6]
 
         # Compute the average continuum level
         continuum_indices = np.where((wavelength >= absorption_start) & (wavelength <= absorption_end))[0]
