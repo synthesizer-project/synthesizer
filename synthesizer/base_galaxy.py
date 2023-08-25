@@ -105,6 +105,7 @@ class BaseGalaxy:
     def get_spectra_transmitted(
         self,
         grid,
+        fesc=0.0,
         young=False,
         old=False,
         update=True
@@ -115,6 +116,9 @@ class BaseGalaxy:
         Args:
             grid (obj):
                 spectral grid object
+            fesc (float):
+                fraction of stellar emission that escapes unattenuated from
+                the birth cloud (defaults to 0.0)
             update (bool):
                 flag for whether to update the `stellar` spectra
                 inside the galaxy object `spectra` dictionary.
@@ -130,7 +134,7 @@ class BaseGalaxy:
             An Sed object containing the stellar spectra
         """
 
-        lnu = self.generate_lnu(grid, 'transmitted', young=young, old=old)
+        lnu = (1.-fesc)*self.generate_lnu(grid, 'transmitted', young=young, old=old)
 
         sed = Sed(grid.lam, lnu)
 
@@ -216,14 +220,23 @@ class BaseGalaxy:
             An Sed object containing the intrinsic spectra
         """
 
-        stellar = self.get_spectra_transmitted(grid, update=update,
+        # the stellar emission which **is not** reprocessed by the gas
+        escape = fesc * self.get_spectra_transmitted(grid, update=update,
                                            young=young, old=old)
+        
+
+        # the stellar emission which **is** reprocessed by the gas
+        transmitted = self.get_spectra_transmitted(grid, fesc, update=update,
+                                           young=young, old=old)
+        
+        # the nebular emission 
         nebular = self.get_spectra_nebular(grid, fesc, update=update,
                                            young=young, old=old)
 
-        sed = Sed(grid.lam, stellar._lnu + nebular._lnu)
+        sed = Sed(grid.lam, escape._lnu + transmitted._lnu + nebular._lnu)
 
         if update:
+            self.spectra['escape'] = escape
             self.spectra['intrinsic'] = sed
 
         return sed
@@ -231,7 +244,7 @@ class BaseGalaxy:
     def get_spectra_screen(
             self,
             grid,
-             fesc=0.0,
+            fesc=0.0,
             tauV=None,
             dust_curve=power_law({'slope': -1.}),
             young=False,
