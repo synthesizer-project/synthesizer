@@ -243,7 +243,7 @@ class Grid:
 
                 self.spectra[spec_name] = hf['spectra'][spec_name][:]
 
-                # if incident is one of the spectra also add a spectra called "stellar"
+                # if incident is one of the spectra also add a spectra called "incident"
                 if spec_name == 'incident':
                     self.spectra['stellar'] = self.spectra[spec_name]
 

@@ -344,7 +344,7 @@ class Survey:
         for ind, gal in enumerate(self.galaxies):
 
             # Are we getting a flux or rest frame?
-            if spectra_type == "stellar":
+            if spectra_type == "incident":
                 _specs[ind, :] = gal.get_spectra_incident(grid)._lnu
             elif spectra_type == "intrinsic":
                 _specs[ind, :] = gal.get_spectra_intrinsic(grid)._lnu
@@ -448,7 +448,7 @@ class Survey:
         for ind, gal in enumerate(self.galaxies):
 
             # Are we getting a flux or rest frame?
-            if spectra_type == "stellar":
+            if spectra_type == "incident":
                 sed = gal.get_particle_spectra_stellar(grid)
                 gal.spectra_array[spectra_type] = sed
             elif spectra_type == "intrinsic":
@@ -475,7 +475,7 @@ class Survey:
         # We need to handle whether different types of spectra exist.
         if spectra_type == "intrinsic":
             pass
-        elif spectra_type == "stellar":
+        elif spectra_type == "incident":
             pass
         elif spectra_type == "total":
             pass
