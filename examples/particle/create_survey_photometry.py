@@ -115,11 +115,11 @@ for igal in range(ngalaxies):
 survey.add_galaxies(galaxies)
 
 # Get the SEDs
-survey.get_spectra(grid, spectra_type="stellar", rest_frame=False,
+survey.get_spectra(grid, spectra_type="incident", rest_frame=False,
                    redshift=redshift)
 
 # Make images for each galaxy in this survey
-survey.get_photometry(spectra_type="stellar")
+survey.get_photometry(spectra_type="incident")
 
 print("Total runtime (including creation, not including plotting):",
       time.time() - start)
