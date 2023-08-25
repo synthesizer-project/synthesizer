@@ -17,6 +17,7 @@ Example usage:
 """
 import numpy as np
 from unyt import kpc, unyt_quantity
+from scipy.spatial import cKDTree
 
 from ..exceptions import MissingSpectraType
 from ..particle.stars import Stars
@@ -209,16 +210,16 @@ Attributes:
         return (grid_spectra, grid_props, part_props, part_mass, fesc,
                 grid_dims, len(grid_props), npart, nlam)
 
-    def calculate_black_hole_metallicity(self, ngas_neighbours=8):
+    def calculate_black_hole_metallicity(self, default_metallicity=0.012):
         """
         Calculates the metallicity of the region surrounding a black hole. This
-        is defined as the mass weighted average metallicity of the nearest
-        ngas_neighbour gas particles.
+        is defined as the mass weighted average metallicity of all gas particles
+        whose SPH kernels intersect the black holes position.
 
         Args:
-            ngas_neighbours (int)
-                The number of gas neighbours to consider for the metallcity of
-                the region surrounding a black hole.
+            default_metallicity (float)
+                The metallicity value used when no gas particles are in range
+                of the black hole. The default is solar metallcity.
         """
 
         # Ensure we actually have Gas and black holes
@@ -232,17 +233,38 @@ Attributes:
                 "This Galaxy does not have a black holes object!"
             )
 
-        # Construct a KD-Tree to efficiently get particle within
-        # local_region_radius
+        # Construct a KD-Tree to efficiently get all gas particles which
+        # intersect the black hole
         tree = cKDTree(self.gas._coordinates)
 
-        # Query the tree for gas particles in range of each black hole
-        inds = tree.query(self.black_holes._coordinates,
-                          k=ngas_neighbours)
+        # Query the tree for gas particles in range of each black hole, here
+        # we use the maximum smoothing length to get all possible intersections
+        # without calculating the distance for every gas particle.
+        inds = tree.query_ball_point(self.black_holes._coordinates,
+                                     r=self.gas._smoothing_lengths.max())
 
         # Loop over black holes
         metals = np.zeros(self.blackholes.nbh)
         for ind, gas_in_range enumerate(inds):
+
+            # Handle black holes with no neighbouring gas
+            if len(gas_in_range) == 0:
+                metals[ind] = default_metallicity
+
+            # Calculate the separation between the black hole and gas particles
+            sep = (
+                self.gas_coordinates[gas_in_range, :]
+                - self.blackholes._coordinates[ind, :]
+            )
+            dists = np.sqrt(sep[0] ** 2 + sep[1] ** 2 + sep[2] ** 2)
+
+            # Get only the gas particles with smoothing lengths that intersect
+            okinds = dists < self.gas._smoothing_lengths[gas_in_range]
+            gas_in_range = gas_in_range[okinds]
+
+            # The above operation can remove all gas neighbours...
+            if len(gas_in_range) == 0:
+                metals[ind] = default_metallicity
 
             # Calculate the mass weight metallicity of this black holes region
             metals[ind] = np.average(
