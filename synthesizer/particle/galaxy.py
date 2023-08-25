@@ -28,7 +28,6 @@ from ..base_galaxy import BaseGalaxy
 from .. import exceptions
 from ..imaging.images import ParticleImage
 
-
 class Galaxy(BaseGalaxy):
     """ The Particle based Galaxy object.
 
@@ -154,10 +153,10 @@ class Galaxy(BaseGalaxy):
         and attach to this galaxy object
 
         Args:
-        masses : array_like (float)
-            gas particle masses, Msol
-        metals : array_like (float)
-            gas particle metallicity (total metal fraction)
+            masses : array_like (float)
+                gas particle masses, Msol
+            metals : array_like (float)
+                gas particle metallicity (total metal fraction)
         **kwargs
 
         Returns:
@@ -168,10 +167,22 @@ class Galaxy(BaseGalaxy):
         self.gas = Gas(masses, metals, **kwargs)
         self.calculate_integrated_gas_properties()
 
-    def _prepare_args(self, grid, fesc, spectra_type, mask=None):
+    def _prepare_sed_args(self, grid, fesc, spectra_type, mask=None):
         """
         A method to prepare the arguments for SED computation with the C
         functions.
+
+        Args:
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            fesc (float)
+                The escape fraction.
+            spectra_type (str)
+                The type of spectra to extract from the Grid. This must match a
+                type of spectra stored in the Grid.
+            mask (bool)
+                A mask to be applied to the stars. Spectra will only be computed
+                and returned for stars with True in the mask.
         """
 
         if mask is None:
@@ -179,8 +190,8 @@ class Galaxy(BaseGalaxy):
 
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(grid.log10ages, dtype=np.float64),
-            np.ascontiguousarray(grid.log10metallicities, dtype=np.float64)
+            np.ascontiguousarray(grid.log10age, dtype=np.float64),
+            np.ascontiguousarray(grid.metallicity, dtype=np.float64)
         ]
         part_props = [
             np.ascontiguousarray(
@@ -275,6 +286,79 @@ class Galaxy(BaseGalaxy):
         # Assign the metallicity we have found
         self.black_holes.metallicities = metals
 
+    def _prepare_los_args(self, kernel, mask, threshold, force_loop):
+        """
+        A method to prepare the arguments for line of sight metal surface
+        density computation with the C function.
+
+        Args:
+            kernel (array_like, float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value of
+                impact parameter q via kernel[int(k*q)]. Note, this can be an
+                arbitrary kernel.
+            mask (bool)
+                A mask to be applied to the stars. Surface densities will only be
+                computed and returned for stars with True in the mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
+        """
+
+        # If we have no gas, throw an error
+        if self.gas is None:
+            raise exceptions.InconsistentArguments(
+                "No Gas object has been provided! We can't calculate line of "
+                "sight dust attenuation with at Gas object containing the "
+                "dust!"
+            )
+
+        # Set up the kernel inputs to the C function.
+        kernel =  np.ascontiguousarray(kernel, dtype=np.float64)
+        kdim = kernel.size
+
+        # Set up the stellar inputs to the C function.
+        star_pos = np.ascontiguousarray(
+            self.stars._coordinates[mask, :],
+            dtype=np.float64
+        )
+        nstar = self.stars._coordinates[mask, :].shape[0]
+
+        # Set up the gas inputs to the C function.
+        gas_pos =  np.ascontiguousarray(
+            self.gas._coordinates,
+            dtype=np.float64
+        )
+        gas_sml = np.ascontiguousarray(
+            self.gas._smoothing_lengths,
+            dtype=np.float64
+        )
+        gas_met = np.ascontiguousarray(
+            self.gas.metallicities,
+            dtype=np.float64
+        )
+        gas_mass = np.ascontiguousarray(
+            self.gas._masses,
+            dtype=np.float64
+        )
+        if isinstance(self.gas.dust_to_metal_ratio, float):
+            gas_dtm = np.ascontiguousarray(
+                np.full_like(
+                    gas_mass, self.gas.dust_to_metal_ratio
+                ),
+                dtype=np.float64
+            )
+        else:
+            gas_dtm = np.ascontiguousarray(
+                self.gas.dust_to_metal_ratio,
+                dtype=np.float64
+            )
+        ngas = gas_mass.size
+
+        return (kernel, star_pos, gas_pos, gas_sml, gas_met,
+                gas_mass, gas_dtm, nstar, ngas, kdim, threshold,
+                np.max(gas_sml), force_loop)
+
     def generate_lnu(
                     self,
                     grid,
@@ -330,7 +414,7 @@ class Galaxy(BaseGalaxy):
         from ..extensions.csed import compute_integrated_sed
 
         # Prepare the arguments for the C function.
-        args = self._prepare_args(grid, fesc=fesc, 
+        args = self._prepare_sed_args(grid, fesc=fesc, 
                                   spectra_type=spectra_name,
                                   mask=mask)
 
@@ -422,7 +506,7 @@ class Galaxy(BaseGalaxy):
         from ..extensions.csed import compute_particle_seds
 
         # Prepare the arguments for the C function.
-        args = self._prepare_args(grid, fesc=0.0, spectra_type='stellar')
+        args = self._prepare_sed_args(grid, fesc=0.0, spectra_type='stellar')
 
         # Get the integrated stellar SED
         spec_arr = compute_particle_seds(*args)
@@ -481,11 +565,11 @@ class Galaxy(BaseGalaxy):
             raise MissingSpectraType(
                 "The Grid does not contain the key '%s'" % 'intrinsic'
             )
-        
+
         from ..extensions.csed import compute_particle_seds
 
         # Prepare the arguments for the C function.
-        args = self._prepare_args(grid, fesc=fesc, spectra_type='stellar')
+        args = self._prepare_sed_args(grid, fesc=fesc, spectra_type='stellar')
 
         # Get the integrated stellar SED
         spec_arr = compute_particle_seds(*args)
@@ -549,7 +633,7 @@ class Galaxy(BaseGalaxy):
         # from ..extensions.csed import compute_particle_seds
 
         # # Prepare the arguments for the C function.
-        # args = self._prepare_args(grid, fesc=fesc, spectra_type='stellar')
+        # args = self._prepare_sed_args(grid, fesc=fesc, spectra_type='stellar')
 
         # # Get the integrated stellar SED
         # spec_arr = compute_particle_seds(*args)
@@ -611,33 +695,70 @@ class Galaxy(BaseGalaxy):
 
         pass
 
-    def calculate_los_tauV(
+    def calculate_los_tau_v(
             self,
-            update=True
+            kappa,
+            kernel,
+            mask=None,
+            threshold=1,
+            force_loop=0,
     ):
         """
-        Calculate tauV for each star particle based on the distribution of
-        star/gas particles
+        Calculate tau_v for each star particle based on the distribution of
+        stellar and gas particles.
+
+        Note: the resulting tau_vs will be associated to the stars object at
+        self.stars.tau_v.
 
         Args:
-            update (bool):
+            kappa (float)
+                ...
+            kernel (array_like/float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value of
+                impact parameter q via kernel[int(k*q)]. Note, this can be an
+                arbitrary kernel.
+            mask (bool)
+                A mask to be applied to the stars. Surface densities will only be
+                computed and returned for stars with True in the mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
         """
 
-        # by default should update self.stars
-        
-        pass
+        from ..extensions.los import compute_dust_surface_dens
 
-    def apply_los(self, tauV, 
+        # If we don't have a mask make a fake one for consistency
+        if mask is None:
+            mask = np.ones(self.stars.nparticles, dtype=bool)
+
+        # Prepare the arguments
+        args = self._prepare_los_args(kernel, mask, threshold, force_loop)
+
+        # Compute the dust surface densities
+        los_dustsds = compute_dust_surface_dens(*args)
+        
+        # Finalise the calculation
+        tau_v = kappa * los_dustsds
+
+        # Store the result in self.stars
+        if self.stars.tau_v is None:
+            self.stars.tau_v = np.zeros(self.stars.nparticles)
+        self.stars.tau_v[mask] = tau_v
+        
+        return tau_v
+
+    def apply_los(self, tau_v, 
                   spectra_type,
                   dust_curve=power_law({'slope': -1.}),
                   integrated=True, sed_object=True):
         """
         Generate
-        tauV: V-band optical depth for every star particle
+        tau_v: V-band optical depth for every star particle
         dust_curve: instance of the dust class
         """
 
-        T = np.outer(tauV, dust_curve.T(self.lam))
+        T = np.outer(tau_v, dust_curve.T(self.lam))
 
         # need exception
         # if not self.intrinsic_lum_array:
@@ -716,6 +837,41 @@ class Galaxy(BaseGalaxy):
                             pixel_values=self.stars.initial_masses)
 
         return img.get_hist_imgs()
+
+    def get_equivalent_width(self, index, spectra_to_plot=None):
+        """
+         Gets all equivalent widths associated with a sed object
+
+         NOTE: index and pseudo continuum windows must be defined.
+
+         Parameters
+         ----------
+         index: float
+            the index to be used in the computation of equivalent width.
+         spectra_to_plot: float array
+             An empty list of spectra to be populated.
+
+         Returns
+         -------
+         equivalent_width : float
+             The calculated equivalent width at the current index.
+
+         """
+
+        equivalent_width = None
+
+        if type(spectra_to_plot) != list:
+            spectra_to_plot = list(self.spectra.keys())
+
+        for sed_name in spectra_to_plot:
+            sed = self.spectra[sed_name]
+            lam_arr = sed.lam
+            lnu_arr = sed.lnu
+
+            # Compute equivalent width
+            equivalent_width = sed.calculate_ew(lam_arr, lnu_arr, index)
+
+        return equivalent_width
 
     def make_images(self, resolution, fov=None, img_type="hist",
                     sed=None, filters=(), pixel_values=None, psfs=None,

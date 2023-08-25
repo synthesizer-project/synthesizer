@@ -40,7 +40,9 @@ class BaseGalaxy:
             update=True
     ):
         """
-        Generate the pure stellar spectra using the provided Grid
+        Generate the pure stellar spectra using the provided Grid. 
+
+        NOTE: this should be replace by incident.
 
         Args:
             grid (obj):
@@ -66,6 +68,87 @@ class BaseGalaxy:
 
         if update:
             self.spectra['stellar'] = sed
+
+        return sed
+    
+    def get_spectra_incident(
+            self,
+            grid,
+            young=False,
+            old=False,
+            update=True
+    ):
+        """
+        Generate the incident (equivalent to pure stellar for stars) spectra 
+        using the provided Grid.
+
+        Args:
+            grid (obj):
+                spectral grid object
+            update (bool):
+                flag for whether to update the `stellar` spectra
+                inside the galaxy object `spectra` dictionary.
+                These are the combined values of young and old.
+            young (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for young star particles
+            old (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for old star particles
+
+        Returns:
+            An Sed object containing the stellar spectra
+        """
+
+        lnu = self.generate_lnu(grid, 'incident', young=young, old=old)
+
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra['incident'] = sed
+
+        return sed
+    
+    def get_spectra_transmitted(
+        self,
+        grid,
+        fesc=0.0,
+        young=False,
+        old=False,
+        update=True
+    ):
+        """
+        Generate the transmitted spectra using the provided Grid. This is the
+        emission which is transmitted through the gas as calculated by the
+        photoionisation code.
+
+        Args:
+            grid (obj):
+                spectral grid object
+            fesc (float):
+                fraction of stellar emission that escapes unattenuated from
+                the birth cloud (defaults to 0.0)
+            update (bool):
+                flag for whether to update the `stellar` spectra
+                inside the galaxy object `spectra` dictionary.
+                These are the combined values of young and old.
+            young (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for young star particles
+            old (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for old star particles
+
+        Returns:
+            An Sed object containing the transmitted spectra
+        """
+
+        lnu = (1.-fesc)*self.generate_lnu(grid, 'transmitted', young=young, old=old)
+
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra['transmitted'] = sed
 
         return sed
 
@@ -122,8 +205,12 @@ class BaseGalaxy:
             update=True
     ):
         """
-        Generates the intrinsic spectra, i.e. the combination of the
-         stellar and nebular emission, but not including dust.
+        Generates the intrinsic spectra, this is the sum of the escaping 
+        radiation (if fesc>0), the transmitted emission, and the nebular 
+        emission. The transmitted emission is the emission that is
+        transmitted through the gas. In addition to returning the intrinsic
+        spectra this saves the incident, nebular, and escape spectra if 
+        update is set to True.
 
         Args:
             grid (obj):
@@ -143,33 +230,44 @@ class BaseGalaxy:
                 for old star particles
 
         Returns:
-            An Sed object containing the intrinsic spectra
+            An Sed object containing the intrinsic spectra.
         """
 
-        stellar = self.get_spectra_stellar(grid, update=update,
+        # the incident emission 
+        incident = self.get_spectra_incident(grid, update=update,
                                            young=young, old=old)
+        
+        # the emission which escapes the gas
+        escape = Sed(grid.lam, incident._lnu)
+
+        # the stellar emission which **is** reprocessed by the gas
+        transmitted = self.get_spectra_transmitted(grid, fesc, update=update,
+                                           young=young, old=old)        
+        # the nebular emission 
         nebular = self.get_spectra_nebular(grid, fesc, update=update,
                                            young=young, old=old)
 
-        sed = Sed(grid.lam, stellar._lnu + nebular._lnu)
+        # the intrinsic emission, the sum of escape, transmitted, and nebular
+        intrinsic = Sed(grid.lam, escape._lnu + transmitted._lnu + nebular._lnu)
 
         if update:
-            self.spectra['intrinsic'] = sed
+            self.spectra['escape'] = escape
+            self.spectra['intrinsic'] = intrinsic
 
-        return sed
+        return intrinsic
 
     def get_spectra_screen(
             self,
             grid,
-             fesc=0.0,
-            tauV=None,
+            fesc=0.0,
+            tau_v=None,
             dust_curve=power_law({'slope': -1.}),
             young=False,
             old=False,                      
             update=True
     ):
         """
-        Calculates dust attenuated spectra assuming a simple screen
+        Calculates dust attenuated spectra assuming a simple screen. This simply operates on the intrinsic spectrum.
 
         Args:
             grid (object, Grid):
@@ -177,7 +275,7 @@ class BaseGalaxy:
             fesc (float):
                 fraction of stellar emission that escapes unattenuated from
                 the birth cloud (defaults to 0.0)
-            tauV (float):
+            tau_v (float):
                 numerical value of dust attenuation
             dust_curve (object)
                 instance of dust_curve
@@ -200,8 +298,8 @@ class BaseGalaxy:
         intrinsic = self.get_spectra_intrinsic(grid, update=update,
                                                fesc=fesc, young=young, old=old)
 
-        if tauV:
-            T = dust_curve.attenuate(tauV, grid.lam)
+        if tau_v:
+            T = dust_curve.attenuate(tau_v, grid.lam)
         else:
             T = 1.0
 
@@ -216,7 +314,7 @@ class BaseGalaxy:
             self,
             grid,
             dust_curve=power_law(),
-            tauV=1.,
+            tau_v=1.,
             alpha=-1.,
             CF00=False,
             old=7.,
@@ -246,17 +344,17 @@ class BaseGalaxy:
                 Lyman continuum escape fraction
             fesc_LyA (float):
                 Lyman-alpha escape fraction
-            tauV (float):
+            tau_v (float):
                 numerical value of dust attenuation
             alpha (float):
                 numerical value of the dust curve slope
             CF00 (bool):
                 Toggle Charlot and Fall 2000 dust attenuation
-                Requires two values for tauV and alpha
+                Requires two values for tau_v and alpha
 
         Raises:
             InconsistentArguments:
-                Errors when more than two values for tauV and alpha is
+                Errors when more than two values for tau_v and alpha is
                 passed for CF00 dust screen. In case of single dust
                 screen, raises error for multiple optical depths or dust
                 curve slope.
@@ -267,15 +365,15 @@ class BaseGalaxy:
         """
 
         if CF00:
-            if (len(tauV)>2) or (len(alpha)>2):
+            if (len(tau_v)>2) or (len(alpha)>2):
                 exceptions.InconsistentArguments(
                     ("Only 2 values for the optical depth or dust curve "
                      "slope are allowed for CF00"))
         else:
-            if isinstance(tauV, (list, tuple, np.ndarray))\
+            if isinstance(tau_v, (list, tuple, np.ndarray))\
                 or isinstance(alpha, (list, tuple, np.ndarray)):
                 exceptions.InconsistentArguments(
-                    ("Only single value supported for tauV and alpha in "
+                    ("Only single value supported for tau_v and alpha in "
                      "case of single dust screen"))
 
         # --- begin by generating the pure stellar spectra
@@ -345,12 +443,12 @@ class BaseGalaxy:
                 self.spectra['reprocessed_nebular']._lnu = (
                     1.-fesc) * (linecont + nebcont)
 
-        if np.isscalar(tauV):
+        if np.isscalar(tau_v):
             # single screen dust, no separate birth cloud attenuation
             dust_curve.params['slope'] = alpha
 
             # calculate dust attenuation
-            T = dust_curve.attenuate(tauV, grid.lam)
+            T = dust_curve.attenuate(tau_v, grid.lam)
             
             self.spectra['reprocessed_attenuated']._lnu = \
                 T*self.spectra['reprocessed_intrinsic']._lnu
@@ -360,7 +458,7 @@ class BaseGalaxy:
             
             # self.spectra['total']._lnu = self.spectra['attenuated']._lnu
         
-        elif np.isscalar(tauV) == False:
+        elif np.isscalar(tau_v) == False:
             # Two screen dust, one for diffuse other for birth cloud dust.
             if np.isscalar(alpha):
                 print(("Separate dust curve slopes for diffuse and "
@@ -372,10 +470,10 @@ class BaseGalaxy:
             self.spectra['reprocessed_attenuated'] = Sed(grid.lam)
             
             dust_curve.params['slope']=alpha[0]
-            T_ISM = dust_curve.attenuate(tauV[0], grid.lam)
+            T_ISM = dust_curve.attenuate(tau_v[0], grid.lam)
             
             dust_curve.params['slope']=alpha[1]
-            T_BC = dust_curve.attenuate(tauV[1], grid.lam)
+            T_BC = dust_curve.attenuate(tau_v[1], grid.lam)
 
             T_yng = T_ISM * T_BC
             T_old = T_ISM
@@ -407,7 +505,7 @@ class BaseGalaxy:
             self,
             grid,
             dust_curve,
-            tauV,
+            tau_v,
             alpha,
             old=False,
             young=False,
@@ -428,14 +526,14 @@ class BaseGalaxy:
         intrinsic_sed = self.generate_lnu(grid, spectra_name=spectra_name,
                                           old=old, young=young)
 
-        if np.isscalar(tauV):
+        if np.isscalar(tau_v):
             dust_curve.params['slope'] = alpha
-            T_total = dust_curve.attenuate(tauV, grid.lam)
+            T_total = dust_curve.attenuate(tau_v, grid.lam)
         else:
             T_total = np.ones(len(intrinsic_sed))
-            for _tauV, _alpha in zip(tauV, alpha):
+            for _tau_v, _alpha in zip(tau_v, alpha):
                 dust_curve.params['slope'] = _alpha
-                _T = dust_curve.attenuate(_tauV, grid.lam)
+                _T = dust_curve.attenuate(_tau_v, grid.lam)
                 T_total *= _T
 
         return intrinsic_sed * T_total
@@ -444,8 +542,8 @@ class BaseGalaxy:
             self,
             grid,
             dust_curve=power_law(),
-            tauV_ISM=1.,
-            tauV_BC=1.,
+            tau_v_ISM=1.,
+            tau_v_BC=1.,
             alpha_ISM=-0.7,
             alpha_BC=-1.3,
             old=7.,
@@ -463,9 +561,9 @@ class BaseGalaxy:
         ----------
         grid : obj (Grid)
             The spectral frid
-        tauV_ISM: float
+        tau_v_ISM: float
             numerical value of dust attenuation due to the ISM in the V-band
-        tauV_BC: float
+        tau_v_BC: float
             numerical value of dust attenuation due to the BC in the V-band
         alpha_ISM: float
             slope of the ISM dust curve, -0.7 in MAGPHYS
@@ -487,12 +585,12 @@ class BaseGalaxy:
             ValueError(F"{spectra_name} not in the data spectra grids\n")
 
         sed_young = self.get_spectra_one_component(
-            grid, dust_curve, tauV=[tauV_ISM, tauV_BC], 
+            grid, dust_curve, tau_v=[tau_v_ISM, tau_v_BC], 
             alpha=[alpha_ISM, alpha_BC], 
             old=False, young=young, spectra_name=spectra_name)
         
         sed_old = self.get_spectra_one_component(
-            grid, dust_curve, tauV=tauV_ISM, alpha=alpha_ISM, 
+            grid, dust_curve, tau_v=tau_v_ISM, alpha=alpha_ISM, 
             old=old, young=False, spectra_name=spectra_name)
 
         if save_young_and_old:
@@ -622,8 +720,8 @@ class BaseGalaxy:
             grid,
             line_ids,
             fesc=0.0,
-            tauV_nebular=None,
-            tauV_stellar=None,
+            tau_v_nebular=None,
+            tau_v_stellar=None,
             dust_curve_nebular=power_law({'slope': -1.}),
             dust_curve_stellar=power_law({'slope': -1.}),
             update=True
@@ -644,9 +742,9 @@ class BaseGalaxy:
         fesc : float
             The Lyman continuum escape fraction, the fraction of
             ionising photons that entirely escape
-        tauV_nebular : float
+        tau_v_nebular : float
             V-band optical depth of the nebular emission
-        tauV_stellar : float
+        tau_v_stellar : float
             V-band optical depth of the stellar emission
         dust_curve_nebular : obj (dust_curve)
             A dust_curve object specifying the dust curve
@@ -676,9 +774,9 @@ class BaseGalaxy:
 
             # calculate attenuation
             T_nebular = dust_curve_nebular.attenuate(
-                tauV_nebular, intrinsic_line._wavelength)
+                tau_v_nebular, intrinsic_line._wavelength)
             T_stellar = dust_curve_stellar.attenuate(
-                tauV_stellar, intrinsic_line._wavelength)
+                tau_v_stellar, intrinsic_line._wavelength)
 
             luminosity = intrinsic_line._luminosity * T_nebular
             continuum = intrinsic_line._continuum * T_stellar
@@ -704,7 +802,7 @@ class BaseGalaxy:
             grid,
             line_ids,
             fesc=0.0,
-            tauV=None,
+            tau_v=None,
             dust_curve=power_law({'slope': -1.}),
             update=True
     ):
@@ -724,7 +822,7 @@ class BaseGalaxy:
             fesc : float
                 The Lyman continuum escape fraction, the fraction of
                 ionising photons that entirely escape
-            tauV : float
+            tau_v : float
                 V-band optical depth
             dust_curve : obj (dust_curve)
                 A dust_curve object specifying the dust curve for
@@ -737,7 +835,7 @@ class BaseGalaxy:
 
         return self.get_line_attenuated(
             grid, line_ids, fesc=fesc,
-            tauV_nebular=tauV, tauV_stellar=tauV,
+            tau_v_nebular=tau_v, tau_v_stellar=tau_v,
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve)   
 
