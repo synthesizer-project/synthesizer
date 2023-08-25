@@ -16,6 +16,7 @@ Contents
    
    installation
    units
+   spectra
    grids/grids
    filters
    parametric/parametric

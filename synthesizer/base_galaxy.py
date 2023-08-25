@@ -36,7 +36,9 @@ class BaseGalaxy:
             update=True
     ):
         """
-        Generate the pure stellar spectra using the provided Grid
+        Generate the pure stellar spectra using the provided Grid. 
+
+        NOTE: this should be replace by incident.
 
         Args:
             grid (obj):
@@ -62,6 +64,87 @@ class BaseGalaxy:
 
         if update:
             self.spectra['stellar'] = sed
+
+        return sed
+    
+    def get_spectra_incident(
+            self,
+            grid,
+            young=False,
+            old=False,
+            update=True
+    ):
+        """
+        Generate the incident (equivalent to pure stellar for stars) spectra 
+        using the provided Grid.
+
+        Args:
+            grid (obj):
+                spectral grid object
+            update (bool):
+                flag for whether to update the `stellar` spectra
+                inside the galaxy object `spectra` dictionary.
+                These are the combined values of young and old.
+            young (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for young star particles
+            old (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for old star particles
+
+        Returns:
+            An Sed object containing the stellar spectra
+        """
+
+        lnu = self.generate_lnu(grid, 'incident', young=young, old=old)
+
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra['incident'] = sed
+
+        return sed
+    
+    def get_spectra_transmitted(
+        self,
+        grid,
+        fesc=0.0,
+        young=False,
+        old=False,
+        update=True
+    ):
+        """
+        Generate the transmitted spectra using the provided Grid. This is the
+        emission which is transmitted through the gas as calculated by the
+        photoionisation code.
+
+        Args:
+            grid (obj):
+                spectral grid object
+            fesc (float):
+                fraction of stellar emission that escapes unattenuated from
+                the birth cloud (defaults to 0.0)
+            update (bool):
+                flag for whether to update the `stellar` spectra
+                inside the galaxy object `spectra` dictionary.
+                These are the combined values of young and old.
+            young (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for young star particles
+            old (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for old star particles
+
+        Returns:
+            An Sed object containing the transmitted spectra
+        """
+
+        lnu = (1.-fesc)*self.generate_lnu(grid, 'transmitted', young=young, old=old)
+
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra['transmitted'] = sed
 
         return sed
 
@@ -118,8 +201,12 @@ class BaseGalaxy:
             update=True
     ):
         """
-        Generates the intrinsic spectra, i.e. the combination of the
-         stellar and nebular emission, but not including dust.
+        Generates the intrinsic spectra, this is the sum of the escaping 
+        radiation (if fesc>0), the transmitted emission, and the nebular 
+        emission. The transmitted emission is the emission that is
+        transmitted through the gas. In addition to returning the intrinsic
+        spectra this saves the incident, nebular, and escape spectra if 
+        update is set to True.
 
         Args:
             grid (obj):
@@ -139,25 +226,36 @@ class BaseGalaxy:
                 for old star particles
 
         Returns:
-            An Sed object containing the intrinsic spectra
+            An Sed object containing the intrinsic spectra.
         """
 
-        stellar = self.get_spectra_stellar(grid, update=update,
+        # the incident emission 
+        incident = self.get_spectra_incident(grid, update=update,
                                            young=young, old=old)
+        
+        # the emission which escapes the gas
+        escape = Sed(grid.lam, incident._lnu)
+
+        # the stellar emission which **is** reprocessed by the gas
+        transmitted = self.get_spectra_transmitted(grid, fesc, update=update,
+                                           young=young, old=old)        
+        # the nebular emission 
         nebular = self.get_spectra_nebular(grid, fesc, update=update,
                                            young=young, old=old)
 
-        sed = Sed(grid.lam, stellar._lnu + nebular._lnu)
+        # the intrinsic emission, the sum of escape, transmitted, and nebular
+        intrinsic = Sed(grid.lam, escape._lnu + transmitted._lnu + nebular._lnu)
 
         if update:
-            self.spectra['intrinsic'] = sed
+            self.spectra['escape'] = escape
+            self.spectra['intrinsic'] = intrinsic
 
-        return sed
+        return intrinsic
 
     def get_spectra_screen(
             self,
             grid,
-             fesc=0.0,
+            fesc=0.0,
             tau_v=None,
             dust_curve=power_law({'slope': -1.}),
             young=False,
@@ -165,7 +263,7 @@ class BaseGalaxy:
             update=True
     ):
         """
-        Calculates dust attenuated spectra assuming a simple screen
+        Calculates dust attenuated spectra assuming a simple screen. This simply operates on the intrinsic spectrum.
 
         Args:
             grid (object, Grid):
