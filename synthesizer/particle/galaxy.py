@@ -16,6 +16,7 @@ Example usage:
 
 """
 import numpy as np
+from unyt import kpc, unyt_quantity
 
 from ..exceptions import MissingSpectraType
 from ..particle.stars import Stars
@@ -28,7 +29,15 @@ from ..imaging.images import ParticleImage
 
 
 class Galaxy(BaseGalaxy):
+""" The Particle based Galaxy object.
 
+When working with particles this object provides interfaces for calculating
+spectra, theoretical galaxy properties and images. A galaxy can be comproised of
+any combination of particle.Stars, particle.Gas, or particle.BlackHoles objects.
+
+Attributes:
+
+"""
     __slots__ = [
         "spectra", "spectra_array", "lam",
         "stars", "gas",
@@ -41,8 +50,14 @@ class Galaxy(BaseGalaxy):
             name="particle galaxy",
             stars=None,
             gas=None,
+            black_holes=None,
             redshift=None
     ):
+        """ Initialise the Galaxy.
+
+        Args:
+
+        """
 
         # Define a name for this galaxy
         self.name = name
@@ -58,8 +73,10 @@ class Galaxy(BaseGalaxy):
         self.spectra = {}  # integrated spectra dictionary
         self.spectra_array = {}  # spectra arrays dictionary
 
-        self.stars = stars  # a star object
-        self.gas = gas  # a gas particle object
+        # Particle components
+        self.stars = stars  # a Stars object
+        self.gas = gas  # a Gas object
+        self.black_holes = black_holes  # A BlackHoles object
 
         # If we have them, record how many stellar / gas particles there are
         if self.stars:
@@ -191,6 +208,64 @@ class Galaxy(BaseGalaxy):
 
         return (grid_spectra, grid_props, part_props, part_mass, fesc,
                 grid_dims, len(grid_props), npart, nlam)
+
+    def calculate_black_hole_metallicity(self, local_region_radius=0.1 * kpc):
+        """
+        Calculates the metallicity of the region surrounding a black hole. This
+        is defined as the mass weighted average metallicity of gas particles
+        within local_region_radius of the black hole.
+
+        Args:
+            local_region_radius (unyt_quantity)
+                The radius of the spherical region surrounding black holes in
+                which gas particles are considered for the calulcation of the
+                black hole's metallicity.
+        """
+
+        # Ensure we actually have Gas and black holes, and the distance has units
+        if self.gas is None:
+            raise exceptions.InconsistentArguments(
+                "Calculating the metallicity of the region surrounding the black"
+                " hole requires a Galaxy to be intialised with a Gas object!"
+            )
+        if self.black_holes is None:
+            raise exceptions.InconsistentArguments(
+                "This Galaxy does not have a black holes object!"
+            )
+        if not instance(local_region_radius, unyt_quantity):
+            raise exceptions.InconsistentArguments(
+                "local_region_radius must have unyt units associated to it to"
+                " ensure consistency!"
+            )
+
+        # Ensure the search radius we have been handed is in the correct units
+        if self.gas.coordinates.units != local_region_radius.units:
+            local_region_radius
+
+        # Construct a KD-Tree to efficiently get particle within
+        # local_region_radius
+        tree = cKDTree(self.gas._coordinates)
+
+        # Query the tree for gas particles in range of each black hole
+        inds = tree.query_ball_point(self.black_holes._coordinates,
+                                     r=local_region_radius.value)
+
+        # Loop over black holes
+        metals = np.zeros(self.blackholes.nbh)
+        for ind, gas_in_range enumerate(inds):
+
+            # Handle the case where there is no gas in range
+            if len(gas_in_range) == 0:
+                continue
+
+            # Calculate the mass weight metallicity of this black holes region
+            metals[ind] = np.average(
+                self.gas.metallicities[gas_in_range],
+                weights=self.gas._masses[gas_in_range]
+            )
+
+        # Assign the metallicity we have found.
+        self.black_holes.metallicites = metals
 
     def generate_lnu(
                     self,
