@@ -13,7 +13,11 @@ class BaseGalaxy:
     The base galaxy class
     """
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+
+        # Add some place holder attributes which are overloaded on the children
+        self.spectra = {}
+
         raise Warning(("Instantiating a BaseGalaxy object is not "
                        "supported behaviour. Instead, you should "
                        "use one of the derived Galaxy classes:\n"
@@ -21,14 +25,14 @@ class BaseGalaxy:
                        "`parametric.galaxy.Galaxy`\n")
                       )
 
-    def generate_lnu(self):
+    def generate_lnu(self, *args, **kwargs):
         raise Warning(("generate_lnu should be overloaded by child classes:\n"
                        "`particle.galaxy.Galaxy`\n"
                        "`parametric.galaxy.Galaxy`\n"
                        "You should not be seeing this!!!")
                       )
 
-    def get_spectra_stellar(
+    def get_spectra_incident(
             self,
             grid,
             young=False,
