@@ -50,7 +50,7 @@ default_units = {
     "current_masses": Msun,
     "ages": yr,
     "accretion_rate": Msun / yr,
-    "bol_luminosity": erg / s / Angstrom,
+    "bol_luminosity": erg / s,
     "bb_temperature": K,
 }
 
@@ -237,7 +237,7 @@ class Units(metaclass=UnitSingleton):
 
         # Black holes quantities
         self.accretion_rate = Msun / yr
-        self.bol_luminosity = erg / s / Angstrom
+        self.bol_luminosity = erg / s
         self.bb_temperature = K
 
 
