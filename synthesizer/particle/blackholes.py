@@ -50,13 +50,13 @@ class BlackHoles(Particles):
 
     # Define the allowed attributes
     __slots__ = ["masses", "metallicities", "nparticles",
-                 "redshift", "accretion_rate", "bb_temperature",
-                 "bol_luminosity", "nbh"]
+                 "redshift", "_accretion_rate", "_bb_temperature",
+                 "_bol_luminosity", "nbh"]
 
     # Define class level Quantity attributes
     accretion_rate = Quantity()
     bol_luminosity = Quantity()
-    bb_temperture = Quantity()
+    bb_temperature = Quantity()
 
     def __init__(self, masses, metallicities=None, redshift=None,
                  accretion_rate=None, coordinates=None,
