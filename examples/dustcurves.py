@@ -1,3 +1,9 @@
+"""
+Dust curves example
+===================
+
+Plot dust curves
+"""
 import matplotlib.pyplot as plt
 import numpy as np
 from unyt import matplotlib_support
