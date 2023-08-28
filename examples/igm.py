@@ -1,3 +1,10 @@
+"""
+IGM transmission example
+========================
+
+Plot IGM transmission curves (Inoue+14 & Madau+96
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 
