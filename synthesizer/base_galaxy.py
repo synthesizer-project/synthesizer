@@ -1,5 +1,4 @@
-import numpy as np
-import matplotlib.pyplot as plt
+import numpy as npimport matplotlib.pyplot as plt
 import cmasher as cmr
 
 from .sed import Sed
@@ -837,7 +836,19 @@ class BaseGalaxy:
     
     def get_equivalent_width(self, index, spectra_to_plot=None):
         """
-        gets all equivalent widths associated with a sed object
+        Gets all equivalent widths associated with a sed object
+        
+        Parameters
+        ----------
+        index: float
+            the index to be used in the computation of equivalent width.
+        spectra_to_plot: float array
+            An empty list of spectra to be populated.
+            
+        Returns
+        -------
+        equivalent_width : float
+            The calculated equivalent width at the current index.
         """
         
         equivalent_width = None
