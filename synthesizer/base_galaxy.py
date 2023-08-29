@@ -1,4 +1,5 @@
-import numpy as npimport matplotlib.pyplot as plt
+import numpy as np
+import matplotlib.pyplot as plt
 import cmasher as cmr
 
 from .sed import Sed
