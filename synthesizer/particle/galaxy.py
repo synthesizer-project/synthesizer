@@ -1,13 +1,13 @@
 """ A module containing all the funtionality for Particle based galaxies.
 
-Like it's parametric variant this module contains the Galaxy object defition
+Like it's parametric variant this module contains the Galaxy object definition
 from which all galaxy focused functionality can be performed. This variant uses
-Particle objects which can either be derived from simulation data or generated
-from parametric models. A Galaxy can contain Stars, Gas, and BlackHoles.
+Particle objects, which can either be derived from simulation data or generated
+from parametric models. A Galaxy can contain Stars, Gas, and / or BlackHoles.
 
 Despite its name a Particle based Galaxy can be used for any collection of
 particles to enable certain functionality (e.g. imaging of a galaxy group, or
-spectra for all particles in a simualtion.)
+spectra for all particles in a simulation.)
 
 Example usage:
 
@@ -32,8 +32,8 @@ class Galaxy(BaseGalaxy):
     """ The Particle based Galaxy object.
 
     When working with particles this object provides interfaces for calculating
-    spectra, theoretical galaxy properties and images. A galaxy can be comproised of
-    any combination of particle.Stars, particle.Gas, or particle.BlackHoles objects.
+    spectra, galaxy properties and images. A galaxy can be composed of any 
+    combination of particle.Stars, particle.Gas, or particle.BlackHoles objects.
 
     Attributes:
 
