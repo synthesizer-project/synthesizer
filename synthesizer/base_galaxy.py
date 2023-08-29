@@ -833,7 +833,25 @@ class BaseGalaxy:
             grid, line_ids, fesc=fesc,
             tau_v_nebular=tau_v, tau_v_stellar=tau_v,
             dust_curve_nebular=dust_curve,
-            dust_curve_stellar=dust_curve)   
+            dust_curve_stellar=dust_curve)
+    
+    def get_equivalent_width(self, index, spectra_to_plot=None):
+        """
+        gets all equivalent widths associated with a sed object
+        """
+        
+        equivalent_width = None
+
+        if type(spectra_to_plot) != list:
+            spectra_to_plot = list(self.spectra.keys())
+
+        for sed_name in spectra_to_plot:
+            sed = self.spectra[sed_name]
+
+            # Compute equivalent width
+            equivalent_width = sed.calculate_ew(sed.lam, sed.lnu, index)
+
+        return equivalent_width
 
     def T(self):
         """
