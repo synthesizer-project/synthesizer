@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to Synthesizer's documentation!
-=======================================
+Synthesizer
+===========
 
 Synthesizer is a python package for generating synthetic astrophysical spectra. It is intended to be modular, flexible and fast.
 
