@@ -29,6 +29,7 @@ extensions = [
     'IPython.sphinxext.ipython_console_highlighting',
     'sphinx.ext.napoleon',
     'sphinx_gallery.gen_gallery',
+    'sphinx_toolbox.collapse',
 ]
 
 sphinx_gallery_conf = {
