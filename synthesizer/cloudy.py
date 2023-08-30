@@ -593,8 +593,8 @@ def read_continuum(filename, return_dict=False):
 #     output.append("age\n")  # label par 1
 #     output.append("logz\n")  # label par 2
 #
-#     output.append(str(grid.spectra['stellar'].shape[0] *
-#                       grid.spectra['stellar'].shape[1])+"\n")  # nmod
+#     output.append(str(grid.spectra["incident"].shape[0] *
+#                       grid.spectra["incident"].shape[1])+"\n")  # nmod
 #     output.append(str(len(grid.lam))+"\n")  # nfreq (nwavelength)
 #     # output.append(str(len(frequency))+"\n")  # nfreq (nwavelength)
 #
@@ -620,7 +620,7 @@ def read_continuum(filename, return_dict=False):
 #     for i, a in enumerate(grid.ages):
 #         for j, z in enumerate(grid.metallicities):
 #             output.append(' '.join(map(str,
-#                                        grid.spectra['stellar'][i, j]))+"\n")
+#                                        grid.spectra["incident"][i, j]))+"\n")
 #
 #     with open('model.ascii', 'w') as target:
 #         target.writelines(output)

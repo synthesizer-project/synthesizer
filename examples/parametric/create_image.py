@@ -49,7 +49,7 @@ if __name__ == '__main__':
     galaxy = Galaxy(sfzh, morph=morph)
 
     # Generate stellar spectra
-    galaxy.get_spectra_stellar(grid)
+    galaxy.get_spectra_incident(grid)
 
     # Get a UVJ filter set
     filters = UVJ()
@@ -64,7 +64,7 @@ if __name__ == '__main__':
         morphology=morph,
         resolution=resolution,
         filters=filters,
-        sed=galaxy.spectra["stellar"],
+        sed=galaxy.spectra["incident"],
         fov=fov,
     )
 
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     img = galaxy.make_images(
         resolution=resolution,
         filters=filters,
-        sed=galaxy.spectra["stellar"],
+        sed=galaxy.spectra["incident"],
         fov=fov,
     )
 
