@@ -47,7 +47,7 @@ if __name__ == '__main__':
     galaxy = Galaxy(sfzh)
 
     # generate pure stellar spectra alone
-    galaxy.get_spectra_stellar(grid)
+    galaxy.get_spectra_incident(grid)
     print("Pure stellar spectra")
     galaxy.plot_spectra(show=True)
 
