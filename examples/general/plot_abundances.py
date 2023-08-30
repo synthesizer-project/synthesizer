@@ -48,6 +48,3 @@ print(f'log10(C/H) dust: {a4.dust["C"]:.2f}')
 # we can plot the abundance pattern of each component
 
 plot_abundance_pattern(a4, show=True, ylim=[-7., -3.], lines = ['total', 'gas', 'dust'])
-
-
-
