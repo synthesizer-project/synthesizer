@@ -37,7 +37,7 @@ class BaseGalaxy:
             grid,
             young=False,
             old=False,
-            label=None,
+            label='',
             update=True
     ):
         """
@@ -77,7 +77,7 @@ class BaseGalaxy:
         fesc=0.0,
         young=False,
         old=False,
-        label=None,
+        label='',
         update=True
     ):
         """
@@ -121,7 +121,7 @@ class BaseGalaxy:
             fesc=0.0, 
             update=True,
             young=False,
-            label=None,
+            label='',
             old=False
     ):
         """
@@ -167,7 +167,7 @@ class BaseGalaxy:
             fesc_LyA=1.0,
             young=False,
             old=False,
-            label=None,
+            label='',
             update=True
     ):
         """
@@ -200,11 +200,13 @@ class BaseGalaxy:
 
         Updates:
             incident:
-            escaped
             transmitted
             nebular
             reprocessed
             intrinsic
+
+            if fesc>0:
+                escaped
         
         Returns:
             An Sed object containing the intrinsic spectra.
@@ -215,7 +217,8 @@ class BaseGalaxy:
                                            young=young, old=old, label=label)
         
         # the emission which escapeds the gas
-        escaped = Sed(grid.lam, fesc*incident._lnu)
+        if fesc > 0:
+            escaped = Sed(grid.lam, fesc*incident._lnu)
 
         # the stellar emission which **is** reprocessed by the gas
         transmitted = self.get_spectra_transmitted(grid, fesc, update=update,
@@ -241,10 +244,15 @@ class BaseGalaxy:
         reprocessed = nebular + transmitted
 
         # the intrinsic emission, the sum of escaped, transmitted, and nebular
-        intrinsic = reprocessed + escaped
+        # if escaped exists other its simply the reprocessed
+        if fesc > 0:
+            intrinsic = reprocessed + escaped
+        else:
+            intrinsic = reprocessed 
 
         if update:
-            self.spectra[label+'escaped'] = escaped
+            if fesc > 0:
+                self.spectra[label+'escaped'] = escaped
             self.spectra[label+'reprocessed'] = reprocessed
             self.spectra[label+'intrinsic'] = intrinsic
 
@@ -320,11 +328,8 @@ class BaseGalaxy:
             CF00=False,
             old=7.,
             young=7.,
-            save_young_and_old=False,
-            spectra_name='total',
             fesc=0.0,
             fesc_LyA=1.0,
-            update=True,
     ):
         """
         Calculates dust attenuated spectra assuming the PACMAN dust/fesc model
@@ -421,7 +426,7 @@ class BaseGalaxy:
         #   - nebular
         #   - reprocessed = transmitted + nebular
         #   - intrinsic = transmitted + reprocessed
-        self.get_spectra_reprocessed(grid, fesc, young=False, old=False)
+        self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=False, old=False)
 
         if CF00:
 
@@ -432,11 +437,11 @@ class BaseGalaxy:
             
             # generate the young gas reprocessed spectra
             # add a label so saves e.g. 'escaped_young' etc.
-            self.get_spectra_reprocessed(grid, fesc, young=young, old=False, label = 'young_')
+            self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=young, old=False, label = 'young_')
 
             # generate the old gas reprocessed spectra
             # add a label so saves e.g. 'escaped_old' etc.
-            self.get_spectra_reprocessed(grid, fesc, young=False, old=old, label = 'old_')
+            self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=False, old=old, label = 'old_')
 
 
         
