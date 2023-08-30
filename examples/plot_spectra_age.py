@@ -14,7 +14,7 @@ import matplotlib.cm as cm
 import cmasher as cmr
 
 
-def plot_spectra_age(grid, log10Z=-2.0, spec_name='stellar'):
+def plot_spectra_age(grid, log10Z=-2.0, spec_name="incident"):
 
     cmap = cmr.bubblegum
     norm = mpl.colors.Normalize(vmin=5., vmax=11.)
