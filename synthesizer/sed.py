@@ -322,8 +322,8 @@ class Sed:
                equivalent width (Å)
 
            """
-
-        flux = self.lnu * (self.lam ** 2)  # TODO: (Connor) Conversion of flux units from nJy to Lnu
+        # conversion of flux units from nJy to Lnu
+        flux = self.lnu * (self.lam ** 2)
 
         # Define the wavelength range of the absorption feature
         absorption_start = index[1]
@@ -353,7 +353,7 @@ class Sed:
 
         line = np.polyfit([avg_blue, avg_red], [blue_mean, red_mean], 1)
 
-        continuum = (line[0] * self.lam) + line[1]
+        continuum = (line[0] + line[1]) * self.lam
 
         # Calculate the equivalent width
         ew = np.trapz((continuum[continuum_indices] -
