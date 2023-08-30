@@ -32,6 +32,32 @@ class BaseGalaxy:
                        "You should not be seeing this!!!")
                       )
     
+    def get_spectra_linecont(self, 
+                   grid, 
+                   fesc=0.0,
+                   fesc_LyA=1.0, 
+                   young=False, 
+                   old=False):
+
+        """
+        Generate the line contribution spectra. This is only invoked if 
+        fesc_LyA < 1.
+        """
+
+        # generate contribution of line emission alone and reduce the contribution of Lyman-alpha
+        linecont = self.generate_lnu(
+            grid, spectra_name='linecont', old=old, young=young)
+       
+        # multiply by the Lyamn-continuum escape fraction
+        linecont *= (1-fesc)
+
+         # get index of Lyman-alpha
+        idx = grid.get_nearest_index(1216., grid.lam)
+        linecont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
+
+        return linecont
+
+
     def get_spectra_incident(
             self,
             grid,
@@ -232,13 +258,14 @@ class BaseGalaxy:
         if fesc_LyA < 1.0:
 
             # get the new line contribution to the spectrum
-            linecont = self.reduce_lya(grid, fesc_LyA)
+            linecont = self.get_spectra_linecont(grid, fesc=fesc, fesc_LyA=fesc_LyA)
 
             # get the nebular continuum emission
             nebular_continuum = self.generate_lnu(grid, 'nebular_continuum', young=young, old=old)
+            nebular_continuum *= (1-fesc)
 
             # redefine the nebular emission
-            nebular._lnu = linecont._lnu + nebular_continuum._lnu
+            nebular._lnu = linecont + nebular_continuum
 
         # the reprocessed emission, the sum of transmitted, and nebular
         reprocessed = nebular + transmitted
