@@ -38,7 +38,7 @@ if __name__ == '__main__':
         to an sed object """
     _g = gals[0]
 
-    _spec = _g.get_spectra_stellar(grid)
+    _spec = _g.get_spectra_incident(grid)
     _g.plot_spectra()
     plt.show()
     

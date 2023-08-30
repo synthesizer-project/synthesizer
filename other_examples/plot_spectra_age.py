@@ -25,7 +25,7 @@ cmap = cmr.bubblegum
 # --- define choise of SPS model and initial mass function (IMF)
 
 
-def plot_spectra_age(grid, log10Z=-2.0, spec_name='stellar'):
+def plot_spectra_age(grid, log10Z=-2.0, spec_name="incident"):
 
     iZ, log10Z = grid.get_nearest_log10Z(log10Z)
     print(f'closest metallicity: {log10Z:.2f}')
