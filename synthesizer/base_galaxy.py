@@ -31,51 +31,13 @@ class BaseGalaxy:
                        "`parametric.galaxy.Galaxy`\n"
                        "You should not be seeing this!!!")
                       )
-
-    def get_spectra_stellar(
-            self,
-            grid,
-            young=False,
-            old=False,
-            update=True
-    ):
-        """
-        Generate the pure stellar spectra using the provided Grid. 
-
-        NOTE: this should be replace by incident.
-
-        Args:
-            grid (obj):
-                spectral grid object
-            update (bool):
-                flag for whether to update the `stellar` spectra
-                inside the galaxy object `spectra` dictionary.
-                These are the combined values of young and old.
-            young (bool, float):
-                if not False, specifies age in Myr at which to filter
-                for young star particles
-            old (bool, float):
-                if not False, specifies age in Myr at which to filter
-                for old star particles
-
-        Returns:
-            An Sed object containing the stellar spectra
-        """
-
-        lnu = self.generate_lnu(grid, "incident", young=young, old=old)
-
-        sed = Sed(grid.lam, lnu)
-
-        if update:
-            self.spectra["incident"] = sed
-
-        return sed
     
     def get_spectra_incident(
             self,
             grid,
             young=False,
             old=False,
+            label=None,
             update=True
     ):
         """
@@ -105,7 +67,7 @@ class BaseGalaxy:
         sed = Sed(grid.lam, lnu)
 
         if update:
-            self.spectra['incident'] = sed
+            self.spectra[label+'incident'] = sed
 
         return sed
     
@@ -115,6 +77,7 @@ class BaseGalaxy:
         fesc=0.0,
         young=False,
         old=False,
+        label=None,
         update=True
     ):
         """
@@ -148,7 +111,7 @@ class BaseGalaxy:
         sed = Sed(grid.lam, lnu)
 
         if update:
-            self.spectra['transmitted'] = sed
+            self.spectra[label+'transmitted'] = sed
 
         return sed
 
@@ -158,6 +121,7 @@ class BaseGalaxy:
             fesc=0.0, 
             update=True,
             young=False,
+            label=None,
             old=False
     ):
         """
@@ -192,25 +156,24 @@ class BaseGalaxy:
         sed = Sed(grid.lam, lnu)
 
         if update:
-            self.spectra['nebular'] = sed
+            self.spectra[label+'nebular'] = sed
 
         return sed
 
-    def get_spectra_intrinsic(
+    def get_spectra_reprocessed(
             self,
             grid,
             fesc=0.0,
             young=False,
             old=False,
+            label=None,
             update=True
     ):
         """
-        Generates the intrinsic spectra, this is the sum of the escaping 
+        Generates the gas reprocessed spectra, this is the sum of the escaping 
         radiation (if fesc>0), the transmitted emission, and the nebular 
         emission. The transmitted emission is the emission that is
-        transmitted through the gas. In addition to returning the intrinsic
-        spectra this saves the incident, nebular, and escape spectra if 
-        update is set to True.
+        transmitted through the gas. 
 
         Args:
             grid (obj):
@@ -229,32 +192,43 @@ class BaseGalaxy:
                 if not False, specifies age in Myr at which to filter
                 for old star particles
 
+        Updates:
+            incident: 
+            escape:
+            transmitted:
+            nebular:
+            reprocessed:
+        
         Returns:
             An Sed object containing the intrinsic spectra.
         """
 
         # the incident emission 
         incident = self.get_spectra_incident(grid, update=update,
-                                           young=young, old=old)
+                                           young=young, old=old, label=label)
         
         # the emission which escapes the gas
         escape = Sed(grid.lam, fesc*incident._lnu)
 
         # the stellar emission which **is** reprocessed by the gas
         transmitted = self.get_spectra_transmitted(grid, fesc, update=update,
-                                           young=young, old=old)        
+                                           young=young, old=old, label=label)        
         # the nebular emission 
         nebular = self.get_spectra_nebular(grid, fesc, update=update,
-                                           young=young, old=old)
+                                           young=young, old=old, label=label)
+
+        # the reprocessed emission, the sum of transmitted, and nebular
+        reprocessed = nebular + transmitted
 
         # the intrinsic emission, the sum of escape, transmitted, and nebular
-        intrinsic = Sed(grid.lam, escape._lnu + transmitted._lnu + nebular._lnu)
+        intrinsic = reprocessed + escape
 
         if update:
-            self.spectra['escape'] = escape
-            self.spectra['intrinsic'] = intrinsic
+            self.spectra[label+'escape'] = escape
+            self.spectra[label+'reprocessed'] = reprocessed
+            self.spectra[label+'intrinsic'] = intrinsic
 
-        return intrinsic
+        return reprocessed
 
     def get_spectra_screen(
             self,
@@ -352,6 +326,8 @@ class BaseGalaxy:
                 Toggle Charlot and Fall 2000 dust attenuation
                 Requires two values for tau_v and alpha
 
+                
+
         Raises:
             InconsistentArguments:
                 Errors when more than two values for tau_v and alpha is
@@ -376,53 +352,42 @@ class BaseGalaxy:
                     ("Only single value supported for tau_v and alpha in "
                      "case of single dust screen"))
 
-        # begin by generating the incident spectra
-        incident = self.get_spectra_incident(grid, update=update)
+        # this is repitition get_spectra_intrinsic() 
 
-        # the emission which escapes the gas
-        escape = Sed(grid.lam, incident._lnu)
-
-        # the stellar emission which **is** reprocessed by the gas
-        transmitted = self.get_spectra_transmitted(grid, fesc, update=update,
-                                           young=young, old=old)        
-        # the nebular emission 
-        nebular = self.get_spectra_nebular(grid, fesc, update=update,
-                                           young=young, old=old)
-
-        # the intrinsic emission, the sum of escape, transmitted, and nebular
-        intrinsic = Sed(grid.lam, escape._lnu + transmitted._lnu + nebular._lnu)
-
-
+        
 
 
         # --- this is the starlight after reprocessing by gas
-        self.spectra['reprocessed_intrinsic'] = Sed(grid.lam)
-        self.spectra['reprocessed_nebular'] = Sed(grid.lam)
+
         self.spectra['reprocessed_attenuated'] = Sed(grid.lam)
-        self.spectra['total'] = Sed(grid.lam)
+        self.spectra['attenuated'] = Sed(grid.lam)
+
+
+        # generate intrinsic spectra using full star formation and metal 
+        # enrichment history or all particles
+        # generates: 
+        #   - incident
+        #   - escape
+        #   - transmitted
+        #   - nebular
+        #   - reprocessed = transmitted + nebular
+        #   - intrinsic = transmitted + reprocessed
+        self.get_spectra_reprocessed(grid, fesc, young=False, old=False)
 
         if CF00:
-            # splitting contribution from old and young stars
-            nebcont_old = self.generate_lnu(
-                grid, spectra_name='nebular_continuum',
-                old=old, young=False)
 
-            nebcont_yng = self.generate_lnu(
-                grid, spectra_name='nebular_continuum',
-                old=False, young=young)
 
-            transmitted_old = self.generate_lnu(
-                grid, spectra_name='transmitted',
-                old=old, young=False)
+            self.spectra['young_reprocessed_attenuated'] = Sed(grid.lam)
+            self.spectra['old_reprocessed_attenuated'] = Sed(grid.lam)
+            
+            # generate the young gas reprocessed spectra
+            # add a label so saves e.g. 'escape_young' etc.
+            self.get_spectra_reprocessed(grid, fesc, young=young, old=False, label = '_young')
 
-            transmitted_yng = self.generate_lnu(
-                grid, spectra_name='transmitted',
-                old=False, young=young)
-        else:
-            nebcont = np.sum(grid.spectra['nebular_continuum'] * self.sfzh_,
-                             axis=(0, 1))
-            transmitted = np.sum(grid.spectra['transmitted'] * self.sfzh_,
-                                 axis=(0, 1))
+            # generate the old gas reprocessed spectra
+            # add a label so saves e.g. 'escape_old' etc.
+            self.get_spectra_reprocessed(grid, fesc, young=False, old=old, label = '_old')
+
 
         if fesc_LyA < 1.0:
             # if Lyman-alpha escape fraction is specified reduce LyA luminosity
@@ -462,15 +427,21 @@ class BaseGalaxy:
             # calculate dust attenuation
             T = dust_curve.attenuate(tau_v, grid.lam)
             
+            # calculate the reprocesssed attenuated emission
             self.spectra['reprocessed_attenuated']._lnu = \
-                T*self.spectra['reprocessed_intrinsic']._lnu
+                T*self.spectra['reprocessed']._lnu
             
-            self.spectra['total']._lnu = self.spectra['escape']._lnu + \
+            # calculate the attenuated emission, the sum of the attenudated 
+            # reprocessed emission and the escaping radiation
+            self.spectra['attenuated']._lnu = self.spectra['escape']._lnu + \
                 self.spectra['reprocessed_attenuated']._lnu
-            
-            # self.spectra['total']._lnu = self.spectra['attenuated']._lnu
-        
+                        
         elif np.isscalar(tau_v) == False:
+
+            """
+            Apply separate attenuation to both the young and old components.  
+            """
+
             # Two screen dust, one for diffuse other for birth cloud dust.
             if np.isscalar(alpha):
                 print(("Separate dust curve slopes for diffuse and "
@@ -478,8 +449,6 @@ class BaseGalaxy:
                 print(("Defaulting to alpha_ISM=-0.7 and alpha_BC=-1.4"
                         " (Charlot & Fall 2000)"))
                 alpha = [-0.7, -1.4]
-
-            self.spectra['reprocessed_attenuated'] = Sed(grid.lam)
             
             dust_curve.params['slope']=alpha[0]
             T_ISM = dust_curve.attenuate(tau_v[0], grid.lam)
@@ -487,31 +456,21 @@ class BaseGalaxy:
             dust_curve.params['slope']=alpha[1]
             T_BC = dust_curve.attenuate(tau_v[1], grid.lam)
 
-            T_yng = T_ISM * T_BC
+            T_young = T_ISM * T_BC
             T_old = T_ISM
 
-            self.spectra['reprocessed_attenuated']._lnu = \
-                reprocessed_intrinsic_old * T_old + \
-                reprocessed_intrinsic_yng * T_yng
+            self.spectra['young_reprocessed_attenuated']._lnu =  T_young * self.spectra['young_reprocessed_attenuated']._lnu
+            self.spectra['old_reprocessed_attenuated']._lnu =  T_old * self.spectra['old_reprocessed_attenuated']._lnu
 
-            self.spectra['total']._lnu = self.spectra['escape']._lnu + \
-                self.spectra['reprocessed_attenuated']._lnu
+            self.spectra['reprocessed_attenuated']._lnu = self.spectra['young_reprocessed_attenuated']._lnu + self.spectra['old_reprocessed_attenuated']._lnu
 
-        else:
-            self.spectra['total']._lnu = self.spectra['escape']._lnu + \
-                self.spectra['reprocessed_intrinsic']._lnu
-            
-        if save_young_and_old:
-            self.spectra['reprocessed_intrinsic_old'] = \
-                Sed(grid.lam, reprocessed_intrinsic_old)
-            self.spectra['reprocessed_intrinsic_yng'] = \
-                Sed(grid.lam, reprocessed_intrinsic_yng)
-            self.spectra['reprocessed_nebular_old'] = \
-                Sed(grid.lam, reprocessed_nebular_old)
-            self.spectra['reprocessed_nebular_yng'] = \
-                Sed(grid.lam, reprocessed_nebular_yng)
-        
-        return self.spectra['total']
+            self.spectra['attenuated']._lnu = self.spectra['escape']._lnu + self.spectra['reprocessed_attenuated']._lnu
+
+
+        # set total to be the attenuated since we don't have dust emission yet
+        self.spectra['total'] = self.spectra['attenuated']
+
+        return 
     
     def get_spectra_one_component(
             self,
