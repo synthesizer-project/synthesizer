@@ -170,10 +170,12 @@ class BaseGalaxy:
             update=True
     ):
         """
-        Generates the gas reprocessed spectra, this is the sum of the escaping 
+        Generates the intrinsic spectra, this is the sum of the escaping 
         radiation (if fesc>0), the transmitted emission, and the nebular 
         emission. The transmitted emission is the emission that is
-        transmitted through the gas. 
+        transmitted through the gas. In addition to returning the intrinsic
+        spectra this saves the incident, nebular, and escape spectra if 
+        update is set to True.
 
         Args:
             grid (obj):

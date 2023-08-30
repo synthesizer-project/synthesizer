@@ -1,3 +1,10 @@
+"""
+Plot spectra by age
+===================
+
+This example plots all the spectra for a single metallicity.
+"""
+
 import argparse
 import glob
 import os
@@ -19,7 +26,7 @@ cmap = cmr.bubblegum
 norm = mpl.colors.Normalize(vmin=5., vmax=11.)
 
 
-def plot_spectra_age(grid, target_Z, spec_name='stellar'):
+def plot_spectra_age(grid, target_Z, spec_name="incident"):
 
     # get closest metallicity grid point
     grid_point = grid.get_grid_point((grid.log10age[0], target_Z))
@@ -84,18 +91,14 @@ def plot_spectra_age(grid, target_Z, spec_name='stellar'):
     return fig, ax
 
 
-if __name__ == '__main__':
-
-    """
-    This example plots all the spectra for a single metallicity.
-    """
-    
+if __name__ == '__main__':    
 
     # Get the location of this script, __file__ is the absolute path of this script, however we just want to directory
-    script_path = os.path.abspath(os.path.dirname(__file__))
+    # script_path = os.path.abspath(os.path.dirname(__file__))
 
     # Define the path to the test grid
-    test_grid_dir = script_path + "/../../tests/test_grid/"
+    # test_grid_dir = script_path + "/../../tests/test_grid/"
+    test_grid_dir = "../../tests/test_grid/"
 
     parser = argparse.ArgumentParser(description=('Create a plot of all spectra for a given metallicity in a grid'))
 
