@@ -1,4 +1,8 @@
+"""
+Plot quiescent UVJ diagram
+==========================
 
+"""
 
 import numpy as np
 import cmasher as cmr
