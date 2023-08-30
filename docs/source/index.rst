@@ -15,9 +15,9 @@ Contents
    :maxdepth: 2
    
    installation
-   units
-   spectra
    grids/grids
+   spectra
+   units
    filters
    parametric/parametric
    cosmo/cosmo
