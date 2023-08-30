@@ -191,7 +191,7 @@ class Galaxy(BaseGalaxy):
         # Set up the inputs to the C function.
         grid_props = [
             np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(grid.metallicity, dtype=np.float64)
+            np.ascontiguousarray(np.log10(grid.metallicity), dtype=np.float64)
         ]
         part_props = [
             np.ascontiguousarray(
