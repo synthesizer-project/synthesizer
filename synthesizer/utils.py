@@ -4,7 +4,7 @@ from unyt import pc, cm, erg, s, Hz, nJy
 import unyt
 
 import unyt
-from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV,  unyt_array
+from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, kb, unyt_array
 
 def write_data_h5py(filename, name, data, overwrite=False):
     check = check_h5py(filename, name)
