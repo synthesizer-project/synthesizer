@@ -909,9 +909,9 @@ class BaseGalaxy:
 
         # only plot FIR if 'total' is plotted otherwise just plot UV-NIR
         if 'total' in spectra_to_plot:
-            xlim = [1., 7.]
+            xlim = [2., 7.]
         else:
-            xlim = [1., 4.5]
+            xlim = [2., 4.5]
 
         ypeak = -100
         for sed_name in spectra_to_plot:
