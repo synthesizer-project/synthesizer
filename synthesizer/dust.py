@@ -1,12 +1,9 @@
 
 import os
 import numpy as np
-from unyt import Angstrom
 from scipy import interpolate
-from functools import partial
 from dust_attenuation.shapes import N09
 from dust_extinction.grain_models import WD01
-from . import exceptions
 this_dir, this_filename = os.path.split(__file__)
 
 # --- dust curves commonly used in literature
@@ -207,7 +204,8 @@ class Calzetti2000():
             amplitude of the UV-bump
 
         """
-        self.description = 'Calzetti attenuation curve; with option for the slope and UV-bump implemented in Noll et al. 2009'
+        self.description = 'Calzetti attenuation curve; with option for the ' \
+            'slope and UV-bump implemented in Noll et al. 2009'
         self.params = params
 
     def tau(self, lam):
@@ -273,7 +271,8 @@ class GrainsWD01():
 
         """
 
-        self.description = 'Weingarter and Draine 2001 dust grain extinction model for MW, SMC and LMC'
+        self.description = 'Weingarter and Draine 2001 dust grain extinction ' \
+            'model for MW, SMC and LMC'
         self.params = {}
         if 'MW' in params['model']:
             self.params['model'] = 'MWRV31'
