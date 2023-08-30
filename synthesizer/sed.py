@@ -323,7 +323,7 @@ class Sed:
 
            """
 
-        flux = self.lnu * (self.lam ** 2)  # TODO: (Chris) I don't understand this
+        flux = self.lnu * (self.lam ** 2)  # TODO: (Connor) Conversion of flux units from nJy to Lnu
 
         # Define the wavelength range of the absorption feature
         absorption_start = index[1]
