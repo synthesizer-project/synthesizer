@@ -156,4 +156,5 @@ ax.legend(
 )
 
 # Plot the image
-plt.savefig(script_path + "/plots/survey_photometry_test.png", bbox_inches="tight", dpi=300)
+# plt.savefig(script_path + "/plots/survey_photometry_test.png", bbox_inches="tight", dpi=300)
+plt.show()

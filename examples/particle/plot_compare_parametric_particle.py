@@ -76,5 +76,5 @@ for N in [1, 10, 100, 1000]:
 plt.legend()
 plt.xlim([2, 5])
 plt.ylim([10, 22])
-plt.savefig(script_path + '/plots/compare_parametric_particle.png', dpi=200, bbox_inches='tight'); plt.close()
-# plt.show()
+# plt.savefig(script_path + '/plots/compare_parametric_particle.png', dpi=200, bbox_inches='tight'); plt.close()
+plt.show()
