@@ -1,9 +1,10 @@
+"""
+Plot Spectra by age
+===================
 
+Plot all spectra in a grid by their age, for a given metallicity
+"""
 
-# Create a model SED
-
-
-import flare.plt as fplt
 from synthesizer.utils import fnu_to_flam
 from synthesizer.grid import Grid
 import numpy as np
@@ -12,22 +13,13 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import cmasher as cmr
 
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-
-norm = mpl.colors.Normalize(vmin=5., vmax=11.)
-cmap = cmr.bubblegum
-
-
-# -------------------------------------------------
-# --- define choise of SPS model and initial mass function (IMF)
-
 
 def plot_spectra_age(grid, log10Z=-2.0, spec_name="incident"):
 
-    iZ, log10Z = grid.get_nearest_log10Z(log10Z)
+    cmap = cmr.bubblegum
+    norm = mpl.colors.Normalize(vmin=5., vmax=11.)
+
+    iZ = grid.get_nearest_index(log10Z, grid.metallicity)
     print(f'closest metallicity: {log10Z:.2f}')
 
     fig = plt.figure(figsize=(3.5, 5.))
@@ -47,7 +39,7 @@ def plot_spectra_age(grid, log10Z=-2.0, spec_name="incident"):
     cax.xaxis.set_label_position('top')
     cax.set_xlabel(r'$\rm \log_{10}(age/yr)$')
 
-    for ia, log10age in enumerate(grid.log10ages):
+    for ia, log10age in enumerate(grid.log10age):
         Lnu = grid.spectra[spec_name][ia, iZ, :]
         # Lnu = fnu_to_flam(grid.lam, Lnu)
         ax.plot(np.log10(grid.lam), np.log10(Lnu), c=cmap(norm(log10age)), lw=1, alpha=0.8)
@@ -66,7 +58,7 @@ def plot_spectra_age(grid, log10Z=-2.0, spec_name="incident"):
 
 if __name__ == '__main__':
 
-    grid_dir = '../../tests/test_grid'
+    grid_dir = '../tests/test_grid'
     grid_name = 'test_grid'
 
     grid = Grid(grid_name, grid_dir=grid_dir)
