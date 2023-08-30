@@ -245,7 +245,7 @@ class Grid:
 
                 # if incident is one of the spectra also add a spectra called "stellar"
                 if spec_name == 'incident':
-                    self.spectra['stellar'] = self.spectra[spec_name]
+                    self.spectra["stellar"] = self.spectra[spec_name]
 
         """ if full cloudy grid available calculate
         some other spectra for convenience """
@@ -343,7 +343,7 @@ class Grid:
         return idx, array[idx]
 
 
-    def get_sed(self, grid_point, spec_name='stellar'):
+    def get_sed(self, grid_point, spec_name="incident"):
         """
         Returns an Sed object for a given spectra type for a given grid point.
 

@@ -29,6 +29,7 @@ extensions = [
     'sphinx_autodoc_typehints', # Automatically document param types (less noise in class signature)
     'IPython.sphinxext.ipython_console_highlighting',
     'sphinx_gallery.gen_gallery',
+    'sphinx_toolbox.collapse',
 ]
 
 sphinx_gallery_conf = {
