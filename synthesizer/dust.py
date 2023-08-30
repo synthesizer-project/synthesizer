@@ -1,12 +1,20 @@
-
 import os
 import numpy as np
 from scipy import interpolate
+from scipy import integrate
+from unyt import h, c, kb, um, erg, s, Hz
+from unyt import accepts
+from unyt.dimensions import temperature
+
 from dust_attenuation.shapes import N09
 from dust_extinction.grain_models import WD01
+
+from synthesizer.utils import planck
+
+
 this_dir, this_filename = os.path.split(__file__)
 
-# --- dust curves commonly used in literature
+# Dust curves commonly used in literature
 
 __all__ = ["power_law", "MW_N18", "Calzetti2000", "GrainsWD01"]
 
@@ -271,8 +279,8 @@ class GrainsWD01():
 
         """
 
-        self.description = 'Weingarter and Draine 2001 dust grain extinction ' \
-            'model for MW, SMC and LMC'
+        self.description = 'Weingarter and Draine 2001 dust grain extinction' \
+            ' model for MW, SMC and LMC'
         self.params = {}
         if 'MW' in params['model']:
             self.params['model'] = 'MWRV31'
@@ -312,24 +320,6 @@ class GrainsWD01():
 
         return self.emodel.extinguish(x=lam.to_astropy(),
                                       Av=1.086*tau_V)
-
-
-
-
-
-from scipy import integrate
-from unyt import h, c, kb, um, erg, s, Hz
-from unyt import accepts, returns
-from unyt.dimensions import length, time, temperature
-
-
-def planck(nu, T):
-
-    """
-    Planck's law 
-    """
-
-    return (2.*h*(nu**3)*(c**-2))*(1./(np.exp(h*nu/(kb*T))-1.))
 
 
 
@@ -536,5 +526,4 @@ class Casey12(EmissionBase):
 
         BB = lambda x: self.N_bb * (1-np.exp(-(self.lam_0/x)**self.emissivity)) * (c/x)**3 / (np.exp((h*c)/(x*kb*self.T)) - 1.0) # x is wavelength NOT frequency
         
-        return  PL(c/nu) + BB(c/nu) 
-    
+        return  PL(c/nu) + BB(c/nu)

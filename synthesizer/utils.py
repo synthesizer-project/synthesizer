@@ -188,3 +188,13 @@ def Lnu_to_M(Lnu_):
         Lnu = Lnu_
 
     return -2.5 * np.log10(Lnu / constants.geo) - 48.6
+
+
+def planck(nu, T):
+
+    """
+    Planck's law
+    """
+
+    return (2. * h * (nu ** 3) * (c ** -2)) \
+        * (1. / (np.exp(h * nu / (kb * T)) - 1.))
