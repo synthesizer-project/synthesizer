@@ -416,17 +416,6 @@ class Galaxy(BaseGalaxy):
             dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve
         )
 
-    def reduce_lya(self, grid, fesc_LyA, young=False, old=False):
-
-        # --- generate contribution of line emission alone and reduce the contribution of Lyman-alpha
-        linecont = self.generate_lnu(
-            grid, spectra_name='linecont', old=old, young=young)
-        # get index of Lyman-alpha
-        idx = grid.get_nearest_index(1216., grid.lam)
-        linecont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
-
-        return linecont
-
     def make_images(self, resolution, fov=None, sed=None, filters=(),
                     psfs=None, depths=None, snrs=None, aperture=None,
                     noises=None, rest_frame=True, cosmo=None, redshift=None,
