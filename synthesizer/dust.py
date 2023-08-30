@@ -322,7 +322,6 @@ class GrainsWD01():
                                       Av=1.086*tau_V)
 
 
-
 class EmissionBase():
 
     """
@@ -334,7 +333,8 @@ class EmissionBase():
         """
         Provide normalisation of lnu_ by integrating the function from 8->1000 um
         """ 
-        return integrate.quad(self.lnu_, c/(1000*um), c/(8*um), full_output=False, limit = 100)[0]
+        return integrate.quad(self.lnu_, c / (1000 * um), c / (8 * um),
+                              full_output=False, limit=100)[0]
 
     # @accepts(lam=length)
     def lnu(self, lam):
@@ -349,18 +349,17 @@ class EmissionBase():
 
         """
 
-        return (erg/s/Hz)*self.lnu_(c/lam).value/self.normalise()
+        return (erg / s / Hz) * self.lnu_(c / lam).value / self.normalise()
 
 
 
 
 class Blackbody(EmissionBase):
-    
     """
     A class to generate a blackbody emission spectrum.
     """
 
-    @accepts(T=temperature) # check T has dimensions of temperature
+    @accepts(T=temperature)  # check T has dimensions of temperature
     def __init__(self, T):
 
         """
@@ -377,7 +376,6 @@ class Blackbody(EmissionBase):
 
     # @accepts(nu=1/time)
     def lnu_(self, nu):
-        
         """
         Generate unnormalised spectrum for given frequency (nu) grid.
         
@@ -394,8 +392,6 @@ class Blackbody(EmissionBase):
         """
 
         return planck(nu, self.T)
-
-    
 
 
 class Greybody(EmissionBase):
