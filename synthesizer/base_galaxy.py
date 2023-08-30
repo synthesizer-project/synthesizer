@@ -326,8 +326,7 @@ class BaseGalaxy:
             tau_v=1.,
             alpha=-1.,
             CF00=False,
-            old=7.,
-            young=7.,
+            young_old_thresh=None,
             fesc=0.0,
             fesc_LyA=1.0,
     ):
@@ -354,9 +353,8 @@ class BaseGalaxy:
                 numerical value of dust attenuation
             alpha (float):
                 numerical value of the dust curve slope
-            CF00 (bool):
-                Toggle Charlot and Fall 2000 dust attenuation
-                Requires two values for tau_v and alpha
+            young_old_thresh (float)
+                numerical value of threshold from young to old
 
                 
 
@@ -404,7 +402,7 @@ class BaseGalaxy:
             if (len(tau_v)>2) or (len(alpha)>2):
                 exceptions.InconsistentArguments(
                     ("Only 2 values for the optical depth or dust curve "
-                     "slope are allowed for CF00"))
+                     "slope are allowed for the CF00 model"))
         else:
             if isinstance(tau_v, (list, tuple, np.ndarray))\
                 or isinstance(alpha, (list, tuple, np.ndarray)):
@@ -414,7 +412,7 @@ class BaseGalaxy:
 
 
         # initialise output spectra
-        self.spectra['rattenuated'] = Sed(grid.lam)
+        self.spectra['attenuated'] = Sed(grid.lam)
         self.spectra['emergent'] = Sed(grid.lam)
 
         # generate intrinsic spectra using full star formation and metal 
@@ -437,11 +435,11 @@ class BaseGalaxy:
             
             # generate the young gas reprocessed spectra
             # add a label so saves e.g. 'escaped_young' etc.
-            self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=young, old=False, label = 'young_')
+            self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=young_old_thresh, old=False, label = 'young_')
 
             # generate the old gas reprocessed spectra
             # add a label so saves e.g. 'escaped_old' etc.
-            self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=False, old=old, label = 'old_')
+            self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=False, old=young_old_thresh, label = 'old_')
 
 
         
