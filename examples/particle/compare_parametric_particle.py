@@ -1,5 +1,9 @@
+"""
+Compare parametric and particle SEDs
+=====================================
 
-# --- this example compares a sampled and binned (parametric) SED for different numbers of particles
+This example compares a sampled and binned (parametric) SED for different numbers of particles
+"""
 
 import os
 import numpy as np
@@ -40,8 +44,8 @@ sfzh = generate_sfzh(grid.log10ages, grid.metallicities, sfh, Zh)
 # CREATE PARAMETRIC SED
 
 parametric_galaxy = ParametricGalaxy(sfzh)
-parametric_galaxy.get_spectra_stellar(grid)
-sed = parametric_galaxy.spectra['stellar']
+parametric_galaxy.get_spectra_incident(grid)
+sed = parametric_galaxy.spectra["incident"]
 plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label='parametric', lw=4, c='k', alpha=0.3)
 
 
@@ -62,10 +66,10 @@ for N in [1, 10, 100, 1000]:
     # particle_galaxy.generate_spectra(grid, fesc=0.0, integrated=True)
     
     # Calculate the stars SEDs
-    particle_galaxy.get_spectra_stellar(grid)
+    particle_galaxy.get_spectra_incident(grid)
 
 
-    sed = particle_galaxy.spectra['stellar']
+    sed = particle_galaxy.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=f'particle (N={N})')
 
 

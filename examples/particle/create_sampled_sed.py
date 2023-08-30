@@ -1,5 +1,10 @@
 
-# --- this example generates a sample of star particles from a 2D SFZH. In this case it is generated from a parametric star formation history with constant star formation.
+"""
+Create sampled SED
+==================
+
+this example generates a sample of star particles from a 2D SFZH. In this case it is generated from a parametric star formation history with constant star formation.
+"""
 
 import os
 import numpy as np
@@ -53,18 +58,18 @@ galaxy = Galaxy(stars=stars)
 # --- this generates stellar and intrinsic spectra
 # galaxy.generate_intrinsic_spectra(grid, fesc=0.0) # calculate only integrated SEDs
 # calculates for every star particle, slow but necessary for LOS.
-galaxy.get_spectra_stellar(grid)
+galaxy.get_spectra_incident(grid)
 
 # --- generate dust screen
-# galaxy.get_screen(0.5) # tauV
+# galaxy.get_screen(0.5) # tau_v
 
 # --- generate CF00 variable dust screen
-# galaxy.get_CF00(grid, 0.5, 0.5) # grid, tauV_BC, tauV_ISM
+# galaxy.get_CF00(grid, 0.5, 0.5) # grid, tau_v_BC, tau_v_ISM
 
 # --- generate for los model
 # TODO: to be implemented
-# tauVs = np.ones(N) * 0.5
-# galaxy.get_los(tauVs)  # grid, tauV_BC, tauV_ISM
+# tau_vs = np.ones(N) * 0.5
+# galaxy.get_los(tau_vs)  # grid, tau_v_BC, tau_v_ISM
 
 for sed_type, sed in galaxy.spectra.items():
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=sed_type)
