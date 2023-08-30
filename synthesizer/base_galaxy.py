@@ -851,6 +851,16 @@ class BaseGalaxy:
 
         return np.interp(l, lam, Al)
 
+    def AV(self):
+        """
+        Calculate rest-frame FUV attenuation
+        
+        Returns:
+            attenuation at rest-frame 1500 angstrom (float)
+        """
+
+        return self.A(5500.)
+
     def A1500(self):
         """
         Calculate rest-frame FUV attenuation
@@ -863,6 +873,7 @@ class BaseGalaxy:
 
     def plot_spectra(self, show=False, 
                      spectra_to_plot=None, 
+                     ylimits=('peak',5),
                      figsize=(3.5, 5)):
         """
         plots all spectra associated with a galaxy object
@@ -899,7 +910,12 @@ class BaseGalaxy:
             ax.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, label=sed_name)
 
         # ax.set_xlim([2.5, 4.2])
-        # ax.set_ylim([27., 29.5])
+
+        if ylimits[0] == 'peak':
+            ypeak = np.max(np.log10(sed.lnu))
+            ylim = [ypeak-ylimits[1], ypeak+0.5]
+
+        ax.set_ylim(ylim)
         ax.legend(fontsize=8, labelspacing=0.0)
         ax.set_xlabel(r'$\rm log_{10}(\lambda/\AA)$')
         ax.set_ylabel(r'$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$')
@@ -912,7 +928,7 @@ class BaseGalaxy:
     def plot_observed_spectra(self, cosmo, z, 
                               fc=None, 
                               show=False, 
-                              spectra_to_plot=None, 
+                              spectra_to_plot=None,
                               figsize=(3.5, 5.),
                               verbose=True):
         """ 
