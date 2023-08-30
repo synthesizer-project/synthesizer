@@ -84,7 +84,8 @@ def load_CAMELS_IllustrisTNG(
     _dir='.',
     snap_name='snap_033.hdf5',
     fof_name='fof_subhalo_tab_033.hdf5',
-    fof_dir=None
+    fof_dir=None,
+    verbose=False
 ):
     """
     Load CAMELS-IllustrisTNG galaxies
@@ -111,6 +112,7 @@ def load_CAMELS_IllustrisTNG(
         masses = hf['PartType4/Masses'][:]
         imasses = hf['PartType4/GFM_InitialMass'][:]
         _metals = hf['PartType4/GFM_Metals'][:]
+        metallicity = hf['PartType4/GFM_Metallicity'][:]
         
         g_sfr = hf['PartType0/StarFormationRate'][:]
         g_masses = hf['PartType0/Masses'][:]
@@ -119,6 +121,41 @@ def load_CAMELS_IllustrisTNG(
         scale_factor = hf['Header'].attrs[u'Time']
         Om0 = hf['Header'].attrs[u'Omega0']
         h = hf['Header'].attrs[u'HubbleParam']
+    
+    if fof_dir:
+        _dir = fof_dir  # replace if symlinks for fof files are broken
+    with h5py.File(f'{_dir}/{fof_name}', 'r') as hf:
+        lens = hf['Subhalo/SubhaloLenType'][:] 
+ 
+    """
+    remove wind particles
+    """
+    mask = form_time <= 0.  # mask for wind particles
+    
+    if verbose:
+        print("Wind particles:", np.sum(mask))
+
+    # change len indexes
+    for m in np.where(mask)[0]:
+        # create array of end indexes
+        cum_lens = np.append(0, np.cumsum(lens[:,4]))
+        
+        # which halo does this wind particle belong to?
+        which_halo = np.where(m < cum_lens)[0]
+
+        # check we're not at the end of the array
+        if len(which_halo) > 0:
+
+            # reduce the length of *this* halo
+            lens[which_halo[0]-1, 4] -= 1
+    
+    # filter particle arrays
+    imasses = imasses[~mask]
+    form_time = form_time[~mask]
+    coods = coods[~mask]
+    metallicity = metallicity[~mask]
+    masses = masses[~mask]
+    _metals = _metals[~mask]
 
     masses = (masses * 1e10) / h
     g_masses = (g_masses * 1e10) / h
@@ -127,21 +164,15 @@ def load_CAMELS_IllustrisTNG(
     star_forming = g_sfr > 0.
 
     s_oxygen = _metals[:, 4]
-    s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
-    metals = _metals[:, 0]
+    s_hydrogen = 1. - np.sum(_metals[:, 1:], axis=1)
 
     # convert formation times to ages
     cosmo = FlatLambdaCDM(H0=h*100, Om0=Om0)
     universe_age = cosmo.age(1. / scale_factor - 1)
     _ages = cosmo.age(1./form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
-    
-    if fof_dir:
-        _dir = fof_dir  # replace if symlinks for fof files are broken
-    with h5py.File(f'{_dir}/{fof_name}', 'r') as hf:
-        lens = hf['Subhalo/SubhaloLenType'][:]
 
-    return _load_CAMELS(lens, imasses, ages, metals,
+    return _load_CAMELS(lens, imasses, ages, metallicity,
                         s_oxygen, s_hydrogen, coods, masses,
                         g_masses, g_metals, star_forming)
 
@@ -177,6 +208,7 @@ def load_CAMELS_Astrid(
         masses = hf['PartType4/Masses'][:]
         imasses = np.ones(len(masses)) * 0.00155 # TODO: update with correct scaling
         _metals = hf['PartType4/GFM_Metals'][:]
+        metallicity = hf['PartType4/GFM_Metallicity'][:]
         
         g_sfr = hf['PartType0/StarFormationRate'][:]
         g_masses = hf['PartType0/Masses'][:]
@@ -194,7 +226,6 @@ def load_CAMELS_Astrid(
 
     s_oxygen = _metals[:, 4]
     s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
-    metals = _metals[:, 0]
 
     # convert formation times to ages
     cosmo = FlatLambdaCDM(H0=h*100, Om0=Om0)
@@ -207,7 +238,7 @@ def load_CAMELS_Astrid(
     with h5py.File(f'{_dir}/{fof_name}', 'r') as hf:
         lens = hf['Subhalo/SubhaloLenType'][:]
 
-    return _load_CAMELS(lens, imasses, ages, metals,
+    return _load_CAMELS(lens, imasses, ages, metallicity,
                         s_oxygen, s_hydrogen, coods, masses,
                         g_masses, g_metals, star_forming)
 
