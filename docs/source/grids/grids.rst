@@ -86,7 +86,7 @@ Most SPS grids are two-dimensional, with the dimensions being `log10(age)` and `
 Grid list
 =========
 
-.. collapse:: **Bruzual & Charlot (2003, BC03)**
+.. collapse:: Bruzual & Charlot (2003, BC03)
 
     * Chabrier (2003) IMF
         - bc03_chabrier03-0.1,100 
@@ -94,7 +94,7 @@ Grid list
         - bc03_chabrier03-0.1,100_cloudy-c17.03_resolution:0.1 
 
 
-.. collapse:: **2016 update of Bruzual & Charlot (2003)**
+.. collapse:: 2016 update of Bruzual & Charlot (2003)
 
     * The BaSel variant
         - Chabrier (2003) IMF
@@ -114,7 +114,8 @@ Grid list
             + bc03-2016-Stelib_chabrier03-0.1,100_cloudy-c17.03 
             + bc03-2016-Stelib_chabrier03-0.1,100_cloudy-c17.03_resolution:0.1 
 
-.. collapse:: **Binary Population and Spectral Synthesis (BPASS) v2.2.1** 
+.. collapse:: Binary Population and Spectral Synthesis (BPASS) v2.2.1
+
     `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ 
 
     * Binary variant
@@ -154,7 +155,8 @@ Grid list
             + bpass-2.2.1-sin_chabrier03-0.1,100.0 
             + bpass-2.2.1-sin_chabrier03-0.1,300.0 
 
-.. collapse:: **Binary Population and Spectral Synthesis (BPASS) v2.3** 
+.. collapse:: Binary Population and Spectral Synthesis (BPASS) v2.3
+
     `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ 
     
     * Binary variant
@@ -171,7 +173,7 @@ Grid list
             + bpass-2.3-bin_chabrier03-0.1,300.0_alpha0.6_cloudy-c17.03_resolution:0.1 
 
 
-.. collapse:: **Flexible Stellar Population Synthesis (FSPS) v3.2** 
+.. collapse:: Flexible Stellar Population Synthesis (FSPS) v3.2
     
     * Broken power-law IMF - Note: several of these are currently missing.
         - fsps-3.2_bpl-0.08,0.5,1,120-1.3,2.3,2.3 
@@ -208,7 +210,7 @@ Grid list
         - fsps-3.2_chabrier03-50,120 
         - fsps-3.2_chabrier03-50,120_cloudy-c17.03 
 
-.. collapse:: **Maraston models** 
+.. collapse:: Maraston models
     
     * Broken power-law IMF  
         - maraston-rhb_bpl-0.1,100-2.35 
