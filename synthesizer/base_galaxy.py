@@ -454,10 +454,6 @@ class BaseGalaxy:
             self.spectra['attenuated']._lnu = \
                 T*self.spectra['reprocessed']._lnu
             
-            # calculate the emergent emission, the sum of the attenudated 
-            # emission and the escaping emission
-            self.spectra['emergent']._lnu = self.spectra['escaped']._lnu + \
-                self.spectra['attenuated']._lnu
                         
         elif np.isscalar(tau_v) == False:
 
@@ -487,36 +483,38 @@ class BaseGalaxy:
 
             self.spectra['attenuated']._lnu = self.spectra['young_attenuated']._lnu + self.spectra['old_attenuated']._lnu
 
-            self.spectra['young_emergent']._lnu = self.spectra['young_escaped']._lnu + self.spectra['young_attenuated']._lnu
-            self.spectra['old_emergent']._lnu = self.spectra['old_escaped']._lnu + self.spectra['old_attenuated']._lnu
+            # set emergent spectra
+            if not fesc > 0:
+                self.spectra['young_emergent']._lnu = self.spectra['young_attenuated']._lnu
+                self.spectra['old_emergent']._lnu = self.spectra['old_attenuated']._lnu       
+            else:
+                self.spectra['young_emergent']._lnu = self.spectra['young_escaped']._lnu + self.spectra['young_attenuated']._lnu
+                self.spectra['old_emergent']._lnu = self.spectra['old_escaped']._lnu + self.spectra['old_attenuated']._lnu
+            
 
+        if not fesc > 0:
+            self.spectra['emergent']._lnu = self.spectra['attenuated']._lnu
+        else:
             self.spectra['emergent']._lnu = self.spectra['escaped']._lnu + self.spectra['attenuated']._lnu
 
 
-        # set total to be the attenuated since we don't have dust emission yet
-        # self.spectra['total'] = self.spectra['attenuated']
-
-        return 
+        return self.spectra['emergent']
     
 
     def get_spectra_CharlotFall(
             self,
             grid,
-            dust_curve=power_law(),
             tau_v_ISM=1.,
             tau_v_BC=1.,
             alpha_ISM=-0.7,
             alpha_BC=-1.3,
-            old=7.,
-            young=7.,
-            save_young_and_old=False,
-            spectra_name='total',
-            update=True
+            young_old_thresh=7.,
     ):
         """
         Calculates dust attenuated spectra assuming the Charlot & Fall (2000)
         dust model. In this model young star particles are embedded in a
-        dusty birth cloud and thus feel more dust attenuation.
+        dusty birth cloud and thus feel more dust attenuation. This is a wrapper
+        around our more generic pacman method.
 
         Parameters
         ----------
@@ -530,49 +528,25 @@ class BaseGalaxy:
             slope of the ISM dust curve, -0.7 in MAGPHYS
         alpha_BC: float
             slope of the BC dust curve, -1.3 in MAGPHYS
-        save_young_and_old: boolean
-            flag specifying whether to save young and old
-
+        young_old_thresh: float
+            the threshold in log10(age/yr) for young/old stellar populations
+      
         Returns
         -------
         obj (Sed)
              A Sed object containing the dust attenuated spectra
         """
 
-        if spectra_name not in grid.spectra.keys():
-            print(F"{spectra_name} not in the data spectra grids\n")
-            print("Available spectra_name values in grid are: ", 
-                   grid.spectra.keys())
-            ValueError(F"{spectra_name} not in the data spectra grids\n")
+        return self.get_spectra_pacman(grid, 
+                                  fesc = 0,
+                                  fesc_LyA=1,
+                                  dust_curve=power_law(),
+                                  tau_v = [tau_v_ISM, tau_v_BC], 
+                                  alpha = [alpha_ISM, alpha_BC],
+                                  young_old_thresh=young_old_thresh,
+                                  CF00 = True
+                                  )
 
-        sed_young = self.get_spectra_one_component(
-            grid, dust_curve, tau_v=[tau_v_ISM, tau_v_BC], 
-            alpha=[alpha_ISM, alpha_BC], 
-            old=False, young=young, spectra_name=spectra_name)
-        
-        sed_old = self.get_spectra_one_component(
-            grid, dust_curve, tau_v=tau_v_ISM, alpha=alpha_ISM, 
-            old=old, young=False, spectra_name=spectra_name)
-
-        if save_young_and_old:
-            # calculate intrinsic sed for young and old stars
-            intrinsic_sed_young = self.generate_lnu(
-                grid, spectra_name=spectra_name, old=False, young=young)
-            intrinsic_sed_old = self.generate_lnu(
-                grid, spectra_name=spectra_name, old=old, young=False)
-
-            self.spectra['intrinsic_young'] = intrinsic_sed_young
-            self.spectra['intrinsic_old'] = intrinsic_sed_old
-
-            self.spectra['attenuated_young'] = Sed(grid.lam, sed_young)
-            self.spectra['attenuated_old'] = Sed(grid.lam, sed_old)
-
-        sed = Sed(grid.lam, sed_young + sed_old)
-
-        if update:
-            self.spectra['attenuated'] = sed
-
-        return sed
 
 
     def get_spectra_dust(self, emissionmodel):
