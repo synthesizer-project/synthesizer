@@ -238,7 +238,7 @@ class BaseGalaxy:
                                            young=young, old=old)
         
         # the emission which escapes the gas
-        escape = Sed(grid.lam, incident._lnu)
+        escape = Sed(grid.lam, fesc*incident._lnu)
 
         # the stellar emission which **is** reprocessed by the gas
         transmitted = self.get_spectra_transmitted(grid, fesc, update=update,
@@ -376,12 +376,24 @@ class BaseGalaxy:
                     ("Only single value supported for tau_v and alpha in "
                      "case of single dust screen"))
 
-        # --- begin by generating the pure stellar spectra
-        self.spectra["incident"] = self.get_spectra_stellar(grid, update=update)
+        # begin by generating the incident spectra
+        incident = self.get_spectra_incident(grid, update=update)
 
-        # --- this is the starlight that escapes any reprocessing
-        self.spectra['escape'] = \
-            Sed(grid.lam, fesc * self.spectra["incident"]._lnu)
+        # the emission which escapes the gas
+        escape = Sed(grid.lam, incident._lnu)
+
+        # the stellar emission which **is** reprocessed by the gas
+        transmitted = self.get_spectra_transmitted(grid, fesc, update=update,
+                                           young=young, old=old)        
+        # the nebular emission 
+        nebular = self.get_spectra_nebular(grid, fesc, update=update,
+                                           young=young, old=old)
+
+        # the intrinsic emission, the sum of escape, transmitted, and nebular
+        intrinsic = Sed(grid.lam, escape._lnu + transmitted._lnu + nebular._lnu)
+
+
+
 
         # --- this is the starlight after reprocessing by gas
         self.spectra['reprocessed_intrinsic'] = Sed(grid.lam)
