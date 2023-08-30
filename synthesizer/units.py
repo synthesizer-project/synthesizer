@@ -23,7 +23,7 @@ Example usage:
     bar_no_units = foo._bar
     
 """
-from unyt import (nJy, erg, s, Hz, Angstrom, cm, Mpc, yr, km, Msun,
+from unyt import (nJy, erg, s, Hz, Angstrom, cm, Mpc, yr, km, Msun, K,
                   unyt_quantity, unyt_array, dimensionless)
 
 
@@ -38,7 +38,7 @@ default_units = {
     "lnu": erg / s / Hz,
     "llam": erg / s / Angstrom,
     "continuum": erg / s / Hz,
-    "flux": erg / s / cm**2,
+    "flux": erg / s / cm ** 2,
     "fnu": nJy,
     "ew": Angstrom,
     "coordinates": Mpc,
@@ -49,6 +49,9 @@ default_units = {
     "initial_masses": Msun,
     "current_masses": Msun,
     "ages": yr,
+    "accretion_rate": Msun / yr,
+    "bol_luminosity": erg / s,
+    "bb_temperature": K,
 }
 
 
@@ -231,6 +234,12 @@ class Units(metaclass=UnitSingleton):
 
         # Time quantities
         self.ages = yr  # Stellar ages
+
+        # Black holes quantities
+        self.accretion_rate = Msun / yr
+        self.bol_luminosity = erg / s
+        self.bb_temperature = K
+
 
         # Do we have any modifications to the default unit system
         if units is not None:

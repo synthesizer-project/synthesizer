@@ -13,7 +13,11 @@ class BaseGalaxy:
     The base galaxy class
     """
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+
+        # Add some place holder attributes which are overloaded on the children
+        self.spectra = {}
+
         raise Warning(("Instantiating a BaseGalaxy object is not "
                        "supported behaviour. Instead, you should "
                        "use one of the derived Galaxy classes:\n"
@@ -21,7 +25,7 @@ class BaseGalaxy:
                        "`parametric.galaxy.Galaxy`\n")
                       )
 
-    def generate_lnu(self):
+    def generate_lnu(self, *args, **kwargs):
         raise Warning(("generate_lnu should be overloaded by child classes:\n"
                        "`particle.galaxy.Galaxy`\n"
                        "`parametric.galaxy.Galaxy`\n"
@@ -58,12 +62,12 @@ class BaseGalaxy:
             An Sed object containing the stellar spectra
         """
 
-        lnu = self.generate_lnu(grid, 'stellar', young=young, old=old)
+        lnu = self.generate_lnu(grid, "incident", young=young, old=old)
 
         sed = Sed(grid.lam, lnu)
 
         if update:
-            self.spectra['stellar'] = sed
+            self.spectra["incident"] = sed
 
         return sed
     
@@ -373,11 +377,11 @@ class BaseGalaxy:
                      "case of single dust screen"))
 
         # --- begin by generating the pure stellar spectra
-        self.spectra['stellar'] = self.get_spectra_stellar(grid, update=update)
+        self.spectra["incident"] = self.get_spectra_stellar(grid, update=update)
 
         # --- this is the starlight that escapes any reprocessing
         self.spectra['escape'] = \
-            Sed(grid.lam, fesc * self.spectra['stellar']._lnu)
+            Sed(grid.lam, fesc * self.spectra["incident"]._lnu)
 
         # --- this is the starlight after reprocessing by gas
         self.spectra['reprocessed_intrinsic'] = Sed(grid.lam)
