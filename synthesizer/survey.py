@@ -344,8 +344,8 @@ class Survey:
         for ind, gal in enumerate(self.galaxies):
 
             # Are we getting a flux or rest frame?
-            if spectra_type == "stellar":
-                _specs[ind, :] = gal.get_spectra_stellar(grid)._lnu
+            if spectra_type == "incident":
+                _specs[ind, :] = gal.get_spectra_incident(grid)._lnu
             elif spectra_type == "intrinsic":
                 _specs[ind, :] = gal.get_spectra_intrinsic(grid)._lnu
             
@@ -360,14 +360,14 @@ class Survey:
         else:
             self.seds[spectra_type].get_fnu(self.cosmo, redshift, igm)
 
-    # def get_integrated_spectra_screen(self, tauV, redshift=None,
+    # def get_integrated_spectra_screen(self, tau_v, redshift=None,
     #                                   igm=None, name='attenuated'):
     #     """
     #     Compute the attenuated spectra of each galaxy using a dust screen model
 
     #     Args:
     #     -----
-    #     - tauV (array, float): V-band optical depth
+    #     - tau_v (array, float): V-band optical depth
     #     - redshift (float): array of galaxy redshifts. If `None` (default),
     #                         all galaxies assumed to be in the rest frame
     #     - igm (obj): synthesizer IGM object, defaults to Inoue+14
@@ -377,13 +377,13 @@ class Survey:
     #     None
     #     """
 
-    #     _lam = self.seds['stellar']._lam
+    #     _lam = self.seds["incident"]._lam
     #     _specs = np.zeros((self.ngalaxies, _lam.size))
 
     #     for ind, gal in enumerate(self.galaxies):
 
     #         # Are we getting a flux or rest frame?
-    #         _specs[ind, :] = gal.apply_screen(tauV, sed_object=False)
+    #         _specs[ind, :] = gal.apply_screen(tau_v, sed_object=False)
 
     #     # Create and store an SED object for these SEDs
     #     self.seds[name] = Sed(lam=_lam, lnu=_specs)
@@ -396,7 +396,7 @@ class Survey:
     #     else:
     #         self.seds[name].get_fnu(self.cosmo, redshift, igm)
 
-    # def get_integrated_spectra_charlot_fall_00(self, grid, tauV_ISM, tauV_BC,
+    # def get_integrated_spectra_charlot_fall_00(self, grid, tau_v_ISM, tau_v_BC,
     #                                            redshift=None, igm=None,
     #                                            name='attenuated'):
     #     """
@@ -405,8 +405,8 @@ class Survey:
     #     Args:
     #     -----
     #     - grid (obj): synthesizer grid object
-    #     - tauV_ISM (array): V-band optical depth in the interstellar medium
-    #     - tauV_BC (array): birth cloud V-band optical depth
+    #     - tau_v_ISM (array): V-band optical depth in the interstellar medium
+    #     - tau_v_BC (array): birth cloud V-band optical depth
     #     - redshift (float): array of galaxy redshifts. If `None` (default),
     #                         all galaxies assumed to be in the rest frame
     #     - igm (obj): synthesizer IGM object, defaults to Inoue+14
@@ -421,7 +421,7 @@ class Survey:
     #     for ind, gal in enumerate(self.galaxies):
 
     #         # Are we getting a flux or rest frame?
-    #         _specs[ind, :] = gal.apply_charlot_fall_00(grid, tauV_ISM, tauV_BC,
+    #         _specs[ind, :] = gal.apply_charlot_fall_00(grid, tau_v_ISM, tau_v_BC,
     #                                                    sed_object=False)
 
     #     # Create and store an SED object for these SEDs
@@ -448,7 +448,7 @@ class Survey:
         for ind, gal in enumerate(self.galaxies):
 
             # Are we getting a flux or rest frame?
-            if spectra_type == "stellar":
+            if spectra_type == "incident":
                 sed = gal.get_particle_spectra_stellar(grid)
                 gal.spectra_array[spectra_type] = sed
             elif spectra_type == "intrinsic":
@@ -475,7 +475,7 @@ class Survey:
         # We need to handle whether different types of spectra exist.
         if spectra_type == "intrinsic":
             pass
-        elif spectra_type == "stellar":
+        elif spectra_type == "incident":
             pass
         elif spectra_type == "total":
             pass

@@ -1,10 +1,14 @@
 """
+Create image example
+====================
+
 Example for generating a rest-frame physical scale image. This example will:
 - Build a parametric galaxy (see make_sfzh and make_sed)
 - Define its morphology
 - Calculate rest-frame luminosities for the UVJ bands
 - Make an image of the galaxy, including an RGB image.
 """
+
 import os
 import numpy as np
 
@@ -45,7 +49,7 @@ if __name__ == '__main__':
     galaxy = Galaxy(sfzh, morph=morph)
 
     # Generate stellar spectra
-    galaxy.get_spectra_stellar(grid)
+    galaxy.get_spectra_incident(grid)
 
     # Get a UVJ filter set
     filters = UVJ()
@@ -60,7 +64,7 @@ if __name__ == '__main__':
         morphology=morph,
         resolution=resolution,
         filters=filters,
-        sed=galaxy.spectra["stellar"],
+        sed=galaxy.spectra["incident"],
         fov=fov,
     )
 
@@ -79,7 +83,7 @@ if __name__ == '__main__':
     img = galaxy.make_images(
         resolution=resolution,
         filters=filters,
-        sed=galaxy.spectra["stellar"],
+        sed=galaxy.spectra["incident"],
         fov=fov,
     )
 

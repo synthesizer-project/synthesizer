@@ -1,13 +1,15 @@
+"""
+Explore a grid
+==============
+
+This example allows us to load a HDF5 grid file and explore the corresponding Grid object.
+"""
 
 import h5py
 import os
 from synthesizer.grid import Grid
 
 if __name__ == "__main__":
-
-    """
-    This example allows us to explore a HDF5 and the correspinding Grid object.
-    """
 
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory

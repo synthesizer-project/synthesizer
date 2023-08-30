@@ -1,4 +1,7 @@
 """
+Create survey images
+====================
+
 This example shows how to create a survey of fake galaxies generated using a
 2D SFZH, and make images of each of these galaxies.
 """
@@ -160,12 +163,12 @@ survey.fov = fov
 survey.add_galaxies(galaxies)
 
 # Calculate the SEDs
-survey.get_particle_spectra(grid, "stellar", redshift=redshift, rest_frame=False)
+survey.get_particle_spectra(grid, "incident", redshift=redshift, rest_frame=False)
 
 # Make images for each galaxy in this survey
 survey.make_images(
     img_type="smoothed",
-    spectra_type="stellar",
+    spectra_type="incident",
     kernel_func=quintic,
     rest_frame=False,
     cosmo=cosmo,
