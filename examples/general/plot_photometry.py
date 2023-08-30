@@ -148,5 +148,6 @@ if __name__ == '__main__':
                 ncol=3,
             )
 
-    fig.savefig(script_path + "/plots/photometry_from_flux.png",
-                bbox_inches="tight", dpi=300)
+    plt.show()
+    # fig.savefig(script_path + "/plots/photometry_from_flux.png",
+    #             bbox_inches="tight", dpi=300)
