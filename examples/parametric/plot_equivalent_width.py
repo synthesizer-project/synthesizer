@@ -94,5 +94,6 @@ if __name__ == '__main__':
     grid_name = 'test_grid'  # Change this to the appropriate .hdf5
 
     indices = uv_indices()  # Retrieve UV indices
+    index = [i[0] for i in indices]
 
-    equivalent_width(grid_name, indices, indices[:, 0])
+    equivalent_width(grid_name, indices, index)

@@ -861,7 +861,7 @@ class BaseGalaxy:
             sed = self.spectra[sed_name]
 
             # Compute equivalent width
-            equivalent_width = sed.calculate_ew(sed.lam, sed.lnu, index)
+            equivalent_width = sed.calculate_ew(index)
 
         return equivalent_width
 
