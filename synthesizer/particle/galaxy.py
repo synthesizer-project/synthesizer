@@ -1,4 +1,23 @@
+""" A module containing all the funtionality for Particle based galaxies.
+
+Like it's parametric variant this module contains the Galaxy object definition
+from which all galaxy focused functionality can be performed. This variant uses
+Particle objects, which can either be derived from simulation data or generated
+from parametric models. A Galaxy can contain Stars, Gas, and / or BlackHoles.
+
+Despite its name a Particle based Galaxy can be used for any collection of
+particles to enable certain functionality (e.g. imaging of a galaxy group, or
+spectra for all particles in a simulation.)
+
+Example usage:
+
+    galaxy = Galaxy(stars, gas, black_holes, ...)
+    galaxy.get_spectra_incident(...)
+
+"""
 import numpy as np
+from unyt import kpc, unyt_quantity
+from scipy.spatial import cKDTree
 
 from ..exceptions import MissingSpectraType
 from ..particle.stars import Stars
@@ -10,7 +29,15 @@ from .. import exceptions
 from ..imaging.images import ParticleImage
 
 class Galaxy(BaseGalaxy):
+    """ The Particle based Galaxy object.
 
+    When working with particles this object provides interfaces for calculating
+    spectra, galaxy properties and images. A galaxy can be composed of any 
+    combination of particle.Stars, particle.Gas, or particle.BlackHoles objects.
+
+    Attributes:
+
+    """
     __slots__ = [
         "spectra", "spectra_array", "lam",
         "stars", "gas",
@@ -23,8 +50,14 @@ class Galaxy(BaseGalaxy):
             name="particle galaxy",
             stars=None,
             gas=None,
+            black_holes=None,
             redshift=None
     ):
+        """ Initialise the Galaxy.
+
+        Args:
+
+        """
 
         # Define a name for this galaxy
         self.name = name
@@ -40,8 +73,10 @@ class Galaxy(BaseGalaxy):
         self.spectra = {}  # integrated spectra dictionary
         self.spectra_array = {}  # spectra arrays dictionary
 
-        self.stars = stars  # a star object
-        self.gas = gas  # a gas particle object
+        # Particle components
+        self.stars = stars  # a Stars object
+        self.gas = gas  # a Gas object
+        self.black_holes = black_holes  # A BlackHoles object
 
         # If we have them, record how many stellar / gas particles there are
         if self.stars:
@@ -186,6 +221,71 @@ class Galaxy(BaseGalaxy):
         return (grid_spectra, grid_props, part_props, part_mass, fesc,
                 grid_dims, len(grid_props), npart, nlam)
 
+    def calculate_black_hole_metallicity(self, default_metallicity=0.012):
+        """
+        Calculates the metallicity of the region surrounding a black hole. This
+        is defined as the mass weighted average metallicity of all gas particles
+        whose SPH kernels intersect the black holes position.
+
+        Args:
+            default_metallicity (float)
+                The metallicity value used when no gas particles are in range
+                of the black hole. The default is solar metallcity.
+        """
+
+        # Ensure we actually have Gas and black holes
+        if self.gas is None:
+            raise exceptions.InconsistentArguments(
+                "Calculating the metallicity of the region surrounding the black"
+                " hole requires a Galaxy to be intialised with a Gas object!"
+            )
+        if self.black_holes is None:
+            raise exceptions.InconsistentArguments(
+                "This Galaxy does not have a black holes object!"
+            )
+
+        # Construct a KD-Tree to efficiently get all gas particles which
+        # intersect the black hole
+        tree = cKDTree(self.gas._coordinates)
+
+        # Query the tree for gas particles in range of each black hole, here
+        # we use the maximum smoothing length to get all possible intersections
+        # without calculating the distance for every gas particle.
+        inds = tree.query_ball_point(self.black_holes._coordinates,
+                                     r=self.gas._smoothing_lengths.max())
+
+        # Loop over black holes
+        metals = np.zeros(self.black_holes.nbh)
+        for ind, gas_in_range in enumerate(inds):
+
+            # Handle black holes with no neighbouring gas
+            if len(gas_in_range) == 0:
+                metals[ind] = default_metallicity
+
+            # Calculate the separation between the black hole and gas particles
+            sep = self.gas._coordinates[gas_in_range, :] \
+                - self.black_holes._coordinates[ind, :]
+
+            dists = np.sqrt(sep[:, 0] ** 2 + sep[:, 1] ** 2 + sep[:, 2] ** 2)
+
+            # Get only the gas particles with smoothing lengths that intersect
+            okinds = dists < self.gas._smoothing_lengths[gas_in_range]
+            gas_in_range = np.array(gas_in_range, dtype=int)[okinds]
+
+            # The above operation can remove all gas neighbours...
+            if len(gas_in_range) == 0:
+                metals[ind] = default_metallicity
+                continue
+
+            # Calculate the mass weight metallicity of this black holes region
+            metals[ind] = np.average(
+                self.gas.metallicities[gas_in_range],
+                weights=self.gas._masses[gas_in_range]
+            )
+
+        # Assign the metallicity we have found
+        self.black_holes.metallicities = metals
+
     def _prepare_los_args(self, kernel, mask, threshold, force_loop):
         """
         A method to prepare the arguments for line of sight metal surface
@@ -259,7 +359,6 @@ class Galaxy(BaseGalaxy):
                 gas_mass, gas_dtm, nstar, ngas, kdim, threshold,
                 np.max(gas_sml), force_loop)
 
-
     def generate_lnu(
                     self,
                     grid,
@@ -273,7 +372,7 @@ class Galaxy(BaseGalaxy):
         Generate the luminosity for a given grid key spectra for all
         stars in this galaxy object. Can optionally apply masks.
 
-        Base class for :func:`~particle.ParticleGalaxy.get_spectra_stellar` 
+        Base class for :func:`~particle.ParticleGalaxy.get_spectra_incident`
         and other related methods
 
         Args:
@@ -407,7 +506,7 @@ class Galaxy(BaseGalaxy):
         from ..extensions.csed import compute_particle_seds
 
         # Prepare the arguments for the C function.
-        args = self._prepare_sed_args(grid, fesc=0.0, spectra_type='stellar')
+        args = self._prepare_sed_args(grid, fesc=0.0, spectra_type="incident")
 
         # Get the integrated stellar SED
         spec_arr = compute_particle_seds(*args)
@@ -416,7 +515,7 @@ class Galaxy(BaseGalaxy):
 
         if update:
             # Store the spectra in the galaxy
-            self.spectra_array['stellar'] = sed
+            self.spectra_array["incident"] = sed
 
         return sed
 
@@ -470,7 +569,7 @@ class Galaxy(BaseGalaxy):
         from ..extensions.csed import compute_particle_seds
 
         # Prepare the arguments for the C function.
-        args = self._prepare_sed_args(grid, fesc=fesc, spectra_type='stellar')
+        args = self._prepare_sed_args(grid, fesc=fesc, spectra_type="incident")
 
         # Get the integrated stellar SED
         spec_arr = compute_particle_seds(*args)
@@ -479,7 +578,7 @@ class Galaxy(BaseGalaxy):
 
         if update:
             # Store the spectra in the galaxy
-            self.spectra_array['stellar'] = sed
+            self.spectra_array["incident"] = sed
 
         return sed
 
@@ -534,7 +633,7 @@ class Galaxy(BaseGalaxy):
         # from ..extensions.csed import compute_particle_seds
 
         # # Prepare the arguments for the C function.
-        # args = self._prepare_sed_args(grid, fesc=fesc, spectra_type='stellar')
+        # args = self._prepare_sed_args(grid, fesc=fesc, spectra_type="incident")
 
         # # Get the integrated stellar SED
         # spec_arr = compute_particle_seds(*args)
@@ -543,7 +642,7 @@ class Galaxy(BaseGalaxy):
 
         # if update:
         #     # Store the spectra in the galaxy
-        #     self.spectra_array['stellar'] = sed
+        #     self.spectra_array["incident"] = sed
 
         # return sed
 

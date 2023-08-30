@@ -36,7 +36,7 @@ def get_ew(index, Z, smass, grid, EqW, mode):
 
     # --- generate equivalent widths
     if mode == 0:
-        galaxy.get_spectra_stellar(grid)
+        galaxy.get_spectra_incident(grid)
     else:
         galaxy.get_spectra_intrinsic(grid, fesc=0.5)
 
