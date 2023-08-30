@@ -4,6 +4,7 @@ Image addition example
 
 An example of how to do image addition and testing error functionality.
 """
+
 import os
 import numpy as np
 from unyt import kpc
@@ -19,7 +20,7 @@ from synthesizer.parametric.sfzh import generate_instant_sfzh
 # First set up some stuff so we can make demonstration images.
 
 # Get the location of this script, __file__ is the absolute path of this
-# script, however we just want to directory
+# script, however we just want the directory
 script_path = os.path.abspath(os.path.dirname(__file__))
 
 # Define the grid
