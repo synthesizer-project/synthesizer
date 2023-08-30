@@ -322,8 +322,8 @@ class Sed:
                equivalent width (Å)
 
            """
-
-        flux = self.lnu * (self.lam ** 2)  # TODO: (Connor) Conversion of flux units from nJy to Lnu
+        # Conversion of flux units from nJy to Lnu
+        flux = self._lnu * (self._lam ** 2)
 
         # Define the wavelength range of the absorption feature
         absorption_start = index[1]
@@ -337,13 +337,13 @@ class Sed:
         red_end = index[6]
 
         # Compute the average continuum level
-        continuum_indices = np.where((self.lam >= absorption_start) &
-                                     (self.lam <= absorption_end))[0]
+        continuum_indices = np.where((self._lam >= absorption_start) &
+                                     (self._lam <= absorption_end))[0]
 
-        blue_indices = np.where((self.lam >= blue_start) &
-                                (self.lam <= blue_end))[0]
-        red_indices = np.where((self.lam >= red_start) &
-                               (self.lam <= red_end))[0]
+        blue_indices = np.where((self._lam >= blue_start) &
+                                (self._lam <= blue_end))[0]
+        red_indices = np.where((self._lam >= red_start) &
+                               (self._lam <= red_end))[0]
 
         blue_mean = np.mean(flux[blue_indices])
         red_mean = np.mean(flux[red_indices])
@@ -353,12 +353,12 @@ class Sed:
 
         line = np.polyfit([avg_blue, avg_red], [blue_mean, red_mean], 1)
 
-        continuum = (line[0] * self.lam) + line[1]
+        continuum = (line[0] * self._lam) + line[1]
 
         # Calculate the equivalent width
         ew = np.trapz((continuum[continuum_indices] -
                        flux[continuum_indices]) / continuum[continuum_indices],
-                      self.lam[continuum_indices])
+                      self._lam[continuum_indices])
 
         return ew
 
