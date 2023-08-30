@@ -1,13 +1,13 @@
-# This script is a modified version of
-# https://github.com/stephenmwilkins/SPS_tools/blob/master/SPS_tools/cloudy/abundances.py
+"""
+This script is a modified version of
+https://github.com/stephenmwilkins/SPS_tools/blob/master/SPS_tools/cloudy/abundances.py
 
-# A note on notation
+A note on notation:
 
+[X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
 
-# [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
-
-# [alpha/Fe] = sum()
-
+[alpha/Fe] = sum()
+"""
 
 from copy import deepcopy
 import numpy as np

@@ -1,4 +1,7 @@
 """
+Image addition example
+======================
+
 An example of how to do image addition and testing error functionality.
 """
 import os
@@ -37,7 +40,7 @@ morph = Sersic2D(r_eff_kpc=1. * kpc, n= 1., ellip=0.5, theta=35.)
 galaxy = Galaxy(morph=morph, sfzh=sfzh)
 
 # Get specrtra
-sed = galaxy.get_spectra_stellar(grid)
+sed = galaxy.get_spectra_incident(grid)
 
 # Create a filter collection
 filter_codes1 = ["JWST/NIRCam.F090W", "JWST/NIRCam.F150W", "JWST/NIRCam.F200W"]

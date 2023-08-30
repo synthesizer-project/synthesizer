@@ -35,15 +35,14 @@ class Particles:
             How many particles are there?
     """
 
-    # # Define the allowed attributes
-    # __slots__ = ["coordinates", "velocities", "masses",
-    #              "softening_length", "redshift", "nparticles"]
+    # Define the allowed attributes
+    __slots__ = ["redshift", "nparticles"]
 
     # Define class level Quantity attributes
     coordinates = Quantity()
     velocities = Quantity()
     masses = Quantity()
-    softening_length = Quantity()
+    softening_lengths = Quantity()
     
     def __init__(self, coordinates, velocities, masses, redshift,
                  softening_length, nparticles):

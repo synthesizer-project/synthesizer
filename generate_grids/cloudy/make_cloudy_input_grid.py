@@ -260,7 +260,7 @@ def make_cloudy_input_grid(output_dir, grid, cloudy_params):
                 print(f"ERROR: do not understand U model choice: {cloudy_params['U_model']}")
 
             lam = grid.lam
-            lnu = grid.spectra['stellar'][ia, iZ]
+            lnu = grid.spectra["incident"][ia, iZ]
 
             model_name = f'{ia}_{iZ}'
 

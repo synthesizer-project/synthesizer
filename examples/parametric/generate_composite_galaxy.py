@@ -1,10 +1,14 @@
 """
+Generate composite image example
+================================
+
 Example for generating a composite galaxy
 photometry. This example will:
 - build two parametric "galaxies" (see make_sfzh)
 - calculate spectral luminosity density of each
-TODO: add image creation
+- make images of both
 """
+
 import os
 from unyt import yr, Myr, kpc, mas
 import matplotlib.pyplot as plt
@@ -19,8 +23,6 @@ from synthesizer.filters import UVJ
 
 if __name__ == '__main__':
 
-    resolution = 0.05 * kpc
-    npix = 50
 
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
@@ -32,11 +34,12 @@ if __name__ == '__main__':
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # Get a UVJ filter collection
-    filters = UVJ(new_lam=grid.lam)
+    filters = UVJ()
 
     # Define geometry of the images
     resolution = 0.05 * kpc  # resolution in kpc
-    fov = resolution.value * 150 * kpc
+    npix = 50 # number of pixels wide
+    fov = resolution.value * npix * kpc # field-of-view
 
     # ===================== Make Disk =====================
 
@@ -57,20 +60,20 @@ if __name__ == '__main__':
     # Get the 2D star formation and metal enrichment history for the given
     # SPS grid. This is (age, Z).
     sfzh = generate_sfzh(
-        grid.log10ages, grid.metallicities, sfh, Zh, stellar_mass=stellar_mass
+        grid.log10age, grid.metallicity, sfh, Zh, stellar_mass=stellar_mass
     )
 
     # Initialise Galaxy object
     disk = Galaxy(morph=morph, sfzh=sfzh)
 
     # Generate stellar spectra
-    disk.get_spectra_stellar(grid)
+    disk.get_spectra_incident(grid)
     
     # Make images
     disk_img = disk.make_images(
         resolution=resolution,
         filters=filters,
-        sed=disk.spectra["stellar"],
+        sed=disk.spectra["incident"],
         fov=fov,
     )
 
@@ -88,22 +91,22 @@ if __name__ == '__main__':
     morph = Sersic2D(r_eff_kpc=1. * kpc, n=4.)
 
     # Define the parameters of the star formation and metal enrichment histories
-    stellar_mass = 1E10
+    stellar_mass = 2E10
     sfzh = generate_instant_sfzh(
-        grid.log10ages, grid.metallicities, 10., 0.01,
+        grid.log10age, grid.metallicity, 10., 0.01,
         stellar_mass=stellar_mass)
 
     # Get galaxy object
     bulge = Galaxy(morph=morph, sfzh=sfzh)
 
     # Get specrtra
-    bulge.get_spectra_stellar(grid)
+    bulge.get_spectra_incident(grid)
 
     # make images
     bulge_img = bulge.make_images(
         resolution=resolution,
         filters=filters,
-        sed=bulge.spectra["stellar"],
+        sed=bulge.spectra["incident"],
         fov=fov,
     )
 
@@ -133,15 +136,15 @@ if __name__ == '__main__':
 
     # Plot the spectra of both components
 
-    sed = disk.spectra['stellar']
+    sed = disk.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c='b',
              label='disk')
 
-    sed = bulge.spectra['stellar']
+    sed = bulge.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c='r',
              label='bulge')
 
-    sed = combined.spectra['stellar']
+    sed = combined.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=2, alpha=0.8, c='k',
              label='combined')
 
