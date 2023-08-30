@@ -838,41 +838,6 @@ class Galaxy(BaseGalaxy):
 
         return img.get_hist_imgs()
 
-    def get_equivalent_width(self, index, spectra_to_plot=None):
-        """
-         Gets all equivalent widths associated with a sed object
-
-         NOTE: index and pseudo continuum windows must be defined.
-
-         Parameters
-         ----------
-         index: float
-            the index to be used in the computation of equivalent width.
-         spectra_to_plot: float array
-             An empty list of spectra to be populated.
-
-         Returns
-         -------
-         equivalent_width : float
-             The calculated equivalent width at the current index.
-
-         """
-
-        equivalent_width = None
-
-        if type(spectra_to_plot) != list:
-            spectra_to_plot = list(self.spectra.keys())
-
-        for sed_name in spectra_to_plot:
-            sed = self.spectra[sed_name]
-            lam_arr = sed.lam
-            lnu_arr = sed.lnu
-
-            # Compute equivalent width
-            equivalent_width = sed.calculate_ew(lam_arr, lnu_arr, index)
-
-        return equivalent_width
-
     def make_images(self, resolution, fov=None, img_type="hist",
                     sed=None, filters=(), pixel_values=None, psfs=None,
                     depths=None, snrs=None, aperture=None, noises=None,
