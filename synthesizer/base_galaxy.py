@@ -597,11 +597,11 @@ class BaseGalaxy:
         # use wavelength grid from attenuated spectra
         # NOTE: in future it might be good to allow a custom wavelength grid
 
-        lam = self.spectra['attenuated'].lam
+        lam = self.spectra['emergent'].lam
 
         # calculate the bolometric dust lunminosity as the difference between the intrinsic and attenuated
 
-        dust_bolometric_luminosity = self.spectra['intrinsic'].get_bolometric_luminosity() - self.spectra['attenuated'].get_bolometric_luminosity()
+        dust_bolometric_luminosity = self.spectra['intrinsic'].get_bolometric_luminosity() - self.spectra['emergent'].get_bolometric_luminosity()
 
         # get the spectrum and normalise it properly
         lnu = dust_bolometric_luminosity.to('erg/s').value * emissionmodel.lnu(lam)
@@ -611,7 +611,7 @@ class BaseGalaxy:
 
         # associate that with the component's spectra dictionarity
         self.spectra['dust'] = sed
-        self.spectra['total'] = self.spectra['dust'] + self.spectra['attenuated']
+        self.spectra['total'] = self.spectra['dust'] + self.spectra['emergent']
 
         return sed
 
