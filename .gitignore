@@ -5,6 +5,8 @@ examples/particle/plots/*.png
 examples/parametric/plots/*.png
 examples/plots/*.png
 docs/source/_autosummary
+docs/source/auto_examples/
+docs/source/gen_modules/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
