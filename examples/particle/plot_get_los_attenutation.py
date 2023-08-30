@@ -157,7 +157,7 @@ for n in [10, 100, 1000, 10000]:
 
     ax.legend()
 
-    fig.savefig("../los_timing_nstar%d.png" % n, dpi=100, bbox_inches="tight")
+    # fig.savefig("../los_timing_nstar%d.png" % n, dpi=100, bbox_inches="tight")
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -171,4 +171,5 @@ for n in [10, 100, 1000, 10000]:
 
     ax.legend()
 
-    fig.savefig("../los_precision_nstar%d.png" % n, dpi=100, bbox_inches="tight")
+    # fig.savefig("../los_precision_nstar%d.png" % n, dpi=100, bbox_inches="tight")
+    plt.show()
