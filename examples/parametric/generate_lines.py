@@ -1,10 +1,14 @@
 """
+Generate lines from parametric galaxy
+=====================================
+
 Example for generating a emission lines for a parametric galaxy. This example will:
 - show the available lines to a grid
 - build a parametric galaxy (see make_sfzh and make_sed)
 - calculate intrinsic line properties
 - calculate dust-attenuated line properties
 """
+
 import os
 
 from synthesizer.units import Units
@@ -25,7 +29,8 @@ if __name__ == '__main__':
     grid_dir = script_path + "/../../tests/test_grid/"
 
     # open the grid
-    grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=True)
+    grid = Grid(grid_name, grid_dir=grid_dir,
+                read_spectra=False, read_lines=True)
 
     # define the parameters of the star formation and metal enrichment histories
     sfh_p = {'duration': 100 * Myr}
@@ -44,7 +49,8 @@ if __name__ == '__main__':
     print(galaxy)
 
     # define list of lines that we're interested in. Note that we can provide multiples which are automatically summed
-    line_ids = ['H 1 4862.69A', 'O 3 4958.91A', 'O 3 5006.84A', ['O 3 4958.91A', 'O 3 5006.84A']]
+    line_ids = ['H 1 4862.69A', 'O 3 4958.91A',
+                'O 3 5006.84A', ['O 3 4958.91A', 'O 3 5006.84A']]
 
     # create the Lines dictionary which contains line objects
     lines = galaxy.get_line_intrinsic(grid, line_ids)
@@ -53,15 +59,16 @@ if __name__ == '__main__':
     for line in lines:
         print(line)
 
-    # calculate attenuated line properties assuming uniform dust (should leave EW unchanged)
-    lines = galaxy.get_line_screen(grid, line_ids, tauV=0.5)
+    # --- calculate attenuated line properties assuming uniform dust (should leave EW unchanged)
+    lines = galaxy.get_line_screen(grid, line_ids, tau_v=0.5)
     print('-'*50)
     print('SCREEN')
     for line in lines:
         print(line)
 
-    # calculate attenuated line properties assuming different dust affecting stellar and nebular components
-    lines = galaxy.get_line_attenuated(grid, line_ids, tauV_stellar=0.1, tauV_nebular=0.5)
+    # --- calculate attenuated line properties assuming different dust affecting stellar and nebular components
+    lines = galaxy.get_line_attenuated(
+        grid, line_ids, tau_v_stellar=0.1, tau_v_nebular=0.5)
     print('-'*50)
     print('ATTENUATED')
     for line in lines:

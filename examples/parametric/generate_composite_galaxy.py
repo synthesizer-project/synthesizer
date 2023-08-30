@@ -1,10 +1,14 @@
 """
+Generate composite image example
+================================
+
 Example for generating a composite galaxy
 photometry. This example will:
 - build two parametric "galaxies" (see make_sfzh)
 - calculate spectral luminosity density of each
 - make images of both
 """
+
 import os
 from unyt import yr, Myr, kpc, mas
 import matplotlib.pyplot as plt
@@ -63,13 +67,13 @@ if __name__ == '__main__':
     disk = Galaxy(morph=morph, sfzh=sfzh)
 
     # Generate stellar spectra
-    disk.get_spectra_stellar(grid)
+    disk.get_spectra_incident(grid)
     
     # Make images
     disk_img = disk.make_images(
         resolution=resolution,
         filters=filters,
-        sed=disk.spectra["stellar"],
+        sed=disk.spectra["incident"],
         fov=fov,
     )
 
@@ -96,13 +100,13 @@ if __name__ == '__main__':
     bulge = Galaxy(morph=morph, sfzh=sfzh)
 
     # Get specrtra
-    bulge.get_spectra_stellar(grid)
+    bulge.get_spectra_incident(grid)
 
     # make images
     bulge_img = bulge.make_images(
         resolution=resolution,
         filters=filters,
-        sed=bulge.spectra["stellar"],
+        sed=bulge.spectra["incident"],
         fov=fov,
     )
 
@@ -132,15 +136,15 @@ if __name__ == '__main__':
 
     # Plot the spectra of both components
 
-    sed = disk.spectra['stellar']
+    sed = disk.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c='b',
              label='disk')
 
-    sed = bulge.spectra['stellar']
+    sed = bulge.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c='r',
              label='bulge')
 
-    sed = combined.spectra['stellar']
+    sed = combined.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=2, alpha=0.8, c='k',
              label='combined')
 

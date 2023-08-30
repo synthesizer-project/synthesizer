@@ -1,4 +1,7 @@
 """
+SED object example
+==================
+
 Example for creating an Sed object straight from the Grid. This example will:
 - extract an Sed from a grid point
 - demonstrating adding two Sed objects together
