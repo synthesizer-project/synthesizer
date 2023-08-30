@@ -237,7 +237,7 @@ class Stars(Particles):
     def _power_law_sample(self, low_lim, upp_lim, g, size=1):
         """
         Sample from a power law over an interval not containing zero.
-        
+
         Power-law gen for pdf(x) propto x^{g-1} for a<=x<=b
 
         Args:

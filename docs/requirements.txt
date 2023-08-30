@@ -6,3 +6,4 @@ sphinx_autodoc_typehints
 ipython
 sphinx_gallery
 pillow
+sphinx-toolbox
