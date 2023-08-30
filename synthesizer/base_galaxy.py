@@ -325,7 +325,6 @@ class BaseGalaxy:
             dust_curve=power_law(),
             tau_v=1.,
             alpha=-1.,
-            CF00=False,
             young_old_thresh=None,
             fesc=0.0,
             fesc_LyA=1.0,
@@ -335,10 +334,13 @@ class BaseGalaxy:
         including variable Lyman-alpha transmission. In this model some
         fraction (fesc) of the pure stellar emission is able to completely
         escaped the galaxy without reprocessing by gas or dust. The rest is
-        assumed to be reprocessed by both gas and a screen of dust.
-
-        CF00 allows to toggle extra attenaution for birth clouds
-        following Charlot & Fall 2000.
+        assumed to be reprocessed by both gas and a screen of dust. If 
+        young_old_thresh is set then the individual and combined spectra will 
+        be generated for both young and old components. In this case it's 
+        necessary to provide an array of tau_v and alphas dscribing the ISM
+        birth cloud components respectively. The young component feels 
+        attenuation from both the ISM and birth cloud while the old component
+        only feels attenuation from the ISM.
 
         Args:
             grid  (object, Grid):
@@ -398,7 +400,7 @@ class BaseGalaxy:
                 A Sed object containing the emergent spectra
         """
 
-        if CF00:
+        if young_old_thresh:
             if (len(tau_v)>2) or (len(alpha)>2):
                 exceptions.InconsistentArguments(
                     ("Only 2 values for the optical depth or dust curve "
@@ -426,7 +428,7 @@ class BaseGalaxy:
         #   - intrinsic = transmitted + reprocessed
         self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=False, old=False)
 
-        if CF00:
+        if young_old_thresh:
 
             self.spectra['young_attenuated'] = Sed(grid.lam)
             self.spectra['old_attenuated'] = Sed(grid.lam)
@@ -441,6 +443,7 @@ class BaseGalaxy:
             # add a label so saves e.g. 'escaped_old' etc.
             self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=False, old=young_old_thresh, label = 'old_')
 
+            print(self.spectra.keys())
 
         
         if np.isscalar(tau_v):
@@ -543,8 +546,7 @@ class BaseGalaxy:
                                   dust_curve=power_law(),
                                   tau_v = [tau_v_ISM, tau_v_BC], 
                                   alpha = [alpha_ISM, alpha_BC],
-                                  young_old_thresh=young_old_thresh,
-                                  CF00 = True
+                                  young_old_thresh=young_old_thresh
                                   )
 
 
@@ -905,17 +907,29 @@ class BaseGalaxy:
         if type(spectra_to_plot) != list:
             spectra_to_plot = list(self.spectra.keys())
 
+        # only plot FIR if 'total' is plotted otherwise just plot UV-NIR
+        if 'total' in spectra_to_plot:
+            xlim = [1., 7.]
+        else:
+            xlim = [1., 4.5]
+
+        ypeak = -100
         for sed_name in spectra_to_plot:
             sed = self.spectra[sed_name]
             ax.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, label=sed_name)
 
+            if np.max(np.log10(sed.lnu))> ypeak:
+                ypeak = np.max(np.log10(sed.lnu))
+
         # ax.set_xlim([2.5, 4.2])
 
         if ylimits[0] == 'peak':
-            ypeak = np.max(np.log10(sed.lnu))
-            ylim = [ypeak-ylimits[1], ypeak+0.5]
+            if ypeak == ypeak:
+                ylim = [ypeak-ylimits[1], ypeak+0.5]
+            ax.set_ylim(ylim)
 
-        ax.set_ylim(ylim)
+        ax.set_xlim(xlim)
+
         ax.legend(fontsize=8, labelspacing=0.0)
         ax.set_xlabel(r'$\rm log_{10}(\lambda/\AA)$')
         ax.set_ylabel(r'$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$')
