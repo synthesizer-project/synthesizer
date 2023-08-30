@@ -498,42 +498,6 @@ class BaseGalaxy:
 
         return 
     
-    def get_spectra_one_component(
-            self,
-            grid,
-            dust_curve,
-            tau_v,
-            alpha,
-            old=False,
-            young=False,
-            spectra_name='total'
-    ):
-        """
-        One component dust screen model,
-        with option for optical depths and
-        dust attenuation slopes
-
-        Args:
-
-        Returns:
-
-        """
-
-        # calculate intrinsic sed for young and old stars
-        intrinsic_sed = self.generate_lnu(grid, spectra_name=spectra_name,
-                                          old=old, young=young)
-
-        if np.isscalar(tau_v):
-            dust_curve.params['slope'] = alpha
-            T_total = dust_curve.attenuate(tau_v, grid.lam)
-        else:
-            T_total = np.ones(len(intrinsic_sed))
-            for _tau_v, _alpha in zip(tau_v, alpha):
-                dust_curve.params['slope'] = _alpha
-                _T = dust_curve.attenuate(_tau_v, grid.lam)
-                T_total *= _T
-
-        return intrinsic_sed * T_total
 
     def get_spectra_CharlotFall(
             self,
