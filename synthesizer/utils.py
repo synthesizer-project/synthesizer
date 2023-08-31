@@ -6,6 +6,7 @@ import unyt
 import unyt
 from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, kb, unyt_array
 
+
 def write_data_h5py(filename, name, data, overwrite=False):
     check = check_h5py(filename, name)
 
@@ -16,9 +17,7 @@ def write_data_h5py(filename, name, data, overwrite=False):
                 del h5file[name]
                 h5file[name] = data
             else:
-                raise ValueError(
-                    "Dataset already exists, " + "and `overwrite` not set"
-                )
+                raise ValueError("Dataset already exists, " + "and `overwrite` not set")
         else:
             h5file.create_dataset(name, data=data)
 
@@ -112,7 +111,7 @@ def flux_to_luminosity(flux, cosmo, redshift):
 def fnu_to_m(fnu):
     """
     Converts flux in nJy to apparent magnitude.
-    
+
     Parameters
     ----------
     flux : array-like (float)/float
@@ -121,17 +120,17 @@ def fnu_to_m(fnu):
 
     # Check whether we have units, if so convert to nJy
     if isinstance(fnu, unyt.array.unyt_quantity):
-        fnu_ = fnu.to('nJy').value
+        fnu_ = fnu.to("nJy").value
     else:
         fnu_ = fnu
 
-    return -2.5 * np.log10(fnu_ / 1E9) + 8.9  # -- assumes flux in nJy
+    return -2.5 * np.log10(fnu_ / 1e9) + 8.9  # -- assumes flux in nJy
 
 
 def m_to_fnu(m):
     """
     Converts apparent magnitude to flux in nJy.
-    
+
     Parameters
     ----------
     m : array-like (float)/float
@@ -139,51 +138,51 @@ def m_to_fnu(m):
         or array.
     """
 
-    return 1E9 * 10 ** (-0.4 * (m - 8.9)) * nJy
+    return 1e9 * 10 ** (-0.4 * (m - 8.9)) * nJy
 
 
 def flam_to_fnu(lam, flam):
-    """ convert f_lam to f_nu
+    """convert f_lam to f_nu
 
     arguments:
     lam -- wavelength / \\AA
     flam -- spectral luminosity density/erg/s/\\AA
     """
 
-    lam_m = lam * 1E-10
+    lam_m = lam * 1e-10
 
-    return flam * lam/(c.value/lam_m)
+    return flam * lam / (c.value / lam_m)
 
 
 def fnu_to_flam(lam, fnu):
-    """ convert f_nu to f_lam
+    """convert f_nu to f_lam
 
     arguments:
     lam -- wavelength/\\AA
     flam -- spectral luminosity density/erg/s/\\AA
     """
 
-    lam_m = lam * 1E-10
+    lam_m = lam * 1e-10
 
-    return fnu * (c.value/lam_m)/lam
+    return fnu * (c.value / lam_m) / lam
 
 
 class constants:
-    tenpc = 10*pc  # ten parsecs
+    tenpc = 10 * pc  # ten parsecs
     # the surface area (in cm) at 10 pc. I HATE the magnitude system
-    geo = 4 * np.pi * (tenpc.to('cm').value) ** 2
+    geo = 4 * np.pi * (tenpc.to("cm").value) ** 2
 
 
 def M_to_Lnu(M):
-    """ Convert absolute magnitude (M) to L_nu """
+    """Convert absolute magnitude (M) to L_nu"""
     return 10 ** (-0.4 * (M + 48.6)) * constants.geo * erg / s / Hz
 
 
 def Lnu_to_M(Lnu_):
-    """ Convert L_nu to absolute magnitude (M). If no unit
-        provided assumes erg/s/Hz. """
+    """Convert L_nu to absolute magnitude (M). If no unit
+    provided assumes erg/s/Hz."""
     if type(Lnu_) == unyt.array.unyt_quantity:
-        Lnu = Lnu_.to('erg/s/Hz').value
+        Lnu = Lnu_.to("erg/s/Hz").value
     else:
         Lnu = Lnu_
 
@@ -191,10 +190,8 @@ def Lnu_to_M(Lnu_):
 
 
 def planck(nu, T):
-
     """
     Planck's law
     """
 
-    return (2. * h * (nu ** 3) * (c ** -2)) \
-        * (1. / (np.exp(h * nu / (kb * T)) - 1.))
+    return (2.0 * h * (nu**3) * (c**-2)) * (1.0 / (np.exp(h * nu / (kb * T)) - 1.0))
