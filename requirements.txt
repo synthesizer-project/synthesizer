@@ -11,7 +11,7 @@ PyYAML
 scipy
 unyt
 cmasher
-git+https://github.com/karllark/dust_attenuation.git@v0.5.dev
+# git+https://github.com/karllark/dust_attenuation.git@v0.5.dev
 dust_extinction
 nbsphinx
 matplotlib
