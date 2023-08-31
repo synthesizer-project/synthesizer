@@ -28,32 +28,38 @@ from ..base_galaxy import BaseGalaxy
 from .. import exceptions
 from ..imaging.images import ParticleImage
 
+
 class Galaxy(BaseGalaxy):
-    """ The Particle based Galaxy object.
+    """The Particle based Galaxy object.
 
     When working with particles this object provides interfaces for calculating
-    spectra, galaxy properties and images. A galaxy can be composed of any 
+    spectra, galaxy properties and images. A galaxy can be composed of any
     combination of particle.Stars, particle.Gas, or particle.BlackHoles objects.
 
     Attributes:
 
     """
+
     __slots__ = [
-        "spectra", "spectra_array", "lam",
-        "stars", "gas",
-        "sf_gas_metallicity", "sf_gas_mass",
-        "gas_mass"
+        "spectra",
+        "spectra_array",
+        "lam",
+        "stars",
+        "gas",
+        "sf_gas_metallicity",
+        "sf_gas_mass",
+        "gas_mass",
     ]
 
     def __init__(
-            self,
-            name="particle galaxy",
-            stars=None,
-            gas=None,
-            black_holes=None,
-            redshift=None
+        self,
+        name="particle galaxy",
+        stars=None,
+        gas=None,
+        black_holes=None,
+        redshift=None,
     ):
-        """ Initialise the Galaxy.
+        """Initialise the Galaxy.
 
         Args:
 
@@ -115,15 +121,16 @@ class Galaxy(BaseGalaxy):
         if self.gas.star_forming is not None:
             mask = self.gas.star_forming
             if np.sum(mask) == 0:
-                self.sf_gas_mass = 0.
-                self.sf_gas_metallicity = 0.
+                self.sf_gas_mass = 0.0
+                self.sf_gas_metallicity = 0.0
             else:
                 self.sf_gas_mass = np.sum(self.gas.masses[mask])
 
                 # mass weighted gas phase metallicity
-                self.sf_gas_metallicity = \
-                    np.sum(self.gas.masses[mask] *
-                           self.gas.metallicities[mask]) / self.sf_gas_mass
+                self.sf_gas_metallicity = (
+                    np.sum(self.gas.masses[mask] * self.gas.metallicities[mask])
+                    / self.sf_gas_mass
+                )
 
     def load_stars(self, initial_masses, ages, metals, **kwargs):
         """
@@ -191,22 +198,20 @@ class Galaxy(BaseGalaxy):
         # Set up the inputs to the C function.
         grid_props = [
             np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(np.log10(grid.metallicity), dtype=np.float64)
+            np.ascontiguousarray(np.log10(grid.metallicity), dtype=np.float64),
         ]
         part_props = [
-            np.ascontiguousarray(
-                self.stars.log10ages[mask], dtype=np.float64),
-            np.ascontiguousarray(
-                self.stars.log10metallicities[mask], dtype=np.float64),
+            np.ascontiguousarray(self.stars.log10ages[mask], dtype=np.float64),
+            np.ascontiguousarray(self.stars.log10metallicities[mask], dtype=np.float64),
         ]
         part_mass = np.ascontiguousarray(
-            self.stars._initial_masses[mask], dtype=np.float64)
+            self.stars._initial_masses[mask], dtype=np.float64
+        )
         npart = np.int32(part_mass.size)
         nlam = np.int32(grid.spectra[spectra_type].shape[-1])
 
         # Slice the spectral grids and pad them with copies of the edges.
-        grid_spectra = np.ascontiguousarray(
-            grid.spectra[spectra_type], np.float64)
+        grid_spectra = np.ascontiguousarray(grid.spectra[spectra_type], np.float64)
 
         # Get the grid dimensions after slicing what we need
         grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
@@ -218,8 +223,17 @@ class Galaxy(BaseGalaxy):
         grid_props = tuple(grid_props)
         part_props = tuple(part_props)
 
-        return (grid_spectra, grid_props, part_props, part_mass, fesc,
-                grid_dims, len(grid_props), npart, nlam)
+        return (
+            grid_spectra,
+            grid_props,
+            part_props,
+            part_mass,
+            fesc,
+            grid_dims,
+            len(grid_props),
+            npart,
+            nlam,
+        )
 
     def calculate_black_hole_metallicity(self, default_metallicity=0.012):
         """
@@ -251,20 +265,22 @@ class Galaxy(BaseGalaxy):
         # Query the tree for gas particles in range of each black hole, here
         # we use the maximum smoothing length to get all possible intersections
         # without calculating the distance for every gas particle.
-        inds = tree.query_ball_point(self.black_holes._coordinates,
-                                     r=self.gas._smoothing_lengths.max())
+        inds = tree.query_ball_point(
+            self.black_holes._coordinates, r=self.gas._smoothing_lengths.max()
+        )
 
         # Loop over black holes
         metals = np.zeros(self.black_holes.nbh)
         for ind, gas_in_range in enumerate(inds):
-
             # Handle black holes with no neighbouring gas
             if len(gas_in_range) == 0:
                 metals[ind] = default_metallicity
 
             # Calculate the separation between the black hole and gas particles
-            sep = self.gas._coordinates[gas_in_range, :] \
+            sep = (
+                self.gas._coordinates[gas_in_range, :]
                 - self.black_holes._coordinates[ind, :]
+            )
 
             dists = np.sqrt(sep[:, 0] ** 2 + sep[:, 1] ** 2 + sep[:, 2] ** 2)
 
@@ -280,7 +296,7 @@ class Galaxy(BaseGalaxy):
             # Calculate the mass weight metallicity of this black holes region
             metals[ind] = np.average(
                 self.gas.metallicities[gas_in_range],
-                weights=self.gas._masses[gas_in_range]
+                weights=self.gas._masses[gas_in_range],
             )
 
         # Assign the metallicity we have found
@@ -314,59 +330,48 @@ class Galaxy(BaseGalaxy):
             )
 
         # Set up the kernel inputs to the C function.
-        kernel =  np.ascontiguousarray(kernel, dtype=np.float64)
+        kernel = np.ascontiguousarray(kernel, dtype=np.float64)
         kdim = kernel.size
 
         # Set up the stellar inputs to the C function.
         star_pos = np.ascontiguousarray(
-            self.stars._coordinates[mask, :],
-            dtype=np.float64
+            self.stars._coordinates[mask, :], dtype=np.float64
         )
         nstar = self.stars._coordinates[mask, :].shape[0]
 
         # Set up the gas inputs to the C function.
-        gas_pos =  np.ascontiguousarray(
-            self.gas._coordinates,
-            dtype=np.float64
-        )
-        gas_sml = np.ascontiguousarray(
-            self.gas._smoothing_lengths,
-            dtype=np.float64
-        )
-        gas_met = np.ascontiguousarray(
-            self.gas.metallicities,
-            dtype=np.float64
-        )
-        gas_mass = np.ascontiguousarray(
-            self.gas._masses,
-            dtype=np.float64
-        )
+        gas_pos = np.ascontiguousarray(self.gas._coordinates, dtype=np.float64)
+        gas_sml = np.ascontiguousarray(self.gas._smoothing_lengths, dtype=np.float64)
+        gas_met = np.ascontiguousarray(self.gas.metallicities, dtype=np.float64)
+        gas_mass = np.ascontiguousarray(self.gas._masses, dtype=np.float64)
         if isinstance(self.gas.dust_to_metal_ratio, float):
             gas_dtm = np.ascontiguousarray(
-                np.full_like(
-                    gas_mass, self.gas.dust_to_metal_ratio
-                ),
-                dtype=np.float64
+                np.full_like(gas_mass, self.gas.dust_to_metal_ratio), dtype=np.float64
             )
         else:
             gas_dtm = np.ascontiguousarray(
-                self.gas.dust_to_metal_ratio,
-                dtype=np.float64
+                self.gas.dust_to_metal_ratio, dtype=np.float64
             )
         ngas = gas_mass.size
 
-        return (kernel, star_pos, gas_pos, gas_sml, gas_met,
-                gas_mass, gas_dtm, nstar, ngas, kdim, threshold,
-                np.max(gas_sml), force_loop)
+        return (
+            kernel,
+            star_pos,
+            gas_pos,
+            gas_sml,
+            gas_met,
+            gas_mass,
+            gas_dtm,
+            nstar,
+            ngas,
+            kdim,
+            threshold,
+            np.max(gas_sml),
+            force_loop,
+        )
 
     def generate_lnu(
-                    self,
-                    grid,
-                    spectra_name,
-                    fesc=0.0,
-                    young=False,
-                    old=False,
-                    verbose=False
+        self, grid, spectra_name, fesc=0.0, young=False, old=False, verbose=False
     ):
         """
         Generate the luminosity for a given grid key spectra for all
@@ -407,27 +412,23 @@ class Galaxy(BaseGalaxy):
 
         if np.sum(mask) == 0:
             if verbose:
-                print('Age mask has filtered out all particles')
+                print("Age mask has filtered out all particles")
 
             return np.zeros(len(grid.lam))
 
         from ..extensions.csed import compute_integrated_sed
 
         # Prepare the arguments for the C function.
-        args = self._prepare_sed_args(grid, fesc=fesc, 
-                                  spectra_type=spectra_name,
-                                  mask=mask)
+        args = self._prepare_sed_args(
+            grid, fesc=fesc, spectra_type=spectra_name, mask=mask
+        )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         spec = compute_integrated_sed(*args)
 
         return spec
 
-    def _get_masks(
-            self,
-            young=None,
-            old=None
-    ):
+    def _get_masks(self, young=None, old=None):
         """
         Get masks for which components we are handling, if a sub-component
         has not been requested it's necessarily all particles.
@@ -442,7 +443,7 @@ class Galaxy(BaseGalaxy):
             InconsistentParameter
                 Can't select for both young and old components
                 simultaneously
-            
+
         """
 
         if young and old:
@@ -466,11 +467,7 @@ class Galaxy(BaseGalaxy):
 
         pass
 
-    def get_particle_spectra_stellar(
-            self,
-            grid,
-            update=True
-    ):
+    def get_particle_spectra_stellar(self, grid, update=True):
         """
         Calculate intrinsic spectra for all *individual* stellar particles.
         The stellar SED component is always created, the intrinsic SED
@@ -519,12 +516,7 @@ class Galaxy(BaseGalaxy):
 
         return sed
 
-    def get_particle_spectra_intrinsic(
-            self,
-            grid,
-            fesc=0.0,
-            update=True
-    ):
+    def get_particle_spectra_intrinsic(self, grid, fesc=0.0, update=True):
         """
         Calculate intrinsic spectra for all *individual* stellar particles.
 
@@ -561,9 +553,9 @@ class Galaxy(BaseGalaxy):
         """
 
         # Ensure we have an `intrinsic`` key in the grid. If not error.
-        if 'intrinsic' not in list(grid.spectra.keys()):
+        if "intrinsic" not in list(grid.spectra.keys()):
             raise MissingSpectraType(
-                "The Grid does not contain the key '%s'" % 'intrinsic'
+                "The Grid does not contain the key '%s'" % "intrinsic"
             )
 
         from ..extensions.csed import compute_particle_seds
@@ -582,12 +574,7 @@ class Galaxy(BaseGalaxy):
 
         return sed
 
-    def get_particle_spectra_screen(
-            self,
-            grid,
-            fesc=0.0,
-            update=True
-    ):
+    def get_particle_spectra_screen(self, grid, fesc=0.0, update=True):
         """
         Calculate attenuated spectra for all *individual* stellar
         particles according to a simple screen.
@@ -623,13 +610,13 @@ class Galaxy(BaseGalaxy):
             directly contradict each other resulting in 0 particles in
             the mask.
         """
-        
+
         # # Ensure we have an `intrinsic`` key in the grid. If not error.
         # if 'intrinsic' not in list(grid.spectra.keys()):
         #     raise MissingSpectraType(
         #         "The Grid does not contain the key '%s'" % 'intrinsic'
         #     )
-        
+
         # from ..extensions.csed import compute_particle_seds
 
         # # Prepare the arguments for the C function.
@@ -648,10 +635,7 @@ class Galaxy(BaseGalaxy):
 
         pass
 
-    def get_particle_line_intrinsic(
-            self,
-            grid
-    ):
+    def get_particle_line_intrinsic(self, grid):
         # """
         # Calculate line luminosities from individual young stellar particles
 
@@ -684,24 +668,21 @@ class Galaxy(BaseGalaxy):
         pass
 
     def get_particle_line_attenuated():
-
         pass
 
     def get_particle_line_screen():
-
         pass
 
     def get_particle_line_los():
-
         pass
 
     def calculate_los_tau_v(
-            self,
-            kappa,
-            kernel,
-            mask=None,
-            threshold=1,
-            force_loop=0,
+        self,
+        kappa,
+        kernel,
+        mask=None,
+        threshold=1,
+        force_loop=0,
     ):
         """
         Calculate tau_v for each star particle based on the distribution of
@@ -737,7 +718,7 @@ class Galaxy(BaseGalaxy):
 
         # Compute the dust surface densities
         los_dustsds = compute_dust_surface_dens(*args)
-        
+
         # Finalise the calculation
         tau_v = kappa * los_dustsds
 
@@ -745,13 +726,17 @@ class Galaxy(BaseGalaxy):
         if self.stars.tau_v is None:
             self.stars.tau_v = np.zeros(self.stars.nparticles)
         self.stars.tau_v[mask] = tau_v
-        
+
         return tau_v
 
-    def apply_los(self, tau_v, 
-                  spectra_type,
-                  dust_curve=PowerLaw({'slope': -1.}),
-                  integrated=True, sed_object=True):
+    def apply_los(
+        self,
+        tau_v,
+        spectra_type,
+        dust_curve=PowerLaw({"slope": -1.0}),
+        integrated=True,
+        sed_object=True,
+    ):
         """
         Generate
         tau_v: V-band optical depth for every star particle
@@ -766,17 +751,21 @@ class Galaxy(BaseGalaxy):
 
         # these two should have the same shape so should work?
         sed = self.spectra_array[spectra_type] * T
-        self.spectra_array['attenuated'] = Sed(self.lam, sed)
-        self.spectra['attenuated'] = Sed(self.lam, np.sum(sed, axis=0))
+        self.spectra_array["attenuated"] = Sed(self.lam, sed)
+        self.spectra["attenuated"] = Sed(self.lam, np.sum(sed, axis=0))
 
         if integrated:
-            return self.spectra['attenuated']
+            return self.spectra["attenuated"]
         else:
-            return self.spectra_array['attenuated']
+            return self.spectra_array["attenuated"]
 
     def screen_dust_gamma_parameter(
-        self, beta=0.1, Z14=0.035, sf_gas_metallicity=None,
-        sf_gas_mass=None, stellar_mass=None
+        self,
+        beta=0.1,
+        Z14=0.035,
+        sf_gas_metallicity=None,
+        sf_gas_mass=None,
+        stellar_mass=None,
     ):
         """
         Calculate the gamma parameter controlling the optical depth
@@ -788,28 +777,26 @@ class Galaxy(BaseGalaxy):
 
         if sf_gas_metallicity is None:
             if self.sf_gas_metallicity is None:
-                raise ValueError('No sf_gas_metallicity provided')
+                raise ValueError("No sf_gas_metallicity provided")
             else:
                 sf_gas_metallicity = self.sf_gas_metallicity
 
         if sf_gas_mass is None:
             if self.sf_gas_mass is None:
-                raise ValueError('No sf_gas_mass provided')
+                raise ValueError("No sf_gas_mass provided")
             else:
                 sf_gas_mass = self.sf_gas_mass
 
         if stellar_mass is None:
             if self.stellar_mass is None:
-                raise ValueError('No stellar_mass provided')
+                raise ValueError("No stellar_mass provided")
             else:
                 stellar_mass = self.stellar_mass
 
-        gamma = (sf_gas_metallicity / Z14) *\
-                (sf_gas_mass / stellar_mass) *\
-                (1. / beta)
+        gamma = (sf_gas_metallicity / Z14) * (sf_gas_mass / stellar_mass) * (1.0 / beta)
 
         return gamma
-    
+
     def create_stellarmass_hist(self, resolution, npix=None, fov=None):
         """
         Calculate a 2D histogram of the galaxy's mass distribution.
@@ -833,17 +820,33 @@ class Galaxy(BaseGalaxy):
         """
 
         # Instantiate the Image object.
-        img = ParticleImage(resolution, npix, fov, stars=self.stars,
-                            pixel_values=self.stars.initial_masses)
+        img = ParticleImage(
+            resolution,
+            npix,
+            fov,
+            stars=self.stars,
+            pixel_values=self.stars.initial_masses,
+        )
 
         return img.get_hist_imgs()
 
-    def make_images(self, resolution, fov=None, img_type="hist",
-                    sed=None, filters=(), pixel_values=None, psfs=None,
-                    depths=None, snrs=None, aperture=None, noises=None,
-                    rest_frame=True, cosmo=None,
-                    psf_resample_factor=1,
-                    ):
+    def make_images(
+        self,
+        resolution,
+        fov=None,
+        img_type="hist",
+        sed=None,
+        filters=(),
+        pixel_values=None,
+        psfs=None,
+        depths=None,
+        snrs=None,
+        aperture=None,
+        noises=None,
+        rest_frame=True,
+        cosmo=None,
+        psf_resample_factor=1,
+    ):
         """
         Makes images, either one or one per filter. This is a generic method
         that will make every sort of image using every possible combination of
@@ -866,7 +869,7 @@ class Galaxy(BaseGalaxy):
         sed : obj (SED)
             An sed object containing the spectra for this image.
         filters : obj (FilterCollection)
-            An imutable collection of Filter objects. If provided images are 
+            An imutable collection of Filter objects. If provided images are
             made for each filter.
         pixel_values : array-like (float)
             The values to be sorted/smoothed into pixels. Only needed if an sed
@@ -921,12 +924,10 @@ class Galaxy(BaseGalaxy):
 
         # Make the image, handling incorrect image types
         if img_type == "hist":
-
             # Compute the image
             img.get_hist_imgs()
 
             if psfs is not None:
-
                 # Convolve the image/images
                 img.get_psfed_imgs()
 
@@ -936,18 +937,15 @@ class Galaxy(BaseGalaxy):
                         img.downsample(1 / psf_resample_factor)
 
             if depths is not None or noises is not None:
-
                 img.get_noisy_imgs(noises)
 
             return img
 
         elif img_type == "smoothed":
-
             # Compute image
             img.get_imgs()
 
             if psfs is not None:
-
                 # Convolve the image/images
                 img.get_psfed_imgs()
 
@@ -957,14 +955,11 @@ class Galaxy(BaseGalaxy):
                         img.downsample(1 / psf_resample_factor)
 
             if depths is not None or noises is not None:
-
                 img.get_noisy_imgs(noises)
 
             return img
 
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or "
-                "'smoothed')" % img_type
+                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
             )
-

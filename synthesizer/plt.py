@@ -1,5 +1,3 @@
-
-
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -7,11 +5,10 @@ import numpy as np
 
 
 def mlabel(l):
-    return rf'$\rm {l}$'
+    return rf"$\rm {l}$"
 
 
 def single(size=3.5):
-
     if type(size) == float or type(size) == int:
         size = (size, size)
 
@@ -28,18 +25,18 @@ def single(size=3.5):
 
 
 def single_wcbar_right(hsize=3.5):
-
     left = 0.15
     height = 0.8
     bottom = 0.15
     width = 0.65
 
-    fig = plt.figure(figsize=(hsize, hsize*width/height))
+    fig = plt.figure(figsize=(hsize, hsize * width / height))
 
     ax = fig.add_axes((left, bottom, width, height))
-    cax = fig.add_axes([left+width, bottom, 0.03, height])
+    cax = fig.add_axes([left + width, bottom, 0.03, height])
 
     return fig, ax, cax
+
 
 # def single_wcbar_top(hsize = 3.5):
 #
@@ -57,7 +54,6 @@ def single_wcbar_right(hsize=3.5):
 
 
 def single_histxy(hsize=3.5, set_axis_off=True):
-
     fig = plt.figure(figsize=(hsize, hsize))
 
     left = 0.15
@@ -71,7 +67,7 @@ def single_histxy(hsize=3.5, set_axis_off=True):
     haxy = fig.add_axes((left + width, bottom, 0.15, height))
 
     if set_axis_off:
-        haxx.axis('off')
-        haxy.axis('off')
+        haxx.axis("off")
+        haxy.axis("off")
 
     return fig, ax, haxx, haxy

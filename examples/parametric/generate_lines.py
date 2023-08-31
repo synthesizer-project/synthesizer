@@ -18,8 +18,7 @@ from synthesizer.parametric.galaxy import Galaxy
 from unyt import yr, Myr
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
     script_path = os.path.abspath(os.path.dirname(__file__))
@@ -29,12 +28,11 @@ if __name__ == '__main__':
     grid_dir = script_path + "/../../tests/test_grid/"
 
     # open the grid
-    grid = Grid(grid_name, grid_dir=grid_dir,
-                read_spectra=False, read_lines=True)
+    grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=True)
 
     # define the parameters of the star formation and metal enrichment histories
-    sfh_p = {'duration': 100 * Myr}
-    Z_p = {'log10Z': -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    sfh_p = {"duration": 100 * Myr}
+    Z_p = {"log10Z": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
 
     # define the functional form of the star formation and metal enrichment histories
     sfh = SFH.Constant(sfh_p)  # constant star formation
@@ -49,27 +47,32 @@ if __name__ == '__main__':
     print(galaxy)
 
     # define list of lines that we're interested in. Note that we can provide multiples which are automatically summed
-    line_ids = ['H 1 4862.69A', 'O 3 4958.91A',
-                'O 3 5006.84A', ['O 3 4958.91A', 'O 3 5006.84A']]
+    line_ids = [
+        "H 1 4862.69A",
+        "O 3 4958.91A",
+        "O 3 5006.84A",
+        ["O 3 4958.91A", "O 3 5006.84A"],
+    ]
 
     # create the Lines dictionary which contains line objects
     lines = galaxy.get_line_intrinsic(grid, line_ids)
-    print('-'*50)
-    print('INTRINSIC')
+    print("-" * 50)
+    print("INTRINSIC")
     for line in lines:
         print(line)
 
     # --- calculate attenuated line properties assuming uniform dust (should leave EW unchanged)
     lines = galaxy.get_line_screen(grid, line_ids, tau_v=0.5)
-    print('-'*50)
-    print('SCREEN')
+    print("-" * 50)
+    print("SCREEN")
     for line in lines:
         print(line)
 
     # --- calculate attenuated line properties assuming different dust affecting stellar and nebular components
     lines = galaxy.get_line_attenuated(
-        grid, line_ids, tau_v_stellar=0.1, tau_v_nebular=0.5)
-    print('-'*50)
-    print('ATTENUATED')
+        grid, line_ids, tau_v_stellar=0.1, tau_v_nebular=0.5
+    )
+    print("-" * 50)
+    print("ATTENUATED")
     for line in lines:
         print(line)
