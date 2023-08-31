@@ -10,10 +10,10 @@ from synthesizer.utils import planck
 
 this_dir, this_filename = os.path.split(__file__)
 
-__all__ = ["power_law", "MW_N18", "GrainsWD01"]
+__all__ = ["PowerLaw", "MW_N18", "GrainsWD01"]
 
 
-class power_law():
+class PowerLaw():
     """
     Custom power law dust curve
 
