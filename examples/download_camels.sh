@@ -1,5 +1,4 @@
 #!/bin/bash
-
 dir=$1
 snap=$2
 lh=$3
