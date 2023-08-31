@@ -10,9 +10,7 @@ from synthesizer.utils import planck
 
 this_dir, this_filename = os.path.split(__file__)
 
-# Dust curves commonly used in literature
-
-__all__ = ["power_law", "MW_N18", "Calzetti2000", "GrainsWD01"]
+__all__ = ["power_law", "MW_N18", "GrainsWD01"]
 
 
 class power_law():
