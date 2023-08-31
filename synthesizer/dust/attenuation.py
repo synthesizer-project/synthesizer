@@ -1,12 +1,8 @@
 import os
 import numpy as np
 from scipy import interpolate
-from scipy import integrate
-from unyt import h, c, kb, um, erg, s, Hz
-from unyt import accepts
-from unyt.dimensions import temperature
 
-from dust_attenuation.shapes import N09
+# from dust_attenuation.shapes import N09
 from dust_extinction.grain_models import WD01
 
 from synthesizer.utils import planck
@@ -170,83 +166,83 @@ class MW_N18():
         return np.exp(-(tau_V * tau_x_v))
 
 
-class Calzetti2000():
-    """
-    Calzetti attenuation curve; with option for the slope and UV-bump
-    implemented in Noll et al. 2009.
+# class Calzetti2000():
+#     """
+#     Calzetti attenuation curve; with option for the slope and UV-bump
+#     implemented in Noll et al. 2009.
 
-    Parameters
-    ----------
-    slope: float
-        slope of the attenuation curve
+#     Parameters
+#     ----------
+#     slope: float
+#         slope of the attenuation curve
 
-    x0: float
-        central wavelength of the UV bump, expected in microns
+#     x0: float
+#         central wavelength of the UV bump, expected in microns
 
-    ampl: float
-        amplitude of the UV-bump
+#     ampl: float
+#         amplitude of the UV-bump
 
-    Methods
-    -------
-    tau
-        calculates V-band normalised optical depth
-    attenuate
-        applies the attenuation curve for given V-band optical
-        depth, returns the transmitted fraction
+#     Methods
+#     -------
+#     tau
+#         calculates V-band normalised optical depth
+#     attenuate
+#         applies the attenuation curve for given V-band optical
+#         depth, returns the transmitted fraction
 
-    """
+#     """
 
-    def __init__(self, params={'slope': 0., 'x0': 0.2175, 'ampl': 0.}):
-        """
-        Initialise the dust curve
+#     def __init__(self, params={'slope': 0., 'x0': 0.2175, 'ampl': 0.}):
+#         """
+#         Initialise the dust curve
 
-        Parameters
-        ----------
-        slope: float
-            slope of the attenuation curve
+#         Parameters
+#         ----------
+#         slope: float
+#             slope of the attenuation curve
 
-        x0: float
-            central wavelength of the UV bump, expected in microns
+#         x0: float
+#             central wavelength of the UV bump, expected in microns
 
-        ampl: float
-            amplitude of the UV-bump
+#         ampl: float
+#             amplitude of the UV-bump
 
-        """
-        self.description = 'Calzetti attenuation curve; with option for the ' \
-            'slope and UV-bump implemented in Noll et al. 2009'
-        self.params = params
+#         """
+#         self.description = 'Calzetti attenuation curve; with option for the ' \
+#             'slope and UV-bump implemented in Noll et al. 2009'
+#         self.params = params
 
-    def tau(self, lam):
-        """
-        Calculate V-band normalised optical depth
+#     def tau(self, lam):
+#         """
+#         Calculate V-band normalised optical depth
 
-        Parameters
-        ----------
-        lam: float array
-            wavelength, expected mwith units
-        """
+#         Parameters
+#         ----------
+#         lam: float array
+#             wavelength, expected mwith units
+#         """
 
-        return N09(Av=1.,
-                   ampl=self.params['ampl'],
-                   slope=self.params['slope'],
-                   x0=self.params['x0'])(lam.to_astropy())
+#         return N09(Av=1.,
+#                    ampl=self.params['ampl'],
+#                    slope=self.params['slope'],
+#                    x0=self.params['x0'])(lam.to_astropy())
 
-    def attenuate(self, tau_V, lam):
-        """
-        Get the transmission at different wavelength for the curve
+#     def attenuate(self, tau_V, lam):
+#         """
+#         Get the transmission at different wavelength for the curve
 
-        Parameters
-        ----------
-        tau_V: float
-            optical depth in the V-band
+#         Parameters
+#         ----------
+#         tau_V: float
+#             optical depth in the V-band
 
-        lam: float
-            wavelength, expected with units
-        """
-        return N09(Av=1.086*tau_V,
-                   ampl=self.params['ampl'],
-                   slope=self.params['slope'],
-                   x0=self.params['x0']).attenuate(lam.to_astropy())
+#         lam: float
+#             wavelength, expected with units
+#         """
+#         return N09(Av=1.086*tau_V,
+#                    ampl=self.params['ampl'],
+#                    slope=self.params['slope'],
+#                    x0=self.params['x0']).attenuate(lam.to_astropy())
 
 
 class GrainsWD01():
