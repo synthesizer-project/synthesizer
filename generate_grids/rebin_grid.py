@@ -87,13 +87,20 @@ if __name__ == "__main__":
         original_grid.copy(original_grid[ds], rebinned_grid['/'], ds)
 
 
-    # define the new wavelength grid
-    lmin, lmax, deltal = 100., 20000., 20.  # min wavelength, max wavelength, resolution
-    opt_wavs = np.arange(lmin, lmax, deltal)
+    # # define the new wavelength grid
+    # lmin, lmax, deltal = 100., 20000., 20.  # min wavelength, max wavelength, resolution
+    # opt_wavs = np.arange(lmin, lmax, deltal)
 
-    # add MIR/FIR points
-    ir_wavs = np.arange(21000., 500000, 1000.)
-    new_wavs = np.hstack((opt_wavs, ir_wavs))
+    # # add MIR/FIR points
+    # ir_wavs = np.arange(21000., 10 000 000, 1000.)
+    # new_wavs = np.hstack((opt_wavs, ir_wavs))
+
+    log10lmin = 1. # 
+    log10lmax = 7. #
+    dlog10l = 0.01
+
+    new_wavs = 10**np.arange(log10lmin, log10lmax, dlog10l)
+
 
     # alias
     original_spectra = original_grid['spectra']
