@@ -58,7 +58,6 @@ for n in [10, 100, 1000, 10000]:
     tree_ys = []
     precision = []
     for ngas in np.logspace(np.log10(n), 6, 20, dtype=int):
-
         # Make a fake galaxy
 
         # First make the stars
@@ -78,9 +77,14 @@ for n in [10, 100, 1000, 10000]:
         # Sample the SFZH, producing a Stars object
         # we will also pass some keyword arguments for attributes
         # we will need for imaging
-        stars = sample_sfhz(sfzh, n, coordinates=coords, 
-                            current_masses=np.full(n, 10**8.7 / n), 
-                            smoothing_lengths=rs / 2, redshift=1)
+        stars = sample_sfhz(
+            sfzh,
+            n,
+            coordinates=coords,
+            current_masses=np.full(n, 10**8.7 / n),
+            smoothing_lengths=rs / 2,
+            redshift=1,
+        )
 
         # Now make the gas
 
@@ -96,11 +100,13 @@ for n in [10, 100, 1000, 10000]:
         )
         rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
 
-        gas = Gas(masses=np.random.uniform(10**6, 10**6.5, ngas),
-                  metallicities=np.random.uniform(0.01, 0.05, ngas),
-                  coordinates=coords,
-                  smoothing_lengths=rs / 4,
-                  dust_to_metal_ratio=0.2)
+        gas = Gas(
+            masses=np.random.uniform(10**6, 10**6.5, ngas),
+            metallicities=np.random.uniform(0.01, 0.05, ngas),
+            coordinates=coords,
+            smoothing_lengths=rs / 4,
+            dust_to_metal_ratio=0.2,
+        )
 
         # Create galaxy object
         galaxy = Galaxy("Galaxy", stars=stars, gas=gas, redshift=1)
@@ -127,15 +133,19 @@ for n in [10, 100, 1000, 10000]:
         tree_ys.append(tree_time)
         precision.append(np.abs(tree_sum - loop_sum) / loop_sum * 100)
 
-        print("LOS calculation with tree took %.4f seconds for nstar=%d and ngas=%d" % (
-            tree_time, n, ngas))
-        print("LOS calculation with loop took %.4f seconds for nstar=%d and ngas=%d" % (
-            loop_time, n, ngas))
-        print("Ratio in wallclock: Time_loop/Time_tree=%.4f" % (loop_time / tree_time))
-        print("Tree gave=%.2f Loop gave=%.2f Normalised residual=%.4f%%" % (
-            tree_sum, loop_sum, np.abs(tree_sum - loop_sum) / loop_sum * 100
+        print(
+            "LOS calculation with tree took %.4f seconds for nstar=%d and ngas=%d"
+            % (tree_time, n, ngas)
         )
-              )
+        print(
+            "LOS calculation with loop took %.4f seconds for nstar=%d and ngas=%d"
+            % (loop_time, n, ngas)
+        )
+        print("Ratio in wallclock: Time_loop/Time_tree=%.4f" % (loop_time / tree_time))
+        print(
+            "Tree gave=%.2f Loop gave=%.2f Normalised residual=%.4f%%"
+            % (tree_sum, loop_sum, np.abs(tree_sum - loop_sum) / loop_sum * 100)
+        )
 
     xs = np.array(xs)
     sinds = np.argsort(xs)
