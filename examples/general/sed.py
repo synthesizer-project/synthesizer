@@ -20,7 +20,7 @@ script_path = os.path.abspath(os.path.dirname(__file__))
 
 # Define the grid
 grid_name = "test_grid"
-grid_dir = script_path + "/../tests/test_grid/"
+grid_dir = script_path + "/../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 grid_point = (5, 5)
 

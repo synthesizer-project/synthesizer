@@ -43,8 +43,8 @@ grid_name = "test_grid"
 grid_dir = script_path + "/../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
-print("Grid dimensions: (%d, %d)" % (grid.log10ages.size,
-                                     grid.log10metallicities.size))
+print("Grid dimensions: (%d, %d)" % (grid.log10age.size,
+                                     grid.metallicity.size))
 
 # What redshift are we testing?
 redshift = 8
