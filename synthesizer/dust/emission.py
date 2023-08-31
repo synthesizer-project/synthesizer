@@ -197,21 +197,21 @@ class Casey12(EmissionBase):
         
         # Essential, when using scipy.integrate, since
         # the integration limits are passed unitless 
-        if np.isscalar(nu): 
+        if np.isscalar(nu):
             nu *= Hz
         
         def PL(lam):
             """
             Calcualate the power-law component.
             """
-            self.N_pl * ((lam/self.lam_c)**(self.alpha)) \
-                * np.exp(-(lam/self.lam_c)**2)  
+            return self.N_pl * ((lam/self.lam_c)**(self.alpha)) \
+                * np.exp(-(lam/self.lam_c)**2) 
 
         def BB(lam):
             """
             Calcualate the blackbody component.
             """
-            self.N_bb * (1-np.exp(-(self.lam_0/lam)**self.emissivity)) \
-                * (c/lam)**3 / (np.exp((h*c)/(lam*kb*self.T)) - 1.0)  
+            return self.N_bb * (1-np.exp(-(self.lam_0/lam)**self.emissivity)) \
+                * (c/lam)**3 / (np.exp((h*c)/(lam*kb*self.T)) - 1.0) 
         
         return PL(c/nu) + BB(c/nu)
