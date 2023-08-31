@@ -5,9 +5,6 @@ from scipy import interpolate
 # from dust_attenuation.shapes import N09
 from dust_extinction.grain_models import WD01
 
-from synthesizer.utils import planck
-
-
 this_dir, this_filename = os.path.split(__file__)
 
 __all__ = ["PowerLaw", "MW_N18", "GrainsWD01"]
@@ -206,8 +203,9 @@ class MW_N18():
 #             amplitude of the UV-bump
 
 #         """
-#         self.description = 'Calzetti attenuation curve; with option for the ' \
-#             'slope and UV-bump implemented in Noll et al. 2009'
+#         self.description = """ Calzetti attenuation curve; with option for
+#                                the slope and UV-bump implemented
+#                                in Noll et al. 2009"""
 #         self.params = params
 
 #     def tau(self, lam):
