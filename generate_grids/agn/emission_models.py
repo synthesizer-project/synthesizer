@@ -55,27 +55,27 @@ class Feltre16:
         nu = c / lam
 
         # define edges
-        edges = [10., 2500., 100000., 1000000.] * Angstrom  # Angstrom
+        edges = [10.0, 2500.0, 100000.0, 1000000.0] * Angstrom  # Angstrom
 
         # define indices
-        indices = [alpha, -0.5, 2.]
+        indices = [alpha, -0.5, 2.0]
 
         # define normalisations
-        norms = [1., ]
+        norms = [
+            1.0,
+        ]
 
         # calcualte remaining normalisations
         for i, (edge_lam, ind1, ind2) in enumerate(
-                zip(edges[1:], indices, indices[1:])
+            zip(edges[1:], indices, indices[1:])
         ):
-
             edge_nu = c / edge_lam
 
-            norm = norms[i] * (edge_nu ** ind1) / (edge_nu ** ind2)
+            norm = norms[i] * (edge_nu**ind1) / (edge_nu**ind2)
             norms.append(norm)
 
         # now construct spectra
         for e1, e2, ind, norm in zip(edges[0:], edges[1:], indices, norms):
-
             # identify indices within the wavelength range
             s = (lam >= e1) & (lam < e2)
 

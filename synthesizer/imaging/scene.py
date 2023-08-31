@@ -43,8 +43,16 @@ class Scene:
 
     # Define slots to reduce memory overhead of this class and limit the
     # possible attributes.
-    __slots__ = ["resolution", "fov", "npix", "sed", "survey", "spatial_unit",
-                 "orig_resolution", "orig_npix", ]
+    __slots__ = [
+        "resolution",
+        "fov",
+        "npix",
+        "sed",
+        "survey",
+        "spatial_unit",
+        "orig_resolution",
+        "orig_npix",
+    ]
 
     def __init__(
         self,
@@ -179,7 +187,6 @@ class Scene:
 
         # Otherwise, do we need to convert the FOV to the correct units?
         elif self.fov.units != self.spatial_unit:
-
             # If the units have the same dimension convert them
             if self.fov.units.same_dimensions_as(self.spatial_unit):
                 self.fov.to(self.spatial_unit)
@@ -199,7 +206,7 @@ class Scene:
         """
         Helper function to resample all images contained within this instance
         by the stated factor using interpolation.
-        
+
         Parameters
         ----------
         factor : float
@@ -248,7 +255,7 @@ class Scene:
         NOTE: It is more robust to create the initial "standard" image at high
         resolution and then downsample it after done with the high resolution
         version.
-        
+
         Parameters
         ----------
         factor : float
@@ -265,9 +272,7 @@ class Scene:
         # mechanically but will ensure users are literal about resampling and
         # can't mistakenly resample in unintended ways).
         if factor > 1:
-            raise ValueError(
-                "Using downsample method to supersample!"
-            )
+            raise ValueError("Using downsample method to supersample!")
 
         # Resample the images
         self._resample(factor)
@@ -281,7 +286,7 @@ class Scene:
         NOTE: It is more robust to create the initial "standard" image at high
         resolution and then downsample it after done with the high resolution
         version.
-        
+
         Parameters
         ----------
         factor : float
@@ -298,13 +303,11 @@ class Scene:
         # mechanically but will ensure users are literal about resampling and
         # can't mistakenly resample in unintended ways).
         if factor < 1:
-            raise ValueError(
-                "Using supersample method to downsample!"
-            )
+            raise ValueError("Using supersample method to downsample!")
 
         # Resample the images
         self._resample(factor)
-        
+
 
 class ParticleScene(Scene):
     """
@@ -334,8 +337,7 @@ class ParticleScene(Scene):
     """
 
     # Define slots to reduce memory overhead of this class
-    __slots__ = ["stars", "coords", "centre", "pix_pos", "npart",
-                 "smoothing_lengths"]
+    __slots__ = ["stars", "coords", "centre", "pix_pos", "npart", "smoothing_lengths"]
 
     def __init__(
         self,
@@ -440,8 +442,7 @@ class ParticleScene(Scene):
         # How many particle are there?
         self.npart = self.coords.shape[0]
 
-    def _check_part_args(self, resolution, stars, positions, centre, cosmo,
-                         sed):
+    def _check_part_args(self, resolution, stars, positions, centre, cosmo, sed):
         """
         Ensures we have a valid combination of inputs.
         Parameters
@@ -476,7 +477,6 @@ class ParticleScene(Scene):
 
         # Check the stars we have been given.
         if stars is not None:
-
             # Ensure we haven't been handed a resampled set of stars
             if stars.resampled:
                 raise exceptions.UnimplementedFunctionality(
@@ -487,10 +487,7 @@ class ParticleScene(Scene):
 
             # If we are working in terms of angles we need redshifts for the
             # stars.
-            if (
-                spatial_unit.same_dimensions_as(arcsec)
-                and stars.redshift is None
-            ):
+            if spatial_unit.same_dimensions_as(arcsec) and stars.redshift is None:
                 raise exceptions.InconsistentArguments(
                     "When working in an angular unit system the provided "
                     "stars need a redshift associated to them. Stars.redshift"
@@ -502,9 +499,10 @@ class ParticleScene(Scene):
             if sed is not None:
                 if sed.lnu.shape[0] != stars.nparticles:
                     raise exceptions.InconsistentArguments(
-                        "The shape of the SED array:", sed.lnu.shape,
+                        "The shape of the SED array:",
+                        sed.lnu.shape,
                         "does not agree with the number of stellar particles "
-                        "(%d)" % stars.nparticles
+                        "(%d)" % stars.nparticles,
                     )
 
         # Missing cosmology
@@ -543,9 +541,10 @@ class ParticleScene(Scene):
         if sed is not None and positions is not None:
             if sed.lnu.shape[0] != positions.shape[0]:
                 raise exceptions.InconsistentArguments(
-                    "The shape of the SED array:", sed.lnu.shape,
+                    "The shape of the SED array:",
+                    sed.lnu.shape,
                     "does not agree with the number of coordinates "
-                    "(%d)" % positions.shape[0]
+                    "(%d)" % positions.shape[0],
                 )
 
     def _centre_coords(self):
@@ -586,7 +585,6 @@ class ParticleScene(Scene):
 
         # If they are the same dimension do the conversion.
         elif self.spatial_unit.same_dimensions_as(self.coord_unit):
-
             # First do the coordinates
             self.coords *= self.coord_unit
             self.coords.convert_to_units(self.spatial_unit)
@@ -633,10 +631,8 @@ class ParticleScene(Scene):
 
         # And now do the smoothing lengths
         if self.smoothing_lengths is not None:
-
             # If they are the same dimension do the conversion.
             if self.spatial_unit.same_dimensions_as(self.smooth_unit):
-
                 self.smoothing_lengths *= self.smooth_unit
                 self.smoothing_lengths.convert_to_units(self.spatial_unit)
                 self.smoothing_lengths = self.smoothing_lengths.value
@@ -665,4 +661,3 @@ class ParticleScene(Scene):
 
             #     # And strip off the unit
             #     self.smoothing_lengths = self.smoothing_lengths.value
-

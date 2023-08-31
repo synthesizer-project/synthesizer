@@ -1,35 +1,21 @@
-
-
-# --- general
-import h5py
-import copy
 import numpy as np
-from scipy import integrate
-from unyt import yr, erg, Hz, s, cm, angstrom
-
 from ..base_galaxy import BaseGalaxy
 from .. import exceptions
-from ..dust import power_law
-from ..sed import Sed
+from ..dust.attenuation import PowerLaw
 from ..line import Line, LineCollection
-from ..plt import single_histxy, mlabel
-from ..stats import weighted_median, weighted_mean
 from ..imaging.images import ParametricImage
 from ..art import Art
-from synthesizer.utils import fnu_to_flam
 
 
 class Galaxy(BaseGalaxy):
 
-    """A class defining parametric galaxy objects
-
-    """
+    """A class defining parametric galaxy objects"""
 
     def __init__(
-            self,
-            sfzh,
-            morph=None,
-            name="parametric galaxy",
+        self,
+        sfzh,
+        morph=None,
+        name="parametric galaxy",
     ):
         """__init__ method for ParametricGalaxy
 
@@ -37,7 +23,8 @@ class Galaxy(BaseGalaxy):
             name (string):
                 name of galaxy
             sfzh (object, sfzh):
-                instance of the BinnedSFZH class containing the star formation and metal enrichment history.
+                instance of the BinnedSFZH class containing the star formation
+                and metal enrichment history.
             morph (object)
         """
 
@@ -57,24 +44,30 @@ class Galaxy(BaseGalaxy):
     def __str__(self):
         """Function to print a basic summary of the Galaxy object.
 
-        Returns a string containing the total mass formed and lists of the available SEDs, lines, and images.
+        Returns a string containing the total mass formed and lists of the
+        available SEDs, lines, and images.
 
         Returns
         -------
         str
-            Summary string containing the total mass formed and lists of the available SEDs, lines, and images.
+            Summary string containing the total mass formed and lists of the
+            available SEDs, lines, and images.
         """
 
-        pstr = ''
-        pstr += '-'*10 + "\n"
-        pstr += 'SUMMARY OF PARAMETRIC GALAXY' + "\n"
+        pstr = ""
+        pstr += "-" * 10 + "\n"
+        pstr += "SUMMARY OF PARAMETRIC GALAXY" + "\n"
         pstr += Art.galaxy + "\n"
         pstr += str(self.__class__) + "\n"
-        pstr += f'log10(stellar mass formed/Msol): {np.log10(np.sum(self.sfzh.sfzh))}' + "\n"
-        pstr += f'available SEDs: {list(self.spectra.keys())}' + "\n"
-        pstr += f'available lines: {list(self.lines.keys())}' + "\n"
-        pstr += f'available images: {list(self.images.keys())}' + "\n"
-        pstr += '-'*10 + "\n"
+        pstr += (
+            f"log10(stellar mass formed/Msol): \
+            {np.log10(np.sum(self.sfzh.sfzh))}"
+            + "\n"
+        )
+        pstr += f"available SEDs: {list(self.spectra.keys())}" + "\n"
+        pstr += f"available lines: {list(self.lines.keys())}" + "\n"
+        pstr += f"available images: {list(self.images.keys())}" + "\n"
+        pstr += "-" * 10 + "\n"
         return pstr
 
     def __add__(self, second_galaxy):
@@ -90,7 +83,8 @@ class Galaxy(BaseGalaxy):
         Returns
         -------
         ParametricGalaxy
-            New ParametricGalaxy object containing summed SFZHs, SEDs, lines, and images.
+            New ParametricGalaxy object containing summed SFZHs, SEDs, lines,
+            and images.
         """
 
         new_sfzh = self.sfzh + second_galaxy.sfzh
@@ -99,11 +93,14 @@ class Galaxy(BaseGalaxy):
         # add together spectra
         for spec_name, spectra in self.spectra.items():
             if spec_name in second_galaxy.spectra.keys():
-                new_galaxy.spectra[spec_name] = spectra + \
-                    second_galaxy.spectra[spec_name]
+                new_galaxy.spectra[spec_name] = (
+                    spectra + second_galaxy.spectra[spec_name]
+                )
             else:
                 exceptions.InconsistentAddition(
-                    'Both galaxies must contain the same spectra to be added together')
+                    "Both galaxies must contain the same spectra to be \
+                    added together"
+                )
 
         # add together lines
         for line_type in self.lines.keys():
@@ -111,41 +108,48 @@ class Galaxy(BaseGalaxy):
 
             if line_type not in second_galaxy.lines.keys():
                 exceptions.InconsistentAddition(
-                    'Both galaxies must contain the same sets of line types (e.g. intrinsic / attenuated)')
+                    "Both galaxies must contain the same sets of line types \
+                        (e.g. intrinsic / attenuated)"
+                )
             else:
                 for line_name, line in self.lines[line_type].items():
                     if line_name in second_galaxy.spectra[line_type].keys():
-                        new_galaxy.lines[line_type][line_name] = line + \
-                            second_galaxy.lines[line_type][line_name]
+                        new_galaxy.lines[line_type][line_name] = (
+                            line + second_galaxy.lines[line_type][line_name]
+                        )
                     else:
                         exceptions.InconsistentAddition(
-                            'Both galaxies must contain the same emission lines to be added together')
+                            "Both galaxies must contain the same emission \
+                                lines to be added together"
+                        )
 
         # add together images
         for img_name, image in self.images.items():
             if img_name in second_galaxy.images.keys():
-                new_galaxy.images[img_name] = \
-                    image + second_galaxy.images[img_name]
+                new_galaxy.images[img_name] = image + second_galaxy.images[img_name]
             else:
                 exceptions.InconsistentAddition(
-                    ('Both galaxies must contain the same'
-                     ' images to be added together'))
+                    (
+                        "Both galaxies must contain the same"
+                        " images to be added together"
+                    )
+                )
 
         return new_galaxy
 
     def get_Q(self, grid):
         """
-        Return the ionising photon luminosity (log10Q) for a given SFZH. 
+        Return the ionising photon luminosity (log10Q) for a given SFZH.
 
         Args:
             grid (object, Grid):
-                The SPS Grid object from which to extract spectra. 
+                The SPS Grid object from which to extract spectra.
 
         Returns:
             Log of the ionising photon luminosity over the grid dimensions
         """
 
-        return np.sum(10**grid.log10Q['HI'] * self.sfzh.sfzh, axis=(0, 1))
+        return np.sum(10 ** grid.log10Q["HI"] * self.sfzh.sfzh, axis=(0, 1))
 
     def generate_lnu(self, grid, spectra_name, old=False, young=False):
         """
@@ -184,22 +188,20 @@ class Galaxy(BaseGalaxy):
 
         # Make the mask for relevent SFZH bins
         if old:
-            sfzh_mask = (self.sfzh.log10ages[non_zero_inds[0]] > old)
+            sfzh_mask = self.sfzh.log10ages[non_zero_inds[0]] > old
         elif young:
-            sfzh_mask = (self.sfzh.log10ages[non_zero_inds[0]] <= young)
+            sfzh_mask = self.sfzh.log10ages[non_zero_inds[0]] <= young
         else:
-            sfzh_mask = np.ones(len(self.sfzh.log10ages[non_zero_inds[0]]),
-                                dtype=bool)
+            sfzh_mask = np.ones(len(self.sfzh.log10ages[non_zero_inds[0]]), dtype=bool)
 
         # Account for the SFZH mask in the non-zero indices
-        non_zero_inds = (non_zero_inds[0][sfzh_mask],
-                         non_zero_inds[1][sfzh_mask])
+        non_zero_inds = (non_zero_inds[0][sfzh_mask], non_zero_inds[1][sfzh_mask])
 
         # Compute the spectra
         spectra = np.sum(
             grid.spectra[spectra_name][non_zero_inds[0], non_zero_inds[1], :]
             * self.sfzh_[non_zero_inds[0], non_zero_inds[1], :],
-            axis=0
+            axis=0,
         )
 
         return spectra
@@ -216,7 +218,8 @@ class Galaxy(BaseGalaxy):
             The Grid
         line_ids : list or str
             A list of line_ids or a str denoting a single line.
-            Doublets can be specified as a nested list or using a comma (e.g. 'OIII4363,OIII4959')
+            Doublets can be specified as a nested list or using a comma (e.g.
+            'OIII4363,OIII4959')
         fesc : float
             The Lyman continuum escape fraction, the fraction of
             ionising photons that entirely escape
@@ -236,26 +239,24 @@ class Galaxy(BaseGalaxy):
         lines = {}
 
         for line_id in line_ids:
-
             # if the line id a doublet in string form
             # (e.g. 'OIII4959,OIII5007') convert it to a list
             if type(line_id) is str:
-                if len(line_id.split(',')) > 1:
-                    line_id = line_id.split(',')
+                if len(line_id.split(",")) > 1:
+                    line_id = line_id.split(",")
 
             # if the line_id is a str denoting a single line
             if isinstance(line_id, str):
-
                 grid_line = grid.lines[line_id]
-                wavelength = grid_line['wavelength']
+                wavelength = grid_line["wavelength"]
 
                 #  line luminosity erg/s
                 luminosity = np.sum(
-                    (1-fesc)*grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1))
+                    (1 - fesc) * grid_line["luminosity"] * self.sfzh.sfzh, axis=(0, 1)
+                )
 
                 #  continuum at line wavelength, erg/s/Hz
-                continuum = np.sum(
-                    grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1))
+                continuum = np.sum(grid_line["continuum"] * self.sfzh.sfzh, axis=(0, 1))
 
                 # NOTE: this is currently incorrect and should be made of the
                 # separated nebular and stellar continuum emission
@@ -270,7 +271,6 @@ class Galaxy(BaseGalaxy):
 
             # else if the line is list or tuple denoting a doublet (or higher)
             elif isinstance(line_id, list) or isinstance(line_id, tuple):
-
                 luminosity = []
                 continuum = []
                 wavelength = []
@@ -279,15 +279,18 @@ class Galaxy(BaseGalaxy):
                     grid_line = grid.lines[line_id_]
 
                     # wavelength [\AA]
-                    wavelength.append(grid_line['wavelength'])
+                    wavelength.append(grid_line["wavelength"])
 
                     #  line luminosity erg/s
                     luminosity.append(
-                        (1-fesc)*np.sum(grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1)))
+                        (1 - fesc)
+                        * np.sum(grid_line["luminosity"] * self.sfzh.sfzh, axis=(0, 1))
+                    )
 
                     #  continuum at line wavelength, erg/s/Hz
                     continuum.append(
-                        np.sum(grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1)))
+                        np.sum(grid_line["continuum"] * self.sfzh.sfzh, axis=(0, 1))
+                    )
 
             else:
                 # throw exception
@@ -301,17 +304,26 @@ class Galaxy(BaseGalaxy):
 
         # associate that line collection with the galaxy object
 
-        self.lines['intrinsic'] = line_collection
+        self.lines["intrinsic"] = line_collection
 
         # return collection
         return line_collection
 
-    def get_line_attenuated(self, grid, line_ids, fesc=0.0, tau_v_nebular=None,
-                            tau_v_stellar=None, dust_curve_nebular=power_law({'slope': -1.}),
-                            dust_curve_stellar=power_law({'slope': -1.}), update=True):
+    def get_line_attenuated(
+        self,
+        grid,
+        line_ids,
+        fesc=0.0,
+        tau_v_nebular=None,
+        tau_v_stellar=None,
+        dust_curve_nebular=PowerLaw({"slope": -1.0}),
+        dust_curve_stellar=PowerLaw({"slope": -1.0}),
+        update=True,
+    ):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a set
-        of lines. Allows the nebular and stellar attenuation to be set separately.
+        of lines. Allows the nebular and stellar attenuation to be set
+        separately.
 
         Parameters
         ----------
@@ -343,33 +355,38 @@ class Galaxy(BaseGalaxy):
 
         # if the intrinsic lines haven't already been calculated and saved
         # then generate them
-        if 'intrinsic' not in self.lines:
+        if "intrinsic" not in self.lines:
             intrinsic_lines = self.get_line_intrinsic(
-                grid, line_ids, fesc=fesc, update=update)
+                grid, line_ids, fesc=fesc, update=update
+            )
         else:
-            intrinsic_lines = self.lines['intrinsic']
+            intrinsic_lines = self.lines["intrinsic"]
 
         # dictionary holding lines
         lines = {}
 
         for line_id, intrinsic_line in intrinsic_lines.items():
-
             # calculate attenuation
             T_nebular = dust_curve_nebular.attenuate(
-                tau_v_nebular, intrinsic_line._wavelength)
+                tau_v_nebular, intrinsic_line._wavelength
+            )
             T_stellar = dust_curve_stellar.attenuate(
-                tau_v_stellar, intrinsic_line._wavelength)
+                tau_v_stellar, intrinsic_line._wavelength
+            )
 
             luminosity = intrinsic_line._luminosity * T_nebular
             continuum = intrinsic_line._continuum * T_stellar
 
-            line = Line(intrinsic_line.id, intrinsic_line._wavelength,
-                        luminosity, continuum)
+            line = Line(
+                intrinsic_line.id, intrinsic_line._wavelength, luminosity, continuum
+            )
 
-            # NOTE: the above is wrong and should be separated into stellar and nebular continuum components:
+            # NOTE: the above is wrong and should be separated into stellar
+            # and nebular continuum components:
             # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
             # stellar_continuum = intrinsic_line._stellar_continuum * T_stellar
-            # line = Line(intrinsic_line.id, intrinsic_line._wavelength, luminosity, nebular_continuum, stellar_continuum)
+            # line = Line(intrinsic_line.id, intrinsic_line._wavelength,
+            # luminosity, nebular_continuum, stellar_continuum)
 
             lines[line.id] = line
 
@@ -378,16 +395,24 @@ class Galaxy(BaseGalaxy):
 
         # associate that line collection with the galaxy object
 
-        self.lines['intrinsic'] = line_collection
+        self.lines["intrinsic"] = line_collection
 
         # return collection
         return line_collection
 
-    def get_line_screen(self, grid, line_ids, fesc=0.0, tau_v=None, dust_curve=power_law({'slope': -1.}), update=True):
+    def get_line_screen(
+        self,
+        grid,
+        line_ids,
+        fesc=0.0,
+        tau_v=None,
+        dust_curve=PowerLaw({"slope": -1.0}),
+        update=True,
+    ):
         """
-        Calculates attenuated properties (luminosity, continuum, EW) for a set 
-        of lines assuming a simple dust screen (i.e. both nebular and stellar 
-        emission feels the same dust attenuation). This is a wrapper around 
+        Calculates attenuated properties (luminosity, continuum, EW) for a set
+        of lines assuming a simple dust screen (i.e. both nebular and stellar
+        emission feels the same dust attenuation). This is a wrapper around
         the more general method above.
 
         Args:
@@ -412,15 +437,31 @@ class Galaxy(BaseGalaxy):
         """
 
         return self.get_line_attenuated(
-            grid, line_ids, fesc=fesc, tau_v_nebular=tau_v, tau_v_stellar=tau_v,
-            dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve
+            grid,
+            line_ids,
+            fesc=fesc,
+            tau_v_nebular=tau_v,
+            tau_v_stellar=tau_v,
+            dust_curve_nebular=dust_curve,
+            dust_curve_stellar=dust_curve,
         )
 
-    def make_images(self, resolution, fov=None, sed=None, filters=(),
-                    psfs=None, depths=None, snrs=None, aperture=None,
-                    noises=None, rest_frame=True, cosmo=None, redshift=None,
-                    psf_resample_factor=1,
-                    ):
+    def make_images(
+        self,
+        resolution,
+        fov=None,
+        sed=None,
+        filters=(),
+        psfs=None,
+        depths=None,
+        snrs=None,
+        aperture=None,
+        noises=None,
+        rest_frame=True,
+        cosmo=None,
+        redshift=None,
+        psf_resample_factor=1,
+    ):
         """
         Makes images in each filter provided in filters. Additionally an image
         can be made with or without a PSF and noise.
@@ -438,7 +479,7 @@ class Galaxy(BaseGalaxy):
         sed : obj (SED)
             An sed object containing the spectra for this image.
         filters : obj (FilterCollection)
-            An imutable collection of Filter objects. If provided images are 
+            An imutable collection of Filter objects. If provided images are
             made for each filter.
         psfs : dict
             A dictionary containing the psf in each filter where the key is
@@ -494,7 +535,6 @@ class Galaxy(BaseGalaxy):
         img.get_imgs()
 
         if psfs is not None:
-
             # Convolve the image/images
             img.get_psfed_imgs()
 
@@ -504,24 +544,6 @@ class Galaxy(BaseGalaxy):
                     img.downsample(1 / psf_resample_factor)
 
         if depths is not None or noises is not None:
-
             img.get_noisy_imgs(noises)
 
         return img
-
-    def get_equivalent_width(self, index, spectra_to_plot=None):
-        """ gets all equivalent widths associated with a sed object """
-        equivalent_width = None
-
-        if type(spectra_to_plot) != list:
-            spectra_to_plot = list(self.spectra.keys())
-
-        for sed_name in spectra_to_plot:
-            sed = self.spectra[sed_name]
-            lam_arr = sed.lam
-            lnu_arr = sed.lnu
-
-            # Compute equivalent width
-            equivalent_width = sed.calculate_ew(lam_arr, lnu_arr, index)
-
-        return equivalent_width

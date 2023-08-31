@@ -22,9 +22,9 @@ print(coords)
 print(coords.shape)
 
 # --- make a basic (histogram) image from these coordinates
-image = ImageGenerator.generate_histogram(coords, size_pixels=50,
-                                          pixel_scale=0.2)
+image = ImageGenerator.generate_histogram(coords, size_pixels=50, pixel_scale=0.2)
 
-fig, ax = image.make_image_plot()#show=True)
-plt.savefig(script_path + '/plots/coodinates_example.png',
-            bbox_inches='tight'); plt.close()
+fig, ax = image.make_image_plot()  # show=True)
+# plt.savefig(script_path + '/plots/coodinates_example.png',
+#             bbox_inches='tight'); plt.close()
+plt.show()
