@@ -570,7 +570,7 @@ class Galaxy(BaseGalaxy):
 
         if update:
             # Store the spectra in the galaxy
-            self.spectra_array["incident"] = sed
+            self.spectra_array["intrinsic"] = sed
 
         return sed
 

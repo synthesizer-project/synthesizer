@@ -438,7 +438,7 @@ class Survey:
         if igm is None:
             igm = Inoue14()
 
-        for ind, gal in enumerate(self.galaxies):
+        for gal in self.galaxies:
             # Are we getting a flux or rest frame?
             if spectra_type == "incident":
                 sed = gal.get_particle_spectra_stellar(grid)
