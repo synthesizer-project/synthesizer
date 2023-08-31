@@ -9,7 +9,7 @@ from unyt import yr, erg, Hz, s, cm, angstrom
 
 from ..base_galaxy import BaseGalaxy
 from .. import exceptions
-from ..dust import power_law
+from ..dust.attenuation import PowerLaw
 from ..sed import Sed
 from ..line import Line, LineCollection
 from ..plt import single_histxy, mlabel
@@ -307,8 +307,8 @@ class Galaxy(BaseGalaxy):
         return line_collection
 
     def get_line_attenuated(self, grid, line_ids, fesc=0.0, tau_v_nebular=None,
-                            tau_v_stellar=None, dust_curve_nebular=power_law({'slope': -1.}),
-                            dust_curve_stellar=power_law({'slope': -1.}), update=True):
+                            tau_v_stellar=None, dust_curve_nebular=PowerLaw({'slope': -1.}),
+                            dust_curve_stellar=PowerLaw({'slope': -1.}), update=True):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a set
         of lines. Allows the nebular and stellar attenuation to be set separately.
@@ -383,7 +383,7 @@ class Galaxy(BaseGalaxy):
         # return collection
         return line_collection
 
-    def get_line_screen(self, grid, line_ids, fesc=0.0, tau_v=None, dust_curve=power_law({'slope': -1.}), update=True):
+    def get_line_screen(self, grid, line_ids, fesc=0.0, tau_v=None, dust_curve=PowerLaw({'slope': -1.}), update=True):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a set 
         of lines assuming a simple dust screen (i.e. both nebular and stellar 
