@@ -23,7 +23,7 @@ from ..exceptions import MissingSpectraType
 from ..particle.stars import Stars
 from ..particle.gas import Gas
 from ..sed import Sed
-from ..dust import power_law
+from ..dust.attenuation import PowerLaw
 from ..base_galaxy import BaseGalaxy
 from .. import exceptions
 from ..imaging.images import ParticleImage
@@ -750,7 +750,7 @@ class Galaxy(BaseGalaxy):
 
     def apply_los(self, tau_v, 
                   spectra_type,
-                  dust_curve=power_law({'slope': -1.}),
+                  dust_curve=PowerLaw({'slope': -1.}),
                   integrated=True, sed_object=True):
         """
         Generate
