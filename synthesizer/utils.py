@@ -4,7 +4,7 @@ from unyt import pc, cm, erg, s, Hz, nJy
 import unyt
 
 import unyt
-from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV,  unyt_array
+from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, kb, unyt_array
 
 def write_data_h5py(filename, name, data, overwrite=False):
     check = check_h5py(filename, name)
@@ -188,3 +188,13 @@ def Lnu_to_M(Lnu_):
         Lnu = Lnu_
 
     return -2.5 * np.log10(Lnu / constants.geo) - 48.6
+
+
+def planck(nu, T):
+
+    """
+    Planck's law
+    """
+
+    return (2. * h * (nu ** 3) * (c ** -2)) \
+        * (1. / (np.exp(h * nu / (kb * T)) - 1.))
