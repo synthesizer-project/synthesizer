@@ -29,13 +29,13 @@ grid_dir = script_path + "/../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
 # Define the parameters of the star formation and metal enrichment histories
-stellar_mass = 1E10
+stellar_mass = 1e10
 sfzh = generate_instant_sfzh(
-    grid.log10ages, grid.metallicities, 10., 0.01,
-    stellar_mass=stellar_mass)
+    grid.log10ages, grid.metallicities, 10.0, 0.01, stellar_mass=stellar_mass
+)
 
 # Define an arbitrary morphology to feed the imaging
-morph = Sersic2D(r_eff_kpc=1. * kpc, n= 1., ellip=0.5, theta=35.)
+morph = Sersic2D(r_eff_kpc=1.0 * kpc, n=1.0, ellip=0.5, theta=35.0)
 
 # Get galaxy object
 galaxy = Galaxy(morph=morph, sfzh=sfzh)
@@ -52,19 +52,37 @@ filters2 = Filters(filter_codes2)
 fake_img = np.zeros((100, 100))
 
 # Create fake image objects
-img1 = ParticleImage(resolution=0.5 * kpc, npix=100, fov=None,
-                     filters=(), positions=np.zeros((100, 3)) * kpc,
-                     pixel_values=np.ones(100))
-img2 = ParticleImage(resolution=0.4 * kpc, npix=100, fov=None,
-                     filters=(), positions=np.zeros((100, 3)) * kpc,
-                     pixel_values=np.ones(100))
+img1 = ParticleImage(
+    resolution=0.5 * kpc,
+    npix=100,
+    fov=None,
+    filters=(),
+    positions=np.zeros((100, 3)) * kpc,
+    pixel_values=np.ones(100),
+)
+img2 = ParticleImage(
+    resolution=0.4 * kpc,
+    npix=100,
+    fov=None,
+    filters=(),
+    positions=np.zeros((100, 3)) * kpc,
+    pixel_values=np.ones(100),
+)
 img_with_filters1 = ParametricImage(
-    morphology=morph, sed=sed, resolution=0.5 * kpc,
-    npix=100, fov=None, filters=filters1
+    morphology=morph,
+    sed=sed,
+    resolution=0.5 * kpc,
+    npix=100,
+    fov=None,
+    filters=filters1,
 )
 img_with_filters2 = ParametricImage(
-    morphology=morph, sed=sed, resolution=0.5 * kpc,
-    npix=100, fov=None, filters=filters2
+    morphology=morph,
+    sed=sed,
+    resolution=0.5 * kpc,
+    npix=100,
+    fov=None,
+    filters=filters2,
 )
 img1.img = fake_img
 img2.img = fake_img
@@ -80,9 +98,7 @@ composite_mixed1 = img1 + img_with_filters1
 composite_mixed2 = img_with_filters1 + img1
 
 # Added images preserve a history of what objects were added
-print(
-    "Example of image nesting from img1 + img2 + img3:", composite.combined_imgs
-)
+print("Example of image nesting from img1 + img2 + img3:", composite.combined_imgs)
 
 print("Error Demonstration:")
 
