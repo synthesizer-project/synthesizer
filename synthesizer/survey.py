@@ -100,8 +100,9 @@ class Survey:
     -------
     """
 
-    def __init__(self, galaxies=(), fov=None, super_resolution_factor=None,
-                 cosmo=Planck18):
+    def __init__(
+        self, galaxies=(), fov=None, super_resolution_factor=None, cosmo=Planck18
+    ):
         """
         Initialise the Survey.
         Parameters
@@ -180,15 +181,13 @@ class Survey:
             if nfilters != len(depths):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(depths)=%d)"
-                    % (nfilters, len(depths))
+                    " len(filters)=%d, len(depths)=%d)" % (nfilters, len(depths))
                 )
         if isinstance(apertures, dict):
             if nfilters != len(apertures):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(apertures)=%d)"
-                    % (nfilters, len(apertures))
+                    " len(filters)=%d, len(apertures)=%d)" % (nfilters, len(apertures))
                 )
         if isinstance(snrs, dict):
             if nfilters != len(snrs):
@@ -200,8 +199,7 @@ class Survey:
             if nfilters != len(noises):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(noises)=%d)"
-                    % (nfilters, len(noises))
+                    " len(filters)=%d, len(noises)=%d)" % (nfilters, len(noises))
                 )
 
         # Create this observation configurations
@@ -243,7 +241,6 @@ class Survey:
             isinstance(galaxies, ParticleGalaxy)
             or isinstance(galaxies, ParametricGalaxy)
         ):
-
             # Double check galaxies is a list
             self.galaxies = list(self.galaxies)
 
@@ -252,7 +249,6 @@ class Survey:
 
         # ... or multiple galaxies
         else:
-
             # Double check galaxies is a list
             self.galaxies = list(self.galaxies)
 
@@ -313,12 +309,9 @@ class Survey:
                         self.instruments[inst].depths[key]
                     )
             else:
-                self.instruments[inst].depths = m_to_fnu(
-                    self.instruments[inst].depths
-                )
+                self.instruments[inst].depths = m_to_fnu(self.instruments[inst].depths)
 
-    def get_spectra(self, grid, spectra_type, redshift=None, igm=None,
-                    rest_frame=True):
+    def get_spectra(self, grid, spectra_type, redshift=None, igm=None, rest_frame=True):
         """
         Compute the integrated stellar spectra of each galaxy.
 
@@ -338,17 +331,16 @@ class Survey:
         if igm is None:
             igm = Inoue14()
 
-        # Initialise spectra 
+        # Initialise spectra
         _specs = np.zeros((self.ngalaxies, grid.lam.size))
 
         for ind, gal in enumerate(self.galaxies):
-
             # Are we getting a flux or rest frame?
             if spectra_type == "incident":
                 _specs[ind, :] = gal.get_spectra_incident(grid)._lnu
             elif spectra_type == "intrinsic":
                 _specs[ind, :] = gal.get_spectra_intrinsic(grid)._lnu
-            
+
         # Create and store an SED object for these SEDs
         self.seds[spectra_type] = Sed(lam=grid.lam, lnu=_specs)
 
@@ -435,8 +427,9 @@ class Survey:
     #     else:
     #         self.seds[name].get_fnu(self.cosmo, redshift, igm)
 
-    def get_particle_spectra(self, grid, spectra_type, redshift=None,
-                             igm=None, rest_frame=True):
+    def get_particle_spectra(
+        self, grid, spectra_type, redshift=None, igm=None, rest_frame=True
+    ):
         """
         Compute the integrated stellar spectra of each galaxy.
         """
@@ -446,7 +439,6 @@ class Survey:
             igm = Inoue14()
 
         for ind, gal in enumerate(self.galaxies):
-
             # Are we getting a flux or rest frame?
             if spectra_type == "incident":
                 sed = gal.get_particle_spectra_stellar(grid)
@@ -454,14 +446,13 @@ class Survey:
             elif spectra_type == "intrinsic":
                 sed = gal.get_particle_spectra_intrinsic(grid)
                 gal.spectra_array[spectra_type] = sed
-            
+
             # Get the flux
             # TODO: catch error if improper arguments are handed
             if rest_frame:
                 gal.spectra_array[spectra_type].get_fnu0()
             else:
-                gal.spectra_array[spectra_type].get_fnu(
-                    self.cosmo, redshift, igm)
+                gal.spectra_array[spectra_type].get_fnu(self.cosmo, redshift, igm)
             # do we want to use redshift defined on the galaxy object?
             # need to update a lot of things to check this (and alow override)
             #         self.cosmo, gal.redshift, igm)
@@ -486,14 +477,13 @@ class Survey:
             # )
         else:
             # TODO: make a UnknownSpectralType error
-            raise exceptions.InconsistentArguments(
-                "Unrecognised spectra_type!")
+            raise exceptions.InconsistentArguments("Unrecognised spectra_type!")
 
         # Loop over each instrument
         for key in self.instruments:
-
-            _photometry = self.seds[spectra_type].\
-                get_broadband_fluxes(self.instruments[key].filters)
+            _photometry = self.seds[spectra_type].get_broadband_fluxes(
+                self.instruments[key].filters
+            )
 
             for _k, _v in _photometry.items():
                 self.photometry[_k] = _v
@@ -517,12 +507,12 @@ class Survey:
         pass
 
     def make_images(
-            self,
-            img_type,
-            spectra_type,
-            kernel_func=None,
-            rest_frame=False,
-            cosmo=None,
+        self,
+        img_type,
+        spectra_type,
+        kernel_func=None,
+        rest_frame=False,
+        cosmo=None,
     ):
         """
         Parameters
@@ -536,7 +526,6 @@ class Survey:
         # Loop over instruments and make images for each galaxy using each
         # instrument
         for key in self.instruments:
-
             # Extract the instrument
             inst = self.instruments[key]
 
@@ -545,7 +534,6 @@ class Survey:
 
             # Loop over galaxies
             for gal in self.galaxies:
-
                 # Get images of this galaxy with this instrument
                 img = gal.make_images(
                     inst.resolution,
