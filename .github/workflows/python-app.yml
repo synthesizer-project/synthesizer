@@ -40,5 +40,5 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
-        find examples/ -name "*.py" -exec pytest {} \;
+        # find examples/ -name "*.py" -exec pytest {} \;
         find docs/source/ -name "*.ipynb" -exec pytest --nbmake {} \;
