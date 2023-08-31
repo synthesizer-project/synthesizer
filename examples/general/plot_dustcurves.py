@@ -14,8 +14,9 @@ from synthesizer.dust import attenuation
 import cmasher as cmr
 
 models = [
-    "power_law",
+    "PowerLaw",
     # 'Calzetti2000',
+    # "MW_N18",
     "GrainsWD01",
     "GrainsWD01",
     "GrainsWD01",
