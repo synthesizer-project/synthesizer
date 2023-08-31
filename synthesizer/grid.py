@@ -31,13 +31,14 @@ def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
         list of lines
     """
 
-    grid_filename = f'{grid_dir}/{grid_name}.hdf5'
-    with h5py.File(grid_filename, 'r') as hf:
-
-        lines = list(hf['lines'].keys())
+    grid_filename = f"{grid_dir}/{grid_name}.hdf5"
+    with h5py.File(grid_filename, "r") as hf:
+        lines = list(hf["lines"].keys())
 
         if include_wavelengths:
-            wavelengths = np.array([hf['lines'][line].attrs['wavelength'] for line in lines])
+            wavelengths = np.array(
+                [hf["lines"][line].attrs["wavelength"] for line in lines]
+            )
             return lines, wavelengths
         else:
             return lines
@@ -62,16 +63,14 @@ def flatten_linelist(list_to_flatten):
 
     flattend_list = []
     for l in list_to_flatten:
-
         if isinstance(l, list) or isinstance(l, tuple):
             for ll in l:
                 flattend_list.append(ll)
 
         elif isinstance(l, str):
-
             # --- if the line is a doublet resolve it and add each line individually
-            if len(l.split(',')) > 1:
-                flattend_list += l.split(',')
+            if len(l.split(",")) > 1:
+                flattend_list += l.split(",")
             else:
                 flattend_list.append(l)
 
@@ -88,44 +87,48 @@ def parse_grid_id(grid_id):
     version, and IMF
     """
 
-    if len(grid_id.split('_')) == 2:
-        sps_model_, imf_ = grid_id.split('_')
-        cloudy = cloudy_model = ''
+    if len(grid_id.split("_")) == 2:
+        sps_model_, imf_ = grid_id.split("_")
+        cloudy = cloudy_model = ""
 
-    if len(grid_id.split('_')) == 4:
-        sps_model_, imf_, cloudy, cloudy_model = grid_id.split('_')
+    if len(grid_id.split("_")) == 4:
+        sps_model_, imf_, cloudy, cloudy_model = grid_id.split("_")
 
-    if len(sps_model_.split('-')) == 1:
-        sps_model = sps_model_.split('-')[0]
-        sps_model_version = ''
+    if len(sps_model_.split("-")) == 1:
+        sps_model = sps_model_.split("-")[0]
+        sps_model_version = ""
 
-    if len(sps_model_.split('-')) == 2:
-        sps_model = sps_model_.split('-')[0]
-        sps_model_version = sps_model_.split('-')[1]
+    if len(sps_model_.split("-")) == 2:
+        sps_model = sps_model_.split("-")[0]
+        sps_model_version = sps_model_.split("-")[1]
 
-    if len(sps_model_.split('-')) > 2:
-        sps_model = sps_model_.split('-')[0]
-        sps_model_version = '-'.join(sps_model_.split('-')[1:])
+    if len(sps_model_.split("-")) > 2:
+        sps_model = sps_model_.split("-")[0]
+        sps_model_version = "-".join(sps_model_.split("-")[1:])
 
-    if len(imf_.split('-')) == 1:
-        imf = imf_.split('-')[0]
-        imf_hmc = ''
+    if len(imf_.split("-")) == 1:
+        imf = imf_.split("-")[0]
+        imf_hmc = ""
 
-    if len(imf_.split('-')) == 2:
-        imf = imf_.split('-')[0]
-        imf_hmc = imf_.split('-')[1]
+    if len(imf_.split("-")) == 2:
+        imf = imf_.split("-")[0]
+        imf_hmc = imf_.split("-")[1]
 
-    if imf in ['chab', 'chabrier03', 'Chabrier03']:
-        imf = 'Chabrier (2003)'
-    if imf in ['kroupa']:
-        imf = 'Kroupa (2003)'
-    if imf in ['salpeter', '135all']:
-        imf = 'Salpeter (1955)'
+    if imf in ["chab", "chabrier03", "Chabrier03"]:
+        imf = "Chabrier (2003)"
+    if imf in ["kroupa"]:
+        imf = "Kroupa (2003)"
+    if imf in ["salpeter", "135all"]:
+        imf = "Salpeter (1955)"
     if imf.isnumeric():
-        imf = rf'$\alpha={float(imf)/100}$'
+        imf = rf"$\alpha={float(imf)/100}$"
 
-    return {'sps_model': sps_model, 'sps_model_version': sps_model_version,
-            'imf': imf, 'imf_hmc': imf_hmc}
+    return {
+        "sps_model": sps_model,
+        "sps_model_version": sps_model_version,
+        "imf": imf,
+        "imf_hmc": imf_hmc,
+    }
 
 
 class Grid:
@@ -141,14 +144,20 @@ class Grid:
 
     """
 
-    def __init__(self, grid_name, grid_dir=None, verbose=False, read_spectra=True, read_lines=False):
-
+    def __init__(
+        self,
+        grid_name,
+        grid_dir=None,
+        verbose=False,
+        read_spectra=True,
+        read_lines=False,
+    ):
         if not grid_dir:
-            grid_dir = os.path.join(os.path.dirname(filepath), 'data/grids')
+            grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
 
         self.grid_dir = grid_dir
         self.grid_name = grid_name
-        self.grid_filename = f'{self.grid_dir}/{self.grid_name}.hdf5'
+        self.grid_filename = f"{self.grid_dir}/{self.grid_name}.hdf5"
 
         self.read_lines = read_lines
         self.read_spectra = read_spectra  #  not used
@@ -161,23 +170,22 @@ class Grid:
             read_lines = flatten_linelist(read_lines)
 
         # get basic info of the grid
-        with h5py.File(self.grid_filename, 'r') as hf:
-
+        with h5py.File(self.grid_filename, "r") as hf:
             self.parameters = {k: v for k, v in hf.attrs.items()}
 
             # get list of axes
-            self.axes = list(hf.attrs['axes'])
+            self.axes = list(hf.attrs["axes"])
 
             for axis in self.axes:
-                setattr(self, axis, hf['axes'][axis][:])
+                setattr(self, axis, hf["axes"][axis][:])
 
             # number of axes
             self.naxes = len(self.axes)
 
-            if 'log10Q' in hf.keys():
+            if "log10Q" in hf.keys():
                 self.log10Q = {}
-                for ion in hf['log10Q'].keys():
-                    self.log10Q[ion] = hf['log10Q'][ion][:]
+                for ion in hf["log10Q"].keys():
+                    self.log10Q[ion] = hf["log10Q"][ion][:]
 
         # read in spectra
         if read_spectra:
@@ -201,7 +209,7 @@ class Grid:
         pstr = ""
 
         # Add the content of the summary to the string to be printed
-        pstr += "-"*30 + "\n"
+        pstr += "-" * 30 + "\n"
         pstr += f"SUMMARY OF GRID" + "\n"
         for axis in self.axes:
             pstr += f"{axis}: {getattr(self, axis)} \n"
@@ -211,10 +219,9 @@ class Grid:
             pstr += f"spectra: {list(self.spectra.keys())}\n"
         if self.lines:
             pstr += f"lines: {list(self.lines.keys())}\n"
-        pstr += "-"*30 + "\n"
+        pstr += "-" * 30 + "\n"
 
         return pstr
-
 
     def get_spectra(self):
         """
@@ -228,34 +235,33 @@ class Grid:
 
         self.spectra = {}
 
-        with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
-
+        with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
             # get list of available spectra
-            self.spec_names = list(hf['spectra'].keys())
-            self.spec_names.remove('wavelength')
-            if 'normalisation' in self.spec_names:
-                self.spec_names.remove('normalisation')
+            self.spec_names = list(hf["spectra"].keys())
+            self.spec_names.remove("wavelength")
+            if "normalisation" in self.spec_names:
+                self.spec_names.remove("normalisation")
 
             for spec_name in self.spec_names:
+                self.lam = hf["spectra/wavelength"][:]
+                self.nu = 3e8 / (self.lam * 1e-10)  # used?
 
-                self.lam = hf['spectra/wavelength'][:]
-                self.nu = 3E8/(self.lam*1E-10)  # used?
-
-                self.spectra[spec_name] = hf['spectra'][spec_name][:]
+                self.spectra[spec_name] = hf["spectra"][spec_name][:]
 
                 # if incident is one of the spectra also add a spectra called "stellar"
-                if spec_name == 'incident':
+                if spec_name == "incident":
                     self.spectra["stellar"] = self.spectra[spec_name]
 
         """ if full cloudy grid available calculate
         some other spectra for convenience """
-        if 'linecont' in self.spec_names:
+        if "linecont" in self.spec_names:
+            self.spectra["total"] = (
+                self.spectra["transmitted"] + self.spectra["nebular"]
+            )  #  assumes fesc = 0
 
-            self.spectra['total'] = self.spectra['transmitted'] +\
-                self.spectra['nebular']  #  assumes fesc = 0
-
-            self.spectra['nebular_continuum'] = self.spectra['nebular'] -\
-                self.spectra['linecont']
+            self.spectra["nebular_continuum"] = (
+                self.spectra["nebular"] - self.spectra["linecont"]
+            )
 
     def get_lines(self):
         """
@@ -274,14 +280,14 @@ class Grid:
         else:
             self.line_list = get_available_lines(self.grid_name, self.grid_dir)
 
-        with h5py.File(f'{self.grid_dir}/{self.grid_name}.hdf5', 'r') as hf:
-
+        with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
             for line in self.line_list:
-
                 self.lines[line] = {}
-                self.lines[line]['wavelength'] = hf['lines'][line].attrs['wavelength']  # angstrom
-                self.lines[line]['luminosity'] = hf['lines'][line]['luminosity'][:]
-                self.lines[line]['continuum'] = hf['lines'][line]['continuum'][:]
+                self.lines[line]["wavelength"] = hf["lines"][line].attrs[
+                    "wavelength"
+                ]  # angstrom
+                self.lines[line]["luminosity"] = hf["lines"][line]["luminosity"][:]
+                self.lines[line]["continuum"] = hf["lines"][line]["continuum"][:]
 
     def get_nearest_index(self, value, array):
         """
@@ -318,7 +324,12 @@ class Grid:
              The index of the closet point in the grid (array)
         """
 
-        return tuple([self.get_nearest_index(value, getattr(self, axis)) for axis, value in zip(self.axes, values)])
+        return tuple(
+            [
+                self.get_nearest_index(value, getattr(self, axis))
+                for axis, value in zip(self.axes, values)
+            ]
+        )
 
     def get_nearest(self, value, array):
         """
@@ -342,7 +353,6 @@ class Grid:
 
         return idx, array[idx]
 
-
     def get_sed(self, grid_point, spec_name="incident"):
         """
         Returns an Sed object for a given spectra type for a given grid point.
@@ -358,10 +368,9 @@ class Grid:
              An Sed object at the defined grid point
         """
 
-
         if len(grid_point) != self.naxes:
             # throw exception
-            print('grid point tuple should have same shape as grid')
+            print("grid point tuple should have same shape as grid")
             pass
 
         return Sed(self.lam, lnu=self.spectra[spec_name][grid_point])
@@ -383,7 +392,7 @@ class Grid:
 
         if len(grid_point) != self.naxes:
             # throw exception
-            print('grid point tuple should have same shape as grid')
+            print("grid point tuple should have same shape as grid")
             pass
 
         if type(line_id) is str:
@@ -395,16 +404,16 @@ class Grid:
 
         for line_id_ in line_id:
             line_ = self.lines[line_id_]
-            wavelength.append(line_['wavelength'])
-            luminosity.append(line_['luminosity'][grid_point])
-            continuum.append(line_['continuum'][grid_point])
+            wavelength.append(line_["wavelength"])
+            luminosity.append(line_["luminosity"][grid_point])
+            continuum.append(line_["continuum"][grid_point])
 
         return Line(line_id, wavelength, luminosity, continuum)
 
     def get_lines_info(self, line_ids, grid_point):
         """
         Return a LineCollection object for a given line and metallicity/age index
-        
+
         Parameters
         ----------
         grid_point: tuple (int)
@@ -419,7 +428,6 @@ class Grid:
         lines = {}
 
         for line_id in line_ids:
-
             line = self.get_line_info(line_id, grid_point)
 
             # add to dictionary

@@ -21,9 +21,7 @@ from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.filters import UVJ
 
 
-if __name__ == '__main__':
-
-
+if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
     script_path = os.path.abspath(os.path.dirname(__file__))
@@ -38,19 +36,19 @@ if __name__ == '__main__':
 
     # Define geometry of the images
     resolution = 0.05 * kpc  # resolution in kpc
-    npix = 50 # number of pixels wide
-    fov = resolution.value * npix * kpc # field-of-view
+    npix = 50  # number of pixels wide
+    fov = resolution.value * npix * kpc  # field-of-view
 
     # ===================== Make Disk =====================
 
     # Define morphology
-    morph = Sersic2D(r_eff_kpc=1. * kpc, n= 1., ellip=0.5, theta=35.)
+    morph = Sersic2D(r_eff_kpc=1.0 * kpc, n=1.0, ellip=0.5, theta=35.0)
 
     # Define the parameters of the star formation and metal enrichment
     # histories
-    sfh_p = {'duration': 10 * Myr}
-    Z_p = {'log10Z': -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
-    stellar_mass = 10 ** 8.5
+    sfh_p = {"duration": 10 * Myr}
+    Z_p = {"log10Z": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    stellar_mass = 10**8.5
 
     # Define the functional form of the star formation and metal enrichment
     # histories
@@ -68,7 +66,7 @@ if __name__ == '__main__':
 
     # Generate stellar spectra
     disk.get_spectra_incident(grid)
-    
+
     # Make images
     disk_img = disk.make_images(
         resolution=resolution,
@@ -78,23 +76,21 @@ if __name__ == '__main__':
     )
 
     print(disk)
-    
+
     # Make and plot an rgb image
-    disk_img.make_rgb_image(rgb_filters={"R" : 'J',
-                                       "G" : 'V',
-                                       "B" : 'U'})
+    disk_img.make_rgb_image(rgb_filters={"R": "J", "G": "V", "B": "U"})
     fig, ax, _ = disk_img.plot_rgb_image(show=True)
 
     # ===================== Make Bulge =====================
 
     # Define bulge morphology
-    morph = Sersic2D(r_eff_kpc=1. * kpc, n=4.)
+    morph = Sersic2D(r_eff_kpc=1.0 * kpc, n=4.0)
 
     # Define the parameters of the star formation and metal enrichment histories
-    stellar_mass = 2E10
+    stellar_mass = 2e10
     sfzh = generate_instant_sfzh(
-        grid.log10age, grid.metallicity, 10., 0.01,
-        stellar_mass=stellar_mass)
+        grid.log10age, grid.metallicity, 10.0, 0.01, stellar_mass=stellar_mass
+    )
 
     # Get galaxy object
     bulge = Galaxy(morph=morph, sfzh=sfzh)
@@ -113,9 +109,7 @@ if __name__ == '__main__':
     print(bulge)
 
     # Make and plot an rgb image
-    bulge_img.make_rgb_image(rgb_filters={"R" : 'J',
-                                       "G" : 'V',
-                                       "B" : 'U'})
+    bulge_img.make_rgb_image(rgb_filters={"R": "J", "G": "V", "B": "U"})
     fig, ax, _ = bulge_img.plot_rgb_image(show=True)
 
     # ===================== Make Composite =====================
@@ -127,32 +121,29 @@ if __name__ == '__main__':
 
     # Combine images
     total = disk_img + bulge_img
-    
+
     # Make and plot an rgb image
-    total.make_rgb_image(rgb_filters={"R" : 'J',
-                                       "G" : 'V',
-                                       "B" : 'U'})
+    total.make_rgb_image(rgb_filters={"R": "J", "G": "V", "B": "U"})
     fig, ax, _ = total.plot_rgb_image(show=True)
 
     # Plot the spectra of both components
 
     sed = disk.spectra["incident"]
-    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c='b',
-             label='disk')
+    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c="b", label="disk")
 
     sed = bulge.spectra["incident"]
-    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c='r',
-             label='bulge')
+    plt.plot(
+        np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c="r", label="bulge"
+    )
 
     sed = combined.spectra["incident"]
-    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=2, alpha=0.8, c='k',
-             label='combined')
+    plt.plot(
+        np.log10(sed.lam), np.log10(sed.lnu), lw=2, alpha=0.8, c="k", label="combined"
+    )
 
-    plt.xlim(3., 4.3)
+    plt.xlim(3.0, 4.3)
     plt.legend(fontsize=8, labelspacing=0.0)
-    plt.xlabel(r'$\rm log_{10}(\lambda_{obs}/\AA)$')
-    plt.ylabel(r'$\rm log_{10}(f_{\nu}/nJy)$')
+    plt.xlabel(r"$\rm log_{10}(\lambda_{obs}/\AA)$")
+    plt.ylabel(r"$\rm log_{10}(f_{\nu}/nJy)$")
 
     plt.show()
-
-    
