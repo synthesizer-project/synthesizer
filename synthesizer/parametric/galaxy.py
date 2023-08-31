@@ -1,22 +1,10 @@
-
-
-# --- general
-import h5py
-import copy
 import numpy as np
-from scipy import integrate
-from unyt import yr, erg, Hz, s, cm, angstrom
-
 from ..base_galaxy import BaseGalaxy
 from .. import exceptions
 from ..dust.attenuation import PowerLaw
-from ..sed import Sed
 from ..line import Line, LineCollection
-from ..plt import single_histxy, mlabel
-from ..stats import weighted_median, weighted_mean
 from ..imaging.images import ParametricImage
 from ..art import Art
-from synthesizer.utils import fnu_to_flam
 
 
 class Galaxy(BaseGalaxy):
@@ -37,7 +25,8 @@ class Galaxy(BaseGalaxy):
             name (string):
                 name of galaxy
             sfzh (object, sfzh):
-                instance of the BinnedSFZH class containing the star formation and metal enrichment history.
+                instance of the BinnedSFZH class containing the star formation 
+                and metal enrichment history.
             morph (object)
         """
 
@@ -57,12 +46,14 @@ class Galaxy(BaseGalaxy):
     def __str__(self):
         """Function to print a basic summary of the Galaxy object.
 
-        Returns a string containing the total mass formed and lists of the available SEDs, lines, and images.
+        Returns a string containing the total mass formed and lists of the 
+        available SEDs, lines, and images.
 
         Returns
         -------
         str
-            Summary string containing the total mass formed and lists of the available SEDs, lines, and images.
+            Summary string containing the total mass formed and lists of the 
+            available SEDs, lines, and images.
         """
 
         pstr = ''
@@ -70,7 +61,8 @@ class Galaxy(BaseGalaxy):
         pstr += 'SUMMARY OF PARAMETRIC GALAXY' + "\n"
         pstr += Art.galaxy + "\n"
         pstr += str(self.__class__) + "\n"
-        pstr += f'log10(stellar mass formed/Msol): {np.log10(np.sum(self.sfzh.sfzh))}' + "\n"
+        pstr += f'log10(stellar mass formed/Msol): \
+            {np.log10(np.sum(self.sfzh.sfzh))}' + "\n"
         pstr += f'available SEDs: {list(self.spectra.keys())}' + "\n"
         pstr += f'available lines: {list(self.lines.keys())}' + "\n"
         pstr += f'available images: {list(self.images.keys())}' + "\n"
@@ -90,7 +82,8 @@ class Galaxy(BaseGalaxy):
         Returns
         -------
         ParametricGalaxy
-            New ParametricGalaxy object containing summed SFZHs, SEDs, lines, and images.
+            New ParametricGalaxy object containing summed SFZHs, SEDs, lines, 
+            and images.
         """
 
         new_sfzh = self.sfzh + second_galaxy.sfzh
@@ -103,7 +96,8 @@ class Galaxy(BaseGalaxy):
                     second_galaxy.spectra[spec_name]
             else:
                 exceptions.InconsistentAddition(
-                    'Both galaxies must contain the same spectra to be added together')
+                    'Both galaxies must contain the same spectra to be \
+                    added together')
 
         # add together lines
         for line_type in self.lines.keys():
@@ -111,7 +105,8 @@ class Galaxy(BaseGalaxy):
 
             if line_type not in second_galaxy.lines.keys():
                 exceptions.InconsistentAddition(
-                    'Both galaxies must contain the same sets of line types (e.g. intrinsic / attenuated)')
+                    'Both galaxies must contain the same sets of line types \
+                        (e.g. intrinsic / attenuated)')
             else:
                 for line_name, line in self.lines[line_type].items():
                     if line_name in second_galaxy.spectra[line_type].keys():
@@ -119,7 +114,8 @@ class Galaxy(BaseGalaxy):
                             second_galaxy.lines[line_type][line_name]
                     else:
                         exceptions.InconsistentAddition(
-                            'Both galaxies must contain the same emission lines to be added together')
+                            'Both galaxies must contain the same emission \
+                                lines to be added together')
 
         # add together images
         for img_name, image in self.images.items():
@@ -135,11 +131,11 @@ class Galaxy(BaseGalaxy):
 
     def get_Q(self, grid):
         """
-        Return the ionising photon luminosity (log10Q) for a given SFZH. 
+        Return the ionising photon luminosity (log10Q) for a given SFZH.
 
         Args:
             grid (object, Grid):
-                The SPS Grid object from which to extract spectra. 
+                The SPS Grid object from which to extract spectra.
 
         Returns:
             Log of the ionising photon luminosity over the grid dimensions
@@ -216,7 +212,8 @@ class Galaxy(BaseGalaxy):
             The Grid
         line_ids : list or str
             A list of line_ids or a str denoting a single line.
-            Doublets can be specified as a nested list or using a comma (e.g. 'OIII4363,OIII4959')
+            Doublets can be specified as a nested list or using a comma (e.g. 
+            'OIII4363,OIII4959')
         fesc : float
             The Lyman continuum escape fraction, the fraction of
             ionising photons that entirely escape
@@ -251,7 +248,8 @@ class Galaxy(BaseGalaxy):
 
                 #  line luminosity erg/s
                 luminosity = np.sum(
-                    (1-fesc)*grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1))
+                    (1-fesc)*grid_line['luminosity'] * self.sfzh.sfzh,
+                    axis=(0, 1))
 
                 #  continuum at line wavelength, erg/s/Hz
                 continuum = np.sum(
@@ -283,11 +281,13 @@ class Galaxy(BaseGalaxy):
 
                     #  line luminosity erg/s
                     luminosity.append(
-                        (1-fesc)*np.sum(grid_line['luminosity'] * self.sfzh.sfzh, axis=(0, 1)))
+                        (1-fesc)*np.sum(grid_line['luminosity'] *
+                                        self.sfzh.sfzh, axis=(0, 1)))
 
                     #  continuum at line wavelength, erg/s/Hz
                     continuum.append(
-                        np.sum(grid_line['continuum'] * self.sfzh.sfzh, axis=(0, 1)))
+                        np.sum(grid_line['continuum'] * self.sfzh.sfzh,
+                               axis=(0, 1)))
 
             else:
                 # throw exception
@@ -306,12 +306,19 @@ class Galaxy(BaseGalaxy):
         # return collection
         return line_collection
 
-    def get_line_attenuated(self, grid, line_ids, fesc=0.0, tau_v_nebular=None,
-                            tau_v_stellar=None, dust_curve_nebular=PowerLaw({'slope': -1.}),
-                            dust_curve_stellar=PowerLaw({'slope': -1.}), update=True):
+    def get_line_attenuated(self,
+                            grid,
+                            line_ids,
+                            fesc=0.0,
+                            tau_v_nebular=None,
+                            tau_v_stellar=None,
+                            dust_curve_nebular=PowerLaw({'slope': -1.}),
+                            dust_curve_stellar=PowerLaw({'slope': -1.}),
+                            update=True):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a set
-        of lines. Allows the nebular and stellar attenuation to be set separately.
+        of lines. Allows the nebular and stellar attenuation to be set 
+        separately.
 
         Parameters
         ----------
@@ -366,10 +373,12 @@ class Galaxy(BaseGalaxy):
             line = Line(intrinsic_line.id, intrinsic_line._wavelength,
                         luminosity, continuum)
 
-            # NOTE: the above is wrong and should be separated into stellar and nebular continuum components:
+            # NOTE: the above is wrong and should be separated into stellar 
+            # and nebular continuum components:
             # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
             # stellar_continuum = intrinsic_line._stellar_continuum * T_stellar
-            # line = Line(intrinsic_line.id, intrinsic_line._wavelength, luminosity, nebular_continuum, stellar_continuum)
+            # line = Line(intrinsic_line.id, intrinsic_line._wavelength, 
+            # luminosity, nebular_continuum, stellar_continuum)
 
             lines[line.id] = line
 
@@ -383,7 +392,13 @@ class Galaxy(BaseGalaxy):
         # return collection
         return line_collection
 
-    def get_line_screen(self, grid, line_ids, fesc=0.0, tau_v=None, dust_curve=PowerLaw({'slope': -1.}), update=True):
+    def get_line_screen(self,
+                        grid,
+                        line_ids,
+                        fesc=0.0,
+                        tau_v=None,
+                        dust_curve=PowerLaw({'slope': -1.}),
+                        update=True):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a set 
         of lines assuming a simple dust screen (i.e. both nebular and stellar 
@@ -412,8 +427,9 @@ class Galaxy(BaseGalaxy):
         """
 
         return self.get_line_attenuated(
-            grid, line_ids, fesc=fesc, tau_v_nebular=tau_v, tau_v_stellar=tau_v,
-            dust_curve_nebular=dust_curve, dust_curve_stellar=dust_curve
+            grid, line_ids, fesc=fesc, tau_v_nebular=tau_v,
+            tau_v_stellar=tau_v, dust_curve_nebular=dust_curve,
+            dust_curve_stellar=dust_curve
         )
 
     def make_images(self, resolution, fov=None, sed=None, filters=(),
