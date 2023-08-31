@@ -21,7 +21,7 @@ class Observation:
         The size a pixel.
     npix : int
         The number of pixels along an axis of the image or number of spaxels
-        in the image plane of the IFU. 
+        in the image plane of the IFU.
     fov : float
         The width of the image/ifu. If coordinates are being used to make the
         image this should have the same units as those coordinates.
@@ -42,8 +42,7 @@ class Observation:
     # possible attributes.
     __slots__ = ["resolution", "fov", "npix", "sed", "survey"]
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None,
-                 survey=None):
+    def __init__(self, resolution, npix=None, fov=None, sed=None, survey=None):
         """
         Intialise the Observation.
 
@@ -53,7 +52,7 @@ class Observation:
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -103,7 +102,7 @@ class Observation:
             The width of the image.
         npix : int
             The number of pixels in the image.
-        
+
         Raises
         ------
         InconsistentArguments
@@ -177,8 +176,17 @@ class ParticleObservation(Observation):
     # Define slots to reduce memory overhead of this class
     __slots__ = ["stars", "coords", "centre", "pix_pos", "npart"]
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None, stars=None,
-                 survey=None, positions=None, centre=None):
+    def __init__(
+        self,
+        resolution,
+        npix=None,
+        fov=None,
+        sed=None,
+        stars=None,
+        survey=None,
+        positions=None,
+        centre=None,
+    ):
         """
         Intialise the ParticleObservation.
 
@@ -188,7 +196,7 @@ class ParticleObservation(Observation):
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.
@@ -216,8 +224,9 @@ class ParticleObservation(Observation):
         self._check_part_args(stars, positions, centre)
 
         # Initilise the parent class
-        Observation.__init__(self, resolution=resolution, npix=npix, fov=fov,
-                             sed=sed, survey=survey)
+        Observation.__init__(
+            self, resolution=resolution, npix=npix, fov=fov, sed=sed, survey=survey
+        )
 
         # Initialise stars attribute
         self.stars = stars
@@ -286,12 +295,14 @@ class ParticleObservation(Observation):
                 pos = positions
             else:
                 pos = stars.coordinates
-                if (centre[0] < np.min(pos[:, 0]) or
-                    centre[0] > np.max(pos[:, 0]) or
-                    centre[1] < np.min(pos[:, 1]) or
-                    centre[1] > np.max(pos[:, 1]) or
-                    centre[2] < np.min(pos[:, 2]) or
-                    centre[2] > np.max(pos[:, 2])):
+                if (
+                    centre[0] < np.min(pos[:, 0])
+                    or centre[0] > np.max(pos[:, 0])
+                    or centre[1] < np.min(pos[:, 1])
+                    or centre[1] > np.max(pos[:, 1])
+                    or centre[2] < np.min(pos[:, 2])
+                    or centre[2] > np.max(pos[:, 2])
+                ):
                     raise exceptions.InconsistentCoordinates(
                         "The centre lies outside of the coordinate range. "
                         "Are they already centred?"
@@ -345,8 +356,7 @@ class ParametricObservation(Observation):
 
     """
 
-    def __init__(self, resolution, npix=None, fov=None, sed=None,
-                 survey=None):
+    def __init__(self, resolution, npix=None, fov=None, sed=None, survey=None):
         """
         Intialise the ParametricObservation.
 
@@ -356,7 +366,7 @@ class ParametricObservation(Observation):
             The size a pixel.
         npix : int
             The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU. 
+            spaxels in the image plane of the IFU.
         fov : float
             The width of the image/ifu. If coordinates are being used to make
             the image this should have the same units as those coordinates.

@@ -43,9 +43,10 @@ class Particles:
     velocities = Quantity()
     masses = Quantity()
     softening_lengths = Quantity()
-    
-    def __init__(self, coordinates, velocities, masses, redshift,
-                 softening_length, nparticles):
+
+    def __init__(
+        self, coordinates, velocities, masses, redshift, softening_length, nparticles
+    ):
         """
         Intialise the Particles.
 
@@ -65,7 +66,6 @@ class Particles:
         """
 
         # Check arguments are valid
-        
 
         # Set phase space coordinates
         self.coordinates = coordinates
@@ -85,8 +85,7 @@ class Particles:
         # How many particles are there?
         self.nparticles = nparticles
 
-    def _check_part_args(self, coordinates, velocities, masses,
-                         softening_length):
+    def _check_part_args(self, coordinates, velocities, masses, softening_length):
         """
         Sanitizes the inputs ensuring all arguments agree and are compatible.
 
@@ -113,7 +112,6 @@ class Particles:
             raise exceptions.InconsistentArguments(
                 "softening_length must have unyt units associated to them."
             )
-        
 
     def rotate_particles(self):
         raise exceptions.UnimplementedFunctionality(
@@ -123,7 +121,9 @@ class Particles:
             "docs/CONTRIBUTING.md"
         )
 
-    def convert_to_physical_properties(self,):
+    def convert_to_physical_properties(
+        self,
+    ):
         """
         Converts comoving coordinates and velocities to physical coordinates
         and velocties.
@@ -140,7 +140,9 @@ class Particles:
             "docs/CONTRIBUTING.md"
         )
 
-    def convert_to_comoving_properties(self,):
+    def convert_to_comoving_properties(
+        self,
+    ):
         """
         Converts comoving coordinates and velocities to physical coordinates
         and velocties.
@@ -156,6 +158,7 @@ class Particles:
             "https://github.com/flaresimulations/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
+
 
 class CoordinateGenerator:
     """
@@ -184,9 +187,9 @@ class CoordinateGenerator:
         # If we haven't been passed a covariance make one
         if not cov:
             cov = np.zeros((3, 3))
-            np.fill_diagonal(cov, 1.)
+            np.fill_diagonal(cov, 1.0)
 
-        # Get the coordinates 
+        # Get the coordinates
         coords = multivariate_normal(mean, cov, n)
 
         return coords

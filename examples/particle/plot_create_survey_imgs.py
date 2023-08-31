@@ -59,13 +59,9 @@ hst_filters = Filters(hst_filter_codes, new_lam=grid.lam)
 webb_filters = Filters(webb_filter_codes, new_lam=grid.lam)
 
 # Create a fake PSF for each instrument (normalising the kernels)
-hst_psf = np.outer(
-    signal.windows.gaussian(25, 4), signal.windows.gaussian(25, 5)
-)
+hst_psf = np.outer(signal.windows.gaussian(25, 4), signal.windows.gaussian(25, 5))
 hst_psf /= np.sum(hst_psf)
-webb_psf = np.outer(
-    signal.windows.gaussian(50, 6), signal.windows.gaussian(50, 6)
-)
+webb_psf = np.outer(signal.windows.gaussian(50, 6), signal.windows.gaussian(50, 6))
 webb_psf /= np.sum(webb_psf)
 hst_psfs = {f: hst_psf for f in hst_filters.filter_codes}
 webb_psfs = {f: webb_psf for f in webb_filters.filter_codes}
@@ -112,32 +108,36 @@ fov = survey.fov
 ngalaxies = 5
 galaxies = []
 for igal in range(ngalaxies):
-
     # Generate the star formation metallicity history
     mass = 10**10
     sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=mass)
 
     # Define the number of stars
     n = 1000
-    
+
     # Generate some random coordinates
     coords = CoordinateGenerator.generate_3D_gaussian(n)
 
     # Calculate the smoothing lengths from radii
     cent = np.mean(coords, axis=0)
     rs = np.sqrt(
-            (coords[:, 0] - cent[0]) ** 2
-            + (coords[:, 1] - cent[1]) ** 2
-            + (coords[:, 2] - cent[2]) ** 2
+        (coords[:, 0] - cent[0]) ** 2
+        + (coords[:, 1] - cent[1]) ** 2
+        + (coords[:, 2] - cent[2]) ** 2
     )
     rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
 
     # Sample the SFZH, producing a Stars object
     # we will also pass some keyword arguments for attributes
     # we will need for imaging
-    stars = sample_sfhz(sfzh, n, coordinates=coords, 
-                        current_masses=np.full(n, 10**8.7 / n), 
-                        smoothing_lengths=rs / 2, redshift=1)
+    stars = sample_sfhz(
+        sfzh,
+        n,
+        coordinates=coords,
+        current_masses=np.full(n, 10**8.7 / n),
+        smoothing_lengths=rs / 2,
+        redshift=1,
+    )
 
     # Compute width of stellar distribution
     width = (np.max(coords) - np.min(coords)) * Mpc
@@ -174,8 +174,9 @@ survey.make_images(
     cosmo=cosmo,
 )
 
-print("Total runtime (including creation, not including plotting):",
-      time.time() - start)
+print(
+    "Total runtime (including creation, not including plotting):", time.time() - start
+)
 
 # Set up plot
 fig = plt.figure(figsize=(3.5 * survey.nfilters, 3.5 * survey.ngalaxies))
@@ -192,10 +193,8 @@ populated = np.zeros((survey.ngalaxies, survey.nfilters))
 
 # Loop over instruments
 for inst in survey.imgs:
-
     # Loop over galaxies
     for i, img in enumerate(survey.imgs[inst]):
-
         # Find the next cell in this row
         j = 0
         while populated[i, j] != 0:
