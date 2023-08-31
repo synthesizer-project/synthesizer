@@ -11,39 +11,38 @@ import h5py
 
 from synthesizer.cloudy import calculate_Q_from_U
 from synthesizer.abundances import Abundances
-from write_submission_script import (apollo_submission_script,
-                                     cosma7_submission_script)
+from write_submission_script import apollo_submission_script, cosma7_submission_script
 
 
-def create_cloudy_input(model_name, log10T, abundances, output_dir='./', **kwargs):
-
+def create_cloudy_input(model_name, log10T, abundances, output_dir="./", **kwargs):
     params = {
-        'log10U': -2,
-        'log10radius': -2,  # radius in log10 parsecs
-        'covering_factor': 1.0,
-        'stop_T': 4000,  # K
-        'stop_efrac': -2,
-        'T_floor': 100,  # K
-        'log10n_H': 2.0,  # Hydrogen density
-        'z': 0.,
-        'CMB': False,
-        'cosmic_rays': False
+        "log10U": -2,
+        "log10radius": -2,  # radius in log10 parsecs
+        "covering_factor": 1.0,
+        "stop_T": 4000,  # K
+        "stop_efrac": -2,
+        "T_floor": 100,  # K
+        "log10n_H": 2.0,  # Hydrogen density
+        "z": 0.0,
+        "CMB": False,
+        "cosmic_rays": False,
     }
 
     for key, value in list(kwargs.items()):
         params[key] = value
 
-    log10U = params['log10U']
+    log10U = params["log10U"]
 
     # ----- start CLOUDY input file (as a list)
     cinput = []
 
-    cinput.append(f'black body t={log10T}\n')
+    cinput.append(f"black body t={log10T}\n")
 
     # --- Define the chemical composition
-    for ele in ['He'] + abundances.metals:
-        cinput.append((f'element abundance {abundances.name[ele]} '
-                       f'{abundances[ele]}\n'))
+    for ele in ["He"] + abundances.metals:
+        cinput.append(
+            (f"element abundance {abundances.name[ele]} " f"{abundances[ele]}\n")
+        )
 
     """
     add graphite and silicate grains
@@ -95,99 +94,101 @@ def create_cloudy_input(model_name, log10T, abundances, output_dir='./', **kwarg
     """
 
     if abundances.d2m > 0:
-        delta_C = 10**abundances.a_nodep['C'] - 10**abundances.a['C']
-        delta_PAH = 0.01 * (10**abundances.a_nodep['C'])
+        delta_C = 10 ** abundances.a_nodep["C"] - 10 ** abundances.a["C"]
+        delta_PAH = 0.01 * (10 ** abundances.a_nodep["C"])
         delta_graphite = delta_C - delta_PAH
-        delta_Si = 10**abundances.a_nodep['Si'] - 10**abundances.a['Si']
+        delta_Si = 10 ** abundances.a_nodep["Si"] - 10 ** abundances.a["Si"]
         orion_C_abund = -3.6259
         orion_Si_abund = -4.5547
         PAH_abund = -4.446
-        f_graphite = delta_graphite/(10**(orion_C_abund))
-        f_Si = delta_Si/(10**(orion_Si_abund))
-        f_pah = delta_PAH/(10**(PAH_abund))
-        command = (f'grains Orion graphite {f_graphite} '
-                   f'\ngrains Orion silicate {f_Si} \ngrains '
-                   f'PAH {f_pah}')
-        cinput.append(command+'\n')
+        f_graphite = delta_graphite / (10 ** (orion_C_abund))
+        f_Si = delta_Si / (10 ** (orion_Si_abund))
+        f_pah = delta_PAH / (10 ** (PAH_abund))
+        command = (
+            f"grains Orion graphite {f_graphite} "
+            f"\ngrains Orion silicate {f_Si} \ngrains "
+            f"PAH {f_pah}"
+        )
+        cinput.append(command + "\n")
     else:
         f_graphite, f_Si, f_pah = 0, 0, 0
 
     # cinput.append('element off limit -7') # should speed up the code
 
     # # --- Define the ionising luminosity
-    log10Q = np.log10(calculate_Q_from_U(10**log10U, 10**params["log10n_H"]))
-    cinput.append(f'Q(H) = {log10Q}\n')
+    log10Q = np.log10(calculate_Q_from_U(10**log10U, 10 ** params["log10n_H"]))
+    cinput.append(f"Q(H) = {log10Q}\n")
     # # cinput.append(f'ionization parameter = {log10U} log\n')
 
     # add background continuum
-    if params['cosmic_rays']:
-        cinput.append('cosmic rays, background\n')
-    if params['CMB']:
+    if params["cosmic_rays"]:
+        cinput.append("cosmic rays, background\n")
+    if params["CMB"]:
         cinput.append(f'CMB {params["z"]}\n')
 
     # --- Define the geometry
     cinput.append(f'hden {params["log10n_H"]} log constant density\n')
     cinput.append(f'radius {params["log10radius"]} log parsecs\n')
-    cinput.append('sphere\n')
+    cinput.append("sphere\n")
     cinput.append(f'covering factor {params["covering_factor"]} linear\n')
 
     # --- Processing commands
-    cinput.append('iterate to convergence\n')
+    cinput.append("iterate to convergence\n")
     cinput.append(f'set temperature floor {params["T_floor"]} linear\n')
     cinput.append(f'stop temperature {params["stop_T"]}K\n')
     cinput.append(f'stop efrac {params["stop_efrac"]}\n')
 
     # --- output commands
-    cinput.append(f'print line vacuum\n')  # output vacuum wavelengths
-    cinput.append((f'save last continuum "{model_name}.cont" '
-                   f'units Angstroms no clobber\n'))
-    cinput.append((f'save last lines, array "{model_name}.lines" '
-                  'units Angstroms no clobber\n'))
+    cinput.append(f"print line vacuum\n")  # output vacuum wavelengths
+    cinput.append(
+        (f'save last continuum "{model_name}.cont" ' f"units Angstroms no clobber\n")
+    )
+    cinput.append(
+        (f'save last lines, array "{model_name}.lines" ' "units Angstroms no clobber\n")
+    )
     cinput.append(f'save overview  "{model_name}.ovr" last\n')
 
     # --- save input file
-    open(f'{output_dir}/{model_name}.in', 'w').writelines(cinput)
+    open(f"{output_dir}/{model_name}.in", "w").writelines(cinput)
 
     return cinput
 
 
 if __name__ == "__main__":
-
-    grid_name = 'blackbody'
+    grid_name = "blackbody"
 
     # replace with arguments
-    machine = 'apollo'
+    machine = "apollo"
     synthesizer_data_dir = "/research/astrodata/highz/synthesizer/"
     output_dir = f"{synthesizer_data_dir}/cloudy/blackbody"
-    cloudy = '/its/home/sw376/flare/software/cloudy/c17.03/source/cloudy.exe'
+    cloudy = "/its/home/sw376/flare/software/cloudy/c17.03/source/cloudy.exe"
 
     # create path for cloudy runs
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # for submission system output files
-    Path(f'{output_dir}/output').mkdir(parents=True, exist_ok=True)
+    Path(f"{output_dir}/output").mkdir(parents=True, exist_ok=True)
 
     # log10T grid
-    log10Ts = np.arange(4., 7., 0.2)
+    log10Ts = np.arange(4.0, 7.0, 0.2)
 
     # metallicity grid
-    log10Zs = np.arange(-5., -1., 0.5)
+    log10Zs = np.arange(-5.0, -1.0, 0.5)
 
     # log10U
-    log10Us = np.array([-4., -3, -2, -1., 0.])
+    log10Us = np.array([-4.0, -3, -2, -1.0, 0.0])
 
     # total number of models
-    N = len(log10Ts)*len(log10Zs)*len(log10Us)
+    N = len(log10Ts) * len(log10Zs) * len(log10Us)
 
     # open the new grid
-    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'w') as hf:
-
+    with h5py.File(f"{synthesizer_data_dir}/grids/{grid_name}.hdf5", "w") as hf:
         # add attribute with the grid axes for future when using >2D grid or AGN grids
-        hf.attrs['grid_axes'] = ['log10T', 'log10Z', 'log10U']
+        hf.attrs["grid_axes"] = ["log10T", "log10Z", "log10U"]
 
-        hf['log10U'] = log10Us
-        hf['log10T'] = log10Ts
-        hf['log10Z'] = log10Zs
+        hf["log10U"] = log10Us
+        hf["log10T"] = log10Ts
+        hf["log10Z"] = log10Zs
 
     # for iT, log10T in enumerate(log10Ts):
     #     for iZ, log10Z in enumerate(log10Zs):

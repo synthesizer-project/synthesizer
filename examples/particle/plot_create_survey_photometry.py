@@ -43,8 +43,7 @@ grid_name = "test_grid"
 grid_dir = script_path + "/../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
-print("Grid dimensions: (%d, %d)" % (grid.log10ages.size,
-                                     grid.log10metallicities.size))
+print("Grid dimensions: (%d, %d)" % (grid.log10ages.size, grid.log10metallicities.size))
 
 # What redshift are we testing?
 redshift = 8
@@ -78,32 +77,36 @@ sfh = SFH.Constant(sfh_p)  # constant star formation
 ngalaxies = 1000
 galaxies = []
 for igal in range(ngalaxies):
-
     # Generate the star formation metallicity history
     mass = np.random.uniform(10**6, 10**10, 1)[0]
     sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=mass)
 
     # Create stars object
     n = random.randint(100, 1000)
-    
+
     # Generate some random coordinates
     coords = CoordinateGenerator.generate_3D_gaussian(n)
 
     # Calculate the smoothing lengths from radii
     cent = np.mean(coords, axis=0)
     rs = np.sqrt(
-            (coords[:, 0] - cent[0]) ** 2
-            + (coords[:, 1] - cent[1]) ** 2
-            + (coords[:, 2] - cent[2]) ** 2
+        (coords[:, 0] - cent[0]) ** 2
+        + (coords[:, 1] - cent[1]) ** 2
+        + (coords[:, 2] - cent[2]) ** 2
     )
     rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
 
     # Sample the SFZH, producing a Stars object
     # we will also pass some keyword arguments for attributes
     # we will need for imaging
-    stars = sample_sfhz(sfzh, n, coordinates=coords, 
-                        current_masses=np.full(n, 10**8.7 / n), 
-                        smoothing_lengths=rs / 2, redshift=1)
+    stars = sample_sfhz(
+        sfzh,
+        n,
+        coordinates=coords,
+        current_masses=np.full(n, 10**8.7 / n),
+        smoothing_lengths=rs / 2,
+        redshift=1,
+    )
 
     # Create galaxy object
     galaxy = Galaxy(name="Galaxy%d" % igal, stars=stars, redshift=1)
@@ -115,14 +118,14 @@ for igal in range(ngalaxies):
 survey.add_galaxies(galaxies)
 
 # Get the SEDs
-survey.get_spectra(grid, spectra_type="incident", rest_frame=False,
-                   redshift=redshift)
+survey.get_spectra(grid, spectra_type="incident", rest_frame=False, redshift=redshift)
 
 # Make images for each galaxy in this survey
 survey.get_photometry(spectra_type="incident")
 
-print("Total runtime (including creation, not including plotting):",
-      time.time() - start)
+print(
+    "Total runtime (including creation, not including plotting):", time.time() - start
+)
 
 # Get stellar masses
 ms = []
@@ -137,7 +140,6 @@ ax.loglog()
 
 # Loop over filters
 for f in survey.photometry:
-
     # Get photometry
     phot = survey.photometry[f]
 
