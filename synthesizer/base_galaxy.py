@@ -1,9 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import cmasher as cmr
 
 from .sed import Sed
-from .dust import power_law
+from .dust.attenuation import PowerLaw
 from . import exceptions
 from .line import Line
 
@@ -32,31 +31,31 @@ class BaseGalaxy:
                        "You should not be seeing this!!!")
                       )
     
-    def get_spectra_linecont(self, 
-                   grid, 
-                   fesc=0.0,
-                   fesc_LyA=1.0, 
-                   young=False, 
-                   old=False):
+    def get_spectra_linecont(self,
+                             grid,
+                             fesc=0.0,
+                             fesc_LyA=1.0,
+                             young=False,
+                             old=False):
 
         """
         Generate the line contribution spectra. This is only invoked if 
         fesc_LyA < 1.
         """
 
-        # generate contribution of line emission alone and reduce the contribution of Lyman-alpha
+        # generate contribution of line emission alone and reduce the 
+        # contribution of Lyman-alpha
         linecont = self.generate_lnu(
             grid, spectra_name='linecont', old=old, young=young)
        
         # multiply by the Lyamn-continuum escape fraction
         linecont *= (1-fesc)
 
-         # get index of Lyman-alpha
+        # get index of Lyman-alpha
         idx = grid.get_nearest_index(1216., grid.lam)
         linecont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
 
         return linecont
-
 
     def get_spectra_incident(
             self,
@@ -132,7 +131,8 @@ class BaseGalaxy:
             An Sed object containing the transmitted spectra
         """
 
-        lnu = (1.-fesc)*self.generate_lnu(grid, 'transmitted', young=young, old=old)
+        lnu = (1.-fesc)*self.generate_lnu(grid, 'transmitted', young=young,
+                                          old=old)
 
         sed = Sed(grid.lam, lnu)
 
@@ -240,7 +240,7 @@ class BaseGalaxy:
 
         # the incident emission 
         incident = self.get_spectra_incident(grid, update=update,
-                                           young=young, old=old, label=label)
+                                             young=young, old=old, label=label)
         
         # the emission which escapeds the gas
         if fesc > 0:
@@ -248,20 +248,22 @@ class BaseGalaxy:
 
         # the stellar emission which **is** reprocessed by the gas
         transmitted = self.get_spectra_transmitted(grid, fesc, update=update,
-                                           young=young, old=old, label=label)        
-        # the nebular emission 
+                                                   young=young, old=old,
+                                                   label=label)
+        # the nebular emission
         nebular = self.get_spectra_nebular(grid, fesc, update=update,
                                            young=young, old=old, label=label)
-
-        
+    
         # if the Lyman-alpha escape fraction is <1.0 suppress it.
         if fesc_LyA < 1.0:
 
             # get the new line contribution to the spectrum
-            linecont = self.get_spectra_linecont(grid, fesc=fesc, fesc_LyA=fesc_LyA)
+            linecont = self.get_spectra_linecont(grid, fesc=fesc,
+                                                 fesc_LyA=fesc_LyA)
 
             # get the nebular continuum emission
-            nebular_continuum = self.generate_lnu(grid, 'nebular_continuum', young=young, old=old)
+            nebular_continuum = self.generate_lnu(grid, 'nebular_continuum',
+                                                  young=young, old=old)
             nebular_continuum *= (1-fesc)
 
             # redefine the nebular emission
@@ -289,7 +291,7 @@ class BaseGalaxy:
             self,
             grid,
             tau_v=None,
-            dust_curve=power_law({'slope': -1.}),
+            dust_curve=PowerLaw({'slope': -1.}),
             young=False,
             old=False,                      
             update=True
@@ -330,7 +332,8 @@ class BaseGalaxy:
         #   - nebular
         #   - reprocessed = transmitted + nebular
         #   - intrinsic = transmitted + reprocessed
-        self.get_spectra_reprocessed(grid, update=update, fesc=0.0, young=young, old=old)
+        self.get_spectra_reprocessed(grid, update=update, fesc=0.0,
+                                     young=young, old=old)
 
         if tau_v:
             T = dust_curve.attenuate(tau_v, grid.lam)
@@ -344,12 +347,10 @@ class BaseGalaxy:
 
         return emergent
     
-
-
     def get_spectra_pacman(
             self,
             grid,
-            dust_curve=power_law(),
+            dust_curve=PowerLaw(),
             tau_v=1.,
             alpha=-1.,
             young_old_thresh=None,
@@ -384,8 +385,6 @@ class BaseGalaxy:
                 numerical value of the dust curve slope
             young_old_thresh (float)
                 numerical value of threshold from young to old
-
-                
 
         Raises:
             InconsistentArguments:
@@ -428,17 +427,16 @@ class BaseGalaxy:
         """
 
         if young_old_thresh:
-            if (len(tau_v)>2) or (len(alpha)>2):
+            if (len(tau_v) > 2) or (len(alpha) > 2):
                 exceptions.InconsistentArguments(
                     ("Only 2 values for the optical depth or dust curve "
                      "slope are allowed for the CF00 model"))
         else:
-            if isinstance(tau_v, (list, tuple, np.ndarray))\
+            if isinstance(tau_v, (list, tuple, np.ndarray)) \
                 or isinstance(alpha, (list, tuple, np.ndarray)):
-                exceptions.InconsistentArguments(
-                    ("Only single value supported for tau_v and alpha in "
-                     "case of single dust screen"))
-
+                exceptions.InconsistentArguments(("""Only single value
+                supported for tau_v and alpha in case of single dust
+                screen"""))
 
         # initialise output spectra
         self.spectra['attenuated'] = Sed(grid.lam)
@@ -453,7 +451,8 @@ class BaseGalaxy:
         #   - nebular
         #   - reprocessed = transmitted + nebular
         #   - intrinsic = transmitted + reprocessed
-        self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=False, old=False)
+        self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA,
+                                     young=False, old=False)
 
         if young_old_thresh:
 
@@ -464,28 +463,30 @@ class BaseGalaxy:
             
             # generate the young gas reprocessed spectra
             # add a label so saves e.g. 'escaped_young' etc.
-            self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=young_old_thresh, old=False, label = 'young_')
+            self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA,
+                                         young=young_old_thresh, old=False,
+                                         label='young_')
 
             # generate the old gas reprocessed spectra
             # add a label so saves e.g. 'escaped_old' etc.
-            self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA, young=False, old=young_old_thresh, label = 'old_')
+            self.get_spectra_reprocessed(grid, fesc, fesc_LyA=fesc_LyA,
+                                         young=False, old=young_old_thresh,
+                                         label='old_')
 
             print(self.spectra.keys())
 
-        
         if np.isscalar(tau_v):
             # single screen dust, no separate birth cloud attenuation
             dust_curve.params['slope'] = alpha
 
             # calculate dust attenuation
             T = dust_curve.attenuate(tau_v, grid.lam)
-            
+
             # calculate the attenuated emission
             self.spectra['attenuated']._lnu = \
                 T*self.spectra['reprocessed']._lnu
-            
-                        
-        elif np.isscalar(tau_v) == False:
+
+        elif np.isscalar(tau_v) is False:
 
             """
             Apply separate attenuation to both the young and old components.  
@@ -494,43 +495,51 @@ class BaseGalaxy:
             # Two screen dust, one for diffuse other for birth cloud dust.
             if np.isscalar(alpha):
                 print(("Separate dust curve slopes for diffuse and "
-                        "birth cloud dust not given"))
-                print(("Defaulting to alpha_ISM=-0.7 and alpha_BC=-1.4"
-                        " (Charlot & Fall 2000)"))
+                       "birth cloud dust not given"))
+                print(("Defaulting to alpha_ISM=-0.7 and alpha_BC=-1.4 "
+                       "(Charlot & Fall 2000)"))
                 alpha = [-0.7, -1.4]
             
-            dust_curve.params['slope']=alpha[0]
+            dust_curve.params['slope'] = alpha[0]
             T_ISM = dust_curve.attenuate(tau_v[0], grid.lam)
             
-            dust_curve.params['slope']=alpha[1]
+            dust_curve.params['slope'] = alpha[1]
             T_BC = dust_curve.attenuate(tau_v[1], grid.lam)
 
             T_young = T_ISM * T_BC
             T_old = T_ISM
 
-            self.spectra['young_attenuated']._lnu =  T_young * self.spectra['young_reprocessed']._lnu
-            self.spectra['old_attenuated']._lnu =  T_old * self.spectra['old_reprocessed']._lnu
+            self.spectra['young_attenuated']._lnu = T_young *\
+                self.spectra['young_reprocessed']._lnu
+            self.spectra['old_attenuated']._lnu = T_old *\
+                self.spectra['old_reprocessed']._lnu
 
-            self.spectra['attenuated']._lnu = self.spectra['young_attenuated']._lnu + self.spectra['old_attenuated']._lnu
+            self.spectra['attenuated']._lnu = \
+                self.spectra['young_attenuated']._lnu +\
+                self.spectra['old_attenuated']._lnu
 
             # set emergent spectra
             if not fesc > 0:
-                self.spectra['young_emergent']._lnu = self.spectra['young_attenuated']._lnu
-                self.spectra['old_emergent']._lnu = self.spectra['old_attenuated']._lnu       
+                self.spectra['young_emergent']._lnu = \
+                    self.spectra['young_attenuated']._lnu
+                self.spectra['old_emergent']._lnu = \
+                    self.spectra['old_attenuated']._lnu       
             else:
-                self.spectra['young_emergent']._lnu = self.spectra['young_escaped']._lnu + self.spectra['young_attenuated']._lnu
-                self.spectra['old_emergent']._lnu = self.spectra['old_escaped']._lnu + self.spectra['old_attenuated']._lnu
+                self.spectra['young_emergent']._lnu = \
+                    self.spectra['young_escaped']._lnu + \
+                    self.spectra['young_attenuated']._lnu
+                self.spectra['old_emergent']._lnu = \
+                    self.spectra['old_escaped']._lnu + \
+                    self.spectra['old_attenuated']._lnu
             
-
         if not fesc > 0:
             self.spectra['emergent']._lnu = self.spectra['attenuated']._lnu
         else:
-            self.spectra['emergent']._lnu = self.spectra['escaped']._lnu + self.spectra['attenuated']._lnu
-
+            self.spectra['emergent']._lnu = self.spectra['escaped']._lnu \
+                + self.spectra['attenuated']._lnu
 
         return self.spectra['emergent']
     
-
     def get_spectra_CharlotFall(
             self,
             grid,
@@ -543,8 +552,8 @@ class BaseGalaxy:
         """
         Calculates dust attenuated spectra assuming the Charlot & Fall (2000)
         dust model. In this model young star particles are embedded in a
-        dusty birth cloud and thus feel more dust attenuation. This is a wrapper
-        around our more generic pacman method.
+        dusty birth cloud and thus feel more dust attenuation. This is a 
+        wrapper around our more generic pacman method.
 
         Parameters
         ----------
@@ -567,21 +576,20 @@ class BaseGalaxy:
              A Sed object containing the dust attenuated spectra
         """
 
-        return self.get_spectra_pacman(grid, 
-                                  fesc = 0,
-                                  fesc_LyA=1,
-                                  dust_curve=power_law(),
-                                  tau_v = [tau_v_ISM, tau_v_BC], 
-                                  alpha = [alpha_ISM, alpha_BC],
-                                  young_old_thresh=young_old_thresh
-                                  )
-
-
+        return self.get_spectra_pacman(grid,
+                                       fesc=0,
+                                       fesc_LyA=1,
+                                       dust_curve=PowerLaw(),
+                                       tau_v=[tau_v_ISM, tau_v_BC],
+                                       alpha=[alpha_ISM, alpha_BC],
+                                       young_old_thresh=young_old_thresh
+                                       )
 
     def get_spectra_dust(self, emissionmodel):
 
         """
-        Calculates dust emission spectra using the attenuated and intrinsic spectra that have already been generated and an emission model.
+        Calculates dust emission spectra using the attenuated and intrinsic 
+        spectra that have already been generated and an emission model.
 
         Parameters
         ----------
@@ -599,12 +607,16 @@ class BaseGalaxy:
 
         lam = self.spectra['emergent'].lam
 
-        # calculate the bolometric dust lunminosity as the difference between the intrinsic and attenuated
+        # calculate the bolometric dust lunminosity as the difference between 
+        # the intrinsic and attenuated
 
-        dust_bolometric_luminosity = self.spectra['intrinsic'].get_bolometric_luminosity() - self.spectra['emergent'].get_bolometric_luminosity()
+        dust_bolometric_luminosity = \
+            self.spectra['intrinsic'].get_bolometric_luminosity() \
+            - self.spectra['emergent'].get_bolometric_luminosity()
 
         # get the spectrum and normalise it properly
-        lnu = dust_bolometric_luminosity.to('erg/s').value * emissionmodel.lnu(lam)
+        lnu = dust_bolometric_luminosity.to('erg/s').value * \
+            emissionmodel.lnu(lam)
 
         # create new Sed object containing dust spectra
         sed = Sed(lam, lnu=lnu)
@@ -614,11 +626,6 @@ class BaseGalaxy:
         self.spectra['total'] = self.spectra['dust'] + self.spectra['emergent']
 
         return sed
-
-
-
-
-
 
     def get_line_intrinsic(
             self,
@@ -729,8 +736,8 @@ class BaseGalaxy:
             fesc=0.0,
             tau_v_nebular=None,
             tau_v_stellar=None,
-            dust_curve_nebular=power_law({'slope': -1.}),
-            dust_curve_stellar=power_law({'slope': -1.}),
+            dust_curve_nebular=PowerLaw({'slope': -1.}),
+            dust_curve_stellar=PowerLaw({'slope': -1.}),
             update=True
     ):
         """
@@ -795,7 +802,8 @@ class BaseGalaxy:
             # and nebular continuum components:
             # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
             # stellar_continuum = intrinsic_line._stellar_continuum * T_stellar
-            # line = Line(intrinsic_line.id, intrinsic_line._wavelength, luminosity, nebular_continuum, stellar_continuum)
+            # line = Line(intrinsic_line.id, intrinsic_line._wavelength, \
+            # luminosity, nebular_continuum, stellar_continuum)
 
             lines[line.id] = line
 
@@ -810,7 +818,7 @@ class BaseGalaxy:
             line_ids,
             fesc=0.0,
             tau_v=None,
-            dust_curve=power_law({'slope': -1.}),
+            dust_curve=PowerLaw({'slope': -1.}),
             update=True
     ):
         """
@@ -854,7 +862,8 @@ class BaseGalaxy:
             transmission (array)
         """
 
-        return self.spectra['attenuated'].lam, self.spectra['attenuated'].lnu/self.spectra['intrinsic'].lnu
+        return self.spectra['attenuated'].lam, self.spectra['attenuated'].lnu\
+            / self.spectra['intrinsic'].lnu
 
     def Al(self):
         """
@@ -900,9 +909,9 @@ class BaseGalaxy:
 
         return self.A(1500.)
 
-    def plot_spectra(self, show=False, 
-                     spectra_to_plot=None, 
-                     ylimits=('peak',5),
+    def plot_spectra(self, show=False,
+                     spectra_to_plot=None,
+                     ylimits=('peak', 5),
                      figsize=(3.5, 5)):
         """
         plots all spectra associated with a galaxy object
@@ -1004,7 +1013,8 @@ class BaseGalaxy:
                 for f in fc:
                     wv = f.pivwv()
                     filter_ax.plot(f.lam, f.t)
-                    ax.scatter(wv, sed.broadband_fluxes[f.filter_code], zorder=4)
+                    ax.scatter(wv, sed.broadband_fluxes[f.filter_code], 
+                               zorder=4)
 
         # ax.set_xlim([5000., 100000.])
         # ax.set_ylim([0., 100])
