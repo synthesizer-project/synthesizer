@@ -31,8 +31,8 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 # Define the parameters of the star formation and metal enrichment histories
 stellar_mass = 1e10
 sfzh = generate_instant_sfzh(
-    grid.log10ages, grid.metallicities, 10.0, 0.01, stellar_mass=stellar_mass
-)
+    grid.log10age, grid.metallicity, 10., 0.01,
+    stellar_mass=stellar_mass)
 
 # Define an arbitrary morphology to feed the imaging
 morph = Sersic2D(r_eff_kpc=1.0 * kpc, n=1.0, ellip=0.5, theta=35.0)
