@@ -11,35 +11,6 @@ from .igm import Inoue14
 from . import exceptions
 
 
-def uv_indices():
-    """
-    A function to define a dictionary of uv indices
-     - Each index has a defined absorption window.
-     - A pseudo-continuum is defined, made up of a blue and red shifted window.
-
-    Returns
-    ----------
-    int array
-        index, absorption start, absorption end, blue start, blue end, red start, red end
-
-    """
-
-    indices = np.array(
-        [
-            [1370, 1360, 1380, 1345, 1354, 1436, 1447],
-            [1400, 1385, 1410, 1345, 1354, 1436, 1447],
-            [1425, 1413, 1435, 1345, 1354, 1436, 1447],
-            [1460, 1450, 1470, 1436, 1447, 1482, 1491],
-            [1501, 1496, 1506, 1482, 1491, 1583, 1593],
-            [1533, 1530, 1537, 1482, 1491, 1583, 1593],
-            [1550, 1530, 1560, 1482, 1491, 1583, 1593],
-            [1719, 1705, 1729, 1675, 1684, 1751, 1761],
-            [1853, 1838, 1858, 1797, 1807, 1871, 1883],
-        ]
-    )
-
-    return indices
-
 
 class Sed:
 
@@ -139,6 +110,23 @@ class Sed:
         """
 
         return np.trapz(self.lnu[::-1], x=self.nu[::-1])
+
+
+    def get_index(index_window, blue_window, red_window, loc):
+         """
+         A function to define the blue continuum, red continuum, and absorption windows
+         - The  pseudo-continuum is defined, made up of a blue and red shifted window.
+
+         Returns
+         ----------
+         int array
+            absorption start, absorption end, blue start, blue end, red start, red end
+
+         """
+
+         indices = np.array([index_window[loc], index_window[loc+1], blue_window[loc], blue_window[loc+1], red_window[loc], red_window[loc+1]])
+
+        return indices
 
     def return_beta(self, wv=[1500.0, 2500.0]):
         """Return the UV continuum slope (\beta) based on measurements
@@ -332,15 +320,15 @@ class Sed:
         flux = self._lnu * (self._lam**2)
 
         # Define the wavelength range of the absorption feature
-        absorption_start = index[1]
-        absorption_end = index[2]
+        absorption_start = index[0]
+        absorption_end = index[1]
 
         # Define the wavelength ranges of the two sets of continuum
-        blue_start = index[3]
-        blue_end = index[4]
+        blue_start = index[2]
+        blue_end = index[3]
 
-        red_start = index[5]
-        red_end = index[6]
+        red_start = index[4]
+        red_end = index[5]
 
         # Compute the average continuum level
         continuum_indices = np.where(

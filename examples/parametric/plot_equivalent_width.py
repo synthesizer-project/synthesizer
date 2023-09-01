@@ -12,8 +12,29 @@ import matplotlib.pyplot as plt
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.parametric.galaxy import Galaxy as Galaxy
-from synthesizer.sed import uv_indices
+from synthesizer.sed import Sed
 from unyt import yr, Myr
+
+
+def set_index():
+    """
+    A function to define a dictionary of uv indices
+       - Each index has a defined absorption window.
+       - A pseudo-continuum is defined, made up of a blue and red shifted window.
+
+    Returns
+    ----------
+    int array
+       index, absorption start, absorption end, blue start, blue end, red start, red end
+
+    """
+
+    index = [1370, 1400, 1425, 1460, 1501, 1533, 1550, 1719, 1853]
+    index_window = [1360, 1380, 1385, 1410, 1413, 1435, 1450, 1470, 1496, 1506, 1530, 1537, 1530, 1560, 1705, 1729, 1838, 1858]
+    blue_window = [1345, 1354, 1345, 1354, 1345, 1354, 1436, 1447, 1482, 1491, 1482, 1491, 1482, 1491, 1675, 1684, 1797, 1807]
+    red_window = [1436, 1447, 1436, 1447, 1436, 1447, 1482, 1491, 1583, 1593, 1583, 1593, 1583, 1593, 1751, 1761, 1871, 1883]
+
+    return index, index_window, blue_window, red_window
 
 
 def get_ew(index, Z, smass, grid, EqW, mode):
@@ -46,9 +67,11 @@ def get_ew(index, Z, smass, grid, EqW, mode):
     return EqW
 
 
-def equivalent_width(grids, index, index_uv):
+def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
     # -- Calculate the equivalent width for each defined index
-    for i, idx in enumerate(index):
+    for i, index in enumerate(uv_index):
+        idx = Sed.get_index(index_window, blue_window, red_window, i)
+
         grid = Grid(grids, grid_dir=grid_dir)
 
         # --- define the parameters of the star formation and metal enrichment histories
@@ -72,10 +95,10 @@ def equivalent_width(grids, index, index_uv):
         if i > 5:
             plt.xlabel("Z", fontsize=8)
 
-        if index_uv[i] == 1501 or index_uv[i] == 1719:
-            label = "UV_" + str(index_uv[i])
+        if index == 1501 or index == 1719:
+            label = "UV_" + str(index)
         else:
-            label = "F" + str(index_uv[i])
+            label = "F" + str(index)
 
         _, y_max = plt.ylim()
 
@@ -96,7 +119,7 @@ def equivalent_width(grids, index, index_uv):
 
         plt.tight_layout()
 
-        if i == len(index) - 1:
+        if i == len(uv_index) - 1:
             plt.show()
 
 
@@ -104,7 +127,6 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid"  # Change this directory to your own.
     grid_name = "test_grid"  # Change this to the appropriate .hdf5
 
-    indices = uv_indices()  # Retrieve UV indices
-    index = indices[:, 0]  # [i[0] for i in indices]
+    index, index_window, blue_window, red_window = set_index()  # Retrieve UV indices
 
-    equivalent_width(grid_name, indices, index)
+    equivalent_width(grid_name, index, index_window, blue_window, red_window)
