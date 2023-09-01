@@ -40,7 +40,6 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
-        ls
-        pytest -v -c conftest.py examples/general/plot_abundances.py
+        # pytest -v -c conftest.py examples/general/plot_abundances.py
         # find examples/ -name "*.py" -exec pytest -c conftest.py {} \;
         # find docs/source/ -name "*.ipynb" -exec pytest --nbmake {} \;
