@@ -7,3 +7,4 @@ ipython
 sphinx_gallery
 pillow
 sphinx-toolbox
+nbsphinx
