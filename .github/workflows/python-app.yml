@@ -40,6 +40,7 @@ jobs:
     - name: Sphinx Build
       uses: ammaraskar/sphinx-action@0.4
       with:
+        pre-build-command: "pip install -r requirements && pip install -e ."
         docs-folder: "docs/"
     - name: Test with pytest
       run: |
