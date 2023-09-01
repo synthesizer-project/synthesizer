@@ -19,6 +19,7 @@ Contents
    spectra
    units
    filters
+   blackholes/blackholes
    parametric/parametric
    cosmo/cosmo
    imaging/imaging
