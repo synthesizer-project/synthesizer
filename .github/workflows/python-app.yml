@@ -39,7 +39,7 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude broken_examples,.eggs
     - name: Test with pytest
       run: |
-        pytest -c conftest.py
+        pytest -c conftest.py --ignore tests/data/
         # pytest -v -c conftest.py examples/general/plot_abundances.py
         # find examples/ -name "*.py" -exec pytest -c conftest.py {} \;
         # find docs/source/ -name "*.ipynb" -exec pytest --nbmake {} \;
