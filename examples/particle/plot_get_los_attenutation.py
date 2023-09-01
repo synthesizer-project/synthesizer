@@ -33,11 +33,11 @@ start = time.time()
 
 # Get the location of this script, __file__ is the absolute path of this
 # script, however we just want to directory
-script_path = os.path.abspath(os.path.dirname(__file__))
+# script_path = os.path.abspath(os.path.dirname(__file__))
 
 # Define the grid
 grid_name = "test_grid"
-grid_dir = script_path + "/../../tests/test_grid/"
+grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
 # Define the grid (normally this would be defined by an SPS grid)
@@ -52,7 +52,7 @@ sfh = SFH.Constant(sfh_p)  # constant star formation
 mass = 10**10
 sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=mass)
 
-for n in [10, 100, 1000, 10000]:
+for n in [10, 100]: # , 1000, 10000]:
     xs = []
     loop_ys = []
     tree_ys = []
@@ -167,6 +167,7 @@ for n in [10, 100, 1000, 10000]:
 
     ax.legend()
 
+    plt.show()
     # fig.savefig("../los_timing_nstar%d.png" % n, dpi=100, bbox_inches="tight")
 
     fig = plt.figure()
