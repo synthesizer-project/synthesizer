@@ -35,6 +35,7 @@ jobs:
       # uses: ammaraskar/sphinx-action@0.4
       run: |
         cd docs
+        apt install pandoc
         pip install -r requirements.txt
         make clean
         make html
