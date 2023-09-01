@@ -20,16 +20,17 @@ from synthesizer.particle.galaxy import Galaxy
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
-    script_path = os.path.abspath(os.path.dirname(__file__))
+    # script_path = os.path.abspath(os.path.dirname(__file__))
 
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = script_path + "/../../tests/test_grid/"
+    # grid_dir = script_path + "/../../tests/test_grid/"
+    grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # now load some example CAMELS data using the dedicated data loader
     gals = load_CAMELS_SIMBA(
-        script_path + "/../../tests/",
+        "../../tests/",
         snap_name="camels_snap.hdf5",
         fof_name="camels_subhalo.hdf5",
     )
@@ -54,11 +55,11 @@ if __name__ == "__main__":
     _g.plot_spectra()
     plt.show()
 
-    spec = _g.get_spectra_intrinsic(grid, fesc=0.1)
+    spec = _g.get_spectra_reprocessed(grid, fesc=0.1)
     _g.plot_spectra()
     plt.show()
 
-    spec = _g.get_spectra_screen(grid, tau_v=0.32, fesc=0.1)
+    spec = _g.get_spectra_screen(grid, tau_v=0.32)
     _g.plot_spectra()
     plt.show()
 

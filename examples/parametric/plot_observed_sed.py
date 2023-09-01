@@ -25,11 +25,11 @@ from astropy.cosmology import Planck18 as cosmo
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
-    script_path = os.path.abspath(os.path.dirname(__file__))
+    # script_path = os.path.abspath(os.path.dirname(__file__))
 
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = script_path + "/../../tests/test_grid/"
+    grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # define filters
@@ -74,4 +74,8 @@ if __name__ == "__main__":
         print(f"{filter}: {flux:.2f}")
 
     # make plot of observed including broadband fluxes (if filter collection object given)
-    galaxy.plot_observed_spectra(cosmo, z, fc=fc, spectra_to_plot=["total"], show=True)
+    galaxy.plot_observed_spectra(cosmo, 
+                                 z, 
+                                 fc=fc, 
+                                 # spectra_to_plot=["total"], 
+                                 show=True)
