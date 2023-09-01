@@ -18,7 +18,7 @@ from synthesizer.imaging.spectral_cubes import (
 )
 
 
-class Image():
+class Image:
     """
     The generic Image object, containing attributes and methods for calculating
     and manipulating images.
@@ -158,12 +158,12 @@ class Image():
         single band/property images). The resulting image object inherits its
         attributes from self, i.e in img = img1 + img2, img will inherit the
         attributes of img1.
-        
+
         If the images are incompatible in dimension an error is thrown.
-        
+
         Note: Once a new composite Image object is returned this will contain
         the combined image objects in the combined_imgs dictionary.
-        
+
         Parameters
         ----------
         other_img : obj (Image/ParticleImage/ParametricImage)
@@ -209,9 +209,7 @@ class Image():
                     + " ]"
                     + "\nFilter set 2:"
                     + "[ "
-                    + ", ".join(
-                        [fstr for fstr in other_img.filters.filter_codes]
-                    )
+                    + ", ".join([fstr for fstr in other_img.filters.filter_codes])
                     + " ]"
                 )
 
@@ -345,7 +343,6 @@ class Image():
 
         # Handle the possible cases (multiple filters or single image)
         if len(self.filters) == 0:
-
             return self._get_hist_img_single_filter()
 
         # Calculate IFU "image"
@@ -353,7 +350,6 @@ class Image():
 
         # Otherwise, we need to loop over filters and return a dictionary
         for f in self.filters:
-
             # Apply this filter to the IFU
             if self.rest_frame:
                 self.imgs[f.filter_code] = f.apply_filter(
@@ -386,7 +382,6 @@ class Image():
 
         # Handle the possible cases (multiple filters or single image)
         if len(self.filters) == 0:
-
             return self._get_img_single_filter()
 
         # Calculate IFU "image"
@@ -394,7 +389,6 @@ class Image():
 
         # Otherwise, we need to loop over filters and return a dictionary
         for f in self.filters:
-
             # Apply this filter to the IFU
             if self.rest_frame:
                 self.imgs[f.filter_code] = f.apply_filter(
@@ -436,13 +430,13 @@ class Image():
         unless a single psf is provided in which case each filter will be
         convolved with the singular psf. If the Image only contains a single
         image it will convolve the psf with that image.
-        
+
         To more accurately apply the PSF we recommend using a super resolution
         image. This can be done via the supersample method and then
         downsampling to the native pixel scale after resampling. However, it
         is more efficient and robust to start at the super resolution initially
         and then downsample after the fact.
-        
+
         Parameters
         ----------
         psfs : array-like (float)/dict
@@ -471,7 +465,6 @@ class Image():
                 "provided for the PSF not a dictionary."
             )
         elif len(self.filters) > 0 and isinstance(psfs, dict):
-
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in psfs:
@@ -492,7 +485,6 @@ class Image():
 
         # Handle the possible cases (multiple filters or single image)
         if len(self.filters) == 0:
-
             self.img_psf = self._get_psfed_single_img(self.img, psfs)
 
             return self.img_psf
@@ -500,7 +492,6 @@ class Image():
         # Otherwise, we need to loop over filters and return a dictionary of
         # convolved images.
         for f in self.filters:
-
             # Get the PSF
             if isinstance(psfs, dict):
                 psf = psfs[f.filter_code]
@@ -556,7 +547,6 @@ class Image():
 
         # Calculate noise from the depth, aperture, and snr if given.
         if noise is None and aperture is not None:
-
             # Calculate the total noise in the aperture
             # NOTE: this assumes SNR = S / sqrt(app_noise)
             app_noise = (depth / snr) ** 2
@@ -573,7 +563,6 @@ class Image():
 
         # Calculate the noise from the depth and snr for a point source.
         if noise is None and aperture is None:
-
             # Calculate noise in a pixel
             # NOTE: this assumes SNR = S / noise
             noise = depth / snr
@@ -627,11 +616,14 @@ class Image():
                 "floats not dictionaries."
             )
         if len(self.filters) > 0 and isinstance(self.depths, dict):
-
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in self.depths:
-                filter_codes -= set([key, ])
+                filter_codes -= set(
+                    [
+                        key,
+                    ]
+                )
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -643,11 +635,14 @@ class Image():
                 )
 
         if len(self.filters) > 0 and isinstance(self.snrs, dict):
-
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in self.snrs:
-                filter_codes -= set([key, ])
+                filter_codes -= set(
+                    [
+                        key,
+                    ]
+                )
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -659,11 +654,14 @@ class Image():
                 )
 
         if len(self.filters) > 0 and isinstance(self.apertures, dict):
-
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in self.apertures:
-                filter_codes -= set([key, ])
+                filter_codes -= set(
+                    [
+                        key,
+                    ]
+                )
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -676,11 +674,14 @@ class Image():
                 )
 
         if len(self.filters) > 0 and isinstance(noises, dict):
-
             # What filters are we missing psfs for?
             filter_codes = set(self.filters.filter_codes)
             for key in noises:
-                filter_codes -= set([key, ])
+                filter_codes -= set(
+                    [
+                        key,
+                    ]
+                )
 
             # If filters are missing raise an error saying which filters we
             # are missing
@@ -693,7 +694,6 @@ class Image():
 
         # Handle the possible cases (multiple filters or single image)
         if len(self.filters) == 0:
-
             # Apply noise to the image
             noise_tuple = self._get_noisy_single_img(
                 self.img_psf, self.depths, self.snrs, self.apertures, noises
@@ -706,7 +706,6 @@ class Image():
         # Otherwise, we need to loop over filters and return a dictionary of
         # convolved images.
         for f in self.filters:
-
             # Extract the arguments
             if isinstance(self.depths, dict):
                 depth = self.depths[f.filter_code]
@@ -742,8 +741,16 @@ class Image():
 
         return self.imgs_noise, self.weight_maps, self.noise_arrs
 
-    def plot_image(self, img_type="standard", filter_code=None, show=False,
-                   vmin=None, vmax=None, scaling_func=None, cmap="Greys_r"):
+    def plot_image(
+        self,
+        img_type="standard",
+        filter_code=None,
+        show=False,
+        vmin=None,
+        vmax=None,
+        scaling_func=None,
+        cmap="Greys_r",
+    ):
         """
         Plot an image.
 
@@ -757,13 +764,13 @@ class Image():
         (vmin, vmax) are not provided then the normalisation will be unique
         to each filter. If they are provided then then they will be global
         across all filters.
-        
+
         Parameters
         ----------
         img_type : str
             The type of images to combine. Can be "standard" for noiseless
             and psfless images (self.imgs), "psf" for images with psf
-            (self.imgs_psf), or "noise" for images with noise 
+            (self.imgs_psf), or "noise" for images with noise
             (self.imgs_noise).
         filter_code : str
             The filter code of the image to be plotted. If provided a plot is
@@ -783,7 +790,7 @@ class Image():
             The name of the matplotlib colormap for image plotting. Can be any
             valid string that can be passed to the cmap argument of imshow.
             Defaults to "Greys_r".
-        
+
         Returns
         ----------
         matplotlib.pyplot.figure
@@ -814,19 +821,16 @@ class Image():
             imgs = self.imgs_noise
         else:
             raise exceptions.UnknownImageType(
-                "img_type can be 'standard', 'psf', or 'noise' "
-                "not '%s'" % img_type
+                "img_type can be 'standard', 'psf', or 'noise' " "not '%s'" % img_type
             )
 
         # Are we only plotting a single image from a set?
         if filter_code is not None:
-
             # Get that image
             img = imgs[filter_code]
 
         # Plot the single image
         if img is not None:
-
             # Set up the figure
             fig = plt.figure(figsize=(3.5, 3.5))
 
@@ -846,10 +850,9 @@ class Image():
             img = scaling_func(img)
 
             # Plot the image and remove the surrounding axis
-            ax.imshow(img, origin="lower", interpolation="nearest",
-                      cmap=cmap)
+            ax.imshow(img, origin="lower", interpolation="nearest", cmap=cmap)
             ax.axis("off")
-            
+
         else:
             # Ok, plot a grid of filter images
 
@@ -863,18 +866,17 @@ class Image():
             )
 
             # Create a gridspec grid
-            gs = gridspec.GridSpec(int(np.ceil(len(self.filters) / 4)), 4,
-                                   hspace=0.0, wspace=0.0)
+            gs = gridspec.GridSpec(
+                int(np.ceil(len(self.filters) / 4)), 4, hspace=0.0, wspace=0.0
+            )
 
             # Loop over filters making each image
             for ind, f in enumerate(self.filters):
-
                 # Get the image
                 img = imgs[f.filter_code]
-                
+
                 # Create the axis
-                ax = fig.add_subplot(gs[int(np.floor(ind / 4)),
-                                        ind % 4])
+                ax = fig.add_subplot(gs[int(np.floor(ind / 4)), ind % 4])
 
                 # Set up minima and maxima
                 if unique_norm_min:
@@ -889,27 +891,33 @@ class Image():
                 img = scaling_func(img)
 
                 # Plot the image and remove the surrounding axis
-                ax.imshow(img, origin="lower", interpolation="nearest",
-                          cmap=cmap)
+                ax.imshow(img, origin="lower", interpolation="nearest", cmap=cmap)
                 ax.axis("off")
 
                 # Place a label for which filter this ised_ASCII
-                ax.text(0.95, 0.9, f.filter_code,
-                        bbox=dict(boxstyle="round,pad=0.3", fc='w', ec="k",
-                                  lw=1, alpha=0.8), transform=ax.transAxes,
-                        horizontalalignment='right')
+                ax.text(
+                    0.95,
+                    0.9,
+                    f.filter_code,
+                    bbox=dict(
+                        boxstyle="round,pad=0.3", fc="w", ec="k", lw=1, alpha=0.8
+                    ),
+                    transform=ax.transAxes,
+                    horizontalalignment="right",
+                )
 
         if show:
             plt.show()
 
         return fig, ax
 
-    def make_rgb_image(self, rgb_filters, img_type="standard", weights=None,
-                       scaling_func=None):
+    def make_rgb_image(
+        self, rgb_filters, img_type="standard", weights=None, scaling_func=None
+    ):
         """
         Makes an rgb image of specified filters with optional weights in
         each filter.
-        
+
         Parameters
         ----------
         r_filters : dict (str: array_like (str))
@@ -919,7 +927,7 @@ class Image():
         img_type : str
             The type of images to combine. Can be "standard" for noiseless
             and psfless images (self.imgs), "psf" for images with psf
-            (self.imgs_psf), or "noise" for images with noise 
+            (self.imgs_psf), or "noise" for images with noise
             (self.imgs_noise).
         weights : dict (str: array_like (str))
             A dictionary of weights for each filter. Defaults to equal weights.
@@ -958,9 +966,7 @@ class Image():
         for rgb_ind, rgb in enumerate(rgb_filters):
             for f in rgb_filters[rgb]:
                 if img_type == "standard":
-                    rgb_img[:, :, rgb_ind] += scaling_func(
-                        weights[f] * self.imgs[f]
-                    )
+                    rgb_img[:, :, rgb_ind] += scaling_func(weights[f] * self.imgs[f])
                 elif img_type == "psf":
                     rgb_img[:, :, rgb_ind] += scaling_func(
                         weights[f] * self.imgs_psf[f]
@@ -982,7 +988,7 @@ class Image():
     def plot_rgb_image(self, show=False, vmin=None, vmax=None):
         """
         Plot an RGB image.
-        
+
         Parameters
         ----------
         show : bool
@@ -991,7 +997,7 @@ class Image():
             The minimum value of the normalisation range.
         vmax : float
             The maximum value of the normalisation range.
-        
+
         Returns
         ----------
         matplotlib.pyplot.figure
@@ -1037,14 +1043,14 @@ class Image():
 
     def print_ascii(self, filter_code=None, img_type="standard"):
         """
-        Print an ASCII representation of an image. 
-        
+        Print an ASCII representation of an image.
+
         Parameters
         ----------
         img_type : str
             The type of images to combine. Can be "standard" for noiseless
             and psfless images (self.imgs), "psf" for images with psf
-            (self.imgs_psf), or "noise" for images with noise 
+            (self.imgs_psf), or "noise" for images with noise
             (self.imgs_noise).
         filter_code : str
             The filter code of the image to be plotted. If provided a plot is
@@ -1053,8 +1059,10 @@ class Image():
         """
 
         # Define the possible ASCII symbols in density order
-        scale = ("$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft|()1{}[]?-_+~<>"
-                 "i!lI;:,\"^`'. "[::-1])
+        scale = (
+            "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft|()1{}[]?-_+~<>"
+            "i!lI;:,\"^`'. "[::-1]
+        )
 
         # Define the number of symbols
         nscale = len(scale)
@@ -1095,24 +1103,24 @@ class ParticleImage(ParticleScene, Image):
     """
 
     def __init__(
-            self,
-            resolution,
-            npix=None,
-            fov=None,
-            sed=None,
-            stars=None,
-            filters=None,
-            positions=None,
-            pixel_values=None,
-            smoothing_lengths=None,
-            centre=None,
-            rest_frame=True,
-            redshift=None,
-            cosmo=None,
-            psfs=None,
-            depths=None,
-            apertures=None,
-            snrs=None,
+        self,
+        resolution,
+        npix=None,
+        fov=None,
+        sed=None,
+        stars=None,
+        filters=None,
+        positions=None,
+        pixel_values=None,
+        smoothing_lengths=None,
+        centre=None,
+        rest_frame=True,
+        redshift=None,
+        cosmo=None,
+        psfs=None,
+        depths=None,
+        apertures=None,
+        snrs=None,
     ):
         """
         Intialise the ParticleImage.
@@ -1232,7 +1240,7 @@ class ParticleImage(ParticleScene, Image):
         A generic method to calculate an image where particles are smoothed over
         a kernel. This uses C extensions to calculate the image for each
         particle efficiently.
-        
+
         Returns
         -------
         img : array_like (float)
@@ -1252,9 +1260,9 @@ class ParticleImage(ParticleScene, Image):
         ys = np.ascontiguousarray(self.coords[:, 1], dtype=np.float64)
         zs = np.ascontiguousarray(self.coords[:, 2], dtype=np.float64)
 
-        self.img = make_img(pix_vals, smls, xs, ys, zs,
-                            self.resolution, self.npix,
-                            self.coords.shape[0])
+        self.img = make_img(
+            pix_vals, smls, xs, ys, zs, self.resolution, self.npix, self.coords.shape[0]
+        )
 
         return self.img
 
@@ -1263,13 +1271,13 @@ class ParametricImage(Scene, Image):
     """
     The Image object, containing attributes and methods for calculating images
     from parametric morphologies.
-    
+
     Attributes
     ----------
     morphology : obj (BaseMorphology and children)
         The object that describes the parameters and creates the density grid
         for a particular morphology.
-    
+
     """
 
     def __init__(
@@ -1290,7 +1298,7 @@ class ParametricImage(Scene, Image):
     ):
         """
         Intialise the ParametricImage.
-        
+
         Parameters
         ----------
         morphology : obj (Morphology)
@@ -1364,11 +1372,11 @@ class ParametricImage(Scene, Image):
 
         # Store the morphology object
         self.morphology = morphology
-        
+
         # Make the IFU, even if we only have 1 filter this is a minor overhead
-        self.ifu_obj = ParametricSpectralCube(morphology, sed, resolution, 
-                                              npix=npix, fov=fov,
-                                              rest_frame=rest_frame)
+        self.ifu_obj = ParametricSpectralCube(
+            morphology, sed, resolution, npix=npix, fov=fov, rest_frame=rest_frame
+        )
 
     def _check_parametric_img_args(self, morphology):
         """
@@ -1390,7 +1398,3 @@ class ParametricImage(Scene, Image):
                 "Parametric images are currently only supported for "
                 "photometry when using filters. Provide a FilterCollection."
             )
-
-
-
-

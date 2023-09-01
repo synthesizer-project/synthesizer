@@ -1,9 +1,8 @@
 ## Issue Type
-<!-- ignore-task-list-start -->
-- [ ] Bug
-- [ ] Document
-- [ ] Enhancement
-<!-- ignore-task-list-end -->
+<!-- delete options below as required -->
+- Bug
+- Document
+- Enhancement
 
 ## Checklist
 <!-- - [x] I have read the [CONTRIBUTING.md]() -->

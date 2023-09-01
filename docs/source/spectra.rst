@@ -9,14 +9,18 @@ Synthesizer enables the generation of multiple different spectra which are assoc
 
 * ``nebular`` is the nebular continuum and line emission predicted by the photoionisation model. This depends on ``fesc``.
 
-* ``intrinsic``, for fesc=0.0, is the sum of the ``nebular`` and ``transmitted`` emission. For ``fesc != 0.0`` it also includes a contribution from ``incident``.
+* ``reprocessed`` is the emission which has been reprocessed by the gas. This is the sum of ``nebular`` and ``transmitted`` emission. 
 
-* ``escape`` is the incident emission that escapes reprocessing by gas. This is ``fesc * incident``.
+* ``escaped`` is the incident emission that escapes reprocessing by gas. This is ``fesc * incident``. This is not subsequently affected by dust.
 
-* ``attenuated`` is the the dust attenuated ``intrinsic`` spectrum. This does not include thermal dust emission, so is only valid from the UV to near-IR.
+* ``intrinsic`` is the sum of the ``escaped`` and ``reprocessed`` emission, essentially the emission before dust attenuated.
+
+* ``attenuated`` is the ``reprocessed`` emission with attenuation by dust.
+
+* ``emergent`` is the combined emission including dust attenuation and is the sum of ``reprocessed_attenuated`` and ``escaped``. NOTE: this does not include thermal dust emission, so is only valid from the UV to near-IR.
 
 * ``dust`` is the thermal dust emission calculated using an energy balance approach, and assuming a dust emission model.
 
-* ``total`` is the sum of ``attenuated`` and ``dust``, i.e. it includes both the effect of dust attenuation on the ``intrinsic`` spectrum and dust emission.
+* ``total`` is the sum of ``attenuated`` and ``dust``, i.e. it includes both the effect of dust attenuation and dust emission.
 
-
+* For two component dust models (e.g. Charlot & Fall 2000) we also generate the individual spectra of the young and old component. This includes ``young_incident``, ``young_nebular``, ``young_attenuated`` etc. ``young`` and ``old`` are equivalent to ``total`` for the young and old components.

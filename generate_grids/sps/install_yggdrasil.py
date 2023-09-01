@@ -39,26 +39,26 @@ from synthesizer.sed import calculate_Q
 
 def download_data(synthesizer_data_dir, ver, fcov):
     """
-        Function access Yggdrasil spectra from website
+    Function access Yggdrasil spectra from website
     """
 
-    filename = F"PopIII{ver}_fcov_{fcov}_SFR_inst_Spectra"
-    url = F"https://www.astro.uu.se/~ez/yggdrasil/YggdrasilSpectra/{filename}"
+    filename = f"PopIII{ver}_fcov_{fcov}_SFR_inst_Spectra"
+    url = f"https://www.astro.uu.se/~ez/yggdrasil/YggdrasilSpectra/{filename}"
 
-    subprocess.call('wget --no-check-certificate ' + url, shell=True)
+    subprocess.call("wget --no-check-certificate " + url, shell=True)
 
-    mv_folder = F"{synthesizer_data_dir}/input_files/popIII/Yggdrasil/"
+    mv_folder = f"{synthesizer_data_dir}/input_files/popIII/Yggdrasil/"
     pathlib.Path(mv_folder).mkdir(parents=True, exist_ok=True)
-    subprocess.call(F'mv {filename} {mv_folder}', shell=True)
+    subprocess.call(f"mv {filename} {mv_folder}", shell=True)
 
-    return mv_folder+filename
+    return mv_folder + filename
 
 
 def convertPOPIII(synthesizer_data_dir, ver, fcov):
     """
-        Convert POPIII outputs for Yggdrasil
-        Wavelength in Angstrom
-        Flux is in erg/s/AA
+    Convert POPIII outputs for Yggdrasil
+    Wavelength in Angstrom
+    Flux is in erg/s/AA
     """
 
     fileloc = download_data(synthesizer_data_dir, ver, fcov)
@@ -69,24 +69,31 @@ def convertPOPIII(synthesizer_data_dir, ver, fcov):
     metalBins = np.array([0])
     seds = np.array([[[None]]])
 
-    print('Reading POPIII files and converting...')
+    print("Reading POPIII files and converting...")
     # Open SED table containing different ages
-    print('Converting file ', fileloc)
-    data = open(fileloc, 'r')
+    print("Converting file ", fileloc)
+    data = open(fileloc, "r")
     text = data.read()
 
     # Get age values
-    ages = re.findall(r'Age\s(.*?)\n', text)
-    ageBins = np.array([float(re.findall(
-            r" [+\-]?[^\w]?(?:0|[1-9]\d*)(?:\.\d*)?(?:[eE][+\-]?\d+)",
-            ages[ii])[0]) for ii in range(len(ages))])
+    ages = re.findall(r"Age\s(.*?)\n", text)
+    ageBins = np.array(
+        [
+            float(
+                re.findall(
+                    r" [+\-]?[^\w]?(?:0|[1-9]\d*)(?:\.\d*)?(?:[eE][+\-]?\d+)", ages[ii]
+                )[0]
+            )
+            for ii in range(len(ages))
+        ]
+    )
 
     # Get the number of wavelength points: lam_num
-    lam_num = np.array(re.findall(r'points:(.*?)\n', text), dtype=int)
+    lam_num = np.array(re.findall(r"points:(.*?)\n", text), dtype=int)
     diff = np.diff(lam_num)
     if np.sum(diff) != 0:
-        print('Age bins are not identical everywhere!!!')
-        print('CANCELLING CONVERSION!!!')
+        print("Age bins are not identical everywhere!!!")
+        print("CANCELLING CONVERSION!!!")
         return
 
     seds = np.zeros((len(ageBins), len(metalBins), lam_num[0]))
@@ -96,46 +103,54 @@ def convertPOPIII(synthesizer_data_dir, ver, fcov):
         lam_num lines of wavelength and flux, then one empty line and
         7 string lines giving the ages 
     """
-    data = open(fileloc, 'r')
+    data = open(fileloc, "r")
     tmp = data.readlines()
     mass = float(re.findall(r"\d+\.\d+", tmp[0])[0])
     begin = 9
     end = begin + lam_num[0]
     for ii in range(len(ageBins)):
-
         this_data = tmp[begin:end]
         if ii == 0:
-            lambdaBins = np.array([float(re.findall(
-                r'[-+]?([0-9]*\.[0-9]+|[0-9]+)', jj)[0]) for jj in this_data])
+            lambdaBins = np.array(
+                [
+                    float(re.findall(r"[-+]?([0-9]*\.[0-9]+|[0-9]+)", jj)[0])
+                    for jj in this_data
+                ]
+            )
 
-        seds[ii, 0] = np.array([float(re.findall(
-            r'[-+]?([0-9]*\.[0-9]+|[0-9]+)', jj)[1]) *
-            (10**float(re.findall(r'[-+]?([0-9]*\.[0-9]+|[0-9]+)', jj)[2]))
-            for jj in this_data])
+        seds[ii, 0] = np.array(
+            [
+                float(re.findall(r"[-+]?([0-9]*\.[0-9]+|[0-9]+)", jj)[1])
+                * (10 ** float(re.findall(r"[-+]?([0-9]*\.[0-9]+|[0-9]+)", jj)[2]))
+                for jj in this_data
+            ]
+        )
 
         begin = end + 8
         end = begin + lam_num[0]
 
-    return (np.array(seds/mass, dtype=np.float64),
-            np.array(metalBins, dtype=np.float64),
-            np.array(ageBins, dtype=np.float64),
-            np.array(lambdaBins, dtype=np.float64))
+    return (
+        np.array(seds / mass, dtype=np.float64),
+        np.array(metalBins, dtype=np.float64),
+        np.array(ageBins, dtype=np.float64),
+        np.array(lambdaBins, dtype=np.float64),
+    )
 
 
 def make_grid(synthesizer_data_dir, ver, fcov):
-    """ Main function to convert POPIII grids and
-        produce grids used by synthesizer """
+    """Main function to convert POPIII grids and
+    produce grids used by synthesizer"""
 
     # Define base path
     # basepath = (f"{synthesizer_data_dir}/input_files/popIII/"
     #             "Yggdrasil/")
 
     # Define output
-    if not os.path.exists(f'{synthesizer_data_dir}/grids/'):
-        os.makedirs(f'{synthesizer_data_dir}/grids/')
+    if not os.path.exists(f"{synthesizer_data_dir}/grids/"):
+        os.makedirs(f"{synthesizer_data_dir}/grids/")
 
-    model_name = F'yggdrasil_POPIII{ver}'
-    fname = f'{synthesizer_data_dir}/grids/{model_name}.hdf5'
+    model_name = f"yggdrasil_POPIII{ver}"
+    fname = f"{synthesizer_data_dir}/grids/{model_name}.hdf5"
 
     # Get spectra and attributes
     out = convertPOPIII(synthesizer_data_dir, ver, fcov)
@@ -155,7 +170,7 @@ def make_grid(synthesizer_data_dir, ver, fcov):
     c in units of AA/s for conversion
     """
 
-    light_speed = c.to(Angstrom/s).value #in AA/s
+    light_speed = c.to(Angstrom / s).value  # in AA/s
     spec = out[0]
 
     spec *= (lam**2) / light_speed  # now in erg s^-1 Hz^-1 Msol^-1
@@ -170,73 +185,88 @@ def make_grid(synthesizer_data_dir, ver, fcov):
 
     #         # --- calcualte ionising photon luminosity
     #         log10Q[ia, iZ] = np.log10(calculate_Q(lam, spec[ia, iZ, :]))
-    
-    if fcov == '0':
-        write_data_h5py(fname, 'ages', data=ages, overwrite=True)
-        write_attribute(fname, 'ages', 'Description',
-                        'Stellar population ages years')
-        write_attribute(fname, 'ages', 'Units', 'yr')
 
-        write_data_h5py(fname, 'log10ages', data=log10ages, overwrite=True)
-        write_attribute(fname, 'log10ages', 'Description',
-                        'Stellar population ages in log10 years')
-        write_attribute(fname, 'log10ages', 'Units', 'log10(yr)')
+    if fcov == "0":
+        write_data_h5py(fname, "ages", data=ages, overwrite=True)
+        write_attribute(fname, "ages", "Description", "Stellar population ages years")
+        write_attribute(fname, "ages", "Units", "yr")
 
-        write_data_h5py(fname, 'metallicities', data=metallicities, overwrite=True)
-        write_attribute(fname, 'metallicities', 'Description',
-                        'raw abundances')
-        write_attribute(fname, 'metallicities', 'Units', 'dimensionless [Z]')
+        write_data_h5py(fname, "log10ages", data=log10ages, overwrite=True)
+        write_attribute(
+            fname, "log10ages", "Description", "Stellar population ages in log10 years"
+        )
+        write_attribute(fname, "log10ages", "Units", "log10(yr)")
 
-        write_data_h5py(fname, 'log10metallicities', data=log10metallicities,
-                        overwrite=True)
-        write_attribute(fname, 'log10metallicities', 'Description',
-                        'raw abundances in log10')
-        write_attribute(fname, 'log10metallicities', 'Units',
-                        'dimensionless [log10(Z)]')
+        write_data_h5py(fname, "metallicities", data=metallicities, overwrite=True)
+        write_attribute(fname, "metallicities", "Description", "raw abundances")
+        write_attribute(fname, "metallicities", "Units", "dimensionless [Z]")
 
-        write_data_h5py(fname, 'log10Q', data=log10Q, overwrite=True)
-        write_attribute(fname, 'log10Q', 'Description',
-                        ("Two-dimensional ionising photon "
-                        "production rate grid, [age,Z]"))
+        write_data_h5py(
+            fname, "log10metallicities", data=log10metallicities, overwrite=True
+        )
+        write_attribute(
+            fname, "log10metallicities", "Description", "raw abundances in log10"
+        )
+        write_attribute(
+            fname, "log10metallicities", "Units", "dimensionless [log10(Z)]"
+        )
 
-        write_data_h5py(fname, 'spectra/wavelength', data=lam, overwrite=True)
-        write_attribute(fname, 'spectra/wavelength', 'Description',
-                        'Wavelength of the spectra grid')
-        write_attribute(fname, 'spectra/wavelength', 'Units', 'AA')
+        write_data_h5py(fname, "log10Q", data=log10Q, overwrite=True)
+        write_attribute(
+            fname,
+            "log10Q",
+            "Description",
+            ("Two-dimensional ionising photon " "production rate grid, [age,Z]"),
+        )
 
-    
-        write_data_h5py(fname, 'spectra/stellar', data=spec, overwrite=True)
-        write_attribute(fname, 'spectra/stellar', 'Description',
-                        """Three-dimensional spectra grid, [age, metallicity
-                        , wavelength]""")
-        write_attribute(fname, 'spectra/stellar', 'Units', 'erg s^-1 Hz^-1')
+        write_data_h5py(fname, "spectra/wavelength", data=lam, overwrite=True)
+        write_attribute(
+            fname, "spectra/wavelength", "Description", "Wavelength of the spectra grid"
+        )
+        write_attribute(fname, "spectra/wavelength", "Units", "AA")
+
+        write_data_h5py(fname, "spectra/stellar", data=spec, overwrite=True)
+        write_attribute(
+            fname,
+            "spectra/stellar",
+            "Description",
+            """Three-dimensional spectra grid, [age, metallicity
+                        , wavelength]""",
+        )
+        write_attribute(fname, "spectra/stellar", "Units", "erg s^-1 Hz^-1")
     else:
-        if fcov=='1':
-            add = ''
+        if fcov == "1":
+            add = ""
         else:
-            add = F'_fcov_{fcov}'
-        write_data_h5py(fname, F'spectra/nebular{add}', data=spec, overwrite=True)
-        write_attribute(fname, F'spectra/nebular{add}', 'Description',
-                        """Three-dimensional spectra grid, [age, metallicity
-                        , wavelength]""")
-        write_attribute(fname, F'spectra/nebular{add}', 'Units', 'erg s^-1 Hz^-1')
+            add = f"_fcov_{fcov}"
+        write_data_h5py(fname, f"spectra/nebular{add}", data=spec, overwrite=True)
+        write_attribute(
+            fname,
+            f"spectra/nebular{add}",
+            "Description",
+            """Three-dimensional spectra grid, [age, metallicity
+                        , wavelength]""",
+        )
+        write_attribute(fname, f"spectra/nebular{add}", "Units", "erg s^-1 Hz^-1")
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(
-            description='Install the POPIII grid to the specified directory.')
+        description="Install the POPIII grid to the specified directory."
+    )
     parser.add_argument("-dir", "--directory", type=str, required=True)
     args = parser.parse_args()
 
     synthesizer_data_dir = args.directory
 
     # Different forms of the IMFs
-    vers = np.array(['.1', '.2', '_kroupa_IMF'])
+    vers = np.array([".1", ".2", "_kroupa_IMF"])
     # different gas covering fractions for nebular emission model
-    fcovs = np.array(['0', '0.5', '1'])
+    fcovs = np.array(["0", "0.5", "1"])
 
     for ver in vers:
         for fcov in fcovs:
             make_grid(synthesizer_data_dir, ver, fcov)
-        add_log10Q(f'{synthesizer_data_dir}/grids/yggdrasil_POPIII{ver}.hdf5', limit=500)
+        add_log10Q(
+            f"{synthesizer_data_dir}/grids/yggdrasil_POPIII{ver}.hdf5", limit=500
+        )
