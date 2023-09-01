@@ -20,8 +20,6 @@ sys.path.insert(0, os.path.abspath('../../synthesizer'))  # Source code dir rela
 sys.path.insert(0, os.path.abspath('../../'))  # Source code dir relative to this file
 sys.path.insert(0, os.path.abspath("."))
 
-import synthesizer
-
 extensions = [
 	"nbsphinx",
     'sphinx.ext.napoleon',
