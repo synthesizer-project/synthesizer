@@ -38,7 +38,9 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude broken_examples,.eggs
     - name: Sphinx Build
-      uses: ammaraskar/sphinx-action@0.4            
+      uses: ammaraskar/sphinx-action@0.4
+      with:
+        docs-folder: "docs/"
     - name: Test with pytest
       run: |
         # pytest -c conftest.py --ignore tests/data/
