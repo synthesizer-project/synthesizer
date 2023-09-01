@@ -59,7 +59,7 @@ def plot_spectra_age(grid, log10Z=-2.0, spec_name="incident"):
 
 
 if __name__ == "__main__":
-    grid_dir = "../tests/test_grid"
+    grid_dir = "../../tests/test_grid"
     grid_name = "test_grid"
 
     grid = Grid(grid_name, grid_dir=grid_dir)
