@@ -113,20 +113,21 @@ class Sed:
 
 
     def get_index(index_window, blue_window, red_window, loc):
-         """
-         A function to define the blue continuum, red continuum, and absorption windows
-         - The  pseudo-continuum is defined, made up of a blue and red shifted window.
+        """
+        A function to define the blue continuum, red continuum, and absorption windows
+         - The pseudo-continuum is defined, made up of a blue and red shifted window.
 
-         Returns
-         ----------
-         int array
-            absorption start, absorption end, blue start, blue end, red start, red end
+        Returns
+        ----------
+        int array
+           absorption start, absorption end, blue start, blue end, red start, red end
 
-         """
+        """
 
-         indices = np.array([index_window[loc], index_window[loc+1], blue_window[loc], blue_window[loc+1], red_window[loc], red_window[loc+1]])
+        indices = np.array([index_window[loc], index_window[loc+1], blue_window[loc], blue_window[loc+1], red_window[loc], red_window[loc+1]])
 
         return indices
+
 
     def return_beta(self, wv=[1500.0, 2500.0]):
         """Return the UV continuum slope (\beta) based on measurements
