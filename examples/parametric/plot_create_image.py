@@ -23,8 +23,7 @@ from synthesizer.grid import Grid
 from synthesizer.imaging.images import ParametricImage
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     # Define the morphology using a simple effective radius and slope
     morph = Sersic2D(r_eff_kpc=1 * kpc, n=2.0)
 
@@ -42,8 +41,7 @@ if __name__ == '__main__':
     Zh = ZH.deltaConstant(Z_p)
     sfh_p = {"duration": 100 * Myr}
     sfh = SFH.Constant(sfh_p)  # constant star formation
-    sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, Zh,
-                         stellar_mass=10**9)
+    sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, Zh, stellar_mass=10**9)
 
     # Initialise a parametric Galaxy
     galaxy = Galaxy(sfzh, morph=morph)
@@ -72,9 +70,7 @@ if __name__ == '__main__':
     img.get_imgs()
 
     # Make and plot an rgb image
-    img.make_rgb_image(rgb_filters={"R" : 'J',
-                                    "G" : 'V',
-                                    "B" : 'U'})
+    img.make_rgb_image(rgb_filters={"R": "J", "G": "V", "B": "U"})
     fig, ax, _ = img.plot_rgb_image()
 
     plt.show()

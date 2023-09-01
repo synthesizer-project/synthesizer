@@ -10,7 +10,6 @@ import os
 from synthesizer.grid import Grid
 
 if __name__ == "__main__":
-
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
     script_path = os.path.abspath(os.path.dirname(__file__))
@@ -20,10 +19,9 @@ if __name__ == "__main__":
     grid_dir = script_path + "/../../tests/test_grid/"
 
     # explore HDF5 grid
-    with h5py.File(f'{grid_dir}/{grid_name}.hdf5', 'r') as hf:
-
+    with h5py.File(f"{grid_dir}/{grid_name}.hdf5", "r") as hf:
         for k, v in hf.attrs.items():
-            print('    -', k, ':', v)
+            print("    -", k, ":", v)
 
         hf.visit(print)
 

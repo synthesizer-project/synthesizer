@@ -35,8 +35,9 @@ class MorphologyBase:
         img = self.compute_density_grid(xx, yy)
 
         plt.figure()
-        plt.imshow(np.log10(img), origin='lower', interpolation='nearest',
-                   vmin=-1, vmax=2)
+        plt.imshow(
+            np.log10(img), origin="lower", interpolation="nearest", vmin=-1, vmax=2
+        )
         plt.show()
 
 
@@ -52,10 +53,17 @@ class Sersic2D(MorphologyBase):
         Calculates and returns the density grid defined by this Morphology
     """
 
-    def __init__(self, r_eff_kpc=None, r_eff_mas=None, n=1, ellip=0, theta=0.0,
-                 cosmo=None, redshift=None):
-        """
-        """
+    def __init__(
+        self,
+        r_eff_kpc=None,
+        r_eff_mas=None,
+        n=1,
+        ellip=0,
+        theta=0.0,
+        cosmo=None,
+        redshift=None,
+    ):
+        """ """
 
         # Define the parameter set
         self.r_eff_kpc = r_eff_kpc
@@ -74,11 +82,10 @@ class Sersic2D(MorphologyBase):
         # If cosmology and redshift have been provided we can calculate both
         # models
         if cosmo is not None and redshift is not None:
-
             # Compute conversion
-            kpc_proper_per_mas = self.cosmo.kpc_proper_per_arcmin(redshift).to(
-                'kpc/mas'
-            ).value
+            kpc_proper_per_mas = (
+                self.cosmo.kpc_proper_per_arcmin(redshift).to("kpc/mas").value
+            )
 
             # Calculate one effective radius from the other depending on what
             # we've been given.
@@ -87,22 +94,26 @@ class Sersic2D(MorphologyBase):
             else:
                 self.r_eff_kpc = self.r_eff_mas * self.kpc_proper_per_mas
 
-        # Intialise the kpc model 
+        # Intialise the kpc model
         if self.r_eff_kpc is not None:
             self.model_kpc = Sersic2D_(
-                amplitude=1, r_eff=self.r_eff_kpc,
-                n=self.n, ellip=self.ellip,
-                theta=self.theta
+                amplitude=1,
+                r_eff=self.r_eff_kpc,
+                n=self.n,
+                ellip=self.ellip,
+                theta=self.theta,
             )
         else:
             self.model_kpc = None
 
-        # Intialise the miliarcsecond model 
+        # Intialise the miliarcsecond model
         if self.r_eff_mas is not None:
             self.model_mas = Sersic2D_(
-                amplitude=1, r_eff=self.r_eff_mas,
-                n=self.n, ellip=self.ellip,
-                theta=self.theta
+                amplitude=1,
+                r_eff=self.r_eff_mas,
+                n=self.n,
+                ellip=self.ellip,
+                theta=self.theta,
             )
         else:
             self.model_mas = None
@@ -125,7 +136,6 @@ class Sersic2D(MorphologyBase):
                 "Astropy.cosmology object is missing, cannot perform "
                 "comoslogical calculations."
             )
-            
 
     def compute_density_grid(self, xx, yy, units=kpc):
         """

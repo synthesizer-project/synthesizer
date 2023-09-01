@@ -49,9 +49,16 @@ class BlackHoles(Particles):
     """
 
     # Define the allowed attributes
-    __slots__ = ["_masses", "metallicities", "nparticles",
-                 "redshift", "_accretion_rate", "_bb_temperature",
-                 "_bol_luminosity", "nbh"]
+    __slots__ = [
+        "_masses",
+        "metallicities",
+        "nparticles",
+        "redshift",
+        "_accretion_rate",
+        "_bb_temperature",
+        "_bol_luminosity",
+        "nbh",
+    ]
 
     # Define class level Quantity attributes
     accretion_rate = Quantity()
@@ -59,9 +66,16 @@ class BlackHoles(Particles):
     bb_temperature = Quantity()
     masses = Quantity()
 
-    def __init__(self, masses, metallicities=None, redshift=None,
-                 accretion_rate=None, coordinates=None,
-                 velocities=None, softening_length=None):
+    def __init__(
+        self,
+        masses,
+        metallicities=None,
+        redshift=None,
+        accretion_rate=None,
+        coordinates=None,
+        velocities=None,
+        softening_length=None,
+    ):
         """
         Intialise the Stars instance. The first 3 arguments are always required.
         All other arguments are optional attributes applicable in different
@@ -96,7 +110,7 @@ class BlackHoles(Particles):
             masses=masses,
             redshift=redshift,
             softening_length=softening_length,
-            nparticles=len(masses)
+            nparticles=len(masses),
         )
 
         # Accretion rate in Msun / yr
@@ -106,8 +120,9 @@ class BlackHoles(Particles):
         self.bol_luminosity = None
 
         # Calculate the big bump temperature
-        self.bb_temperature = 2.24E9 * \
-            self._accretion_rate ** (1 / 4) * self._masses ** -0.5
+        self.bb_temperature = (
+            2.24e9 * self._accretion_rate ** (1 / 4) * self._masses**-0.5
+        )
 
         # The metallicity of the region surrounding the black hole.
         self.metallicities = metallicities
@@ -158,7 +173,7 @@ class BlackHoles(Particles):
 
         """
 
-        self.bol_luminosity = epsilon * self.accretion_rate * c ** 2
+        self.bol_luminosity = epsilon * self.accretion_rate * c**2
 
         return self.bol_luminosity
 
@@ -171,5 +186,3 @@ class BlackHoles(Particles):
 
 #     def __init__(self):
 #         return None
-
-

@@ -38,7 +38,7 @@ sphinx_gallery_conf = {
      'nested_sections': True,
 
      # directory where function/class granular galleries are stored
-     'backreferences_dir'  : 'auto_examples/backreferences',
+     'backreferences_dir'  : '_autosummary/backreferences',
 
      # Modules for which function/class level galleries are created. In
      # this case sphinx_gallery and numpy in a tuple of strings.

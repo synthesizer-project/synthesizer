@@ -12,4 +12,5 @@ In the following we show some examples of how to do this:
    generate_observed_sed
    generate_lines
    generate_composite_galaxy
+   generate_dust_sed
    

@@ -9,7 +9,7 @@ from unyt.dimensions import length, angle
 from synthesizer.imaging.scene import Scene, ParticleScene
 
 
-class SpectralCube():
+class SpectralCube:
     """
     The generic parent IFU/Spectral data cube object, containing common
     attributes and methods for both particle and parametric sIFUs.
@@ -58,17 +58,14 @@ class SpectralCube():
         # Lets get the right SED from the object
         self.sed_values = None
         if rest_frame:
-
             # Get the rest frame SED
             self.sed_values = self.sed._lnu
 
         elif self.sed._fnu is not None:
-
             # Assign the flux
             self.sed_values = self.sed._fnu
 
         else:
-
             # Raise that we have inconsistent arguments
             raise exceptions.InconsistentArguments(
                 "If rest_frame=False, i.e. an observed (flux) SED is requested"
@@ -234,17 +231,18 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
 
         # Loop over positions including the sed
         for ind in range(self.npart):
-
             # Skip particles outside the FOV
-            if (self.pix_pos[ind, 0] < 0 or
-                self.pix_pos[ind, 1] < 0 or
-                self.pix_pos[ind, 0] >= self.npix or
-                self.pix_pos[ind, 1] >= self.npix):
+            if (
+                self.pix_pos[ind, 0] < 0
+                or self.pix_pos[ind, 1] < 0
+                or self.pix_pos[ind, 0] >= self.npix
+                or self.pix_pos[ind, 1] >= self.npix
+            ):
                 continue
-            
-            self.ifu[
-                self.pix_pos[ind, 0], self.pix_pos[ind, 1], :
-            ] += self.sed_values[ind, :]
+
+            self.ifu[self.pix_pos[ind, 0], self.pix_pos[ind, 1], :] += self.sed_values[
+                ind, :
+            ]
 
         return self.ifu
 
@@ -284,9 +282,17 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         ys = np.ascontiguousarray(self.coords[:, 1], dtype=np.float64)
         zs = np.ascontiguousarray(self.coords[:, 2], dtype=np.float64)
 
-        self.ifu = make_ifu(sed_vals, smls, xs, ys, zs,
-                            self.resolution, self.npix,
-                            self.coords.shape[0], self.spectral_resolution)
+        self.ifu = make_ifu(
+            sed_vals,
+            smls,
+            xs,
+            ys,
+            zs,
+            self.resolution,
+            self.npix,
+            self.coords.shape[0],
+            self.spectral_resolution,
+        )
 
         return self.ifu
 
@@ -295,13 +301,13 @@ class ParametricSpectralCube(Scene, SpectralCube):
     """
     The IFU/Spectral data cube object, used when creating parametric
     observations.
-    
+
     Attributes
     ----------
-    
+
     Methods
     -------
-    
+
     """
 
     def __init__(
@@ -318,7 +324,6 @@ class ParametricSpectralCube(Scene, SpectralCube):
         # snrs=None,
         rest_frame=True,
     ):
-
         # Initilise the parent classes
         Scene.__init__(
             self,
@@ -350,11 +355,10 @@ class ParametricSpectralCube(Scene, SpectralCube):
         Raises
         ----------
         """
-        
+
         # check morphology has the correct method
         # this might not be generic enough
         if (self.spatial_unit == kpc) & (not morphology.model_kpc):
-
             raise exceptions.InconsistentArguments(
                 "To create an image in kpc the morphology object must have a "
                 "model defined in kpc. This can be achieved from a "
@@ -363,7 +367,6 @@ class ParametricSpectralCube(Scene, SpectralCube):
             )
 
         if (self.spatial_unit == mas) & (not morphology.model_mas):
-
             raise exceptions.InconsistentArguments(
                 "To create an image in milliarcsecond the morphology object "
                 "must have a model defined in milliarcseconds. This can be "
@@ -372,18 +375,13 @@ class ParametricSpectralCube(Scene, SpectralCube):
             )
 
     def _get_density_grid(self):
-        
         # Define 1D bin centres of each pixel
         if self.spatial_unit.dimensions == angle:
             res = (self.resolution * self.spatial_unit).to("mas").value
-            bin_centres = res * np.linspace(
-                -self.npix / 2, self.npix / 2, self.npix
-            )
+            bin_centres = res * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
         else:
             res = (self.resolution * self.spatial_unit).to("kpc").value
-            bin_centres = res * np.linspace(
-                -self.npix / 2, self.npix / 2, self.npix
-            )
+            bin_centres = res * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
 
         # Convert the 1D grid into 2D grids coordinate grids
         self._xx, self._yy = np.meshgrid(bin_centres, bin_centres)
@@ -424,6 +422,3 @@ class ParametricSpectralCube(Scene, SpectralCube):
         self.ifu = self.density_grid[:, :, None] * self.sed_values
 
         return self.ifu
-        
-
-        
