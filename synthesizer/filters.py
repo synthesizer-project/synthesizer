@@ -80,7 +80,7 @@ class FilterCollection:
         mean_lams (array-like, float)
             The mean wavelength of each Filter in the collection.
         pivot_lams (array-like, float)
-            The mean wavelength of each Filter in the collection. 
+            The mean wavelength of each Filter in the collection.
     """
 
     def __init__(
@@ -158,7 +158,6 @@ class FilterCollection:
 
         # Loop over the given filter codes
         for f in filter_codes:
-
             # Get filter from SVO
             _filter = Filter(f, new_lam=self.lam)
 
@@ -185,7 +184,6 @@ class FilterCollection:
 
         # Loop over the keys of the dictionary
         for key in tophat_dict:
-
             # Get this filter's properties
             if "lam_min" in tophat_dict[key]:
                 lam_min = tophat_dict[key]["lam_min"]
@@ -233,7 +231,6 @@ class FilterCollection:
 
         # Loop over the keys of the dictionary
         for key in generic_dict:
-
             # Get this filter's properties
             t = generic_dict[key]
 
@@ -258,17 +255,13 @@ class FilterCollection:
 
         # Are we adding a collection or a single filter?
         if isinstance(other_filters, FilterCollection):
-
             # Loop over the filters in other_filters
             for key in other_filters.filters:
-
                 # Store the filter and its code
                 self.filters[key] = other_filters.filters[key]
-                self.filter_codes.append(
-                    other_filters.filters[key].filter_code)
+                self.filter_codes.append(other_filters.filters[key].filter_code)
 
         elif isinstance(other_filters, Filter):
-
             # Store the filter and its code
             self.filters[other_filters.filter_code] = other_filters
             self.filter_codes.append(other_filters.filter_code)
@@ -380,7 +373,7 @@ class FilterCollection:
                 The filter code of the desired filter.
 
         Returns:
-            Filter 
+            Filter
                 The Filter object stored at self.filters[key].
 
         Raises:
@@ -417,7 +410,6 @@ class FilterCollection:
 
         # Do we need to find a wavelength array from the filters?
         if new_lam is None:
-
             # Set up values for looping
             min_lam = np.inf
             max_lam = 0
@@ -433,14 +425,15 @@ class FilterCollection:
                     max_lam = this_max
 
             # Create wavelength array
-            new_lam = np.arange(min_lam, max_lam + lam_resolution,
-                                lam_resolution)
+            new_lam = np.arange(min_lam, max_lam + lam_resolution, lam_resolution)
 
             if verbose:
-                print("Calcualted wavelength array: \n"
-                      + "min = %.2e Angstrom\n" % min_lam
-                      + "max = %.2e Angstrom\n" % max_lam
-                      + "FilterCollection.lam.size = %d" % new_lam.size)
+                print(
+                    "Calcualted wavelength array: \n"
+                    + "min = %.2e Angstrom\n" % min_lam
+                    + "max = %.2e Angstrom\n" % max_lam
+                    + "FilterCollection.lam.size = %d" % new_lam.size
+                )
 
         # Set the wavelength array
         self.lam = new_lam
@@ -551,8 +544,7 @@ class FilterCollection:
 
         return mean_lams
 
-    def find_filter(self, rest_frame_lam, redshift=None,
-                    method="pivot"):
+    def find_filter(self, rest_frame_lam, redshift=None, method="pivot"):
         """
         Takes a rest frame target wavelength and returns the filter that probes
         that wavelength.
@@ -577,12 +569,12 @@ class FilterCollection:
                 to None.
             method (str):
                 The method to decide which filter to return. Either "pivot"
-                (default), "mean", or "transmission". 
+                (default), "mean", or "transmission".
 
         Returns:
             synthesizer.Filter
                 The closest Filter in this FilterCollection. The filter-code
-                of this filter is also printed. 
+                of this filter is also printed.
 
         Raises:
             WavelengthOutOfRange:
@@ -592,18 +584,15 @@ class FilterCollection:
 
         # Are we working in a shifted frame or not?
         if redshift is not None:
-
             # Get the shifted wavelength
             lam = rest_frame_lam * (1 + redshift)
 
         else:
-
             # Get the rest frame wavelength
             lam = rest_frame_lam
 
         # Which method are we using?
         if method == "pivot":
-
             # Calculate each filters pivot wavelength
             piv_lams = self.piv_lams
 
@@ -611,7 +600,6 @@ class FilterCollection:
             ind = np.argmin(np.abs(piv_lams - lam))
 
         elif method == "mean":
-
             # Calculate each filters mean wavelength
             mean_lams = self.mean_lams
 
@@ -619,7 +607,6 @@ class FilterCollection:
             ind = np.argmin(np.abs(mean_lams - lam))
 
         elif method == "transmission":
-
             # Compute the transmission in each filter at lam
             transmissions = np.zeros(len(self))
             for ind, f in enumerate(self):
@@ -671,12 +658,13 @@ class FilterCollection:
                     )
 
         if redshift is None:
-            print("Filter containing rest_frame_lam=%.2e Angstrom: %s"
-                  % (lam, fcode))
+            print("Filter containing rest_frame_lam=%.2e Angstrom: %s" % (lam, fcode))
         else:
-            print("Filter containing rest_frame_lam=%.2e Angstrom "
-                  "(with observed wavelength=%.2e Angstrom): %s"
-                  % (rest_frame_lam, lam, fcode))
+            print(
+                "Filter containing rest_frame_lam=%.2e Angstrom "
+                "(with observed wavelength=%.2e Angstrom): %s"
+                % (rest_frame_lam, lam, fcode)
+            )
 
         return f
 
@@ -968,14 +956,17 @@ class Filter:
         # if both are provided
         if lam is not None and nu is not None:
             if verbose:
-                print(('WARNING: Both wavelengths and frequencies were '
-                       'provided, frequencies take priority over wavelengths'
-                       ' for filter convolution.'))
+                print(
+                    (
+                        "WARNING: Both wavelengths and frequencies were "
+                        "provided, frequencies take priority over wavelengths"
+                        " for filter convolution."
+                    )
+                )
 
         # Get the correct x array to integrate w.r.t and work out if we need
         # to shift the transmission curve.
         if nu is not None:
-
             # Define the integration xs
             xs = nu
 
@@ -986,7 +977,6 @@ class Filter:
             lam = (c / (nu * Hz)).to(angstrom).value
 
         elif lam is not None:
-
             # Define the integration xs
             xs = lam
 
@@ -994,7 +984,6 @@ class Filter:
             need_shift = not lam[0] == self.lam[0]
 
         else:
-
             # Define the integration xs
             xs = self.nu
 
@@ -1003,16 +992,11 @@ class Filter:
 
         # Do we need to shift?
         if need_shift:
-
             # Ok, shift the tranmission curve by interpolating onto the
             # provided wavelengths
-            t = np.interp(
-                lam, self.original_lam, self.original_t,
-                left=0.0, right=0.0
-            )
+            t = np.interp(lam, self.original_lam, self.original_t, left=0.0, right=0.0)
 
         else:
-
             # We can use the standard transmission array
             t = self.t
 
@@ -1039,12 +1023,8 @@ class Filter:
         transmission = arr_in_band * t_in_band
 
         # Sum over the final axis to "collect" transmission in this filer
-        sum_per_x = integrate.trapezoid(
-            transmission / xs_in_band, xs_in_band, axis=-1
-        )
-        sum_den = integrate.trapezoid(
-            t_in_band / xs_in_band, xs_in_band, axis=-1
-        )
+        sum_per_x = integrate.trapezoid(transmission / xs_in_band, xs_in_band, axis=-1)
+        sum_den = integrate.trapezoid(t_in_band / xs_in_band, xs_in_band, axis=-1)
         sum_in_band = sum_per_x / sum_den
 
         return sum_in_band
@@ -1091,8 +1071,7 @@ class Filter:
 
         return np.exp(
             np.trapz(
-                np.log(self.original_lam) *
-                self.original_t / self.original_lam,
+                np.log(self.original_lam) * self.original_t / self.original_lam,
                 x=self.original_lam,
             )
             / np.trapz(self.original_t / self.original_lam, x=self.original_lam)
@@ -1119,9 +1098,7 @@ class Filter:
             )
         )
 
-        B = np.sqrt(
-            np.trapz(self.original_t / self.original_lam, x=self.original_lam)
-        )
+        B = np.sqrt(np.trapz(self.original_t / self.original_lam, x=self.original_lam))
 
         return self.meanwv() * (A / B)
 
