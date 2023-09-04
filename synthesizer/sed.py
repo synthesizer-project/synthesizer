@@ -114,19 +114,28 @@ class Sed:
 
     def get_index(index_window, blue_window, red_window, loc):
         """
-        A function to define the blue continuum, red continuum, and absorption windows
-         - The pseudo-continuum is defined, made up of a blue and red shifted window.
+        Calculate the bounds of absorption, blue continuum, and red continuum windows.
 
-        Returns
-        ----------
-        int array
-           absorption start, absorption end, blue start, blue end, red start, red end
+        Args:
+            index_window (list): List of index window bounds.
+            blue_window (list): List of blue shifted window bounds.
+            red_window (list): List of red shifted window bounds.
+            loc (int): Location index to select the appropriate bounds.
 
+        Returns:
+            tuple: A tuple containing the following integer values:
+                - absorption_start (int): Start of the absorption window.
+                - absorption_end (int): End of the absorption window.
+                - blue_start (int): Start of the blue continuum window.
+                - blue_end (int): End of the blue continuum window.
+                - red_start (int): Start of the red continuum window.
+                - red_end (int): End of the red continuum window.
         """
-
         indices = np.array([index_window[loc], index_window[loc+1], blue_window[loc], blue_window[loc+1], red_window[loc], red_window[loc+1]])
-
-        return indices
+        
+        absorption_start, absorption_end, blue_start, blue_end, red_start, red_end = indices
+        
+        return absorption_start, absorption_end, blue_start, blue_end, red_start, red_end
 
 
     def return_beta(self, wv=[1500.0, 2500.0]):
@@ -304,34 +313,46 @@ class Sed:
 
     def calculate_ew(self, index):
         """
-        An function to calculate the equivalent width.
+        Calculate the equivalent width of an absorption feature.
 
-        Parameters
-        ----------
-        index: int array
-            wavelength indices
+        Parameters:
+            index (list): List of wavelength indices, containing:
+                - absorption_start (int): Start index of the absorption feature.
+                - absorption_end (int): End index of the absorption feature.
+                - blue_start (int): Start index of the blue continuum.
+                - blue_end (int): End index of the blue continuum.
+                - red_start (int): Start index of the red continuum.
+                - red_end (int): End index of the red continuum.
 
-        Returns
-        ----------
-        float array
-            equivalent width (Å)
+        Returns:
+            float: Equivalent width in angstroms (Å).
 
+        Notes:
+            - This method calculates the equivalent width (EW) of an absorption feature in a spectrum.
+            - The flux units are converted from nJy to Lnu.
+            - The method defines the wavelength ranges of the absorption feature and two sets of continuum.
+            - The average continuum level is computed based on the specified wavelength ranges.
+            - The EW is calculated by integrating the flux difference between the absorption feature and continuum.
+
+        Example:
+            To calculate the EW, provide a list of wavelength indices:
+            >>> index = [1370, 1400, 1360, 1380, 1436, 1447]
+            >>> ew_value = your_instance.calculate_ew(index)
+            >>> print(ew_value)
+            42.15 Å
         """
-        # Conversion of flux units from nJy to Lnu
+        
         flux = self._lnu * (self._lam**2)
 
-        # Define the wavelength range of the absorption feature
         absorption_start = index[0]
         absorption_end = index[1]
 
-        # Define the wavelength ranges of the two sets of continuum
         blue_start = index[2]
         blue_end = index[3]
 
         red_start = index[4]
         red_end = index[5]
 
-        # Compute the average continuum level
         continuum_indices = np.where(
             (self._lam >= absorption_start) & (self._lam <= absorption_end)
         )[0]
@@ -349,7 +370,6 @@ class Sed:
 
         continuum = (line[0] * self._lam) + line[1]
 
-        # Calculate the equivalent width
         ew = np.trapz(
             (continuum[continuum_indices] - flux[continuum_indices])
             / continuum[continuum_indices],
