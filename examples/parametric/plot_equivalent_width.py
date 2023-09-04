@@ -17,7 +17,7 @@ from unyt import yr, Myr
 
 
 def set_index():
-   """
+    """
     A function to define a dictionary of uv indices.
 
     Each index has a defined absorption window.
