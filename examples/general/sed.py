@@ -16,11 +16,11 @@ from synthesizer.grid import Grid
 
 # Get the location of this script, __file__ is the absolute path of this
 # script, however we just want to directory
-script_path = os.path.abspath(os.path.dirname(__file__))
+# script_path = os.path.abspath(os.path.dirname(__file__))
 
 # Define the grid
 grid_name = "test_grid"
-grid_dir = script_path + "/../../tests/test_grid/"
+grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 grid_point = (5, 5)
 
