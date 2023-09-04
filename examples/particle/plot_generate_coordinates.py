@@ -13,7 +13,7 @@ from synthesizer.particle.image import ImageGenerator
 
 # Get the location of this script, __file__ is the absolute path of this
 # script, however we just want to directory
-script_path = os.path.abspath(os.path.dirname(__file__))
+# script_path = os.path.abspath(os.path.dirname(__file__))
 
 # --- create a set of particles assuming a 3D gaussian
 coords = CoordinateGenerator.generate_3D_gaussian(10000)
