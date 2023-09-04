@@ -17,16 +17,18 @@ from unyt import yr, Myr
 
 
 def set_index():
-    """
-    A function to define a dictionary of uv indices
-       - Each index has a defined absorption window.
-       - A pseudo-continuum is defined, made up of a blue and red shifted window.
+   """
+    A function to define a dictionary of uv indices.
 
-    Returns
-    ----------
-    int array
-       index, absorption start, absorption end, blue start, blue end, red start, red end
+    Each index has a defined absorption window.
+    A pseudo-continuum is defined, made up of a blue and red shifted window.
 
+    Returns:
+        tuple: A tuple containing the following lists:
+            - index (int): List of UV indices.
+            - index_window (int): List of absorption window bounds.
+            - blue_window (int): List of blue shifted window bounds.
+            - red_window (int): List of red shifted window bounds.
     """
 
     index = [1370, 1400, 1425, 1460, 1501, 1533, 1550, 1719, 1853]
@@ -38,6 +40,24 @@ def set_index():
 
 
 def get_ew(index, Z, smass, grid, EqW, mode):
+    """
+    Calculate equivalent width for a specified UV index.
+
+    Args:
+        index (int): The UV index for which the equivalent width is calculated.
+        Z (float): Metallicity.
+        smass (float): Stellar mass.
+        grid (Grid): The grid object.
+        EqW (float): Initial equivalent width.
+        mode (str): Calculation mode.
+
+    Returns:
+        float: The calculated equivalent width.
+
+    Raises:
+        ValueError: If mode is invalid.
+    """
+    
     sfh_p = {"duration": 100 * Myr}
 
     Z_p = {"Z": Z}  # can also use linear metallicity e.g. {'Z': 0.01}
@@ -68,6 +88,20 @@ def get_ew(index, Z, smass, grid, EqW, mode):
 
 
 def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
+    """
+    Calculate equivalent widths for specified UV indices.
+
+    Args:
+        grids (str): Grid name.
+        uv_index (list): List of UV indices to calculate equivalent widths for.
+        index_window (list): List of index window bounds.
+        blue_window (list): List of blue shifted window bounds.
+        red_window (list): List of red shifted window bounds.
+
+    Returns:
+        None
+    """
+    
     # -- Calculate the equivalent width for each defined index
     for i, index in enumerate(uv_index):
         idx = Sed.get_index(index_window, blue_window, red_window, i)
