@@ -1,4 +1,4 @@
-name: Synthesizer docs
+name: Documentation
 
 on:
   pull_request:
