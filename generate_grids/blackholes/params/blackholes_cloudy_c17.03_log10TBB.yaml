@@ -1,4 +1,3 @@
-
 model: cloudy # model name
 cloudy_version: c17.03 # cloudy version
 
