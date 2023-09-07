@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
     # load cloudy parameters
     fixed_params, grid_params = load_grid_params(
-        param_file=f'{grid_name}.yaml')
+        param_file=f'params/{grid_name}.yaml')
 
     cloudy_version = fixed_params['cloudy_version']
 
