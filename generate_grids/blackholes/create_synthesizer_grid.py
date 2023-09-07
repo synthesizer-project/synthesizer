@@ -281,7 +281,7 @@ def add_lines(grid_name,
 
                 # calculate line luminosity and save it. Uses normalisation from spectra.
                 line['luminosity'][indices] = 10**(luminosity_)/norm  # erg s^-1
-                line['intrinsic_luminosity'][indices] = 10**(luminosity_)/norm  # erg s^-1
+                # line['intrinsic_luminosity'][indices] = 10**(luminosity_)/norm  # erg s^-1
                 
                 if include_spectra:
 
