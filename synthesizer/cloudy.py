@@ -248,10 +248,10 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     """
 
     if (abundances.d2m > 0) & params["grains"]:
-        delta_C = 10 ** abundances.a_nodep["C"] - 10 ** abundances.a["C"]
-        delta_PAH = 0.01 * (10 ** abundances.a_nodep["C"])
+        delta_C = 10 ** abundances.total["C"] - 10 ** abundances.gas["C"]
+        delta_PAH = 0.01 * (10 ** abundances.total["C"])
         delta_graphite = delta_C - delta_PAH
-        delta_Si = 10 ** abundances.a_nodep["Si"] - 10 ** abundances.a["Si"]
+        delta_Si = 10 ** abundances.total["Si"] - 10 ** abundances.gas["Si"]
         orion_C_abund = -3.6259
         orion_Si_abund = -4.5547
         PAH_abund = -4.446
