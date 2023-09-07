@@ -22,15 +22,15 @@ from synthesizer import exceptions
 class Gas(Particles):
     """
     The base Gas class. This contains all data a collection of gas particles
-    could contain. It inherits from the base Particles class holding 
+    could contain. It inherits from the base Particles class holding
     attributes and methods common to all particle types.
 
     The Gas class can be handed to methods elsewhere to pass information
-    about the gas particles needed in other computations. A galaxy object should 
+    about the gas particles needed in other computations. A galaxy object should
     have a link to the Gas object containing its gas particles, for example.
 
-    Note that due to the wide range of possible properties and operations, 
-    this class has a large number of optional attributes which are set to 
+    Note that due to the wide range of possible properties and operations,
+    this class has a large number of optional attributes which are set to
     None if not provided.
 
     Attributes:
@@ -45,16 +45,34 @@ class Gas(Particles):
             particle in simulation length units.
     """
 
-    # # Define the allowed attributes
-    # __slots__ = ["metallicities", "star_forming", 
-    #              "log10metallicities", "smoothing_lengths"]
+    # Define the allowed attributes
+    __slots__ = [
+        "metallicities",
+        "star_forming",
+        "log10metallicities",
+        "dust_to_metal_ratio",
+        "_coordinates",
+        "_velocities",
+        "_smoothing_lengths",
+        "_softening_lengths",
+        "_masses",
+    ]
 
     # Define class level Quantity attributes
     smoothing_lengths = Quantity()
 
-    def __init__(self, masses, metallicities, star_forming=None, redshift=None,
-                 coordinates=None, velocities=None, smoothing_lengths=None,
-                 softening_length=None):
+    def __init__(
+        self,
+        masses,
+        metallicities,
+        star_forming=None,
+        redshift=None,
+        coordinates=None,
+        velocities=None,
+        smoothing_lengths=None,
+        softening_length=None,
+        dust_to_metal_ratio=None,
+    ):
         """
         Initialise the gas object.
 
@@ -74,6 +92,10 @@ class Gas(Particles):
             smoothing_lengths (array-like, float)
                 The smoothing lengths (describing the sph kernel) of each
                 gas particle in simulation length units.
+            dust_to_metal_ratio (array_like, float or float)
+                The ratio between dust and total metal content in a gas
+                particle. This can either be a single float or an array of
+                values for each gas particle.
         """
 
         # Instantiate parent
@@ -84,7 +106,7 @@ class Gas(Particles):
             masses=masses,
             redshift=redshift,
             softening_length=softening_length,
-            nparticles=len(masses)
+            nparticles=len(masses),
         )
 
         # Set the metallicites and log10 equivalent
@@ -96,6 +118,10 @@ class Gas(Particles):
 
         # Set the smoothing lengths for these gas particles
         self.smoothing_lengths = smoothing_lengths
+
+        # The dust to metal ratio for gas particles. Either 1 value or a value
+        # per gas particle.
+        self.dust_to_metal_ratio = dust_to_metal_ratio
 
         # Check the arguments we've been given
         self._check_gas_args()
@@ -111,7 +137,7 @@ class Gas(Particles):
         """
 
         # Ensure all arrays are the expected length
-        for key in self.__dict__:
+        for key in self.__slots__:
             attr = getattr(self, key)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
@@ -119,4 +145,3 @@ class Gas(Particles):
                         "Inconsistent gas array sizes! (nparticles=%d, "
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
-

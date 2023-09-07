@@ -50,9 +50,9 @@ survey.add_galaxies(gals[mask])
 # Get the SEDs
 survey.get_integrated_stellar_spectra(grid)
 
-survey.get_integrated_spectra_screen(tauV=0.33)
+survey.get_integrated_spectra_screen(tau_v=0.33)
 
-survey.get_integrated_spectra_charlot_fall_00(grid, tauV_ISM=0.33, tauV_BC=0.67)
+survey.get_integrated_spectra_charlot_fall_00(grid, tau_v_ISM=0.33, tau_v_BC=0.67)
 
 # Compute the photometry in UVJ filters
 
