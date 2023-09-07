@@ -112,7 +112,7 @@ if __name__ == "__main__":
 
     # get the properties of the grid
     axes, n_axes, shape, n_models, mesh, model_list, index_list = \
-        get_grid_properties(grid_axes, grid_params, verbose=False)
+        get_grid_properties(grid_axes, grid_params, verbose=True)
 
     if not args.dry_run:
 
@@ -147,7 +147,8 @@ if __name__ == "__main__":
             abundances = Abundances(10**params['log10Z'],
                                     d2m=params['d2m'],
                                     alpha=params['alpha'],
-                                    scaling=params['scaling'])
+                                    C=params['C'],
+                                    N=params['N'],)
 
             if model == 'cloudy':
 
