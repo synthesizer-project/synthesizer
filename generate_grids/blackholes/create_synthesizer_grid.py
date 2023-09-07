@@ -32,7 +32,7 @@ def get_grid_properties_hf(hf, verbose=True):
     """
     
     axes = hf.attrs['axes'] # list of axes
-    axes_values = {axis: hf[axis][:] for axis in axes} # dictionary of axis grid points
+    axes_values = {axis: hf['axes'][axis][:] for axis in axes} # dictionary of axis grid points
     
     # Get the properties of the grid including the dimensions etc.
     return get_grid_properties(axes, axes_values, verbose=verbose)
