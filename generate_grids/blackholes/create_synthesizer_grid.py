@@ -198,11 +198,12 @@ def add_lines(grid_name,
     """
 
     # open the new grid
-    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'a') as hf:
-
-        
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'a') as \ 
+    hf:
+ 
         # Get the properties of the grid including the dimensions etc.
-        axes, n_axes, shape, n_models, mesh, model_list, index_list = get_grid_properties_hf(hf)
+        axes, n_axes, shape, n_models, mesh, model_list, index_list = \
+            get_grid_properties_hf(hf)
 
         # delete lines group if it already exists
         if 'lines' in hf:
@@ -217,6 +218,13 @@ def add_lines(grid_name,
         # create group for holding lines
         lines = hf.create_group('lines')
         # lines.attrs['lines'] = list(lines_to_include)  # save list of spectra as attribute
+
+
+        # get list of lines to include
+        if line_type == 'linelist':
+            infile = f"{synthesizer_data_dir}/cloudy/{grid_name}/1"
+            lines_to_include, _, _ = read_linelist(infile)
+            
 
         # set up output arrays
         for line_id in lines_to_include:
