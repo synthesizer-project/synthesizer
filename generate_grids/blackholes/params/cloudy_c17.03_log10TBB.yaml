@@ -6,7 +6,8 @@ cloudy_version: v17.03 # cloudy version
 log10Z: -2.0 # log10(metallicity)
 alpha: 0.0  # alpha-abundance ratio
 d2m: 0.3  # dust to metals ratio in the cloud
-scaling: null
+C: Dopita2006
+N: Dopita2006
 
 # photoionisation model parameters
 CMB: false  # include CMB heating
