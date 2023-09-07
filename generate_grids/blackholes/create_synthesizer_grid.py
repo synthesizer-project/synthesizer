@@ -41,7 +41,7 @@ def get_grid_properties_hf(hf, verbose=True):
 def check_cloudy_runs(grid_name,
                       synthesizer_data_dir,
                       replace=False,
-                      files_to_check=['cont', 'elines']):
+                      files_to_check=['cont', 'elin']):
     """
     Check that all the cloudy runs have run properly
 
