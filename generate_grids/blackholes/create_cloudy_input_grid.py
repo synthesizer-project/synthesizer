@@ -12,14 +12,14 @@ from unyt import c, h, angstrom, eV, erg, s, Hz, unyt_array
 import h5py
 
 # synthesizer modules
-from synthesizer.agn import Feltre16
 from synthesizer.cloudy import create_cloudy_input, ShapeCommands
 from synthesizer.abundances import Abundances
 
 # local modules
-from utils import (get_grid_properties, apollo_submission_script,cosma7_submission_script)
-
-
+from emission_models import Feltre16
+from utils import (get_grid_properties,
+                   apollo_submission_script,
+                   cosma7_submission_script)
 
 
 def load_grid_params(param_file='default.yaml'):
@@ -58,21 +58,31 @@ def load_grid_params(param_file='default.yaml'):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description='Run a grid of Cloudy AGN models')
-    parser.add_argument("-machine", type=str, required=True) # machine (for submission script generation)
-    parser.add_argument("-synthesizer_data_dir", type=str, required=True) # path to synthesizer_data_dir
-    parser.add_argument("-grid_name", type=str, required=True) # grid_name, used to define parameter file
-    parser.add_argument("-cloudy_path", type=str, required=True) # path to cloudy directory (not executable; this is assumed to {cloudy}/{cloudy_version}/source/cloudy.ext)
-    parser.add_argument("-dry_run", type=bool, required=False, default=False) # boolean for dry run
+    parser = argparse.ArgumentParser(
+        description='Run a grid of Cloudy AGN models')
+
+    # machine (for submission script generation)
+    parser.add_argument("-machine", type=str, required=True)
+    # path to synthesizer_data_dir
+    parser.add_argument("-synthesizer_data_dir", type=str, required=True)
+    # grid_name, used to define parameter file
+    parser.add_argument("-grid_name", type=str, required=True)
+    # path to cloudy directory (not executable; 
+    # this is assumed to {cloudy}/{cloudy_version}/source/cloudy.ext)
+    parser.add_argument("-cloudy_path", type=str, required=True)
+    # boolean for dry run
+    parser.add_argument("-dry_run", type=bool, required=False, default=False)
+
+    # get arguments
     args = parser.parse_args()
 
-
+    # set grid_name
     grid_name = args.grid_name
 
     # get model family
     family = grid_name.split('_')[0] # e.g. AGN, blackbody, SPS
 
-    # get model 
+    # get model
     model = grid_name.split('_')[1]
 
     machine = args.machine
@@ -80,7 +90,8 @@ if __name__ == "__main__":
     cloudy_path = args.cloudy_path
 
     # load cloudy parameters
-    fixed_params, grid_params = load_grid_params(param_file = f'{grid_name}.yaml')
+    fixed_params, grid_params = load_grid_params(
+        param_file=f'{grid_name}.yaml')
 
     cloudy_version = fixed_params['cloudy_version']
 
@@ -91,17 +102,17 @@ if __name__ == "__main__":
     print(cloudy_version)
 
     for k, v in fixed_params.items():
-        print(k,v)
+        print(k, v)
 
     for k, v in grid_params.items():
-        print(k,v)
+        print(k, v)
     
     # make list of models
     grid_axes = list(grid_params.keys())
 
-    axes, n_axes, shape, n_models, mesh, model_list, index_list = get_grid_properties(grid_axes, grid_params, verbose = False)
-
-
+    # get the properties of the grid
+    axes, n_axes, shape, n_models, mesh, model_list, index_list = \
+        get_grid_properties(grid_axes, grid_params, verbose=False)
 
     if not args.dry_run:
 
@@ -110,10 +121,10 @@ if __name__ == "__main__":
 
         # for submission system output files
         Path(f'{output_dir}/output').mkdir(parents=True, exist_ok=True)
-
-        
+  
         # open the new grid
-        with h5py.File(f'{args.synthesizer_data_dir}/grids/{grid_name}.hdf5', 'w') as hf:
+        with h5py.File(f'{args.synthesizer_data_dir}/grids/{grid_name}.hdf5',
+                       'w') as hf:
 
             # add attribute with the grid axes
             hf.attrs['grid_axes'] = grid_axes
@@ -122,9 +133,8 @@ if __name__ == "__main__":
             for grid_axis in grid_axes:
                 hf[grid_axis] = grid_params[grid_axis]
 
-
     for i, grid_params_ in enumerate(model_list):
-    
+
         grid_params = dict(zip(grid_axes, grid_params_))
 
         params = fixed_params | grid_params
@@ -133,14 +143,23 @@ if __name__ == "__main__":
 
         if not args.dry_run:
 
-            abundances = Abundances(10**params['log10Z'], d2m=params['d2m'], alpha=params['alpha'], scaling=params['scaling'])
+            # build abundances
+            abundances = Abundances(10**params['log10Z'],
+                                    d2m=params['d2m'],
+                                    alpha=params['alpha'],
+                                    scaling=params['scaling'])
 
             if model == 'cloudy':
 
                 # create shape commands
                 TBB = 10**params['log10T']
-                shape_commands = ShapeCommands.cloudy_agn(TBB, aox=params['aox'], auv=params['auv'],ax=params['ax'])
+                shape_commands = ShapeCommands.cloudy_agn(TBB,
+                                                          aox=params['aox'],
+                                                          auv=params['auv'],
+                                                          ax=params['ax'])
             
+            # call a different model
+            # TODO: allow this to call the method from a string
             elif model == 'feltre16':
 
                 # define wavelength grid
@@ -150,7 +169,8 @@ if __name__ == "__main__":
                 lnu = Feltre16.intrinsic(lam, alpha=params['aalpha'])
 
                 # create shape commands
-                shape_commands = ShapeCommands.table_sed(str(i), lam, lnu,  output_dir=output_dir)
+                shape_commands = ShapeCommands.table_sed(str(i), lam, lnu,
+                                                         output_dir=output_dir)
 
             else:
 
@@ -158,15 +178,20 @@ if __name__ == "__main__":
 
 
             # create input file
-            create_cloudy_input(str(i), shape_commands, abundances, output_dir=output_dir, **params)
+            create_cloudy_input(str(i), shape_commands, abundances,
+                                output_dir=output_dir, **params)
 
             # write out input file
             with open(f"{output_dir}/input_names.txt", "a") as myfile:
                 myfile.write(f'{i}\n')
 
     if machine == 'apollo':
-        apollo_submission_script(n_models, output_dir, cloudy_path, cloudy_version)
+        apollo_submission_script(n_models, output_dir, cloudy_path,
+                                 cloudy_version)
     elif machine == 'cosma7':
-        cosma7_submission_script(n_models, output_dir, cloudy_path, cloudy_version,
-                                cosma_project='cosma7',
-                                cosma_account='dp004')
+        cosma7_submission_script(n_models,
+                                 output_dir,
+                                 cloudy_path,
+                                 cloudy_version,
+                                 cosma_project='cosma7',
+                                 cosma_account='dp004')
