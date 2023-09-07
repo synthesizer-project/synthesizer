@@ -75,12 +75,14 @@ def check_cloudy_runs(grid_name,
             # check if files exist
             for ext in files_to_check:
                 if not os.path.isfile(infile+'.'+ext):  # attempt to open run.
-                    failed = True   
+                    print(f'failed existence of {ext} for {i}')
+                    failed = True  
             
             # if they exist also check they have size >0
             if not failed:
                 for ext in files_to_check:
                     if os.path.getsize(infile+'.'+ext) < 1000:
+                        print(f'failed size of {ext} for {i}')
                         failed = True
 
             if failed:
