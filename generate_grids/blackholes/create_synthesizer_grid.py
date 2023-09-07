@@ -311,7 +311,7 @@ if __name__ == "__main__":
     # path to synthesizer_data_dir
     parser.add_argument("-synthesizer_data_dir", type=str, required=True) 
     parser.add_argument("-grid_name", "--grid_name", type=str, required=True)
-    parser.add_argument("-include_spectra", "--include_spectra", type=bool, default=False, required=False)
+    parser.add_argument("-include_spectra", "--include_spectra", type=bool, default=True, required=False)
     parser.add_argument("-replace", "--replace", type=bool, default=False, required=False)
     parser.add_argument("-line_calc_method", "--line_calc_method", type=str, default='lines', required=False)
 
