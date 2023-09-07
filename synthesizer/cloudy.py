@@ -25,39 +25,32 @@ class Ions:
     """
 
     energy = {
-        'HI': 13.6 * eV,
-        'HeI': 24.6 * eV,
-        'HeII': 54.4 * eV,
-        'CII': 24.4 * eV,
-        'CIII': 47.9 * eV,
-        'CIV': 64.5 * eV,
-        'NI': 14.5 * eV,
-        'NII': 29.6 * eV,
-        'NIII': 47.4 * eV,
-        'OI': 13.6 * eV,
-        'OII': 35.1 * eV,
-        'OIII': 54.9 * eV,
-        'NeI': 21.6 * eV,
-        'NeII': 41.0 * eV,
-        'NeIII': 63.45 * eV,
+        "HI": 13.6 * eV,
+        "HeI": 24.6 * eV,
+        "HeII": 54.4 * eV,
+        "CII": 24.4 * eV,
+        "CIII": 47.9 * eV,
+        "CIV": 64.5 * eV,
+        "NI": 14.5 * eV,
+        "NII": 29.6 * eV,
+        "NIII": 47.4 * eV,
+        "OI": 13.6 * eV,
+        "OII": 35.1 * eV,
+        "OIII": 54.9 * eV,
+        "NeI": 21.6 * eV,
+        "NeII": 41.0 * eV,
+        "NeIII": 63.45 * eV,
     }
-
-
-
 
 
 class ShapeCommands:
 
     """
     A class for holding different cloudy shape commands
-    
+
     """
 
-
-
-
-    def table_sed(model_name, lam, lnu, output_dir='./'):
-        
+    def table_sed(model_name, lam, lnu, output_dir="./"):
         """
         A function for creating a cloudy input file using a tabulated SED.
 
@@ -71,12 +64,12 @@ class ShapeCommands:
             Spectral luminosity density
         output_dir: str
             Output directory path
-            
+
         Returns
         -------
         list
             a list of strings with the cloudy input commands
-        
+
 
         TODO
         -------
@@ -89,20 +82,21 @@ class ShapeCommands:
             lam *= angstrom
 
         # define frequency
-        nu = c/lam
+        nu = c / lam
 
         # define energy
-        E = h*nu
+        E = h * nu
 
         # define energy in units of Rydbergs
-        E_Ryd = E.to('Ry').value
+        E_Ryd = E.to("Ry").value
 
         # get rid of negative/zero luminosities, which are unphysical and seem to make cloudy break
-        lnu[lnu <= 0.0] = 1E-100  
+        lnu[lnu <= 0.0] = 1e-100
 
         # save tabulated spectrum
-        np.savetxt(f'{output_dir}/{model_name}.sed',
-                np.array([E_Ryd[::-1], lnu[::-1]]).T)
+        np.savetxt(
+            f"{output_dir}/{model_name}.sed", np.array([E_Ryd[::-1], lnu[::-1]]).T
+        )
 
         # collect cloudy shape commands
         shape_commands = []
@@ -145,7 +139,7 @@ def create_cloudy_input(model_name, shape_commands, abundances,
                         output_dir='./', **kwargs):
 
     """
-    A generic function for creating a cloudy input file 
+    A generic function for creating a cloudy input file
 
     Arguments
     ----------
@@ -163,23 +157,23 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     """
 
     default_params = {
-        'log10U': -2, # ionisation parameter
-        'log10radius': -2,  # radius in log10 parsecs, only important for spherical geometry
-        'covering_factor': 1.0, # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
-        'stop_T': 4000, # K
-        'stop_efrac': -2, 
-        'T_floor': 100,  # K
-        'log10n_H': 2.5,  # Hydrogen density
-        'z': 0., # redshift
-        'CMB': False, # include CMB heating
-        'cosmic_rays': False, # include cosmic rays
-        'grains': False, # include dust grains
-        'geometry': 'planeparallel', # the geometry 
-        'resolution': 1.0, # relative resolution the saved continuum spectra
-        'output_abundances': True, # output abundances
-        'output_cont': True, # output continuum
-        'output_lines': False, # output full list of all available lines
-        'output_linelist': 'linelist.dat', # output linelist
+        "log10U": -2,  # ionisation parameter
+        "log10radius": -2,  # radius in log10 parsecs, only important for spherical geometry
+        "covering_factor": 1.0,  # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
+        "stop_T": 4000,  # K
+        "stop_efrac": -2,
+        "T_floor": 100,  # K
+        "log10n_H": 2.5,  # Hydrogen density
+        "z": 0.0,  # redshift
+        "CMB": False,  # include CMB heating
+        "cosmic_rays": False,  # include cosmic rays
+        "grains": False,  # include dust grains
+        "geometry": "planeparallel",  # the geometry
+        "resolution": 1.0,  # relative resolution the saved continuum spectra
+        "output_abundances": True,  # output abundances
+        "output_cont": True,  # output continuum
+        "output_lines": False,  # output full list of all available lines
+        "output_linelist": "linelist.dat",  # output linelist
     }
 
     # update default_params with kwargs
@@ -189,7 +183,6 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     # for key, value in list(kwargs.items()):
     #     params[key] = value
 
-
     # begin input list
     cinput = []
 
@@ -197,9 +190,13 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     cinput += shape_commands
 
     # --- Define the chemical composition
-    for ele in ['He'] + abundances.metals:
-        cinput.append((f'element abundance {abundances.name[ele]} '
-                       f'{abundances.gas[ele]} no grains\n'))
+    for ele in ["He"] + abundances.metals:
+        cinput.append(
+            (
+                f"element abundance {abundances.name[ele]} "
+                f"{abundances.gas[ele]} no grains\n"
+            )
+        )
 
     """
     add graphite and silicate grains
@@ -250,45 +247,47 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     which will again introduce issues on mass conservation.
     """
 
-    if (abundances.d2m > 0) & params['grains']:
-        delta_C = 10**abundances.a_nodep['C'] - 10**abundances.a['C']
-        delta_PAH = 0.01 * (10**abundances.a_nodep['C'])
+    if (abundances.d2m > 0) & params["grains"]:
+        delta_C = 10 ** abundances.a_nodep["C"] - 10 ** abundances.a["C"]
+        delta_PAH = 0.01 * (10 ** abundances.a_nodep["C"])
         delta_graphite = delta_C - delta_PAH
-        delta_Si = 10**abundances.a_nodep['Si'] - 10**abundances.a['Si']
+        delta_Si = 10 ** abundances.a_nodep["Si"] - 10 ** abundances.a["Si"]
         orion_C_abund = -3.6259
         orion_Si_abund = -4.5547
         PAH_abund = -4.446
-        f_graphite = delta_graphite/(10**(orion_C_abund))
-        f_Si = delta_Si/(10**(orion_Si_abund))
-        f_pah = delta_PAH/(10**(PAH_abund))
-        command = (f'grains Orion graphite {f_graphite} '
-                   f'\ngrains Orion silicate {f_Si} \ngrains '
-                   f'PAH {f_pah}')
-        cinput.append(command+'\n')
+        f_graphite = delta_graphite / (10 ** (orion_C_abund))
+        f_Si = delta_Si / (10 ** (orion_Si_abund))
+        f_pah = delta_PAH / (10 ** (PAH_abund))
+        command = (
+            f"grains Orion graphite {f_graphite} "
+            f"\ngrains Orion silicate {f_Si} \ngrains "
+            f"PAH {f_pah}"
+        )
+        cinput.append(command + "\n")
     else:
         f_graphite, f_Si, f_pah = 0, 0, 0
 
     # cinput.append('element off limit -7') # should speed up the code
 
-    log10U = params['log10U']
+    log10U = params["log10U"]
 
     # plane parallel geometry
-    if params['geometry'] == 'planeparallel':
-        cinput.append(f'ionization parameter = {log10U:.3f}\n')
+    if params["geometry"] == "planeparallel":
+        cinput.append(f"ionization parameter = {log10U:.3f}\n")
         # inner radius = 10^30 cm and thickness = 10^21.5 cm (==1 kpc) this is essentially plane parallel geometry
-        cinput.append(f'radius 30.0 21.5\n')
+        cinput.append(f"radius 30.0 21.5\n")
 
-    if params['geometry'] == 'spherical':
+    if params["geometry"] == "spherical":
         # in the spherical geometry case I think U is some average U, not U at the inner face of the cloud.
-        log10Q = np.log10(calculate_Q_from_U(10**log10U, 10**params["log10n_H"]))
-        cinput.append(f'Q(H) = {log10Q}\n')
+        log10Q = np.log10(calculate_Q_from_U(10**log10U, 10 ** params["log10n_H"]))
+        cinput.append(f"Q(H) = {log10Q}\n")
         cinput.append(f'radius {params["log10radius"]} log parsecs\n')
-        cinput.append('sphere\n')
+        cinput.append("sphere\n")
 
     # add background continuum
-    if params['cosmic_rays']:
-        cinput.append('cosmic rays, background\n')
-    if params['CMB']:
+    if params["cosmic_rays"]:
+        cinput.append("cosmic rays, background\n")
+    if params["CMB"]:
         cinput.append(f'CMB {params["z"]}\n')
 
     # define hydrogend density
@@ -297,38 +296,50 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     # cinput.append(f'covering factor {params["covering_factor"]} linear\n')
 
     # --- Processing commands
-    cinput.append('iterate to convergence\n')
+    cinput.append("iterate to convergence\n")
     cinput.append(f'set temperature floor {params["T_floor"]} linear\n')
     cinput.append(f'stop temperature {params["stop_T"]}K\n')
     cinput.append(f'stop efrac {params["stop_efrac"]}\n')
 
     # --- output commands
     # cinput.append(f'print line vacuum\n')  # output vacuum wavelengths
-    cinput.append(f'set continuum resolution {params["resolution"]}\n') # set the continuum resolution
+    cinput.append(
+        f'set continuum resolution {params["resolution"]}\n'
+    )  # set the continuum resolution
     cinput.append(f'save overview  "{model_name}.ovr" last\n')
 
     # output abundances
-    if params['output_abundances']:
+    if params["output_abundances"]:
         cinput.append(f'save last abundances "{model_name}.abundances"\n')
 
     # output continuum (i.e. spectra)
-    if params['output_cont']:
-        cinput.append((f'save last continuum "{model_name}.cont" '
-                   f'units Angstroms no clobber\n'))
+    if params["output_cont"]:
+        cinput.append(
+            (
+                f'save last continuum "{model_name}.cont" '
+                f"units Angstroms no clobber\n"
+            )
+        )
     # output lines
-    if params['output_lines']:
-        cinput.append((f'save last lines, array "{model_name}.lines" '
-                  'units Angstroms no clobber\n'))
-    
+    if params["output_lines"]:
+        cinput.append(
+            (
+                f'save last lines, array "{model_name}.lines" '
+                "units Angstroms no clobber\n"
+            )
+        )
+
     # output linelist
-    if params['output_linelist']:
-        cinput.append(f'save linelist column emergent absolute last units angstroms "{model_name}.elin" "linelist.dat"\n')
-        
+    if params["output_linelist"]:
+        cinput.append(
+            f'save linelist column emergent absolute last units angstroms "{model_name}.elin" "linelist.dat"\n'
+        )
+
         # make copy of linelist
-        shutil.copyfile(params['output_linelist'], f'{output_dir}/linelist.dat')
+        shutil.copyfile(params["output_linelist"], f"{output_dir}/linelist.dat")
 
     # --- save input file
-    open(f'{output_dir}/{model_name}.in', 'w').writelines(cinput)
+    open(f"{output_dir}/{model_name}.in", "w").writelines(cinput)
 
     return cinput
 
@@ -344,10 +355,11 @@ def calculate_Q_from_U(U_avg, n_h):
     """
     alpha_B = 2.59e-13  # cm^3 s^-1
     c_cm = 2.99e8 * 100  # cm s^-1
-    epsilon = 1.
+    epsilon = 1.0
 
-    return ((U_avg * c_cm)**3 / alpha_B**2) *\
-        ((4 * np.pi) / (3 * epsilon**2 * n_h))
+    return ((U_avg * c_cm) ** 3 / alpha_B**2) * (
+        (4 * np.pi) / (3 * epsilon**2 * n_h)
+    )
 
 
 def calculate_U_from_Q(Q_avg, n_h=100):
@@ -361,10 +373,11 @@ def calculate_U_from_Q(Q_avg, n_h=100):
     """
     alpha_B = 2.59e-13  # cm^3 s^-1
     c_cm = 2.99e8 * 100  # cm s^-1
-    epsilon = 1.
+    epsilon = 1.0
 
-    return ((alpha_B**(2./3)) / c_cm) *\
-        ((3 * Q_avg * (epsilon**2) * n_h) / (4 * np.pi))**(1./3)
+    return ((alpha_B ** (2.0 / 3)) / c_cm) * (
+        (3 * Q_avg * (epsilon**2) * n_h) / (4 * np.pi)
+    ) ** (1.0 / 3)
 
 
 # # deprecate in favour of the function in sed.py
@@ -411,26 +424,28 @@ def calculate_U_from_Q(Q_avg, n_h=100):
 #         return [e+ion+str(wv), False]
 
 
-def read_lines(filename, extension = 'lines'):
-
+def read_lines(filename, extension="lines"):
     """
     Read a full line list from cloudy
-    
+
     """
 
     # open file and read columns
     wavelengths, cloudy_ids, intrinsic, emergent = np.loadtxt(
-        f'{filename}.{extension}', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
+        f"{filename}.{extension}", dtype=str, delimiter="\t", usecols=(0, 1, 2, 3)
+    ).T
 
     wavelengths = wavelengths.astype(float)
-    intrinsic = intrinsic.astype(float) - 7.  # erg s^{-1} 
-    emergent = emergent.astype(float) - 7.  # erg s^{-1} 
+    intrinsic = intrinsic.astype(float) - 7.0  # erg s^{-1}
+    emergent = emergent.astype(float) - 7.0  # erg s^{-1}
 
     # make a new cloudy ID e.g. "H I 4861.33A"
-    line_ids = np.array([' '.join(list(filter(None, id.split(' ')))) for id in cloudy_ids])
-    
+    line_ids = np.array(
+        [" ".join(list(filter(None, id.split(" ")))) for id in cloudy_ids]
+    )
+
     # find out the length of the line id when split
-    lenid = np.array([len(list(filter(None, id.split(' ')))) for id in cloudy_ids])
+    lenid = np.array([len(list(filter(None, id.split(" ")))) for id in cloudy_ids])
 
     # define a blend as a line with only two entries
     blends = np.ones(len(wavelengths), dtype=bool)
@@ -440,7 +455,6 @@ def read_lines(filename, extension = 'lines'):
 
 
 def convert_cloudy_wavelength(x):
-
     """
     Convert a cloudy wavelength string (e.g. 6562.81A, 1.008m) to a wavelength float in units of angstroms.
     """
@@ -449,43 +463,37 @@ def convert_cloudy_wavelength(x):
     unit = x[-1]
 
     # if Angstroms
-    if unit == 'A':
+    if unit == "A":
         return value
-    
+
     # if microns
-    if unit == 'm':
-        return 1E4*value
-
-    
+    if unit == "m":
+        return 1e4 * value
 
 
-
-def read_linelist(filename, extension = 'elin'):
-
-    """ 
+def read_linelist(filename, extension="elin"):
+    """
     Read a cloudy linelist file.
     """
 
     # read file
-    with open(f'{filename}.{extension}','r') as f:
+    with open(f"{filename}.{extension}", "r") as f:
         d = f.readlines()
-    
+
     line_ids = []
     luminosities = []
     wavelengths = []
 
     for row in d:
-
-        # ignore invalid rows 
-        if len(row.split('\t')) > 1:
-
+        # ignore invalid rows
+        if len(row.split("\t")) > 1:
             # split each row using tab character
-            id, lum = row.split('\t')
+            id, lum = row.split("\t")
 
             # reformat line id to be ELEMENT ION WAVELENGTH
-            id = ' '.join(list(filter(None, id.split(' '))))
+            id = " ".join(list(filter(None, id.split(" "))))
 
-            wavelength = convert_cloudy_wavelength(id.split(' ')[-1])
+            wavelength = convert_cloudy_wavelength(id.split(" ")[-1])
 
             # convert luminosity to float
             lum = float(lum)
@@ -539,16 +547,16 @@ def read_linelist(filename, extension = 'elin'):
 
 
 def read_wavelength(filename):
-    """ return just wavelength grid from cloudy file and reverse the order """
+    """return just wavelength grid from cloudy file and reverse the order"""
 
-    lam = np.loadtxt(f'{filename}.cont', delimiter='\t', usecols=(0)).T
+    lam = np.loadtxt(f"{filename}.cont", delimiter="\t", usecols=(0)).T
     lam = lam[::-1]  # reverse order
 
     return lam
 
 
 def read_continuum(filename, return_dict=False):
-    """ read a cloudy continuum file and convert spectra to erg/s/Hz """
+    """read a cloudy continuum file and convert spectra to erg/s/Hz"""
 
     # ----- Open SED
 
@@ -557,11 +565,12 @@ def read_continuum(filename, return_dict=False):
     4 = total, 8 = contribution of lines to total
     """
     lam, incident, transmitted, nebular, total, linecont = np.loadtxt(
-        f'{filename}.cont', delimiter='\t', usecols=(0, 1, 2, 3, 4, 8)).T
+        f"{filename}.cont", delimiter="\t", usecols=(0, 1, 2, 3, 4, 8)
+    ).T
 
     # --- frequency
     lam = lam[::-1]  # reverse array
-    lam_m = lam * 1E-10  # m
+    lam_m = lam * 1e-10  # m
     nu = c.value / (lam_m)
 
     """
@@ -570,13 +579,18 @@ def read_continuum(filename, return_dict=False):
     """
     nebular_continuum = nebular - linecont
 
-    spec_dict = {'lam': lam, 'nu': nu}
+    spec_dict = {"lam": lam, "nu": nu}
 
-    for spec_type in ['incident', 'transmitted', 'nebular',
-                      'nebular_continuum', 'total', 'linecont']:
-
+    for spec_type in [
+        "incident",
+        "transmitted",
+        "nebular",
+        "nebular_continuum",
+        "total",
+        "linecont",
+    ]:
         sed = locals()[spec_type]
-        sed = sed[:: -1]  # reverse array
+        sed = sed[::-1]  # reverse array
         sed /= 10**7  # convert from W to erg
         sed /= nu  # convert from nu l_nu to l_nu
         spec_dict[spec_type] = sed
@@ -584,8 +598,16 @@ def read_continuum(filename, return_dict=False):
     if return_dict:
         return spec_dict
     else:
-        return lam, nu, incident, transmitted, nebular,\
-            nebular_continuum, total, linecont
+        return (
+            lam,
+            nu,
+            incident,
+            transmitted,
+            nebular,
+            nebular_continuum,
+            total,
+            linecont,
+        )
 
 
 # def _create_cloudy_binary(grid, params, verbose=False):
@@ -620,8 +642,8 @@ def read_continuum(filename, return_dict=False):
 #     output.append("age\n")  # label par 1
 #     output.append("logz\n")  # label par 2
 #
-#     output.append(str(grid.spectra['stellar'].shape[0] *
-#                       grid.spectra['stellar'].shape[1])+"\n")  # nmod
+#     output.append(str(grid.spectra["incident"].shape[0] *
+#                       grid.spectra["incident"].shape[1])+"\n")  # nmod
 #     output.append(str(len(grid.lam))+"\n")  # nfreq (nwavelength)
 #     # output.append(str(len(frequency))+"\n")  # nfreq (nwavelength)
 #
@@ -647,7 +669,7 @@ def read_continuum(filename, return_dict=False):
 #     for i, a in enumerate(grid.ages):
 #         for j, z in enumerate(grid.metallicities):
 #             output.append(' '.join(map(str,
-#                                        grid.spectra['stellar'][i, j]))+"\n")
+#                                        grid.spectra["incident"][i, j]))+"\n")
 #
 #     with open('model.ascii', 'w') as target:
 #         target.writelines(output)

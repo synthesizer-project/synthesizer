@@ -23,8 +23,22 @@ Example usage:
     bar_no_units = foo._bar
     
 """
-from unyt import (nJy, erg, s, Hz, Angstrom, cm, Mpc, yr, km, Msun,
-                  unyt_quantity, unyt_array, dimensionless)
+from unyt import (
+    nJy,
+    erg,
+    s,
+    Hz,
+    Angstrom,
+    cm,
+    Mpc,
+    yr,
+    km,
+    Msun,
+    K,
+    unyt_quantity,
+    unyt_array,
+    dimensionless,
+)
 
 
 # Define an importable dictionary with the default unit system
@@ -49,6 +63,9 @@ default_units = {
     "initial_masses": Msun,
     "current_masses": Msun,
     "ages": yr,
+    "accretion_rate": Msun / yr,
+    "bol_luminosity": erg / s,
+    "bb_temperature": K,
 }
 
 
@@ -57,7 +74,7 @@ class UnitSingleton(type):
     A metaclass used to ensure singleton behaviour of Units.
 
     i.e. there can only ever be a single instance of a class in a namespace.
-    
+
     Adapted from:
     https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python
     """
@@ -83,23 +100,20 @@ class UnitSingleton(type):
 
         # Are we forcing an update?... I hope not
         if force:
-            cls._instances[cls] = super(UnitSingleton, cls).__call__(
-                new_units, force
-            )
+            cls._instances[cls] = super(UnitSingleton, cls).__call__(new_units, force)
 
         # Print a warning if an instance exists and arguments have been passed
         elif cls in cls._instances and new_units is not None:
-            print("WARNING! Units are already set. \nAny modified units will not "
-                  "take effect. \nUnits should be configured before running "
-                  "anything else... \nbut you could (and shouldn't) force it: "
-                  "Units(new_units_dict, force=True).")
-            
+            print(
+                "WARNING! Units are already set. \nAny modified units will not "
+                "take effect. \nUnits should be configured before running "
+                "anything else... \nbut you could (and shouldn't) force it: "
+                "Units(new_units_dict, force=True)."
+            )
 
         # If we don't already have an instance the dictionary will be empty
         if cls not in cls._instances:
-            cls._instances[cls] = super(UnitSingleton, cls).__call__(
-                new_units, force
-            )
+            cls._instances[cls] = super(UnitSingleton, cls).__call__(new_units, force)
 
         return cls._instances[cls]
 
@@ -130,7 +144,7 @@ class Units(metaclass=UnitSingleton):
             Observer frame wavelength unit.
         wavelength (unyt.unit_object.Unit)
             Alias for rest frame wavelength unit.
-    
+
         nu (unyt.unit_object.Unit)
             Rest frame frequency unit.
         nuz (unyt.unit_object.Unit)
@@ -180,7 +194,7 @@ class Units(metaclass=UnitSingleton):
         """
         Intialise the Units object.
 
-        Args: 
+        Args:
             units (dict)
                 A dictionary containing any modifications to the default unit
                 system. This dictionary must be of the form:
@@ -193,7 +207,7 @@ class Units(metaclass=UnitSingleton):
         """
 
         # First define all possible units with their defaults
-        
+
         # Wavelengths
         self.lam = Angstrom  # rest frame wavelengths
         self.obslam = Angstrom  # observer frame wavelengths
@@ -232,6 +246,11 @@ class Units(metaclass=UnitSingleton):
         # Time quantities
         self.ages = yr  # Stellar ages
 
+        # Black holes quantities
+        self.accretion_rate = Msun / yr
+        self.bol_luminosity = erg / s
+        self.bb_temperature = K
+
         # Do we have any modifications to the default unit system
         if units is not None:
             print("Redefining unit system:")
@@ -246,12 +265,11 @@ class Units(metaclass=UnitSingleton):
         out_str = "Unit System: \n"
         for key in default_units:
             out_str += (
-                "%s: ".ljust(22 - len(key)) % key
-                + getattr(self, key).__str__() + "\n"
+                "%s: ".ljust(22 - len(key)) % key + getattr(self, key).__str__() + "\n"
             )
 
         return out_str
-        
+
 
 class Quantity:
     """
@@ -280,7 +298,7 @@ class Quantity:
 
         # Attach the unit system
         self.units = Units()
-            
+
     def __set_name__(self, owner, name):
         """
         When a class variable is assigned a Quantity() this method is called
@@ -288,7 +306,7 @@ class Quantity:
         for use when returning values with or without units.
         """
         self.public_name = name
-        self.private_name = '_' + name
+        self.private_name = "_" + name
 
     def __get__(self, obj, type=None):
         """
@@ -329,11 +347,13 @@ class Quantity:
         # Do we need to perform a unit conversion? If not we assume value
         # is already in the default unit system
         if isinstance(value, unyt_quantity) or isinstance(value, unyt_array):
-            if (value.units != getattr(self.units, self.public_name) and
-                value.units != dimensionless):
+            if (
+                value.units != getattr(self.units, self.public_name)
+                and value.units != dimensionless
+            ):
                 value = value.to(getattr(self.units, self.public_name)).value
             else:
                 value = value.value
-                
+
         # Set the attribute
         setattr(obj, self.private_name, value)
