@@ -22,7 +22,14 @@
       :toctree:
       :nosignatures:
    {% for item in functions %}
-      {{ item }}
+
+   .. autofunction:: {{ item }}
+   
+   .. _sphx_glr_backref_{{fullname}}.{{item}}:
+
+   .. minigallery:: {{fullname}}.{{item}}
+       :add-heading:
+
    {%- endfor %}
    {% endif %}
    {% endblock %}
@@ -36,7 +43,15 @@
       :template: custom-class-template.rst
       :nosignatures:
    {% for item in classes %}
-      {{ item }}
+   
+   .. autoclass:: {{ item }}
+      :members:
+
+   .. _sphx_glr_backref_{{fullname}}.{{item}}:
+
+   .. minigallery:: {{fullname}}.{{item}}
+       :add-heading:
+
    {%- endfor %}
    {% endif %}
    {% endblock %}
