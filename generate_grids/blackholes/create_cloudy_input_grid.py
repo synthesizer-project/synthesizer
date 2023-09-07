@@ -5,11 +5,10 @@ grid. Can optionally generate an array of input files for selected parameters.
 
 import yaml
 import numpy as np
-from scipy import integrate
 from pathlib import Path
 import argparse
-from unyt import c, h, angstrom, eV, erg, s, Hz, unyt_array
 import h5py
+from unyt import Angstrom
 
 # synthesizer modules
 from synthesizer.cloudy import create_cloudy_input, ShapeCommands
@@ -134,7 +133,7 @@ if __name__ == "__main__":
                 hf[f'axes/{axis}'] = grid_params[axis]
 
             # add other parameters as attributes
-            for k,v in fixed_params.items():
+            for k, v in fixed_params.items():
                 hf.attrs[k] = v
 
     for i, grid_params_ in enumerate(model_list):
@@ -168,7 +167,7 @@ if __name__ == "__main__":
             elif model == 'feltre16':
 
                 # define wavelength grid
-                lam = np.arange(1, 20000, 1) * angstrom
+                lam = np.arange(1, 20000, 1) * Angstrom
 
                 # determine luminosity
                 lnu = Feltre16.intrinsic(lam, alpha=params['aalpha'])
