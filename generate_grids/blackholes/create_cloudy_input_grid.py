@@ -134,7 +134,7 @@ if __name__ == "__main__":
                 hf[f'axes/{axis}'] = grid_params[axis]
 
             # add other parameters as attributes
-            for k,v in params.items():
+            for k,v in fixed_params.items():
                 hf.attrs[k] = v
 
     for i, grid_params_ in enumerate(model_list):
