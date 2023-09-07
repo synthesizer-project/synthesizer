@@ -198,8 +198,7 @@ def add_lines(grid_name,
     """
 
     # open the new grid
-    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'a') as \ 
-    hf:
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'a') as hf:
  
         # Get the properties of the grid including the dimensions etc.
         axes, n_axes, shape, n_models, mesh, model_list, index_list = \
