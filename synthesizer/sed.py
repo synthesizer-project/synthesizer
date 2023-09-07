@@ -1,16 +1,14 @@
 import numpy as np
-
+from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from scipy import integrate
-
-import unyt
 from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array
 
-from .units import Quantity
+from .units import Quantity, Units
 from .igm import Inoue14
 from . import exceptions
 
-
+units = Units()
 
 class Sed:
 
@@ -43,7 +41,9 @@ class Sed:
     fnu = Quantity()  # nJy
 
     def __init__(self, lam, lnu=None, description=False):
-        """Initialise an empty spectral energy distribution object"""
+        """
+        Initialise an empty spectral energy distribution object
+        """
 
         self.description = description
 
@@ -76,7 +76,8 @@ class Sed:
                 return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
 
             elif self._lnu.ndim == 2:
-                # if array of Seds concatenate them. This is only relevant for particles.
+                # if array of Seds concatenate them.
+                # This is only relevant for particles.
                 return Sed(self._lam, np.concatenate((self._lnu, second_sed._lnu)))
 
             else:
@@ -95,7 +96,8 @@ class Sed:
         pstr += "-" * 10 + "\n"
         pstr += "SUMMARY OF SED \n"
         pstr += f"Number of wavelength points: {len(self._lam)} \n"
-        # pstr += f"Bolometric luminosity: {self.get_bolometric_luminosity()}"
+        pstr += f"Wavelength range: {np.min(self.lam)},{np.max(self.lam)} \n"
+        pstr += f"log10(Bolometric luminosity): {np.log10(self.get_bolometric_luminosity()):.2f}"
         pstr += "-" * 10
 
         return pstr
@@ -106,10 +108,34 @@ class Sed:
 
     def get_bolometric_luminosity(self):
         """
-        Calculate the bolometric luminosity of the SED.
+        Calculate the bolometric luminosity of the SED by simply integrating the
+        SED.
         """
 
         return np.trapz(self.lnu[::-1], x=self.nu[::-1])
+
+
+    def get_lnu_at(self, wavelength, kind=False):
+        """
+        Return lnu at a provided wavelength.
+        
+        Arguments
+        ---------
+
+        wavelength: float
+            wavelength of interest
+
+        Returns
+        ---------
+
+        float
+            luminosity (lnu) at the provided wavelength
+
+        """
+
+        return interp1d(self._lam, self._lnu, kind=kind)(
+            wavelength.to(units.lam).value) * units.lnu
+
 
 
     def get_index(index_window, blue_window, red_window, loc):
@@ -131,20 +157,27 @@ class Sed:
                 - red_start (int): Start of the red continuum window.
                 - red_end (int): End of the red continuum window.
         """
-        indices = np.array([index_window[loc], index_window[loc+1], blue_window[loc], blue_window[loc+1], red_window[loc], red_window[loc+1]])
+        indices = np.array([index_window[loc], index_window[loc+1],
+                            blue_window[loc], blue_window[loc+1],
+                            red_window[loc], red_window[loc+1]])
         
-        absorption_start, absorption_end, blue_start, blue_end, red_start, red_end = indices
+        absorption_start, absorption_end, blue_start, blue_end, red_start, \
+            red_end = indices
         
-        return absorption_start, absorption_end, blue_start, blue_end, red_start, red_end
-
+        return absorption_start, absorption_end, blue_start, blue_end, \
+            red_start, red_end
 
     def return_beta(self, wv=[1500.0, 2500.0]):
-        """Return the UV continuum slope (\beta) based on measurements
-        at two wavelength."""
+        """
+        Return the UV continuum slope (\beta) based on measurements
+        at two wavelength.
+        """
 
         if self._spec_dims == 2:
-            f0 = np.array([np.interp(wv[0], self.lam, _lnu) for _lnu in self.lnu])
-            f1 = np.array([np.interp(wv[1], self.lam, _lnu) for _lnu in self.lnu])
+            f0 = np.array([np.interp(wv[0], self.lam, _lnu) for _lnu in
+                           self.lnu])
+            f1 = np.array([np.interp(wv[1], self.lam, _lnu) for _lnu in
+                           self.lnu])
 
         else:
             f0 = np.interp(wv[0], self._lam, self._lnu)
