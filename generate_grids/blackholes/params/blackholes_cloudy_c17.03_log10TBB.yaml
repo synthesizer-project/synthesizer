@@ -1,6 +1,6 @@
 
 model: cloudy # model name
-cloudy_version: v17.03 # cloudy version
+cloudy_version: c17.03 # cloudy version
 
 # chemical composition
 log10Z: -2.0 # log10(metallicity)
