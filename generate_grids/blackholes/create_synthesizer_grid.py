@@ -14,7 +14,8 @@ import h5py
 import yaml
 
 from synthesizer.utils import read_params
-from synthesizer.cloudy import read_wavelength, read_continuum, read_lines, read_linelist
+from synthesizer.cloudy import read_wavelength, read_continuum, read_lines, \
+    read_linelist
 from synthesizer.sed import calculate_Q
 
 from utils import get_grid_properties
@@ -26,7 +27,8 @@ from utils import get_grid_properties
 def get_grid_properties_hf(hf, verbose=True):
 
     """
-    A wrapper over get_grid_properties to get the grid properties for a HDF5 grid.
+    A wrapper over get_grid_properties to get the grid properties for a HDF5 
+    grid.
     """
     
     axes = hf.attrs['grid_axes'] # list of axes
@@ -36,8 +38,10 @@ def get_grid_properties_hf(hf, verbose=True):
     return get_grid_properties(axes, axes_values, verbose=verbose)
 
 
-
-def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False, files_to_check = ['cont', 'elines']):
+def check_cloudy_runs(grid_name,
+                      synthesizer_data_dir,
+                      replace=False,
+                      files_to_check=['cont', 'elines']):
     """
     Check that all the cloudy runs have run properly
 
@@ -52,10 +56,12 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False, files_to_c
     """
 
     # open the new grid
-    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'r') as hf:
+    with h5py.File(f'{synthesizer_data_dir}/grids/{grid_name}.hdf5', 'r') \
+        as hf:
 
         # Get the properties of the grid including the dimensions etc.
-        axes, n_axes, shape, n_models, mesh, model_list, index_list = get_grid_properties_hf(hf)
+        axes, n_axes, shape, n_models, mesh, model_list, index_list = \
+            get_grid_properties_hf(hf)
 
         # list of failed models
         failed_list = []
@@ -79,30 +85,27 @@ def check_cloudy_runs(grid_name, synthesizer_data_dir, replace=False, files_to_c
 
             if failed:
 
-                print(i, model_list[i])    
+                print(i, model_list[i])
                 failed_list.append(i)
 
                 """
-                If replace is specified, instead replace the grid point with the previous one.
-                NOTE: this should be a last resort if the cloudy runs of a small number of grid points are consistently failing.
+                If replace is specified, instead replace the grid point with
+                the previous one.
+                NOTE: this should be a last resort if the cloudy runs of a
+                small number of grid points are consistently failing.
                 """
                 if replace:
                     for ext in files_to_check:
-                        shutil.copyfile(f"{synthesizer_data_dir}/cloudy/{grid_name}/{i-1}.{ext}", infile+'.lines')
+                        shutil.copyfile(f"{synthesizer_data_dir}/cloudy/\
+                                        {grid_name}/{i-1}.{ext}",
+                                        infile+'.lines')
                     
-        # if the files have been replace set the failed list to empty so the rest of the code can run     
+        # if the files have been replace set the failed list to empty so the 
+        # rest of the code can run     
         if replace:
             failed_list = []
 
-
         return failed_list
-
-
-
-
-
-
-
 
 
 def add_spectra(grid_name, synthesizer_data_dir):
@@ -172,7 +175,11 @@ def add_spectra(grid_name, synthesizer_data_dir):
 
 
 
-def add_lines(grid_name, synthesizer_data_dir, line_type = 'linelist', lines_to_include = False, include_spectra = True):
+def add_lines(grid_name,
+              synthesizer_data_dir,
+              line_type='linelist',
+              lines_to_include=False,
+              include_spectra=True):
     """
     Open cloudy lines and add them to the HDF5 grid
 
@@ -226,7 +233,8 @@ def add_lines(grid_name, synthesizer_data_dir, line_type = 'linelist', lines_to_
 
             # get TOTAL continuum spectra
             if include_spectra:
-                nebular_continuum = spectra['nebular'][indices] - spectra['linecont'][indices]
+                nebular_continuum = spectra['nebular'][indices] \
+                - spectra['linecont'][indices]
                 continuum = spectra['transmitted'][indices] + nebular_continuum
 
             
@@ -291,7 +299,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=('Create synthesizer HDF5 grid '
                                                   'for a given grid.'))
 
-    parser.add_argument("-synthesizer_data_dir", type=str, required=True) # path to synthesizer_data_dir
+    # path to synthesizer_data_dir
+    parser.add_argument("-synthesizer_data_dir", type=str, required=True) 
     parser.add_argument("-grid_name", "--grid_name", type=str, required=True)
     parser.add_argument("-include_spectra", "--include_spectra", type=bool, default=False, required=False)
     parser.add_argument("-replace", "--replace", type=bool, default=False, required=False)
@@ -299,17 +308,16 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    print(args)
-
     include_spectra = args.include_spectra
-
-    print(include_spectra)
 
     synthesizer_data_dir = args.synthesizer_data_dir
     grid_name = args.grid_name
 
     # check cloudy runs
-    failed_list = check_cloudy_runs(grid_name, synthesizer_data_dir, replace = args.replace, include_spectra = include_spectra)
+    failed_list = check_cloudy_runs(grid_name,
+                                    synthesizer_data_dir,
+                                    replace=args.replace
+                                    )
 
     print(failed_list)
 
@@ -337,5 +345,8 @@ if __name__ == "__main__":
         if args.line_calc_method == 'lines':
 
             # add lines
-            add_lines(grid_name, synthesizer_data_dir, line_type = 'linelist', include_spectra = include_spectra)
+            add_lines(grid_name,
+                      synthesizer_data_dir,
+                      line_type='linelist',
+                      include_spectra=include_spectra)
             
