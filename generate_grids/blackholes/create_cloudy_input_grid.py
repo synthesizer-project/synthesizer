@@ -127,7 +127,7 @@ if __name__ == "__main__":
                        'w') as hf:
 
             # add attribute with the grid axes
-            hf.attrs['grid_axes'] = grid_axes
+            hf.attrs['axes'] = grid_axes
 
             # add the grid axis values
             for grid_axis in grid_axes:
