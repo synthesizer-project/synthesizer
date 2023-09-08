@@ -202,45 +202,63 @@ class Sed:
         return self._get_lnu_at_lam(lam.to(units.lam).value, kind=kind)\
             * units.lnu
 
-
-    def return_beta(self, wv=[1500.0, 2500.0]):
+    def measure_beta(self, window=(1250.0, 3000.0)):
         """
-        Return the UV continuum slope (\beta) based on measurements
-        at two wavelength.
+        Measure the UV continuum slope (\beta) measured using the provided 
+        window. If the window has len(2) a full fit to the spectra is performed
+        else the luminosity in two windows is calculated and used to determine
+        the slope, similar to observations.
         """
 
-        if self._spec_dims == 2:
-            f0 = np.array([np.interp(wv[0], self.lam, _lnu) for _lnu in
-                           self.lnu])
-            f1 = np.array([np.interp(wv[1], self.lam, _lnu) for _lnu in
-                           self.lnu])
+        # if a single window is provided
+        if len(window) == 2:
 
+            s = (self.lam > window[0]) & (self.lam < window[1])
+
+            beta = linregress(np.log10(self._lam[s]), np.log10(self._lnu[s]))[0]
+
+        # if two windows are provided 
+        elif len(window) == 4:
+
+            # define the red and blue windows
+            blue = window[:2]
+            red = window[2:]
+
+            # measure the red and blue windows
+            lnu_blue = self.measure_window_lnu(blue)
+            lnu_red = self.measure_window_lnu(red)
+            
+            # measure beta
+            beta = np.log10(lnu_blue / lnu_red) / np.log10(np.mean(blue) /
+                                                           np.mean(red)) - 2.0
+            
         else:
-            f0 = np.interp(wv[0], self._lam, self._lnu)
-            f1 = np.interp(wv[1], self._lam, self._lnu)
 
-        return np.log10(f0 / f1) / np.log10(wv[0] / wv[1]) - 2.0
+            # raise exception
+            print('a window of len 2 or 4 must be provided')
 
-    def return_beta_spec(self, wv=[1250.0, 3000.0]):
-        """
-        Return the UV continuum slope (\beta) based on linear
-        regression to the spectra over a wavelength range.
-        """
+        return beta
 
-        s = (self.lam > wv[0]) & (self.lam < wv[1])
+    # def return_beta_spec(self, wv=[1250.0, 3000.0]):
+    #     """
+    #     Return the UV continuum slope (\beta) based on linear
+    #     regression to the spectra over a wavelength range.
+    #     """
 
-        if self._spec_dims == 2:
-            slope = np.array(
-                [
-                    linregress(np.log10(self.lam[s]), np.log10(_lnu[..., s]))[0]
-                    for _lnu in self.lnu
-                ]
-            )
-        else:
-            dummy = linregress(np.log10(self.lam[s]), np.log10(self.lnu[..., s]))
-            slope = dummy[0]
+    #     s = (self.lam > wv[0]) & (self.lam < wv[1])
 
-        return slope - 2.0
+    #     if self._spec_dims == 2:
+    #         slope = np.array(
+    #             [
+    #                 linregress(np.log10(self.lam[s]), np.log10(_lnu[..., s]))[0]
+    #                 for _lnu in self.lnu
+    #             ]
+    #         )
+    #     else:
+    #         dummy = linregress(np.log10(self.lam[s]), np.log10(self.lnu[..., s]))
+    #         slope = dummy[0]
+
+    #     return slope - 2.0
 
     def measure_window_luminosity(self, window, method='trapz'):
 
