@@ -2,7 +2,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from scipy import integrate
-from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array
+from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, Angstrom
 
 from .units import Quantity, Units
 from .igm import Inoue14
@@ -96,8 +96,10 @@ class Sed:
         pstr += "-" * 10 + "\n"
         pstr += "SUMMARY OF SED \n"
         pstr += f"Number of wavelength points: {len(self._lam)} \n"
-        pstr += f"Wavelength range: {np.min(self.lam)},{np.max(self.lam)} \n"
-        pstr += f"log10(Bolometric luminosity): {np.log10(self.get_bolometric_luminosity()):.2f}"
+        pstr += f"Wavelength range: [{np.min(self.lam):.2f}, {np.max(self.lam):.2f}] \n"
+        pstr += f"log10(Peak luminosity/{units.lnu}): {np.log10(np.max(self.lnu)):.2f} \n"
+        bolometric_luminosity = self.get_bolometric_luminosity()
+        pstr += f"log10(Bolometric luminosity/{bolometric_luminosity.units}): {np.log10(bolometric_luminosity):.2f} \n"
         pstr += "-" * 10
 
         return pstr
@@ -106,35 +108,101 @@ class Sed:
     def _spec_dims(self):
         return np.ndim(self.lnu)
 
-    def get_bolometric_luminosity(self):
+    def get_bolometric_luminosity(self, method='trapz'):
         """
-        Calculate the bolometric luminosity of the SED by simply integrating the
-        SED.
+        Calculate the bolometric luminosity of the SED by simply integrating
+        the SED.
+
+        Args:
+            method (str)
+                The method used to calculate the bolometric luminosity. Options
+                include 'trapz' and 'quad'.
+       
+        Returns:
+            bolometric_luminosity (float)
+                The bolometric luminosity.
+        
         """
 
-        return np.trapz(self.lnu[::-1], x=self.nu[::-1])
+        if method == 'trapz':
+            bolometric_luminosity = np.trapz(self.lnu[::-1], x=self.nu[::-1])
+        if method == 'quad':
+            bolometric_luminosity = integrate.quad(self._get_lnu_at_nu,
+                                                   1E12, 1E16)[0] \
+                                                    * units.luminosity
+
+        return bolometric_luminosity
+
+    def _get_lnu_at_nu(self, nu, kind=False):
+        """
+        A simple internal function for getting lnu at nu assuming the default 
+        unit system.
+
+        Args:
+            nu (array or float)
+                frequency(s) of interest
+
+        Returns:
+            luminosity (array or float)
+                luminosity (lnu) at the provided wavelength
+
+        """
+
+        return interp1d(self._nu, self._lnu, kind=kind)(
+            nu)
+
+    def get_lnu_at_nu(self, nu, kind=False):
+        """
+        Return lnu with units at a provided frequency using 1d interpolation
+        
+        Args:
+            wavelength (array or float)
+                wavelength(s) of interest
+            kind (str)
+                interpolation kind
+
+        Returns:
+            luminosity (unyt_array)
+                luminosity (lnu) at the provided wavelength
+
+        """
+
+        return self._get_lnu_at_nu(nu.to(units.nu).value, kind=kind)\
+            * units.lnu
 
 
-    def get_lnu_at(self, wavelength, kind=False):
+    def _get_lnu_at_lam(self, lam, kind=False):
+        """
+        Return lnu without units at a provided wavelength using 1d interpolation
+        
+        Args:
+            lam (array or float)
+                wavelength(s) of interest
+
+        Returns:
+            luminosity (array or float)
+                luminosity (lnu) at the provided wavelength
+
+        """
+
+        return interp1d(self._lam, self._lnu, kind=kind)(lam)
+
+    def get_lnu_at_lam(self, lam, kind=False):
         """
         Return lnu at a provided wavelength.
         
-        Arguments
-        ---------
+        Args:
+            lam (array or float)
+                wavelength(s) of interest
 
-        wavelength: float
-            wavelength of interest
-
-        Returns
-        ---------
-
-        float
-            luminosity (lnu) at the provided wavelength
+        Returns:
+            luminosity (array or float)
+                luminosity (lnu) at the provided wavelength
 
         """
 
-        return interp1d(self._lam, self._lnu, kind=kind)(
-            wavelength.to(units.lam).value) * units.lnu
+        return self._get_lnu_at_lam(lam.to(units.lam).value, kind=kind)\
+            * units.lnu
 
 
 
@@ -205,6 +273,126 @@ class Sed:
             slope = dummy[0]
 
         return slope - 2.0
+
+    def measure_window_luminosity(self, window, method='trapz'):
+
+        """
+        Measure the luminosity in a spectral window.
+
+        Args:
+            window (tuple of floats)
+                The window in wavelength
+        
+        Returns:
+            luminosity (float)
+                The luminosity in the window.
+        """
+
+        if method == 'quad':
+            # convert wavelength limits to frequency limits and convert to
+            # base units.
+            lims = (c / np.array(window)).to(units.nu).value
+            luminosity = integrate.quad(self._get_lnu_at_nu, *lims)[0] \
+                                                    * units.luminosity
+
+        if method == 'trapz':
+             # define a pseudo transmission function
+            transmission = (self.lam > window[0]) & (self.lam < window[1])
+            transmission = transmission.astype(float)
+            luminosity = np.trapz(self.lnu[::-1] * transmission[::-1],
+                                  x=self.nu[::-1])
+            
+        return luminosity.to(units.luminosity)
+
+    def measure_window_lnu(self, window, method='trapz'):
+
+        """
+        Measure lnu in a spectral window.
+
+        Args:
+            window (tuple of floats)
+                The window in wavelength
+            method (str)
+                The method to use for the integration
+        
+        Returns:
+            luminosity (float)
+                The luminosity in the window.
+        """
+
+        if method == 'average':
+
+            # define a pseudo transmission function
+            transmission = (self.lam > window[0]) & (self.lam < window[1])
+            transmission = transmission.astype(float)
+
+            Lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
+
+        if method == 'trapz':
+
+            # define a pseudo transmission function
+            transmission = (self.lam > window[0]) & (self.lam < window[1])
+            transmission = transmission.astype(float)
+
+            nu = self.nu[::-1]
+            lnu = self.lnu[::-1]
+
+            Lnu = np.trapz(lnu * transmission[::-1] / nu, x=nu) / \
+                np.trapz(transmission[::-1]/nu, x=nu)
+
+        if method == 'quad':
+
+            # define limits in base units
+            lims = (c / window).to(units.nu).value
+
+            def func(x):
+                return self._get_lnu_at_nu(x)/x
+
+            def inv(x):
+                return 1/x
+
+            Lnu = integrate.quad(func, *lims)[0] / \
+                integrate.quad(inv, *lims)[0]
+
+            Lnu = Lnu * units.lnu
+
+        return Lnu.to(units.lnu)
+
+
+
+    def measure_break(self, blue, red):
+        """
+        Measure a spectral break (e.g. the Balmer break) or D4000 using two 
+        windows.
+
+        Args:
+            blue (tuple of floats)
+                The blue window
+            red (tuple of floats)
+                The red window
+        
+        Returns:
+            break 
+                The ratio of the luminosity in the two windows. 
+        """
+        return self.measure_window_lnu(red) / self.measure_window_lnu(blue)
+    
+    def measure_Balmer_break(self):
+        """
+        Measure the Balmer break using two windows at (3400,3600) and (4150,4250)
+        
+        Returns:
+            float
+                The Balmer break strength
+        """
+
+        blue = (3400, 3600) * Angstrom
+        red = (4150, 4250) * Angstrom
+
+        return self.measure_break(blue, red)
+
+
+
 
     def get_balmer_break(self):
         """Return the Balmer break strength"""
