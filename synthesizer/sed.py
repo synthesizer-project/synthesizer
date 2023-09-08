@@ -552,24 +552,27 @@ class Sed:
 
         # measure the red and blue windows
         lnu_blue = self.measure_window_lnu(blue)
-        lnu_red = self.measure_window_lnu(red) 
+        lnu_red = self.measure_window_lnu(red)
 
         # using the red and blue windows fit the continuum
-        continuum_fit = np.polyfit([np.mean(blue), np.mean(red)], 
+        # note, this does not conserve units so we need to add them back in
+        # later.
+        continuum_fit = np.polyfit([np.mean(blue), np.mean(red)],
                                    [lnu_blue, lnu_red], 1)
 
         # define the wavelength grid over the feature
         transmission = (self.lam > feature[0]) & (self.lam < feature[1])
-        feature_lam = self._lam[transmission]
+        feature_lam = self.lam[transmission]
 
         # use the continuum fit to define the continuum
-        continuum = ((continuum_fit[0] * feature_lam) + continuum_fit[1]) * feature_lam**2
+        continuum = ((continuum_fit[0] * feature_lam.to(units.lam).value)
+                     + continuum_fit[1]) * units.lnu
 
         # define the continuum subtracted spectrum
-        feature_lum = self._lnu[transmission] * feature_lam**2
+        feature_lum = self.lnu[transmission]
 
         feature_lum_continuum_subtracted = -(feature_lum - continuum) / \
-            continuum 
+            continuum
 
         # measure index
         index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
