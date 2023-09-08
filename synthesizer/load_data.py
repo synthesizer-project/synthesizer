@@ -45,12 +45,18 @@ def _load_CAMELS(
             particle coordinates array, comoving
         masses (array):
             current mass particle array
+        g_coods (array):
+            gas particle coordinates array, comoving
         g_masses (array):
             gas particle masses array
         g_metallicities (array):
             gas particle overall metallicities array
+        g_hsml (array):
+            gas particle smoothing lengths array, comoving
         star_forming (array):
             boolean array flagging star forming gas particles
+        dtm (float):
+            dust-to-metals ratio to apply to all particles
 
     Returns:
         galaxies (object):
@@ -108,6 +114,10 @@ def load_CAMELS_IllustrisTNG(
         fof_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
+        verbose (bool):
+            verbosity flag
+        dtm (float):
+            dust-to-metals ratio to apply to all gas particles
 
     Returns:
         galaxies (object):
