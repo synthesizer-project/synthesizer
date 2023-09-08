@@ -529,7 +529,56 @@ class Sed:
                 )
             )
 
-        return 2.5 * np.log10(self.broadband_fluxes[f2] / self.broadband_fluxes[f1])
+        return 2.5 * np.log10(self.broadband_fluxes[f2] / 
+                              self.broadband_fluxes[f1])
+
+    def measure_index(self, feature, blue, red):
+
+        """
+        Measure an asorption feature index.
+
+        Args:
+            absorption (tuple)
+                Absoprtion feature window.
+            blue (tuple)
+                Blue continuum window for fitting.
+            red (tuple)
+                Red continuum window for fitting.
+
+        Returns:
+            index (float)
+                Absorption feature index
+        """
+
+        # measure the red and blue windows
+        lnu_blue = self.measure_window_lnu(blue)
+        lnu_red = self.measure_window_lnu(red) 
+
+        # using the red and blue windows fit the continuum
+        continuum_fit = np.polyfit([np.mean(blue), np.mean(red)], 
+                                   [lnu_blue, lnu_red], 1)
+
+        # define the wavelength grid over the feature
+        transmission = (self.lam > feature[0]) & (self.lam < feature[1])
+        feature_lam = self._lam[transmission]
+
+        # use the continuum fit to define the continuum
+        continuum = ((continuum_fit[0] * feature_lam) + continuum_fit[1]) * feature_lam**2
+
+        # define the continuum subtracted spectrum
+        feature_lum = self._lnu[transmission] * feature_lam**2
+
+        feature_lum_continuum_subtracted = -(feature_lum - continuum) / \
+            continuum 
+
+        # measure index
+        index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
+
+        return index
+
+
+
+
 
     def calculate_ew(self, index):
         """
