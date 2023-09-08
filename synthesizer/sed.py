@@ -108,7 +108,7 @@ class Sed:
     def _spec_dims(self):
         return np.ndim(self.lnu)
 
-    def get_bolometric_luminosity(self, method='trapz'):
+    def measure_bolometric_luminosity(self, method='trapz'):
         """
         Calculate the bolometric luminosity of the SED by simply integrating
         the SED.
@@ -135,7 +135,7 @@ class Sed:
 
     def _get_lnu_at_nu(self, nu, kind=False):
         """
-        A simple internal function for getting lnu at nu assuming the default 
+        A simple internal function for getting lnu at nu assuming the default
         unit system.
 
         Args:
@@ -148,12 +148,11 @@ class Sed:
 
         """
 
-        return interp1d(self._nu, self._lnu, kind=kind)(
-            nu)
+        return interp1d(self._nu, self._lnu, kind=kind)(nu)
 
     def get_lnu_at_nu(self, nu, kind=False):
         """
-        Return lnu with units at a provided frequency using 1d interpolation
+        Return lnu with units at a provided frequency using 1d interpolation.
         
         Args:
             wavelength (array or float)
@@ -169,7 +168,6 @@ class Sed:
 
         return self._get_lnu_at_nu(nu.to(units.nu).value, kind=kind)\
             * units.lnu
-
 
     def _get_lnu_at_lam(self, lam, kind=False):
         """
@@ -204,36 +202,6 @@ class Sed:
         return self._get_lnu_at_lam(lam.to(units.lam).value, kind=kind)\
             * units.lnu
 
-
-
-    def get_index(index_window, blue_window, red_window, loc):
-        """
-        Calculate the bounds of absorption, blue continuum, and red continuum windows.
-
-        Args:
-            index_window (list): List of index window bounds.
-            blue_window (list): List of blue shifted window bounds.
-            red_window (list): List of red shifted window bounds.
-            loc (int): Location index to select the appropriate bounds.
-
-        Returns:
-            tuple: A tuple containing the following integer values:
-                - absorption_start (int): Start of the absorption window.
-                - absorption_end (int): End of the absorption window.
-                - blue_start (int): Start of the blue continuum window.
-                - blue_end (int): End of the blue continuum window.
-                - red_start (int): Start of the red continuum window.
-                - red_end (int): End of the red continuum window.
-        """
-        indices = np.array([index_window[loc], index_window[loc+1],
-                            blue_window[loc], blue_window[loc+1],
-                            red_window[loc], red_window[loc+1]])
-        
-        absorption_start, absorption_end, blue_start, blue_end, red_start, \
-            red_end = indices
-        
-        return absorption_start, absorption_end, blue_start, blue_end, \
-            red_start, red_end
 
     def return_beta(self, wv=[1500.0, 2500.0]):
         """
