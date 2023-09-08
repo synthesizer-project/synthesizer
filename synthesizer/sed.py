@@ -358,8 +358,6 @@ class Sed:
 
         return Lnu.to(units.lnu)
 
-
-
     def measure_break(self, blue, red):
         """
         Measure a spectral break (e.g. the Balmer break) or D4000 using two 
@@ -372,7 +370,7 @@ class Sed:
                 The red window
         
         Returns:
-            break 
+            break
                 The ratio of the luminosity in the two windows. 
         """
         return self.measure_window_lnu(red) / self.measure_window_lnu(blue)
@@ -388,6 +386,29 @@ class Sed:
 
         blue = (3400, 3600) * Angstrom
         red = (4150, 4250) * Angstrom
+
+        return self.measure_break(blue, red)
+    
+    def measure_D4000(self, definition='Bruzual83'):
+        """
+        Measure the D4000 index using either the Bruzual83 or Balogh 
+        definitions.
+        
+        Args:
+            definition
+                The choice of definition 'Bruzual83' or 'Balogh'
+
+        Returns:
+            float
+                The Balmer break strength
+        """
+        if definition == 'Bruzual83':
+            blue = (3750, 3950) * Angstrom
+            red = (4050, 4250) * Angstrom
+
+        if definition == 'Balogh':
+            blue = (3850, 3950) * Angstrom
+            red = (4000, 4100) * Angstrom
 
         return self.measure_break(blue, red)
 
