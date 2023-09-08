@@ -391,28 +391,6 @@ class Sed:
 
         return self.measure_break(blue, red)
 
-
-
-
-    def get_balmer_break(self):
-        """Return the Balmer break strength"""
-
-        T = (self.lam > 3400) & (self.lam < 3600)
-        T = T.astype(float)
-        b = integrate.trapezoid(self.lnu * T / self.nu, self.nu) / integrate.trapezoid(
-            T / self.nu, self.nu
-        )  # numerator
-
-        T = (self.lam > 4150) & (self.lam < 4250)
-        T = T.astype(float)
-        r = integrate.trapezoid(self.lnu * T / self.nu, self.nu) / integrate.trapezoid(
-            T / self.nu, self.nu
-        )  # numerator
-
-        return np.log10(r / b)
-
-        """ measure the balmer break strength """
-
     def get_broadband_luminosities(self, filters):
         """
         Calculate broadband luminosities using a FilterCollection object
