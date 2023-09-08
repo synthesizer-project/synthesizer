@@ -554,28 +554,54 @@ class Sed:
         lnu_blue = self.measure_window_lnu(blue)
         lnu_red = self.measure_window_lnu(red)
 
-        # using the red and blue windows fit the continuum
-        # note, this does not conserve units so we need to add them back in
-        # later.
-        continuum_fit = np.polyfit([np.mean(blue), np.mean(red)],
-                                   [lnu_blue, lnu_red], 1)
-
         # define the wavelength grid over the feature
         transmission = (self.lam > feature[0]) & (self.lam < feature[1])
         feature_lam = self.lam[transmission]
 
-        # use the continuum fit to define the continuum
-        continuum = ((continuum_fit[0] * feature_lam.to(units.lam).value)
-                     + continuum_fit[1]) * units.lnu
+        # using the red and blue windows fit the continuum
+        # note, this does not conserve units so we need to add them back in
+        # later.
 
-        # define the continuum subtracted spectrum
-        feature_lum = self.lnu[transmission]
+        if self._spec_dims == 2:
 
-        feature_lum_continuum_subtracted = -(feature_lum - continuum) / \
-            continuum
+                # set up output array
+                index = np.zeros(len(self.lnu))
 
-        # measure index
-        index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
+                # Note: I'm sure this could be done better.
+                for i, _lnu in enumerate(self.lnu):
+                    continuum_fit = np.polyfit([np.mean(blue), np.mean(red)],
+                                        [lnu_blue[i], lnu_red[i]], 1)
+
+                    # use the continuum fit to define the continuum
+                    continuum = ((continuum_fit[0] *
+                                  feature_lam.to(units.lam).value)
+                                  + continuum_fit[1]) * units.lnu
+
+                    # define the continuum subtracted spectrum
+                    feature_lum = _lnu[transmission]
+                    feature_lum_continuum_subtracted = -(feature_lum - continuum) / continuum
+
+                    # measure index
+                    index[i] = np.trapz(feature_lum_continuum_subtracted, 
+                                        x=feature_lam)
+
+        else:
+
+            continuum_fit = np.polyfit([np.mean(blue), np.mean(red)],
+                                       [lnu_blue, lnu_red], 1)
+
+            # use the continuum fit to define the continuum
+            continuum = ((continuum_fit[0] * feature_lam.to(units.lam).value)
+                         + continuum_fit[1]) * units.lnu
+
+            # define the continuum subtracted spectrum
+            feature_lum = self.lnu[transmission]
+
+            feature_lum_continuum_subtracted = -(feature_lum - continuum) / \
+                continuum
+
+            # measure index
+            index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
 
         return index
 
