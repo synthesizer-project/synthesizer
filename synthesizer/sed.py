@@ -375,7 +375,7 @@ class Sed:
         """
         return self.measure_window_lnu(red) / self.measure_window_lnu(blue)
     
-    def measure_Balmer_break(self):
+    def measure_balmer_break(self):
         """
         Measure the Balmer break using two windows at (3400,3600) and (4150,4250)
         
@@ -389,7 +389,7 @@ class Sed:
 
         return self.measure_break(blue, red)
     
-    def measure_D4000(self, definition='Bruzual83'):
+    def measure_d4000(self, definition='Bruzual83'):
         """
         Measure the D4000 index using either the Bruzual83 or Balogh 
         definitions.
