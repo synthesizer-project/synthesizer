@@ -98,7 +98,7 @@ class Sed:
         pstr += f"Number of wavelength points: {len(self._lam)} \n"
         pstr += f"Wavelength range: [{np.min(self.lam):.2f}, {np.max(self.lam):.2f}] \n"
         pstr += f"log10(Peak luminosity/{units.lnu}): {np.log10(np.max(self.lnu)):.2f} \n"
-        bolometric_luminosity = self.get_bolometric_luminosity()
+        bolometric_luminosity = self.measure_bolometric_luminosity()
         pstr += f"log10(Bolometric luminosity/{bolometric_luminosity.units}): {np.log10(bolometric_luminosity):.2f} \n"
         pstr += "-" * 10
 
@@ -215,7 +215,8 @@ class Sed:
 
             s = (self.lam > window[0]) & (self.lam < window[1])
 
-            beta = linregress(np.log10(self._lam[s]), np.log10(self._lnu[s]))[0]
+            beta = linregress(np.log10(self._lam[s]),
+                              np.log10(self._lnu[s]))[0] - 2.0
 
         # if two windows are provided 
         elif len(window) == 4:
