@@ -443,8 +443,18 @@ class Sed:
 
     def get_fnu(self, cosmo, z, igm=None):
         """
-        Calculate the observed frame spectral energy distribution in nJy
+        Calculate the observed frame spectral energy distribution
 
+        Args:
+            cosmo (instance)
+                astropy cosmology instance
+            z (float)
+                redshift
+            igm (class)
+                IGM class
+
+        Returns:
+            
         """
 
         # Define default igm if none has been given
@@ -470,6 +480,8 @@ class Sed:
         # If we are applying an IGM model apply it
         if igm:
             self._fnu *= igm.T(z, self.obslam)
+
+        return self.fnu
 
     def get_broadband_fluxes(self, fc, verbose=True):  # broad band flux/nJy
         """
@@ -564,26 +576,27 @@ class Sed:
 
         if self._spec_dims == 2:
 
-                # set up output array
-                index = np.zeros(len(self.lnu))
+            # set up output array
+            index = np.zeros(len(self.lnu)) * units.lam
 
-                # Note: I'm sure this could be done better.
-                for i, _lnu in enumerate(self.lnu):
-                    continuum_fit = np.polyfit([np.mean(blue), np.mean(red)],
-                                        [lnu_blue[i], lnu_red[i]], 1)
+            # Note: I'm sure this could be done better.
+            for i, _lnu in enumerate(self.lnu):
+                continuum_fit = np.polyfit([np.mean(blue), np.mean(red)],
+                                           [lnu_blue[i], lnu_red[i]], 1)
 
-                    # use the continuum fit to define the continuum
-                    continuum = ((continuum_fit[0] *
-                                  feature_lam.to(units.lam).value)
-                                  + continuum_fit[1]) * units.lnu
+                # use the continuum fit to define the continuum
+                continuum = ((continuum_fit[0] *
+                              feature_lam.to(units.lam).value)
+                              + continuum_fit[1]) * units.lnu
 
-                    # define the continuum subtracted spectrum
-                    feature_lum = _lnu[transmission]
-                    feature_lum_continuum_subtracted = -(feature_lum - continuum) / continuum
+                # define the continuum subtracted spectrum
+                feature_lum = _lnu[transmission]
+                feature_lum_continuum_subtracted = -(feature_lum - continuum)\
+                    / continuum
 
-                    # measure index
-                    index[i] = np.trapz(feature_lum_continuum_subtracted, 
-                                        x=feature_lam)
+                # measure index
+                index[i] = np.trapz(feature_lum_continuum_subtracted, 
+                                    x=feature_lam)
 
         else:
 
