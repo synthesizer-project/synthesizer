@@ -215,8 +215,18 @@ class Sed:
 
             s = (self.lam > window[0]) & (self.lam < window[1])
 
-            beta = linregress(np.log10(self._lam[s]),
-                              np.log10(self._lnu[s]))[0] - 2.0
+            if self._spec_dims == 2:
+
+                beta = np.array([
+                    linregress(np.log10(self._lam[s]),
+                               np.log10(_lnu[..., s]))[0] - 2.0
+                    for _lnu in self.lnu
+                ])
+            
+            else:
+
+                beta = linregress(np.log10(self._lam[s]), 
+                                  np.log10(self._lnu[s]))[0] - 2.0
 
         # if two windows are provided 
         elif len(window) == 4:
@@ -239,27 +249,6 @@ class Sed:
             print('a window of len 2 or 4 must be provided')
 
         return beta
-
-    # def return_beta_spec(self, wv=[1250.0, 3000.0]):
-    #     """
-    #     Return the UV continuum slope (\beta) based on linear
-    #     regression to the spectra over a wavelength range.
-    #     """
-
-    #     s = (self.lam > wv[0]) & (self.lam < wv[1])
-
-    #     if self._spec_dims == 2:
-    #         slope = np.array(
-    #             [
-    #                 linregress(np.log10(self.lam[s]), np.log10(_lnu[..., s]))[0]
-    #                 for _lnu in self.lnu
-    #             ]
-    #         )
-    #     else:
-    #         dummy = linregress(np.log10(self.lam[s]), np.log10(self.lnu[..., s]))
-    #         slope = dummy[0]
-
-    #     return slope - 2.0
 
     def measure_window_luminosity(self, window, method='trapz'):
 
@@ -313,7 +302,15 @@ class Sed:
             transmission = (self.lam > window[0]) & (self.lam < window[1])
             transmission = transmission.astype(float)
 
-            Lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
+            if self._spec_dims == 2:
+
+                Lnu = np.array([np.sum(_lnu * transmission) /
+                                np.sum(transmission)
+                                for _lnu in self._lnu]) * units.lnu
+
+            else:
+
+                Lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
 
         if method == 'trapz':
 
@@ -322,11 +319,21 @@ class Sed:
             transmission = transmission.astype(float)
 
             nu = self.nu[::-1]
-            lnu = self.lnu[::-1]
+            
+            if self._spec_dims == 2:
 
-            Lnu = np.trapz(lnu * transmission[::-1] / nu, x=nu) / \
-                np.trapz(transmission[::-1]/nu, x=nu)
+                Lnu = np.array([
+                    np.trapz(_lnu[::-1] * transmission[::-1] / nu, x=nu) / \
+                    np.trapz(transmission[::-1]/nu, x=nu)
+                    for _lnu in self._lnu]) * units.lnu
+                
+            else:
 
+                lnu = self.lnu[::-1]
+                Lnu = np.trapz(lnu * transmission[::-1] / nu, x=nu) / \
+                    np.trapz(transmission[::-1]/nu, x=nu)
+
+        # note: not yet adapted for multiple SEDs                
         if method == 'quad':
 
             # define limits in base units
@@ -337,7 +344,7 @@ class Sed:
 
             def inv(x):
                 return 1/x
-
+            
             Lnu = integrate.quad(func, *lims)[0] / \
                 integrate.quad(inv, *lims)[0]
 
@@ -502,9 +509,15 @@ class Sed:
 
         return self.broadband_fluxes
 
-    def colour(self, f1, f2, verbose=False):
+    def measure_colour(self, f1, f2):
         """
-        Calculate broadband colours using the broad_band fluxes
+        Measure a broadband colour.
+
+        Args:
+            f1 (str)
+                blue filter
+            f2 (str)
+                red filter
         """
 
         if not bool(self.broadband_fluxes):
@@ -534,7 +547,7 @@ class Sed:
 
         Returns:
             index (float)
-                Absorption feature index
+                Absorption feature index in units of wavelength
         """
 
         # measure the red and blue windows
@@ -565,114 +578,6 @@ class Sed:
         index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
 
         return index
-
-
-
-
-
-    def calculate_ew(self, index):
-        """
-        Calculate the equivalent width of an absorption feature.
-
-        Parameters:
-            index (list): List of wavelength indices, containing:
-                - absorption_start (int): Start index of the absorption feature.
-                - absorption_end (int): End index of the absorption feature.
-                - blue_start (int): Start index of the blue continuum.
-                - blue_end (int): End index of the blue continuum.
-                - red_start (int): Start index of the red continuum.
-                - red_end (int): End index of the red continuum.
-
-        Returns:
-            float: Equivalent width in angstroms (Å).
-
-        Notes:
-            - This method calculates the equivalent width (EW) of an absorption feature in a spectrum.
-            - The flux units are converted from nJy to Lnu.
-            - The method defines the wavelength ranges of the absorption feature and two sets of continuum.
-            - The average continuum level is computed based on the specified wavelength ranges.
-            - The EW is calculated by integrating the flux difference between the absorption feature and continuum.
-
-        Example:
-            To calculate the EW, provide a list of wavelength indices:
-            >>> index = [1370, 1400, 1360, 1380, 1436, 1447]
-            >>> ew_value = your_instance.calculate_ew(index)
-            >>> print(ew_value)
-            42.15 Å
-        """
-        
-        flux = self._lnu * (self._lam**2)
-
-        absorption_start = index[0]
-        absorption_end = index[1]
-
-        blue_start = index[2]
-        blue_end = index[3]
-
-        red_start = index[4]
-        red_end = index[5]
-
-        continuum_indices = np.where(
-            (self._lam >= absorption_start) & (self._lam <= absorption_end)
-        )[0]
-
-        blue_indices = np.where((self._lam >= blue_start) & (self._lam <= blue_end))[0]
-        red_indices = np.where((self._lam >= red_start) & (self._lam <= red_end))[0]
-
-        blue_mean = np.mean(flux[blue_indices])
-        red_mean = np.mean(flux[red_indices])
-
-        avg_blue = 0.5 * (blue_start + blue_end)
-        avg_red = 0.5 * (red_start + red_end)
-
-        line = np.polyfit([avg_blue, avg_red], [blue_mean, red_mean], 1)
-
-        continuum = (line[0] * self._lam) + line[1]
-
-        ew = np.trapz(
-            (continuum[continuum_indices] - flux[continuum_indices])
-            / continuum[continuum_indices],
-            self._lam[continuum_indices],
-        )
-
-        return ew
-
-    # def return_log10Q(self):
-    #     """
-    #     measure the ionising photon luminosity
-    #     :return:
-    #     """
-    #
-    #     llam = self.lnu * c.value / (self.lam**2*1E-10)  # erg s^-1 \AA^-1
-    #     # s^-1 \AA^-1
-    #     nlam = (llam*self.lam*1E-10) / (h.to('erg/Hz').value * c.value)
-    #     s = ((self.lam >= 0) & (self.lam < 912)).nonzero()[0]
-    #     Q = simps(nlam[s], self.lam[s])
-    #
-    #     return np.log10(Q)
-
-
-# def calculate_Q_deprecated(lam, lnu):
-#     """ calculate the ionising photon luminosity
-#
-#     arguments:
-#     lam -- wavelength / \\AA
-#     lnu -- spectral luminosity density/erg/s/Hz
-#     """
-#
-#     # --- check lam is increasing and if not reverse
-#     if lam[1] < lam[0]:
-#         lam = lam[::-1]
-#
-#     lam_m = lam * 1E-10  # m
-#     lnu *= 1E-7  # convert to W s^-1 Hz^-1
-#     llam = lnu * c.value / (lam * lam_m)  # convert to l_lam (W s^-1 \AA^-1)
-#     nlam = (llam * lam_m) / (h.value * c.value)  # s^-1 \AA^-1
-#
-#     def f(l): return np.interp(l, lam, nlam)
-#     Q = integrate.quad(f, 0, 912.0)[0]
-#
-#     return Q
 
 
 def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
