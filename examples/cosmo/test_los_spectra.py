@@ -14,4 +14,3 @@ kern = kernel()
 kern.get_kernel()
 
 gals[0].calculate_los_tau_v(kappa=0.3, kernel=kern.get_kernel())
-
