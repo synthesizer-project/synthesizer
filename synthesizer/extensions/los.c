@@ -137,7 +137,7 @@ void populate_cell_tree_recursive(struct cell *c,
   int ngas = c->part_count;
 
   /* Do we need to split? */
-  if (ngas < 100)
+  if (ngas < 1000)
     return;
 
   /* Compute the width at this level. */
@@ -548,7 +548,7 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
     /* Allocate cells. */
   int cdim = (int)fmax(dim / max_sml, 3);
   if (cdim > 64) cdim = 64;
-  int maxdepth = 50;
+  int maxdepth = 10;
   int ncells = pow(cdim, 3);
   int tot_cells = ncells * pow(8, 3);
   struct cell *cells = malloc(tot_cells * sizeof(struct cell));
