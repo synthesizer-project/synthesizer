@@ -102,7 +102,6 @@ class Galaxy(BaseGalaxy):
         """
         Calculate integrated stellar properties
         """
-        self.n_starparticles = self.stars.nparticles
 
         # Define integrated properties of this galaxy
         if self.stars.current_masses is not None:
@@ -112,7 +111,6 @@ class Galaxy(BaseGalaxy):
         """
         Calculate integrated gas properties
         """
-        self.n_gasparticles = self.gas.nparticles
 
         # Define integrated properties of this galaxy
         if self.gas.masses is not None:
@@ -455,7 +453,7 @@ class Galaxy(BaseGalaxy):
         elif old:
             s = self.stars.log10ages > np.log10(old)
         else:
-            s = np.ones(self.n_starparticles, dtype=bool)
+            s = np.ones(self.stars.nparticles, dtype=bool)
 
         return s
 
@@ -467,12 +465,9 @@ class Galaxy(BaseGalaxy):
 
         pass
 
-    def get_particle_spectra_stellar(self, grid, update=True):
+    def get_particle_spectra_incident(self, grid, update=True):
         """
-        Calculate intrinsic spectra for all *individual* stellar particles.
-        The stellar SED component is always created, the intrinsic SED
-        component is only computed if the "total" grid is available from
-        the passed grid.
+        Calculate incident spectra for all *individual* stellar particles.
 
         TODO: need to be able to apply masks to get young and old stars.
         # young=False,
@@ -516,13 +511,9 @@ class Galaxy(BaseGalaxy):
 
         return sed
 
-    def get_particle_spectra_intrinsic(self, grid, fesc=0.0, update=True):
+    def get_particle_spectra_reprocessed(self, grid, fesc=0.0, update=True):
         """
-        Calculate intrinsic spectra for all *individual* stellar particles.
-
-        [is this still true?] The stellar SED component is always created, the intrinsic SED
-        component is only computed if the "total" grid is available from
-        the passed grid.
+        Calculate reprocessed spectra for all *individual* stellar particles.
 
         TODO: need to be able to apply masks to get young and old stars.
         # young=False,
@@ -578,10 +569,6 @@ class Galaxy(BaseGalaxy):
         """
         Calculate attenuated spectra for all *individual* stellar
         particles according to a simple screen.
-
-        [is this still true?] The stellar SED component is always created,
-        the intrinsic SED component is only computed if the "total" grid
-        is available from the passed grid.
 
         TODO: need to be able to apply masks to get young and old stars.
         # young=False,
