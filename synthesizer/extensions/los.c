@@ -544,7 +544,8 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
   }
 
     /* Allocate cells. */
-  int cdim = min((int)fmax(dim / max_sml, 3), 64);
+  int cdim = (int)fmax(dim / max_sml, 3);
+  if (cdim > 64) cdim = 64;
   int maxdepth = 50;
   int ncells = pow(cdim, 3);
   int tot_cells = ncells * pow(8, 3);
