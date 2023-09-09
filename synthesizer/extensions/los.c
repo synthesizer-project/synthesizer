@@ -154,9 +154,11 @@ void populate_cell_tree_recursive(struct cell *c,
       /* Allocate the cells. */
       struct cell *new_cells = malloc(8 * 8 * sizeof(struct cell));
 
-      /* Ensure the allocation went smoothly */
-      if (new_cells == NULL)
-          error("Failed to dynamically allocate more cells in the tree!");
+      /* TODO: Python C extension error handling, need to pass NULL up
+       * recursion tree. */
+      /* /\* Ensure the allocation went smoothly *\/ */
+      /* if (new_cells == NULL) */
+      /*     error("Failed to dynamically allocate more cells in the tree!"); */
 
       /* Intialise the cells at 0. */
       bzero(new_cells, 8 * 8 * sizeof(struct cell));
