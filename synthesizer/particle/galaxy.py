@@ -102,7 +102,6 @@ class Galaxy(BaseGalaxy):
         """
         Calculate integrated stellar properties
         """
-        self.n_starparticles = self.stars.nparticles  # TODO: why do we need this?
 
         # Define integrated properties of this galaxy
         if self.stars.current_masses is not None:
@@ -112,7 +111,6 @@ class Galaxy(BaseGalaxy):
         """
         Calculate integrated gas properties
         """
-        self.n_gasparticles = self.gas.nparticles
 
         # Define integrated properties of this galaxy
         if self.gas.masses is not None:
@@ -455,7 +453,7 @@ class Galaxy(BaseGalaxy):
         elif old:
             s = self.stars.log10ages > np.log10(old)
         else:
-            s = np.ones(self.n_starparticles, dtype=bool)
+            s = np.ones(self.stars.nparticles, dtype=bool)
 
         return s
 
