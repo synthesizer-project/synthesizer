@@ -18,6 +18,7 @@ Contents
    grids/grids
    spectra
    units
+   sed
    filters
    blackholes/blackholes
    parametric/parametric
