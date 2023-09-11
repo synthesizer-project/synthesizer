@@ -59,11 +59,11 @@ default_units = {
     "smoothing_lengths": Mpc,
     "softening_length": Mpc,
     "velocities": km / s,
-    "masses": Msun,
-    "initial_masses": Msun,
-    "current_masses": Msun,
+    "masses": Msun.in_base('galactic'),
+    "initial_masses": Msun.in_base('galactic'),
+    "current_masses": Msun.in_base('galactic'),
     "ages": yr,
-    "accretion_rate": Msun / yr,
+    "accretion_rate": Msun.in_base('galactic') / yr,
     "bol_luminosity": erg / s,
     "bb_temperature": K,
 }
@@ -239,15 +239,15 @@ class Units(metaclass=UnitSingleton):
         self.velocities = km / s
 
         # Masses
-        self.masses = Msun
-        self.initial_masses = Msun  # initial mass of stellar particles
-        self.current_masses = Msun  # current mass of stellar particles
+        self.masses = Msun.in_base('galactic')
+        self.initial_masses = Msun.in_base('galactic')  # initial mass of stellar particles
+        self.current_masses = Msun.in_base('galactic')  # current mass of stellar particles
 
         # Time quantities
         self.ages = yr  # Stellar ages
 
         # Black holes quantities
-        self.accretion_rate = Msun / yr
+        self.accretion_rate = Msun.in_base('galactic') / yr
         self.bol_luminosity = erg / s
         self.bb_temperature = K
 
