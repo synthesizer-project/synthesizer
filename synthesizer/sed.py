@@ -10,28 +10,21 @@ from . import exceptions
 
 units = Units()
 
+
 class Sed:
 
     """
     A class representing a spectral energy distribution (SED).
 
-    Attributes
-    ----------
-    lam : ndarray
-        the wavelength grid in Angstroms
-    nu : ndarray
-        frequency in Hz
-    lnu: ndarray
-        the spectral luminosity density
+    Attributes:
+        lam (ndarray)
+            the wavelength grid in Angstroms
+        nu (ndarray)
+            frequency in Hz
+        lnu (ndarray)
+            the spectral luminosity density
 
-
-    Methods
-    -------
-    return_beta:
-        Calculate beta using two wavelength points
-    return_beta_spec:
-        Calculate beta using linear regression to the spectra over a
-        wavelength range
+    Methods:    
     """
 
     # for details see units.py
@@ -42,18 +35,30 @@ class Sed:
 
     def __init__(self, lam, lnu=None, description=False):
         """
-        Initialise an empty spectral energy distribution object
+        Initialise a new spectral energy distribution object.
+
+        Args:
+            lam (ndarray)
+                the wavelength grid in Angstroms
+            lnu (ndarray)
+                the spectral luminosity density
+
         """
 
+        # set the description
         self.description = description
 
+        # set the wavelength
         self.lam = lam  # \AA
 
+        # if no lnu is provided create an empty array with the same shape as
+        # lam.
         if lnu is None:
-            self.lnu = np.zeros(self.lam.shape)  # luminosity erg/s/Hz
+            self.lnu = np.zeros(self.lam.shape)  
         else:
             self.lnu = lnu
 
+        # calculate frequency
         self.nu = (c / (self.lam)).to("Hz").value  # Hz
 
         self.redshift = 0
@@ -64,12 +69,20 @@ class Sed:
         self.broadband_fluxes = None
 
     def __add__(self, second_sed):
+
+        """
+        Overide addition operator to allow two Sed objects to be added
+        together.
+        """
+
         if not np.array_equal(self._lam, second_sed._lam):
-            exceptions.InconsistentAddition("Wavelength grids must be identical")
+            exceptions.InconsistentAddition("Wavelength grids \
+                                            must be identical")
 
         else:
             if self._lnu.ndim != second_sed._lnu.ndim:
-                exceptions.InconsistentAddition("SEDs must have same dimensions")
+                exceptions.InconsistentAddition("SEDs must have \
+                                                same dimensions")
 
             elif self._lnu.ndim == 1:
                 # if single Seds simply add together and return.
@@ -86,7 +99,7 @@ class Sed:
     def __str__(self):
         """
         Overloads the __str__ operator. A summary can be achieved by
-        print(sed) where sed is an instance of sed.
+        print(sed) where sed is an instance of Sed.
         """
 
         # Set up string for printing
@@ -96,10 +109,13 @@ class Sed:
         pstr += "-" * 10 + "\n"
         pstr += "SUMMARY OF SED \n"
         pstr += f"Number of wavelength points: {len(self._lam)} \n"
-        pstr += f"Wavelength range: [{np.min(self.lam):.2f}, {np.max(self.lam):.2f}] \n"
-        pstr += f"log10(Peak luminosity/{units.lnu}): {np.log10(np.max(self.lnu)):.2f} \n"
+        pstr += f"Wavelength range: [{np.min(self.lam):.2f}, \
+            {np.max(self.lam):.2f}] \n"
+        pstr += f"log10(Peak luminosity/{units.lnu}): \
+            {np.log10(np.max(self.lnu)):.2f} \n"
         bolometric_luminosity = self.measure_bolometric_luminosity()
-        pstr += f"log10(Bolometric luminosity/{bolometric_luminosity.units}): {np.log10(bolometric_luminosity):.2f} \n"
+        pstr += f"log10(Bolometric luminosity/{bolometric_luminosity.units}): \
+            {np.log10(bolometric_luminosity):.2f} \n"
         pstr += "-" * 10
 
         return pstr
@@ -108,30 +124,6 @@ class Sed:
     def _spec_dims(self):
         return np.ndim(self.lnu)
 
-    def measure_bolometric_luminosity(self, method='trapz'):
-        """
-        Calculate the bolometric luminosity of the SED by simply integrating
-        the SED.
-
-        Args:
-            method (str)
-                The method used to calculate the bolometric luminosity. Options
-                include 'trapz' and 'quad'.
-       
-        Returns:
-            bolometric_luminosity (float)
-                The bolometric luminosity.
-        
-        """
-
-        if method == 'trapz':
-            bolometric_luminosity = np.trapz(self.lnu[::-1], x=self.nu[::-1])
-        if method == 'quad':
-            bolometric_luminosity = integrate.quad(self._get_lnu_at_nu,
-                                                   1E12, 1E16)[0] \
-                                                    * units.luminosity
-
-        return bolometric_luminosity
 
     def _get_lnu_at_nu(self, nu, kind=False):
         """
@@ -202,53 +194,31 @@ class Sed:
         return self._get_lnu_at_lam(lam.to(units.lam).value, kind=kind)\
             * units.lnu
 
-    def measure_beta(self, window=(1250.0, 3000.0)):
+
+    def measure_bolometric_luminosity(self, method='trapz'):
         """
-        Measure the UV continuum slope (\beta) measured using the provided 
-        window. If the window has len(2) a full fit to the spectra is performed
-        else the luminosity in two windows is calculated and used to determine
-        the slope, similar to observations.
+        Calculate the bolometric luminosity of the SED by simply integrating
+        the SED.
+
+        Args:
+            method (str)
+                The method used to calculate the bolometric luminosity. Options
+                include 'trapz' and 'quad'.
+       
+        Returns:
+            bolometric_luminosity (float)
+                The bolometric luminosity.
+        
         """
 
-        # if a single window is provided
-        if len(window) == 2:
+        if method == 'trapz':
+            bolometric_luminosity = np.trapz(self.lnu[::-1], x=self.nu[::-1])
+        if method == 'quad':
+            bolometric_luminosity = integrate.quad(self._get_lnu_at_nu,
+                                                   1E12, 1E16)[0] \
+                                                    * units.luminosity
 
-            s = (self.lam > window[0]) & (self.lam < window[1])
-
-            if self._spec_dims == 2:
-
-                beta = np.array([
-                    linregress(np.log10(self._lam[s]),
-                               np.log10(_lnu[..., s]))[0] - 2.0
-                    for _lnu in self.lnu
-                ])
-            
-            else:
-
-                beta = linregress(np.log10(self._lam[s]), 
-                                  np.log10(self._lnu[s]))[0] - 2.0
-
-        # if two windows are provided 
-        elif len(window) == 4:
-
-            # define the red and blue windows
-            blue = window[:2]
-            red = window[2:]
-
-            # measure the red and blue windows
-            lnu_blue = self.measure_window_lnu(blue)
-            lnu_red = self.measure_window_lnu(red)
-            
-            # measure beta
-            beta = np.log10(lnu_blue / lnu_red) / np.log10(np.mean(blue) /
-                                                           np.mean(red)) - 2.0
-            
-        else:
-
-            # raise exception
-            print('a window of len 2 or 4 must be provided')
-
-        return beta
+        return bolometric_luminosity
 
     def measure_window_luminosity(self, window, method='trapz'):
 
@@ -277,7 +247,7 @@ class Sed:
             transmission = transmission.astype(float)
             luminosity = np.trapz(self.lnu[::-1] * transmission[::-1],
                                   x=self.nu[::-1])
-            
+
         return luminosity.to(units.luminosity)
 
     def measure_window_lnu(self, window, method='trapz'):
@@ -290,7 +260,7 @@ class Sed:
                 The window in wavelength
             method (str)
                 The method to use for the integration
-        
+
         Returns:
             luminosity (float)
                 The luminosity in the window.
@@ -323,7 +293,7 @@ class Sed:
             if self._spec_dims == 2:
 
                 Lnu = np.array([
-                    np.trapz(_lnu[::-1] * transmission[::-1] / nu, x=nu) / \
+                    np.trapz(_lnu[::-1] * transmission[::-1] / nu, x=nu) / 
                     np.trapz(transmission[::-1]/nu, x=nu)
                     for _lnu in self._lnu]) * units.lnu
                 
@@ -354,7 +324,7 @@ class Sed:
 
     def measure_break(self, blue, red):
         """
-        Measure a spectral break (e.g. the Balmer break) or D4000 using two 
+        Measure a spectral break (e.g. the Balmer break) or D4000 using two
         windows.
 
         Args:
@@ -362,17 +332,18 @@ class Sed:
                 The blue window
             red (tuple of floats)
                 The red window
-        
+
         Returns:
             break
                 The ratio of the luminosity in the two windows. 
         """
         return self.measure_window_lnu(red) / self.measure_window_lnu(blue)
-    
+
     def measure_balmer_break(self):
         """
-        Measure the Balmer break using two windows at (3400,3600) and (4150,4250)
-        
+        Measure the Balmer break using two windows at (3400,3600) and
+        (4150,4250)
+
         Returns:
             float
                 The Balmer break strength
@@ -382,12 +353,12 @@ class Sed:
         red = (4150, 4250) * Angstrom
 
         return self.measure_break(blue, red)
-    
+
     def measure_d4000(self, definition='Bruzual83'):
         """
-        Measure the D4000 index using either the Bruzual83 or Balogh 
+        Measure the D4000 index using either the Bruzual83 or Balogh
         definitions.
-        
+
         Args:
             definition
                 The choice of definition 'Bruzual83' or 'Balogh'
@@ -406,12 +377,69 @@ class Sed:
 
         return self.measure_break(blue, red)
 
+    def measure_beta(self, window=(1250.0, 3000.0)):
+        """
+        Measure the UV continuum slope ($\beta$) measured using the provided
+        window. If the window has len(2) a full fit to the spectra is performed
+        else the luminosity in two windows is calculated and used to determine
+        the slope, similar to observations.
+
+        Returns:
+            float
+                The UV continuum slope ($\beta$)
+        """
+
+        # if a single window is provided
+        if len(window) == 2:
+
+            s = (self.lam > window[0]) & (self.lam < window[1])
+
+            if self._spec_dims == 2:
+
+                beta = np.array([
+                    linregress(np.log10(self._lam[s]),
+                               np.log10(_lnu[..., s]))[0] - 2.0
+                    for _lnu in self.lnu
+                ])
+            
+            else:
+
+                beta = linregress(np.log10(self._lam[s]),
+                                  np.log10(self._lnu[s]))[0] - 2.0
+
+        # if two windows are provided 
+        elif len(window) == 4:
+
+            # define the red and blue windows
+            blue = window[:2]
+            red = window[2:]
+
+            # measure the red and blue windows
+            lnu_blue = self.measure_window_lnu(blue)
+            lnu_red = self.measure_window_lnu(red)
+            
+            # measure beta
+            beta = np.log10(lnu_blue / lnu_red) / np.log10(np.mean(blue) /
+                                                           np.mean(red)) - 2.0
+            
+        else:
+
+            # raise exception
+            print('a window of len 2 or 4 must be provided')
+
+        return beta
+
     def get_broadband_luminosities(self, filters):
         """
         Calculate broadband luminosities using a FilterCollection object
 
-        arguments
-        fc: a FilterCollection object
+        Arguments:
+            filters (filters.FilterCollection)
+                A FilterCollection object.
+
+        Returns:
+            broadband_luminosities (dict)
+                A dictionary of broadband luminosities.
         """
 
         self.broadband_luminosities = {}
@@ -419,7 +447,7 @@ class Sed:
         for f in filters:
             # Apply the filter transmission curve and store the resulting
             # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu) * erg / s / Hz
+            bb_lum = f.apply_filter(self._lnu, nu=self._nu) * units.lnu
             self.broadband_luminosities[f.filter_code] = bb_lum
 
         return self.broadband_luminosities
@@ -430,6 +458,10 @@ class Sed:
         Useful when you want rest-frame quantities.
 
         Uses a standard distance of 10 pc
+
+        Returns:
+            fnu (ndarray)
+                Spectral flux density calcualted at d=10 pc
         """
 
         # Get the observed wavelength and frequency arrays
@@ -441,25 +473,25 @@ class Sed:
         self._fnu *= 1e23  # convert to Jy
         self._fnu *= 1e9  # convert to nJy
 
-    def get_fnu(self, cosmo, z, igm=None):
+        return self.fnu
+
+    def get_fnu(self, cosmo, z, igm=Inoue14):
         """
         Calculate the observed frame spectral energy distribution
 
         Args:
-            cosmo (instance)
+            cosmo (astropy.cosmology)
                 astropy cosmology instance
             z (float)
                 redshift
-            igm (class)
+            igm (igm)
                 IGM class
 
         Returns:
+            fnu (ndarray)
+                Spectral flux density calcualted at d=10 pc
             
         """
-
-        # Define default igm if none has been given
-        if igm is None:
-            igm = Inoue14()
 
         # Store the redshift for later use
         self.redshift = z
@@ -479,7 +511,7 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm:
-            self._fnu *= igm.T(z, self.obslam)
+            self._fnu *= igm().T(z, self.obslam)
 
         return self.fnu
 
@@ -487,8 +519,13 @@ class Sed:
         """
         Calculate broadband luminosities using a FilterCollection object
 
-        arguments
-        fc: a FilterCollection object
+        Args:
+            fc (object)
+                a FilterCollection object
+
+        Returns:
+            (dict)
+                a dictionary of fluxes
         """
 
         if (self.obslam is None) | (self.fnu is None):
@@ -527,9 +564,13 @@ class Sed:
 
         Args:
             f1 (str)
-                blue filter
+                blue filter code
             f2 (str)
-                red filter
+                red filter code
+
+        Returns:
+            (float)
+                the broadband colour.
         """
 
         if not bool(self.broadband_fluxes):
@@ -623,24 +664,20 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
     """
     An improved function to calculate the ionising production rate.
 
-    Parameters
-    ----------
-    lam : float array
-        wavelength grid
-    lnu: float array
-        luminosity grid (erg/s/Hz)
-    ionisation_energy: unyt_array
-        ionisation energy
-    limit: float or int, optional
-        An upper bound on the number of subintervals
-        used in the integration adaptive algorithm.
-
+    Args:
+        lam (float array)
+            wavelength grid
+        lnu (float array)
+            luminosity grid (erg/s/Hz)
+        ionisation_energy (unyt_array)
+            ionisation energy
+        limit (float or int, optional)
+            An upper bound on the number of subintervals
+            used in the integration adaptive algorithm.
 
     Returns
-    ----------
-    float
-        ionising photon luminosity (s^-1)
-
+        float
+            ionising photon luminosity (s^-1)
     """
 
     if not isinstance(lam, unyt_array):
@@ -659,7 +696,8 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
     ionisation_wavelength = h * c / ionisation_energy
 
     x = lam.to("Angstrom").value
-    y = lum.to("erg/s").value / (h.to("erg/Hz").value * c.to("Angstrom/s").value)
+    y = lum.to("erg/s").value / (h.to("erg/Hz").value * 
+                                 c.to("Angstrom/s").value)
 
     def f(x_):
         return np.interp(x_, x, y)
@@ -667,6 +705,7 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
     return integrate.quad(
         f, 0, ionisation_wavelength.to("Angstrom").value, limit=limit
     )[0]
+
 
 
 def rebin(l, f, n):  # rebin SED [currently destroys original]
