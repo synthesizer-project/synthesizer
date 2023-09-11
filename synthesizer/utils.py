@@ -1,5 +1,6 @@
 import h5py
 import numpy as np
+import unyt
 from unyt import c, h, nJy, erg, s, Hz, pc, kb
 
 
