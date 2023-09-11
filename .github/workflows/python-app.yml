@@ -40,8 +40,7 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
-        # find examples/ -name "*.py" -exec pytest {} \;
-        find docs/source/ -name "*.ipynb" -exec pytest --nbmake {} \;
+        pytest --nbmake docs/source/*.ipynb docs/source/*/*.ipynb
     - name: Sphinx Build
       run: |
         cd docs
