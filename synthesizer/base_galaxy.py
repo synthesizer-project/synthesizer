@@ -477,8 +477,6 @@ class BaseGalaxy:
                 label="old_",
             )
 
-            print(self.spectra.keys())
-
         if np.isscalar(tau_v):
             # single screen dust, no separate birth cloud attenuation
             dust_curve.params["slope"] = alpha
