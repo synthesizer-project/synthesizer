@@ -2,29 +2,46 @@
 import numpy as np
 
 
-def get_grid_properties(axes, axes_values, verbose = True):
+def get_grid_properties(axes, axes_values, verbose=True):
 
     """ 
     Get the properties of the grid including the dimensions etc.
+
+    Args:
+        axes (list)
+            The axes of the grid
+        axes_values (dict)
+            Dictionary of axes values
+
+    Returns:
+        axes
+        n_axes 
+        shape
+        n_models
+        mesh
+        model_list
+        index_list
+    
     """
 
-    
-
     # the grid axes
-   
-    if verbose: print(f'axes: {axes}')
+    if verbose:
+        print(f'axes: {axes}')
 
     # number of axes
     n_axes = len(axes)
-    if verbose: print(f'number of axes: {n_axes}')
+    if verbose:
+        print(f'number of axes: {n_axes}')
 
     # the shape of the grid (useful for creating outputs)
     shape = list([len(axes_values[axis]) for axis in axes])
-    if verbose: print(f'shape: {shape}')
+    if verbose:
+        print(f'shape: {shape}')
 
     # determine number of models
     n_models = np.prod(shape)
-    if verbose: print(f'number of models to run: {n_models}')
+    if verbose: 
+        print(f'number of models to run: {n_models}')
 
     # create the mesh of the grid
     mesh = np.array(np.meshgrid(*[np.array(axes_values[axis]) for axis in axes]))
@@ -47,25 +64,19 @@ def get_grid_properties(axes, axes_values, verbose = True):
     return axes, n_axes, shape, n_models, mesh, model_list, index_list
 
 
-
-
 def apollo_submission_script(n, grid_data_dir, cloudy_path, cloudy_version):
 
     """
     Create an Apollo SGE submission script.
 
-    Parameters
-    ----------
-    n : int
-        Number of models to run, sets size of array job.
-    synthesizer_data_dir : str
-        where to write the submission script
-    cloudy : str
-        bash executable for CLOUDY
+    Args:
+        n (int)
+            Number of models to run, sets size of array job.
+        synthesizer_data_dir (str)
+            where to write the submission script
+        cloudy (str)
+            bash executable for CLOUDY
 
-    Returns
-    -------
-    None
     """
 
     # cloudy executable
@@ -129,23 +140,20 @@ def cosma7_submission_script(N, output_dir, cloudy,
     """
     Create a cosma7 SLURM submission script.
 
-    Parameters
-    ----------
-    N : int
-        Number of models to run, sets size of array job.
-        Warning: if greater than 1000, SLURM may fail. May need to set manually
-    output_dir : str
-        where to write the submission script
-    cloudy : str
-        bash executable for CLOUDY
-    cosma_project : str
-        name of COSMA project / machine to submit to
-    cosma_account : str
-        name of COSMA account to charge computing time to
+    Args:
+        N (int)
+            Number of models to run, sets size of array job.
+            Warning: if greater than 1000, SLURM may fail.
+            May need to set manually.
+        output_dir (str)
+            where to write the submission script
+        cloudy (str)
+            bash executable for CLOUDY
+        cosma_project (str)
+            name of COSMA project / machine to submit to
+        cosma_account (str)
+            name of COSMA account to charge computing time to
 
-    Returns
-    -------
-    None
     """
 
     output = []

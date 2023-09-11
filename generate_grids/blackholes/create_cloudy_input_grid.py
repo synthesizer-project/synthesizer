@@ -23,17 +23,15 @@ from utils import (get_grid_properties,
 
 def load_grid_params(param_file='default.yaml'):
     """
-    parameters from a single param_file
+    Load parameters from a single param_file.
 
-    Parameters
-    ----------
-    param_file : str
-        Location of YAML file.
+    Args:
+        param_file (str)
+            Location of YAML file.
 
-    Returns
-    -------
-    dict
-        Dictionary of cloudy parameters
+    Returns:
+        (dict)
+            Dictionary of cloudy parameters
     """
 
     # open paramter file
