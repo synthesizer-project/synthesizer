@@ -227,7 +227,7 @@ class BaseGalaxy:
             grid, update=update, young=young, old=old, label=label
         )
 
-        # the emission which escapeds the gas
+        # the emission which escapes the gas
         if fesc > 0:
             escaped = Sed(grid.lam, fesc * incident._lnu)
 

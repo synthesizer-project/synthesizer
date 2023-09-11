@@ -20,11 +20,11 @@ from unyt import yr, Myr
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
-    script_path = os.path.abspath(os.path.dirname(__file__))
+    # script_path = os.path.abspath(os.path.dirname(__file__))
 
     # Define the grid
     grid_name = "test_grid"
-    grid_dir = script_path + "/../../tests/test_grid/"
+    grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # define the parameters of the star formation and metal enrichment histories
@@ -52,12 +52,12 @@ if __name__ == "__main__":
     galaxy.plot_spectra(show=True)
 
     # generate intrinsic spectra (which includes reprocessing by gas)
-    galaxy.get_spectra_intrinsic(grid, fesc=0.5)
+    galaxy.get_spectra_reprocessed(grid, fesc=0.5)
     print("Intrinsic spectra")
     galaxy.plot_spectra(show=True)
 
     # # --- simple dust and gas screen
-    galaxy.get_spectra_screen(grid, tau_v=0.1, fesc=0.5)
+    galaxy.get_spectra_screen(grid, tau_v=0.1)
     print("Simple dust and gas screen")
     galaxy.plot_spectra(show=True)
 
@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     # --- CF00 model implemented within pacman model
     galaxy.get_spectra_pacman(
-        grid, fesc=0.1, fesc_LyA=0.1, tau_v=[1.0, 1.0], alpha=[-1, -1], CF00=True
+        grid, fesc=0.1, fesc_LyA=0.1, tau_v=[1.0, 1.0], alpha=[-1, -1], young_old_thresh=1e7
     )
     print("CF00 implemented within the Pacman model")
     galaxy.plot_spectra()
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     # print galaxy summary
     print(galaxy)
 
-    sed = galaxy.spectra["total"]
+    sed = galaxy.spectra["attenuated"]
     print(sed)
 
     # generate broadband photometry

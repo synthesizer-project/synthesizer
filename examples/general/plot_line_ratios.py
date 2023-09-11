@@ -12,7 +12,7 @@ from synthesizer.line import LineRatios
 
 if __name__ == "__main__":
     grid_name = "test_grid"
-    grid_dir = "../tests/test_grid/"
+    grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=True)
 
     # grid_names = [
