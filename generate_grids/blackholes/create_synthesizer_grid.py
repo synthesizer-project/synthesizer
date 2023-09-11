@@ -17,9 +17,6 @@ from synthesizer.cloudy import read_wavelength, read_continuum, read_lines, \
 from utils import get_grid_properties
 
 
-
-
-
 def get_grid_properties_hf(hf, verbose=True):
 
     """
@@ -40,16 +37,15 @@ def check_cloudy_runs(grid_name,
                       replace=False,
                       files_to_check=['cont', 'elin']):
     """
-    Check that all the cloudy runs have run properly
+    Check that all the cloudy runs have run properly.
 
-    Parameters
-    ----------
-    grid_name : str
-        Name of the grid
-    synthesizer_data_dir : str
-        Directory where synthesizer data is kept.
-    replace : boolean
-        If a run has failed simply replace the model with the previous one
+    Args:
+        grid_name (str)
+            Name of the grid.
+        synthesizer_data_dir (str)
+            Directory where synthesizer data is kept.
+        replace : boolean
+            If a run has failed simply replace the model with the previous one
     """
 
     # open the new grid
@@ -111,12 +107,11 @@ def add_spectra(grid_name, synthesizer_data_dir):
     """
     Open cloudy spectra and add them to the grid
 
-    Parameters
-    ----------
-    grid_name : str
-        Name of the grid
-    synthesizer_data_dir : str
-        Directory where synthesizer data is kept.
+    Args:
+        grid_name (str)
+            Name of the grid.
+        synthesizer_data_dir (str)
+            Directory where synthesizer data is kept.
     """
 
     #  the cloudy spectra to save (others can be generated later)
@@ -193,17 +188,18 @@ def add_lines(grid_name,
     """
     Open cloudy lines and add them to the HDF5 grid
 
-    Parameters
-    ----------
-    grid_name: str
-        Name of the grid.
-    synthesizer_data_dir: str
-        Directory where synthesizer data is kept.
-    line_type : str
-        The type of line file to use (linelist, lines)
-    dlog10Q
-        The difference between the original and cloudy log10Q used for
-        rescaling the cloudy spectra
+    Args:
+        grid_name (str)
+            Name of the grid.
+        synthesizer_data_dir (str)
+            Directory where synthesizer data is kept.
+        line_type (str)
+            The type of line file to use (linelist, lines)
+        lines_to_include (bool, list)
+            Which lines to include, if at all. If linelist, linelist overwrites
+            the lines to include.
+        include_spectra (bool)
+            Flag whether to include spectra.
     """
 
     # open the new grid
