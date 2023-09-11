@@ -1,0 +1,29 @@
+model: cloudy # model name
+cloudy_version: c17.03 # cloudy version
+
+# chemical composition
+log10Z: -2.0 # log10(metallicity)
+alpha: 0.0  # alpha-abundance ratio
+d2m: 0.3  # dust to metals ratio in the cloud
+C: Dopita2006
+N: Dopita2006
+
+# photoionisation model parameters
+CMB: false  # include CMB heating
+T_floor: 100  # lower gas temperature floor
+cosmic_rays: false  # flag for inclusion of cosmic ray heating
+covering_factor: 1.0  #
+stop_T: 500  # stopping temperature
+stop_efrac: -2  # limiting ratio of electron to H densities
+z: 0.0  # redshift
+geometry: planeparallel
+grains: true # include grains
+resolution: 1.0 # energy resolution relative to the default
+log10U: -2.0
+log10n_H: 2.0
+
+# AGN model parameters
+auv: -0.5
+ax: -1.35
+log10T: [4.0,4.5,5.0,5.5,6.0,6.5,7.0]
+aox: -1.4
