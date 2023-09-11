@@ -441,10 +441,10 @@ class Survey:
         for gal in self.galaxies:
             # Are we getting a flux or rest frame?
             if spectra_type == "incident":
-                sed = gal.get_particle_spectra_stellar(grid)
+                sed = gal.get_particle_spectra_incident(grid)
                 gal.spectra_array[spectra_type] = sed
             elif spectra_type == "intrinsic":
-                sed = gal.get_particle_spectra_intrinsic(grid)
+                sed = gal.get_particle_spectra_reprocessed(grid)
                 gal.spectra_array[spectra_type] = sed
 
             # Get the flux

@@ -3,6 +3,14 @@
 Please feel free to submit issues and pull requests to this repository. 
 The github workflow will automatically run [flake8](https://flake8.pycqa.org/en/latest/) and [pytest](https://docs.pytest.org/en/7.2.x/) on any contributions; builds that fail these tests will not be accepted. Further notes on code style are detailed below.
 
+**Contents:**
+- [Style guide](#style-guide)
+- [Contributing to the Documentation](#contributing-to-the-documentation)
+    - [Getting set up](#getting-set-up)
+    - [Adding notebooks](#adding-notebooks)
+    - [Adding example scripts](#adding-example-scripts)
+
+
 ## Style guide
 All new PRs should follow these guidelines. We adhere to the pep8 style guide, and verify using flake8. We use the [Google docstring format](https://google.github.io/styleguide/pyguide.html#s3.8-comments-and-docstrings).
 
@@ -75,7 +83,7 @@ Example toctree:
 
 The `examples/` top level directory contains a number of self contained example scripts for particular use cases that may not belong in the main documentation, but are still useful for many users. We use the [sphinx-gallery](https://sphinx-gallery.github.io/stable/index.html) extension to build a gallery of our examples in the documentation.
 
-Each script should have a top level docstring written in reST, with a header. Further details are provided [here](https://sphinx-gallery.github.io/stable/syntax.html). For example:
+**Important**: each script should have a top level docstring written in reST, with a header. Examples that do not will fail the automated build process. Further details are provided [here](https://sphinx-gallery.github.io/stable/syntax.html). For example:
 
     """
     "This" is my example-script
@@ -87,5 +95,4 @@ Each script should have a top level docstring written in reST, with a header. Fu
 
 Subfolders of examples should contain a `README.rst` with a section heading (please follow the template in other subfolders).
 
-If an example is named `plot_*.py` then `sphinx-gallery` will attempt to run the script and use any images generated in the gallery thumbnail.
-
+If an example is named `plot_*.py` then `sphinx-gallery` will attempt to run the script and use any images generated in the gallery thumbnail. Images should be generated using `plt.show()` and not saved to disk.
