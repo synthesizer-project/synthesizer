@@ -204,6 +204,7 @@ def load_CAMELS_Astrid(
     snap_name="snap_090.hdf5",
     fof_name="fof_subhalo_tab_090.hdf5",
     fof_dir=None,
+    dtm=0.3
 ):
     """
     Load CAMELS-Astrid galaxies
@@ -218,6 +219,8 @@ def load_CAMELS_Astrid(
         fof_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
+        dtm (float):
+            dust to metals ratio for all gas particles
 
     Returns:
         galaxies (object):
@@ -285,6 +288,7 @@ def load_CAMELS_SIMBA(
     snap_name="snap_033.hdf5",
     fof_name="fof_subhalo_tab_033.hdf5",
     fof_dir=None,
+    dtm=0.3
 ):
     """
     Load CAMELS-SIMBA galaxies
@@ -299,6 +303,8 @@ def load_CAMELS_SIMBA(
         fof_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
+        dtm (float):
+            dust to metals ratio for all gas particles
 
     Returns:
         galaxies (object):
@@ -330,7 +336,7 @@ def load_CAMELS_SIMBA(
 
     s_oxygen = _metals[:, 4]
     s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
-    metals = _metals[:, 0]
+    metallicity = _metals[:, 0]
 
     # convert formation times to ages
     cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
