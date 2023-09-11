@@ -627,8 +627,8 @@ class BaseGalaxy:
         # the intrinsic and attenuated
 
         dust_bolometric_luminosity = (
-            self.spectra["intrinsic"].get_bolometric_luminosity()
-            - self.spectra["emergent"].get_bolometric_luminosity()
+            self.spectra["intrinsic"].measure_bolometric_luminosity()
+            - self.spectra["emergent"].measure_bolometric_luminosity()
         )
 
         # get the spectrum and normalise it properly
