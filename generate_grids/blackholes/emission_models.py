@@ -1,17 +1,10 @@
-"""A module for working with arrays of black holes.
-
-Contains the BlackHoles class for use with particle based systems. This houses
-all the data detailing collections of black hole particles. Each property is
-stored in (N_bh, ) shaped arrays for efficiency.
-
-When instantiate a BlackHoles object a myriad of extra optional properties can
-be set by providing them as keyword arguments.
-
-Example usages:
-
-    bhs = BlackHoles(masses, metallicities,
-                     redshift=redshift, accretion_rate=accretion_rate, ...)
 """
+A module holding black hole emission models.
+
+In addition to these models there is the model built in to cloudy.
+
+"""
+
 import numpy as np
 from unyt import c, Angstrom
 
@@ -30,22 +23,21 @@ class Feltre16:
         Create intrinsic narrow-line AGN spectra as utilised by
         Feltre et al. (2016). This is utilised to build the cloudy grid.
 
-        Parameters
-        ----------
-        lam : array
-            Wavelength grid (array) in angstrom or unyt
+        Args:
+        
+            lam (array)
+                Wavelength grid (array) in angstrom or unyt
 
-        alpha: float
-            UV/optical power-law index. Expected to be -2.0<alpha<-1.2
+            alpha (float)
+                UV/optical power-law index. Expected to be -2.0<alpha<-1.2
 
-        luminosity: float
-            Bolometric luminosity. Set to unity.
+            luminosity (float)
+                Bolometric luminosity. Set to unity.
 
 
-        Returns
-        -------
-        lnu
-            Spectral luminosity density.
+        Returns:
+            lnu (ndarray)
+                Spectral luminosity density.
         """
 
         # create empty luminosity array
