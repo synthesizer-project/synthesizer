@@ -51,12 +51,15 @@ class BlackHoles(Particles):
     # Define the allowed attributes
     __slots__ = [
         "_masses",
+        "_coordinates",
+        "_velocities",
         "metallicities",
         "nparticles",
         "redshift",
         "_accretion_rate",
         "_bb_temperature",
         "_bol_luminosity",
+        "_softening_lengths",
         "nbh",
     ]
 
