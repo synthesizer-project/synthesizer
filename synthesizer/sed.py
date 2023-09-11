@@ -4,9 +4,11 @@ from scipy.stats import linregress
 from scipy import integrate
 from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, Angstrom
 
+from . import exceptions
+from .utils import rebin_1d
 from .units import Quantity, Units
 from .igm import Inoue14
-from . import exceptions
+
 
 units = Units()
 
@@ -54,7 +56,7 @@ class Sed:
         # if no lnu is provided create an empty array with the same shape as
         # lam.
         if lnu is None:
-            self.lnu = np.zeros(self.lam.shape)  
+            self.lnu = np.zeros(self.lam.shape)
         else:
             self.lnu = lnu
 
@@ -91,10 +93,12 @@ class Sed:
             elif self._lnu.ndim == 2:
                 # if array of Seds concatenate them.
                 # This is only relevant for particles.
-                return Sed(self._lam, np.concatenate((self._lnu, second_sed._lnu)))
+                return Sed(self._lam, np.concatenate((self._lnu,
+                                                      second_sed._lnu)))
 
             else:
-                exceptions.InconsistentAddition("Sed.lnu must have ndim 1 or 2")
+                exceptions.InconsistentAddition("Sed.lnu must have ndim 1 \
+                                                or 2")
 
     def __str__(self):
         """
@@ -163,7 +167,8 @@ class Sed:
 
     def _get_lnu_at_lam(self, lam, kind=False):
         """
-        Return lnu without units at a provided wavelength using 1d interpolation
+        Return lnu without units at a provided wavelength using 1d
+        interpolation.
         
         Args:
             lam (array or float)
@@ -193,7 +198,6 @@ class Sed:
 
         return self._get_lnu_at_lam(lam.to(units.lam).value, kind=kind)\
             * units.lnu
-
 
     def measure_bolometric_luminosity(self, method='trapz'):
         """
@@ -235,11 +239,13 @@ class Sed:
         """
 
         if method == 'quad':
-            # convert wavelength limits to frequency limits and convert to
-            # base units.
+            """
+            Convert wavelength limits to frequency limits and convert to
+            base units.
+            """
             lims = (c / np.array(window)).to(units.nu).value
-            luminosity = integrate.quad(self._get_lnu_at_nu, *lims)[0] \
-                                                    * units.luminosity
+            luminosity = integrate.quad(self._get_lnu_at_nu, *lims)[0]\
+                * units.luminosity
 
         if method == 'trapz':
              # define a pseudo transmission function
@@ -303,7 +309,7 @@ class Sed:
                 Lnu = np.trapz(lnu * transmission[::-1] / nu, x=nu) / \
                     np.trapz(transmission[::-1]/nu, x=nu)
 
-        # note: not yet adapted for multiple SEDs                
+        # note: not yet adapted for multiple SEDs            
         if method == 'quad':
 
             # define limits in base units
@@ -582,7 +588,7 @@ class Sed:
                 )
             )
 
-        return 2.5 * np.log10(self.broadband_fluxes[f2] / 
+        return 2.5 * np.log10(self.broadband_fluxes[f2] /
                               self.broadband_fluxes[f1])
 
     def measure_index(self, feature, blue, red):
@@ -627,7 +633,7 @@ class Sed:
 
                 # use the continuum fit to define the continuum
                 continuum = ((continuum_fit[0] *
-                              feature_lam.to(units.lam).value)
+                              feature_lam.to(units.lam).value) 
                               + continuum_fit[1]) * units.lnu
 
                 # define the continuum subtracted spectrum
@@ -636,7 +642,7 @@ class Sed:
                     / continuum
 
                 # measure index
-                index[i] = np.trapz(feature_lum_continuum_subtracted, 
+                index[i] = np.trapz(feature_lum_continuum_subtracted,
                                     x=feature_lam)
 
         else:
@@ -658,6 +664,34 @@ class Sed:
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
 
         return index
+
+    def get_resampled_sed(self, n):
+        """
+        Resameple the spectra and create a new Sed object
+
+        Args:
+            n (int or float)
+      
+        Returns:
+            (sed.Sed)
+                A rebinned Sed
+        """
+
+        if isinstance(n, int):
+            sed = Sed(rebin_1d(self.lam, n, func=np.mean),
+                      rebin_1d(self.lnu, n, func=np.mean))
+
+        elif isinstance(n, float):
+            exceptions.UnimplementedFunctionality(
+                'Non-integer resampling not yet implemented.'
+            )
+
+        else:
+            exceptions.InconsistentArguments(
+                'Sampling factor must be integer or float.'
+            )
+
+        return sed
 
 
 def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
@@ -696,7 +730,7 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
     ionisation_wavelength = h * c / ionisation_energy
 
     x = lam.to("Angstrom").value
-    y = lum.to("erg/s").value / (h.to("erg/Hz").value * 
+    y = lum.to("erg/s").value / (h.to("erg/Hz").value *
                                  c.to("Angstrom/s").value)
 
     def f(x_):
@@ -706,13 +740,13 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
         f, 0, ionisation_wavelength.to("Angstrom").value, limit=limit
     )[0]
 
+    
 
+# def rebin(l, f, n):  # rebin SED [currently destroys original]
+#     n_len = int(np.floor(len(l) / n))
+#     _l = l[: n_len * n]
+#     _f = f[: n_len * n]
+#     nl = np.mean(_l.reshape(n_len, n), axis=1)
+#     nf = np.sum(_f.reshape(n_len, n), axis=1) / n
 
-def rebin(l, f, n):  # rebin SED [currently destroys original]
-    n_len = int(np.floor(len(l) / n))
-    _l = l[: n_len * n]
-    _f = f[: n_len * n]
-    nl = np.mean(_l.reshape(n_len, n), axis=1)
-    nf = np.sum(_f.reshape(n_len, n), axis=1) / n
-
-    return nl, nf
+#     return nl, nf
