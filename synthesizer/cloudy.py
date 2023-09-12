@@ -105,9 +105,39 @@ class ShapeCommands:
         return shape_commands
 
 
-def create_cloudy_input(
-    model_name, shape_commands, abundances, output_dir="./", **kwargs
-):
+    def cloudy_agn(TBB, aox=-1.4, auv=-0.5, ax=-1.35): # values from Calabro CEERS AGN model
+        
+        """
+        A function for specifying the cloudy AGN model. See 6.2 Hazy1.pdf.
+
+        Arguments
+        ----------
+        model_name: str
+            User defined name of the model used for cloudy inputs and outputs.
+        TBB: float
+            The Big Bump temperature
+        aox: float
+
+        auv: float
+
+        ax: float
+            
+        Returns
+        -------
+        list
+            a list of strings with the cloudy input commands
+        """
+
+        # collect cloudy shape commands
+        shape_commands = []
+        shape_commands.append(f'AGN T ={TBB} k, a(ox) = {aox}, a(uv)= {auv} a(x)={ax} \n')
+
+        return shape_commands
+
+
+def create_cloudy_input(model_name, shape_commands, abundances,
+                        output_dir='./', **kwargs):
+
     """
     A generic function for creating a cloudy input file
 
@@ -218,10 +248,10 @@ def create_cloudy_input(
     """
 
     if (abundances.d2m > 0) & params["grains"]:
-        delta_C = 10 ** abundances.a_nodep["C"] - 10 ** abundances.a["C"]
-        delta_PAH = 0.01 * (10 ** abundances.a_nodep["C"])
+        delta_C = 10 ** abundances.total["C"] - 10 ** abundances.gas["C"]
+        delta_PAH = 0.01 * (10 ** abundances.total["C"])
         delta_graphite = delta_C - delta_PAH
-        delta_Si = 10 ** abundances.a_nodep["Si"] - 10 ** abundances.a["Si"]
+        delta_Si = 10 ** abundances.total["Si"] - 10 ** abundances.gas["Si"]
         orion_C_abund = -3.6259
         orion_Si_abund = -4.5547
         PAH_abund = -4.446
