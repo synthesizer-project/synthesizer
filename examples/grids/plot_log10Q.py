@@ -36,7 +36,8 @@ if __name__ == "__main__":
 
     # The path to the grid directory. Defaults to the test grid directory.
     parser.add_argument(
-        "-grid_dir", "--grid_dir", type=str, required=False, default=test_grid_dir
+        "-grid_dir", "--grid_dir", type=str, required=False, 
+        default=test_grid_dir
     )
 
     # The desired ion.
