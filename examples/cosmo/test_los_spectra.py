@@ -1,4 +1,11 @@
-# import sys
+"""
+Line of sight example
+=====================
+
+Test the calculation of tau_v along the line of sight
+to each star particle
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 
