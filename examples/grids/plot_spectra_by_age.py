@@ -14,8 +14,6 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import cmasher as cmr
 
-
-from synthesizer.utils import fnu_to_flam
 from synthesizer.grid import Grid
 
 
@@ -34,8 +32,8 @@ def plot_spectra_age(grid, target_Z, spec_name="incident"):
 
     # get actual metallicity for that grid point and print it
     Z = grid.metallicity[iZ]
-    # print(f'target metallicity: {target_Z:.2f}')
-    # print(f'metallicity: {Z:.2f}')
+    print(f'target metallicity: {target_Z:.2f}')
+    print(f'metallicity: {Z:.2f}')
 
     # initialise plot
     fig = plt.figure(figsize=(3.5, 5.0))
@@ -89,7 +87,8 @@ def plot_spectra_age(grid, target_Z, spec_name="incident"):
 
     # add labels
     ax.set_xlabel(r"$\rm log_{10}(\lambda/\AA)$")
-    ax.set_ylabel(r"$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$")
+    ax.set_ylabel(r"$\rm log_{10}(L_{\nu}/erg\ \
+                  s^{-1}\ Hz^{-1} M_{\odot}^{-1})$")
 
     # return figure and axes for further use
     return fig, ax
@@ -105,7 +104,8 @@ if __name__ == "__main__":
     test_grid_dir = "../../tests/test_grid/"
 
     parser = argparse.ArgumentParser(
-        description=("Create a plot of all spectra for a given metallicity in a grid")
+        description=("Create a plot of all spectra for a given metallicity in \
+                     a grid")
     )
 
     # The name of the grid. Defaults to the test grid.
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     # Get dictionary of arguments
     args = parser.parse_args()
 
-    # If all grids are requested get a list of the grids in the grid_dir 
+    # If all grids are requested get a list of the grids in the grid_dir
     # directory.
     if args.all:
         grid_filenames = list(
@@ -150,7 +150,7 @@ if __name__ == "__main__":
         print(grid_filenames)
 
         # Remove extension
-        grid_names = list(map(lambda x: ".".join(x.split(".")[:-1]), 
+        grid_names = list(map(lambda x: ".".join(x.split(".")[:-1]),
                               grid_filenames))
 
         print(grid_names)
