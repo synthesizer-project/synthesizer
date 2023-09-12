@@ -2,7 +2,8 @@
 Plot spectra example
 ====================
 
-This example demonstrates how to extract a spectra directly from a grid and plots all the available spectra.
+This example demonstrates how to extract a spectra directly from a grid and 
+plots all the available spectra.
 
 NOTE: this only works on 2D grids at the moment
 """
@@ -10,13 +11,7 @@ NOTE: this only works on 2D grids at the moment
 import argparse
 from synthesizer.grid import Grid
 import numpy as np
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import cmasher as cmr
-
-import os
-import sys
 
 
 if __name__ == "__main__":
