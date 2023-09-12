@@ -15,10 +15,11 @@ Contents
    :maxdepth: 2
    
    installation
-   grids/grids
+   grids
    spectra
    units
    sed
+   lines
    filters
    blackholes/blackholes
    parametric/parametric
