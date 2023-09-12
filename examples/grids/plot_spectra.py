@@ -31,24 +31,32 @@ if __name__ == "__main__":
     # initialise argument parser
     parser = argparse.ArgumentParser(
         description=(
-            "Create a plot of all spectra types for a given metallicity and age"
+            "Create a plot of all spectra types for a given metallicity and \
+            age"
         )
     )
 
     # The name of the grid. Defaults to the test grid.
     parser.add_argument(
-        "-grid_name", "--grid_name", type=str, required=False, default="test_grid"
+        "-grid_name", "--grid_name", type=str, required=False, 
+        default="test_grid"
     )
 
     # The path to the grid directory. Defaults to the test grid directory.
     parser.add_argument(
-        "-grid_dir", "--grid_dir", type=str, required=False, default=test_grid_dir
+        "-grid_dir", "--grid_dir", type=str, required=False, 
+        default=test_grid_dir
     )
 
-    # The target metallicity. The code function will find the closest metallicity and report it back. The rationale behind this is that this code can easily be adapted to explore other grids.
-    parser.add_argument("-metallicity", type=float, required=False, default=0.01)
+    # The target metallicity. The code function will find the closest
+    # metallicity and report it back. The rationale behind this is
+    # that this code can easily be adapted to explore other grids.
+    parser.add_argument("-metallicity", type=float, required=False, 
+                        default=0.01)
 
-    # The target log10(age/yr). The code function will find the closest metallicity and report it back. The rationale behind this is that this code can easily be adapted to explore other grids.
+    # The target log10(age/yr). The code function will find the closest 
+    # metallicity and report it back. The rationale behind this is that 
+    # this code can easily be adapted to explore other grids.
     parser.add_argument("-log10age", type=float, required=False, default=6.0)
 
     # Get dictionary of arguments
@@ -66,7 +74,8 @@ if __name__ == "__main__":
         sed = grid.get_sed(grid_point, spec_name=spec_name)
         # print summary of SED object
         print(sed)
-        plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, label=spec_name)
+        plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, 
+                 label=spec_name)
 
     plt.xlim([2.0, 4.0])
     plt.ylim([18.0, 23])
