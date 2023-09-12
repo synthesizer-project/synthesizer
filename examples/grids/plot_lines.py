@@ -9,10 +9,9 @@ This example demonstrates how to:
 - ad hoc load an additional line
 """
 
-import os
+
 import matplotlib.pyplot as plt
-import numpy as np
-from synthesizer.grid import Grid, get_available_lines
+from synthesizer.grid import Grid
 
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this
@@ -60,7 +59,8 @@ if __name__ == "__main__":
         ratio = lines.get_ratio(ratio_id)
         print(f"{ratio_id}: {ratio:.2f}")
 
-    # we can plot a ratio against metallicity by looping over the metallicity grid
+    # we can plot a ratio against metallicity by looping over the metallicity 
+    # grid
     ratio_id = "R23"
     ia = 0  # 1 Myr old for test grid
     ratios = []
