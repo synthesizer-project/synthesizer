@@ -9,11 +9,9 @@ Example for generating a rest-frame physical scale image. This example will:
 - Make an image of the galaxy, including an RGB image.
 """
 
-import os
-import numpy as np
 
 import matplotlib.pyplot as plt
-from unyt import kpc, yr, Myr, mas
+from unyt import kpc, Myr
 
 from synthesizer.filters import UVJ
 from synthesizer.parametric.galaxy import Galaxy
@@ -41,7 +39,8 @@ if __name__ == "__main__":
     Zh = ZH.deltaConstant(Z_p)
     sfh_p = {"duration": 100 * Myr}
     sfh = SFH.Constant(sfh_p)  # constant star formation
-    sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, Zh, stellar_mass=10**9)
+    sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, Zh, 
+                         stellar_mass=10**9)
 
     # Initialise a parametric Galaxy
     galaxy = Galaxy(sfzh, morph=morph)
