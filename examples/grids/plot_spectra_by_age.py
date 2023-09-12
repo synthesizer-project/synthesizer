@@ -52,9 +52,10 @@ def plot_spectra_age(grid, target_Z, spec_name="incident"):
     cax = fig.add_axes((left, bottom + height, width, 0.02))
 
     # add colourbar
-    cbar = fig.colorbar(
-        cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, orientation="horizontal"
-    )  # add the colourbar
+    fig.colorbar(
+        cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax,
+        orientation="horizontal"
+    )
 
     # colourbar formatting and labelling
     cax.xaxis.tick_top()
@@ -69,7 +70,8 @@ def plot_spectra_age(grid, target_Z, spec_name="incident"):
 
         # plot spectra
         ax.plot(
-            np.log10(grid.lam), np.log10(Lnu), c=cmap(norm(log10age)), lw=1, alpha=0.8
+            np.log10(grid.lam), np.log10(Lnu), c=cmap(norm(log10age)), lw=1, 
+            alpha=0.8
         )
 
     # plot Lyman and Balmer limits for reference
@@ -94,7 +96,8 @@ def plot_spectra_age(grid, target_Z, spec_name="incident"):
 
 
 if __name__ == "__main__":
-    # Get the location of this script, __file__ is the absolute path of this script, however we just want to directory
+    # Get the location of this script, __file__ is the absolute path of this
+    # script, however we just want to directory
     # script_path = os.path.abspath(os.path.dirname(__file__))
 
     # Define the path to the test grid
@@ -107,22 +110,29 @@ if __name__ == "__main__":
 
     # The name of the grid. Defaults to the test grid.
     parser.add_argument(
-        "-grid_name", "--grid_name", type=str, required=False, default="test_grid"
+        "-grid_name", "--grid_name", type=str, required=False,
+        default="test_grid"
     )
 
     # The path to the grid directory. Defaults to the test grid directory.
     parser.add_argument(
-        "-grid_dir", "--grid_dir", type=str, required=False, default=test_grid_dir
+        "-grid_dir", "--grid_dir", type=str, required=False,
+        default=test_grid_dir
     )
 
-    # The target metallicity. The code function will find the closest metallicity and report it back. The rationale behind this is that this code can easily be adapted to explore other grids.
+    # The target metallicity. The code function will find the closest
+    # metallicity and report it back. The rationale behind this is that this
+    # code can easily be adapted to explore other grids.
     parser.add_argument("-Z", "--Z", type=float, required=False, default=0.01)
 
-    # Flag whether to show the figure. Figure is saved in current directory using "spectra_age_{grid_name}"
-    parser.add_argument("-show", "--show", action=argparse.BooleanOptionalAction)
+    # Flag whether to show the figure. Figure is saved in current
+    # directory using "spectra_age_{grid_name}"
+    parser.add_argument("-show", "--show", 
+                        action=argparse.BooleanOptionalAction)
 
     # Flag whether to save the figure.
-    parser.add_argument("-save", "--save", action=argparse.BooleanOptionalAction)
+    parser.add_argument("-save", "--save", 
+                        action=argparse.BooleanOptionalAction)
 
     # Flag whether to analyse all grids in the provided directory.
     parser.add_argument("-all", "--all", action=argparse.BooleanOptionalAction)
@@ -130,7 +140,8 @@ if __name__ == "__main__":
     # Get dictionary of arguments
     args = parser.parse_args()
 
-    # If all grids are requested get a list of the grids in the grid_dir directory.
+    # If all grids are requested get a list of the grids in the grid_dir 
+    # directory.
     if args.all:
         grid_filenames = list(
             map(os.path.basename, glob.glob(args.grid_dir + "*.hdf5"))
@@ -139,7 +150,8 @@ if __name__ == "__main__":
         print(grid_filenames)
 
         # Remove extension
-        grid_names = list(map(lambda x: ".".join(x.split(".")[:-1]), grid_filenames))
+        grid_names = list(map(lambda x: ".".join(x.split(".")[:-1]), 
+                              grid_filenames))
 
         print(grid_names)
 
