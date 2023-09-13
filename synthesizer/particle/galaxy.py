@@ -780,7 +780,10 @@ class Galaxy(BaseGalaxy):
             else:
                 stellar_mass = self.stellar_mass
 
-        gamma = (sf_gas_metallicity / Z14) * (sf_gas_mass / stellar_mass) * (1.0 / beta)
+        if sf_gas_mass == 0.:
+            gamma = 0.
+        else:
+            gamma = (sf_gas_metallicity / Z14) * (sf_gas_mass / stellar_mass) * (1.0 / beta)
 
         return gamma
 
