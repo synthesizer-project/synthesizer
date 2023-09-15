@@ -77,7 +77,7 @@ if __name__ == "__main__":
         seds[z] = galaxy.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1)
 
         # Generate observed frame spectra
-        seds[z].get_fnu(cosmo, z, igm=Madau96())
+        seds[z].get_fnu(cosmo, z, igm=Madau96)
 
     # Set up plot
     fig = plt.figure(figsize=(5, 3.5 * len(zs)))
