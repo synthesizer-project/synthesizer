@@ -329,7 +329,7 @@ class Survey:
 
         # Initialise the IGM
         if igm is None:
-            igm = Inoue14()
+            igm = Inoue14
 
         # Initialise spectra
         _specs = np.zeros((self.ngalaxies, grid.lam.size))
@@ -436,7 +436,7 @@ class Survey:
 
         # Initialise the IGM
         if igm is None:
-            igm = Inoue14()
+            igm = Inoue14
 
         for gal in self.galaxies:
             # Are we getting a flux or rest frame?
