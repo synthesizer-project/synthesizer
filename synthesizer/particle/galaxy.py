@@ -749,17 +749,53 @@ class Galaxy(BaseGalaxy):
     def screen_dust_gamma_parameter(
         self,
         beta=0.1,
-        Z14=0.035,
+        Z_norm=0.035,
         sf_gas_metallicity=None,
         sf_gas_mass=None,
         stellar_mass=None,
+        gamma_min=None,
+        gamma_max=None,
     ):
         """
         Calculate the gamma parameter controlling the optical depth
-        due to dust from integrated galaxy properties
+        due to dust dependent on the mass and metallicity of star forming 
+        gas.
+
+        gamma = (Z_SF / Z_MW) * (M_SF / M_star) * (1 / beta)
+
+        where Z_SF is the star forming gas metallicity, Z_MW is the Milky
+        Way value (defaults to value from Zahid+14), M_SF is the star forming gas mass, M_star
+        is the stellar mass, and beta is a normalisation value.
+
+
+        Zahid+14:
+        https://iopscience.iop.org/article/10.1088/0004-637X/791/2/130
 
         Args:
-
+            beta (float):
+                normalisation value, default 0.1
+            Z_norm (float):
+                metallicity normsalition value, defaults to Zahid+14
+                value for the Milky Way (0.035)
+            sf_gas_metallicity (array):
+                custom star forming gas metallicity array. If None, 
+                defaults to value attached to this galaxy object.
+            sf_gas_mass (array):
+                custom star forming gas mass array. If None, 
+                defaults to value attached to this galaxy object.
+            stellar_mass (array):
+                custom stellar mass array. If None, defaults to value 
+                attached to this galaxy object.
+            gamma_min (float):
+                lower limit of the gamma parameter. If None, no lower 
+                limit implemented. Default = None                 
+            gamma_max (float):
+                upper limit of the gamma parameter. If None, no upper 
+                limit implemented. Default = None                 
+                
+        Returns:
+            gamma (array):
+                gamma scaling parameter for this galaxy
         """
 
         if sf_gas_metallicity is None:
@@ -782,8 +818,16 @@ class Galaxy(BaseGalaxy):
 
         if sf_gas_mass == 0.:
             gamma = 0.
+        elif stellar_mass == 0.:
+            gamma = 1.0
         else:
-            gamma = (sf_gas_metallicity / Z14) * (sf_gas_mass / stellar_mass) * (1.0 / beta)
+            gamma = (sf_gas_metallicity / Z_norm) * (sf_gas_mass / stellar_mass) * (1.0 / beta)
+
+        if gamma_min is not None:
+            gamma[gamma < gamma_min] = gamma_min
+
+        if gamma_max is not None:
+            gamma[gamma > gamma_max] = gamma_max
 
         return gamma
 
