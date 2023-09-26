@@ -16,16 +16,21 @@ class Galaxy(BaseGalaxy):
         sfzh,
         morph=None,
         name="parametric galaxy",
+        redshift=None,
     ):
         """__init__ method for ParametricGalaxy
 
         Args:
-            name (string):
-                name of galaxy
-            sfzh (object, sfzh):
-                instance of the BinnedSFZH class containing the star formation
-                and metal enrichment history.
-            morph (object)
+            name (str)
+                A name to identify the galaxy. Only used for external labelling,
+                has no internal use.
+            sfzh (object, BinnedSFZH)
+                An instance of BinnedSFZH containing the combined star
+                formation and metallicity histories.
+            morph (object, morphology.* e.g. Sersic2D)
+                An instance of one of the morphology classes describing the
+                galaxy's morphology. This can be any of the family of
+                morphology classes from synthesizer.morphology.
         """
 
         self.name = name
@@ -40,6 +45,9 @@ class Galaxy(BaseGalaxy):
         self.spectra = {}  # dictionary holding spectra
         self.lines = {}  # dictionary holding lines
         self.images = {}  # dictionary holding images
+
+        # The redshift of the galaxy
+        self.redshift = redshift
 
     def __str__(self):
         """Function to print a basic summary of the Galaxy object.
