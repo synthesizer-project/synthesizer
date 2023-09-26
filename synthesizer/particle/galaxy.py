@@ -26,6 +26,7 @@ from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
 from synthesizer.imaging.images import ParticleImage
+from synthesizer.parametric import BinnedSFZH
 
 
 class Galaxy(BaseGalaxy):
@@ -75,7 +76,16 @@ class Galaxy(BaseGalaxy):
             redshift (float)
                 The redshift of the galaxy.
 
+        Raises:
+            InconsistentArguments
         """
+
+        # Check we haven't been given a SFZH
+        if isinstance(stars, BinnedSFZH):
+            raise exceptions.InconsistentArguments(
+                "BinnedSFZH passed instead of particle based Stars object."
+                " Did you mean synthesizer.parametric.Galaxy instead?"
+            )
 
         # Define a name for this galaxy
         self.name = name
