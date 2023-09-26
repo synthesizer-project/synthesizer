@@ -1,10 +1,12 @@
 import numpy as np
-from ..base_galaxy import BaseGalaxy
-from .. import exceptions
-from ..dust.attenuation import PowerLaw
-from ..line import Line, LineCollection
-from ..imaging.images import ParametricImage
-from ..art import Art
+
+from synthesizer.base_galaxy import BaseGalaxy
+from synthesizer import exceptions
+from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.line import Line, LineCollection
+from synthesizer.imaging.images import ParametricImage
+from synthesizer.art import Art
+from synthesizer.particle import Stars
 
 
 class Galaxy(BaseGalaxy):
@@ -31,7 +33,17 @@ class Galaxy(BaseGalaxy):
                 An instance of one of the morphology classes describing the
                 galaxy's morphology. This can be any of the family of
                 morphology classes from synthesizer.morphology.
+
+        Raises:
+            InconsistentArguments
         """
+
+        # Check we haven't been given Stars
+        if isinstance(sfzh, Stars):
+            raise exceptions.InconsistentArguments(
+                "Stars passed instead of SFZH object (BinnedSFZH)."
+                " Did you mean synthesizer.particle.Galaxy instead?"
+            )
 
         self.name = name
 
