@@ -9,14 +9,14 @@ initialised and returned, if a BinnedSFZH is passed then a parametric galaxy is
 initialised and returned.
 
 Example:
-from synthesizer.galaxy import galaxy
+from synthesizer import galaxy
 
 # Get a particle galaxy
 gal = galaxy(stars=Stars(...), gas=Gas(...), ...)
 
 OR
 
-# Get a paramertic galaxy
+# Get a parametric galaxy
 gal = galaxy(stars=BinnedSFZH, morph=Sersic2D(...), ...)
 
 """
