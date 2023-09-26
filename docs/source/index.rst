@@ -24,6 +24,7 @@ Contents
    
    installation
    grids/grids
+   galaxies/galaxy
    spectra
    units
    filters
