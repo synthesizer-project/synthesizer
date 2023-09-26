@@ -1,4 +1,4 @@
-from stars import Stars
-from gas import Gas
-from blackholes import BlackHoles
-from particles import Particles as DarkMatter
+from synthesizer.particle.stars import Stars
+from synthesizer.particle.gas import Gas
+from synthesizer.particle.blackholes.gas import BlackHoles
+from synthesizer.particle.particles import Particles as DarkMatter
