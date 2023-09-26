@@ -59,9 +59,22 @@ class Galaxy(BaseGalaxy):
         black_holes=None,
         redshift=None,
     ):
-        """Initialise the Galaxy.
+        """Initialise a particle based Galaxy with objects derived from
+           Particles.
 
         Args:
+            name (str)
+                A name to identify the galaxy. Only used for external labelling,
+                has no internal use.
+            stars (object, Stars/BinnedSFZH)
+                An instance of Stars containing the stellar particle data
+            gas (object, Gas)
+                An instance of Gas containing the gas particle data.
+            black_holes (object, BlackHoles)
+                An instance of BlackHoles containing the black hole particle
+                data.
+            redshift (float)
+                The redshift of the galaxy.
 
         """
 
