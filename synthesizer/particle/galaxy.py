@@ -19,14 +19,13 @@ import numpy as np
 from unyt import kpc, unyt_quantity
 from scipy.spatial import cKDTree
 
-from ..exceptions import MissingSpectraType
-from ..particle.stars import Stars
-from ..particle.gas import Gas
-from ..sed import Sed
-from ..dust.attenuation import PowerLaw
-from ..base_galaxy import BaseGalaxy
-from .. import exceptions
-from ..imaging.images import ParticleImage
+from synthesizer.particle import Stars
+from synthesizer.particle import Gas
+from synthesizer.sed import Sed
+from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.base_galaxy import BaseGalaxy
+from synthesizer import exceptions
+from synthesizer.imaging.images import ParticleImage
 
 
 class Galaxy(BaseGalaxy):
@@ -414,7 +413,7 @@ class Galaxy(BaseGalaxy):
 
         # Ensure we have a total key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
-            raise MissingSpectraType(
+            raise exceptions.MissingSpectraType(
                 "The Grid does not contain the key '%s'" % spectra_name
             )
 
@@ -558,7 +557,7 @@ class Galaxy(BaseGalaxy):
 
         # Ensure we have an `intrinsic`` key in the grid. If not error.
         if "intrinsic" not in list(grid.spectra.keys()):
-            raise MissingSpectraType(
+            raise exceptions.MissingSpectraType(
                 "The Grid does not contain the key '%s'" % "intrinsic"
             )
 
