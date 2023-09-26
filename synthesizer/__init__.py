@@ -1,7 +1,3 @@
-from . import utils
-
-# from . import particles
-# from . import stars
-from . import abundances
-
-# from . import weights
+from synthesizer import utils
+from synthesizer import abundances
+from synthesizer.galaxy import galaxy
