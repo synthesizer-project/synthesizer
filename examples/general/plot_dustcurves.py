@@ -14,7 +14,7 @@ import cmasher as cmr
 
 models = [
     "PowerLaw",
-    # 'Calzetti2000',
+    'Calzetti2000',
     # "MW_N18",
     "GrainsWD01",
     "GrainsWD01",
@@ -23,7 +23,7 @@ models = [
 
 params = [
     {"slope": -1.0},
-    # {'slope': 0., 'x0': 0.2175, 'ampl': 1.},
+    {'slope': 0., 'x0': 0.2175, 'ampl': 1.26, 'gamma': 0.0356},
     {"model": "MW"},
     {"model": "SMC"},
     {"model": "LMC"},
