@@ -494,7 +494,7 @@ class Survey:
             #    # Make an entry in the photometry dictionary for this filter
             #    self.photometry[f.filter_code] = f.apply_filter(
             #        self.seds[spectra_type]._fnu,
-            #        xs=self.seds[spectra_type].nuz
+            #        xs=self.seds[spectra_type].obsnu
             #    )
 
         return self.photometry
