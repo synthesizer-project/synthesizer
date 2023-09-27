@@ -48,6 +48,7 @@ default_units = {
     "wavelength": Angstrom,
     "nu": Hz,
     "obsnu": Hz,
+    "nuz": Hz,
     "luminosity": erg / s,
     "lnu": erg / s / Hz,
     "llam": erg / s / Angstrom,
@@ -149,6 +150,8 @@ class Units(metaclass=UnitSingleton):
             Rest frame frequency unit.
         obsnu (unyt.unit_object.Unit)
             Observer frame frequency unit.
+        nuz (unyt.unit_object.Unit)
+            Observer frame frequency unit.
 
         luminosity (unyt.unit_object.Unit)
             Luminosity unit.
@@ -188,6 +191,13 @@ class Units(metaclass=UnitSingleton):
 
         ages (unyt.unit_object.Unit)
             Stellar particle age unit.
+
+        accretion_rate (unyt.unit_object.Unit)
+            Black hole accretion rate unit.
+        bol_luminosity (unyt.unit_object.Unit)
+            Bolometric luminositiy unit.
+        bb_temperature (unyt.unit_object.Unit)
+            Black hole big bump temperature unit.
     """
 
     def __init__(self, units=None, force=False):
@@ -346,7 +356,7 @@ class Quantity:
 
         # Do we need to perform a unit conversion? If not we assume value
         # is already in the default unit system
-        if isinstance(value, unyt_quantity) or isinstance(value, unyt_array):
+        if isinstance(value, (unyt_quantity, unyt_array)):
             if (
                 value.units != getattr(self.units, self.public_name)
                 and value.units != dimensionless
