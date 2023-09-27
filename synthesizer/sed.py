@@ -29,11 +29,13 @@ class Sed:
     Methods:    
     """
 
-    # for details see units.py
-    lam = Quantity()  # Angstrom
-    nu = Quantity()  # Hz
-    lnu = Quantity()  # erg/s/Hz
-    fnu = Quantity()  # nJy
+    # Define Quantities, for details see units.py
+    lam = Quantity()
+    nu = Quantity()
+    lnu = Quantity()
+    fnu = Quantity()
+    nuz = Quantity()
+    obslam = Quantity()
 
     def __init__(self, lam, lnu=None, description=False):
         """
@@ -47,26 +49,33 @@ class Sed:
 
         """
 
-        # set the description
+        # Set the description
         self.description = description
 
-        # set the wavelength
+        # Set the wavelength
         self.lam = lam  # \AA
 
-        # if no lnu is provided create an empty array with the same shape as
+        # If no lnu is provided create an empty array with the same shape as
         # lam.
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
         else:
             self.lnu = lnu
 
-        # calculate frequency
+        # Calculate frequency
         self.nu = (c / (self.lam)).to("Hz").value  # Hz
 
+        # Redshift of the SED
         self.redshift = 0
+
+        # The wavelengths and frequencies in the observer frame
         self.obslam = None
         self.nuz = None
+
+        # Fluxes
         self.fnu = None
+
+        # Broadband photometry
         self.broadband_luminosities = None
         self.broadband_fluxes = None
 
