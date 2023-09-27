@@ -86,6 +86,14 @@ class Sed:
             other_seds (object, Sed)
                 Any number of Sed objects to concatenate with self. These must
                 have the same wavelength array.
+
+        Returns:
+            Sed
+                A new instance of Sed with the concatenated lnu arrays.
+
+        Raises:
+            InconsistentAddition
+                If wavelength arrays are incompatible an error is raised.
         """
 
         # Define the new lnu to accumalate in
@@ -114,30 +122,41 @@ class Sed:
         """
         Overide addition operator to allow two Sed objects to be added
         together.
+
+        Args:
+            second_sed (object, Sed)
+                The Sed object to combine with self.
+
+        Returns:
+            Sed
+                A new instance of Sed with added lnu arrays.
+
+        Raises:
+            InconsistentAddition
+                If wavelength arrays or lnu arrays are incompatible an error
+                is raised.
         """
 
+        # Ensure the wavelength arrays are compatible
+        # # NOTE: this is probably overkill and too costly. We
+        # could instead check the first and last entry and the shape.
+        # In rare instances this could fail though.
         if not np.array_equal(self._lam, second_sed._lam):
-            raise exceptions.InconsistentAddition("Wavelength grids \
-                                            must be identical")
+            raise exceptions.InconsistentAddition(
+                "Wavelength grids must be identical"
+            )
 
-        else:
-            if self._lnu.ndim != second_sed._lnu.ndim:
-                raise exceptions.InconsistentAddition("SEDs must have \
-                                                same dimensions")
+        # Ensure the lnu arrays are compatible
+        # This check is redudant for Sed.lnu.shape = (nlam, ) spectra but will
+        # not erroneously error. Nor is it expensive.
+        if self._lnu.shape[0] != second_sed._lnu.shape[0]:
+            raise exceptions.InconsistentAddition(
+                "SEDs must have same dimensions"
+            )
 
-            elif self._lnu.ndim == 1:
-                # if single Seds simply add together and return.
-                return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+        # They're compatible, add them
+        return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
 
-            elif self._lnu.ndim == 2:
-                # if array of Seds concatenate them.
-                # This is only relevant for particles.
-                return Sed(self._lam, np.concatenate((self._lnu,
-                                                      second_sed._lnu)))
-
-            else:
-                raise exceptions.InconsistentAddition("Sed.lnu must have ndim 1 \
-                                                or 2")
 
     def __str__(self):
         """
