@@ -23,8 +23,8 @@ Contents
    :maxdepth: 1
    
    installation
-   grids/grids
-   galaxies/galaxy
+   grids
+   galaxies/galaxies
    spectra
    units
    sed
