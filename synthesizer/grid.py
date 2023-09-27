@@ -388,12 +388,12 @@ class Grid:
         """
         # throw exception if tline_id not in list of available lines
         if spectra_id not in self.available_spectra:
-            exceptions.InconsistentParameter("""Provided spectra_id is not in
+            raise exceptions.InconsistentParameter("""Provided spectra_id is not in
             list of available spectra.""")
 
         # throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
-            exceptions.InconsistentParameter("""The grid_point tuple provided
+            raise exceptions.InconsistentParameter("""The grid_point tuple provided
             as an argument should have same shape as the grid.""")
 
         # TODO: throw an exception if grid point is outside grid bounds
@@ -416,12 +416,12 @@ class Grid:
         """
         # throw exception if tline_id not in list of available lines
         if line_id not in self.available_lines:
-            exceptions.InconsistentParameter("""Provided line_id is not in list
+            raise exceptions.InconsistentParameter("""Provided line_id is not in list
             of available lines.""")
 
         # throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
-            exceptions.InconsistentParameter("""The grid_point tuple provided
+            raise exceptions.InconsistentParameter("""The grid_point tuple provided
             as an argument should have same shape as the grid.""")
 
         if type(line_id) is str:
