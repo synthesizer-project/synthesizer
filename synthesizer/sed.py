@@ -78,12 +78,12 @@ class Sed:
         """
 
         if not np.array_equal(self._lam, second_sed._lam):
-            exceptions.InconsistentAddition("Wavelength grids \
+            raise exceptions.InconsistentAddition("Wavelength grids \
                                             must be identical")
 
         else:
             if self._lnu.ndim != second_sed._lnu.ndim:
-                exceptions.InconsistentAddition("SEDs must have \
+                raise exceptions.InconsistentAddition("SEDs must have \
                                                 same dimensions")
 
             elif self._lnu.ndim == 1:
@@ -97,7 +97,7 @@ class Sed:
                                                       second_sed._lnu)))
 
             else:
-                exceptions.InconsistentAddition("Sed.lnu must have ndim 1 \
+                raise exceptions.InconsistentAddition("Sed.lnu must have ndim 1 \
                                                 or 2")
 
     def __str__(self):
@@ -682,12 +682,12 @@ class Sed:
                       rebin_1d(self.lnu, n, func=np.mean))
 
         elif isinstance(n, float):
-            exceptions.UnimplementedFunctionality(
+            raise exceptions.UnimplementedFunctionality(
                 'Non-integer resampling not yet implemented.'
             )
 
         else:
-            exceptions.InconsistentArguments(
+            raise exceptions.InconsistentArguments(
                 'Sampling factor must be integer or float.'
             )
 
