@@ -1,10 +1,12 @@
 import numpy as np
-from ..base_galaxy import BaseGalaxy
-from .. import exceptions
-from ..dust.attenuation import PowerLaw
-from ..line import Line, LineCollection
-from ..imaging.images import ParametricImage
-from ..art import Art
+
+from synthesizer.base_galaxy import BaseGalaxy
+from synthesizer import exceptions
+from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.line import Line, LineCollection
+from synthesizer.imaging.images import ParametricImage
+from synthesizer.art import Art
+from synthesizer.particle import Stars
 
 
 class Galaxy(BaseGalaxy):
@@ -16,17 +18,32 @@ class Galaxy(BaseGalaxy):
         sfzh,
         morph=None,
         name="parametric galaxy",
+        redshift=None,
     ):
         """__init__ method for ParametricGalaxy
 
         Args:
-            name (string):
-                name of galaxy
-            sfzh (object, sfzh):
-                instance of the BinnedSFZH class containing the star formation
-                and metal enrichment history.
-            morph (object)
+            name (str)
+                A name to identify the galaxy. Only used for external labelling,
+                has no internal use.
+            sfzh (object, BinnedSFZH)
+                An instance of BinnedSFZH containing the combined star
+                formation and metallicity histories.
+            morph (object, morphology.* e.g. Sersic2D)
+                An instance of one of the morphology classes describing the
+                galaxy's morphology. This can be any of the family of
+                morphology classes from synthesizer.morphology.
+
+        Raises:
+            InconsistentArguments
         """
+
+        # Check we haven't been given Stars
+        if isinstance(sfzh, Stars):
+            raise exceptions.InconsistentArguments(
+                "Stars passed instead of SFZH object (BinnedSFZH)."
+                " Did you mean synthesizer.particle.Galaxy instead?"
+            )
 
         self.name = name
 
@@ -40,6 +57,9 @@ class Galaxy(BaseGalaxy):
         self.spectra = {}  # dictionary holding spectra
         self.lines = {}  # dictionary holding lines
         self.images = {}  # dictionary holding images
+
+        # The redshift of the galaxy
+        self.redshift = redshift
 
     def __str__(self):
         """Function to print a basic summary of the Galaxy object.
