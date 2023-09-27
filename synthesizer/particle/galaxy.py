@@ -19,14 +19,14 @@ import numpy as np
 from unyt import kpc, unyt_quantity
 from scipy.spatial import cKDTree
 
-from ..exceptions import MissingSpectraType
-from ..particle.stars import Stars
-from ..particle.gas import Gas
-from ..sed import Sed
-from ..dust.attenuation import PowerLaw
-from ..base_galaxy import BaseGalaxy
-from .. import exceptions
-from ..imaging.images import ParticleImage
+from synthesizer.particle import Stars
+from synthesizer.particle import Gas
+from synthesizer.sed import Sed
+from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.base_galaxy import BaseGalaxy
+from synthesizer import exceptions
+from synthesizer.imaging.images import ParticleImage
+from synthesizer.parametric import BinnedSFZH
 
 
 class Galaxy(BaseGalaxy):
@@ -59,11 +59,33 @@ class Galaxy(BaseGalaxy):
         black_holes=None,
         redshift=None,
     ):
-        """Initialise the Galaxy.
+        """Initialise a particle based Galaxy with objects derived from
+           Particles.
 
         Args:
+            name (str)
+                A name to identify the galaxy. Only used for external labelling,
+                has no internal use.
+            stars (object, Stars/BinnedSFZH)
+                An instance of Stars containing the stellar particle data
+            gas (object, Gas)
+                An instance of Gas containing the gas particle data.
+            black_holes (object, BlackHoles)
+                An instance of BlackHoles containing the black hole particle
+                data.
+            redshift (float)
+                The redshift of the galaxy.
 
+        Raises:
+            InconsistentArguments
         """
+
+        # Check we haven't been given a SFZH
+        if isinstance(stars, BinnedSFZH):
+            raise exceptions.InconsistentArguments(
+                "BinnedSFZH passed instead of particle based Stars object."
+                " Did you mean synthesizer.parametric.Galaxy instead?"
+            )
 
         # Define a name for this galaxy
         self.name = name
@@ -401,7 +423,7 @@ class Galaxy(BaseGalaxy):
 
         # Ensure we have a total key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
-            raise MissingSpectraType(
+            raise exceptions.MissingSpectraType(
                 "The Grid does not contain the key '%s'" % spectra_name
             )
 
@@ -545,7 +567,7 @@ class Galaxy(BaseGalaxy):
 
         # Ensure we have an `intrinsic`` key in the grid. If not error.
         if "intrinsic" not in list(grid.spectra.keys()):
-            raise MissingSpectraType(
+            raise exceptions.MissingSpectraType(
                 "The Grid does not contain the key '%s'" % "intrinsic"
             )
 
