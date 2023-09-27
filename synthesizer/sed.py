@@ -34,7 +34,7 @@ class Sed:
     nu = Quantity()
     lnu = Quantity()
     fnu = Quantity()
-    nuz = Quantity()
+    obsnu = Quantity()
     obslam = Quantity()
 
     def __init__(self, lam, lnu=None, description=False):
@@ -70,9 +70,7 @@ class Sed:
 
         # The wavelengths and frequencies in the observer frame
         self.obslam = None
-        self.nuz = None
-
-        # Fluxes
+        self.obsnu = None
         self.fnu = None
 
         # Broadband photometry
@@ -539,7 +537,7 @@ class Sed:
 
         # Get the observed wavelength and frequency arrays
         self.obslam = self._lam
-        self.nuz = self._nu
+        self.obsnu = self._nu
 
         # Compute the flux SED and apply unit conversions to get to nJy
         self.fnu = self._lnu / (4 * np.pi * (10 * pc).to("cm").value)
@@ -571,7 +569,7 @@ class Sed:
 
         # Get the observed wavelength and frequency arrays
         self.obslam = self._lam * (1.0 + z)
-        self.nuz = self._nu / (1.0 + z)
+        self.obsnu = self._nu / (1.0 + z)
 
         # Compute the luminosity distance
         luminosity_distance = cosmo.luminosity_distance(z).to("cm").value
@@ -626,7 +624,7 @@ class Sed:
                     )
 
             # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(self._fnu, nu=self.nuz) * nJy
+            bb_flux = f.apply_filter(self._fnu, nu=self.obsnu) * nJy
             self.broadband_fluxes[f.filter_code] = bb_flux
 
         return self.broadband_fluxes
