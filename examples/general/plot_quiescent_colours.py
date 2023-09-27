@@ -35,8 +35,8 @@ def simple_UVJ(grid, target_metallicity=0.01):
         print(
             (
                 f"log10(age/Myr): {log10age - 6:.1f} "
-                f'U-V: {sed.colour("U", "V"):.2f} '
-                f'V-J: {sed.colour("V", "J"):.2f}'
+                f'U-V: {sed.measure_colour("U", "V"):.2f} '
+                f'V-J: {sed.measure_colour("V", "J"):.2f}'
             )
         )
 

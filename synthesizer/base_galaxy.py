@@ -625,8 +625,8 @@ class BaseGalaxy:
         # the intrinsic and attenuated
 
         dust_bolometric_luminosity = (
-            self.spectra["intrinsic"].get_bolometric_luminosity()
-            - self.spectra["emergent"].get_bolometric_luminosity()
+            self.spectra["intrinsic"].measure_bolometric_luminosity()
+            - self.spectra["emergent"].measure_bolometric_luminosity()
         )
 
         # get the spectrum and normalise it properly
@@ -868,7 +868,7 @@ class BaseGalaxy:
             dust_curve_stellar=dust_curve,
         )
 
-    def get_equivalent_width(self, index, spectra_to_plot=None):
+    def get_equivalent_width(self, feature, blue, red, spectra_to_plot=None):
         """
         Gets all equivalent widths associated with a sed object
 
@@ -894,7 +894,7 @@ class BaseGalaxy:
             sed = self.spectra[sed_name]
 
             # Compute equivalent width
-            equivalent_width = sed.calculate_ew(index)
+            equivalent_width = sed.measure_index(feature, blue, red)
 
         return equivalent_width
 
