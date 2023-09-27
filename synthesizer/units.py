@@ -225,7 +225,7 @@ class Units(metaclass=UnitSingleton):
 
         # Frequencies
         self.nu = Hz  # rest frame frequencies
-        self.nuz = Hz  # observer frame frequencies
+        self.obsnu = Hz  # observer frame frequencies
 
         # Luminosities
         self.luminosity = erg / s  # luminosity
