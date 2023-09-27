@@ -582,7 +582,7 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm:
-            self._fnu *= igm().T(z, self.obslam)
+            self._fnu *= igm().T(z, self._obslam)
 
         return self.fnu
 
@@ -624,7 +624,7 @@ class Sed:
                     )
 
             # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(self._fnu, nu=self.obsnu) * nJy
+            bb_flux = f.apply_filter(self._fnu, nu=self._obsnu) * nJy
             self.broadband_fluxes[f.filter_code] = bb_flux
 
         return self.broadband_fluxes
