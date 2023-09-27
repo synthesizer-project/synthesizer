@@ -29,11 +29,13 @@ class Sed:
     Methods:    
     """
 
-    # for details see units.py
-    lam = Quantity()  # Angstrom
-    nu = Quantity()  # Hz
-    lnu = Quantity()  # erg/s/Hz
-    fnu = Quantity()  # nJy
+    # Define Quantities, for details see units.py
+    lam = Quantity()
+    nu = Quantity()
+    lnu = Quantity()
+    fnu = Quantity()
+    obsnu = Quantity()
+    obslam = Quantity()
 
     def __init__(self, lam, lnu=None, description=False):
         """
@@ -47,58 +49,121 @@ class Sed:
 
         """
 
-        # set the description
+        # Set the description
         self.description = description
 
-        # set the wavelength
+        # Set the wavelength
         self.lam = lam  # \AA
 
-        # if no lnu is provided create an empty array with the same shape as
+        # If no lnu is provided create an empty array with the same shape as
         # lam.
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
         else:
             self.lnu = lnu
 
-        # calculate frequency
+        # Calculate frequency
         self.nu = (c / (self.lam)).to("Hz").value  # Hz
 
+        # Redshift of the SED
         self.redshift = 0
+
+        # The wavelengths and frequencies in the observer frame
         self.obslam = None
-        self.nuz = None
+        self.obsnu = None
         self.fnu = None
+
+        # Broadband photometry
         self.broadband_luminosities = None
         self.broadband_fluxes = None
+
+    def concat(self, *other_seds):
+        """
+        Concatenate the spectra arrays of multiple Sed objects.
+
+        This will combine the arrays along the first axis. For example
+        concatenating two Seds with Sed.lnu.shape = (10, 1000) and
+        Sed.lnu.shape = (20, 1000) will result in a new Sed with
+        Sed.lnu.shape = (30, 1000). The wavelength array of
+        the resulting Sed will be the array on self.
+
+        Incompatible spectra shapes will raise an error.
+
+        Args:
+            other_seds (object, Sed)
+                Any number of Sed objects to concatenate with self. These must
+                have the same wavelength array.
+
+        Returns:
+            Sed
+                A new instance of Sed with the concatenated lnu arrays.
+
+        Raises:
+            InconsistentAddition
+                If wavelength arrays are incompatible an error is raised.
+        """
+
+        # Define the new lnu to accumalate in
+        new_lnu = self._lnu
+
+        # Loop over the other seds
+        for other_sed in other_seds:
+
+            # Ensure the wavelength arrays are compatible
+            # NOTE: this is probably overkill and too costly. We
+            # could instead check the first and last entry and the shape.
+            # In rare instances this could fail though.
+            if not np.array_equal(self._lam, other_sed._lam):
+                raise exceptions.InconsistentAddition(
+                    "Wavelength grids must be identical"
+                )
+
+            # Concatenate this lnu array
+            new_lnu = np.concatenate(new_lnu, other_sed._lnu)
+
+        return Sed(self._lam, new_lnu)
+
 
     def __add__(self, second_sed):
 
         """
         Overide addition operator to allow two Sed objects to be added
         together.
+
+        Args:
+            second_sed (object, Sed)
+                The Sed object to combine with self.
+
+        Returns:
+            Sed
+                A new instance of Sed with added lnu arrays.
+
+        Raises:
+            InconsistentAddition
+                If wavelength arrays or lnu arrays are incompatible an error
+                is raised.
         """
 
+        # Ensure the wavelength arrays are compatible
+        # # NOTE: this is probably overkill and too costly. We
+        # could instead check the first and last entry and the shape.
+        # In rare instances this could fail though.
         if not np.array_equal(self._lam, second_sed._lam):
-            exceptions.InconsistentAddition("Wavelength grids \
-                                            must be identical")
+            raise exceptions.InconsistentAddition(
+                "Wavelength grids must be identical"
+            )
 
-        else:
-            if self._lnu.ndim != second_sed._lnu.ndim:
-                exceptions.InconsistentAddition("SEDs must have \
-                                                same dimensions")
+        # Ensure the lnu arrays are compatible
+        # This check is redudant for Sed.lnu.shape = (nlam, ) spectra but will
+        # not erroneously error. Nor is it expensive.
+        if self._lnu.shape[0] != second_sed._lnu.shape[0]:
+            raise exceptions.InconsistentAddition(
+                "SEDs must have same dimensions"
+            )
 
-            elif self._lnu.ndim == 1:
-                # if single Seds simply add together and return.
-                return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+        # They're compatible, add them
+        return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
 
-            elif self._lnu.ndim == 2:
-                # if array of Seds concatenate them.
-                # This is only relevant for particles.
-                return Sed(self._lam, np.concatenate((self._lnu,
-                                                      second_sed._lnu)))
-
-            else:
-                exceptions.InconsistentAddition("Sed.lnu must have ndim 1 \
-                                                or 2")
 
     def __str__(self):
         """
@@ -472,7 +537,7 @@ class Sed:
 
         # Get the observed wavelength and frequency arrays
         self.obslam = self._lam
-        self.nuz = self._nu
+        self.obsnu = self._nu
 
         # Compute the flux SED and apply unit conversions to get to nJy
         self.fnu = self._lnu / (4 * np.pi * (10 * pc).to("cm").value)
@@ -504,7 +569,7 @@ class Sed:
 
         # Get the observed wavelength and frequency arrays
         self.obslam = self._lam * (1.0 + z)
-        self.nuz = self._nu / (1.0 + z)
+        self.obsnu = self._nu / (1.0 + z)
 
         # Compute the luminosity distance
         luminosity_distance = cosmo.luminosity_distance(z).to("cm").value
@@ -517,7 +582,7 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm:
-            self._fnu *= igm().T(z, self.obslam)
+            self._fnu *= igm().T(z, self._obslam)
 
         return self.fnu
 
@@ -559,7 +624,7 @@ class Sed:
                     )
 
             # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(self._fnu, nu=self.nuz) * nJy
+            bb_flux = f.apply_filter(self._fnu, nu=self._obsnu) * nJy
             self.broadband_fluxes[f.filter_code] = bb_flux
 
         return self.broadband_fluxes
@@ -682,12 +747,12 @@ class Sed:
                       rebin_1d(self.lnu, n, func=np.mean))
 
         elif isinstance(n, float):
-            exceptions.UnimplementedFunctionality(
+            raise exceptions.UnimplementedFunctionality(
                 'Non-integer resampling not yet implemented.'
             )
 
         else:
-            exceptions.InconsistentArguments(
+            raise exceptions.InconsistentArguments(
                 'Sampling factor must be integer or float.'
             )
 
