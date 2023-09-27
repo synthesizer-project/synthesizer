@@ -137,7 +137,7 @@ void populate_cell_tree_recursive(struct cell *c,
   int ngas = c->part_count;
 
   /* Do we need to split? */
-  if (ngas < 100)
+  if (ngas < 1000)
     return;
 
   /* Compute the width at this level. */
@@ -150,13 +150,25 @@ void populate_cell_tree_recursive(struct cell *c,
 
     /* Ensure we have allocated cells. */
     if (ncells > tot_cells) {
+
+      /* Allocate the cells. */
       struct cell *new_cells = malloc(8 * 8 * sizeof(struct cell));
+
+      /* TODO: Python C extension error handling, need to pass NULL up
+       * recursion tree. */
+      /* /\* Ensure the allocation went smoothly *\/ */
+      /* if (new_cells == NULL) */
+      /*     error("Failed to dynamically allocate more cells in the tree!"); */
+
+      /* Intialise the cells at 0. */
       bzero(new_cells, 8 * 8 * sizeof(struct cell));
+
+      /* Attach the cells. */
       cells[ncells] = *new_cells;
       tot_cells += 8 * 8;
     }
 
-     /* Nibble off a cell */
+    /* Nibble off a cell */
     c->progeny[ip] = cells[ncells++];
     struct cell *cp = &c->progeny[ip];
 
@@ -535,7 +547,8 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
 
     /* Allocate cells. */
   int cdim = (int)fmax(dim / max_sml, 3);
-  int maxdepth = 50;
+  if (cdim > 64) cdim = 64;
+  int maxdepth = 10;
   int ncells = pow(cdim, 3);
   int tot_cells = ncells * pow(8, 3);
   struct cell *cells = malloc(tot_cells * sizeof(struct cell));
