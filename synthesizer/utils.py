@@ -1,10 +1,7 @@
 import h5py
 import numpy as np
-from unyt import pc, cm, erg, s, Hz, nJy
 import unyt
-
-import unyt
-from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, kb, unyt_array
+from unyt import c, h, nJy, erg, s, Hz, pc, kb
 
 
 def write_data_h5py(filename, name, data, overwrite=False):
@@ -17,7 +14,8 @@ def write_data_h5py(filename, name, data, overwrite=False):
                 del h5file[name]
                 h5file[name] = data
             else:
-                raise ValueError("Dataset already exists, " + "and `overwrite` not set")
+                raise ValueError("Dataset already exists, "
+                                 + "and `overwrite` not set")
         else:
             h5file.create_dataset(name, data=data)
 
@@ -195,3 +193,34 @@ def planck(nu, T):
     """
 
     return (2.0 * h * (nu**3) * (c**-2)) * (1.0 / (np.exp(h * nu / (kb * T)) - 1.0))
+
+
+def rebin_1d(a, i, func=np.sum):
+
+    """
+    A simple function for rebinning a 1D array using a specificed
+    function (e.g. sum or mean).
+
+    TODO: add exeption to make sure a is an 1D array and that i is an integer.
+    
+    Args: 
+        a (ndarray)
+            the input 1D array
+        i (int)
+            integer rebinning factor, i.e. how many bins to rebin by
+        func (func)
+            the function to use (e.g. mean or sum)
+
+
+    """
+    
+    n = len(a)
+
+    # if array is not the right size truncate it
+    if n % i != 0:
+        a = a[:int(i * np.floor(n/i))]
+
+    x = len(a) // i
+    b = a.reshape(x, i)
+
+    return func(b, axis=1)

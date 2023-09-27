@@ -223,10 +223,5 @@ Loading and using Grids
 .. toctree::
    :maxdepth: 2
    
-   photoionisation
-   explore_grid
-   plot_spectra
-   plot_spectra_age
-   plot_log10Q
-   grid_lines
+    grids
    

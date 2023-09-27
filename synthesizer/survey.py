@@ -329,7 +329,7 @@ class Survey:
 
         # Initialise the IGM
         if igm is None:
-            igm = Inoue14()
+            igm = Inoue14
 
         # Initialise spectra
         _specs = np.zeros((self.ngalaxies, grid.lam.size))
@@ -436,7 +436,7 @@ class Survey:
 
         # Initialise the IGM
         if igm is None:
-            igm = Inoue14()
+            igm = Inoue14
 
         for gal in self.galaxies:
             # Are we getting a flux or rest frame?
@@ -494,7 +494,7 @@ class Survey:
             #    # Make an entry in the photometry dictionary for this filter
             #    self.photometry[f.filter_code] = f.apply_filter(
             #        self.seds[spectra_type]._fnu,
-            #        xs=self.seds[spectra_type].nuz
+            #        xs=self.seds[spectra_type].obsnu
             #    )
 
         return self.photometry

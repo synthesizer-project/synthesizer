@@ -2,19 +2,18 @@
 Generate parametric galaxy SED
 ===============================
 
-Example for generating the rest-frame spectrum for a parametric galaxy including
-photometry. This example will:
+Example for generating the rest-frame spectrum for a parametric galaxy 
+including photometry. This example will:
 - build a parametric galaxy (see make_sfzh)
 - calculate spectral luminosity density
 """
-import os
-import numpy as np
+
 
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import yr, Myr
+from unyt import Myr
 
 
 if __name__ == "__main__":
@@ -27,18 +26,21 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
-    # define the parameters of the star formation and metal enrichment histories
+    # define the parameters of the star formation and metal enrichment 
+    # histories
     sfh_p = {"duration": 10 * Myr}
     Z_p = {"log10Z": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = 1e8
 
-    # define the functional form of the star formation and metal enrichment histories
+    # define the functional form of the star formation and metal enrichment 
+    # histories
     sfh = SFH.Constant(sfh_p)  # constant star formation
     print(sfh)  # print sfh summary
 
     Zh = ZH.deltaConstant(Z_p)  # constant metallicity
 
-    # get the 2D star formation and metal enrichment history for the given SPS grid.
+    # get the 2D star formation and metal enrichment history for the given SPS 
+    # grid.
     sfzh = generate_sfzh(
         grid.log10age, grid.metallicity, sfh, Zh, stellar_mass=stellar_mass
     )
@@ -85,7 +87,8 @@ if __name__ == "__main__":
 
     # --- CF00 model implemented within pacman model
     galaxy.get_spectra_pacman(
-        grid, fesc=0.1, fesc_LyA=0.1, tau_v=[1.0, 1.0], alpha=[-1, -1], young_old_thresh=1e7
+        grid, fesc=0.1, fesc_LyA=0.1, tau_v=[1.0, 1.0], alpha=[-1, -1],
+        young_old_thresh=1e7
     )
     print("CF00 implemented within the Pacman model")
     galaxy.plot_spectra()
@@ -96,7 +99,7 @@ if __name__ == "__main__":
     sed = galaxy.spectra["attenuated"]
     print(sed)
 
-    # generate broadband photometry
+    # generate broadband photometry using 3 top-hat filters
     tophats = {
         "U": {"lam_eff": 3650, "lam_fwhm": 660},
         "V": {"lam_eff": 5510, "lam_fwhm": 880},

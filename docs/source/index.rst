@@ -27,6 +27,8 @@ Contents
    galaxies/galaxy
    spectra
    units
+   sed
+   lines
    filters
    blackholes/blackholes
    parametric/parametric
