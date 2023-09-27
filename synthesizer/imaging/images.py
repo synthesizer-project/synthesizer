@@ -358,7 +358,7 @@ class Image:
 
             else:
                 self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, nu=self.ifu_obj.sed.obsnu
+                    self.ifu, nu=self.ifu_obj.sed._obsnu
                 )
 
         return self.imgs
