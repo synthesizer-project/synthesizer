@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
-from synthesizer.load_data import load_CAMELS_SIMBA
+from synthesizer.load_data import load_CAMELS_IllustrisTNG
 from synthesizer.filters import UVJ
 
 from synthesizer.particle.galaxy import Galaxy
@@ -29,8 +29,8 @@ if __name__ == "__main__":
     grid = Grid(grid_name, grid_dir=grid_dir)
 
     # now load some example CAMELS data using the dedicated data loader
-    gals = load_CAMELS_SIMBA(
-        "../../tests/",
+    gals = load_CAMELS_IllustrisTNG(
+        "../../tests/data/",
         snap_name="camels_snap.hdf5",
         fof_name="camels_subhalo.hdf5",
     )

@@ -16,9 +16,12 @@ def _load_CAMELS(
     s_hydrogen,
     coods,
     masses,
+    g_coods,
     g_masses,
     g_metallicities,
+    g_hsml,
     star_forming,
+    dtm=0.3
 ):
     """
     Load CAMELS galaxies into a galaxy object
@@ -42,12 +45,18 @@ def _load_CAMELS(
             particle coordinates array, comoving
         masses (array):
             current mass particle array
+        g_coods (array):
+            gas particle coordinates array, comoving
         g_masses (array):
             gas particle masses array
         g_metallicities (array):
             gas particle overall metallicities array
+        g_hsml (array):
+            gas particle smoothing lengths array, comoving
         star_forming (array):
             boolean array flagging star forming gas particles
+        dtm (float):
+            dust-to-metals ratio to apply to all particles
 
     Returns:
         galaxies (object):
@@ -73,9 +82,12 @@ def _load_CAMELS(
     begin, end = get_len(lens[:, 0])
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i].load_gas(
+            coordinates=g_coods[b:e],
             masses=g_masses[b:e],
             metals=g_metallicities[b:e],
             star_forming=star_forming[b:e],
+            smoothing_lengths=g_hsml[b:e],
+            dust_to_metal_ratio=dtm,
         )
 
     return galaxies
@@ -87,6 +99,7 @@ def load_CAMELS_IllustrisTNG(
     fof_name="fof_subhalo_tab_033.hdf5",
     fof_dir=None,
     verbose=False,
+    dtm=0.3,
 ):
     """
     Load CAMELS-IllustrisTNG galaxies
@@ -101,6 +114,10 @@ def load_CAMELS_IllustrisTNG(
         fof_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
+        verbose (bool):
+            verbosity flag
+        dtm (float):
+            dust-to-metals ratio to apply to all gas particles
 
     Returns:
         galaxies (object):
@@ -118,6 +135,8 @@ def load_CAMELS_IllustrisTNG(
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/GFM_Metallicity"][:]
+        g_coods = hf["PartType0/Coordinates"][:]
+        g_hsml = hf["PartType0/SubfindHsml"][:]
 
         scale_factor = hf["Header"].attrs["Time"]
         Om0 = hf["Header"].attrs["Omega0"]
@@ -173,17 +192,20 @@ def load_CAMELS_IllustrisTNG(
     ages = (universe_age - _ages).value * 1e9  # yr
 
     return _load_CAMELS(
-        lens,
-        imasses,
-        ages,
-        metallicity,
-        s_oxygen,
-        s_hydrogen,
-        coods,
-        masses,
-        g_masses,
-        g_metals,
-        star_forming,
+        lens=lens,
+        imasses=imasses,
+        ages=ages,
+        metals=metallicity,
+        s_oxygen=s_oxygen,
+        s_hydrogen=s_hydrogen,
+        coods=coods,
+        masses=masses,
+        g_coods=g_coods,
+        g_masses=g_masses,
+        g_metallicities=g_metals,
+        g_hsml=g_hsml,
+        star_forming=star_forming,
+        dtm=dtm,
     )
 
 
@@ -192,6 +214,7 @@ def load_CAMELS_Astrid(
     snap_name="snap_090.hdf5",
     fof_name="fof_subhalo_tab_090.hdf5",
     fof_dir=None,
+    dtm=0.3
 ):
     """
     Load CAMELS-Astrid galaxies
@@ -206,6 +229,8 @@ def load_CAMELS_Astrid(
         fof_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
+        dtm (float):
+            dust to metals ratio for all gas particles
 
     Returns:
         galaxies (object):
@@ -223,6 +248,8 @@ def load_CAMELS_Astrid(
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/GFM_Metallicity"][:]
+        g_coods = hf["PartType0/Coordinates"][:]
+        g_hsml = hf["PartType0/SmoothingLength"][:]
 
         scale_factor = hf["Header"].attrs["Time"][0]
         Om0 = hf["Header"].attrs["Omega0"][0]
@@ -249,17 +276,20 @@ def load_CAMELS_Astrid(
         lens = hf["Subhalo/SubhaloLenType"][:]
 
     return _load_CAMELS(
-        lens,
-        imasses,
-        ages,
-        metallicity,
-        s_oxygen,
-        s_hydrogen,
-        coods,
-        masses,
-        g_masses,
-        g_metals,
-        star_forming,
+        lens=lens,
+        imasses=imasses,
+        ages=ages,
+        metals=metallicity,
+        s_oxygen=s_oxygen,
+        s_hydrogen=s_hydrogen,
+        coods=coods,
+        masses=masses,
+        g_coods=g_coods,
+        g_masses=g_masses,
+        g_metallicities=g_metals,
+        g_hsml=g_hsml,
+        star_forming=star_forming,
+        dtm=dtm
     )
 
 
@@ -268,6 +298,7 @@ def load_CAMELS_SIMBA(
     snap_name="snap_033.hdf5",
     fof_name="fof_subhalo_tab_033.hdf5",
     fof_dir=None,
+    dtm=0.3
 ):
     """
     Load CAMELS-SIMBA galaxies
@@ -282,6 +313,8 @@ def load_CAMELS_SIMBA(
         fof_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
+        dtm (float):
+            dust to metals ratio for all gas particles
 
     Returns:
         galaxies (object):
@@ -298,6 +331,8 @@ def load_CAMELS_SIMBA(
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/Metallicity"][:][:, 0]
+        g_coods = hf["PartType0/Coordinates"][:]
+        g_hsml = hf["PartType0/SmoothingLength"][:]
 
         scale_factor = hf["Header"].attrs["Time"]
         Om0 = hf["Header"].attrs["Omega0"]
@@ -311,7 +346,7 @@ def load_CAMELS_SIMBA(
 
     s_oxygen = _metals[:, 4]
     s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
-    metals = _metals[:, 0]
+    metallicity = _metals[:, 0]
 
     # convert formation times to ages
     cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
@@ -325,19 +360,21 @@ def load_CAMELS_SIMBA(
         lens = hf["Subhalo/SubhaloLenType"][:]
 
     return _load_CAMELS(
-        lens,
-        imasses,
-        ages,
-        metals,
-        s_oxygen,
-        s_hydrogen,
-        coods,
-        masses,
-        g_masses,
-        g_metals,
-        star_forming,
+        lens=lens,
+        imasses=imasses,
+        ages=ages,
+        metals=metallicity,
+        s_oxygen=s_oxygen,
+        s_hydrogen=s_hydrogen,
+        coods=coods,
+        masses=masses,
+        g_coods=g_coods,
+        g_masses=g_masses,
+        g_metallicities=g_metals,
+        g_hsml=g_hsml,
+        star_forming=star_forming,
+        dtm=dtm,
     )
-
 
 def load_FLARES(f, region, tag):
     """
