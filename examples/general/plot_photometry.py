@@ -131,7 +131,7 @@ if __name__ == "__main__":
         # Loop over the filters
         for f in filters:
             # Calculate the photometry
-            phot = f.apply_filter(seds[z]._fnu, nu=seds[z].nuz)
+            phot = f.apply_filter(seds[z]._fnu, nu=seds[z]._obsnu)
 
             # Plot the transmitted portion of the SED
             if ind == len(zs) - 1:
