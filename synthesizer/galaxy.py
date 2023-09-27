@@ -1,12 +1,12 @@
-""" A factory function to return the correct galaxy type based.
+""" A factory function to return the correct galaxy type.
 
 This function means the user doesn't need to worry which galaxy they need to
-import. They only need import the galaxy function and pass the arguments they
+import. They only need to import the galaxy function, and pass the arguments they
 have to hand.
 
-If Particles derived objects are passed a particle galaxy is
-initialised and returned, if a BinnedSFZH is passed then a parametric galaxy is
-initialised and returned.
+If Particles derived objects are passed a particle galaxy is initialised and
+returned. If a BinnedSFZH is passed then a parametric galaxy is initialised
+and returned.
 
 Example:
 from synthesizer import galaxy
@@ -43,7 +43,7 @@ def galaxy(
     utilise the wrong flavour of Galaxy object.
 
     If Particles derived objects are passed a particle galaxy is
-    initialised and returned, if a SFZH is passed then a parametric galaxy is
+    initialised and returned. If a SFZH is passed then a parametric galaxy is
     initialised and returned. If an incompatible combination is passed then an
     error is raised.
 
@@ -89,7 +89,7 @@ def galaxy(
     if isinstance(stars, BinnedSFZH):
         if gas is not None or black_holes is not None:
             raise exceptions.InconsistentArguments(
-                "A parametric BinnedSFZH has been passed inconjunction with "
+                "A parametric BinnedSFZH has been passed in conjunction with "
                 "particle based gas or black hole objects. These are "
                 "incompatible. Did you mean to pass a particle based Stars "
                 "object?"
