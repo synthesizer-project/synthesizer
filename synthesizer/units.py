@@ -47,7 +47,7 @@ default_units = {
     "obslam": Angstrom,
     "wavelength": Angstrom,
     "nu": Hz,
-    "nuz": Hz,
+    "obsnu": Hz,
     "luminosity": erg / s,
     "lnu": erg / s / Hz,
     "llam": erg / s / Angstrom,
@@ -147,7 +147,7 @@ class Units(metaclass=UnitSingleton):
 
         nu (unyt.unit_object.Unit)
             Rest frame frequency unit.
-        nuz (unyt.unit_object.Unit)
+        obsnu (unyt.unit_object.Unit)
             Observer frame frequency unit.
 
         luminosity (unyt.unit_object.Unit)
@@ -215,7 +215,7 @@ class Units(metaclass=UnitSingleton):
 
         # Frequencies
         self.nu = Hz  # rest frame frequencies
-        self.nuz = Hz  # observer frame frequencies
+        self.obsnu = Hz  # observer frame frequencies
 
         # Luminosities
         self.luminosity = erg / s  # luminosity
