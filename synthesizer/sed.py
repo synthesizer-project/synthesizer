@@ -70,6 +70,45 @@ class Sed:
         self.broadband_luminosities = None
         self.broadband_fluxes = None
 
+    def concat(self, *other_seds):
+        """
+        Concatenate the spectra arrays of multiple Sed objects.
+
+        This will combine the arrays along the first axis. For example
+        concatenating two Seds with Sed.lnu.shape = (10, 1000) and
+        Sed.lnu.shape = (20, 1000) will result in a new Sed with
+        Sed.lnu.shape = (30, 1000). The wavelength array of
+        the resulting Sed will be the array on self.
+
+        Incompatible spectra shapes will raise an error.
+
+        Args:
+            other_seds (object, Sed)
+                Any number of Sed objects to concatenate with self. These must
+                have the same wavelength array.
+        """
+
+        # Define the new lnu to accumalate in
+        new_lnu = self._lnu
+
+        # Loop over the other seds
+        for other_sed in other_seds:
+
+            # Ensure the wavelength arrays are compatible
+            # NOTE: this is probably overkill and too costly. We
+            # could instead check the first and last entry and the shape.
+            # In rare instances this could fail though.
+            if not np.array_equal(self._lam, other_sed._lam):
+                raise exceptions.InconsistentAddition(
+                    "Wavelength grids must be identical"
+                )
+
+            # Concatenate this lnu array
+            new_lnu = np.concatenate(new_lnu, other_sed._lnu)
+
+        return Sed(self._lam, new_lnu)
+
+
     def __add__(self, second_sed):
 
         """
