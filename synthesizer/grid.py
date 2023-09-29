@@ -126,56 +126,39 @@ class Grid:
     manipulating spectral grids.
 
     Attributes:
-
-        grid_name (str)
-            The name of the grid file.
-
         grid_dir (str)
-            The directory to the grid file.
-
+            The directory containing the grid HDF5 file.
+        grid_name (str)
+            The name of the grid (as defined by the file name) with no extension.
+        grid_ext (str)
+            The grid extension. Either ".hdf5" or ".h5". If the passed grid_name
+            has no extension then ".hdf5" is assumed.
+        read_lines (bool/list)
+            Flag for whether to read lines. If False they are not read, otherwise,
+            this is a list of the requested lines.
+        read_spectra (bool/list)
+            Flag for whether to read spectra.
+        spectra (array-like, float)
+            The spectra array from the grid. This is an N-dimensional grid where 
+            N is the number of axes of the SPS grid. The final dimension is
+            always wavelength.
+        lines (array-like, float)
+            The lines array from the grid. This is an N-dimensional grid where 
+            N is the number of axes of the SPS grid. The final dimension is
+            always wavelength.
         parameters (dict)
-            A dictionary containing parameters used to create the grid.
-
-        axes (list)
-            A list of the axes.
-
-        axes_values (dict)
-            A dictionary containing the axes values. Note, these are also set
-            as attributes, e.g. self.axes_values['log10age']==self.log10age.
-
-        naxes (int)
-            The number of axes.
-
-        lam (numpy.ndarray)
-            The wavelength grid.
-
-        spectra (dict)
-            A dictionary containing arrays for the different available spectra.
-            Each array has shape (*axes.shape, len(lam))
-
-        available_spectra (list)
-            A list of the available spectra.
-
-        lines (dict)
-            A dictionary containing line quantities.
-
-        available_lines (list)
-            A list of the available lines.
-
-        log10Q (dict)
-            A dictionary containing log10Q arrays for each ions.
-
-    Methods:
-
-        get_nearest_index
-
-        get_grid_point
-
-        get_spectra
-
-        get_line
-
-        get_lines
+            A dictionary containing the grid's parameters used in its generation.
+        axes (list, str)
+            A list of the names of the spectral grid axes.
+        naxes
+            The number of axes the spectral grid has.
+        logQ10 (dict)
+            A dictionary of ionisation Q parameters.
+        <grid_axis> (array-like, float)
+            A Grid will always contain 1D arrays corresponding to the axes of the
+            spectral grid. These are read dynamically from the HDF5 file so can be
+            anything but usually contain at least stellar ages and stellar 
+            metallicity.
     """
 
     def __init__(
@@ -185,42 +168,41 @@ class Grid:
         read_spectra=True,
         read_lines=True,
     ):
-        """
-        Initialisation function.
-
-        Arguments:
-            grid_name (str)
-                The name of the grid file.
-
-            grid_dir (str)
-                The directory to the grid file.
-
-            read_spectra (bool)
-                Flag specifying whether to read spectra.
-
-            read_lines (bool)
-                Flag specifying whether to read lines.
-
-        """
-
-        # if no grid_dir provided assume in <current path>/data/grids/
-        # NOTE: not sure this is desired anymore.
-        if not grid_dir:
+        if grid_dir is None:
             grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
 
+        # The grid directory
         self.grid_dir = grid_dir
-        self.grid_name = grid_name
-        self.grid_filename = f"{self.grid_dir}/{self.grid_name}.hdf5"
+
+        # Have we been passed an extension?
+        if len(grid_name.split(".")) > 1:
+            self.grid_ext = grid_name.split(".")[-1]
+        else:
+            self.grid_ext = "hdf5"
+
+        # Strip the extension off the name (harmless if no extension)
+        self.grid_name = grid_name.replace(".hdf5", "").replace(".h5", "")
+
+        # Construct the full path
+        self.grid_filename = f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
+
+        # Flags for reading behaviour
+        self.read_lines = read_lines
+        self.read_spectra = read_spectra  #  not used
+
+        # Set up attributes we will set later
         self.spectra = None
         self.lines = None
-        self.available_spectra = []
-        self.available_lines = []
 
-        # get basic info of the grid
+        # Convert line list into flattened list and remove duplicates
+        if isinstance(read_lines, list):
+            read_lines = flatten_linelist(read_lines)
+
+        # Get basic info of the grid
         with h5py.File(self.grid_filename, "r") as hf:
             self.parameters = {k: v for k, v in hf.attrs.items()}
 
-            # get list of axes
+            # Get list of axes
             self.axes = list(hf.attrs["axes"])
 
             # put the values of each axis in a dictionary
@@ -232,7 +214,7 @@ class Grid:
             for axis in self.axes:
                 setattr(self, axis, self.axes_values[axis])
 
-            # number of axes
+            # Number of axes
             self.naxes = len(self.axes)
 
             # if log10Q is available set this as an attribute as well
@@ -241,7 +223,7 @@ class Grid:
                 for ion in hf["log10Q"].keys():
                     self.log10Q[ion] = hf["log10Q"][ion][:]
 
-        # read in spectra
+        # Read in spectra
         if read_spectra:
             self.spectra = {}
 
