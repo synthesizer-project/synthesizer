@@ -396,10 +396,6 @@ class Grid:
             line (synthesizer.line.Line)
                 A synthesizer Line object.
         """
-        # throw exception if tline_id not in list of available lines
-        if line_id not in self.available_lines:
-            raise exceptions.InconsistentParameter("""Provided line_id is not in list
-            of available lines.""")
 
         # throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
@@ -414,6 +410,12 @@ class Grid:
         continuum = []
 
         for line_id_ in line_id:
+
+            # throw exception if tline_id not in list of available lines
+            if line_id_ not in self.available_lines:
+                raise exceptions.InconsistentParameter("""Provided line_id is
+                not in list of available lines.""")
+
             line_ = self.lines[line_id_]
             wavelength.append(line_["wavelength"])
             luminosity.append(line_["luminosity"][grid_point])
