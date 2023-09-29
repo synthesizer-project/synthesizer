@@ -1,13 +1,14 @@
 import os
 import numpy as np
 from scipy import interpolate
+from unyt import um
 
 # from dust_attenuation.shapes import N09
 from dust_extinction.grain_models import WD01
 
 this_dir, this_filename = os.path.split(__file__)
 
-__all__ = ["PowerLaw", "MW_N18", "GrainsWD01"]
+__all__ = ["PowerLaw", "MW_N18", "Calzetti2000", "GrainsWD01"]
 
 
 class PowerLaw:
@@ -163,84 +164,86 @@ class MW_N18:
         return np.exp(-(tau_V * tau_x_v))
 
 
-# class Calzetti2000():
-#     """
-#     Calzetti attenuation curve; with option for the slope and UV-bump
-#     implemented in Noll et al. 2009.
+class Calzetti2000():
+    """
+    Calzetti attenuation curve; with option for the slope and UV-bump
+    implemented in Noll et al. 2009.
 
-#     Parameters
-#     ----------
-#     slope: float
-#         slope of the attenuation curve
+    Parameters
+    ----------
+    slope: float
+        slope of the attenuation curve
 
-#     x0: float
-#         central wavelength of the UV bump, expected in microns
+    x0: float
+        central wavelength of the UV bump, expected in microns
 
-#     ampl: float
-#         amplitude of the UV-bump
+    ampl: float
+        amplitude of the UV-bump
 
-#     Methods
-#     -------
-#     tau
-#         calculates V-band normalised optical depth
-#     attenuate
-#         applies the attenuation curve for given V-band optical
-#         depth, returns the transmitted fraction
+    Methods
+    -------
+    tau
+        calculates V-band normalised optical depth
+    attenuate
+        applies the attenuation curve for given V-band optical
+        depth, returns the transmitted fraction
 
-#     """
+    """
 
-#     def __init__(self, params={'slope': 0., 'x0': 0.2175, 'ampl': 0.}):
-#         """
-#         Initialise the dust curve
+    def __init__(self, params={'slope': 0., 'x0': 0.2175, 'ampl': 1., 'gamma': 0.035}):
+        """
+        Initialise the dust curve
 
-#         Parameters
-#         ----------
-#         slope: float
-#             slope of the attenuation curve
+        Parameters
+        ----------
+        slope: float
+            slope of the attenuation curve
 
-#         x0: float
-#             central wavelength of the UV bump, expected in microns
+        x0: float
+            central wavelength of the UV bump, expected in microns
 
-#         ampl: float
-#             amplitude of the UV-bump
+        ampl: float
+            amplitude of the UV-bump
 
-#         """
-#         self.description = """ Calzetti attenuation curve; with option for
-#                                the slope and UV-bump implemented
-#                                in Noll et al. 2009"""
-#         self.params = params
+        gamma: float
+            Width (FWHM) of the UV bump, in microns
 
-#     def tau(self, lam):
-#         """
-#         Calculate V-band normalised optical depth
+        """
+        self.description = """ Calzetti attenuation curve; with option 
+                               for the slope and UV-bump implemented
+                               in Noll et al. 2009"""
+        self.params = params
 
-#         Parameters
-#         ----------
-#         lam: float array
-#             wavelength, expected mwith units
-#         """
+    def tau(self, lam):
+        """
+        Calculate V-band normalised optical depth
 
-#         return N09(Av=1.,
-#                    ampl=self.params['ampl'],
-#                    slope=self.params['slope'],
-#                    x0=self.params['x0'])(lam.to_astropy())
+        Parameters
+        ----------
+        lam: float array
+            wavelength, expected with units
+        """
+        return N09_tau(lam=lam,
+                   slope=self.params['slope'],
+                   x0=self.params['x0'],
+                   ampl=self.params['ampl'],
+                   gamma=self.params['gamma'])
 
-#     def attenuate(self, tau_V, lam):
-#         """
-#         Get the transmission at different wavelength for the curve
+    def attenuate(self, tau_V, lam):
+        """
+        Get the transmission at different wavelength for the curve
 
-#         Parameters
-#         ----------
-#         tau_V: float
-#             optical depth in the V-band
+        Parameters
+        ----------
+        tau_V: float
+            optical depth in the V-band
 
-#         lam: float
-#             wavelength, expected with units
-#         """
-#         return N09(Av=1.086*tau_V,
-#                    ampl=self.params['ampl'],
-#                    slope=self.params['slope'],
-#                    x0=self.params['x0']).attenuate(lam.to_astropy())
+        lam: float
+            wavelength, expected with units
+        """
+        tau_x_v = self.tau(lam) 
+    
+        return np.exp(-(tau_V * tau_x_v))
 
 
 class GrainsWD01:
@@ -315,3 +318,53 @@ class GrainsWD01:
         """
 
         return self.emodel.extinguish(x=lam.to_astropy(), Av=1.086 * tau_V)
+
+
+def N09_tau(lam, slope, x0, ampl, gamma):
+    """
+    Attenuation curve using a modified version of the Calzetti
+    attenuation (Charlot+2000) law allowing for a varying UV slope 
+    and the presence of a UV bump; from Noll+2009
+
+    Args:
+        lam (array-like, float)
+            The input wavelength array
+
+        slope: float
+            slope of the attenuation curve
+
+        x0: float
+            central wavelength of the UV bump, expected in microns
+
+        ampl: float
+            amplitude of the UV-bump
+
+        gamma: float
+            Width (FWHM) of the UV bump, in microns
+
+    Returns:
+        (array-like, float)
+        V-band normalised optical depth for given wavelength
+    """
+
+    # Wavelength in microns
+    tmp_lam = np.arange(0.12, 2.2, 0.001) 
+    lam_v = 0.55
+    k_lam = np.zeros_like(tmp_lam)
+    
+    ok = (tmp_lam < 0.63)
+    k_lam[ok] = -2.156 + (1.509/tmp_lam[ok]) \
+        - (0.198/tmp_lam[ok]**2) \
+        + (0.011/tmp_lam[ok]**3)
+    k_lam[~ok] = -1.857 + (1.040/tmp_lam[~ok])
+    k_lam = 4.05 + 2.659 * k_lam
+
+    D_lam = ampl * ((tmp_lam*gamma)**2) \
+        / ((tmp_lam**2 - x0**2)**2 + (tmp_lam*gamma)**2)
+    
+    tau_x_v = (1/4.05) * (k_lam + D_lam) * ((tmp_lam/lam_v)**slope)
+
+    f = interpolate.interp1d(tmp_lam, tau_x_v,
+                             fill_value="extrapolate")
+
+    return f(lam.to(um))
