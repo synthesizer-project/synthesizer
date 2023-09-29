@@ -26,7 +26,7 @@ if __name__ == "__main__":
     grid = Grid(grid_name, grid_dir=grid_dir, read_lines=True)
 
     # get list of lines
-    print(grid.line_list)
+    print(grid.available_lines)
 
     # choose age and metallicity
     log10age = 6.0  # log10(age/yr)
@@ -36,17 +36,16 @@ if __name__ == "__main__":
     grid_point = grid.get_grid_point((log10age, metallicity))
 
     # get information on one line
-    line = grid.get_line_info("H 1 4862.69A", grid_point)
+    line = grid.get_line(grid_point, "H 1 4862.69A")
     print(line)
 
     # or a combination of lines, e.g. a doublet
-    line = grid.get_lines_info(
-        ["H 1 4862.69A", "O 3 4958.91A", "O 3 5006.84A"], grid_point
-    )
+    line = grid.get_lines(grid_point,
+                          ["H 1 4862.69A", "O 3 4958.91A", "O 3 5006.84A"])
     print(line)
 
     # create a line collection from all lines
-    lines = grid.get_lines_info(grid.line_list, grid_point)
+    lines = grid.get_lines(grid_point, grid.available_lines)
     print(lines)
 
     # we can measure line ratios
@@ -66,7 +65,7 @@ if __name__ == "__main__":
     ratios = []
     for iZ, Z in enumerate(grid.metallicity):
         grid_point = (ia, iZ)
-        lines = grid.get_lines_info(grid.line_list, grid_point)
+        lines = grid.get_lines(grid_point, grid.available_lines)
         ratios.append(lines.get_ratio(ratio_id))
 
     Zsun = grid.metallicity / 0.0124
@@ -86,7 +85,7 @@ if __name__ == "__main__":
     y = []
     for iZ, Z in enumerate(grid.metallicity):
         grid_point = (ia, iZ)
-        lines = grid.get_lines_info(grid.line_list, grid_point)
+        lines = grid.get_lines(grid_point, grid.available_lines)
         x_, y_ = lines.get_diagram(diagram_id)
         x.append(x_)
         y.append(y_)
