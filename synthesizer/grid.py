@@ -189,7 +189,7 @@ class Grid:
         if len(grid_name.split(".")) > 1:
             self.grid_ext = grid_name.split(".")[-1]
         else:
-            self.grid_ext = ".hdf5"
+            self.grid_ext = "hdf5"
 
         # Strip the extension off the name (harmless if no extension)
         self.grid_name = grid_name.replace(".hdf5", "").replace(".h5", "")
