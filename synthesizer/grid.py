@@ -46,7 +46,7 @@ def flatten_linelist(list_to_flatten):
 
     Returns:
         (list)
-            flattend list
+            flattened list
     """
 
     flattend_list = []
@@ -56,7 +56,8 @@ def flatten_linelist(list_to_flatten):
                 flattend_list.append(ll)
 
         elif isinstance(lst, str):
-            # if the line is a doublet resolve it and add each line
+            
+            # If the line is a doublet resolve it and add each line
             # individually
             if len(lst.split(",")) > 1:
                 flattend_list += lst.split(",")
@@ -64,7 +65,7 @@ def flatten_linelist(list_to_flatten):
                 flattend_list.append(lst)
 
         else:
-            # raise exception
+            # TODO: raise exception
             pass
 
     return list(set(flattend_list))
@@ -194,7 +195,7 @@ class Grid:
         self.spectra = None
         self.lines = None
 
-        # Convert line list into flattened list and remove duplicates
+        # Convert line list into a flattened list and remove duplicates
         if isinstance(read_lines, list):
             read_lines = flatten_linelist(read_lines)
 
@@ -205,11 +206,11 @@ class Grid:
             # Get list of axes
             self.axes = list(hf.attrs["axes"])
 
-            # put the values of each axis in a dictionary
+            # Put the values of each axis in a dictionary
             self.axes_values = {axis: hf["axes"][axis][:] for axis
                                 in self.axes}
 
-            # set the values of each axis as an attribute
+            # Set the values of each axis as an attribute
             # e.g. self.log10age == self.axes_values['log10age']
             for axis in self.axes:
                 setattr(self, axis, self.axes_values[axis])
@@ -217,7 +218,7 @@ class Grid:
             # Number of axes
             self.naxes = len(self.axes)
 
-            # if log10Q is available set this as an attribute as well
+            # If log10Q is available set this as an attribute as well
             if "log10Q" in hf.keys():
                 self.log10Q = {}
                 for ion in hf["log10Q"].keys():
@@ -230,23 +231,22 @@ class Grid:
             with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5",
                            "r") as hf:
 
-                # get list of available spectra
+                # Get list of available spectra
                 spectra_ids = list(hf["spectra"].keys())
 
-                # remove wavelength dataset
+                # Remove wavelength dataset
                 spectra_ids.remove("wavelength")
 
-                # remove normalisation dataset
+                # Remove normalisation dataset
                 if "normalisation" in spectra_ids:
                     spectra_ids.remove("normalisation")
 
                 for spectra_id in spectra_ids:
                     self.lam = hf["spectra/wavelength"][:]
                     self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
-            """
-            If full cloudy grid available calculate some other spectra for
-            convenience.
-            """
+
+            # If a full cloudy grid is available calculate some other spectra for
+            # convenience.
             if "linecont" in self.spectra.keys():
                 self.spectra["total"] = (
                     self.spectra["transmitted"] + self.spectra["nebular"]
@@ -256,21 +256,21 @@ class Grid:
                     self.spectra["nebular"] - self.spectra["linecont"]
                 )
 
-            # save list of available spectra
+            # Save list of available spectra
             self.available_spectra = list(self.spectra.keys())
 
         if read_lines is not False:
-            """
-            If read_lines is True read all available lines in the grid,
-            otherwise if read_lines is a list just read the lines in the list.
-            """
+            
+            # If read_lines is True read all available lines in the grid,
+            # otherwise if read_lines is a list just read the lines in the list.
 
             self.lines = {}
 
-            # if a list of lines is provided then only read lines in this list
+            # If a list of lines is provided then only read lines in this list
             if isinstance(read_lines, list):
                 read_lines = flatten_linelist(read_lines)
-            # if a list isn't provided then use all available lines to the grid
+                
+            # If a list isn't provided then use all available lines to the grid
             else:
                 read_lines = get_available_lines(self.grid_name, self.grid_dir)
 
@@ -285,7 +285,7 @@ class Grid:
                     self.lines[line]["continuum"] = hf["lines"][line][
                         "continuum"][:]
 
-            # save list of available lines
+            # Save list of available lines
             self.available_lines = list(self.lines.keys())
 
     def __str__(self):
@@ -293,7 +293,7 @@ class Grid:
         Function to print a basic summary of the Grid object.
         """
 
-        # Set up string for printing
+        # Set up the string for printing
         pstr = ""
 
         # Add the content of the summary to the string to be printed
@@ -368,15 +368,20 @@ class Grid:
             sed (synthesizer.sed.Sed)
                 A synthesizer Sed object
         """
-        # throw exception if tline_id not in list of available lines
+        
+        # Throw exception if the line_id not in list of available lines
         if spectra_id not in self.available_spectra:
-            raise exceptions.InconsistentParameter("""Provided spectra_id is not in
-            list of available spectra.""")
+            raise exceptions.InconsistentParameter(
+                "Provided spectra_id is not in"
+                "list of available spectra."
+            )
 
-        # throw exception if the grid_point has a different shape from the grid
+        # Throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
-            raise exceptions.InconsistentParameter("""The grid_point tuple provided
-            as an argument should have same shape as the grid.""")
+            raise exceptions.InconsistentParameter(
+                "The grid_point tuple provided"
+                "as an argument should have same shape as the grid."
+            )
 
         # TODO: throw an exception if grid point is outside grid bounds
 
@@ -397,10 +402,12 @@ class Grid:
                 A synthesizer Line object.
         """
 
-        # throw exception if the grid_point has a different shape from the grid
+        # Throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
-            raise exceptions.InconsistentParameter("""The grid_point tuple provided
-            as an argument should have same shape as the grid.""")
+            raise exceptions.InconsistentParameter(
+                "The grid_point tuple provided"
+                "as an argument should have same shape as the grid."
+            )
 
         if type(line_id) is str:
             line_id = [line_id]
@@ -411,10 +418,12 @@ class Grid:
 
         for line_id_ in line_id:
 
-            # throw exception if tline_id not in list of available lines
+            # Throw exception if tline_id not in list of available lines
             if line_id_ not in self.available_lines:
-                raise exceptions.InconsistentParameter("""Provided line_id is
-                not in list of available lines.""")
+                raise exceptions.InconsistentParameter(
+                    "Provided line_id is"
+                    "not in list of available lines."
+                )
 
             line_ = self.lines[line_id_]
             wavelength.append(line_["wavelength"])
@@ -437,18 +446,18 @@ class Grid:
             lines (lines.LineCollection)
         """
 
-        # if no line ids provided calcualte all lines
+        # If no line ids are provided calculate all lines
         if line_ids is None:
             line_ids = self.available_lines
 
-        # line dictionary
+        # Line dictionary
         lines = {}
 
         for line_id in line_ids:
             line = self.get_line(grid_point, line_id)
 
-            # add to dictionary
+            # Add to dictionary
             lines[line.id] = line
 
-        # create and return collection
+        # Create and return collection
         return LineCollection(lines)
