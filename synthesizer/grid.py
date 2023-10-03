@@ -2,9 +2,9 @@ import os
 import numpy as np
 import h5py
 from . import __file__ as filepath
-from . import exceptions
-from .sed import Sed
-from .line import Line, LineCollection
+from synthesizer import exceptions
+from synthesizer.sed import Sed
+from synthesizer.line import Line, LineCollection
 
 
 def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
