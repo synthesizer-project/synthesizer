@@ -64,9 +64,9 @@ if __name__ == "__main__":
     grid_point = grid.get_grid_point((args.log10age, args.metallicity))
 
     # loop over available spectra and plot
-    for spec_name in grid.spec_names:
+    for spec_name in grid.available_spectra:
         # get Sed object
-        sed = grid.get_sed(grid_point, spec_name=spec_name)
+        sed = grid.get_spectra(grid_point, spectra_id=spec_name)
         # print summary of SED object
         print(sed)
         plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, 
