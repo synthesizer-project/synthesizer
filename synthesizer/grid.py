@@ -1,34 +1,25 @@
-"""
-Create a Grid object
-"""
-
 import os
 import numpy as np
 import h5py
-
 from . import __file__ as filepath
-from .sed import Sed
-from .line import Line, LineCollection
-
-
-from collections.abc import Iterable
+from synthesizer import exceptions
+from synthesizer.sed import Sed
+from synthesizer.line import Line, LineCollection
 
 
 def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
     """Get a list of the lines available to a grid
 
-    Parameters
-    ----------
-    grid_name : str
-        list containing lists and/or strings and integers
+    Arguments:
+        grid_name (str)
+            The name of the grid file.
 
-    grid_dir : str
-        path to grid
+        grid_dir (str)
+            The directory to the grid file.
 
-    Returns
-    -------
-    list
-        list of lines
+    Returns:
+        (list)
+            List of available lines
     """
 
     grid_filename = f"{grid_dir}/{grid_name}.hdf5"
@@ -45,37 +36,36 @@ def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
 
 
 def flatten_linelist(list_to_flatten):
-    """Flatten a mixed list of lists and strings and remove duplicates
+    """
+    Flatten a mixed list of lists and strings and remove duplicates. Used when
+    converting a desired line list which may contain single lines and doublets.
 
-    Flattens a mixed list of lists and strings. Used when converting a desired line list which may contain single lines and doublets.
+    Arguments:
+        list_to_flatten (list)
+            list containing lists and/or strings and integers
 
-    Parameters
-    ----------
-    list : list
-        list containing lists and/or strings and integers
-
-
-    Returns
-    -------
-    list
-        flattend list
+    Returns:
+        (list)
+            flattened list
     """
 
     flattend_list = []
-    for l in list_to_flatten:
-        if isinstance(l, list) or isinstance(l, tuple):
-            for ll in l:
+    for lst in list_to_flatten:
+        if isinstance(lst, list) or isinstance(lst, tuple):
+            for ll in lst:
                 flattend_list.append(ll)
 
-        elif isinstance(l, str):
-            # --- if the line is a doublet resolve it and add each line individually
-            if len(l.split(",")) > 1:
-                flattend_list += l.split(",")
+        elif isinstance(lst, str):
+            
+            # If the line is a doublet resolve it and add each line
+            # individually
+            if len(lst.split(",")) > 1:
+                flattend_list += lst.split(",")
             else:
-                flattend_list.append(l)
+                flattend_list.append(lst)
 
         else:
-            # raise exception
+            # TODO: raise exception
             pass
 
     return list(set(flattend_list))
@@ -133,7 +123,8 @@ def parse_grid_id(grid_id):
 
 class Grid:
     """
-    The Grid class, containing attributes and methods for reading and manipulating spectral grids
+    The Grid class, containing attributes and methods for reading and
+    manipulating spectral grids.
 
     Attributes:
         grid_dir (str)
@@ -175,9 +166,8 @@ class Grid:
         self,
         grid_name,
         grid_dir=None,
-        verbose=False,
         read_spectra=True,
-        read_lines=False,
+        read_lines=True,
     ):
         if grid_dir is None:
             grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
@@ -205,7 +195,7 @@ class Grid:
         self.spectra = None
         self.lines = None
 
-        # Convert line list into flattened list and remove duplicates
+        # Convert line list into a flattened list and remove duplicates
         if isinstance(read_lines, list):
             read_lines = flatten_linelist(read_lines)
 
@@ -216,14 +206,19 @@ class Grid:
             # Get list of axes
             self.axes = list(hf.attrs["axes"])
 
-            # Loop over axes extracting their data
+            # Put the values of each axis in a dictionary
+            self.axes_values = {axis: hf["axes"][axis][:] for axis
+                                in self.axes}
+
+            # Set the values of each axis as an attribute
+            # e.g. self.log10age == self.axes_values['log10age']
             for axis in self.axes:
-                setattr(self, axis, hf["axes"][axis][:])
+                setattr(self, axis, self.axes_values[axis])
 
             # Number of axes
             self.naxes = len(self.axes)
 
-            # Get ionisation data
+            # If log10Q is available set this as an attribute as well
             if "log10Q" in hf.keys():
                 self.log10Q = {}
                 for ion in hf["log10Q"].keys():
@@ -231,139 +226,125 @@ class Grid:
 
         # Read in spectra
         if read_spectra:
-            self.get_spectra()
+            self.spectra = {}
 
-        # Read in lines
-        if read_lines:
-            self.get_lines()
+            with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5",
+                           "r") as hf:
+
+                # Get list of available spectra
+                spectra_ids = list(hf["spectra"].keys())
+
+                # Remove wavelength dataset
+                spectra_ids.remove("wavelength")
+
+                # Remove normalisation dataset
+                if "normalisation" in spectra_ids:
+                    spectra_ids.remove("normalisation")
+
+                for spectra_id in spectra_ids:
+                    self.lam = hf["spectra/wavelength"][:]
+                    self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
+
+            # If a full cloudy grid is available calculate some other spectra for
+            # convenience.
+            if "linecont" in self.spectra.keys():
+                self.spectra["total"] = (
+                    self.spectra["transmitted"] + self.spectra["nebular"]
+                )
+
+                self.spectra["nebular_continuum"] = (
+                    self.spectra["nebular"] - self.spectra["linecont"]
+                )
+
+            # Save list of available spectra
+            self.available_spectra = list(self.spectra.keys())
+
+        if read_lines is not False:
+            
+            # If read_lines is True read all available lines in the grid,
+            # otherwise if read_lines is a list just read the lines in the list.
+
+            self.lines = {}
+
+            # If a list of lines is provided then only read lines in this list
+            if isinstance(read_lines, list):
+                read_lines = flatten_linelist(read_lines)
+                
+            # If a list isn't provided then use all available lines to the grid
+            else:
+                read_lines = get_available_lines(self.grid_name, self.grid_dir)
+
+            with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5",
+                           "r") as hf:
+                for line in read_lines:
+                    self.lines[line] = {}
+                    self.lines[line]["wavelength"] = hf["lines"][line].attrs[
+                        "wavelength"]
+                    self.lines[line]["luminosity"] = hf["lines"][line][
+                        "luminosity"][:]
+                    self.lines[line]["continuum"] = hf["lines"][line][
+                        "continuum"][:]
+
+            # Save list of available lines
+            self.available_lines = list(self.lines.keys())
 
     def __str__(self):
         """
         Function to print a basic summary of the Grid object.
-
-        Returns
-        -------
-        str
-
         """
 
-        # Set up string for printing
+        # Set up the string for printing
         pstr = ""
 
         # Add the content of the summary to the string to be printed
         pstr += "-" * 30 + "\n"
-        pstr += f"SUMMARY OF GRID" + "\n"
+        pstr += "SUMMARY OF GRID" + "\n"
         for axis in self.axes:
             pstr += f"{axis}: {getattr(self, axis)} \n"
         for k, v in self.parameters.items():
             pstr += f"{k}: {v} \n"
         if self.spectra:
-            pstr += f"spectra: {list(self.spectra.keys())}\n"
+            pstr += f"available lines: {self.available_lines}\n"
         if self.lines:
-            pstr += f"lines: {list(self.lines.keys())}\n"
+            pstr += f"available spectra: {self.available_spectra}\n"
         pstr += "-" * 30 + "\n"
 
         return pstr
 
-    def get_spectra(self):
-        """
-        Function to read in spectra from the HDF5 grid
-
-        Returns
-        -------
-        str
-
-        """
-
-        self.spectra = {}
-
-        with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
-            # get list of available spectra
-            self.spec_names = list(hf["spectra"].keys())
-            self.spec_names.remove("wavelength")
-            if "normalisation" in self.spec_names:
-                self.spec_names.remove("normalisation")
-
-            for spec_name in self.spec_names:
-                self.lam = hf["spectra/wavelength"][:]
-                self.nu = 3e8 / (self.lam * 1e-10)  # used?
-
-                self.spectra[spec_name] = hf["spectra"][spec_name][:]
-
-                # if incident is one of the spectra also add a spectra called "stellar"
-                if spec_name == "incident":
-                    self.spectra["stellar"] = self.spectra[spec_name]
-
-        """ if full cloudy grid available calculate
-        some other spectra for convenience """
-        if "linecont" in self.spec_names:
-            self.spectra["total"] = (
-                self.spectra["transmitted"] + self.spectra["nebular"]
-            )  #  assumes fesc = 0
-
-            self.spectra["nebular_continuum"] = (
-                self.spectra["nebular"] - self.spectra["linecont"]
-            )
-
-    def get_lines(self):
-        """
-        Function to read in lines from the HDF5 grid
-
-        Returns
-        -------
-        str
-
-        """
-
-        self.lines = {}
-
-        if isinstance(self.read_lines, list):
-            self.line_list = flatten_linelist(self.read_lines)
-        else:
-            self.line_list = get_available_lines(self.grid_name, self.grid_dir)
-
-        with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
-            for line in self.line_list:
-                self.lines[line] = {}
-                self.lines[line]["wavelength"] = hf["lines"][line].attrs[
-                    "wavelength"
-                ]  # angstrom
-                self.lines[line]["luminosity"] = hf["lines"][line]["luminosity"][:]
-                self.lines[line]["continuum"] = hf["lines"][line]["continuum"][:]
-
     def get_nearest_index(self, value, array):
         """
-        Simple function for calculating the closest index in an array for a given value
+        Function for calculating the closest index in an array for a
+        given value.
 
-        Parameters
-        ----------
-        value : float
-            The target value
+        TODO: This could be moved to utils?
 
-        array : nn.ndarray
-            The array to search
+        Arguments:
+            value (float)
+                The target value.
 
-        Returns
-        -------
-        int
-             The index of the closet point in the grid (array)
+            array (np.ndarray)
+                The array to search.
+
+        Returns:
+            int
+                The index of the closet point in the grid (array)
         """
 
         return (np.abs(array - value)).argmin()
 
     def get_grid_point(self, values):
+
         """
-        Identify the nearest grid point for a tuple of values
+        Function to identify the nearest grid point for a tuple of values.
 
-        Parameters
-        ----------
-        value : float
-            The target value
+        Arguments:
+            values (tuple)
+                The values for which we want the grid point. These have to be 
+                in the same order as the axes.
 
-        Returns
-        -------
-        int
-             The index of the closet point in the grid (array)
+        Returns:
+            (tuple)
+                A tuple of integers specifying the closest grid point.
         """
 
         return tuple(
@@ -373,69 +354,60 @@ class Grid:
             ]
         )
 
-    def get_nearest(self, value, array):
+    def get_spectra(self, grid_point, spectra_id="incident"):
         """
-        Simple function for calculating the closest index in an array for a given value
+        Function for creating an Sed object for a specific grid point.
 
-        Parameters
-        ----------
-        value : float
-            The target value
+        Arguments:
+            grid_point (tuple)
+                A tuple of integers specifying the closest grid point.
+            spectra_id (str)
+                The name of the spectra (in the grid) that is desired.
 
-        array : nn.ndarray
-            The array to search
-
-        Returns
-        -------
-        int
-             The index of the closet point in the grid (array)
+        Returns:
+            sed (synthesizer.sed.Sed)
+                A synthesizer Sed object
         """
+        
+        # Throw exception if the line_id not in list of available lines
+        if spectra_id not in self.available_spectra:
+            raise exceptions.InconsistentParameter(
+                "Provided spectra_id is not in"
+                "list of available spectra."
+            )
 
-        idx = self.get_nearest_index(value, array)
-
-        return idx, array[idx]
-
-    def get_sed(self, grid_point, spec_name="incident"):
-        """
-        Returns an Sed object for a given spectra type for a given grid point.
-
-        Parameters
-        ----------
-        grid_point: tuple (int)
-            A tuple of the grid point indices
-
-        Returns
-        -------
-        obj (Sed)
-             An Sed object at the defined grid point
-        """
-
+        # Throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
-            # throw exception
-            print("grid point tuple should have same shape as grid")
-            pass
+            raise exceptions.InconsistentParameter(
+                "The grid_point tuple provided"
+                "as an argument should have same shape as the grid."
+            )
 
-        return Sed(self.lam, lnu=self.spectra[spec_name][grid_point])
+        # TODO: throw an exception if grid point is outside grid bounds
 
-    def get_line_info(self, line_id, grid_point):
+        return Sed(self.lam, lnu=self.spectra[spectra_id][grid_point])
+
+    def get_line(self, grid_point, line_id):
         """
-        Returns a Line object for a given line_id and grid_point
+        Function for creating a Line object for a given line_id and grid_point.
 
-        Parameters
-        ----------
-        grid_point: tuple (int)
-            A tuple of the grid point indices
+        Arguments:
+            grid_point (tuple)
+                A tuple of integers specifying the closest grid point.
+            line_id (str)
+                The id of the line.
 
-        Returns
-        -------
-        obj (Line)
-             A Line object at the defined grid point
+        Returns:
+            line (synthesizer.line.Line)
+                A synthesizer Line object.
         """
 
+        # Throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
-            # throw exception
-            print("grid point tuple should have same shape as grid")
-            pass
+            raise exceptions.InconsistentParameter(
+                "The grid_point tuple provided"
+                "as an argument should have same shape as the grid."
+            )
 
         if type(line_id) is str:
             line_id = [line_id]
@@ -445,6 +417,14 @@ class Grid:
         continuum = []
 
         for line_id_ in line_id:
+
+            # Throw exception if tline_id not in list of available lines
+            if line_id_ not in self.available_lines:
+                raise exceptions.InconsistentParameter(
+                    "Provided line_id is"
+                    "not in list of available lines."
+                )
+
             line_ = self.lines[line_id_]
             wavelength.append(line_["wavelength"])
             luminosity.append(line_["luminosity"][grid_point])
@@ -452,31 +432,32 @@ class Grid:
 
         return Line(line_id, wavelength, luminosity, continuum)
 
-    def get_lines_info(self, line_ids, grid_point):
+    def get_lines(self, grid_point, line_ids=None):
         """
-        Return a LineCollection object for a given line and metallicity/age index
+        Function a LineCollection of multiple lines.
 
-        Parameters
-        ----------
-        grid_point: tuple (int)
-            A tuple of the grid point indices
+        Arguments:
+            grid_point (tuple)
+                A tuple of the grid point indices.
+            line_ids (list)
+                A list of lines, if None use all available lines.
 
         Returns:
-        ------------
-        obj (Line)
+            lines (lines.LineCollection)
         """
 
-        # line dictionary
+        # If no line ids are provided calculate all lines
+        if line_ids is None:
+            line_ids = self.available_lines
+
+        # Line dictionary
         lines = {}
 
         for line_id in line_ids:
-            line = self.get_line_info(line_id, grid_point)
+            line = self.get_line(grid_point, line_id)
 
-            # add to dictionary
+            # Add to dictionary
             lines[line.id] = line
 
-        # create collection
-        line_collection = LineCollection(lines)
-
-        # return collection
-        return line_collection
+        # Create and return collection
+        return LineCollection(lines)

@@ -23,7 +23,7 @@ def simple_UVJ(grid, target_metallicity=0.01):
     # fc.plot_transmission_curves()
 
     for ia, log10age in enumerate(grid.log10age):
-        sed = grid.get_sed((ia, iZ))  # creates an SED object from a given grid point
+        sed = grid.get_spectra((ia, iZ))  # creates an SED object from a given grid point
 
         # --- now calculate the observed frame spectra
 
@@ -55,7 +55,7 @@ def UVJ_metallicity(grid):
             table[f"{Z}_{f}"] = np.zeros(len(grid.log10age))
 
         for ia, log10age in enumerate(grid.log10age):
-            sed = grid.get_sed(
+            sed = grid.get_spectra(
                 (ia, iZ)
             )  # creates an SED object from a given grid point
 
