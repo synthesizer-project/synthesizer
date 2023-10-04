@@ -81,9 +81,9 @@ Example toctree:
 
 ### Adding example scripts
 
-The `examples/` top level directory contains a number of self contained example scripts for particular use cases that may not belong in the main documentation, but are still useful for many users. We use the [sphinx-gallery](https://sphinx-gallery.github.io/stable/index.html) extension to build a gallery of our examples in the documentation.
+The `examples/` top level directory contains a number of self contained example scripts (python, `.py`) for particular use cases that may not belong in the main documentation, but are still useful for many users. We use the [sphinx-gallery](https://sphinx-gallery.github.io/stable/index.html) extension to build a gallery of our examples in the documentation.
 
-**Important**: each script should have a top level docstring written in reST, with a header. Examples that do not will fail the automated build process. Further details are provided [here](https://sphinx-gallery.github.io/stable/syntax.html). For example:
+**Important**: each script (`.py`) should have a top level docstring written in reST, with a header. Examples that do not will fail the automated build process. Further details are provided [here](https://sphinx-gallery.github.io/stable/syntax.html). For example:
 
     """
     "This" is my example-script
