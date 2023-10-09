@@ -223,5 +223,5 @@ Loading and using Grids
 .. toctree::
    :maxdepth: 2
    
-    grids
+    grids_example
    
