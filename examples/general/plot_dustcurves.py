@@ -36,7 +36,7 @@ lam = np.arange(1000, 10000, 10) * Angstrom
 for ii, (model, param) in enumerate(zip(models, params)):
     emodel = getattr(attenuation, model)(params=param)
 
-    plt.plot(lam, emodel.tau(lam), color=colors[ii], label=f"{model}, {param}")
+    plt.plot(lam, emodel.get_tau(lam), color=colors[ii], label=f"{model}, {param}")
 
 plt.xlabel(r"$\lambda/(\AA)$", fontsize=12)
 plt.ylabel(r"A$_{\lambda}/$A$_{V}$", fontsize=12)
