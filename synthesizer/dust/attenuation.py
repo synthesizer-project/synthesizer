@@ -42,7 +42,7 @@ class PowerLaw:
         self.description = "simple power law dust curve"
         self.params = params
 
-    def get_tau_x(self, lam):
+    def get_tau_at_lam(self, lam):
         """
         Calculate optical depth at lam
 
@@ -73,7 +73,7 @@ class PowerLaw:
         # tau_x = (lam.to('Angstrom')/(5500.*Angstrom))**self.params['slope']
         # tau_V = np.interp(5500., lam.to('Angstrom').v, tau_x)
 
-        return self.tau_x(lam) / self.tau_x(5500.0)
+        return self.get_tau_at_lam(lam) / self.get_tau_at_lam(5500.0)
 
     def get_transmission(self, tau_V, lam):
         """
