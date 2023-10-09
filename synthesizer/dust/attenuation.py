@@ -42,7 +42,7 @@ class PowerLaw:
         self.description = "simple power law dust curve"
         self.params = params
 
-    def tau_x(self, lam):
+    def get_tau_x(self, lam):
         """
         Calculate optical depth at lam
 
@@ -60,7 +60,7 @@ class PowerLaw:
 
         return (lam / 5500.0) ** self.params["slope"]
 
-    def tau(self, lam):
+    def get_tau(self, lam):
         """
         Calculate V-band normalised optical depth
 
@@ -75,7 +75,7 @@ class PowerLaw:
 
         return self.tau_x(lam) / self.tau_x(5500.0)
 
-    def attenuate(self, tau_V, lam):
+    def get_transmission(self, tau_V, lam):
         """
         Provide the transmitted flux/luminosity fraction
 
@@ -88,7 +88,7 @@ class PowerLaw:
             wavelength, expected with units
         """
 
-        tau_x_v = self.tau(lam)
+        tau_x_v = self.get_tau(lam)
 
         return np.exp(-(tau_V * tau_x_v))
 
@@ -127,7 +127,7 @@ class MW_N18:
             5500.0, self.d.f.mw_df_lam[::-1], self.d.f.mw_df_chi[::-1]
         )
 
-    def tau(self, lam, interp="cubic"):
+    def get_tau(self, lam, interp="cubic"):
         """
         Calculate V-band normalised optical depth
 
@@ -146,7 +146,7 @@ class MW_N18:
 
         return f(lam.to("Angstrom").v) / self.tau_lam_V
 
-    def attenuate(self, tau_V, lam):
+    def get_transmission(self, tau_V, lam):
         """
         Provide the transmitted flux/luminosity fraction
 
@@ -159,7 +159,7 @@ class MW_N18:
             wavelength, expected with units
         """
 
-        tau_x_v = self.tau(lam)
+        tau_x_v = self.get_tau(lam)
 
         return np.exp(-(tau_V * tau_x_v))
 
@@ -214,7 +214,7 @@ class Calzetti2000():
                                in Noll et al. 2009"""
         self.params = params
 
-    def tau(self, lam):
+    def get_tau(self, lam):
         """
         Calculate V-band normalised optical depth
 
@@ -229,7 +229,7 @@ class Calzetti2000():
                    ampl=self.params['ampl'],
                    gamma=self.params['gamma'])
 
-    def attenuate(self, tau_V, lam):
+    def get_transmission(self, tau_V, lam):
         """
         Get the transmission at different wavelength for the curve
 
@@ -241,7 +241,7 @@ class Calzetti2000():
         lam: float
             wavelength, expected with units
         """
-        tau_x_v = self.tau(lam) 
+        tau_x_v = self.get_tau(lam) 
     
         return np.exp(-(tau_V * tau_x_v))
 
@@ -292,7 +292,7 @@ class GrainsWD01:
 
         self.emodel = WD01(self.params["model"])
 
-    def tau(self, lam):
+    def get_tau(self, lam):
         """
         Calculate V-band normalised optical depth
 
@@ -304,7 +304,7 @@ class GrainsWD01:
 
         return self.emodel(lam.to_astropy())
 
-    def attenuate(self, tau_V, lam):
+    def get_transmission(self, tau_V, lam):
         """
         Get the transmission at different wavelength for the curve
 
