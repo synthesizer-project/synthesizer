@@ -452,7 +452,7 @@ class Line:
             )
 
         else:
-            exceptions.InconsistentAddition("Wavelength grids must be identical")
+            raise exceptions.InconsistentAddition("Wavelength grids must be identical")
 
     def get_flux(self, cosmo, z):
         """Calculate the line flux in units of erg/s/cm2
