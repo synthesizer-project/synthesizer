@@ -414,7 +414,7 @@ class BaseGalaxy:
 
         if young_old_thresh:
             if (len(tau_v) > 2) or (len(alpha) > 2):
-                exceptions.InconsistentArguments(
+                raise exceptions.InconsistentArguments(
                     (
                         "Only 2 values for the optical depth or dust curve "
                         "slope are allowed for the CF00 model"
@@ -424,7 +424,7 @@ class BaseGalaxy:
             if isinstance(tau_v, (list, tuple, np.ndarray)) or isinstance(
                 alpha, (list, tuple, np.ndarray)
             ):
-                exceptions.InconsistentArguments(
+                raise exceptions.InconsistentArguments(
                     (
                         """Only single value
                 supported for tau_v and alpha in case of single dust
