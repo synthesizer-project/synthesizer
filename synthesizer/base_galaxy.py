@@ -322,7 +322,7 @@ class BaseGalaxy:
         )
 
         if tau_v:
-            T = dust_curve.attenuate(tau_v, grid.lam)
+            T = dust_curve.get_transmission(tau_v, grid.lam)
         else:
             T = 1.0
 
@@ -482,7 +482,7 @@ class BaseGalaxy:
             dust_curve.params["slope"] = alpha
 
             # calculate dust attenuation
-            T = dust_curve.attenuate(tau_v, grid.lam)
+            T = dust_curve.get_transmission(tau_v, grid.lam)
 
             # calculate the attenuated emission
             self.spectra["attenuated"]._lnu = T * self.spectra["reprocessed"]._lnu
@@ -509,10 +509,10 @@ class BaseGalaxy:
                 alpha = [-0.7, -1.4]
 
             dust_curve.params["slope"] = alpha[0]
-            T_ISM = dust_curve.attenuate(tau_v[0], grid.lam)
+            T_ISM = dust_curve.get_transmission(tau_v[0], grid.lam)
 
             dust_curve.params["slope"] = alpha[1]
-            T_BC = dust_curve.attenuate(tau_v[1], grid.lam)
+            T_BC = dust_curve.get_transmission(tau_v[1], grid.lam)
 
             T_young = T_ISM * T_BC
             T_old = T_ISM
