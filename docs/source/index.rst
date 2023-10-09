@@ -23,7 +23,7 @@ Contents
    :maxdepth: 1
    
    installation
-   grids
+   grids/grids
    galaxies/galaxies
    spectra
    units
