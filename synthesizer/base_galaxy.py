@@ -673,7 +673,7 @@ class BaseGalaxy:
         for line_id in line_ids:
             # if the line id a doublet in string form
             # (e.g. 'OIII4959,OIII5007') convert it to a list
-            if type(line_id) is str:
+            if isinstance(line_id, str):
                 if len(line_id.split(",")) > 1:
                     line_id = line_id.split(",")
 
@@ -702,7 +702,7 @@ class BaseGalaxy:
                 #               axis=(0, 1))  # affected by fesc
 
             # else if the line is list or tuple denoting a doublet (or higher)
-            elif isinstance(line_id, list) or isinstance(line_id, tuple):
+            elif isinstance(line_id, (list, tuple):
                 luminosity = []
                 continuum = []
                 wavelength = []
@@ -887,7 +887,7 @@ class BaseGalaxy:
 
         equivalent_width = None
 
-        if type(spectra_to_plot) != list:
+        if not isinstance(spectra_to_plot, list):
             spectra_to_plot = list(self.spectra.keys())
 
         for sed_name in spectra_to_plot:
@@ -985,7 +985,7 @@ class BaseGalaxy:
 
         ax = fig.add_axes((left, bottom, width, height))
 
-        if type(spectra_to_plot) != list:
+        if not isinstance(spectra_to_plot, list):
             spectra_to_plot = list(self.spectra.keys())
 
         # only plot FIR if 'total' is plotted otherwise just plot UV-NIR
@@ -1050,7 +1050,7 @@ class BaseGalaxy:
         ax = fig.add_axes((left, bottom, width, height))
         filter_ax = ax.twinx()
 
-        if type(spectra_to_plot) != list:
+        if not isinstance(spectra_to_plot, list):
             spectra_to_plot = list(self.spectra.keys())
 
         for sed_name in spectra_to_plot:
