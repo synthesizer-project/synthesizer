@@ -489,7 +489,7 @@ class Galaxy(BaseGalaxy):
 
             return np.zeros(len(grid.lam))
 
-        from ..extensions.csed import compute_particle _sed
+        from ..extensions.csed import compute_particle_sed
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
