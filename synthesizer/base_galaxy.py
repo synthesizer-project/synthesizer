@@ -479,7 +479,7 @@ class BaseGalaxy:
 
         if np.isscalar(tau_v):
             # single screen dust, no separate birth cloud attenuation
-            dust_curve.params["slope"] = alpha
+            dust_curve.slope = alpha
 
             # calculate dust attenuation
             T = dust_curve.get_transmission(tau_v, grid.lam)
@@ -508,10 +508,10 @@ class BaseGalaxy:
                 )
                 alpha = [-0.7, -1.4]
 
-            dust_curve.params["slope"] = alpha[0]
+            dust_curve.slope = alpha[0]
             T_ISM = dust_curve.get_transmission(tau_v[0], grid.lam)
 
-            dust_curve.params["slope"] = alpha[1]
+            dust_curve.slope = alpha[1]
             T_BC = dust_curve.get_transmission(tau_v[1], grid.lam)
 
             T_young = T_ISM * T_BC
