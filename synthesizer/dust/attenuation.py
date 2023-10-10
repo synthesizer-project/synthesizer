@@ -124,13 +124,11 @@ class PowerLaw(AttenuationLaw):
     Custom power law dust curve.
 
     Attributes:
-        params (dict)
-            A dictionary containing the parameters of the model. In this case
-            this is simply the power law slope.
-            TODO: this would be better as a keyword argument.
+        slope (float)
+            The slope of the power law.
     """
 
-    def __init__(self, params={"slope": -1.0}):
+    def __init__(self, slope=-1.0):
         """
         Initialise the power law slope of the dust curve.
 
@@ -141,7 +139,7 @@ class PowerLaw(AttenuationLaw):
 
         description = "simple power law dust curve"
         AttenuationLaw.__init__(self, description)
-        self.params = params
+        self.slope = slope
 
     def get_tau_at_lam(self, lam):
         """
@@ -157,7 +155,7 @@ class PowerLaw(AttenuationLaw):
                 The optical depth.
         """
 
-        return (lam / 5500.0) ** self.params["slope"]
+        return (lam / 5500.0) ** self.slope
 
     def get_tau(self, lam):
         """
@@ -250,7 +248,7 @@ class Calzetti2000(AttenuationLaw):
 
     """
 
-    def __init__(self, params={'slope': 0., 'x0': 0.2175, 'ampl': 1., 'gamma': 0.035}):
+    def __init__(self, slope=0, cent_lam=0.2175, ampl=1, gamma=0.035):
         """
         Initialise the dust curve.
 
@@ -273,7 +271,12 @@ class Calzetti2000(AttenuationLaw):
             "in Noll et al. 2009"
         )
         AttenuationLaw.__init__(self, description)
-        self.params = params
+
+        # Define the parameters of the model.
+        self.slope = slope
+        self.cent_lam = cent_lam
+        self.ampl = ampl
+        self.gamma = gamma
 
     def get_tau(self, lam):
         """
@@ -291,10 +294,10 @@ class Calzetti2000(AttenuationLaw):
         """
         return N09_tau(
             lam=lam,
-            slope=self.params['slope'],
-            cent_lam=self.params['cent_lam'],
-            ampl=self.params['ampl'],
-            gamma=self.params['gamma']
+            slope=self.slope,
+            cent_lam=self.cent_lam,
+            ampl=self.ampl,
+            gamma=self.gamma,
         )
 
 
@@ -313,7 +316,7 @@ class GrainsWD01:
             The function that describes the model from WD01 imported above.
     """
 
-    def __init__(self, params={"model": "SMCBar"}):
+    def __init__(self, model="SMCBar"):
         """
         Initialise the dust curve
 
@@ -327,7 +330,7 @@ class GrainsWD01:
             "Weingarter and Draine 2001 dust grain extinction"
             " model for MW, SMC and LMC"
         )
-        self.emodel = WD01(params["model"])
+        self.emodel = WD01(model)
 
     def get_tau(self, lam):
         """
