@@ -702,7 +702,7 @@ class BaseGalaxy:
                 #               axis=(0, 1))  # affected by fesc
 
             # else if the line is list or tuple denoting a doublet (or higher)
-            elif isinstance(line_id, (list, tuple):
+            elif isinstance(line_id, (list, tuple)):
                 luminosity = []
                 continuum = []
                 wavelength = []
