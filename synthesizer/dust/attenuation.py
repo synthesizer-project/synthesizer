@@ -340,7 +340,7 @@ class GrainsWD01:
             self.model = "SMCBar"
         else:
             self.model = model
-        self.emodel = WD01(model)
+        self.emodel = WD01(self.model)
 
     def get_tau(self, lam):
         """
