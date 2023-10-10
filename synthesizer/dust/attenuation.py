@@ -330,6 +330,16 @@ class GrainsWD01:
             "Weingarter and Draine 2001 dust grain extinction"
             " model for MW, SMC and LMC"
         )
+
+        # Get the correct model string
+        if "MW" in model:
+            self.model = "MWRV31"
+        elif "LMC" in model:
+            self.model = "LMCAvg"
+        elif "SMC" in model:
+            self.model = "SMCBar"
+        else:
+            self.model = model
         self.emodel = WD01(model)
 
     def get_tau(self, lam):
