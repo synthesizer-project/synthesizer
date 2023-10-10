@@ -11,6 +11,55 @@ this_dir, this_filename = os.path.split(__file__)
 
 __all__ = ["PowerLaw", "MW_N18", "Calzetti2000", "GrainsWD01"]
 
+def N09_tau(lam, slope, cent_lam, ampl, gamma):
+    """
+    Attenuation curve using a modified version of the Calzetti
+    attenuation (Charlot+2000) law allowing for a varying UV slope
+    and the presence of a UV bump; from Noll+2009
+
+    Args:
+        lam (array-like, float)
+            The input wavelength array.
+
+        slope (float)
+            The slope of the attenuation curve.
+
+        cent_lam (float)
+            The central wavelength of the UV bump, expected in microns.
+
+        ampl (float)
+            The amplitude of the UV-bump.
+
+        gamma (float)
+            The width (FWHM) of the UV bump, in microns.
+
+    Returns:
+        (array-like, float)
+            V-band normalised optical depth for given wavelength
+    """
+
+    # Wavelength in microns
+    tmp_lam = np.arange(0.12, 2.2, 0.001)
+    lam_v = 0.55
+    k_lam = np.zeros_like(tmp_lam)
+
+    ok = (tmp_lam < 0.63)
+    k_lam[ok] = -2.156 + (1.509 / tmp_lam[ok]) \
+        - (0.198 / tmp_lam[ok] ** 2) \
+        + (0.011 / tmp_lam[ok] ** 3)
+    k_lam[~ok] = -1.857 + (1.040 / tmp_lam[~ok])
+    k_lam = 4.05 + 2.659 * k_lam
+
+    D_lam = ampl * ((tmp_lam * gamma) ** 2) \
+        / ((tmp_lam ** 2 - cent_lam ** 2) ** 2 + (tmp_lam * gamma) ** 2)
+
+    tau_x_v = (1 / 4.05) * (k_lam + D_lam) * ((tmp_lam / lam_v) ** slope)
+
+    func = interpolate.interp1d(tmp_lam, tau_x_v,
+                                fill_value="extrapolate")
+
+    return func(lam.to(um))
+
 
 class AttenuationLaw:
     """
@@ -43,7 +92,7 @@ class AttenuationLaw:
 
     def get_transmission(self, tau_v, lam):
         """
-        Provide the transmitted flux/luminosity fraction based on an optical
+        Returns the transmitted flux/luminosity fraction based on an optical
         depth at a range of wavelengths.
 
         Args:
@@ -72,30 +121,22 @@ class AttenuationLaw:
 
 class PowerLaw(AttenuationLaw):
     """
-    Custom power law dust curve
+    Custom power law dust curve.
 
-    Attributes
-    ----------
-    slope: float
-        power law slope
-
-    Methods
-    -------
-    tau
-        calculates V-band normalised optical depth
-    attenuate
-        applies the attenuation curve for given V-band optical
-        depth, returns the transmitted fraction
+    Attributes:
+        params (dict)
+            A dictionary containing the parameters of the model. In this case
+            this is simply the power law slope.
+            TODO: this would be better as a keyword argument.
     """
 
     def __init__(self, params={"slope": -1.0}):
         """
-        Initialise the power law slope of the dust curve
+        Initialise the power law slope of the dust curve.
 
-        Parameters
-        ----------
-        slope: float
-            power law slope
+        Args:
+            params (dict)
+                A dictionary containing the parameters for the model.
         """
 
         description = "simple power law dust curve"
@@ -104,91 +145,89 @@ class PowerLaw(AttenuationLaw):
 
     def get_tau_at_lam(self, lam):
         """
-        Calculate optical depth at lam
+        Calculate optical depth at a wavelength.
 
-        Parameters
-        ----------
-        lam: float array
-            wavelength, in Angstroms
+        Args:
+            lam (float/array-like, float)
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths.
 
-
-        Returns
-        ----------
-        float array
-            optical depth
+        Returns:
+            float/array-like, float
+                The optical depth.
         """
 
         return (lam / 5500.0) ** self.params["slope"]
 
     def get_tau(self, lam):
         """
-        Calculate V-band normalised optical depth
+        Calculate V-band normalised optical depth.
 
-        Parameters
-        ----------
-        lam: float array
-            wavelength, expected mwith units
+        Args:
+            lam (float/array-like, float)
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths.
+
+        Returns:
+            float/array-like, float
+                The optical depth.
         """
-
-        # tau_x = (lam.to('Angstrom')/(5500.*Angstrom))**self.params['slope']
-        # tau_V = np.interp(5500., lam.to('Angstrom').v, tau_x)
 
         return self.get_tau_at_lam(lam) / self.get_tau_at_lam(5500.0)
 
 
 class MW_N18(AttenuationLaw):
     """
-    Milky Way attenuation curve used in Narayanan+2018
+    Milky Way attenuation curve used in Narayanan+2018.
 
-    Attributes
-    ----------
-    lam: float
-        wavlength, expected with units
-
-    Methods
-    -------
-    tau
-        calculates V-band normalised optical depth
-    attenuate
-        applies the attenuation curve for given V-band optical
-        depth, returns the transmitted fraction
-
+    Attributes:
+        data (array-like, float)
+            The data describing the dust curve, loaded from MW_N18.npz.
+        tau_lam_v (float)
+            The V band optical depth.
     """
 
     def __init__(self):
         """
-        Initialise the dust curve
-
-        Parameters
-        ----------
-        None
+        Initialise the dust curve by loading the data and get the V band
+        optical depth by interpolation.
         """
 
         description = "MW extinction curve from Desika"
         AttenuationLaw.__init__(self, description)
-        self.d = np.load(f"{this_dir}/data/MW_N18.npz")
-        self.tau_lam_V = np.interp(
-            5500.0, self.d.f.mw_df_lam[::-1], self.d.f.mw_df_chi[::-1]
+        self.data = np.load(f"{this_dir}/data/MW_N18.npz")
+        self.tau_lam_v = np.interp(
+            5500.0, self.data.f.mw_df_lam[::-1], self.data.f.mw_df_chi[::-1]
         )
 
     def get_tau(self, lam, interp="cubic"):
         """
-        Calculate V-band normalised optical depth
+        Calculate V-band normalised optical depth.
 
-        Parameters
-        ----------
-        lam: float array
-            wavelength, expected mwith units
+        Args:
+            lam (float/array, float)
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths.
+            interp (str)
+                The type of interpolation to use. Can be ‘linear’, ‘nearest’,
+                ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’,
+                ‘previous’, or ‘next’. ‘zero’, ‘slinear’, ‘quadratic’ and
+                ‘cubic’ refer to a spline interpolation of zeroth, first,
+                second or third order. Uses scipy.interpolate.interp1d.
+
+        Returns:
+            float/array, float
+                The optical depth.
         """
 
-        f = interpolate.interp1d(
-            self.d.f.mw_df_lam[::-1],
-            self.d.f.mw_df_chi[::-1],
+        func = interpolate.interp1d(
+            self.data.f.mw_df_lam[::-1],
+            self.data.f.mw_df_chi[::-1],
             kind=interp,
             fill_value="extrapolate",
         )
 
-        return f(lam.to("Angstrom").v) / self.tau_lam_V
+        return func(lam.to("Angstrom").v) / self.tau_lam_v
 
 
 class Calzetti2000(AttenuationLaw):
@@ -196,45 +235,37 @@ class Calzetti2000(AttenuationLaw):
     Calzetti attenuation curve; with option for the slope and UV-bump
     implemented in Noll et al. 2009.
 
-    Parameters
-    ----------
-    slope: float
-        slope of the attenuation curve
+    Attributes:
+        slope (float)
+            The slope of the attenuation curve.
 
-    x0: float
-        central wavelength of the UV bump, expected in microns
+        cent_lam (float)
+            The central wavelength of the UV bump, expected in microns.
 
-    ampl: float
-        amplitude of the UV-bump
+        ampl (float)
+            The amplitude of the UV-bump.
 
-    Methods
-    -------
-    tau
-        calculates V-band normalised optical depth
-    attenuate
-        applies the attenuation curve for given V-band optical
-        depth, returns the transmitted fraction
+        gamma (float)
+            The width (FWHM) of the UV bump, in microns.
 
     """
 
     def __init__(self, params={'slope': 0., 'x0': 0.2175, 'ampl': 1., 'gamma': 0.035}):
         """
-        Initialise the dust curve
+        Initialise the dust curve.
 
-        Parameters
-        ----------
-        slope: float
-            slope of the attenuation curve
+        Args:
+            slope (float)
+                The slope of the attenuation curve.
 
-        x0: float
-            central wavelength of the UV bump, expected in microns
+            cent_lam (float)
+                The central wavelength of the UV bump, expected in microns.
 
-        ampl: float
-            amplitude of the UV-bump
+            ampl (float)
+                The amplitude of the UV-bump.
 
-        gamma: float
-            Width (FWHM) of the UV bump, in microns
-
+            gamma (float)
+                The width (FWHM) of the UV bump, in microns.
         """
         description = (
             "Calzetti attenuation curve; with option"
@@ -246,47 +277,49 @@ class Calzetti2000(AttenuationLaw):
 
     def get_tau(self, lam):
         """
-        Calculate V-band normalised optical depth
+        Calculate V-band normalised optical depth. (Uses the N09_tau function
+        defined above.)
 
-        Parameters
-        ----------
-        lam: float array
-            wavelength, expected with units
+        Args:
+            lam (float/array-like, float)
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths.
+
+        Returns:
+            float/array-like, float
+                The optical depth.
         """
-        return N09_tau(lam=lam,
-                   slope=self.params['slope'],
-                   x0=self.params['x0'],
-                   ampl=self.params['ampl'],
-                   gamma=self.params['gamma'])
+        return N09_tau(
+            lam=lam,
+            slope=self.params['slope'],
+            cent_lam=self.params['cent_lam'],
+            ampl=self.params['ampl'],
+            gamma=self.params['gamma']
+        )
 
 
 class GrainsWD01:
     """
     Weingarter and Draine 2001 dust grain extinction model
-    for MW, SMC and LMC or any available in WD01
+    for MW, SMC and LMC or any available in WD01.
 
-    Parameters
-    ----------
-    model: string
-        dust grain model to use
+    NOTE: this model does not inherit from AttenuationLaw because it is
+          distinctly different.
 
-    Methods
-    -------
-    tau
-        calculates V-band normalised optical depth
-    attenuate
-        applies the extinction curve for given V-band optical
-        depth, returns the transmitted fraction
+    Attributes:
+        model (str)
+            The dust grain model used.
+        emodel (function)
+            The function that describes the model from WD01 imported above.
     """
 
     def __init__(self, params={"model": "SMCBar"}):
         """
         Initialise the dust curve
 
-        Parameters
-        ----------
-        model: string
-            dust grain model to use
+        Args:
+            model (str)
+                The dust grain model to use.
 
         """
 
@@ -294,91 +327,40 @@ class GrainsWD01:
             "Weingarter and Draine 2001 dust grain extinction"
             " model for MW, SMC and LMC"
         )
-        self.params = {}
-        if "MW" in params["model"]:
-            self.params["model"] = "MWRV31"
-        elif "LMC" in params["model"]:
-            self.params["model"] = "LMCAvg"
-        elif "SMC" in params["model"]:
-            self.params["model"] = "SMCBar"
-        else:
-            self.params["model"] = params["model"]
-
-        self.emodel = WD01(self.params["model"])
+        self.emodel = WD01(params["model"])
 
     def get_tau(self, lam):
         """
-        Calculate V-band normalised optical depth
+        Calculate V-band normalised optical depth.
 
-        Parameters
-        ----------
-        lam: float array
-            wavelength, expected mwith units
+        Args:
+            lam (float/array-like, float)
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths. Must have unyts attached.
+
+        Returns:
+            float/array-like, float
+                The optical depth.
         """
-
         return self.emodel(lam.to_astropy())
 
-    def get_transmission(self, tau_V, lam):
+    def get_transmission(self, tau_v, lam):
         """
-        Get the transmission at different wavelength for the curve
+        Returns the transmitted flux/luminosity fraction based on an optical
+        depth at a range of wavelengths.
 
-        Parameters
-        ----------
-        tau_V: float
-            optical depth in the V-band
+        Args:
+            tau_v (float/array-like, float)
+                Optical depth in the V-band. Can either be a single float or
+                array.
 
-        lam: float
-            wavelength, expected with units
+            lam (array-like, float)
+                The wavelengths (with units) at which to calculate transmission.
+
+        Returns:
+            array-like
+                The transmission at each wavelength. Either (lam.size,) in shape
+                for singular tau_v values or (tau_v.size, lam.size) tau_v
+                is an array.
         """
-
-        return self.emodel.extinguish(x=lam.to_astropy(), Av=1.086 * tau_V)
-
-
-def N09_tau(lam, slope, x0, ampl, gamma):
-    """
-    Attenuation curve using a modified version of the Calzetti
-    attenuation (Charlot+2000) law allowing for a varying UV slope 
-    and the presence of a UV bump; from Noll+2009
-
-    Args:
-        lam (array-like, float)
-            The input wavelength array
-
-        slope: float
-            slope of the attenuation curve
-
-        x0: float
-            central wavelength of the UV bump, expected in microns
-
-        ampl: float
-            amplitude of the UV-bump
-
-        gamma: float
-            Width (FWHM) of the UV bump, in microns
-
-    Returns:
-        (array-like, float)
-        V-band normalised optical depth for given wavelength
-    """
-
-    # Wavelength in microns
-    tmp_lam = np.arange(0.12, 2.2, 0.001) 
-    lam_v = 0.55
-    k_lam = np.zeros_like(tmp_lam)
-    
-    ok = (tmp_lam < 0.63)
-    k_lam[ok] = -2.156 + (1.509/tmp_lam[ok]) \
-        - (0.198/tmp_lam[ok]**2) \
-        + (0.011/tmp_lam[ok]**3)
-    k_lam[~ok] = -1.857 + (1.040/tmp_lam[~ok])
-    k_lam = 4.05 + 2.659 * k_lam
-
-    D_lam = ampl * ((tmp_lam*gamma)**2) \
-        / ((tmp_lam**2 - x0**2)**2 + (tmp_lam*gamma)**2)
-    
-    tau_x_v = (1/4.05) * (k_lam + D_lam) * ((tmp_lam/lam_v)**slope)
-
-    f = interpolate.interp1d(tmp_lam, tau_x_v,
-                             fill_value="extrapolate")
-
-    return f(lam.to(um))
+        return self.emodel.extinguish(x=lam.to_astropy(), Av=1.086 * tau_v)
