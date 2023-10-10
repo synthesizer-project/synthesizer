@@ -59,7 +59,9 @@ class BaseGalaxy:
 
         return linecont
 
-    def get_spectra_incident(self, grid, young=False, old=False, label="", update=True):
+    def get_spectra_incident(
+            self, grid, young=False, old=False, label="", update=True
+    ):
         """
         Generate the incident (equivalent to pure stellar for stars) spectra
         using the provided Grid.
@@ -222,7 +224,7 @@ class BaseGalaxy:
             An Sed object containing the intrinsic spectra.
         """
 
-        # the incident emission
+        # The incident emission
         incident = self.get_spectra_incident(
             grid, update=update, young=young, old=old, label=label
         )
@@ -231,33 +233,38 @@ class BaseGalaxy:
         if fesc > 0:
             escaped = Sed(grid.lam, fesc * incident._lnu)
 
-        # the stellar emission which **is** reprocessed by the gas
+        # The stellar emission which **is** reprocessed by the gas
         transmitted = self.get_spectra_transmitted(
             grid, fesc, update=update, young=young, old=old, label=label
         )
-        # the nebular emission
+        # The nebular emission
         nebular = self.get_spectra_nebular(
             grid, fesc, update=update, young=young, old=old, label=label
         )
 
-        # if the Lyman-alpha escape fraction is <1.0 suppress it.
+        # If the Lyman-alpha escape fraction is <1.0 suppress it.
         if fesc_LyA < 1.0:
-            # get the new line contribution to the spectrum
-            linecont = self.get_spectra_linecont(grid, fesc=fesc, fesc_LyA=fesc_LyA)
 
-            # get the nebular continuum emission
+            # Get the new line contribution to the spectrum
+            linecont = self.get_spectra_linecont(
+                grid,
+                fesc=fesc,
+                fesc_LyA=fesc_LyA,
+            )
+
+            # Get the nebular continuum emission
             nebular_continuum = self.generate_lnu(
                 grid, "nebular_continuum", young=young, old=old
             )
             nebular_continuum *= 1 - fesc
 
-            # redefine the nebular emission
+            # Redefine the nebular emission
             nebular._lnu = linecont + nebular_continuum
 
-        # the reprocessed emission, the sum of transmitted, and nebular
+        # The reprocessed emission, the sum of transmitted, and nebular
         reprocessed = nebular + transmitted
 
-        # the intrinsic emission, the sum of escaped, transmitted, and nebular
+        # The intrinsic emission, the sum of escaped, transmitted, and nebular
         # if escaped exists other its simply the reprocessed
         if fesc > 0:
             intrinsic = reprocessed + escaped
@@ -276,7 +283,7 @@ class BaseGalaxy:
         self,
         grid,
         tau_v=None,
-        dust_curve=PowerLaw({"slope": -1.0}),
+        dust_curve=PowerLaw(slope=-1.0),
         young=False,
         old=False,
         update=True,
@@ -485,7 +492,9 @@ class BaseGalaxy:
             transmission = dust_curve.get_transmission(tau_v, grid.lam)
 
             # calculate the attenuated emission
-            self.spectra["attenuated"]._lnu = transmission * self.spectra["reprocessed"]._lnu
+            self.spectra["attenuated"]._lnu = (
+                transmission * self.spectra["reprocessed"]._lnu
+            )
 
         elif np.isscalar(tau_v) is False:
             """
@@ -743,8 +752,8 @@ class BaseGalaxy:
         fesc=0.0,
         tau_v_nebular=None,
         tau_v_stellar=None,
-        dust_curve_nebular=PowerLaw({"slope": -1.0}),
-        dust_curve_stellar=PowerLaw({"slope": -1.0}),
+        dust_curve_nebular=PowerLaw(slope=-1.0),
+        dust_curve_stellar=PowerLaw(slope=-1.0),
         update=True,
     ):
         """
@@ -828,7 +837,7 @@ class BaseGalaxy:
         line_ids,
         fesc=0.0,
         tau_v=None,
-        dust_curve=PowerLaw({"slope": -1.0}),
+        dust_curve=PowerLaw(slope=-1.0),
         update=True,
     ):
         """
