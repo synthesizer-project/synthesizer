@@ -23,7 +23,7 @@ models = [
 
 params = [
     {"slope": -1.0},
-    {'slope': 0., 'x0': 0.2175, 'ampl': 1.26, 'gamma': 0.0356},
+    {'slope': 0., 'cent_lam': 0.2175, 'ampl': 1.26, 'gamma': 0.0356},
     {"model": "MW"},
     {"model": "SMC"},
     {"model": "LMC"},
@@ -34,7 +34,7 @@ colors = cmr.take_cmap_colors("cmr.guppy", len(models))
 lam = np.arange(1000, 10000, 10) * Angstrom
 
 for ii, (model, param) in enumerate(zip(models, params)):
-    emodel = getattr(attenuation, model)(params=param)
+    emodel = getattr(attenuation, model)(**param)
 
     plt.plot(lam, emodel.get_tau(lam), color=colors[ii], label=f"{model}, {param}")
 
