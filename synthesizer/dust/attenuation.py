@@ -3,15 +3,74 @@ import numpy as np
 from scipy import interpolate
 from unyt import um
 
-# from dust_attenuation.shapes import N09
 from dust_extinction.grain_models import WD01
+
+from synthesizer import exceptions
 
 this_dir, this_filename = os.path.split(__file__)
 
 __all__ = ["PowerLaw", "MW_N18", "Calzetti2000", "GrainsWD01"]
 
 
-class PowerLaw:
+class AttenuationLaw:
+    """
+    A generic parent class for dust attenuation laws to hold common attributes
+    and methods
+
+    Attributes:
+        description (str)
+            A description of the type of model. Defined on children classes.
+    """
+
+    def __init__(self, description):
+        """
+        Initialise the parent and set common attributes.
+        """
+
+        # Store the description of the model.
+        self.description = description
+
+    def get_tau(self, *args):
+        """
+        A prototype method to be overloaded by the children defining various
+        models.
+        """
+        raise exceptions.UnimplementedFunctionality(
+            "AttenuationLaw should not be instantiated directly!"
+            " Instead use one to child models ("
+            + ", ".join(__all__) + ")"
+        )
+
+    def get_transmission(self, tau_v, lam):
+        """
+        Provide the transmitted flux/luminosity fraction based on an optical
+        depth at a range of wavelengths.
+
+        Args:
+            tau_v (float/array-like, float)
+                Optical depth in the V-band. Can either be a single float or
+                array.
+
+            lam (array-like, float)
+                The wavelengths (with units) at which to calculate transmission.
+
+        Returns:
+            array-like
+                The transmission at each wavelength. Either (lam.size,) in shape
+                for singular tau_v values or (tau_v.size, lam.size) tau_v
+                is an array.
+        """
+
+        # Get the optical depth at each wavelength
+        tau_x_v = self.get_tau(lam)
+
+        # Include the V band optical depth in the exponent
+        exponent = tau_v * tau_x_v
+
+        return np.exp(-exponent)
+
+
+class PowerLaw(AttenuationLaw):
     """
     Custom power law dust curve
 
@@ -39,7 +98,8 @@ class PowerLaw:
             power law slope
         """
 
-        self.description = "simple power law dust curve"
+        description = "simple power law dust curve"
+        AttenuationLaw.__init__(self, description)
         self.params = params
 
     def get_tau_at_lam(self, lam):
@@ -75,25 +135,8 @@ class PowerLaw:
 
         return self.get_tau_at_lam(lam) / self.get_tau_at_lam(5500.0)
 
-    def get_transmission(self, tau_V, lam):
-        """
-        Provide the transmitted flux/luminosity fraction
 
-        Parameters
-        ----------
-        tau_V: float
-            optical depth in the V-band
-
-        lam: float
-            wavelength, expected with units
-        """
-
-        tau_x_v = self.get_tau(lam)
-
-        return np.exp(-(tau_V * tau_x_v))
-
-
-class MW_N18:
+class MW_N18(AttenuationLaw):
     """
     Milky Way attenuation curve used in Narayanan+2018
 
@@ -121,7 +164,8 @@ class MW_N18:
         None
         """
 
-        self.description = "MW extinction curve from Desika"
+        description = "MW extinction curve from Desika"
+        AttenuationLaw.__init__(self, description)
         self.d = np.load(f"{this_dir}/data/MW_N18.npz")
         self.tau_lam_V = np.interp(
             5500.0, self.d.f.mw_df_lam[::-1], self.d.f.mw_df_chi[::-1]
@@ -146,25 +190,8 @@ class MW_N18:
 
         return f(lam.to("Angstrom").v) / self.tau_lam_V
 
-    def get_transmission(self, tau_V, lam):
-        """
-        Provide the transmitted flux/luminosity fraction
 
-        Parameters
-        ----------
-        tau_V: float
-            optical depth in the V-band
-
-        lam: float
-            wavelength, expected with units
-        """
-
-        tau_x_v = self.get_tau(lam)
-
-        return np.exp(-(tau_V * tau_x_v))
-
-
-class Calzetti2000():
+class Calzetti2000(AttenuationLaw):
     """
     Calzetti attenuation curve; with option for the slope and UV-bump
     implemented in Noll et al. 2009.
@@ -209,9 +236,12 @@ class Calzetti2000():
             Width (FWHM) of the UV bump, in microns
 
         """
-        self.description = """ Calzetti attenuation curve; with option 
-                               for the slope and UV-bump implemented
-                               in Noll et al. 2009"""
+        description = (
+            "Calzetti attenuation curve; with option"
+            "for the slope and UV-bump implemented"
+            "in Noll et al. 2009"
+        )
+        AttenuationLaw.__init__(self, description)
         self.params = params
 
     def get_tau(self, lam):
@@ -228,22 +258,6 @@ class Calzetti2000():
                    x0=self.params['x0'],
                    ampl=self.params['ampl'],
                    gamma=self.params['gamma'])
-
-    def get_transmission(self, tau_V, lam):
-        """
-        Get the transmission at different wavelength for the curve
-
-        Parameters
-        ----------
-        tau_V: float
-            optical depth in the V-band
-
-        lam: float
-            wavelength, expected with units
-        """
-        tau_x_v = self.get_tau(lam) 
-    
-        return np.exp(-(tau_V * tau_x_v))
 
 
 class GrainsWD01:
