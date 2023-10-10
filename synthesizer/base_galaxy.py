@@ -322,11 +322,11 @@ class BaseGalaxy:
         )
 
         if tau_v:
-            T = dust_curve.get_transmission(tau_v, grid.lam)
+            transmission = dust_curve.get_transmission(tau_v, grid.lam)
         else:
-            T = 1.0
+            transmission = 1.0
 
-        emergent = Sed(grid.lam, T * self.spectra["intrinsic"]._lnu)
+        emergent = Sed(grid.lam, transmission * self.spectra["intrinsic"]._lnu)
 
         if update:
             self.spectra["emergent"] = emergent
@@ -482,10 +482,10 @@ class BaseGalaxy:
             dust_curve.slope = alpha
 
             # calculate dust attenuation
-            T = dust_curve.get_transmission(tau_v, grid.lam)
+            transmission = dust_curve.get_transmission(tau_v, grid.lam)
 
             # calculate the attenuated emission
-            self.spectra["attenuated"]._lnu = T * self.spectra["reprocessed"]._lnu
+            self.spectra["attenuated"]._lnu = transmission * self.spectra["reprocessed"]._lnu
 
         elif np.isscalar(tau_v) is False:
             """
@@ -509,19 +509,19 @@ class BaseGalaxy:
                 alpha = [-0.7, -1.4]
 
             dust_curve.slope = alpha[0]
-            T_ISM = dust_curve.get_transmission(tau_v[0], grid.lam)
+            transmission_ISM = dust_curve.get_transmission(tau_v[0], grid.lam)
 
             dust_curve.slope = alpha[1]
-            T_BC = dust_curve.get_transmission(tau_v[1], grid.lam)
+            transmission_BC = dust_curve.get_transmission(tau_v[1], grid.lam)
 
-            T_young = T_ISM * T_BC
-            T_old = T_ISM
+            transmission_young = transmission_ISM * transmission_BC
+            transmission_old = transmission_ISM
 
             self.spectra["young_attenuated"]._lnu = (
-                T_young * self.spectra["young_reprocessed"]._lnu
+                transmission_young * self.spectra["young_reprocessed"]._lnu
             )
             self.spectra["old_attenuated"]._lnu = (
-                T_old * self.spectra["old_reprocessed"]._lnu
+                transmission_old * self.spectra["old_reprocessed"]._lnu
             )
 
             self.spectra["attenuated"]._lnu = (
@@ -794,15 +794,15 @@ class BaseGalaxy:
 
         for line_id, intrinsic_line in intrinsic_lines.items():
             # calculate attenuation
-            T_nebular = dust_curve_nebular.attenuate(
+            transmission_nebular = dust_curve_nebular.attenuate(
                 tau_v_nebular, intrinsic_line._wavelength
             )
-            T_stellar = dust_curve_stellar.attenuate(
+            transmission_stellar = dust_curve_stellar.attenuate(
                 tau_v_stellar, intrinsic_line._wavelength
             )
 
-            luminosity = intrinsic_line._luminosity * T_nebular
-            continuum = intrinsic_line._continuum * T_stellar
+            luminosity = intrinsic_line._luminosity * transmission_nebular
+            continuum = intrinsic_line._continuum * transmission_stellar
 
             line = Line(
                 intrinsic_line.id, intrinsic_line._wavelength, luminosity, continuum
@@ -810,8 +810,8 @@ class BaseGalaxy:
 
             # NOTE: the above is wrong and should be separated into stellar
             # and nebular continuum components:
-            # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
-            # stellar_continuum = intrinsic_line._stellar_continuum * T_stellar
+            # nebular_continuum = intrinsic_line._nebular_continuum * transmission_nebular
+            # stellar_continuum = intrinsic_line._stellar_continuum * transmission_stellar
             # line = Line(intrinsic_line.id, intrinsic_line._wavelength, \
             # luminosity, nebular_continuum, stellar_continuum)
 
@@ -898,7 +898,7 @@ class BaseGalaxy:
 
         return equivalent_width
 
-    def T(self):
+    def transmission(self):
         """
         Calculate transmission as a function of wavelength
 
@@ -919,9 +919,9 @@ class BaseGalaxy:
             attenuation (array)
         """
 
-        lam, T = self.T()
+        lam, transmission = self.transmission()
 
-        return lam, -2.5 * np.log10(T)
+        return lam, -2.5 * np.log10(transmission)
 
     def A(self, l):
         """
