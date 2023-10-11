@@ -489,7 +489,7 @@ class Galaxy(BaseGalaxy):
 
             return np.zeros(len(grid.lam))
 
-        from ..extensions.csed import compute_particle_sed
+        from ..extensions.csed import compute_particle_seds
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
@@ -497,7 +497,7 @@ class Galaxy(BaseGalaxy):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        spec = compute_particle_sed(*args)
+        spec = compute_particle_seds(*args)
 
         return spec
 
