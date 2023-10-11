@@ -340,7 +340,7 @@ class Galaxy(BaseGalaxy):
         if self.gas is None:
             raise exceptions.InconsistentArguments(
                 "No Gas object has been provided! We can't calculate line of "
-                "sight dust attenuation with at Gas object containing the "
+                "sight dust attenuation without a Gas object containing the "
                 "dust!"
             )
 
@@ -715,7 +715,7 @@ class Galaxy(BaseGalaxy):
                 for old star particles
 
         Updates:
-            incident:
+            incident
             transmitted
             nebular
             reprocessed
