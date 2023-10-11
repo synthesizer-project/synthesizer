@@ -79,7 +79,7 @@ class AttenuationLaw:
         # Store the description of the model.
         self.description = description
 
-    def get_tau(self, *args):
+    def get_tau(self, lam):
         """
         A prototype method to be overloaded by the children defining various
         models.
