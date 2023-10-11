@@ -593,7 +593,7 @@ class Galaxy(BaseGalaxy):
         sed = Sed(grid.lam, lnu)
 
         if update:
-            self.spectra[label + "incident"] = sed
+            self.spectra_array[label + "incident"] = sed
 
         return sed
 
@@ -633,7 +633,7 @@ class Galaxy(BaseGalaxy):
         sed = Sed(grid.lam, lnu)
 
         if update:
-            self.spectra[label + "transmitted"] = sed
+            self.spectra_array[label + "transmitted"] = sed
 
         return sed
 
@@ -672,7 +672,7 @@ class Galaxy(BaseGalaxy):
         sed = Sed(grid.lam, lnu)
 
         if update:
-            self.spectra[label + "nebular"] = sed
+            self.spectra_array[label + "nebular"] = sed
 
         return sed
 
@@ -749,7 +749,9 @@ class Galaxy(BaseGalaxy):
         # if the Lyman-alpha escape fraction is <1.0 suppress it.
         if fesc_LyA < 1.0:
             # get the new line contribution to the spectrum
-            linecont = self.get_particle_spectra_linecont(grid, fesc=fesc, fesc_LyA=fesc_LyA)
+            linecont = self.get_particle_spectra_linecont(
+                grid, fesc=fesc, fesc_LyA=fesc_LyA
+            )
 
             # get the nebular continuum emission
             nebular_continuum = self.generate_particle_lnu(
@@ -772,9 +774,9 @@ class Galaxy(BaseGalaxy):
 
         if update:
             if fesc > 0:
-                self.spectra[label + "escaped"] = escaped
-            self.spectra[label + "reprocessed"] = reprocessed
-            self.spectra[label + "intrinsic"] = intrinsic
+                self.spectra_array[label + "escaped"] = escaped
+            self.spectra_array[label + "reprocessed"] = reprocessed
+            self.spectra_array[label + "intrinsic"] = intrinsic
 
         return reprocessed
 
