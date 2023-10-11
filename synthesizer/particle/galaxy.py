@@ -906,13 +906,7 @@ class Galaxy(BaseGalaxy):
         lam = self.spectra_array[incident_spectra_type]._lam
 
         # Compute the transmission
-        if np.isscalar(tau_v):
-            transmission = dust_curve.get_transmission(lam) * tau_v
-        else:
-            transmission = np.outer(
-                tau_v,
-                dust_curve.get_transmission(lam)
-            )
+        transmission = dust_curve.get_transmission(tau_v, lam)
 
         # These two should have the same shape so should work?
         if mask is None:
