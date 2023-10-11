@@ -2,8 +2,9 @@ import numpy as np
 from scipy import integrate
 from unyt import h, c, kb, um, erg, s, Hz
 from unyt import accepts
-from unyt.dimensions import temperature
+from unyt.dimensions import temperature as temperature_dim
 
+from synthesizer import exceptions
 from synthesizer.utils import planck
 
 
@@ -11,18 +12,46 @@ class EmissionBase:
 
     """
     Dust emission base class for holding common methods.
+
+    Attributes:
+        temperature (float)
+            The temperature of the dust.
     """
 
-    def normalise(self):
+    def __init__(self, temperature):
         """
-        Provide normalisation of lnu_ by integrating the function from 8->1000
-        um
+        Initialises the base class for dust emission models.
+
+        Args:
+            temperature (float)
+                The temperature of the dust.
+        """
+
+        self.temperature = temperature
+
+    def _lnu(self, *args):
+        """
+        A prototype private method used during integration. This should be
+        overloaded by child classes!
+        """
+        raise exceptions.UnimplementedFunctionality(
+            "EmissionBase should not be instantiated directly!"
+            " Instead use one to child models (Blackbody, Greybody, Casey12)."
+        )
+
+    def normalisation(self):
+        """
+        Provide normalisation of _lnu by integrating the function from 8->1000
+        um.
         """
         return integrate.quad(
-            self.lnu_, c / (1000 * um), c / (8 * um), full_output=False, limit=100
+            self._lnu,
+            c / (1000 * um),
+            c / (8 * um),
+            full_output=False,
+            limit=100
         )[0]
 
-    # @accepts(lam=length)
     def lnu(self, lam):
         """
         Returns the normalised lnu for the provided wavelength grid
@@ -34,7 +63,7 @@ class EmissionBase:
 
         """
 
-        return (erg / s / Hz) * self.lnu_(c / lam).value / self.normalise()
+        return (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
 
 
 class Blackbody(EmissionBase):
@@ -42,156 +71,175 @@ class Blackbody(EmissionBase):
     A class to generate a blackbody emission spectrum.
     """
 
-    @accepts(T=temperature)  # check T has dimensions of temperature
-    def __init__(self, T):
+    @accepts(temperature=temperature_dim)
+    def __init__(self, temperature):
         """
         A function to generate a simple blackbody spectrum.
 
-        Parameters
-        ----------
-        T: unyt_array
-            Temperature
+        Args:
+            temperature (unyt_array)
+                The temperature of the dust.
 
         """
 
-        self.T = T
+        EmissionBase.__init__(self, temperature)
 
     # @accepts(nu=1/time)
-    def lnu_(self, nu):
+    def _lnu(self, nu):
         """
         Generate unnormalised spectrum for given frequency (nu) grid.
 
-        Parameters
-        ----------
-        nu: unyt_array
-            frequency
+        Args:
+            nu (unyt_array)
+                The frequency at which to calculate lnu.
 
-        Returns
-        ----------
-        lnu: unyt_array
-            spectral luminosity density
+        Returns:
+            unyt_array
+                The unnormalised spectral luminosity density.
 
         """
 
-        return planck(nu, self.T)
+        return planck(nu, self.temperature)
 
 
 class Greybody(EmissionBase):
-
     """
     A class to generate a greybody emission spectrum.
+
+    Attributes:
+        emissivity (float)
+            The emissivity of the dust (dimensionless).
     """
 
-    @accepts(T=temperature)  # check T has dimensions of temperature
-    def __init__(self, T, emissivity):
+    @accepts(temperature=temperature_dim)
+    def __init__(self, temperature, emissivity):
         """
-        Initialise class
+        Initialise the dust emission model.
 
-        Parameters
-        ----------
-        T: unyt_array
-            Temperature
+        Args:
+            temperature (unyt_array)
+                The temperature of the dust.
 
-        emissivity: float
-            Emissivity (dimensionless)
+            emissivity (float)
+                The Emissivity (dimensionless).
 
         """
 
-        self.T = T
+        EmissionBase.__init__(self, temperature)
         self.emissivity = emissivity
 
     # @accepts(nu=1/time)
-    def lnu_(self, nu):
+    def _lnu(self, nu):
         """
         Generate unnormalised spectrum for given frequency (nu) grid.
 
-        Parameters
-        ----------
-        nu: unyt_array
-            frequency
+        Args:
+            nu (unyt_array)
+                The frequencies at which to calculate the spectral luminosity
+                density.
 
         Returns
-        ----------
-        lnu: unyt_array
-            spectral luminosity density
+            lnu (unyt_array)
+                The unnormalised spectral luminosity density.
 
         """
 
-        return nu**self.emissivity * planck(nu, self.T)
+        return nu ** self.emissivity * planck(nu, self.temperature)
 
 
 class Casey12(EmissionBase):
     """
     A class to generate a dust emission spectrum using the Casey (2012) model.
     https://ui.adsabs.harvard.edu/abs/2012MNRAS.425.3094C/abstract
+
+    Attributes:
+        emissivity (float)
+            The emissivity of the dust (dimensionless).
+
+        alpha (float)
+            The power-law slope (dimensionless)  [good value = 2.0].
+
+        n_bb (float)
+            Normalisation of the blackbody component [default 1.0].
+
+        lam_0 (float)
+            Wavelength where the dust optical depth is unity.
+
+        lam_c (float)
+            The power law turnover wavelength.
+
+        n_pl (float)
+            The power law normalisation.
+
     """
 
-    @accepts(T=temperature)  # check T has dimensions of temperature
-    def __init__(self, T, emissivity, alpha, N_bb=1.0, lam_0=200.0 * um):
+    @accepts(temperature=temperature_dim)
+    def __init__(self, temperature, emissivity, alpha,
+                 N_bb=1.0, lam_0=200.0 * um):
         """
-        Parameters
-        ----------
-        lam: unyt_array
-            wavelength
+        Args:
+            lam (unyt_array)
+                The wavelengths at which to calculate the emission.
 
-        T: unyt_array
-            Temperature
+            temperature (unyt_array)
+                The temperature of the dust.
 
-        emissivity: float
-            Emissivity (dimensionless) [good value = 1.6]
+            emissivity (float)
+                The emissivity (dimensionless) [good value = 1.6].
 
-        alpha: float
-            Power-law slope (dimensionless)  [good value = 2.0]
+            alpha (float)
+                The power-law slope (dimensionless)  [good value = 2.0].
 
-        N_Bb: float
-            Normalisation of the blackbody component [default 1.0]
+            n_bb (float)
+                Normalisation of the blackbody component [default 1.0].
 
-        lam_0: float
-            Wavelength at where the dust optical depth is unity
+            lam_0 (float)
+                Wavelength where the dust optical depth is unity.
         """
 
-        self.T = T
+        EmissionBase.__init__(self, temperature)
         self.emissivity = emissivity
         self.alpha = alpha
         self.N_bb = N_bb
         self.lam_0 = lam_0
 
-        # calculate the powerlaw turnover wavelength
-
+        # Calculate the power law turnover wavelength
         b1 = 26.68
         b2 = 6.246
         b3 = 0.0001905
         b4 = 0.00007243
-        L = ((b1 + b2 * alpha) ** -2 + (b3 + b4 * alpha) * T.to("K").value) ** -1
+        lum = (
+            ((b1 + b2 * alpha) ** -2 + (b3 + b4 * alpha)
+             * temperature.to("K").value) ** -1
+        )
 
-        self.lam_c = (3.0 / 4.0) * L * um
+        self.lam_c = (3.0 / 4.0) * lum * um
 
-        # calculate normalisation of the power-law term
+        # Calculate normalisation of the power-law term
 
         # See Casey+2012, Table 1 for the expression
         # Missing factors of lam_c and c in some places
 
-        self.N_pl = (
+        self.n_pl = (
             self.N_bb
             * (1 - np.exp(-((self.lam_0 / self.lam_c) ** emissivity)))
             * (c / self.lam_c) ** 3
-            / (np.exp(h * c / (self.lam_c * kb * T)) - 1)
+            / (np.exp(h * c / (self.lam_c * kb * temperature)) - 1)
         )
 
     # @accepts(nu=1/time)
-    def lnu_(self, nu):
+    def _lnu(self, nu):
         """
         Generate unnormalised spectrum for given frequency (nu) grid.
 
-        Parameters
-        ----------
-        nu: unyt_array
-            frequency
+        Args:
+            nu (unyt_array)
+                The frequencies at which to calculate the spectral luminosity
+                density.
 
         Returns
-        ----------
-        lnu: unyt_array
-            spectral luminosity density
+            lnu (unyt_array)
+                The unnormalised spectral luminosity density.
 
         """
 
@@ -200,25 +248,33 @@ class Casey12(EmissionBase):
         if np.isscalar(nu):
             nu *= Hz
 
-        def PL(lam):
+        # Define a function to calcualate the power-law component.
+        def _power_law(lam):
             """
             Calcualate the power-law component.
+
+            Args:
+                lam (unyt_array)
+                    The wavelengths at which to calculate lnu.
             """
             return (
-                self.N_pl
-                * ((lam / self.lam_c) ** (self.alpha))
+                self.n_pl * ((lam / self.lam_c) ** (self.alpha))
                 * np.exp(-((lam / self.lam_c) ** 2))
             )
 
-        def BB(lam):
+        def _blackbody(lam):
             """
             Calcualate the blackbody component.
+
+            Args:
+                lam (unyt_array)
+                    The wavelengths at which to calculate lnu.
             """
             return (
                 self.N_bb
                 * (1 - np.exp(-((self.lam_0 / lam) ** self.emissivity)))
                 * (c / lam) ** 3
-                / (np.exp((h * c) / (lam * kb * self.T)) - 1.0)
+                / (np.exp((h * c) / (lam * kb * self.temperature)) - 1.0)
             )
 
-        return PL(c / nu) + BB(c / nu)
+        return _power_law(c / nu) + _blackbody(c / nu)
