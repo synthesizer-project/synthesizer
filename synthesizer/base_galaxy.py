@@ -59,7 +59,9 @@ class BaseGalaxy:
 
         return linecont
 
-    def get_spectra_incident(self, grid, young=False, old=False, label="", update=True):
+    def get_spectra_incident(
+            self, grid, young=False, old=False, label="", update=True
+    ):
         """
         Generate the incident (equivalent to pure stellar for stars) spectra
         using the provided Grid.
@@ -222,7 +224,7 @@ class BaseGalaxy:
             An Sed object containing the intrinsic spectra.
         """
 
-        # the incident emission
+        # The incident emission
         incident = self.get_spectra_incident(
             grid, update=update, young=young, old=old, label=label
         )
@@ -231,33 +233,38 @@ class BaseGalaxy:
         if fesc > 0:
             escaped = Sed(grid.lam, fesc * incident._lnu)
 
-        # the stellar emission which **is** reprocessed by the gas
+        # The stellar emission which **is** reprocessed by the gas
         transmitted = self.get_spectra_transmitted(
             grid, fesc, update=update, young=young, old=old, label=label
         )
-        # the nebular emission
+        # The nebular emission
         nebular = self.get_spectra_nebular(
             grid, fesc, update=update, young=young, old=old, label=label
         )
 
-        # if the Lyman-alpha escape fraction is <1.0 suppress it.
+        # If the Lyman-alpha escape fraction is <1.0 suppress it.
         if fesc_LyA < 1.0:
-            # get the new line contribution to the spectrum
-            linecont = self.get_spectra_linecont(grid, fesc=fesc, fesc_LyA=fesc_LyA)
 
-            # get the nebular continuum emission
+            # Get the new line contribution to the spectrum
+            linecont = self.get_spectra_linecont(
+                grid,
+                fesc=fesc,
+                fesc_LyA=fesc_LyA,
+            )
+
+            # Get the nebular continuum emission
             nebular_continuum = self.generate_lnu(
                 grid, "nebular_continuum", young=young, old=old
             )
             nebular_continuum *= 1 - fesc
 
-            # redefine the nebular emission
+            # Redefine the nebular emission
             nebular._lnu = linecont + nebular_continuum
 
-        # the reprocessed emission, the sum of transmitted, and nebular
+        # The reprocessed emission, the sum of transmitted, and nebular
         reprocessed = nebular + transmitted
 
-        # the intrinsic emission, the sum of escaped, transmitted, and nebular
+        # The intrinsic emission, the sum of escaped, transmitted, and nebular
         # if escaped exists other its simply the reprocessed
         if fesc > 0:
             intrinsic = reprocessed + escaped
@@ -276,7 +283,7 @@ class BaseGalaxy:
         self,
         grid,
         tau_v=None,
-        dust_curve=PowerLaw({"slope": -1.0}),
+        dust_curve=PowerLaw(slope=-1.0),
         young=False,
         old=False,
         update=True,
@@ -322,11 +329,11 @@ class BaseGalaxy:
         )
 
         if tau_v:
-            T = dust_curve.get_transmission(tau_v, grid.lam)
+            transmission = dust_curve.get_transmission(tau_v, grid.lam)
         else:
-            T = 1.0
+            transmission = 1.0
 
-        emergent = Sed(grid.lam, T * self.spectra["intrinsic"]._lnu)
+        emergent = Sed(grid.lam, transmission * self.spectra["intrinsic"]._lnu)
 
         if update:
             self.spectra["emergent"] = emergent
@@ -479,13 +486,15 @@ class BaseGalaxy:
 
         if np.isscalar(tau_v):
             # single screen dust, no separate birth cloud attenuation
-            dust_curve.params["slope"] = alpha
+            dust_curve.slope = alpha
 
             # calculate dust attenuation
-            T = dust_curve.get_transmission(tau_v, grid.lam)
+            transmission = dust_curve.get_transmission(tau_v, grid.lam)
 
             # calculate the attenuated emission
-            self.spectra["attenuated"]._lnu = T * self.spectra["reprocessed"]._lnu
+            self.spectra["attenuated"]._lnu = (
+                transmission * self.spectra["reprocessed"]._lnu
+            )
 
         elif np.isscalar(tau_v) is False:
             """
@@ -508,20 +517,20 @@ class BaseGalaxy:
                 )
                 alpha = [-0.7, -1.4]
 
-            dust_curve.params["slope"] = alpha[0]
-            T_ISM = dust_curve.get_transmission(tau_v[0], grid.lam)
+            dust_curve.slope = alpha[0]
+            transmission_ISM = dust_curve.get_transmission(tau_v[0], grid.lam)
 
-            dust_curve.params["slope"] = alpha[1]
-            T_BC = dust_curve.get_transmission(tau_v[1], grid.lam)
+            dust_curve.slope = alpha[1]
+            transmission_BC = dust_curve.get_transmission(tau_v[1], grid.lam)
 
-            T_young = T_ISM * T_BC
-            T_old = T_ISM
+            transmission_young = transmission_ISM * transmission_BC
+            transmission_old = transmission_ISM
 
             self.spectra["young_attenuated"]._lnu = (
-                T_young * self.spectra["young_reprocessed"]._lnu
+                transmission_young * self.spectra["young_reprocessed"]._lnu
             )
             self.spectra["old_attenuated"]._lnu = (
-                T_old * self.spectra["old_reprocessed"]._lnu
+                transmission_old * self.spectra["old_reprocessed"]._lnu
             )
 
             self.spectra["attenuated"]._lnu = (
@@ -673,7 +682,7 @@ class BaseGalaxy:
         for line_id in line_ids:
             # if the line id a doublet in string form
             # (e.g. 'OIII4959,OIII5007') convert it to a list
-            if type(line_id) is str:
+            if isinstance(line_id, str):
                 if len(line_id.split(",")) > 1:
                     line_id = line_id.split(",")
 
@@ -702,7 +711,7 @@ class BaseGalaxy:
                 #               axis=(0, 1))  # affected by fesc
 
             # else if the line is list or tuple denoting a doublet (or higher)
-            elif isinstance(line_id, list) or isinstance(line_id, tuple):
+            elif isinstance(line_id, (list, tuple)):
                 luminosity = []
                 continuum = []
                 wavelength = []
@@ -743,8 +752,8 @@ class BaseGalaxy:
         fesc=0.0,
         tau_v_nebular=None,
         tau_v_stellar=None,
-        dust_curve_nebular=PowerLaw({"slope": -1.0}),
-        dust_curve_stellar=PowerLaw({"slope": -1.0}),
+        dust_curve_nebular=PowerLaw(slope=-1.0),
+        dust_curve_stellar=PowerLaw(slope=-1.0),
         update=True,
     ):
         """
@@ -794,15 +803,15 @@ class BaseGalaxy:
 
         for line_id, intrinsic_line in intrinsic_lines.items():
             # calculate attenuation
-            T_nebular = dust_curve_nebular.attenuate(
+            transmission_nebular = dust_curve_nebular.attenuate(
                 tau_v_nebular, intrinsic_line._wavelength
             )
-            T_stellar = dust_curve_stellar.attenuate(
+            transmission_stellar = dust_curve_stellar.attenuate(
                 tau_v_stellar, intrinsic_line._wavelength
             )
 
-            luminosity = intrinsic_line._luminosity * T_nebular
-            continuum = intrinsic_line._continuum * T_stellar
+            luminosity = intrinsic_line._luminosity * transmission_nebular
+            continuum = intrinsic_line._continuum * transmission_stellar
 
             line = Line(
                 intrinsic_line.id, intrinsic_line._wavelength, luminosity, continuum
@@ -810,8 +819,8 @@ class BaseGalaxy:
 
             # NOTE: the above is wrong and should be separated into stellar
             # and nebular continuum components:
-            # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
-            # stellar_continuum = intrinsic_line._stellar_continuum * T_stellar
+            # nebular_continuum = intrinsic_line._nebular_continuum * transmission_nebular
+            # stellar_continuum = intrinsic_line._stellar_continuum * transmission_stellar
             # line = Line(intrinsic_line.id, intrinsic_line._wavelength, \
             # luminosity, nebular_continuum, stellar_continuum)
 
@@ -828,7 +837,7 @@ class BaseGalaxy:
         line_ids,
         fesc=0.0,
         tau_v=None,
-        dust_curve=PowerLaw({"slope": -1.0}),
+        dust_curve=PowerLaw(slope=-1.0),
         update=True,
     ):
         """
@@ -887,7 +896,7 @@ class BaseGalaxy:
 
         equivalent_width = None
 
-        if type(spectra_to_plot) != list:
+        if not isinstance(spectra_to_plot, list):
             spectra_to_plot = list(self.spectra.keys())
 
         for sed_name in spectra_to_plot:
@@ -898,7 +907,7 @@ class BaseGalaxy:
 
         return equivalent_width
 
-    def T(self):
+    def transmission(self):
         """
         Calculate transmission as a function of wavelength
 
@@ -919,9 +928,9 @@ class BaseGalaxy:
             attenuation (array)
         """
 
-        lam, T = self.T()
+        lam, transmission = self.transmission()
 
-        return lam, -2.5 * np.log10(T)
+        return lam, -2.5 * np.log10(transmission)
 
     def A(self, l):
         """
@@ -985,7 +994,7 @@ class BaseGalaxy:
 
         ax = fig.add_axes((left, bottom, width, height))
 
-        if type(spectra_to_plot) != list:
+        if not isinstance(spectra_to_plot, list):
             spectra_to_plot = list(self.spectra.keys())
 
         # only plot FIR if 'total' is plotted otherwise just plot UV-NIR
@@ -1050,7 +1059,7 @@ class BaseGalaxy:
         ax = fig.add_axes((left, bottom, width, height))
         filter_ax = ax.twinx()
 
-        if type(spectra_to_plot) != list:
+        if not isinstance(spectra_to_plot, list):
             spectra_to_plot = list(self.spectra.keys())
 
         for sed_name in spectra_to_plot:
