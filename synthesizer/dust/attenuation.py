@@ -114,7 +114,12 @@ class AttenuationLaw:
         tau_x_v = self.get_tau(lam)
 
         # Include the V band optical depth in the exponent
-        exponent = tau_v * tau_x_v
+        # For a scalar we can just multiply but for an array we need to
+        # broadcast
+        if np.isscalar(tau_v):
+            exponent = tau_v * tau_x_v
+        else:
+            exponent = tau_v[:, None] * tau_x_v
 
         return np.exp(-exponent)
 
