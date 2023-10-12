@@ -349,6 +349,32 @@ class Galaxy(BaseGalaxy):
                 "dust!"
             )
 
+        # Ensure we actually have the properties needed
+        if self.stars.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                "Star object is missing coordinates!"
+            )
+        if self.gas.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                "Gas object is missing coordinates!"
+            )
+        if self.gas.smoothing_lengths is None:
+            raise exceptions.InconsistentArguments(
+                "Gas object is missing smoothing lengths!"
+            )
+        if self.gas.metallicities is None:
+            raise exceptions.InconsistentArguments(
+                "Gas object is missing metallicities!"
+            )
+        if self.gas.masses is None:
+            raise exceptions.InconsistentArguments(
+                "Gas object is missing masses!"
+            )
+        if self.gas.dust_to_metal_ratio is None:
+            raise exceptions.InconsistentArguments(
+                "Gas object is missing DTMs (dust_to_metal_ratio)!"
+            )
+            
         # Set up the kernel inputs to the C function.
         kernel = np.ascontiguousarray(kernel, dtype=np.float64)
         kdim = kernel.size
