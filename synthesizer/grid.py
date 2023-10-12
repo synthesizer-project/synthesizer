@@ -176,7 +176,8 @@ class Grid:
         self.grid_dir = grid_dir
 
         # Have we been passed an extension?
-        if len(grid_name.split(".")) > 1:
+        if (grid_name.split(".")[-1] == "hdf5" 
+            or grid_name.split(".")[-1] == "h5"):
             self.grid_ext = grid_name.split(".")[-1]
         else:
             self.grid_ext = "hdf5"
