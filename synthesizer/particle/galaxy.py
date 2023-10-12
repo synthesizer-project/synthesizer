@@ -910,11 +910,11 @@ class Galaxy(BaseGalaxy):
 
         # These two should have the same shape so should work?
         if mask is None:
-            sed = self.spectra_array[incident_spectra_type] * transmission
+            sed = self.spectra_array[incident_spectra_type]._lnu * transmission
             self.spectra_array["attenuated"] = Sed(self.lam, sed)
             self.spectra["attenuated"] = Sed(self.lam, np.sum(sed, axis=0))
         else:
-            sed = self.spectra_array[incident_spectra_type]
+            sed = self.spectra_array[incident_spectra_type]._lnu
             sed[mask] *= transmission
             self.spectra_array["attenuated"] = Sed(self.lam, sed)
             self.spectra["attenuated"] = Sed(self.lam, np.sum(sed, axis=0))
