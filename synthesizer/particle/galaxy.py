@@ -93,11 +93,6 @@ class Galaxy(BaseGalaxy):
         # What is the redshift of this galaxy?
         self.redshift = redshift
 
-        # self.stellar_lum = None
-        # self.stellar_lum_array = None
-        # self.intrinsic_lum = None
-        # self.intrinsic_lum_array = None
-
         self.spectra = {}  # integrated spectra dictionary
         self.spectra_array = {}  # spectra arrays dictionary
 
@@ -345,7 +340,7 @@ class Galaxy(BaseGalaxy):
         if self.gas is None:
             raise exceptions.InconsistentArguments(
                 "No Gas object has been provided! We can't calculate line of "
-                "sight dust attenuation with at Gas object containing the "
+                "sight dust attenuation without a Gas object containing the "
                 "dust!"
             )
 
@@ -474,6 +469,64 @@ class Galaxy(BaseGalaxy):
 
         return spec
 
+    def generate_particle_lnu(
+        self, grid, spectra_name, fesc=0.0, young=False, old=False, verbose=False
+    ):
+        """
+        Generate the luminosity for a given grid key spectra for all
+        stars in this galaxy object. Can optionally apply masks.
+
+        Base class for :func:`~particle.ParticleGalaxy.get_spectra_incident`
+        and other related methods
+
+        Args:
+            grid (obj):
+                spectral grid object
+            spectra_name (string):
+                name of the target spectra inside the grid file
+            fesc (float):
+                fraction of stellar emission that escapes unattenuated from
+                the birth cloud (defaults to 0.0)
+            young (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for young star particles
+            old (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for old star particles
+            verbose (bool):
+                Flag for verbose output
+
+        Returns:
+            numpy array of integrated spectra in units of (erg / s / Hz)
+        """
+
+        # Ensure we have a total key in the grid. If not error.
+        if spectra_name not in list(grid.spectra.keys()):
+            raise exceptions.MissingSpectraType(
+                "The Grid does not contain the key '%s'" % spectra_name
+            )
+
+        # get particle age masks
+        mask = self._get_masks(young, old)
+
+        if np.sum(mask) == 0:
+            if verbose:
+                print("Age mask has filtered out all particles")
+
+            return np.zeros(len(grid.lam))
+
+        from ..extensions.csed import compute_particle_seds
+
+        # Prepare the arguments for the C function.
+        args = self._prepare_sed_args(
+            grid, fesc=fesc, spectra_type=spectra_name, mask=mask
+        )
+
+        # Get the integrated spectra in grid units (erg / s / Hz)
+        spec = compute_particle_seds(*args)
+
+        return spec
+
     def _get_masks(self, young=None, old=None):
         """
         Get masks for which components we are handling, if a sub-component
@@ -513,162 +566,245 @@ class Galaxy(BaseGalaxy):
 
         pass
 
-    def get_particle_spectra_incident(self, grid, update=True):
+    def get_particle_spectra_linecont(
+        self, grid, fesc=0.0, fesc_LyA=1.0, young=False, old=False
+    ):
         """
-        Calculate incident spectra for all *individual* stellar particles.
+        Generate the line contribution spectra. This is only invoked if
+        fesc_LyA < 1.
+        """
 
-        TODO: need to be able to apply masks to get young and old stars.
-        # young=False,
-        # old=False,
+        # generate contribution of line emission alone and reduce the
+        # contribution of Lyman-alpha
+        linecont = self.generate_particle_lnu(
+            grid, spectra_name="linecont", old=old, young=young
+        )
+
+        # multiply by the Lyamn-continuum escape fraction
+        linecont *= 1 - fesc
+
+        # get index of Lyman-alpha
+        idx = grid.get_nearest_index(1216.0, grid.lam)
+        linecont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
+
+        return linecont
+
+    def get_particle_spectra_incident(
+            self, grid, young=False, old=False, label="", update=True
+    ):
+        """
+        Generate the incident (equivalent to pure stellar for stars) spectra
+        using the provided Grid.
 
         Args:
-            grid (object, Grid):
-                The SPS grid object sampled by stellar particle to make the SED.
+            grid (obj):
+                spectral grid object
             update (bool):
-                Should we update the Galaxy's spectra attributes?
-
-            # young (bool):
-            #     Are we masking for only young stars?
-            # old (bool):
-            #     Are we masking for only old stars?
+                flag for whether to update the `stellar` spectra
+                inside the galaxy object `spectra` dictionary.
+                These are the combined values of young and old.
+            young (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for young star particles
+            old (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for old star particles
 
         Returns:
-            Sed object containing all particle stellar spectra
-
-        Raises
-        ------
-        InconsistentArguments
-            Errors if both a young and old component is requested because these
-            directly contradict each other resulting in 0 particles in
-            the mask.
+            An Sed object containing the stellar spectra
         """
 
-        from ..extensions.csed import compute_particle_seds
+        lnu = self.generate_particle_lnu(grid, "incident", young=young, old=old)
 
-        # Prepare the arguments for the C function.
-        args = self._prepare_sed_args(grid, fesc=0.0, spectra_type="incident")
-
-        # Get the integrated stellar SED
-        spec_arr = compute_particle_seds(*args)
-
-        sed = Sed(grid.lam, spec_arr)
+        sed = Sed(grid.lam, lnu)
 
         if update:
-            # Store the spectra in the galaxy
-            self.spectra_array["incident"] = sed
+            self.spectra_array[label + "incident"] = sed
 
         return sed
 
-    def get_particle_spectra_reprocessed(self, grid, fesc=0.0, update=True):
+    def get_particle_spectra_transmitted(
+        self, grid, fesc=0.0, young=False, old=False, label="", update=True
+    ):
         """
-        Calculate reprocessed spectra for all *individual* stellar particles.
-
-        TODO: need to be able to apply masks to get young and old stars.
-        # young=False,
-        # old=False,
+        Generate the transmitted spectra using the provided Grid. This is the
+        emission which is transmitted through the gas as calculated by the
+        photoionisation code.
 
         Args:
-            grid (object, Grid):
-                The SPS grid object sampled by stellar particle to make the SED.
+            grid (obj):
+                spectral grid object
             fesc (float):
-                The Lyc escape fraction.
+                fraction of stellar emission that escapeds unattenuated from
+                the birth cloud (defaults to 0.0)
             update (bool):
-                Should we update the Galaxy's spectra attributes?
-
-            # young (bool):
-            #     Are we masking for only young stars?
-            # old (bool):
-            #     Are we masking for only old stars?
+                flag for whether to update the `stellar` spectra
+                inside the galaxy object `spectra` dictionary.
+                These are the combined values of young and old.
+            young (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for young star particles
+            old (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for old star particles
 
         Returns:
-            Sed object containing all particle stellar spectra
-
-        Raises
-        ------
-        InconsistentArguments
-            Errors if both a young and old component is requested because these
-            directly contradict each other resulting in 0 particles in
-            the mask.
+            An Sed object containing the transmitted spectra
         """
 
-        # Ensure we have an `intrinsic`` key in the grid. If not error.
-        if "intrinsic" not in list(grid.spectra.keys()):
-            raise exceptions.MissingSpectraType(
-                "The Grid does not contain the key '%s'" % "intrinsic"
+        lnu = (1.0 - fesc) * self.generate_particle_lnu(
+            grid, "transmitted", young=young, old=old
+        )
+
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra_array[label + "transmitted"] = sed
+
+        return sed
+
+    def get_particle_spectra_nebular(
+        self, grid, fesc=0.0, update=True, young=False, label="", old=False
+    ):
+        """
+        Generate nebular spectra from a grid object and star particles.
+        The grid object must contain a nebular component.
+
+        Args:
+            grid (obj):
+                spectral grid object
+            fesc (float):
+                fraction of stellar emission that escapeds unattenuated from
+                the birth cloud (defaults to 0.0)
+            update (bool):
+                flag for whether to update the `intrinsic` and `attenuated`
+                spectra inside the galaxy object `spectra` dictionary.
+                These are the combined values of young and old.
+            young (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for young star particles
+            old (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for old star particles
+
+        Returns:
+            An Sed object containing the nebular spectra
+        """
+
+        lnu = self.generate_particle_lnu(grid, "nebular", young=young, old=old)
+
+        lnu *= 1 - fesc
+
+        sed = Sed(grid.lam, lnu)
+
+        if update:
+            self.spectra_array[label + "nebular"] = sed
+
+        return sed
+
+    def get_particle_spectra_reprocessed(
+        self,
+        grid,
+        fesc=0.0,
+        fesc_LyA=1.0,
+        young=False,
+        old=False,
+        label="",
+        update=True,
+    ):
+        """
+        Generates the intrinsic spectra, this is the sum of the escaping
+        radiation (if fesc>0), the transmitted emission, and the nebular
+        emission. The transmitted emission is the emission that is
+        transmitted through the gas. In addition to returning the intrinsic
+        spectra this saves the incident, nebular, and escaped spectra if
+        update is set to True.
+
+        Args:
+            grid (obj):
+                spectral grid object
+            fesc (float):
+                fraction of stellar emission that escapeds unattenuated from
+                the birth cloud (defaults to 0.0)
+            fesc_LyA (float):
+                fraction of Lyman-alpha emission that can escape unimpeded
+                by the ISM/IGM.
+            update (bool):
+                flag for whether to update the `intrinsic`, `stellar` and
+                `nebular` spectra inside the galaxy object `spectra`
+                dictionary. These are the combined values of young and old.
+            young (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for young star particles
+            old (bool, float):
+                if not False, specifies age in Myr at which to filter
+                for old star particles
+
+        Updates:
+            incident
+            transmitted
+            nebular
+            reprocessed
+            intrinsic
+
+            if fesc>0:
+                escaped
+
+        Returns:
+            An Sed object containing the intrinsic spectra.
+        """
+
+        # the incident emission
+        incident = self.get_particle_spectra_incident(
+            grid, update=update, young=young, old=old, label=label
+        )
+
+        # the emission which escapes the gas
+        if fesc > 0:
+            escaped = Sed(grid.lam, fesc * incident._lnu)
+
+        # the stellar emission which **is** reprocessed by the gas
+        transmitted = self.get_particle_spectra_transmitted(
+            grid, fesc, update=update, young=young, old=old, label=label
+        )
+        # the nebular emission
+        nebular = self.get_particle_spectra_nebular(
+            grid, fesc, update=update, young=young, old=old, label=label
+        )
+
+        # if the Lyman-alpha escape fraction is <1.0 suppress it.
+        if fesc_LyA < 1.0:
+            # get the new line contribution to the spectrum
+            linecont = self.get_particle_spectra_linecont(
+                grid, fesc=fesc, fesc_LyA=fesc_LyA
             )
 
-        from ..extensions.csed import compute_particle_seds
+            # get the nebular continuum emission
+            nebular_continuum = self.generate_particle_lnu(
+                grid, "nebular_continuum", young=young, old=old
+            )
+            nebular_continuum *= 1 - fesc
 
-        # Prepare the arguments for the C function.
-        args = self._prepare_sed_args(grid, fesc=fesc, spectra_type="incident")
+            # redefine the nebular emission
+            nebular._lnu = linecont + nebular_continuum
 
-        # Get the integrated stellar SED
-        spec_arr = compute_particle_seds(*args)
+        # the reprocessed emission, the sum of transmitted, and nebular
+        reprocessed = nebular + transmitted
 
-        sed = Sed(grid.lam, spec_arr)
+        # the intrinsic emission, the sum of escaped, transmitted, and nebular
+        # if escaped exists other its simply the reprocessed
+        if fesc > 0:
+            intrinsic = reprocessed + escaped
+        else:
+            intrinsic = reprocessed
 
         if update:
-            # Store the spectra in the galaxy
-            self.spectra_array["intrinsic"] = sed
+            if fesc > 0:
+                self.spectra_array[label + "escaped"] = escaped
+            self.spectra_array[label + "reprocessed"] = reprocessed
+            self.spectra_array[label + "intrinsic"] = intrinsic
 
-        return sed
-
-    def get_particle_spectra_screen(self, grid, fesc=0.0, update=True):
-        """
-        Calculate attenuated spectra for all *individual* stellar
-        particles according to a simple screen.
-
-        TODO: need to be able to apply masks to get young and old stars.
-        # young=False,
-        # old=False,
-
-        Args:
-            grid (object, Grid):
-                The SPS grid object sampled by stellar particle to make the SED.
-            fesc (float):
-                The Lyc escape fraction.
-            update (bool):
-                Should we update the Galaxy's spectra attributes?
-
-            # young (bool):
-            #     Are we masking for only young stars?
-            # old (bool):
-            #     Are we masking for only old stars?
-
-        Returns:
-            Sed object containing all particle stellar spectra
-
-        Raises
-        ------
-        InconsistentArguments
-            Errors if both a young and old component is requested because these
-            directly contradict each other resulting in 0 particles in
-            the mask.
-        """
-
-        # # Ensure we have an `intrinsic`` key in the grid. If not error.
-        # if 'intrinsic' not in list(grid.spectra.keys()):
-        #     raise MissingSpectraType(
-        #         "The Grid does not contain the key '%s'" % 'intrinsic'
-        #     )
-
-        # from ..extensions.csed import compute_particle_seds
-
-        # # Prepare the arguments for the C function.
-        # args = self._prepare_sed_args(grid, fesc=fesc, spectra_type="incident")
-
-        # # Get the integrated stellar SED
-        # spec_arr = compute_particle_seds(*args)
-
-        # sed = Sed(grid.lam, spec_arr)
-
-        # if update:
-        #     # Store the spectra in the galaxy
-        #     self.spectra_array["incident"] = sed
-
-        # return sed
-
-        pass
+        return reprocessed
 
     def get_particle_line_intrinsic(self, grid):
         # """
@@ -764,35 +900,52 @@ class Galaxy(BaseGalaxy):
 
         return tau_v
 
-    def apply_los(
+    def apply_attenuation(
         self,
         tau_v,
-        spectra_type,
-        dust_curve=PowerLaw({"slope": -1.0}),
-        integrated=True,
-        sed_object=True,
+        incident_spectra_type,
+        dust_curve=PowerLaw(slope=-1.0),
+        mask=None,
     ):
         """
-        Generate
-        tau_v: V-band optical depth for every star particle
-        dust_curve: instance of the dust class
+        Apply attenuation to a spectra.
+
+        Args:
+
+            tau_v (array-like, float)
+                The V-band optical depth for every star particle.
+
+            incident_spectra_type (str)
+                The key for the spectra to be attenuated.
+
+            dust_curve (synthesizer.dust.attenuation.*)
+                An instance of one of the dust attenuation models. (defined in
+                synthesizer/dust/attenuation.py)
+
+            mask (array-like, bool)
+                A mask array with an entry for each star particle. Masked out
+                particles (star particles with False in the mask) will be
+                ignored when applying the attenuation.
         """
 
-        T = np.outer(tau_v, dust_curve.T(self.lam))
+        # Get the wavelength grid associated to the spectra
+        lam = self.spectra_array[incident_spectra_type]._lam
 
-        # need exception
-        # if not self.intrinsic_lum_array:
-        #     print('Must generate spectra for individual star particles')
+        # Compute the transmission
+        transmission = dust_curve.get_transmission(tau_v, lam)
 
-        # these two should have the same shape so should work?
-        sed = self.spectra_array[spectra_type] * T
-        self.spectra_array["attenuated"] = Sed(self.lam, sed)
-        self.spectra["attenuated"] = Sed(self.lam, np.sum(sed, axis=0))
-
-        if integrated:
-            return self.spectra["attenuated"]
+        # These two should have the same shape so should work?
+        if mask is None:
+            sed = self.spectra_array[incident_spectra_type]._lnu * transmission
+            self.spectra_array["attenuated"] = Sed(lam, sed)
+            self.spectra["attenuated"] = Sed(lam, np.sum(sed, axis=0))
         else:
-            return self.spectra_array["attenuated"]
+            sed = self.spectra_array[incident_spectra_type]._lnu
+            sed[mask] *= transmission
+            self.spectra_array["attenuated"] = Sed(lam, sed)
+            self.spectra["attenuated"] = Sed(lam, np.sum(sed, axis=0))
+
+        return self.spectra_array["attenuated"]
 
     def screen_dust_gamma_parameter(
         self,
