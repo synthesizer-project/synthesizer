@@ -310,6 +310,16 @@ class Grid:
             # Save list of available lines
             self.available_lines = list(self.lines.keys())
 
+        # Has a new wavelength grid been passed to interpolate the spectra onto?
+        if lam is not None:
+
+            # Double check we aren't being asked to do something impossible.
+            if not read_spectra:
+                raise exceptions.InconsistentArguments(
+                    "Can't interpolate spectra onto a new wavelength array if"
+                    " no spectra have been read in! Set read_spectra=True."
+                )
+
     def __str__(self):
         """
         Function to print a basic summary of the Grid object.
