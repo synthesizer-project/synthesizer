@@ -519,7 +519,7 @@ class BaseGalaxy:
             # Overwrite Nones with the dust_curve.slope value
             if alpha[0] is None:
                 alpha[0] = dust_curve.slope
-            elif alpha[1] is None:
+            if alpha[1] is None:
                 alpha[1] = dust_curve.slope
 
             dust_curve.slope = alpha[0]
