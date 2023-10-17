@@ -439,30 +439,41 @@ class BaseGalaxy:
                     )
                 )
 
-        # initialise output spectra
+        # Initialise output spectra
         self.spectra["attenuated"] = Sed(grid.lam)
         self.spectra["emergent"] = Sed(grid.lam)
 
-        # generate intrinsic spectra using full star formation and metal
-        # enrichment history or all particles
-        # generates:
-        #   - incident
-        #   - escaped
-        #   - transmitted
-        #   - nebular
-        #   - reprocessed = transmitted + nebular
-        #   - intrinsic = transmitted + reprocessed
-        self.get_spectra_reprocessed(
-            grid, fesc, fesc_LyA=fesc_LyA, young=False, old=False
-        )
+        # Generate intrinsic spectra for young and old particles 
+        # separately before summing them if we have been given
+        # a threshold
+        if young_old_thresh is not None:
 
-        if young_old_thresh:
+            # Generates:
+            #   - young_incident
+            #   - young_escaped
+            #   - young_transmitted
+            #   - young_nebular
+            #   - young_reprocessed = young_transmitted + young_nebular
+            #   - young_intrinsic = young_transmitted + young_reprocessed
+            #   - old_incident
+            #   - old_escaped
+            #   - old_transmitted
+            #   - old_nebular
+            #   - old_reprocessed = old_transmitted + old_nebular
+            #   - old_intrinsic = old_transmitted + old_reprocessed
+            #   - incident
+            #   - escaped
+            #   - transmitted
+            #   - nebular
+            #   - reprocessed = transmitted + nebular
+            #   - intrinsic = transmitted + reprocessed
+            
             self.spectra["young_attenuated"] = Sed(grid.lam)
             self.spectra["old_attenuated"] = Sed(grid.lam)
             self.spectra["young_emergent"] = Sed(grid.lam)
             self.spectra["old_emergent"] = Sed(grid.lam)
 
-            # generate the young gas reprocessed spectra
+            # Generate the young gas reprocessed spectra
             # add a label so saves e.g. 'escaped_young' etc.
             self.get_spectra_reprocessed(
                 grid,
@@ -473,7 +484,7 @@ class BaseGalaxy:
                 label="young_",
             )
 
-            # generate the old gas reprocessed spectra
+            # Generate the old gas reprocessed spectra
             # add a label so saves e.g. 'escaped_old' etc.
             self.get_spectra_reprocessed(
                 grid,
@@ -484,24 +495,63 @@ class BaseGalaxy:
                 label="old_",
             )
 
+            # Combine young and old spectra
+            self.spectra["incident"] = (
+                self.spectra["young_incident"] 
+                + self.spectra["old_incident"]
+            )
+            self.spectra["transmitted"] = (
+                self.spectra["young_transmitted"] 
+                + self.spectra["old_transmitted"]
+            )
+            self.spectra["nebular"] = (
+                self.spectra["young_nebular"] 
+                + self.spectra["old_nebular"]
+            )
+            self.spectra["reprocessed"] = (
+                self.spectra["young_reprocessed"] 
+                + self.spectra["old_reprocessed"]
+            )
+            self.spectra["intrinsic"] = (
+                self.spectra["young_intrinsic"] 
+                + self.spectra["old_intrinsic"]
+            )
+            if fesc > 0:
+                self.spectra["escaped"] = (
+                    self.spectra["young_escaped"] 
+                    + self.spectra["old_escaped"]
+                )
+        else:
+            
+            # Generate intrinsic spectra for all particles
+            # Generates:
+            #   - incident
+            #   - escaped
+            #   - transmitted
+            #   - nebular
+            #   - reprocessed = transmitted + nebular
+            #   - intrinsic = transmitted + reprocessed
+            self.get_spectra_reprocessed(
+                grid, fesc, fesc_LyA=fesc_LyA, young=False, old=False
+            )
+
         if np.isscalar(tau_v):
-            # single screen dust, no separate birth cloud attenuation
+            # Single screen dust, no separate birth cloud attenuation
             dust_curve.slope = alpha
 
-            # calculate dust attenuation
+            # Calculate dust attenuation
             transmission = dust_curve.get_transmission(tau_v, grid.lam)
 
-            # calculate the attenuated emission
+            # Calculate the attenuated emission
             self.spectra["attenuated"]._lnu = (
                 transmission * self.spectra["reprocessed"]._lnu
             )
 
         elif np.isscalar(tau_v) is False:
-            """
-            Apply separate attenuation to both the young and old components.
-            """
+            # Apply separate attenuation to both the young and old components.
 
-            # Two screen dust, one for diffuse other for birth cloud dust.
+            # Two screen dust, one for diffuse ISM, the other for birth cloud 
+            # dust.
             if np.isscalar(alpha):
                 print(
                     (
@@ -517,28 +567,31 @@ class BaseGalaxy:
                 )
                 alpha = [-0.7, -1.4]
 
+            # Get transmission curve for ISM
             dust_curve.slope = alpha[0]
             transmission_ISM = dust_curve.get_transmission(tau_v[0], grid.lam)
 
+            # Get transmission curve for birth cloud
             dust_curve.slope = alpha[1]
             transmission_BC = dust_curve.get_transmission(tau_v[1], grid.lam)
 
+            # Define yound and old transmissions
             transmission_young = transmission_ISM * transmission_BC
             transmission_old = transmission_ISM
 
+            # Calculate attenuated spectra
             self.spectra["young_attenuated"]._lnu = (
                 transmission_young * self.spectra["young_reprocessed"]._lnu
             )
             self.spectra["old_attenuated"]._lnu = (
                 transmission_old * self.spectra["old_reprocessed"]._lnu
             )
-
             self.spectra["attenuated"]._lnu = (
                 self.spectra["young_attenuated"]._lnu
                 + self.spectra["old_attenuated"]._lnu
             )
 
-            # set emergent spectra
+            # Set emergent spectra based on fesc (for young and old particles)
             if not fesc > 0:
                 self.spectra["young_emergent"]._lnu = self.spectra[
                     "young_attenuated"
@@ -554,6 +607,7 @@ class BaseGalaxy:
                     + self.spectra["old_attenuated"]._lnu
                 )
 
+        # Set emergent spectra based on fesc (for all particles)
         if not fesc > 0:
             self.spectra["emergent"]._lnu = self.spectra["attenuated"]._lnu
         else:
