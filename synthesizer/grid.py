@@ -160,6 +160,8 @@ class Grid:
             spectral grid. These are read dynamically from the HDF5 file so can be
             anything but usually contain at least stellar ages and stellar 
             metallicity.
+        lam (array_like, float)
+            The wavelengths at which the spectra are defined.
     """
 
     def __init__(
@@ -168,7 +170,26 @@ class Grid:
         grid_dir=None,
         read_spectra=True,
         read_lines=True,
+        lam=None,
     ):
+        """
+        Initailise the grid object, open the grid file and extracting the
+        relevant data.
+
+        Args:
+            grid_name (str)
+                The file name of the grid (if no extension is provided then
+                hdf5 is assumed).
+            grid_dir (str)
+                The file path to the directory containing the grid file.
+            read_spectra (bool)
+                Should we read the spectra?
+            read_lines (bool)
+                Should we read the lines?
+            lam (array-like, float)
+                An optional user defined wavelength array the spectra will be
+                interpolated onto, see Grid.interp_spectra.
+        """
         if grid_dir is None:
             grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
 
