@@ -511,11 +511,16 @@ class BaseGalaxy:
                 )
                 print(
                     (
-                        "Defaulting to alpha_ISM=-0.7 and alpha_BC=-1.4 "
-                        "(Charlot & Fall 2000)"
+                        "Defaulting to dust_curve.slope (-1 if unmodified)"
                     )
                 )
-                alpha = [-0.7, -1.4]
+                alpha = [dust_curve.slope, dust_curve.slope]
+
+            # Overwrite Nones with the dust_curve.slope value
+            if alpha[0] is None:
+                alpha[0] = dust_curve.slope
+            elif alpha[1] is None:
+                alpha[1] = dust_curve.slope
 
             dust_curve.slope = alpha[0]
             transmission_ISM = dust_curve.get_transmission(tau_v[0], grid.lam)
@@ -568,8 +573,8 @@ class BaseGalaxy:
         grid,
         tau_v_ISM=1.0,
         tau_v_BC=1.0,
-        alpha_ISM=-0.7,
-        alpha_BC=-1.3,
+        alpha_ISM=None,
+        alpha_BC=None,
         young_old_thresh=7.0,
     ):
         """
@@ -587,9 +592,11 @@ class BaseGalaxy:
         tau_v_BC: float
             numerical value of dust attenuation due to the BC in the V-band
         alpha_ISM: float
-            slope of the ISM dust curve, -0.7 in MAGPHYS
+            The slope of the ISM dust curve, (defaults to dust_curve.slope=-1, 
+            Recommended: -0.7 from MAGPHYS)
         alpha_BC: float
-            slope of the BC dust curve, -1.3 in MAGPHYS
+            The slope of the BC dust curve, (defaults to dust_curve.slope=-1, 
+            Recommended: -1.3 from MAGPHYS)
         young_old_thresh: float
             the threshold in log10(age/yr) for young/old stellar populations
 
