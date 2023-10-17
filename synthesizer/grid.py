@@ -3,6 +3,7 @@ import numpy as np
 import h5py
 
 from scipy.interpolate import interp1d
+from spectres import spectres
 
 from . import __file__ as filepath
 from synthesizer import exceptions
@@ -174,7 +175,6 @@ class Grid:
         read_spectra=True,
         read_lines=True,
         new_lam=None,
-        interp_kind="linear",
     ):
         """
         Initailise the grid object, open the grid file and extracting the
@@ -193,13 +193,7 @@ class Grid:
             new_lam (array-like, float)
                 An optional user defined wavelength array the spectra will be
                 interpolated onto, see Grid.interp_spectra.
-            interp_kind (str)
-                The kind of interpolation to use for wavelength interpolation
-                if new_lam is not set to None. Can be ‘linear’, ‘nearest’,
-                ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’,
-                ‘previous’, or ‘next’. See scipy.interpolate.interp1d docs for
-                more information.
-        """
+       """
         if grid_dir is None:
             grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
 
@@ -331,9 +325,9 @@ class Grid:
                 )
 
             # Interpolate the spectra grid
-            self.interp_spectra(new_lam, kind=interp_kind)
+            self.interp_spectra(new_lam)
 
-    def interp_spectra(self, new_lam, kind="linear"):
+    def interp_spectra(self, new_lam):
         """
         Interpolates the spectra grid onto the provided wavelength grid.
 
@@ -344,31 +338,20 @@ class Grid:
         Args:
             new_lam (array-like, float)
                 The new wavelength array to interpolate the spectra onto.
-            kind (str)
-                The kind of interpolation to use. Can be ‘linear’, ‘nearest’,
-                ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’,
-                ‘previous’, or ‘next’. See scipy.interpolate.interp1d docs for
-                more information.
         """
 
         # Loop over spectra to interpolate
         for spectra_type in self.available_spectra:
 
-            # Get the interpolation function for the wavelength axis (always -1)
-            interp_func = interp1d(
-                self.lam,
-                self.spectra[spectra_type],
-                axis=-1, kind=kind,
-                bounds_error=False,
-                fill_value='extrapolate'
-            )
-
             # Evaluate the function at the desired wavelengths
-            new_spectra = interp_func(new_lam)
+            new_spectra = spectres(
+                new_lam,
+                self.lam,
+                self.spectra[spectra_type]
+            )
 
             # Update this spectra
             self.spectra[spectra_type] = new_spectra
-
 
         # Update wavelength array
         self.lam = new_lam
