@@ -860,7 +860,7 @@ class Filter:
         # if it hasn't been provided
         if self.lam is None:
             self.lam = np.arange(
-                np.max([0, self.lam_min - 1000]), self.lam_max + 1000, 1
+                np.max([0, self._lam_min - 1000]), self._lam_max + 1000, 1
             )
 
         # Define the transmission curve (1 inside, 0 outside)
