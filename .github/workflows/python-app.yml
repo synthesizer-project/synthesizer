@@ -31,12 +31,19 @@ jobs:
         pip install flake8 pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install -e .
+        # Install google API for downloading test data
+        pip install --upgrade google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client gdown
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude broken_examples
+    - name: Download test data
+      env:
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+      run: |
+        gdown https://drive.google.com/uc?id=1txY9PY-ejtRaMSZorpZSxGPsm6muvh9X --output tests/test_grid/test_grid.hdf5
     - name: Test with pytest
       run: |
         pytest
