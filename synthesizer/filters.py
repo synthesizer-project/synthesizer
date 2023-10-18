@@ -23,7 +23,7 @@ import numpy as np
 import urllib.request
 import matplotlib.pyplot as plt
 from scipy import integrate
-from unyt import angstrom, c, Hz, unyt_array
+from unyt import Angstrom, c, Hz, unyt_array
 
 import synthesizer.exceptions as exceptions
 from synthesizer.units import Quantity
@@ -151,7 +151,7 @@ class FilterCollection:
 
         # Calculate mean and pivot wavelengths for each filter
         self.mean_lams = self.calc_mean_lams()
-        self.piv_lams = self.calc_pivot_lams()
+        self.pivot_lams = self.calc_pivot_lams()
 
     def _make_svo_collection(self, filter_codes):
         """
@@ -525,17 +525,17 @@ class FilterCollection:
         FilterCollection.
 
         Returns:
-            piv_lams (ndarray, float)
+            pivot_lams (ndarray, float)
                 An array containing the rest frame pivot wavelengths of each
                 filter in the same order as self.filter_codes.
         """
 
         # Calculate each filters pivot wavelength
-        piv_lams = np.zeros(len(self))
+        pivot_lams = np.zeros(len(self))
         for ind, f in enumerate(self):
-            piv_lams[ind] = f.pivwv()
+            pivot_lams[ind] = f.pivwv()
 
-        return piv_lams
+        return pivot_lams
 
     def calc_mean_lams(self):
         """
@@ -605,10 +605,10 @@ class FilterCollection:
         # Which method are we using?
         if method == "pivot":
             # Calculate each filters pivot wavelength
-            piv_lams = self._piv_lams
+            pivot_lams = self._pivot_lams
 
             # Find the index of the closest pivot wavelength to lam
-            ind = np.argmin(np.abs(piv_lams - lam))
+            ind = np.argmin(np.abs(pivot_lams - lam))
 
         elif method == "mean":
             # Calculate each filters mean wavelength
@@ -1005,7 +1005,7 @@ class Filter:
             # To shift the transmission we need the corresponding wavelength
             # with the units stripped off
             if need_shift:
-                lam = (c / nu).to(angstrom).value
+                lam = (c / nu).to(Angstrom).value
 
         elif lam is not None:
 
