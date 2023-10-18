@@ -4,7 +4,7 @@ import h5py
 
 from scipy.interpolate import interp1d
 from spectres import spectres
-from unyt import unyt_array
+from unyt import unyt_array, unyt_quantity
 
 from . import __file__ as filepath
 from synthesizer import exceptions
@@ -398,16 +398,28 @@ class Grid:
         TODO: This could be moved to utils?
 
         Arguments:
-            value (float)
+            value (float/unyt_quantity)
                 The target value.
 
-            array (np.ndarray)
+            array (np.ndarray/unyt_array)
                 The array to search.
 
         Returns:
             int
                 The index of the closet point in the grid (array)
         """
+
+        # Handle units on both value and array
+        # First do we need a conversion?
+        if isinstance(array, unyt_array) and isinstance(value, unyt_quantity):
+            if array.units != value.units:
+                value = value.to(array.units)
+
+        # Get the values
+        if isinstance(array, unyt_array):
+            array = array.value
+        if isinstance(value, unyt_quantity):
+            value = value.value
 
         return (np.abs(array - value)).argmin()
 
