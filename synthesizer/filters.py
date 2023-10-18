@@ -424,8 +424,8 @@ class FilterCollection:
             # Loop over filters getting the minimum and maximum wavelengths,
             # and highest resolution from the individual filters.
             for f in self.filters:
-                this_min = np.min(self.filters[f].lam)
-                this_max = np.max(self.filters[f].lam)
+                this_min = np.min(self.filters[f]._lam)
+                this_max = np.max(self.filters[f]._lam)
                 if this_min < min_lam:
                     min_lam = this_min
                 if this_max > max_lam:
