@@ -51,6 +51,8 @@ default_units = {
     "lam_max": Angstrom,
     "lam_eff": Angstrom,
     "lam_fwhm": Angstrom,
+    "mean_lams": Angstrom,
+    "pivot_lams": Angstrom,
     "nu": Hz,
     "obsnu": Hz,
     "nuz": Hz,
@@ -233,6 +235,8 @@ class Units(metaclass=UnitSingleton):
         self.lam_max = Angstrom  # filter maximum wavelength
         self.lam_eff = Angstrom  # filter effective wavelength
         self.lam_fwhm = Angstrom  # filter FWHM
+        self.mean_lams = Angstrom  # filter collection mean wavelenghts
+        self.pivot_lams = Angstrom  # filter collection pivot wavelengths
 
         # Frequencies
         self.nu = Hz  # rest frame frequencies
