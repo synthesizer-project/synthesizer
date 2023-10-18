@@ -1033,7 +1033,7 @@ class Filter:
             t = np.interp(
                 lam,
                 self._original_lam,
-                self._original_t,
+                self.original_t,
                 left=0.0,
                 right=0.0
             )
