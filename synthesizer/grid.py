@@ -9,6 +9,7 @@ from . import __file__ as filepath
 from synthesizer import exceptions
 from synthesizer.sed import Sed
 from synthesizer.line import Line, LineCollection
+from synthesizer.units import Quantity
 
 
 def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
@@ -167,6 +168,9 @@ class Grid:
         lam (array_like, float)
             The wavelengths at which the spectra are defined.
     """
+
+    # Define Quantitys
+    lam = Quantity()
 
     def __init__(
         self,
@@ -336,9 +340,15 @@ class Grid:
         will need to instantiated with no lam argument passed.
 
         Args:
-            new_lam (array-like, float)
+            new_lam (unyt_array/array-like, float)
                 The new wavelength array to interpolate the spectra onto.
         """
+
+        # Handle and remove the units from the passed wavelengths if needed
+        if isinstance(new_lam, unyt_array):
+            if new_lam.units != self.lam.units:
+                new_lam = new_lam.to(self.lam.units)
+            new_lam = new_lam.value
 
         # Loop over spectra to interpolate
         for spectra_type in self.available_spectra:
@@ -346,7 +356,7 @@ class Grid:
             # Evaluate the function at the desired wavelengths
             new_spectra = spectres(
                 new_lam,
-                self.lam,
+                self._lam,
                 self.spectra[spectra_type]
             )
 
