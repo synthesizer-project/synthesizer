@@ -40,7 +40,7 @@ start = time.time()
 # Define the grid
 grid_name = "test_grid"
 grid_dir = "../../tests/test_grid/"
-grid = Grid(grid_name, grid_dir=grid_dir)
+grid = Grid(grid_name, grid_dir=grid_dir, new_lam=np.logspace(2, 5, 600))
 
 # What redshift are we testing?
 redshift = 4
