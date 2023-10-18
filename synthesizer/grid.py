@@ -4,6 +4,7 @@ import h5py
 
 from scipy.interpolate import interp1d
 from spectres import spectres
+from unyt import unyt_array
 
 from . import __file__ as filepath
 from synthesizer import exceptions
