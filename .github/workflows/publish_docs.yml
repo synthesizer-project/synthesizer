@@ -22,6 +22,12 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install -e .
           sudo apt install pandoc
+            pip install --upgrade google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client gdown
+      - name: Download test data
+        env:
+            GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+        run: |
+          gdown https://drive.google.com/uc?id=1txY9PY-ejtRaMSZorpZSxGPsm6muvh9X --output tests/test_grid/test_grid.hdf5          
       - name: Sphinx Build
         run: |
           cd docs
