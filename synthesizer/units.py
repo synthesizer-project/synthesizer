@@ -46,9 +46,15 @@ default_units = {
     "lam": Angstrom,
     "obslam": Angstrom,
     "wavelength": Angstrom,
+    "original_lam": Angstrom,
+    "lam_min": Angstrom,
+    "lam_max": Angstrom,
+    "lam_eff": Angstrom,
+    "lam_fwhm": Angstrom,
     "nu": Hz,
     "obsnu": Hz,
     "nuz": Hz,
+    "original_nu": Hz,
     "luminosity": erg / s,
     "lnu": erg / s / Hz,
     "llam": erg / s / Angstrom,
@@ -222,11 +228,17 @@ class Units(metaclass=UnitSingleton):
         self.lam = Angstrom  # rest frame wavelengths
         self.obslam = Angstrom  # observer frame wavelengths
         self.wavelength = Angstrom  # rest frame wavelengths alais
+        self.original_lam = Angstrom  # SVO filter wavelengths
+        self.lam_min = Angstrom  # filter minimum wavelength
+        self.lam_max = Angstrom  # filter maximum wavelength
+        self.lam_eff = Angstrom  # filter effective wavelength
+        self.lam_fwhm = Angstrom  # filter FWHM
 
         # Frequencies
         self.nu = Hz  # rest frame frequencies
         self.nuz = Hz  # rest frame frequencies
         self.obsnu = Hz  # observer frame frequencies
+        self.original_nu = Hz  # SVO filter wavelengths
 
         # Luminosities
         self.luminosity = erg / s  # luminosity
