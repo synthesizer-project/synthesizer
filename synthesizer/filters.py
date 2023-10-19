@@ -23,9 +23,10 @@ import numpy as np
 import urllib.request
 import matplotlib.pyplot as plt
 from scipy import integrate
-from unyt import angstrom, c, Hz
+from unyt import Angstrom, c, Hz, unyt_array
 
 import synthesizer.exceptions as exceptions
+from synthesizer.units import Quantity
 
 
 def UVJ(new_lam=None):
@@ -83,6 +84,11 @@ class FilterCollection:
             The mean wavelength of each Filter in the collection.
     """
 
+    # Define Quantitys
+    lam = Quantity()
+    mean_lams = Quantity()
+    pivot_lams = Quantity()
+
     def __init__(
         self,
         filter_codes=None,
@@ -114,7 +120,8 @@ class FilterCollection:
                     {<filter_code1> : {"transmission": <transmission_array>}}.
                 For generic filters new_lam must be provided.
             new_lam : (array-like, float)
-                The wavelength array to define the transmission curve on.
+                The wavelength array to define the transmission curve on. Can
+                have units but Angstrom assumed.
         """
 
         # Define lists to hold our filters and filter codes
@@ -144,7 +151,7 @@ class FilterCollection:
 
         # Calculate mean and pivot wavelengths for each filter
         self.mean_lams = self.calc_mean_lams()
-        self.piv_lams = self.calc_pivot_lams()
+        self.pivot_lams = self.calc_pivot_lams()
 
     def _make_svo_collection(self, filter_codes):
         """
@@ -417,15 +424,19 @@ class FilterCollection:
             # Loop over filters getting the minimum and maximum wavelengths,
             # and highest resolution from the individual filters.
             for f in self.filters:
-                this_min = np.min(self.filters[f].lam)
-                this_max = np.max(self.filters[f].lam)
+                this_min = np.min(self.filters[f]._lam)
+                this_max = np.max(self.filters[f]._lam)
                 if this_min < min_lam:
                     min_lam = this_min
                 if this_max > max_lam:
                     max_lam = this_max
 
             # Create wavelength array
-            new_lam = np.arange(min_lam, max_lam + lam_resolution, lam_resolution)
+            new_lam = np.arange(
+                min_lam,
+                max_lam + lam_resolution,
+                lam_resolution
+            )
 
             if verbose:
                 print(
@@ -459,7 +470,7 @@ class FilterCollection:
         # Loop over the filters plotting their curves.
         for key in self.filters:
             f = self.filters[key]
-            ax.plot(f.lam, f.t, label=f.filter_code)
+            ax.plot(f._lam, f.t, label=f.filter_code)
 
         # Label the axes
         ax.set_xlabel(r"$\rm \lambda/\AA$")
@@ -514,17 +525,17 @@ class FilterCollection:
         FilterCollection.
 
         Returns:
-            piv_lams (ndarray, float)
+            pivot_lams (ndarray, float)
                 An array containing the rest frame pivot wavelengths of each
                 filter in the same order as self.filter_codes.
         """
 
         # Calculate each filters pivot wavelength
-        piv_lams = np.zeros(len(self))
+        pivot_lams = np.zeros(len(self))
         for ind, f in enumerate(self):
-            piv_lams[ind] = f.pivwv()
+            pivot_lams[ind] = f.pivwv()
 
-        return piv_lams
+        return pivot_lams
 
     def calc_mean_lams(self):
         """
@@ -594,14 +605,14 @@ class FilterCollection:
         # Which method are we using?
         if method == "pivot":
             # Calculate each filters pivot wavelength
-            piv_lams = self.piv_lams
+            pivot_lams = self._pivot_lams
 
             # Find the index of the closest pivot wavelength to lam
-            ind = np.argmin(np.abs(piv_lams - lam))
+            ind = np.argmin(np.abs(pivot_lams - lam))
 
         elif method == "mean":
             # Calculate each filters mean wavelength
-            mean_lams = self.mean_lams
+            mean_lams = self._mean_lams
 
             # Find the index of the closest mean wavelength to lam
             ind = np.argmin(np.abs(mean_lams - lam))
@@ -610,7 +621,7 @@ class FilterCollection:
             # Compute the transmission in each filter at lam
             transmissions = np.zeros(len(self))
             for ind, f in enumerate(self):
-                transmissions[ind] = f.t[np.argmin(np.abs(self.lam - lam))]
+                transmissions[ind] = f.t[np.argmin(np.abs(self._lam - lam))]
 
             # Find the index of the filter with the peak transmission
             ind = np.argmax(transmissions)
@@ -626,7 +637,7 @@ class FilterCollection:
         f = self.filters[fcode]
 
         # Get the transmission
-        transmission = f.t[np.argmin(np.abs(self.lam - lam))]
+        transmission = f.t[np.argmin(np.abs(self._lam - lam))]
 
         # Ensure the transmission is non-zero at the desired wavelength
         if transmission == 0:
@@ -658,7 +669,10 @@ class FilterCollection:
                     )
 
         if redshift is None:
-            print("Filter containing rest_frame_lam=%.2e Angstrom: %s" % (lam, fcode))
+            print(
+                "Filter containing rest_frame_lam=%.2e Angstrom: %s" % (lam,
+                                                                        fcode)
+            )
         else:
             print(
                 "Filter containing rest_frame_lam=%.2e Angstrom "
@@ -713,13 +727,23 @@ class Filter:
         original_lam : array-like (float)
             The original wavelength extracted from SVO. In a non-SVO filter
             self.original_lam == self.lam.
-        nu : array-like (float)
+        original_nu : array-like (float)
             The original frequency derived from self.original_lam. In a non-SVO
             filter self.original_nu == self.nu.
         original_t : array-like (float)
             The original transmission extracted from SVO. In a non-SVO filter
             self.original_t == self.t.
     """
+
+    # Define Quantitys
+    lam_min = Quantity()
+    lam_max = Quantity()
+    lam_eff = Quantity()
+    lam_fwhm = Quantity()
+    lam = Quantity()
+    nu = Quantity()
+    original_lam = Quantity()
+    original_nu = Quantity()
 
     def __init__(
         self,
@@ -813,8 +837,8 @@ class Filter:
             self.original_t = self.t
 
         # Calculate frequencies
-        self.nu = (c / (self.lam * angstrom)).to("Hz").value
-        self.original_nu = (c / (self.original_lam * angstrom)).to("Hz").value
+        self.nu = (c / self.lam).to("Hz").value
+        self.original_nu = (c / self.original_lam).to("Hz").value
 
     def _make_top_hat_filter(self):
         """
@@ -836,7 +860,7 @@ class Filter:
         # if it hasn't been provided
         if self.lam is None:
             self.lam = np.arange(
-                np.max([0, self.lam_min - 1000]), self.lam_max + 1000, 1
+                np.max([0, self._lam_min - 1000]), self._lam_max + 1000, 1
             )
 
         # Define the transmission curve (1 inside, 0 outside)
@@ -886,7 +910,7 @@ class Filter:
 
         # If a new wavelength grid is provided, interpolate
         # the transmission curve on to that grid
-        if isinstance(self.lam, np.ndarray):
+        if isinstance(self._lam, np.ndarray):
             self.t = self._interpolate_wavelength()
         else:
             self.lam = self.original_lam
@@ -914,7 +938,7 @@ class Filter:
 
         # Perform interpolation
         return np.interp(
-            self.lam, self.original_lam, self.original_t, left=0.0, right=0.0
+            self._lam, self._original_lam, self.original_t, left=0.0, right=0.0
         )
 
     def apply_filter(self, arr, lam=None, nu=None, verbose=True):
@@ -930,11 +954,11 @@ class Filter:
             arr (array-like, float)
                 The array to convolve with the filter's transmission curve. Can
                 be any dimension but wavelength must be the final axis.
-            lam (array-like, float)
+            lam (unyt_array/array-like, float)
                 The wavelength array to integrate with respect to.
                 Defaults to the rest frame frequency if neither lams or nus are
                 provided.
-            nu :  (array-like, float)
+            nu :  (unyt_array/array-like, float)
                 The frequency array to integrate with respect to.
                 Defaults to the rest frame frequency if neither lams or nus are
                 provided.
@@ -967,25 +991,37 @@ class Filter:
         # Get the correct x array to integrate w.r.t and work out if we need
         # to shift the transmission curve.
         if nu is not None:
+
+            # Ensure the passed frequencies have units
+            if not isinstance(nu, unyt_array):
+                nu *= Hz
+
             # Define the integration xs
             xs = nu
 
             # Do we need to shift?
-            need_shift = not nu[0] == self.nu[0]
+            need_shift = not nu.value[0] == self._nu[0]
 
             # To shift the transmission we need the corresponding wavelength
-            lam = (c / (nu * Hz)).to(angstrom).value
+            # with the units stripped off
+            if need_shift:
+                lam = (c / nu).to(Angstrom).value
 
         elif lam is not None:
+
+            # Ensure the passed wavelengths have no units
+            if isinstance(lam, unyt_array):
+                lam = lam.value
+
             # Define the integration xs
             xs = lam
 
             # Do we need to shift?
-            need_shift = not lam[0] == self.lam[0]
+            need_shift = not lam[0] == self._lam[0]
 
         else:
             # Define the integration xs
-            xs = self.nu
+            xs = self._nu
 
             # No shift needed
             need_shift = False
@@ -994,7 +1030,13 @@ class Filter:
         if need_shift:
             # Ok, shift the tranmission curve by interpolating onto the
             # provided wavelengths
-            t = np.interp(lam, self.original_lam, self.original_t, left=0.0, right=0.0)
+            t = np.interp(
+                lam,
+                self._original_lam,
+                self.original_t,
+                left=0.0,
+                right=0.0
+            )
 
         else:
             # We can use the standard transmission array
