@@ -4,11 +4,13 @@ import h5py
 
 from scipy.interpolate import interp1d
 from spectres import spectres
+from unyt import unyt_array, unyt_quantity
 
 from . import __file__ as filepath
 from synthesizer import exceptions
 from synthesizer.sed import Sed
 from synthesizer.line import Line, LineCollection
+from synthesizer.units import Quantity
 
 
 def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
@@ -167,6 +169,9 @@ class Grid:
         lam (array_like, float)
             The wavelengths at which the spectra are defined.
     """
+
+    # Define Quantitys
+    lam = Quantity()
 
     def __init__(
         self,
@@ -336,9 +341,15 @@ class Grid:
         will need to instantiated with no lam argument passed.
 
         Args:
-            new_lam (array-like, float)
+            new_lam (unyt_array/array-like, float)
                 The new wavelength array to interpolate the spectra onto.
         """
+
+        # Handle and remove the units from the passed wavelengths if needed
+        if isinstance(new_lam, unyt_array):
+            if new_lam.units != self.lam.units:
+                new_lam = new_lam.to(self.lam.units)
+            new_lam = new_lam.value
 
         # Loop over spectra to interpolate
         for spectra_type in self.available_spectra:
@@ -346,7 +357,7 @@ class Grid:
             # Evaluate the function at the desired wavelengths
             new_spectra = spectres(
                 new_lam,
-                self.lam,
+                self._lam,
                 self.spectra[spectra_type]
             )
 
@@ -387,16 +398,28 @@ class Grid:
         TODO: This could be moved to utils?
 
         Arguments:
-            value (float)
+            value (float/unyt_quantity)
                 The target value.
 
-            array (np.ndarray)
+            array (np.ndarray/unyt_array)
                 The array to search.
 
         Returns:
             int
                 The index of the closet point in the grid (array)
         """
+
+        # Handle units on both value and array
+        # First do we need a conversion?
+        if isinstance(array, unyt_array) and isinstance(value, unyt_quantity):
+            if array.units != value.units:
+                value = value.to(array.units)
+
+        # Get the values
+        if isinstance(array, unyt_array):
+            array = array.value
+        if isinstance(value, unyt_quantity):
+            value = value.value
 
         return (np.abs(array - value)).argmin()
 
