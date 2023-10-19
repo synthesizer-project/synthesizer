@@ -1,4 +1,3 @@
-.. _grids:
 Grids
 *****
 
