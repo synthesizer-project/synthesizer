@@ -54,7 +54,7 @@ plt.plot(
 # --------------------------------------------
 # CREATE PARTICLE SED
 
-for N in [1, 10, 100, 1000]:
+for N in [1, 10, 100]: # , 1000]:
     # --- create stars object
     stars = sample_sfhz(sfzh, N)
     # ensure that the total mass = 1 irrespective of N. This can be also acheived by setting the mass of the star particles in sample_sfhz but this will be easier most of the time.
