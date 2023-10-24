@@ -81,7 +81,6 @@ if __name__ == "__main__":
         plt.title(f'simple particle method - {spectrum}')
         plt.grid(color='whitesmoke')
     plt.show()
-    plt.close()
     
     for lnu in parametric_NNI_SEDs:
         plt.plot(np.log10(parametric_sed.lam), np.log10(lnu))
@@ -92,7 +91,6 @@ if __name__ == "__main__":
         plt.title(f'NNI parametric method - {spectrum}')
         plt.grid(color='whitesmoke')
     plt.show()
-    plt.close()
 
     for lnu in parametric_RGI_SEDs:
         plt.plot(np.log10(parametric_sed.lam), np.log10(lnu))
@@ -103,4 +101,3 @@ if __name__ == "__main__":
         plt.title(f'RGI parametric method - {spectrum}')
         plt.grid(color='whitesmoke')
     plt.show()
-    plt.close()
