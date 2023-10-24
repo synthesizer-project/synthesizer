@@ -80,8 +80,7 @@ if __name__ == "__main__":
         plt.ylim(10, 35)
         plt.title(f'simple particle method - {spectrum}')
         plt.grid(color='whitesmoke')
-        plt.savefig(f'plots/sc-sam_particle_test_spectra_{spectrum}',
-                    dpi=300, bbox_inches='tight')
+    plt.show()
     plt.close()
     
     for lnu in parametric_NNI_SEDs:
@@ -92,8 +91,7 @@ if __name__ == "__main__":
         plt.ylim(10, 35)
         plt.title(f'NNI parametric method - {spectrum}')
         plt.grid(color='whitesmoke')
-        plt.savefig(f'plots/sc-sam_parametric_NNI_test_spectra_{spectrum}',
-                    dpi=300, bbox_inches='tight')
+    plt.show()
     plt.close()
 
     for lnu in parametric_RGI_SEDs:
@@ -104,6 +102,5 @@ if __name__ == "__main__":
         plt.ylim(10, 35)
         plt.title(f'RGI parametric method - {spectrum}')
         plt.grid(color='whitesmoke')
-        plt.savefig(f'plots/sc-sam_parametric_RGI_test_spectra_{spectrum}',
-                    dpi=300, bbox_inches='tight')
+    plt.show()
     plt.close()
