@@ -7,7 +7,7 @@ from scipy.interpolate import RegularGridInterpolator as RGI
 from scipy.interpolate import NearestNDInterpolator as NNI
 
 
-def load_SCSAM(fname, method, grid=None):
+def load_SCSAM(fname, method, grid=None, verbose=False):
 
     """
     Reads an SC-SAM sfhist_*-*.dat file.
@@ -15,15 +15,28 @@ def load_SCSAM(fname, method, grid=None):
     Adapted from code by Aaron Yung.
 
     Args:
-    fname (str): SC-SAM sfhist_*-*.dat file to be read
-    method (str): 'particle', 'parametric_NNI' or 'paremteric_RGI',
-      depending on how you wish to model your SFZH.
-      - 'particle' treats each age-Z bin as a particle
-      - 'parametric_NNI' uses scipy's nearest ND interpolator to
-        interpolate the grid for a parametric SFH
-      - 'parametric_RGI' uses scipy's regular grid interpolator to
-        interpolate the grid for a parametric SFH
-    grid: synthesizer grid object (needed for parametric galaxies)
+        fname (str): 
+            SC-SAM sfhist_*-*.dat file to be read
+        method (str): 
+            'particle', 'parametric_NNI' or 'paremteric_RGI',
+            depending on how you wish to model your SFZH.
+            - 'particle' treats each age-Z bin as a particle
+            - 'parametric_NNI' uses scipy's nearest ND interpolator to
+              interpolate the grid for a parametric SFH
+            - 'parametric_RGI' uses scipy's regular grid interpolator to
+              interpolate the grid for a parametric SFH
+        grid (grid object): 
+            synthesizer grid object (needed for parametric galaxies)
+        verbose (bool):
+            increase output verbosity
+
+    Returns:
+        galaxies (list):
+            list of galaxy objects
+        halo_ind_list (list):
+            list of halo indices
+        birthhalo_id_list (list):
+            birth halo indices
     """
 
     # Prepare to read SFHist file
@@ -46,24 +59,28 @@ def load_SCSAM(fname, method, grid=None):
         # Get age-metallicity grid structure
         if count == 0:
             Z_len, age_len = [int(i) for i in line.split()]
-            print(f'There are {Z_len} metallicity bins and {age_len} age bins.')
+            if verbose:
+                print(f'There are {Z_len} metallicity bins and {age_len} age bins.')
 
         # Get metallicity bins
         if count == 1:
             Z_lst = [float(i) for i in line.split()] # logZ in solar units
-            print(f'Z_lst (log10Zsun): {Z_lst}')
+            if verbose:
+                print(f'Z_lst (log10Zsun): {Z_lst}')
             # Check that this agrees with the expected grid structure
             if len(Z_lst) != Z_len:
                 print('Wrong number of Z bins.')
                 break
             Z_sun = 0.02 # Solar metallicity
             Z_lst = 10**np.array(Z_lst) * Z_sun # Unitless
-            print(f'Z_lst (unitless): {Z_lst}')
+            if verbose:
+                print(f'Z_lst (unitless): {Z_lst}')
 
         # Get age bins
         if count == 2:
             age_lst = [float(i) for i in line.split()] # Gyr
-            print(f'age_lst: {age_lst}')
+            if verbose:
+                print(f'age_lst: {age_lst}')
             # Check that this agrees with the expected grid structure
             if len(age_lst) != age_len:
                 print('Wrong number of age bins.')
@@ -101,13 +118,13 @@ def load_SCSAM(fname, method, grid=None):
 
             # Create galaxy object
             if method=='particle':
-                galaxy = _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst)
+                galaxy = _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=verbose)
             elif method=='parametric_NNI':
                 galaxy = _load_SCSAM_parametric_galaxy(SFH, age_lst,
-                                                       Z_lst, 'NNI', grid)
+                                                       Z_lst, 'NNI', grid, verbose=verbose)
             elif method=='parametric_RGI':
                 galaxy = _load_SCSAM_parametric_galaxy(SFH, age_lst,
-                                                       Z_lst, 'RGI', grid)
+                                                       Z_lst, 'RGI', grid, verbose=verbose)
 
             # Append to list of galaxy objects
             galaxies.append(galaxy)
@@ -117,7 +134,7 @@ def load_SCSAM(fname, method, grid=None):
     return galaxies, halo_ind_list, birthhalo_id_list
 
 
-def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst):
+def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
 
     """
     Treat each age-Z bin as a particle.
@@ -138,7 +155,8 @@ def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst):
     Z_len = len(Z_lst)
 
     # Iterate through every point on the grid
-    print('Iterating through grid...')
+    if verbose:
+        print('Iterating through grid...')
     for age_ind in range(age_len):
         for Z_ind in range(Z_len):
             if SFH[age_ind][Z_ind]==0:
@@ -149,25 +167,28 @@ def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst):
                 p_Z.append(Z_lst[Z_ind]) # unitless
 
     # Convert units
-    print('Converting units...')
+    if verbose:
+        print('Converting units...')
     p_imass = np.array(p_imass) * 10**9 # Msun
     p_age = np.array(p_age) * 10**9 # yr
     p_Z = p_Z # unitless
 
-    print('Generating SED...')
+    if verbose:
+        print('Generating SED...')
 
     # Create stars object
     stars = Stars(initial_masses=p_imass, ages=p_age,
                   metallicities=p_Z)
 
-    print('Creating galaxy object...')
+    if verbose:
+        print('Creating galaxy object...')
     # Create galaxy object
     particle_galaxy = ParticleGalaxy(stars=stars)
 
     return particle_galaxy
 
 
-def _load_SCSAM_parametric_galaxy(SFH, age_lst, Z_lst, method, grid):
+def _load_SCSAM_parametric_galaxy(SFH, age_lst, Z_lst, method, grid, verbose=False):
 
     """
     Obtain galaxy SED using the parametric method.
