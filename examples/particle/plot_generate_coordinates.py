@@ -16,7 +16,7 @@ from synthesizer.particle.image import ImageGenerator
 # script_path = os.path.abspath(os.path.dirname(__file__))
 
 # --- create a set of particles assuming a 3D gaussian
-coords = CoordinateGenerator.generate_3D_gaussian(10000)
+coords = CoordinateGenerator.generate_3D_gaussian(1000)
 
 print(coords)
 print(coords.shape)
