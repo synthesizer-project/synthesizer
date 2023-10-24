@@ -6,13 +6,13 @@ from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 from scipy.interpolate import RegularGridInterpolator as RGI
 from scipy.interpolate import NearestNDInterpolator as NNI
 
-# This script builds on code written by Aaron Yung and Kartheik Iyer.
 
 def load_SCSAM(fname, method, grid=None):
 
     """
     Reads an SC-SAM sfhist_*-*.dat file.
     Returns a list of galaxy objects, halo indices, and birth halo IDs
+    Adapted from code by Aaron Yung.
 
     Args:
     fname (str): SC-SAM sfhist_*-*.dat file to be read
@@ -173,7 +173,7 @@ def _load_SCSAM_parametric_galaxy(SFH, age_lst, Z_lst, method, grid):
     Obtain galaxy SED using the parametric method.
     This is done by interpolating the grid.
     Returns a galaxy object.
-    Based on code by Kartheik Iyer and Aswin Vijayan.
+    Adapted from code by Kartheik Iyer.
 
     Args:
     SFH: age x Z SFH array as given by SC-SAM for a single galaxy
