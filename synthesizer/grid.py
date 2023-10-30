@@ -20,15 +20,17 @@ def get_available_lines(
     """Get a list of the lines available to a grid
 
     Arguments:
-        grid_name (str)
+        grid_name (str):
             The name of the grid file.
 
-        grid_dir (str)
+        grid_dir (str):
             The directory to the grid file.
 
     Returns:
-        (list)
+        lines (list):
             List of available lines
+        wavelengths (list)
+            List of associated wavelengths (if `include_wavelengths` is True)
     """
 
     grid_filename = f"{grid_dir}/{grid_name}.hdf5"
