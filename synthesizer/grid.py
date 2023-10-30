@@ -12,6 +12,27 @@ from synthesizer.line import Line, LineCollection
 from synthesizer.units import Quantity
 
 
+def check_lines_available(
+    grid_name,
+    grid_dir
+):
+    """ Check that lines are available on this grid
+
+    Arguments:
+        grid_name (str):
+            The name of the grid file.
+        grid_dir (str):
+            The directory to the grid file.
+    """
+
+    grid_filename = f"{grid_dir}/{grid_name}.hdf5"
+    with h5py.File(grid_filename, "r") as hf:
+        if "lines" in hf.keys():
+            return True
+        else:
+            return False
+
+
 def get_available_lines(
     grid_name,
     grid_dir,
@@ -22,7 +43,6 @@ def get_available_lines(
     Arguments:
         grid_name (str):
             The name of the grid file.
-
         grid_dir (str):
             The directory to the grid file.
 
@@ -67,7 +87,7 @@ def flatten_linelist(list_to_flatten):
                 flattened_list.append(ll)
 
         elif isinstance(lst, str):
-            
+
             # If the line is a doublet, resolve it and add each line
             # individually
             if len(lst.split(",")) > 1:
@@ -298,6 +318,14 @@ class Grid:
             self.available_spectra = list(self.spectra.keys())
 
         if read_lines is not False:
+
+            if check_lines_available(self.grid_name, self.grid_dir):
+                pass
+            else:
+                raise Exception(
+                    ("No lines available on this grid object. "
+                     "Either set `read_lines=True`, or load a grid "
+                     "containing line information"))
 
             # If read_lines is True read all available lines in the grid,
             # otherwise if read_lines is a list just read the lines
