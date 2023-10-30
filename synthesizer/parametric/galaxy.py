@@ -334,10 +334,10 @@ class Galaxy(BaseGalaxy):
         grid,
         line_ids,
         fesc=0.0,
-        tau_v_nebular=None,
-        tau_v_stellar=None,
-        dust_curve_nebular=PowerLaw({"slope": -1.0}),
-        dust_curve_stellar=PowerLaw({"slope": -1.0}),
+        tau_v_BC=None,
+        tau_v_ISM=None,
+        dust_curve_nebular=PowerLaw(slope=-1.0),
+        dust_curve_stellar=PowerLaw(slope=-1.0),
         update=True,
     ):
         """
@@ -385,17 +385,17 @@ class Galaxy(BaseGalaxy):
         # dictionary holding lines
         lines = {}
 
-        for line_id, intrinsic_line in intrinsic_lines.items():
+        for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # calculate attenuation
-            T_nebular = dust_curve_nebular.attenuate(
-                tau_v_nebular, intrinsic_line._wavelength
+            T_BC = dust_curve_nebular.get_transmission(
+                tau_v_BC, intrinsic_line._wavelength
             )
-            T_stellar = dust_curve_stellar.attenuate(
-                tau_v_stellar, intrinsic_line._wavelength
+            T_ISM = dust_curve_stellar.get_transmission(
+                tau_v_ISM, intrinsic_line._wavelength
             )
 
-            luminosity = intrinsic_line._luminosity * T_nebular
-            continuum = intrinsic_line._continuum * T_stellar
+            luminosity = intrinsic_line._luminosity * T_BC * T_ISM 
+            continuum = intrinsic_line._continuum * T_ISM
 
             line = Line(
                 intrinsic_line.id, intrinsic_line._wavelength, luminosity, continuum
