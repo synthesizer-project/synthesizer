@@ -51,6 +51,7 @@ class Gas(Particles):
         "star_forming",
         "log10metallicities",
         "dust_to_metal_ratio",
+        "dust_masses",
         "_coordinates",
         "_velocities",
         "_smoothing_lengths",
@@ -72,6 +73,7 @@ class Gas(Particles):
         smoothing_lengths=None,
         softening_length=None,
         dust_to_metal_ratio=None,
+        dust_masses=None,
     ):
         """
         Initialise the gas object.
@@ -119,9 +121,16 @@ class Gas(Particles):
         # Set the smoothing lengths for these gas particles
         self.smoothing_lengths = smoothing_lengths
 
-        # The dust to metal ratio for gas particles. Either 1 value or a value
-        # per gas particle.
-        self.dust_to_metal_ratio = dust_to_metal_ratio
+        if dust_to_metal_ratio is not None:
+            # The dust to metal ratio for gas particles. Either 1 value or a value
+            # per gas particle.
+            self.dust_to_metal_ratio = dust_to_metal_ratio
+
+            # use dtm to calculate dust mass
+            self.dust_masses = self.masses *\
+                self.metallicities * self.dust_to_metal_ratio
+        else:
+            self.dust_masses = dust_masses
 
         # Check the arguments we've been given
         self._check_gas_args()
