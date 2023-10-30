@@ -336,8 +336,8 @@ class Galaxy(BaseGalaxy):
         fesc=0.0,
         tau_v_BC=None,
         tau_v_ISM=None,
-        dust_curve_nebular=PowerLaw(slope=-1.0),
-        dust_curve_stellar=PowerLaw(slope=-1.0),
+        dust_curve_BC=PowerLaw(slope=-1.0),
+        dust_curve_ISM=PowerLaw(slope=-1.0),
         update=True,
     ):
         """
@@ -356,16 +356,16 @@ class Galaxy(BaseGalaxy):
         fesc : float
             The Lyman continuum escape fraction, the fraction of
             ionising photons that entirely escape
-        tau_v_nebular : float
-            V-band optical depth of the nebular emission
-        tau_v_stellar : float
-            V-band optical depth of the stellar emission
-        dust_curve_nebular : obj (dust_curve)
+        tau_v_BC : float
+            V-band optical depth of the birth cloud
+        tau_v_ISM : float
+            V-band optical depth of the diffuse ISM
+        dust_curve_BC : obj (dust_curve)
             A dust_curve object specifying the dust curve
-            for the nebular emission
-        dust_curve_stellar : obj (dust_curve)
+            for the birth cloud
+        dust_curve_ISM : obj (dust_curve)
             A dust_curve object specifying the dust curve
-            for the stellar emission
+            for the diffuse ISM
 
         Returns
         -------
@@ -387,10 +387,10 @@ class Galaxy(BaseGalaxy):
 
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # calculate attenuation
-            T_BC = dust_curve_nebular.get_transmission(
+            T_BC = dust_curve_BC.get_transmission(
                 tau_v_BC, intrinsic_line._wavelength
             )
-            T_ISM = dust_curve_stellar.get_transmission(
+            T_ISM = dust_curve_ISM.get_transmission(
                 tau_v_ISM, intrinsic_line._wavelength
             )
 
