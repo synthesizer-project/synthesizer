@@ -8,23 +8,23 @@ from synthesizer.load_data.utils import get_len
 
 
 def load_Simba(
-    _dir=".",
+    directory=".",
     snap_name="snap_033.hdf5",
-    fof_name="fof_subhalo_tab_033.hdf5",
-    fof_dir=None,
-    dtm=0.3
+    caesar_name="fof_subhalo_tab_033.hdf5",
+    caesar_directory=None,
+    load_halo=False,
 ):
     """
     Load CAMELS-SIMBA galaxies
 
     Args:
-        dir (string):
+        directory (string):
             data location
         snap_name (string):
             snapshot filename
         fof_name (string):
             Subfind / FOF filename
-        fof_dir (string):
+        fof_directory (string):
             optional argument specifying location of fof file
             if different to snapshot
         dtm (float):
@@ -35,7 +35,7 @@ def load_Simba(
             `ParticleGalaxy` object containing star and gas particle
     """
 
-    with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
+    with h5py.File(f"{directory}/{snap_name}", "r") as hf:
         form_time = hf["PartType4/StellarFormationTime"][:]
         coods = hf["PartType4/Coordinates"][:]
         masses = hf["PartType4/Masses"][:]
@@ -51,12 +51,15 @@ def load_Simba(
         g_coods = hf["PartType0/Coordinates"][:]
         g_hsml = hf["PartType0/SmoothingLength"][:]
 
+        g_dustmass = hf["PartType0/Dust_Masses"][:]
+
         scale_factor = hf["Header"].attrs["Time"]
         Om0 = hf["Header"].attrs["Omega0"]
         h = hf["Header"].attrs["HubbleParam"]
 
     masses = (masses * 1e10) / h
     g_masses = (g_masses * 1e10) / h
+    g_dustmass = (g_dustmass * 1e10) / h
     imasses = (imasses * 1e10) / h
 
     star_forming = g_sfr > 0.0
@@ -71,9 +74,10 @@ def load_Simba(
     _ages = cosmo.age(1.0 / form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
-    if fof_dir:
-        _dir = fof_dir  # replace if symlinks for fof files are broken
-    with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
+    if caesar_directory:
+        # replace if symlinks for fof files are broken
+        directory = caesar_directory
+    with h5py.File(f"{directory}/{caesar_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
 
     begin, end = get_len(lens[:, 4])
@@ -99,7 +103,7 @@ def load_Simba(
             metals=g_metals[b:e],
             star_forming=star_forming[b:e],
             smoothing_lengths=g_hsml[b:e],
-            dust_to_metal_ratio=dtm,
+            dust_masses=g_dustmass[b:e],
         )
 
     return galaxies
