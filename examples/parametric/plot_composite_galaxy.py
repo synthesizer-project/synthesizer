@@ -16,10 +16,8 @@ import numpy as np
 
 from synthesizer.grid import Grid
 from synthesizer.parametric.morphology import Sersic2D
-from synthesizer.parametric.sfzh import (SFH,
-                                         ZH,
-                                         generate_sfzh,
-                                         generate_instant_sfzh)
+from synthesizer.parametric.sfzh import SFH, ZH
+from synthesizer.parametric.sfzh import generate_sfzh, generate_instant_sfzh
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.filters import UVJ
 
@@ -32,7 +30,7 @@ if __name__ == "__main__":
     # Define the grid
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
-    grid = Grid(grid_name, grid_dir=grid_dir)
+    grid = Grid(grid_name, grid_dir=grid_dir, new_lam=np.logspace(3, 4.2, 1000))
 
     # Get a UVJ filter collection
     filters = UVJ()
@@ -89,7 +87,7 @@ if __name__ == "__main__":
     # Define bulge morphology
     morph = Sersic2D(r_eff_kpc=1.0 * kpc, n=4.0)
 
-    # Define the parameters of the star formation and metal enrichment 
+    # Define the parameters of the star formation and metal enrichment
     # histories
     stellar_mass = 2e10
     sfzh = generate_instant_sfzh(
@@ -133,19 +131,16 @@ if __name__ == "__main__":
     # Plot the spectra of both components
 
     sed = disk.spectra["incident"]
-    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c="b", 
-             label="disk")
+    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c="b", label="disk")
 
     sed = bulge.spectra["incident"]
     plt.plot(
-        np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c="r", 
-        label="bulge"
+        np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, c="r", label="bulge"
     )
 
     sed = combined.spectra["incident"]
     plt.plot(
-        np.log10(sed.lam), np.log10(sed.lnu), lw=2, alpha=0.8, c="k", 
-        label="combined"
+        np.log10(sed.lam), np.log10(sed.lnu), lw=2, alpha=0.8, c="k", label="combined"
     )
 
     plt.xlim(3.0, 4.3)
