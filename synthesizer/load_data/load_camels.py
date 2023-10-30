@@ -1,4 +1,3 @@
-import sys
 import h5py
 import numpy as np
 
@@ -297,7 +296,7 @@ def load_CAMELS_Astrid(
     )
 
 
-def load_CAMELS_SIMBA(
+def load_CAMELS_Simba(
     _dir=".",
     snap_name="snap_033.hdf5",
     fof_name="fof_subhalo_tab_033.hdf5",

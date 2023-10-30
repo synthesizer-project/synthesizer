@@ -1,0 +1,105 @@
+import h5py
+import numpy as np
+
+from astropy.cosmology import FlatLambdaCDM
+
+from ..particle.galaxy import Galaxy
+from synthesizer.load_data.utils import get_len
+
+
+def load_Simba(
+    _dir=".",
+    snap_name="snap_033.hdf5",
+    fof_name="fof_subhalo_tab_033.hdf5",
+    fof_dir=None,
+    dtm=0.3
+):
+    """
+    Load CAMELS-SIMBA galaxies
+
+    Args:
+        dir (string):
+            data location
+        snap_name (string):
+            snapshot filename
+        fof_name (string):
+            Subfind / FOF filename
+        fof_dir (string):
+            optional argument specifying location of fof file
+            if different to snapshot
+        dtm (float):
+            dust to metals ratio for all gas particles
+
+    Returns:
+        galaxies (object):
+            `ParticleGalaxy` object containing star and gas particle
+    """
+
+    with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
+        form_time = hf["PartType4/StellarFormationTime"][:]
+        coods = hf["PartType4/Coordinates"][:]
+        masses = hf["PartType4/Masses"][:]
+
+        imasses = np.ones(len(masses)) * 0.00155
+        # * hf['Header'].attrs['MassTable'][1]
+
+        _metals = hf["PartType4/Metallicity"][:]
+
+        g_sfr = hf["PartType0/StarFormationRate"][:]
+        g_masses = hf["PartType0/Masses"][:]
+        g_metals = hf["PartType0/Metallicity"][:][:, 0]
+        g_coods = hf["PartType0/Coordinates"][:]
+        g_hsml = hf["PartType0/SmoothingLength"][:]
+
+        scale_factor = hf["Header"].attrs["Time"]
+        Om0 = hf["Header"].attrs["Omega0"]
+        h = hf["Header"].attrs["HubbleParam"]
+
+    masses = (masses * 1e10) / h
+    g_masses = (g_masses * 1e10) / h
+    imasses = (imasses * 1e10) / h
+
+    star_forming = g_sfr > 0.0
+
+    s_oxygen = _metals[:, 4]
+    s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
+    metallicity = _metals[:, 0]
+
+    # convert formation times to ages
+    cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
+    universe_age = cosmo.age(1.0 / scale_factor - 1)
+    _ages = cosmo.age(1.0 / form_time - 1)
+    ages = (universe_age - _ages).value * 1e9  # yr
+
+    if fof_dir:
+        _dir = fof_dir  # replace if symlinks for fof files are broken
+    with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
+        lens = hf["Subhalo/SubhaloLenType"][:]
+
+    begin, end = get_len(lens[:, 4])
+    galaxies = [None] * len(begin)
+    for i, (b, e) in enumerate(zip(begin, end)):
+        galaxies[i] = Galaxy()
+
+        galaxies[i].load_stars(
+            imasses[b:e],
+            ages[b:e],
+            metallicity[b:e],
+            s_oxygen=s_oxygen[b:e],
+            s_hydrogen=s_hydrogen[b:e],
+            coordinates=coods[b:e, :],
+            current_masses=masses[b:e],
+        )
+
+    begin, end = get_len(lens[:, 0])
+    for i, (b, e) in enumerate(zip(begin, end)):
+        galaxies[i].load_gas(
+            coordinates=g_coods[b:e],
+            masses=g_masses[b:e],
+            metals=g_metals[b:e],
+            star_forming=star_forming[b:e],
+            smoothing_lengths=g_hsml[b:e],
+            dust_to_metal_ratio=dtm,
+        )
+
+    return galaxies
