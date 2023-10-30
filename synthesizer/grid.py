@@ -13,7 +13,11 @@ from synthesizer.line import Line, LineCollection
 from synthesizer.units import Quantity
 
 
-def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
+def get_available_lines(
+    grid_name,
+    grid_dir,
+    include_wavelengths=False
+):
     """Get a list of the lines available to a grid
 
     Arguments:
@@ -136,25 +140,27 @@ class Grid:
         grid_dir (str)
             The directory containing the grid HDF5 file.
         grid_name (str)
-            The name of the grid (as defined by the file name) with no extension.
+            The name of the grid (as defined by the file name)
+            with no extension.
         grid_ext (str)
-            The grid extension. Either ".hdf5" or ".h5". If the passed grid_name
-            has no extension then ".hdf5" is assumed.
+            The grid extension. Either ".hdf5" or ".h5". If the passed 
+            grid_name has no extension then ".hdf5" is assumed.
         read_lines (bool/list)
-            Flag for whether to read lines. If False they are not read, otherwise,
-            this is a list of the requested lines.
+            Flag for whether to read lines. If False they are not read,
+            otherwise, this is a list of the requested lines.
         read_spectra (bool/list)
             Flag for whether to read spectra.
         spectra (array-like, float)
-            The spectra array from the grid. This is an N-dimensional grid where 
-            N is the number of axes of the SPS grid. The final dimension is
-            always wavelength.
+            The spectra array from the grid. This is an N-dimensional
+            grid where N is the number of axes of the SPS grid. The final
+            dimension is always wavelength.
         lines (array-like, float)
-            The lines array from the grid. This is an N-dimensional grid where 
+            The lines array from the grid. This is an N-dimensional grid where
             N is the number of axes of the SPS grid. The final dimension is
             always wavelength.
         parameters (dict)
-            A dictionary containing the grid's parameters used in its generation.
+            A dictionary containing the grid's parameters used in its
+            generation.
         axes (list, str)
             A list of the names of the spectral grid axes.
         naxes
@@ -162,15 +168,15 @@ class Grid:
         logQ10 (dict)
             A dictionary of ionisation Q parameters.
         <grid_axis> (array-like, float)
-            A Grid will always contain 1D arrays corresponding to the axes of the
-            spectral grid. These are read dynamically from the HDF5 file so can be
-            anything but usually contain at least stellar ages and stellar 
-            metallicity.
+            A Grid will always contain 1D arrays corresponding to the axes
+            of the spectral grid. These are read dynamically from the HDF5
+            file so can be anything but usually contain at least stellar ages
+            and stellar metallicity.
         lam (array_like, float)
             The wavelengths at which the spectra are defined.
     """
 
-    # Define Quantitys
+    # Define Quantities
     lam = Quantity()
 
     def __init__(
