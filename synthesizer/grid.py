@@ -58,26 +58,26 @@ def flatten_linelist(list_to_flatten):
             flattened list
     """
 
-    flattend_list = []
+    flattened_list = []
     for lst in list_to_flatten:
         if isinstance(lst, list) or isinstance(lst, tuple):
             for ll in lst:
-                flattend_list.append(ll)
+                flattened_list.append(ll)
 
         elif isinstance(lst, str):
             
-            # If the line is a doublet resolve it and add each line
+            # If the line is a doublet, resolve it and add each line
             # individually
             if len(lst.split(",")) > 1:
-                flattend_list += lst.split(",")
+                flattened_list += lst.split(",")
             else:
-                flattend_list.append(lst)
+                flattened_list.append(lst)
 
         else:
-            # TODO: raise exception
-            pass
+            raise Exception(("Unrecognised type provided. Please provide"
+                             "a list of lists and strings"))
 
-    return list(set(flattend_list))
+    return list(set(flattened_list))
 
 
 def parse_grid_id(grid_id):
@@ -211,8 +211,8 @@ class Grid:
         self.grid_dir = grid_dir
 
         # Have we been passed an extension?
-        if (grid_name.split(".")[-1] == "hdf5" 
-            or grid_name.split(".")[-1] == "h5"):
+        if (grid_name.split(".")[-1] == "hdf5" or
+                grid_name.split(".")[-1] == "h5"):
             self.grid_ext = grid_name.split(".")[-1]
         else:
             self.grid_ext = "hdf5"
@@ -225,7 +225,7 @@ class Grid:
 
         # Flags for reading behaviour
         self.read_lines = read_lines
-        self.read_spectra = read_spectra  #  not used
+        self.read_spectra = read_spectra  # not used
 
         # Set up attributes we will set later
         self.spectra = None
@@ -296,16 +296,17 @@ class Grid:
             self.available_spectra = list(self.spectra.keys())
 
         if read_lines is not False:
-            
+
             # If read_lines is True read all available lines in the grid,
-            # otherwise if read_lines is a list just read the lines in the list.
+            # otherwise if read_lines is a list just read the lines
+            # in the list.
 
             self.lines = {}
 
             # If a list of lines is provided then only read lines in this list
             if isinstance(read_lines, list):
                 read_lines = flatten_linelist(read_lines)
-                
+
             # If a list isn't provided then use all available lines to the grid
             else:
                 read_lines = get_available_lines(self.grid_name, self.grid_dir)
