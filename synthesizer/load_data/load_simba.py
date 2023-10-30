@@ -4,7 +4,6 @@ import numpy as np
 from astropy.cosmology import FlatLambdaCDM
 
 from ..particle.galaxy import Galaxy
-from synthesizer.load_data.utils import get_len
 
 
 def load_Simba(
@@ -57,13 +56,16 @@ def load_Simba(
         Om0 = hf["Header"].attrs["Omega0"]
         h = hf["Header"].attrs["HubbleParam"]
 
+    # convert units
     masses = (masses * 1e10) / h
     g_masses = (g_masses * 1e10) / h
     g_dustmass = (g_dustmass * 1e10) / h
     imasses = (imasses * 1e10) / h
 
+    # create mask of star forming gas particles
     star_forming = g_sfr > 0.0
 
+    # get individual and summed metallicity components
     s_oxygen = _metals[:, 4]
     s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
     metallicity = _metals[:, 0]
@@ -74,15 +76,20 @@ def load_Simba(
     _ages = cosmo.age(1.0 / form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
-    if caesar_directory:
-        # replace if symlinks for fof files are broken
-        directory = caesar_directory
-    with h5py.File(f"{directory}/{caesar_name}", "r") as hf:
-        lens = hf["Subhalo/SubhaloLenType"][:]
+    # check which kind of object we're loading
+    if load_halo:
+        obj_str = 'halo_data'
+    else:
+        obj_str = 'galaxy_data'
 
-    begin, end = get_len(lens[:, 4])
+    # get the star particle begin / end indices
+    with h5py.File(f"{caesar_directory}/{caesar_name}", "r") as hf:
+        begin = hf[f"{obj_str}/slist_start"][:]
+        end = hf[f"{obj_str}/slist_end"][:]
+
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
+        # create the individual galaxy objects
         galaxies[i] = Galaxy()
 
         galaxies[i].load_stars(
@@ -95,7 +102,11 @@ def load_Simba(
             current_masses=masses[b:e],
         )
 
-    begin, end = get_len(lens[:, 0])
+    # get the gas particle begin / end indices
+    with h5py.File(f"{caesar_directory}/{caesar_name}", "r") as hf:
+        begin = hf[f"{obj_str}/glist_start"][:]
+        end = hf[f"{obj_str}/glist_end"][:]
+
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i].load_gas(
             coordinates=g_coods[b:e],
