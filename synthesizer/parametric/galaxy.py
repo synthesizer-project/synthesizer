@@ -426,7 +426,7 @@ class Galaxy(BaseGalaxy):
         line_ids,
         fesc=0.0,
         tau_v=None,
-        dust_curve=PowerLaw({"slope": -1.0}),
+        dust_curve=PowerLaw(slope=-1.0),
         update=True,
     ):
         """
@@ -460,8 +460,8 @@ class Galaxy(BaseGalaxy):
             grid,
             line_ids,
             fesc=fesc,
-            tau_v_nebular=tau_v,
-            tau_v_stellar=tau_v,
+            tau_v_BC=0,
+            tau_v_ISM=tau_v,
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve,
         )
