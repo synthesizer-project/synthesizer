@@ -4,8 +4,8 @@ import numpy as np
 
 from astropy.cosmology import FlatLambdaCDM
 
-from .particle.galaxy import Galaxy
-from utils import get_len
+from ..particle.galaxy import Galaxy
+from synthesizer.load_data.utils import get_len
 
 
 def _load_CAMELS(

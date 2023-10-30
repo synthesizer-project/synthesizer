@@ -1,8 +1,9 @@
 import h5py
 import numpy as np
 
-from .particle.galaxy import Galaxy
-from utils import get_len
+from ..particle.galaxy import Galaxy
+from synthesizer.load_data.utils import get_len
+
 
 def load_FLARES(f, region, tag):
     """
