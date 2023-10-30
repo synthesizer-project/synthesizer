@@ -2,7 +2,6 @@ import os
 import numpy as np
 import h5py
 
-from scipy.interpolate import interp1d
 from spectres import spectres
 from unyt import unyt_array, unyt_quantity
 
