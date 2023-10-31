@@ -167,40 +167,40 @@ void frac_loop(const double *grid_props, const double *part_props, int p,
  * @param fracs: The array for storing the mass fractions. NOTE: The left most
  *               grid cell's mass fraction is simply (1 - frac[dim])
  */
-void recursive_weight_loop(const double mass, short *sub_indices,
-                           int *frac_indices, int *low_indices,
-                           int *weight_indices, double *weights, double *fracs,
-                           int dim, const int *dims, const int ndim) {
+void recursive_weight_loop(const double mass, short int *sub_indices,
+                           int *frac_indices, int *low_indices, double *weights,
+                           double *fracs, int dim, const int *dims,
+                           const int ndim) {
 
   /* Are we done yet? */
   if (dim >= ndim) {
 
-    /* Get the index for this particle in the weights array. */
-    const int weight_ind = get_flat_index_subarray(sub_indices, ndim);
-
     /* Get the flattened index into the grid array. */
-    weight_indices[weight_ind] = get_flat_index(frac_indices, dims, ndim);
+    const int weight_ind = get_flat_index(frac_indices, dims, ndim);
 
     /* Check whether we need a weight in this cell. */
     for (int i = 0; i < ndim; i++) {
       if ((sub_indices[i] == 1 && fracs[i] == 0 && frac_indices[i] == 0) ||
           (sub_indices[i] == 1 && fracs[i] == 0 &&
            frac_indices[i] == dims[i])) {
-        weights[weight_ind] = 0;
         return;
       }
     }
 
     /* Compute the weight. */
-    weights[weight_ind] = mass;
+    double weight = mass;
     for (int i = 0; i < ndim; i++) {
 
+      /* Account for the fractional contribution in this grid cell. */
       if (sub_indices[i]) {
-        weights[weight_ind] *= fracs[i];
+        weight *= fracs[i];
       } else {
-        weights[weight_ind] *= (1 - fracs[i]);
+        weight *= (1 - fracs[i]);
       }
     }
+
+    /* And add the weight. */
+    weights[weight_ind] += weight;
 
     /* We're done! */
     return;
@@ -216,8 +216,8 @@ void recursive_weight_loop(const double mass, short *sub_indices,
     frac_indices[dim] = low_indices[dim] + i;
 
     /* Recurse... */
-    recursive_weight_loop(mass, sub_indices, frac_indices, low_indices,
-                          weight_indices, weights, fracs, dim + 1, dims, ndim);
+    recursive_weight_loop(mass, sub_indices, frac_indices, low_indices, weights,
+                          fracs, dim + 1, dims, ndim);
   }
 }
 
@@ -273,10 +273,6 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   /* Compute the number of weights we need. Adding on a buffer for
    * accurate casting*/
   const int nweights = pow(2, ndim) + 0.1;
-
-  /* Define an array to hold this particle's weights. */
-  double *weights = malloc(nweights * sizeof(double));
-  bzero(weights, nweights * sizeof(double));
 
   /* Allocate a single array for grid properties*/
   /* NOTE: ndim by definition excludes the wavelength axis. */
@@ -334,18 +330,15 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   /* Set up arrays to store grid indices for the weights, mass fractions
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
-  double *fracs = malloc(ndim * sizeof(double));
-  int *frac_indices = malloc((ndim + 1) * sizeof(int));
-  int *low_indices = malloc((ndim + 1) * sizeof(int));
-  int *weight_indices = malloc(nweights * sizeof(int));
-  short int *sub_indices = malloc(ndim * sizeof(short int));
+  double fracs[ndim];
+  int frac_indices[ndim + 1];
+  int low_indices[ndim + 1];
+  short int sub_indices[ndim];
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
-    /* Reset arrays. */
-    for (int ind = 0; ind < nweights; ind++)
-      weight_indices[ind] = 0;
+    /* Reset fraction and indices arrays to zero. */
     for (int ind = 0; ind < ndim; ind++) {
       fracs[ind] = 0;
       sub_indices[ind] = 0;
@@ -362,38 +355,17 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     frac_loop(grid_props, part_props, p, ndim, dims, npart, frac_indices,
               fracs);
 
-    /* Make a copy of the indices of the fraction to avoid double addition. */
+    /* Make a copy of the indices of the fraction to avoid modification
+     * during recursion. */
     for (int ind = 0; ind < ndim + 1; ind++) {
       low_indices[ind] = frac_indices[ind];
     }
 
-    /* Compute the weights and flattened grid indices. */
+    /* Finally, compute the weights for this particle. */
     recursive_weight_loop(mass, sub_indices, frac_indices, low_indices,
-                          weight_indices, weights, fracs, /*dim*/ 0, dims,
-                          ndim);
+                          grid_weights, fracs, /*dim*/ 0, dims, ndim);
 
-    /* Loop over weights and their indices. */
-    for (int i = 0; i < nweights; i++) {
-
-      /* Get this weight and it's flattened index. */
-      const double weight = weights[i];
-      const int grid_ind = weight_indices[i];
-
-      /* Skip zero weight cells. */
-      if (weight <= 0)
-        continue;
-
-      /* Skip and warn about badly behaved indices. */
-      if (grid_ind < 0 || grid_ind > grid_size) {
-        printf("WARNING: Stellar particle found outside grid!\n");
-        continue;
-      }
-
-      /* Add weight to this grid cell. */
-      grid_weights[grid_ind] += weight;
-
-    } /* Loop over 2 ** ndim weights. */
-  }   /* Loop over particles. */
+  } /* Loop over particles. */
 
   /* Loop over grid cells. */
   for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
