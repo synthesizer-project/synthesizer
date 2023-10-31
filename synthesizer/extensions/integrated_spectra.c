@@ -24,11 +24,12 @@
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
 
 /**
- * @brief Compute a flat grid index based on the grid dimensions.
+ * @brief Compute an ndimensional index from a flat index.
  *
- * @param indices: An array of N-dimensional indices.
- * @param dims: The length of each dimension.
- * @param ndim: The number of dimensions.
+ * @param flat_ind: The flattened index to unravel.
+ * @param ndim: The number of dimensions for the unraveled index.
+ * @param dims: The size of each dimension.
+ * @param indices: The output N-dimensional indices.
  */
 void get_indices_from_flat(int flat_ind, int ndim, const int *dims,
                            int *indices) {
@@ -43,7 +44,7 @@ void get_indices_from_flat(int flat_ind, int ndim, const int *dims,
 /**
  * @brief Compute a flat grid index based on the grid dimensions.
  *
- * @param indices: An array of N-dimensional indices.
+ * @param multi_index: An array of N-dimensional indices.
  * @param dims: The length of each dimension.
  * @param ndim: The number of dimensions.
  */
@@ -61,12 +62,14 @@ int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
  * @brief Calculates the mass fractions in each right most grid cell along
  *        each dimension.
  *
- * @param grid_tuple: The tuple contain each array of grid properties.
- * @param part_tuple: The tuple containing each array of particle properties.
+ * @param grid_props: An array of the properties along each grid axis.
+ * @param part_props: An array of the particle properties, in the same property
+ *                    order as grid props.
  * @param p: Index of the current particle.
  * @param ndim: The number of grid dimensions.
  * @param dims: The length of each grid dimension.
- * @param indices: The array for storing N-dimensional grid indicies.
+ * @param npart: The number of particles in total.
+ * @param frac_indices: The array for storing N-dimensional grid indicies.
  * @param fracs: The array for storing the mass fractions. NOTE: The left most
  *               grid cell's mass fraction is simply (1 - frac[dim])
  */
@@ -138,17 +141,20 @@ void frac_loop(const double *grid_props, const double *part_props, int p,
 /**
  * @brief This calculates the grid weights in each grid cell.
  *
- * To do this for an N-dimensional array this is done recursively.
+ * To do this for an N-dimensional array this is done recursively one dimension
+ * at a time.
  *
  * @param mass: The mass of the current particle.
- * @param part_tuple: The tuple containing each array of particle properties.
- * @param p: Index of the current particle.
- * @param dim: The current dimension in the recursion.
- * @param ndim: The number of grid dimensions.
- * @param dims: The length of each grid dimension.
- * @param indices: The array for storing N-dimensional grid indicies.
+ * @param sub_indices: The indices in the 2**ndim subset of grid points being
+ *                     computed in the current recursion (entries are 0 or 1).
+ * @param frac_indices: The array for storing N-dimensional grid indicies.
+ * @param low_indices: The index of the bottom corner grid point.
+ * @param weights: The weight of each grid point.
  * @param fracs: The array for storing the mass fractions. NOTE: The left most
  *               grid cell's mass fraction is simply (1 - frac[dim])
+ * @param dim: The current dimension in the recursion.
+ * @param dims: The length of each grid dimension.
+ * @param ndim: The number of grid dimensions.
  */
 void recursive_weight_loop(const double mass, short int *sub_indices,
                            int *frac_indices, int *low_indices, double *weights,
@@ -207,16 +213,16 @@ void recursive_weight_loop(const double mass, short int *sub_indices,
 /**
  * @brief Computes an integrated SED for a collection of particles.
  *
- * @param np_stellar_spectra:
- * @param np_total_spectra:
- * @param grid_tuple:
- * @param part_tuple:
- * @param part_mass:
- * @param fesc:
- * @param len_tuple:
- * @param grid_dim:
- * @param npart:
- * @param nlam:
+ * @param np_grid_spectra: The SPS spectra array.
+ * @param grid_tuple: The tuple containing arrays of grid axis properties.
+ * @param part_tuple: The tuple of particle property arrays (in the same order
+ *                    as grid_tuple).
+ * @param np_part_mass: The particle mass array.
+ * @param fesc: The escape fraction.
+ * @param np_ndims: The size of each grid axis.
+ * @param ndim: The number of grid axes.
+ * @param npart: The number of particles.
+ * @param nlam: The number of wavelength elements.
  */
 PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
