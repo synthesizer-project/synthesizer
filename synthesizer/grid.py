@@ -2,7 +2,6 @@ import os
 import numpy as np
 import h5py
 
-from scipy.interpolate import interp1d
 from spectres import spectres
 from unyt import unyt_array, unyt_quantity
 
@@ -13,19 +12,45 @@ from synthesizer.line import Line, LineCollection
 from synthesizer.units import Quantity
 
 
-def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
+def check_lines_available(
+    grid_name,
+    grid_dir
+):
+    """ Check that lines are available on this grid
+
+    Arguments:
+        grid_name (str):
+            The name of the grid file.
+        grid_dir (str):
+            The directory to the grid file.
+    """
+
+    grid_filename = f"{grid_dir}/{grid_name}.hdf5"
+    with h5py.File(grid_filename, "r") as hf:
+        if "lines" in hf.keys():
+            return True
+        else:
+            return False
+
+
+def get_available_lines(
+    grid_name,
+    grid_dir,
+    include_wavelengths=False
+):
     """Get a list of the lines available to a grid
 
     Arguments:
-        grid_name (str)
+        grid_name (str):
             The name of the grid file.
-
-        grid_dir (str)
+        grid_dir (str):
             The directory to the grid file.
 
     Returns:
-        (list)
+        lines (list):
             List of available lines
+        wavelengths (list)
+            List of associated wavelengths (if `include_wavelengths` is True)
     """
 
     grid_filename = f"{grid_dir}/{grid_name}.hdf5"
@@ -55,26 +80,26 @@ def flatten_linelist(list_to_flatten):
             flattened list
     """
 
-    flattend_list = []
+    flattened_list = []
     for lst in list_to_flatten:
         if isinstance(lst, list) or isinstance(lst, tuple):
             for ll in lst:
-                flattend_list.append(ll)
+                flattened_list.append(ll)
 
         elif isinstance(lst, str):
-            
-            # If the line is a doublet resolve it and add each line
+
+            # If the line is a doublet, resolve it and add each line
             # individually
             if len(lst.split(",")) > 1:
-                flattend_list += lst.split(",")
+                flattened_list += lst.split(",")
             else:
-                flattend_list.append(lst)
+                flattened_list.append(lst)
 
         else:
-            # TODO: raise exception
-            pass
+            raise Exception(("Unrecognised type provided. Please provide"
+                             "a list of lists and strings"))
 
-    return list(set(flattend_list))
+    return list(set(flattened_list))
 
 
 def parse_grid_id(grid_id):
@@ -136,25 +161,27 @@ class Grid:
         grid_dir (str)
             The directory containing the grid HDF5 file.
         grid_name (str)
-            The name of the grid (as defined by the file name) with no extension.
+            The name of the grid (as defined by the file name)
+            with no extension.
         grid_ext (str)
-            The grid extension. Either ".hdf5" or ".h5". If the passed grid_name
-            has no extension then ".hdf5" is assumed.
+            The grid extension. Either ".hdf5" or ".h5". If the passed 
+            grid_name has no extension then ".hdf5" is assumed.
         read_lines (bool/list)
-            Flag for whether to read lines. If False they are not read, otherwise,
-            this is a list of the requested lines.
+            Flag for whether to read lines. If False they are not read,
+            otherwise, this is a list of the requested lines.
         read_spectra (bool/list)
             Flag for whether to read spectra.
         spectra (array-like, float)
-            The spectra array from the grid. This is an N-dimensional grid where 
-            N is the number of axes of the SPS grid. The final dimension is
-            always wavelength.
+            The spectra array from the grid. This is an N-dimensional
+            grid where N is the number of axes of the SPS grid. The final
+            dimension is always wavelength.
         lines (array-like, float)
-            The lines array from the grid. This is an N-dimensional grid where 
+            The lines array from the grid. This is an N-dimensional grid where
             N is the number of axes of the SPS grid. The final dimension is
             always wavelength.
         parameters (dict)
-            A dictionary containing the grid's parameters used in its generation.
+            A dictionary containing the grid's parameters used in its
+            generation.
         axes (list, str)
             A list of the names of the spectral grid axes.
         naxes
@@ -162,15 +189,15 @@ class Grid:
         logQ10 (dict)
             A dictionary of ionisation Q parameters.
         <grid_axis> (array-like, float)
-            A Grid will always contain 1D arrays corresponding to the axes of the
-            spectral grid. These are read dynamically from the HDF5 file so can be
-            anything but usually contain at least stellar ages and stellar 
-            metallicity.
+            A Grid will always contain 1D arrays corresponding to the axes
+            of the spectral grid. These are read dynamically from the HDF5
+            file so can be anything but usually contain at least stellar ages
+            and stellar metallicity.
         lam (array_like, float)
             The wavelengths at which the spectra are defined.
     """
 
-    # Define Quantitys
+    # Define Quantities
     lam = Quantity()
 
     def __init__(
@@ -206,8 +233,8 @@ class Grid:
         self.grid_dir = grid_dir
 
         # Have we been passed an extension?
-        if (grid_name.split(".")[-1] == "hdf5" 
-            or grid_name.split(".")[-1] == "h5"):
+        if (grid_name.split(".")[-1] == "hdf5" or
+                grid_name.split(".")[-1] == "h5"):
             self.grid_ext = grid_name.split(".")[-1]
         else:
             self.grid_ext = "hdf5"
@@ -220,7 +247,7 @@ class Grid:
 
         # Flags for reading behaviour
         self.read_lines = read_lines
-        self.read_spectra = read_spectra  #  not used
+        self.read_spectra = read_spectra  # not used
 
         # Set up attributes we will set later
         self.spectra = None
@@ -291,16 +318,25 @@ class Grid:
             self.available_spectra = list(self.spectra.keys())
 
         if read_lines is not False:
-            
+
+            if check_lines_available(self.grid_name, self.grid_dir):
+                pass
+            else:
+                raise Exception(
+                    ("No lines available on this grid object. "
+                     "Either set `read_lines=True`, or load a grid "
+                     "containing line information"))
+
             # If read_lines is True read all available lines in the grid,
-            # otherwise if read_lines is a list just read the lines in the list.
+            # otherwise if read_lines is a list just read the lines
+            # in the list.
 
             self.lines = {}
 
             # If a list of lines is provided then only read lines in this list
             if isinstance(read_lines, list):
                 read_lines = flatten_linelist(read_lines)
-                
+
             # If a list isn't provided then use all available lines to the grid
             else:
                 read_lines = get_available_lines(self.grid_name, self.grid_dir)
