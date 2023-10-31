@@ -334,10 +334,10 @@ class Galaxy(BaseGalaxy):
         grid,
         line_ids,
         fesc=0.0,
-        tau_v_nebular=None,
-        tau_v_stellar=None,
-        dust_curve_nebular=PowerLaw({"slope": -1.0}),
-        dust_curve_stellar=PowerLaw({"slope": -1.0}),
+        tau_v_BC=None,
+        tau_v_ISM=None,
+        dust_curve_BC=PowerLaw(slope=-1.0),
+        dust_curve_ISM=PowerLaw(slope=-1.0),
         update=True,
     ):
         """
@@ -356,16 +356,16 @@ class Galaxy(BaseGalaxy):
         fesc : float
             The Lyman continuum escape fraction, the fraction of
             ionising photons that entirely escape
-        tau_v_nebular : float
-            V-band optical depth of the nebular emission
-        tau_v_stellar : float
-            V-band optical depth of the stellar emission
-        dust_curve_nebular : obj (dust_curve)
+        tau_v_BC : float
+            V-band optical depth of the birth cloud
+        tau_v_ISM : float
+            V-band optical depth of the diffuse ISM
+        dust_curve_BC : obj (dust_curve)
             A dust_curve object specifying the dust curve
-            for the nebular emission
-        dust_curve_stellar : obj (dust_curve)
+            for the birth cloud
+        dust_curve_ISM : obj (dust_curve)
             A dust_curve object specifying the dust curve
-            for the stellar emission
+            for the diffuse ISM
 
         Returns
         -------
@@ -385,17 +385,17 @@ class Galaxy(BaseGalaxy):
         # dictionary holding lines
         lines = {}
 
-        for line_id, intrinsic_line in intrinsic_lines.items():
+        for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # calculate attenuation
-            T_nebular = dust_curve_nebular.attenuate(
-                tau_v_nebular, intrinsic_line._wavelength
+            T_BC = dust_curve_BC.get_transmission(
+                tau_v_BC, intrinsic_line._wavelength
             )
-            T_stellar = dust_curve_stellar.attenuate(
-                tau_v_stellar, intrinsic_line._wavelength
+            T_ISM = dust_curve_ISM.get_transmission(
+                tau_v_ISM, intrinsic_line._wavelength
             )
 
-            luminosity = intrinsic_line._luminosity * T_nebular
-            continuum = intrinsic_line._continuum * T_stellar
+            luminosity = intrinsic_line._luminosity * T_BC * T_ISM 
+            continuum = intrinsic_line._continuum * T_ISM
 
             line = Line(
                 intrinsic_line.id, intrinsic_line._wavelength, luminosity, continuum
@@ -426,7 +426,7 @@ class Galaxy(BaseGalaxy):
         line_ids,
         fesc=0.0,
         tau_v=None,
-        dust_curve=PowerLaw({"slope": -1.0}),
+        dust_curve=PowerLaw(slope=-1.0),
         update=True,
     ):
         """
@@ -460,8 +460,8 @@ class Galaxy(BaseGalaxy):
             grid,
             line_ids,
             fesc=fesc,
-            tau_v_nebular=tau_v,
-            tau_v_stellar=tau_v,
+            tau_v_BC=0,
+            tau_v_ISM=tau_v,
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve,
         )
