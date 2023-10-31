@@ -58,23 +58,6 @@ int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
 }
 
 /**
- * @brief Compute a flat grid index based on the grid dimensions for instances
- *        where the length of each dimension is always 2.
- *
- * @param indices: An array of N-dimensional indices.
- * @param dims: The length of each dimension.
- * @param ndim: The number of dimensions.
- */
-int get_flat_index_subarray(const int *multi_index, int ndims) {
-  int index = 0, stride = 1;
-  for (int i = ndims - 1; i >= 0; i--) {
-    index += stride * multi_index[i];
-    stride *= 2;
-  }
-  return index;
-}
-
-/**
  * @brief Calculates the mass fractions in each right most grid cell along
  *        each dimension.
  *
@@ -393,6 +376,8 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   /* Clean up memory! */
   free(grid_weights);
+  free(part_props);
+  free(grid_props);
 
   /* Reconstruct the python array to return. */
   npy_intp np_dims[1] = {
