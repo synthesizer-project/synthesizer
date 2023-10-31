@@ -89,16 +89,19 @@ class BinnedSFZH:
         fig, ax, haxx, haxy = single_histxy()
 
         # this is technically incorrect because metallicity is not on a an actual grid.
-        ax.imshow(
-            self.sfzh.T,
-            origin="lower",
-            extent=[
-                *self.log10ages_lims,
-                self.log10metallicities[0],
-                self.log10metallicities[-1],
-            ],
-            cmap=cmr.sunburst,
-            aspect="auto",
+        # ax.imshow(
+        #     self.sfzh.T,
+        #     origin="lower",
+        #     extent=[
+        #         *self.log10ages_lims,
+        #         self.log10metallicities[0],
+        #         self.log10metallicities[-1],
+        #     ],
+        #     cmap=cmr.sunburst,
+        #     aspect="auto",
+        # )
+        ax.pcolormesh(
+            self.log10ages, self.log10metallicities, self.sfzh.T, cmap=cmr.sunburst
         )
 
         # --- add binned Z to right of the plot
@@ -128,12 +131,16 @@ class BinnedSFZH:
             haxx.plot(x, y / np.max(y))
 
         haxy.set_xlim([0.0, 1.2])
-        haxy.set_ylim(self.log10metallicities_lims)
+        haxy.set_ylim(*self.log10metallicities_lims)
         haxx.set_ylim([0.0, 1.2])
         haxx.set_xlim(self.log10ages_lims)
 
         ax.set_xlabel(mlabel("log_{10}(age/yr)"))
         ax.set_ylabel(mlabel("log_{10}Z"))
+
+        # Set the limits so all axes line up
+        ax.set_ylim(*self.log10metallicities_lims)
+        ax.set_xlim(*self.log10ages_lims)
 
         if show:
             plt.show()
