@@ -26,8 +26,9 @@ class Gas(Particles):
     attributes and methods common to all particle types.
 
     The Gas class can be handed to methods elsewhere to pass information
-    about the gas particles needed in other computations. A galaxy object should
-    have a link to the Gas object containing its gas particles, for example.
+    about the gas particles needed in other computations. A galaxy object
+    should have a link to the Gas object containing its gas particles, for
+    example.
 
     Note that due to the wide range of possible properties and operations,
     this class has a large number of optional attributes which are set to
@@ -122,15 +123,17 @@ class Gas(Particles):
         self.smoothing_lengths = smoothing_lengths
 
         if dust_to_metal_ratio is not None:
-            # The dust to metal ratio for gas particles. Either 1 value or a value
-            # per gas particle.
+            # The dust to metal ratio for gas particles. Either a scalar
+            # or an array of values for each gas particle
             self.dust_to_metal_ratio = dust_to_metal_ratio
-
-            # use dtm to calculate dust mass
-            self.dust_masses = self.masses *\
-                self.metallicities * self.dust_to_metal_ratio
+            self.calculate_dust_mass()
         else:
             self.dust_masses = dust_masses
+
+            # TODO: this should be removed when dust masses are
+            # properly propagated to LOS calculation
+            self.dust_to_metal_ratio = self.dust_masses /\
+                (self.masses * self.metallicities)
 
         # Check the arguments we've been given
         self._check_gas_args()
@@ -154,3 +157,11 @@ class Gas(Particles):
                         "Inconsistent gas array sizes! (nparticles=%d, "
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
+
+    def calculate_dust_mass(self):
+        """
+        Calculate dust mass from a given dust-to-metals ratio
+        and gas particle properties (mass and metallicity)
+        """
+        self.dust_masses = self.masses *\
+            self.metallicities * self.dust_to_metal_ratio
