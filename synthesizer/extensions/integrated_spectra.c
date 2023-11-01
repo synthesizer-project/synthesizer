@@ -52,6 +52,37 @@ int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
 }
 
 /**
+ * @brief Performs a binary search for the index of an array corresponding to
+ * a value.
+ *
+ * @param low: The initial low index (probably beginning of array).
+ * @param high: The initial high index (probably size of array).
+ * @param arr: The array to search in.
+ * @param val: The value to search for.
+ */
+int binary_search(int low, int high, const double *arr, const double val) {
+
+  /* While we don't have a pair of adjacent indices. */
+  int diff = high - low;
+  while (diff > 1) {
+
+    /* Define the midpoint. */
+    int mid = low + floor(diff / 2);
+
+    /* Where is the midpoint relative to the value? */
+    if (arr[mid] < val) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+
+    /* Compute the new range. */
+    diff = high - low;
+  }
+  return low;
+}
+
+/**
  * @brief Calculates the mass fractions in each right most grid cell along
  *        each dimension.
  *
@@ -97,23 +128,9 @@ void frac_loop(const double **grid_props, const double **part_props, int p,
       fracs[dim] = 0;
     } else {
 
-      /* While we don't have a pair of adjacent indices. */
-      int diff = high - low;
-      while (diff > 1) {
-
-        /* Define the midpoint. */
-        int mid = low + floor(diff / 2);
-
-        /* Where is the midpoint relative to the value? */
-        if (grid_prop[mid] < part_val) {
-          low = mid;
-        } else {
-          high = mid;
-        }
-
-        /* Compute the new range. */
-        diff = high - low;
-      }
+      /* Find the grid index corresponding to this particle property. */
+      low = binary_search(low, high, grid_prop, part_val);
+      high = low + 1;
 
       /* Calculate the fraction. Note, this represents the mass fraction in
        * the high cell. */
