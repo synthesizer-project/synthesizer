@@ -14,24 +14,25 @@ def load_Simba(
     load_halo=False,
 ):
     """
-    Load CAMELS-SIMBA galaxies
+    Load Simba galaxy data from a caesar file and snapshot
 
     Args:
         directory (string):
             data location
         snap_name (string):
             snapshot filename
-        fof_name (string):
+        caesar_name (string):
             Subfind / FOF filename
-        fof_directory (string):
+        caesar_directory (string):
             optional argument specifying location of fof file
             if different to snapshot
-        dtm (float):
-            dust to metals ratio for all gas particles
+        load_halo (bool, false):
+            optional argument, whether to load galaxy or halo objects.
+            If False (default), will load individual galaxies.
 
     Returns:
         galaxies (object):
-            `ParticleGalaxy` object containing star and gas particle
+            `ParticleGalaxy` object containing star and gas particles
     """
 
     with h5py.File(f"{directory}/{snap_name}", "r") as hf:
@@ -81,6 +82,9 @@ def load_Simba(
         obj_str = 'halo_data'
     else:
         obj_str = 'galaxy_data'
+
+    if caesar_directory is None:
+        caesar_directory = directory
 
     # get the star particle begin / end indices
     with h5py.File(f"{caesar_directory}/{caesar_name}", "r") as hf:
