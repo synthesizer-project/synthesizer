@@ -1,14 +1,7 @@
 /******************************************************************************
- * Cython extension to calculate SED weights for star particles.
- * Calculates weights on an age / metallicity grid given the mass.
- * Args:
- *   z - 1 dimensional array of metallicity values (ascending)
- *   a - 1 dimensional array of age values (ascending)
- *   particle - 2 dimensional array of particle properties (N, 3)
- *   first column metallicity, second column age, third column mass
- * Returns:
- *   w - 2d array, dimensions (z, a), of weights to apply to SED array
-/*****************************************************************************/
+ * C extension to calculate integrated SEDs for a galaxy's star particles.
+ * Calculates weights on an arbitrary dimensional grid given the mass.
+ *****************************************************************************/
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -362,15 +355,15 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     /* Get the weight. */
     const double weight = grid_weights[grid_ind];
 
+    /* Skip zero weight cells. */
+    if (weight <= 0)
+      continue;
+
     /* Get the spectra ind. */
     int unraveled_ind[ndim + 1];
     get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
     unraveled_ind[ndim] = 0;
     int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
-
-    /* Skip zero weight cells. */
-    if (weight <= 0)
-      continue;
 
     /* Add this grid cell's contribution to the spectra */
     for (int ilam = 0; ilam < nlam; ilam++) {
