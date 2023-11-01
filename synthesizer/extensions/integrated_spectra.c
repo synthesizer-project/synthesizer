@@ -66,39 +66,34 @@ int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
  * @param fracs: The array for storing the mass fractions. NOTE: The left most
  *               grid cell's mass fraction is simply (1 - frac[dim])
  */
-void frac_loop(const double *grid_props, const double *part_props, int p,
+void frac_loop(const double **grid_props, const double **part_props, int p,
                const int ndim, const int *dims, const int npart,
                int *frac_indices, double *fracs) {
 
   /* Loop over dimensions. */
   for (int dim = 0; dim < ndim; dim++) {
 
-    /* Get the grid and particle start indices for this property. */
-    int grid_start = 0;
-    int part_start = 0;
-    for (int jdim = 0; jdim < dim; jdim++) {
-      grid_start += dims[jdim];
-      part_start += npart;
-    }
+    /* Get this array of grid properties */
+    const double *grid_prop = grid_props[dim];
 
     /* Get this particle property. */
-    const double part_val = part_props[part_start + p];
+    const double part_val = part_props[dim][p];
 
     /**************************************************************************
      * Get the cells corresponding to this particle and compute the fraction.
      *************************************************************************/
 
     /* Define the starting indices. */
-    int low = grid_start, high = grid_start + dims[dim] - 1;
+    int low = 0, high = dims[dim] - 1;
 
     /* Here we need to handle if we are outside the range of values. If so
      * there's no point in searching and we return the edge nearest to the
      * value. */
-    if (part_val <= grid_props[low]) {
-      low = grid_start;
+    if (part_val <= grid_prop[low]) {
+      low = 0;
       fracs[dim] = 0;
-    } else if (part_val > grid_props[high]) {
-      low = grid_start + dims[dim];
+    } else if (part_val > grid_prop[high]) {
+      low = dims[dim];
       fracs[dim] = 0;
     } else {
 
@@ -110,7 +105,7 @@ void frac_loop(const double *grid_props, const double *part_props, int p,
         int mid = low + floor(diff / 2);
 
         /* Where is the midpoint relative to the value? */
-        if (grid_props[mid] < part_val) {
+        if (grid_prop[mid] < part_val) {
           low = mid;
         } else {
           high = mid;
@@ -123,11 +118,11 @@ void frac_loop(const double *grid_props, const double *part_props, int p,
       /* Calculate the fraction. Note, this represents the mass fraction in
        * the high cell. */
       fracs[dim] =
-          (part_val - grid_props[low]) / (grid_props[high] - grid_props[low]);
+          (part_val - grid_prop[low]) / (grid_prop[high] - grid_prop[low]);
     }
 
     /* Set these indices. */
-    frac_indices[dim] = low - grid_start;
+    frac_indices[dim] = low;
   }
 }
 
@@ -257,11 +252,10 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   const int nweights = pow(2, ndim) + 0.1;
 
   /* Allocate a single array for grid properties*/
-  /* NOTE: ndim by definition excludes the wavelength axis. */
   int nprops = 0;
   for (int dim = 0; dim < ndim; dim++)
     nprops += dims[dim];
-  double *grid_props = malloc(nprops * sizeof(double));
+  const double **grid_props = malloc(nprops * sizeof(double *));
 
   /* How many grid elements are there? (excluding wavelength axis)*/
   int grid_size = 1;
@@ -279,18 +273,12 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     const PyArrayObject *np_grid_arr = PyTuple_GetItem(grid_tuple, idim);
     const double *grid_arr = PyArray_DATA(np_grid_arr);
 
-    /* Get the start index for this data. */
-    int start = 0;
-    for (int jdim = 0; jdim < idim; jdim++)
-      start += dims[jdim];
-
     /* Assign this data to the property array. */
-    for (int ind = start; ind < start + dims[idim]; ind++)
-      grid_props[ind] = grid_arr[ind - start];
+    grid_props[idim] = grid_arr;
   }
 
   /* Allocate a single array for particle properties. */
-  double *part_props = malloc(npart * ndim * sizeof(double));
+  const double **part_props = malloc(npart * ndim * sizeof(double *));
 
   /* Unpack the particle property arrays into a single contiguous array. */
   for (int idim = 0; idim < ndim; idim++) {
@@ -299,14 +287,8 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     const PyArrayObject *np_part_arr = PyTuple_GetItem(part_tuple, idim);
     const double *part_arr = PyArray_DATA(np_part_arr);
 
-    /* Get the start index for this data. */
-    int start = 0;
-    for (int jdim = 0; jdim < idim; jdim++)
-      start += npart;
-
     /* Assign this data to the property array. */
-    for (int ind = start; ind < start + npart; ind++)
-      part_props[ind] = part_arr[ind - start];
+    part_props[idim] = part_arr;
   }
 
   /* Set up arrays to store grid indices for the weights, mass fractions
