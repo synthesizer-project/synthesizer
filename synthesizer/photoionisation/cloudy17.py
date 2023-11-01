@@ -125,10 +125,10 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     default_params = {
         "log10U": -2,  # ionisation parameter
         "log10radius": -2,  # radius in log10 parsecs, only important for spherical geometry
-        "covering_factor": 1.0,  # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
-        "stop_T": 4000,  # K
-        "stop_efrac": -2,
-        "T_floor": 100,  # K
+        "covering_factor": False,  # covering factor. Keep as 1 as it is more efficient to simply combine SEDs to get != 1.0 values
+        "stop_T": False,  # K, if not provided the command is not used
+        "stop_efrac": False, # if not provided the command is not used
+        "T_floor": False,  # K, if not provided the command is not used
         "log10n_H": 2.5,  # Hydrogen density
         "z": 0.0,  # redshift
         "CMB": False,  # include CMB heating
@@ -233,8 +233,6 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     else:
         f_graphite, f_Si, f_pah = 0, 0, 0
 
-    # cinput.append('element off limit -7') # should speed up the code
-
     log10U = params["log10U"]
 
     # plane parallel geometry
@@ -255,21 +253,33 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     # add background continuum
     if params["cosmic_rays"]:
         cinput.append("cosmic rays, background\n")
+
     if params["CMB"]:
         cinput.append(f'CMB {params["z"]}\n')
 
     # define hydrogend density
-    cinput.append(f'hden {params["log10n_H"]} log constant density\n')
+    if params["log10n_H"]:
+        cinput.append(f'hden {params["log10n_H"]} log constant density\n')
 
-    # cinput.append(f'covering factor {params["covering_factor"]} linear\n')
+    # covering factor
+    if params["covering_factor"]:
+        cinput.append(f'covering factor {params["covering_factor"]} linear\n')
 
-    # --- Processing commands
+    # Processing commands
     cinput.append("iterate to convergence\n")
-    cinput.append(f'set temperature floor {params["T_floor"]} linear\n')
-    cinput.append(f'stop temperature {params["stop_T"]}K\n')
-    cinput.append(f'stop efrac {params["stop_efrac"]}\n')
+    if params["T_floor"]:
+        cinput.append(f'set temperature floor {params["T_floor"]} linear\n')
+    
+    if params["stop_T"]:
+        cinput.append(f'stop temperature {params["stop_T"]}K\n')
+
+    if params["stop_efrac"]:
+        cinput.append(f'stop efrac {params["stop_efrac"]}\n')
 
     # --- output commands
+
+
+
     # cinput.append(f'print line vacuum\n')  # output vacuum wavelengths
     cinput.append(
         f'set continuum resolution {params["resolution"]}\n'
