@@ -1,14 +1,7 @@
 /******************************************************************************
- * Cython extension to calculate SED weights for star particles.
- * Calculates weights on an age / metallicity grid given the mass.
- * Args:
- *   z - 1 dimensional array of metallicity values (ascending)
- *   a - 1 dimensional array of age values (ascending)
- *   particle - 2 dimensional array of particle properties (N, 3)
- *   first column metallicity, second column age, third column mass
- * Returns:
- *   w - 2d array, dimensions (z, a), of weights to apply to SED array
-/*****************************************************************************/
+ * C extension to calculate SEDs for star particles.
+ * Calculates weights on an arbitrary dimensional grid given the mass.
+ *****************************************************************************/
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,9 +17,27 @@
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
 
 /**
+ * @brief Compute an ndimensional index from a flat index.
+ *
+ * @param flat_ind: The flattened index to unravel.
+ * @param ndim: The number of dimensions for the unraveled index.
+ * @param dims: The size of each dimension.
+ * @param indices: The output N-dimensional indices.
+ */
+void get_indices_from_flat(int flat_ind, int ndim, const int *dims,
+                           int *indices) {
+
+  /* Loop over indices calculating each one. */
+  for (int i = 0; i < ndim; i++) {
+    indices[i] = flat_ind % dims[i];
+    flat_ind /= dims[i];
+  }
+}
+
+/**
  * @brief Compute a flat grid index based on the grid dimensions.
  *
- * @param indices: An array of N-dimensional indices.
+ * @param multi_index: An array of N-dimensional indices.
  * @param dims: The length of each dimension.
  * @param ndim: The number of dimensions.
  */
@@ -39,34 +50,18 @@ int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
 
   return index;
 }
-
-/**
- * @brief Compute a flat grid index based on the grid dimensions for instances
- *        where the length of each dimension is always 2.
- *
- * @param indices: An array of N-dimensional indices.
- * @param dims: The length of each dimension.
- * @param ndim: The number of dimensions.
- */
-int get_flat_index_subarray(const int *multi_index, int ndims) {
-  int index = 0, stride = 1;
-  for (int i = ndims - 1; i >= 0; i--) {
-    index += stride * multi_index[i];
-    stride *= 2;
-  }
-  return index;
-}
-
 /**
  * @brief Calculates the mass fractions in each right most grid cell along
  *        each dimension.
  *
- * @param grid_tuple: The tuple contain each array of grid properties.
- * @param part_tuple: The tuple containing each array of particle properties.
+ * @param grid_props: An array of the properties along each grid axis.
+ * @param part_props: An array of the particle properties, in the same property
+ *                    order as grid props.
  * @param p: Index of the current particle.
  * @param ndim: The number of grid dimensions.
  * @param dims: The length of each grid dimension.
- * @param indices: The array for storing N-dimensional grid indicies.
+ * @param npart: The number of particles in total.
+ * @param frac_indices: The array for storing N-dimensional grid indicies.
  * @param fracs: The array for storing the mass fractions. NOTE: The left most
  *               grid cell's mass fraction is simply (1 - frac[dim])
  */
@@ -138,52 +133,55 @@ void frac_loop(const double *grid_props, const double *part_props, int p,
 /**
  * @brief This calculates the grid weights in each grid cell.
  *
- * To do this for an N-dimensional array this is done recursively.
+ * To do this for an N-dimensional array this is done recursively one dimension
+ * at a time.
  *
  * @param mass: The mass of the current particle.
- * @param part_tuple: The tuple containing each array of particle properties.
- * @param p: Index of the current particle.
- * @param dim: The current dimension in the recursion.
- * @param ndim: The number of grid dimensions.
- * @param dims: The length of each grid dimension.
- * @param indices: The array for storing N-dimensional grid indicies.
+ * @param sub_indices: The indices in the 2**ndim subset of grid points being
+ *                     computed in the current recursion (entries are 0 or 1).
+ * @param frac_indices: The array for storing N-dimensional grid indicies.
+ * @param low_indices: The index of the bottom corner grid point.
+ * @param weights: The weight of each grid point.
  * @param fracs: The array for storing the mass fractions. NOTE: The left most
  *               grid cell's mass fraction is simply (1 - frac[dim])
+ * @param dim: The current dimension in the recursion.
+ * @param dims: The length of each grid dimension.
+ * @param ndim: The number of grid dimensions.
  */
-void recursive_weight_loop(const double mass, int *sub_indices,
-                           int *frac_indices, int *low_indices,
-                           int *weight_indices, double *weights, double *fracs,
-                           int dim, const int *dims, const int ndim) {
+void recursive_weight_loop(const double mass, short int *sub_indices,
+                           int *frac_indices, int *low_indices, double *weights,
+                           double *fracs, int dim, const int *dims,
+                           const int ndim) {
 
   /* Are we done yet? */
   if (dim >= ndim) {
 
-    /* Get the index for this particle in the weights array. */
-    const int weight_ind = get_flat_index_subarray(sub_indices, ndim);
-
     /* Get the flattened index into the grid array. */
-    weight_indices[weight_ind] = get_flat_index(frac_indices, dims, ndim + 1);
+    const int weight_ind = get_flat_index(frac_indices, dims, ndim);
 
     /* Check whether we need a weight in this cell. */
     for (int i = 0; i < ndim; i++) {
       if ((sub_indices[i] == 1 && fracs[i] == 0 && frac_indices[i] == 0) ||
           (sub_indices[i] == 1 && fracs[i] == 0 &&
            frac_indices[i] == dims[i])) {
-        weights[weight_ind] = 0;
         return;
       }
     }
 
     /* Compute the weight. */
-    weights[weight_ind] = mass;
+    double weight = mass;
     for (int i = 0; i < ndim; i++) {
 
+      /* Account for the fractional contribution in this grid cell. */
       if (sub_indices[i]) {
-        weights[weight_ind] *= fracs[i];
+        weight *= fracs[i];
       } else {
-        weights[weight_ind] *= (1 - fracs[i]);
+        weight *= (1 - fracs[i]);
       }
     }
+
+    /* And add the weight. */
+    weights[weight_ind] += weight;
 
     /* We're done! */
     return;
@@ -199,24 +197,24 @@ void recursive_weight_loop(const double mass, int *sub_indices,
     frac_indices[dim] = low_indices[dim] + i;
 
     /* Recurse... */
-    recursive_weight_loop(mass, sub_indices, frac_indices, low_indices,
-                          weight_indices, weights, fracs, dim + 1, dims, ndim);
+    recursive_weight_loop(mass, sub_indices, frac_indices, low_indices, weights,
+                          fracs, dim + 1, dims, ndim);
   }
 }
 
 /**
  * @brief Computes an integrated SED for a collection of particles.
  *
- * @param np_stellar_spectra:
- * @param np_total_spectra:
- * @param grid_tuple:
- * @param part_tuple:
- * @param part_mass:
- * @param fesc:
- * @param len_tuple:
- * @param ndim:
- * @param npart:
- * @param nlam:
+ * @param np_grid_spectra: The SPS spectra array.
+ * @param grid_tuple: The tuple containing arrays of grid axis properties.
+ * @param part_tuple: The tuple of particle property arrays (in the same order
+ *                    as grid_tuple).
+ * @param np_part_mass: The particle mass array.
+ * @param fesc: The escape fraction.
+ * @param np_ndims: The size of each grid axis.
+ * @param ndim: The number of grid axes.
+ * @param npart: The number of particles.
+ * @param nlam: The number of wavelength elements.
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
@@ -256,20 +254,20 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Compute the number of weights we need. */
   const int nweights = pow(2, ndim) + 0.1;
 
-  /* Define an array to hold this particle's weights. */
-  double *weights = malloc(nweights * sizeof(double));
-  bzero(weights, nweights * sizeof(double));
-
   /* Allocate a single array for grid properties*/
   int nprops = 0;
   for (int dim = 0; dim < ndim; dim++)
     nprops += dims[dim];
   double *grid_props = malloc(nprops * sizeof(double));
 
-  /* Get the grid size. */
-  int grid_size = nlam;
+  /* How many grid elements are there? (excluding wavelength axis)*/
+  int grid_size = 1;
   for (int dim = 0; dim < ndim; dim++)
     grid_size *= dims[dim];
+
+  /* Allocate an array to hold the grid weights. */
+  double *grid_weights = malloc(grid_size * sizeof(double));
+  bzero(grid_weights, grid_size * sizeof(double));
 
   /* Unpack the grid property arrays into a single contiguous array. */
   for (int idim = 0; idim < ndim; idim++) {
@@ -311,18 +309,15 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Set up arrays to store grid indices for the weights, mass fractions
    * and indices.
    * NOTE: the wavelength index on frac_indices is always 0. */
-  double *fracs = malloc(ndim * sizeof(double));
-  int *frac_indices = malloc((ndim + 1) * sizeof(int));
-  int *low_indices = malloc((ndim + 1) * sizeof(int));
-  int *weight_indices = malloc(nweights * sizeof(int));
-  short int *sub_indices = malloc(ndim * sizeof(double));
+  double fracs[ndim];
+  int frac_indices[ndim + 1];
+  int low_indices[ndim + 1];
+  short int sub_indices[ndim];
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
     /* Reset arrays. */
-    for (int ind = 0; ind < nweights; ind++)
-      weight_indices[ind] = 0;
     for (int ind = 0; ind < ndim; ind++) {
       fracs[ind] = 0;
       sub_indices[ind] = 0;
@@ -344,33 +339,43 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
       low_indices[ind] = frac_indices[ind];
     }
 
-    /* Compute the weights and flattened grid indices. */
+    /* Finally, compute the weights for this particle. */
     recursive_weight_loop(mass, sub_indices, frac_indices, low_indices,
-                          weight_indices, weights, fracs, /*dim*/ 0, dims,
-                          ndim);
+                          grid_weights, fracs, /*dim*/ 0, dims, ndim);
 
-    /* Loop over weights and their indices. */
-    for (int i = 0; i < nweights; i++) {
+    /* Loop over grid cells. */
+    for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
 
-      /* Get this weight and it's flattened index. */
-      const double weight = weights[i];
-      const int grid_ind = weight_indices[i];
+      /* Get the weight. */
+      const double weight = grid_weights[grid_ind];
 
-      /* Skip and warn about badly behaved indices. */
-      if (grid_ind < 0 || grid_ind > grid_size) {
-        printf("WARNING: Stellar particle found outside grid!\n");
+      /* Skip zero weight cells. */
+      if (weight <= 0)
         continue;
-      }
 
-      /* Add this particle's contribution to the spectra */
+      /* Get the spectra ind. */
+      int unraveled_ind[ndim + 1];
+      get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+      unraveled_ind[ndim] = 0;
+      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+      /* Add this grid cell's contribution to the spectra */
       for (int ilam = 0; ilam < nlam; ilam++) {
 
-        /* Are we doing total or stellar? */
+        /* Add the contribution to this wavelength. */
         spectra[p * nlam + ilam] +=
-            grid_spectra[grid_ind + ilam] * (1 - fesc) * weight;
+            grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight;
       }
+
+      /* Zero this cell ready for the next particle. */
+      grid_weights[grid_ind] = 0;
     }
   }
+
+  /* Clean up memory! */
+  free(grid_weights);
+  free(part_props);
+  free(grid_props);
 
   /* Reconstruct the python array to return. */
   npy_intp np_dims[2] = {
@@ -402,7 +407,7 @@ static struct PyModuleDef moduledef = {
     NULL,                                  /* m_free */
 };
 
-PyMODINIT_FUNC PyInit_integrated_spectra(void) {
+PyMODINIT_FUNC PyInit_particle_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
   import_array();
   return m;
