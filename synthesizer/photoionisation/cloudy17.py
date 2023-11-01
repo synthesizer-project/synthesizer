@@ -4,43 +4,9 @@ grid. Can optionally generate an array of input files for selected parameters.
 """
 
 import numpy as np
-from scipy import integrate
 import shutil
-from unyt import c, h, angstrom, eV, erg, s, Hz, unyt_array
+from unyt import c, h, angstrom, unyt_array
 
-
-from dataclasses import dataclass
-
-
-@dataclass
-class Ions:
-
-    """
-    A dataclass holding the ionisation energy of various ions amongst other
-    properties and methods
-
-    Used for calculating ionising photon luminosities (Q).
-
-    Values taken from: https://en.wikipedia.org/wiki/Ionization_energies_of_the_elements_(data_page)
-    """
-
-    energy = {
-        "HI": 13.6 * eV,
-        "HeI": 24.6 * eV,
-        "HeII": 54.4 * eV,
-        "CII": 24.4 * eV,
-        "CIII": 47.9 * eV,
-        "CIV": 64.5 * eV,
-        "NI": 14.5 * eV,
-        "NII": 29.6 * eV,
-        "NIII": 47.4 * eV,
-        "OI": 13.6 * eV,
-        "OII": 35.1 * eV,
-        "OIII": 54.9 * eV,
-        "NeI": 21.6 * eV,
-        "NeII": 41.0 * eV,
-        "NeIII": 63.45 * eV,
-    }
 
 
 class ShapeCommands:
@@ -274,8 +240,10 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     # plane parallel geometry
     if params["geometry"] == "planeparallel":
         cinput.append(f"ionization parameter = {log10U:.3f}\n")
+        
+        # NOTE: I don't think this is needed.
         # inner radius = 10^30 cm and thickness = 10^21.5 cm (==1 kpc) this is essentially plane parallel geometry
-        cinput.append(f"radius 30.0 21.5\n")
+        # cinput.append(f"radius 30.0 21.5\n")
 
     if params["geometry"] == "spherical":
         # in the spherical geometry case I think U is some average U, not U at the inner face of the cloud.
@@ -342,86 +310,6 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     open(f"{output_dir}/{model_name}.in", "w").writelines(cinput)
 
     return cinput
-
-
-def calculate_Q_from_U(U_avg, n_h):
-    """
-    Args
-    U - units: dimensionless
-    n_h - units: cm^-3
-
-    Returns
-    Q - units: s^-1
-    """
-    alpha_B = 2.59e-13  # cm^3 s^-1
-    c_cm = 2.99e8 * 100  # cm s^-1
-    epsilon = 1.0
-
-    return ((U_avg * c_cm) ** 3 / alpha_B**2) * (
-        (4 * np.pi) / (3 * epsilon**2 * n_h)
-    )
-
-
-def calculate_U_from_Q(Q_avg, n_h=100):
-    """
-    Args
-    Q - units: s^-1
-    n_h - units: cm^-3
-
-    Returns
-    U - units: dimensionless
-    """
-    alpha_B = 2.59e-13  # cm^3 s^-1
-    c_cm = 2.99e8 * 100  # cm s^-1
-    epsilon = 1.0
-
-    return ((alpha_B ** (2.0 / 3)) / c_cm) * (
-        (3 * Q_avg * (epsilon**2) * n_h) / (4 * np.pi)
-    ) ** (1.0 / 3)
-
-
-# # deprecate in favour of the function in sed.py
-# def measure_Q(lam, L_AA, limit=100):
-#     """
-#     Args
-#     lam: \\AA
-#     L_AA: erg s^-1 AA^-1
-#     Returns
-#     Q: s^-1
-#     """
-#     h = 6.626070040E-34  # J s
-#     h_erg = h * 1e7  # erg s
-#     c = 2.99E8  # m s-1
-#     c_AA = c * 1e10  # AA s-1
-#     def f(x): return np.interp(x, lam, L_AA * lam) / (h_erg*c_AA)
-#     return integrate.quad(f, 0, 912, limit=limit)[0]
-
-
-# def get_synthesizer_id(wavelength, cloudy_id):
-#     """ convert the cloudy line ID into a new form ID """
-#
-#     # round wavelength
-#     wv = int(np.round(wavelength, 0))
-#
-#     # split id into different components
-#     li = list(filter(None, cloudy_id.split(' ')))
-#
-#     if len(li) == 2:
-#         return [li[0]+str(wv), True]
-#
-#     elif len(li) == 3:
-#
-#         # element
-#         e = li[0]
-#
-#         # convert arabic ionisation level to roman
-#
-#         if li[1].isnumeric():
-#             ion = get_roman_numeral(int(li[1]))
-#         else:
-#             ion = li[1]
-#
-#         return [e+ion+str(wv), False]
 
 
 def read_lines(filename, extension="lines"):
@@ -507,45 +395,6 @@ def read_linelist(filename, extension="elin"):
     return np.array(line_ids), np.array(wavelengths), np.array(luminosities)
 
 
-# I DON'T BELIEVE THIS IS USED ANYMORE. I BELIEVE THIS WAS TO GENERATE SPECTRA FROM JUST LINES.
-
-# def make_linecont(filename, wavelength_grid, line_ids=None):
-#     """
-#     make linecont from lines
-#     (hopefully the same as that from the continuum)
-#     """
-#
-#     line_wavelengths, cloudy_line_ids, intrinsic, emergent = np.loadtxt(
-#         f'{filename}.lines', dtype=str, delimiter='\t', usecols=(0, 1, 2, 3)).T
-#
-#     line_wavelengths = line_wavelengths.astype(float)
-#
-#     # correct for size of cluster # erg s^-1
-#     intrinsic = intrinsic.astype(float)
-#     emergent = emergent.astype(float)  # correct for size of cluster # erg s^-1
-#
-#     new_line_ids = np.array([get_new_id(wv, cloudy_line_id)
-#                              for wv, cloudy_line_id in zip(line_wavelengths,
-#                                                            cloudy_line_ids)])
-#
-#     line_spectra = np.zeros(len(wavelength_grid)) + 1E-100
-#
-#     for new_line_id, line_wv, line_luminosity in zip(new_line_ids,
-#                                                      line_wavelengths,
-#                                                      emergent):
-#
-#         if new_line_id in line_ids:
-#
-#             line_luminosity += -7.  # erg -> W ??????
-#
-#             idx = (np.abs(wavelength_grid-line_wv)).argmin()
-#             dl = 0.5*(wavelength_grid[idx+1] - wavelength_grid[idx-1])
-#             n = c.value/(line_wv*1E-10)
-#             line_spectra[idx] += line_wv*((10**line_luminosity)/n)/dl
-#
-#     return line_spectra
-
-
 def read_wavelength(filename):
     """return just wavelength grid from cloudy file and reverse the order"""
 
@@ -608,81 +457,3 @@ def read_continuum(filename, return_dict=False):
             total,
             linecont,
         )
-
-
-# def _create_cloudy_binary(grid, params, verbose=False):
-#     """
-#     DEPRECATED create a cloudy binary file
-#
-#     Args:
-#
-#     grid: synthesizer _grid_ object
-#     """
-#
-#     # # ---- TEMP check for negative values and amend
-#     # # The BPASS binary sed has a couple of erroneous negative values,
-#     # # possibly due to interpolation errors
-#     # # Here we set the Flux to the average of each
-#     # # neighbouring wavelength value
-#     #
-#     # mask = np.asarray(np.where(sed < 0.))
-#     # for i in range(mask.shape[1]):
-#     #     sed[mask[0,i],mask[1,i],mask[2,i]] = \
-#     #           sed[mask[0,i],mask[1,i],mask[2,i]-1]+sed[mask[0,i],mask[1,i],mask[2,i]+1]/2
-#
-#     if verbose:
-#         print('Writing .ascii')
-#
-#     output = []
-#     output.append("20060612\n")  # magic number
-#     output.append("2\n")  # ndim
-#     output.append("2\n")  # npar
-#
-#     # First parameter MUST be log otherwise Cloudy throws a tantrum
-#     output.append("age\n")  # label par 1
-#     output.append("logz\n")  # label par 2
-#
-#     output.append(str(grid.spectra["incident"].shape[0] *
-#                       grid.spectra["incident"].shape[1])+"\n")  # nmod
-#     output.append(str(len(grid.lam))+"\n")  # nfreq (nwavelength)
-#     # output.append(str(len(frequency))+"\n")  # nfreq (nwavelength)
-#
-#     output.append("lambda\n")  # type of independent variable (nu or lambda)
-#     output.append("1.0\n")  # conversion factor for independent variable
-#
-#     # type of dependent variable (F_nu/H_nu or F_lambda/H_lambda)
-#     # output.append("F_nu\n")
-#
-#     # output.append("3.839e33\n")  # conversion factor for dependent variable
-#
-#     # type of dependent variable (F_nu/H_nu or F_lambda/H_lambda)
-#     output.append("F_lambda\n")
-#     output.append("1.0\n")  # conversion factor for dependent variable
-#
-#     for a in grid.ages:  # available SED ages
-#         for z in grid.metallicities:
-#             output.append(f'{np.log10(a)} {z}\n')  # (npar x nmod) parameters
-#
-#     # the frequency(wavelength) grid, nfreq points
-#     output.append(' '.join(map(str, grid.lam))+"\n")
-#
-#     for i, a in enumerate(grid.ages):
-#         for j, z in enumerate(grid.metallicities):
-#             output.append(' '.join(map(str,
-#                                        grid.spectra["incident"][i, j]))+"\n")
-#
-#     with open('model.ascii', 'w') as target:
-#         target.writelines(output)
-#
-#     # ---- compile ascii file
-#     print('Compiling Cloudy atmosphere file (.ascii)')
-#     subprocess.call(('echo -e \'compile stars \"model.ascii\"\''
-#                     f'| {params.cloudy_dir}/source/cloudy.exe'), shell=True)
-#
-#     # ---- copy .mod file to cloudy data directory
-#     print(('Copying compiled atmosphere to Cloudy directory, '
-#            f'{params.cloudy_dir}'))
-#     subprocess.call(f'cp model.mod {params.cloudy_dir}/data/.', shell=True)
-#
-#     # ---- remove .ascii file
-#     # os.remove(out_dir+model+'.ascii')
