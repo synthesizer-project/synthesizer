@@ -1121,6 +1121,8 @@ class ParticleImage(ParticleScene, Image):
         depths=None,
         apertures=None,
         snrs=None,
+        kernel=None,
+        kernel_threshold=1,
     ):
         """
         Intialise the ParticleImage.
@@ -1164,6 +1166,11 @@ class ParticleImage(ParticleScene, Image):
             when converting rest frame luminosity to flux.
         igm : obj (Inoue14/Madau96)
             Object containing the absorbtion due to an intergalactic medium.
+        kernel (array-like, float)
+            The values from one of the kernels from the kernel_functions module.
+            Only used for smoothed images.
+        kernel_threshold (float)
+            The kernel's impact parameter threshold (by default 1).
         """
 
         # Sanitize inputs
@@ -1184,6 +1191,8 @@ class ParticleImage(ParticleScene, Image):
             cosmo=cosmo,
             redshift=redshift,
             rest_frame=rest_frame,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
         )
         Image.__init__(
             self,
@@ -1261,7 +1270,16 @@ class ParticleImage(ParticleScene, Image):
         zs = np.ascontiguousarray(self.coords[:, 2], dtype=np.float64)
 
         self.img = make_img(
-            pix_vals, smls, xs, ys, zs, self.resolution, self.npix, self.coords.shape[0]
+            pix_vals,
+            smls,
+            xs,
+            ys,
+            self.kernel,
+            self.resolution,
+            self.npix,
+            self.coords.shape[0],
+            self.kernel_threshold,
+            self.kernel_dim,
         )
 
         return self.img
