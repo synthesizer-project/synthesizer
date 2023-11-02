@@ -43,13 +43,13 @@
 PyObject *make_img(PyObject *self, PyObject *args) {
 
   const double res, threshold;
-  const int npix, npart, nlam, kdim;
+  const int npix, npart, kdim;
   PyArrayObject *np_pix_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys;
 
-  if (!PyArg_ParseTuple(args, "OOOOOdiiidi", &np_pix_values,
+  if (!PyArg_ParseTuple(args, "OOOOOdiidi", &np_pix_values,
                         &np_smoothing_lengths, &np_xs, &np_ys, &np_kernel, &res,
-                        &npix, &npart, &nlam, &threshold, &kdim))
+                        &npix, &npart, &threshold, &kdim))
     return NULL;
 
   /* Get pointers to the actual data. */
