@@ -345,21 +345,22 @@ class Image:
         if len(self.filters) == 0:
             return self._get_hist_img_single_filter()
 
-        # Calculate IFU "image"
-        self.ifu = self.ifu_obj.get_hist_ifu()
-
-        # Otherwise, we need to loop over filters and return a dictionary
+        # Otherwise, we need to loop over filters, calculate photometry, and
+        # return a dictionary of images
         for f in self.filters:
             # Apply this filter to the IFU
             if self.rest_frame:
-                self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, nu=self.ifu_obj.sed._nu
-                )
+                # Get the photometry for this filter
+                phot = f.apply_filter(self.sed._lnu, nu=self.sed._nu)
 
             else:
-                self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, nu=self.ifu_obj.sed._obsnu
-                )
+                # Get the photometry for this filter
+                phot = f.apply_filter(self.sed._fnu, nu=self.sed._obsnu)
+
+            # Get and store the image for this filter
+            self.imgs[f.filter_code] = self._get_hist_img_single_filter(
+                pixel_values=phot
+            )
 
         return self.imgs
 
@@ -384,20 +385,20 @@ class Image:
         if len(self.filters) == 0:
             return self._get_img_single_filter()
 
-        # Calculate IFU "image"
-        self.ifu = self.ifu_obj.get_ifu()
-
-        # Otherwise, we need to loop over filters and return a dictionary
+        # Otherwise, we need to loop over filters, calculate photometry, and
+        # return a dictionary of images
         for f in self.filters:
             # Apply this filter to the IFU
             if self.rest_frame:
-                self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, nu=self.ifu_obj.sed._nu
-                )
+                # Get the photometry for this filter
+                phot = f.apply_filter(self.sed._lnu, nu=self.sed._nu)
+
             else:
-                self.imgs[f.filter_code] = f.apply_filter(
-                    self.ifu, nu=self.ifu_obj.sed._obsnu
-                )
+                # Get the photometry for this filter
+                phot = f.apply_filter(self.sed._fnu, nu=self.sed._obsnu)
+
+            # Get and store the image for this filter
+            self.imgs[f.filter_code] = self._get_img_single_filter(pixel_values=phot)
 
         return self.imgs
 
@@ -1203,18 +1204,6 @@ class ParticleImage(ParticleScene, Image):
             snrs=snrs,
         )
 
-        # If we have a list of filters make an IFU
-        if len(filters) > 0:
-            self.ifu_obj = ParticleSpectralCube(
-                sed=self.sed,
-                resolution=self.orig_resolution,
-                npix=self.orig_npix,
-                fov=fov,
-                stars=self.stars,
-                rest_frame=rest_frame,
-                cosmo=cosmo,
-            )
-
         # Set up standalone arrays used when Synthesizer objects are not
         # passed.
         if isinstance(pixel_values, unyt_array):
@@ -1222,11 +1211,17 @@ class ParticleImage(ParticleScene, Image):
         else:
             self.pixel_values = pixel_values
 
-    def _get_hist_img_single_filter(self):
+    def _get_hist_img_single_filter(self, pixel_values=None):
         """
         A generic method to calculate an image with no smoothing.
         Just a wrapper for numpy.histogram2d utilising ParticleImage
         attributes.
+
+        Args:
+            pixel_values (array_like, float)
+                The values to sort into pixels. If None self.pixel_values is
+                used. If both are None an error is raised.
+
         Returns
         -------
         img : array_like (float)
@@ -1234,40 +1229,63 @@ class ParticleImage(ParticleScene, Image):
             (npix, npix)
         """
 
+        # Get the pixel values if necessary
+        if pixel_values is None:
+            pixel_values = self.pixel_values
+
         self.img = np.histogram2d(
             self.pix_pos[:, 0],
             self.pix_pos[:, 1],
             bins=self.npix,
             range=((0, self.npix), (0, self.npix)),
-            weights=self.pixel_values,
+            weights=pixel_values,
         )[0]
 
         return self.img
 
-    def _get_img_single_filter(self):
+    def _get_img_single_filter(self, pixel_values=None):
         """
         A generic method to calculate an image where particles are smoothed over
         a kernel. This uses C extensions to calculate the image for each
         particle efficiently.
+
+        Args:
+            pixel_values (array_like, float)
+                The values to sort into pixels. If None self.pixel_values is
+                used. If both are None an error is raised.
 
         Returns
         -------
         img : array_like (float)
             A 2D array containing particles sorted into an image.
             (npix, npix)
+
+        Raises:
+            InconsistentArguments
+                If there is no kernel we can't make a smoothed image
         """
 
         from .extensions.image import make_img
+
+        # Ensure we have a kernel to compute with
+        if self.kernel is None:
+            raise exceptions.InconsistentArguments(
+                "No kernel present for calculating a smoothed image! Did you"
+                " mean to make a histogram? (Galaxy.get_hist_imgs())"
+            )
+
+        # Get the pixel values if necessary
+        if pixel_values is None:
+            pixel_values = self.pixel_values
 
         # Prepare the inputs, we need to make sure we are passing C contiguous
         # arrays.
         # TODO: more memory efficient to pass the position array and handle C
         #       extraction.
-        pix_vals = np.ascontiguousarray(self.pixel_values, dtype=np.float64)
+        pix_vals = np.ascontiguousarray(pixel_values, dtype=np.float64)
         smls = np.ascontiguousarray(self.smoothing_lengths, dtype=np.float64)
         xs = np.ascontiguousarray(self.coords[:, 0], dtype=np.float64)
         ys = np.ascontiguousarray(self.coords[:, 1], dtype=np.float64)
-        zs = np.ascontiguousarray(self.coords[:, 2], dtype=np.float64)
 
         self.img = make_img(
             pix_vals,
