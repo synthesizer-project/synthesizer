@@ -169,6 +169,9 @@ class Galaxy(BaseGalaxy):
         self.stars = Stars(initial_masses, ages, metals, **kwargs)
         self.calculate_integrated_stellar_properties()
 
+        # Assign the redshift
+        self.stars.redshift = self.redshift
+
     def load_gas(self, masses, metals, **kwargs):
         """
         Load arrays for gas particle properties into a `Gas` object,
@@ -350,9 +353,7 @@ class Galaxy(BaseGalaxy):
                 "Star object is missing coordinates!"
             )
         if self.gas.coordinates is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing coordinates!"
-            )
+            raise exceptions.InconsistentArguments("Gas object is missing coordinates!")
         if self.gas.smoothing_lengths is None:
             raise exceptions.InconsistentArguments(
                 "Gas object is missing smoothing lengths!"
@@ -362,14 +363,12 @@ class Galaxy(BaseGalaxy):
                 "Gas object is missing metallicities!"
             )
         if self.gas.masses is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing masses!"
-            )
+            raise exceptions.InconsistentArguments("Gas object is missing masses!")
         if self.gas.dust_to_metal_ratio is None:
             raise exceptions.InconsistentArguments(
                 "Gas object is missing DTMs (dust_to_metal_ratio)!"
             )
-            
+
         # Set up the kernel inputs to the C function.
         kernel = np.ascontiguousarray(kernel, dtype=np.float64)
         kdim = kernel.size
@@ -590,7 +589,7 @@ class Galaxy(BaseGalaxy):
         return linecont
 
     def get_particle_spectra_incident(
-            self, grid, young=False, old=False, label="", update=True
+        self, grid, young=False, old=False, label="", update=True
     ):
         """
         Generate the incident (equivalent to pure stellar for stars) spectra
@@ -959,7 +958,7 @@ class Galaxy(BaseGalaxy):
     ):
         """
         Calculate the gamma parameter controlling the optical depth
-        due to dust dependent on the mass and metallicity of star forming 
+        due to dust dependent on the mass and metallicity of star forming
         gas.
 
         gamma = (Z_SF / Z_MW) * (M_SF / M_star) * (1 / beta)
@@ -979,21 +978,21 @@ class Galaxy(BaseGalaxy):
                 metallicity normsalition value, defaults to Zahid+14
                 value for the Milky Way (0.035)
             sf_gas_metallicity (array):
-                custom star forming gas metallicity array. If None, 
+                custom star forming gas metallicity array. If None,
                 defaults to value attached to this galaxy object.
             sf_gas_mass (array):
-                custom star forming gas mass array. If None, 
+                custom star forming gas mass array. If None,
                 defaults to value attached to this galaxy object.
             stellar_mass (array):
-                custom stellar mass array. If None, defaults to value 
+                custom stellar mass array. If None, defaults to value
                 attached to this galaxy object.
             gamma_min (float):
-                lower limit of the gamma parameter. If None, no lower 
-                limit implemented. Default = None                 
+                lower limit of the gamma parameter. If None, no lower
+                limit implemented. Default = None
             gamma_max (float):
-                upper limit of the gamma parameter. If None, no upper 
-                limit implemented. Default = None                 
-                
+                upper limit of the gamma parameter. If None, no upper
+                limit implemented. Default = None
+
         Returns:
             gamma (array):
                 gamma scaling parameter for this galaxy
@@ -1017,12 +1016,16 @@ class Galaxy(BaseGalaxy):
             else:
                 stellar_mass = self.stellar_mass
 
-        if sf_gas_mass == 0.:
-            gamma = 0.
-        elif stellar_mass == 0.:
+        if sf_gas_mass == 0.0:
+            gamma = 0.0
+        elif stellar_mass == 0.0:
             gamma = 1.0
         else:
-            gamma = (sf_gas_metallicity / Z_norm) * (sf_gas_mass / stellar_mass) * (1.0 / beta)
+            gamma = (
+                (sf_gas_metallicity / Z_norm)
+                * (sf_gas_mass / stellar_mass)
+                * (1.0 / beta)
+            )
 
         if gamma_min is not None:
             gamma[gamma < gamma_min] = gamma_min
@@ -1081,6 +1084,8 @@ class Galaxy(BaseGalaxy):
         rest_frame=True,
         cosmo=None,
         psf_resample_factor=1,
+        kernel=None,
+        kernel_threshold=1,
     ):
         """
         Makes images, either one or one per filter. This is a generic method
@@ -1129,6 +1134,11 @@ class Galaxy(BaseGalaxy):
             The factor by which the image should be resampled for robust PSF
             convolution. Note the images after PSF application will be
             downsampled to the native pixel scale.
+        kernel (array-like, float)
+            The values from one of the kernels from the kernel_functions module.
+            Only used for smoothed images.
+        kernel_threshold (float)
+            The kernel's impact parameter threshold (by default 1).
         Returns
         -------
         Image : array-like
@@ -1155,6 +1165,8 @@ class Galaxy(BaseGalaxy):
             depths=depths,
             apertures=aperture,
             snrs=snrs,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
         )
 
         # Make the image, handling incorrect image types
