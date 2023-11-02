@@ -119,7 +119,7 @@ class Sed:
                 )
 
             # Concatenate this lnu array
-            new_lnu = np.concatenate(new_lnu, other_sed._lnu)
+            new_lnu = np.concatenate((new_lnu, other_sed._lnu))
 
         return Sed(self._lam, new_lnu)
 
