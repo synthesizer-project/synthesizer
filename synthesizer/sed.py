@@ -164,6 +164,40 @@ class Sed:
         # They're compatible, add them
         return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
 
+    def __mul__(self, scaling):
+
+        """
+        Overide multiplication operator to allow lnu to be scaled.
+        This only works scaling * x
+
+        Args:
+            scaling (float)
+                The scaling to apply to lnu
+
+        Returns:
+            Sed
+                A new instance of Sed with scaled lnu.
+
+        """
+
+        return Sed(self._lam, lnu=scaling*self._lnu)
+    
+    def __rmul__(self, scaling):
+
+        """
+        As above but for x * scaling
+
+        Args:
+            scaling (float)
+                The scaling to apply to lnu
+
+        Returns:
+            Sed
+                A new instance of Sed with scaled lnu.
+
+        """
+
+        return Sed(self._lam, lnu=scaling * self._lnu)
 
     def __str__(self):
         """
@@ -192,7 +226,6 @@ class Sed:
     @property
     def _spec_dims(self):
         return np.ndim(self.lnu)
-
 
     def _get_lnu_at_nu(self, nu, kind=False):
         """
