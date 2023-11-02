@@ -118,7 +118,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   /* Construct a numpy python array to return the IFU. */
   npy_intp dims[3] = {npix, npix};
   PyArrayObject *out_img =
-      (PyArrayObject *)PyArray_SimpleNewFromData(3, dims, NPY_FLOAT64, img);
+      (PyArrayObject *)PyArray_SimpleNewFromData(2, dims, NPY_FLOAT64, img);
 
   return Py_BuildValue("N", out_img);
 }
