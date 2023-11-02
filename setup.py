@@ -10,7 +10,8 @@ from distutils.errors import CompileError
 
 # We first need a numpy install to run setup.py
 from setuptools import dist
-dist.Distribution().fetch_build_eggs(['numpy==1.23.4'])
+
+dist.Distribution().fetch_build_eggs(["numpy==1.23.4"])
 
 import numpy as np
 
@@ -39,11 +40,19 @@ def has_flags(compiler, flags):
 
 # Build a build extension class that allows for finer selection of flags.
 
+
 class BuildExt(build_ext):
     # Never check these; they're always added.
     # Note that we don't support MSVC here.
-    compile_flags = {"unix": ["-std=c99", "-w", "-O3",
-                              "-ffast-math", "-I{:s}".format(np.get_include())]}
+    compile_flags = {
+        "unix": [
+            "-std=c99",
+            "-w",
+            "-O3",
+            "-ffast-math",
+            "-I{:s}".format(np.get_include()),
+        ]
+    }
 
     def build_extensions(self):
         ct = self.compiler.compiler_type
@@ -96,19 +105,13 @@ class BuildExt(build_ext):
 extensions = [
     Extension(path, sources=[source])
     for path, source in {
-        "synthesizer.extensions.csed":
-            "synthesizer/extensions/csed.c",
-        "synthesizer.extensions.weights":
-            "synthesizer/extensions/weights.c",
-        "synthesizer.extensions.los":
-            "synthesizer/extensions/los.c",
-        "synthesizer.imaging.extensions.sph_kernel_calc":
-            "synthesizer/imaging/extensions/sph_kernel_calc.c",
-        "synthesizer.imaging.extensions.ckernel_functions":
-            "synthesizer/imaging/extensions/ckernel_functions.c",
+        "synthesizer.extensions.csed": "synthesizer/extensions/csed.c",
+        "synthesizer.extensions.weights": "synthesizer/extensions/weights.c",
+        "synthesizer.extensions.los": "synthesizer/extensions/los.c",
+        "synthesizer.imaging.extensions.spectral_cube": "synthesizer/imaging/extensions/spectral_cube.c",
+        "synthesizer.imaging.extensions.image": "synthesizer/imaging/extensions/image.c",
     }.items()
-
-    # Extension("synthesizer.weights", ["synthesizer/weights.pyx"], 
+    # Extension("synthesizer.weights", ["synthesizer/weights.pyx"],
     #     define_macros=[('CYTHON_TRACE', '1')])
 ]
 
@@ -126,21 +129,21 @@ setup(
     install_requires=[  # Need to actually write the module to know this...
         "numpy>=1.14.5",
         "scipy>=1.7",
-
     ],
     # extras_require={"plotting": ["matplotlib>=2.2.0", "jupyter"]},
     # setup_requires=["pytest-runner", "flake8"],
     # tests_require=["pytest"],
     entry_points={
-        "console_scripts": ["init_bc03=grids.grid_bc03:main",
-                            "init_fsps=grids.grid_fsps:main"]
+        "console_scripts": [
+            "init_bc03=grids.grid_bc03:main",
+            "init_fsps=grids.grid_fsps:main",
+        ]
     },
     include_package_data=True,
     include_dirs=[np.get_include()],
     package_data={"synthesizer": ["*.c", "*.txt"]},
     cmdclass=dict(build_ext=BuildExt),
     ext_modules=extensions,
-
     # Need to populate these properly
     # license="GNU GPL v3",
     # classifiers=[
