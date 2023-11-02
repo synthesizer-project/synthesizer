@@ -329,6 +329,13 @@ class ParticleScene(Scene):
         The integer coordinates of particles in pixel units.
     npart : int
         The number of stellar particles.
+    kernel (array-like, float)
+        The values from one of the kernels from the kernel_functions module.
+        Only used for smoothed images.
+    kernel_dim:
+        The number of elements in the kernel.
+    kernel_threshold (float)
+        The kernel's impact parameter threshold (by default 1).
     Raises
     ----------
     InconsistentArguments
@@ -352,6 +359,8 @@ class ParticleScene(Scene):
         cosmo=None,
         redshift=None,
         rest_frame=True,
+        kernel=None,
+        kernel_threshold=1,
     ):
         """
         Intialise the ParticleObservation.
@@ -379,6 +388,11 @@ class ParticleScene(Scene):
         centre : array-like (float)
             The coordinates around which the image will be centered. The if one
             is not provided then the geometric centre is calculated and used.
+        kernel (array-like, float)
+            The values from one of the kernels from the kernel_functions module.
+            Only used for smoothed images.
+        kernel_threshold (float)
+            The kernel's impact parameter threshold (by default 1).
         Raises
         ------
         InconsistentArguments
@@ -441,6 +455,16 @@ class ParticleScene(Scene):
 
         # How many particle are there?
         self.npart = self.coords.shape[0]
+
+        # Set up the kernel attributes we need
+        if kernel is not None:
+            self.kernel = kernel
+            self.kernel_dim = kernel.size
+            self.kernel_threshold = kernel_threshold
+        else:
+            self.kernel = None
+            self.kernel_dim = None
+            self.kernel_threshold = None
 
     def _check_part_args(self, resolution, stars, positions, centre, cosmo, sed):
         """
