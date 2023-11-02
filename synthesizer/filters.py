@@ -1098,7 +1098,7 @@ class Filter:
                 Transmission at pivot wavelength.
         """
 
-        return np.interp(self.pivwv(), self._original_lam, self.original_t)
+        return np.interp(self.pivwv().value, self._original_lam, self.original_t)
 
     def meanwv(self):
         """
