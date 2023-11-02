@@ -59,7 +59,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   const double *ys = PyArray_DATA(np_ys);
   const double *kernel = PyArray_DATA(np_kernel);
 
-  /* Allocate IFU. */
+  /* Allocate the image.. */
   double *img = malloc(npix * npix * sizeof(double));
   bzero(img, npix * npix * sizeof(double));
 
@@ -78,13 +78,31 @@ PyObject *make_img(PyObject *self, PyObject *args) {
     /* How many pixels are in the smoothing length? Add some buffer. */
     int delta_pix = ceil(smooth_length / res) + 1;
 
+    /* How many pixels along kernel axis? */
+    int kernel_cdim = 2 * delta_pix + 1;
+
+    /* Create an empty kernel for this particle. */
+    double *part_kernel = malloc(kernel_cdim * kernel_cdim * sizeof(double));
+    bzero(part_kernel, kernel_cdim * kernel_cdim * sizeof(double));
+
+    /* Track the kernel sum for normalisation. */
+    double kernel_sum = 0;
+
     /* Loop over a square aperture around this particle */
     for (int ii = i - delta_pix; ii <= i + delta_pix; ii++) {
+
+      /* Skip out of bounds pixels. */
+      if (ii < 0 || ii >= npix)
+        continue;
 
       /* Compute the x separation */
       double x_dist = (ii * res) + (res / 2) - x;
 
       for (int jj = j - delta_pix; jj <= j + delta_pix; jj++) {
+
+        /* Skip out of bounds pixels. */
+        if (jj < 0 || jj >= npix)
+          continue;
 
         /* Compute the y separation */
         double y_dist = (jj * res) + (res / 2) - y;
@@ -109,10 +127,43 @@ PyObject *make_img(PyObject *self, PyObject *args) {
         int index = kdim * q;
         double kvalue = kernel[index];
 
-        /* Loop over the wavelength axis. */
-        img[jj + npix * ii] += kvalue * pix_values[ind];
+        /* Set the value in the kernel. */
+        part_kernel[iii * kernel_cdim + jjj] = kvalue;
+        kernel_sum += kvalue;
       }
     }
+
+    /* Normalise the kernel */
+    if (kernel_sum > 0) {
+      for (int n = 0; n < kernel_cdim * kernel_cdim; n++) {
+        part_kernel[n] /= kernel_sum;
+      }
+    }
+
+    /* Loop over a square aperture around this particle */
+    for (int ii = i - delta_pix; ii <= i + delta_pix; ii++) {
+
+      /* Skip out of bounds pixels. */
+      if (ii < 0 || ii >= npix)
+        continue;
+
+      for (int jj = j - delta_pix; jj <= j + delta_pix; jj++) {
+
+        /* Skip out of bounds pixels. */
+        if (jj < 0 || jj >= npix)
+          continue;
+
+        /* Get the pixel coordinates in the kernel */
+        int iii = ii - (i - delta_pix);
+        int jjj = jj - (j - delta_pix);
+
+        /* Loop over the wavelength axis. */
+        img[jj + npix * ii] +=
+            part_kernel[iii * kernel_cdim + jjj] * pix_values[ind];
+      }
+    }
+
+    free(part_kernel);
   }
 
   /* Construct a numpy python array to return the IFU. */
