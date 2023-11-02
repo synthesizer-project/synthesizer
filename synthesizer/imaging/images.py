@@ -1248,7 +1248,7 @@ class ParticleImage(ParticleScene, Image):
             (npix, npix)
         """
 
-        from .extensions.sph_kernel_calc import make_img
+        from .extensions.image import make_img
 
         # Prepare the inputs, we need to make sure we are passing C contiguous
         # arrays.

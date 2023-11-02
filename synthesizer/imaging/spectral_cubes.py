@@ -270,7 +270,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             pixels. [npix, npix, spectral_resolution]
         """
 
-        from .extensions.sph_kernel_calc import make_ifu
+        from .extensions.spectral_cube import make_ifu
 
         # Prepare the inputs, we need to make sure we are passing C contiguous
         # arrays.
