@@ -6,6 +6,7 @@ import unyt
 from unyt import arcsec, kpc
 from scipy.ndimage import zoom
 
+from synthesizer.particle import Stars
 import synthesizer.exceptions as exceptions
 
 
@@ -319,8 +320,8 @@ class ParticleScene(Scene):
     types to reduce boilerplate.
     Attributes
     ----------
-    stars : obj (Stars)
-        The object containing the stars to be placed in a image.
+    particles (Stars/Gas/DarkMatter/BlackHoles)
+        The object containing the particles to be placed in a image.
     coords : array-like (float)
         The position of particles to be sorted into the image.
     centre : array-like (float)
@@ -344,7 +345,18 @@ class ParticleScene(Scene):
     """
 
     # Define slots to reduce memory overhead of this class
-    __slots__ = ["stars", "coords", "centre", "pix_pos", "npart", "smoothing_lengths"]
+    __slots__ = [
+        "coords",
+        "coord_unit",
+        "centre",
+        "pix_pos",
+        "npart",
+        "smoothing_lengths",
+        "smooth_unit",
+        "kernel",
+        "kernel_threshold",
+        "kernel_dim",
+    ]
 
     def __init__(
         self,
@@ -352,7 +364,6 @@ class ParticleScene(Scene):
         npix=None,
         fov=None,
         sed=None,
-        stars=None,
         positions=None,
         smoothing_lengths=None,
         centre=None,
@@ -376,10 +387,6 @@ class ParticleScene(Scene):
             the image this should have the same units as those coordinates.
         sed : obj (SED)
             An sed object containing the spectra for this observation.
-        stars : obj (Stars)
-            The object containing the stars to be placed in a image.
-        survey : obj (Survey)
-            WorkInProgress
         positons : array-like (float)
             The position of particles to be sorted into the image.
         smoothing_lengths : array-like (float)
@@ -401,7 +408,9 @@ class ParticleScene(Scene):
         """
 
         # Check what we've been given
-        self._check_part_args(resolution, stars, positions, centre, cosmo, sed)
+        self._check_part_args(
+            resolution, positions, centre, cosmo, sed, kernel, smoothing_lengths
+        )
 
         # Initilise the parent class
         Scene.__init__(
@@ -415,33 +424,22 @@ class ParticleScene(Scene):
             redshift=redshift,
         )
 
-        # Initialise stars attribute
-        self.stars = stars
-
         # Handle the particle positions, here we make a copy to avoid changing
         # the original values
-        if self.stars is not None:
-            self.coords = np.copy(self.stars._coordinates)
-            self.coord_unit = self.stars.coordinates.units
-        else:
-            self.coords = np.copy(positions)
-            self.coord_unit = positions.units
+        self.coords = np.copy(positions)
+        self.coord_unit = positions.units
 
         # If the positions are not already centred centre them
         self.centre = centre
         self._centre_coords()
 
         # Store the smoothing lengths because we again need a copy
-        if self.stars is not None:
-            self.smoothing_lengths = np.copy(self.stars._smoothing_lengths)
-            self.smooth_unit = self.stars.smoothing_lengths.units
+        if smoothing_lengths is not None:
+            self.smoothing_lengths = np.copy(smoothing_lengths)
+            self.smooth_unit = smoothing_lengths.units
         else:
-            if smoothing_lengths is not None:
-                self.smoothing_lengths = np.copy(smoothing_lengths)
-                self.smooth_unit = smoothing_lengths.units
-            else:
-                self.smoothing_lengths = None
-                self.smooth_unit = None
+            self.smoothing_lengths = None
+            self.smooth_unit = None
 
         # Convert coordinates to the image's spatial units
         self._convert_to_img_units()
@@ -466,13 +464,13 @@ class ParticleScene(Scene):
             self.kernel_dim = None
             self.kernel_threshold = None
 
-    def _check_part_args(self, resolution, stars, positions, centre, cosmo, sed):
+    def _check_part_args(
+        self, resolution, positions, centre, cosmo, sed, kernel, smoothing_lengths
+    ):
         """
         Ensures we have a valid combination of inputs.
         Parameters
         ----------
-        stars : obj (Stars)
-            The object containing the stars to be placed in a image.
         positons : array-like (float)
             The position of particles to be sorted into the image.
         centre : array-like (float)
@@ -499,35 +497,25 @@ class ParticleScene(Scene):
                     "spectra has been passed."
                 )
 
-        # Check the stars we have been given.
-        if stars is not None:
-            # Ensure we haven't been handed a resampled set of stars
-            if stars.resampled:
-                raise exceptions.UnimplementedFunctionality(
-                    "Functionality to make images from resampled stellar "
-                    "distributions is currently unsupported. Contact the "
-                    "authors if you wish to contribute this behaviour."
-                )
+        # If we are working in terms of angles we need redshifts for the
+        # particles.
+        if spatial_unit.same_dimensions_as(arcsec) and self.redshift is None:
+            raise exceptions.InconsistentArguments(
+                "When working in an angular unit system the provided "
+                "particles need a redshift associated to them. Particles.redshift"
+                " can either be a single redshift for all particles or an "
+                "array of redshifts for each star."
+            )
 
-            # If we are working in terms of angles we need redshifts for the
-            # stars.
-            if spatial_unit.same_dimensions_as(arcsec) and stars.redshift is None:
+        # Need to ensure we have a per particle SED
+        if sed is not None:
+            if sed.lnu.shape[0] != positions.shape[0]:
                 raise exceptions.InconsistentArguments(
-                    "When working in an angular unit system the provided "
-                    "stars need a redshift associated to them. Stars.redshift"
-                    " can either be a single redshift for all stars or an "
-                    "array of redshifts for each star."
+                    "The shape of the SED array:",
+                    sed.lnu.shape,
+                    "does not agree with the number of stellar particles "
+                    "(%d)" % positions.shape[0],
                 )
-
-            # Need to ensure we have a per particle SED
-            if sed is not None:
-                if sed.lnu.shape[0] != stars.nparticles:
-                    raise exceptions.InconsistentArguments(
-                        "The shape of the SED array:",
-                        sed.lnu.shape,
-                        "does not agree with the number of stellar particles "
-                        "(%d)" % stars.nparticles,
-                    )
 
         # Missing cosmology
         if spatial_unit.same_dimensions_as(arcsec) and cosmo is None:
@@ -535,34 +523,23 @@ class ParticleScene(Scene):
                 "When working in an angular unit system a cosmology object"
                 " must be given."
             )
-
-        # Missing positions
-        if stars is None and positions is None:
-            raise exceptions.InconsistentArguments(
-                "Either stars or positions must be specified!"
-            )
-
         # The passed centre does not lie within the range of positions
         if centre is not None:
-            if stars is None:
-                pos = positions
-            else:
-                pos = stars.coordinates
-                if (
-                    centre[0] < np.min(pos[:, 0])
-                    or centre[0] > np.max(pos[:, 0])
-                    or centre[1] < np.min(pos[:, 1])
-                    or centre[1] > np.max(pos[:, 1])
-                    or centre[2] < np.min(pos[:, 2])
-                    or centre[2] > np.max(pos[:, 2])
-                ):
-                    raise exceptions.InconsistentCoordinates(
-                        "The centre lies outside of the coordinate range. "
-                        "Are they already centred?"
-                    )
+            if (
+                centre[0] < np.min(positions[:, 0])
+                or centre[0] > np.max(positions[:, 0])
+                or centre[1] < np.min(positions[:, 1])
+                or centre[1] > np.max(positions[:, 1])
+                or centre[2] < np.min(positions[:, 2])
+                or centre[2] > np.max(positions[:, 2])
+            ):
+                raise exceptions.InconsistentCoordinates(
+                    "The centre lies outside of the coordinate range. "
+                    "Are they already centred?"
+                )
 
         # Need to ensure we have a per particle SED
-        if sed is not None and positions is not None:
+        if sed is not None:
             if sed.lnu.shape[0] != positions.shape[0]:
                 raise exceptions.InconsistentArguments(
                     "The shape of the SED array:",
@@ -570,6 +547,12 @@ class ParticleScene(Scene):
                     "does not agree with the number of coordinates "
                     "(%d)" % positions.shape[0],
                 )
+
+        # Ensure we aren't trying to smooth particles without smoothing lengths
+        if kernel is not None and smoothing_lengths is None:
+            raise exceptions.InconsistentArguments(
+                "Trying to smooth particles which don't have smoothing lengths!"
+            )
 
     def _centre_coords(self):
         """
@@ -617,21 +600,21 @@ class ParticleScene(Scene):
         # # Otherwise, handle conversion between length and angle
         # elif self.spatial_unit.same_dimensions_as(
         #     arcsec
-        # ) and self.stars.coord_units.same_dimensions_as(kpc):
+        # ) and self.particles.coord_units.same_dimensions_as(kpc):
 
         #     # Convert coordinates from comoving to physical coordinates
-        #     self.coords *= 1 / (1 + self.stars.redshift)
+        #     self.coords *= 1 / (1 + self.particles.redshift)
 
         #     # Get the conversion factor for arcsec and kpc at this redshift
         #     arcsec_per_kpc_proper = self.cosmo.arcsec_per_kpc_proper(
-        #         self.stars.redshift
+        #         self.particles.redshift
         #     ).value
 
         #     # First we need to convert to kpc
-        #     if self.stars.coord_units != kpc:
+        #     if self.particles.coord_units != kpc:
 
         #         # First do the coordinates
-        #         self.coords *= self.stars.coord_units
+        #         self.coords *= self.particles.coord_units
         #         self.coords.convert_to_units(kpc)
         #         self.coords = self.coords.value
 
@@ -664,14 +647,14 @@ class ParticleScene(Scene):
             # # Otherwise, handle conversion between length and angle
             # elif self.spatial_unit.same_dimensions_as(
             #     arcsec
-            # ) and self.stars.coord_units.same_dimensions_as(kpc):
+            # ) and self.particles.coord_units.same_dimensions_as(kpc):
 
             #     # Convert coordinates from comoving to physical coordinates
-            #     self.smoothing_lengths *= 1 / (1 + self.stars.redshift)
+            #     self.smoothing_lengths *= 1 / (1 + self.particles.redshift)
 
             #     # First we need to convert to kpc
-            #     if self.stars.coord_units != kpc:
-            #         self.smoothing_lengths *= self.stars.coord_units
+            #     if self.particles.coord_units != kpc:
+            #         self.smoothing_lengths *= self.particles.coord_units
             #         self.smoothing_lengths.convert_to_units(kpc)
             #         self.smoothing_lengths = self.smoothing_lengths.value
 

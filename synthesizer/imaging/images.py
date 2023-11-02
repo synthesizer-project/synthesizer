@@ -236,7 +236,7 @@ class Image:
                 npix=None,
                 fov=self.fov * self.spatial_unit,
                 sed=self.sed,
-                stars=self.stars,
+                particles=self.particles,
                 filters=None,
                 positions=self.coords * self.coord_unit,
                 pixel_values=None,
@@ -1109,7 +1109,6 @@ class ParticleImage(ParticleScene, Image):
         npix=None,
         fov=None,
         sed=None,
-        stars=None,
         filters=None,
         positions=None,
         pixel_values=None,
@@ -1139,13 +1138,9 @@ class ParticleImage(ParticleScene, Image):
             the image this should have the same units as those coordinates.
         sed : obj (SED)
             An sed object containing the spectra for this observation.
-        stars : obj (Stars)
-            The object containing the stars to be placed in a image.
         filters : obj (FilterCollection)
             An object containing the Filter objects for which images are
             required.
-        survey : obj (Survey)
-            WorkInProgress
         positons : array-like (float)
             The position of particles to be sorted into the image.
         pixel_values : array-like (float)
@@ -1185,7 +1180,6 @@ class ParticleImage(ParticleScene, Image):
             npix=npix,
             fov=fov,
             sed=sed,
-            stars=stars,
             positions=positions,
             smoothing_lengths=smoothing_lengths,
             centre=centre,
