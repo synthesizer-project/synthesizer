@@ -87,6 +87,27 @@ class Image:
             FilterCollection is passed.
     """
 
+    # Define the slots to reduce the memory footprint
+    __slots__ = [
+        "psfs",
+        "filters",
+        "img",
+        "img_psf",
+        "img_noise",
+        "imgs",
+        "imgs_psf",
+        "imgs_noise",
+        "rgb_image",
+        "combined_imgs",
+        "depths",
+        "snrs",
+        "apertures",
+        "weight_map",
+        "noise_arr",
+        "noise_arrs",
+        "weights_maps",
+    ]
+
     def __init__(
         self,
         filters=(),
@@ -1171,6 +1192,9 @@ class ParticleImage(ParticleScene, Image):
             The particles property array ot be softed into pixels. Only used
             if an Sed is not passed.
     """
+
+    # Define the slots to reduce the memory footprint
+    __slots__ = ["pixel_values"]
 
     def __init__(
         self,
