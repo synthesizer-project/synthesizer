@@ -568,10 +568,10 @@ class Image:
             app_noise = (depth / snr) ** 2
 
             # Calculate the aperture area in image coordinates
-            app_area_coords = np.pi * aperture**2
+            app_area_coordinates = np.pi * aperture**2
 
             # Convert the aperture area to units of pixels
-            app_area_pix = app_area_coords / (self.resolution) ** 2
+            app_area_pix = app_area_coordinates / (self.resolution) ** 2
 
             # Get the noise per pixel
             # NOTE: here we remove the squaring done above.
@@ -1387,9 +1387,9 @@ class ParticleImage(ParticleScene, Image):
         # TODO: more memory efficient to pass the position array and handle C
         #       extraction.
         pix_vals = np.ascontiguousarray(pixel_values, dtype=np.float64)
-        smls = np.ascontiguousarray(self.smoothing_lengths, dtype=np.float64)
-        xs = np.ascontiguousarray(self.coords[:, 0], dtype=np.float64)
-        ys = np.ascontiguousarray(self.coords[:, 1], dtype=np.float64)
+        smls = np.ascontiguousarray(self._smoothing_lengths, dtype=np.float64)
+        xs = np.ascontiguousarray(self._coordinates[:, 0], dtype=np.float64)
+        ys = np.ascontiguousarray(self._coordinates[:, 1], dtype=np.float64)
 
         self.img = make_img(
             pix_vals,
@@ -1397,9 +1397,9 @@ class ParticleImage(ParticleScene, Image):
             xs,
             ys,
             self.kernel,
-            self.resolution,
+            self._resolution,
             self.npix,
-            self.coords.shape[0],
+            self.coordinates.shape[0],
             self.kernel_threshold,
             self.kernel_dim,
         )
@@ -1572,20 +1572,17 @@ class ParametricImage(Scene, Image):
         Get the density grid defined by the
         """
         # Define 1D bin centres of each pixel
-        if self.resolution.dimensions == angle:
-            res = self.resolution.to("mas").value
-            bin_centres = res * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
+        if self.resolution.units.dimensions == angle:
+            res = self.resolution.to("mas")
         else:
-            res = self.resolution.to("kpc").value
-            bin_centres = res * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
+            res = self.resolution.to("kpc")
+        bin_centres = res.value * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
 
         # Convert the 1D grid into 2D grids coordinate grids
         xx, yy = np.meshgrid(bin_centres, bin_centres)
 
         # Extract the density grid from the morphology function
-        density_grid = self.morphology.compute_density_grid(
-            xx, yy, units=self.resolution.units
-        )
+        density_grid = self.morphology.compute_density_grid(xx, yy, units=res.units)
 
         # And normalise it...
         return density_grid / np.sum(density_grid)
