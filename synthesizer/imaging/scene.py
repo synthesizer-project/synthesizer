@@ -1,4 +1,7 @@
-""" Definitions for image objects
+""" Definitions for image scene objects
+
+These should not be explictly used by the user. Instead the user interfaces with
+Images and Galaxys
 """
 import math
 import numpy as np
