@@ -551,7 +551,7 @@ class ParticleScene(Scene):
             self.centre = np.mean(self._coordinates, axis=0)
 
         # Centre the coordinates
-        self.coordinates -= self._centre
+        self._coordinates -= self._centre
 
     def _get_pixel_pos(self):
         """

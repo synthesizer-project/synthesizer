@@ -259,7 +259,7 @@ class Image:
                 sed=self.sed,
                 particles=self.particles,
                 filters=None,
-                coordinates=self.coords * self.coord_unit,
+                coordinates=self.coordinates * self.coord_unit,
                 pixel_values=None,
                 smoothing_lengths=None,
                 centre=None,
