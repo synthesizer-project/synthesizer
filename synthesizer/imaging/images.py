@@ -1415,7 +1415,21 @@ class ParametricImage(Scene, Image):
         morphology (BaseMorphology and children)
             The object that describes the parameters and creates the density grid
             for a particular morphology.
+        density_grid (array-like, float)
+            The density grid defined by the morphology over which photometry or
+            smooth_value are smoothed to make an image.
+        smooth_value (float)
+            The value to smooth over the density grid. By default this value is
+            None and a FilterCollection must be provided with an Sed to
+            calculate ans subsequently smooth photometry into an image.
     """
+
+    # Define slots to reduce memory footprint
+    __slots__ = [
+        "morphology",
+        "density_grid",
+        "smooth_value",
+    ]
 
     def __init__(
         self,
@@ -1424,6 +1438,7 @@ class ParametricImage(Scene, Image):
         npix=None,
         fov=None,
         sed=None,
+        smooth_value=None,
         filters=None,
         rest_frame=True,
         redshift=None,
@@ -1453,6 +1468,9 @@ class ParametricImage(Scene, Image):
                 the image this should have the same units as those coordinates.
             sed (Sed)
                 An sed object containing the spectra for this observation.
+            smooth_value (float)
+                A value to smooth over the morphology defined density grid. Only
+                used when a single value is provided and Filters are not.
             filters (FilterCollection)
                 An object containing the Filter objects for which images are
                 required.
@@ -1511,17 +1529,18 @@ class ParametricImage(Scene, Image):
         )
 
         # Check our inputs
-        self._check_parametric_img_args(morphology)
+        self._check_parametric_img_args()
 
         # Store the morphology object
         self.morphology = morphology
 
-        # Make the IFU, even if we only have 1 filter this is a minor overhead
-        self.ifu_obj = ParametricSpectralCube(
-            morphology, sed, resolution, npix=npix, fov=fov, rest_frame=rest_frame
-        )
+        # Ready the density grid for the image
+        self.density_grid = self._get_density_grid()
 
-    def _check_parametric_img_args(self, morphology):
+        # Set the value to smooth over the density grid
+        self.smooth_value = smooth_value
+
+    def _check_parametric_img_args(self):
         """
         Checks all arguments agree and do not conflict.
 
@@ -1532,13 +1551,67 @@ class ParametricImage(Scene, Image):
 
         # For now ensure we have filters. Filterless images are not currently
         # supported.
-        if self.filters is None:
+        if self.filters is None and self.smooth_value is None:
             raise exceptions.UnimplementedFunctionality(
                 "Parametric images are currently only supported for "
-                "photometry when using filters. Provide a FilterCollection."
+                "photometry when using filters or when a smooth_value is "
+                "provided. Provide a FilterCollection or smooth_vale."
             )
-        if len(self.filters) == 0:
+        if len(self.filters) == 0 and self.smooth_value is None:
             raise exceptions.UnimplementedFunctionality(
                 "Parametric images are currently only supported for "
-                "photometry when using filters. Provide a FilterCollection."
+                "photometry when using filters or when a smooth_value is "
+                "provided. Provide a FilterCollection or smooth_vale."
             )
+
+    def _get_density_grid(self):
+        """
+        Get the density grid defined by the
+        """
+        # Define 1D bin centres of each pixel
+        if self.resolution.dimensions == angle:
+            res = self.resolution.to("mas").value
+            bin_centres = res * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
+        else:
+            res = self.resolution.to("kpc").value
+            bin_centres = res * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
+
+        # Convert the 1D grid into 2D grids coordinate grids
+        xx, yy = np.meshgrid(bin_centres, bin_centres)
+
+        # Extract the density grid from the morphology function
+        density_grid = self.morphology.compute_density_grid(
+            xx, yy, units=self.resolution.units
+        )
+
+        # And normalise it...
+        return density_grid / np.sum(density_grid)
+
+    def _get_img_single_filter(self, pixel_values=None):
+        """
+        A generic method to calculate an image from a morphology density grid
+        and a value to smooth onto that density grid.
+
+        Args:
+            pixel_values (float)
+                The value to smooth over the density grid. If None
+                self.smooth_value is used. If both are None an error is raised.
+
+        Returns:
+            img : array_like (float)
+                A 2D array containing particles sorted into an image.
+                (npix, npix)
+
+        Raises:
+            InconsistentArguments
+                If there is no kernel we can't make a smoothed image
+        """
+
+        # Get the pixel values if necessary
+        if pixel_values is None:
+            pixel_values = self.smooth_value
+
+        # Multiply the density grid by the sed to get the IFU
+        self.img = self.density_grid[:, :] * pixel_values
+
+        return self.img
