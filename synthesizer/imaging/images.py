@@ -1,5 +1,11 @@
 """
-Definitions for image objects
+Definitions for image objects.
+
+Example usage:
+
+img = ParticleImage(...)
+img.get_imgs()
+img.plot_image(...)
 """
 import math
 import numpy as np
@@ -25,59 +31,60 @@ class Image:
     This is the base class used for both particle and parametric images,
     containing the functionality common to both. Images can be made with or
     without a PSF and noise.
-    Attributes
-    ----------
-    ifu_obj : obj (ParticleSpectralCube/ParametricSpectralCube)
-        A local attribute holding a SpectralCube object. This is only used
-        when a filter based image is requested, if an array of pixel values is
-        provided this is never populated and used.
-    ifu : array-like (float)
-        The ifu array from _ifu_obj. This simplifies syntax for filter
-        application. (npix, npix, nwavelength)
-    filters : obj (FilterCollection)
-        An imutable collection of Filter objects. If provided images are made
-        for each filter.
-    img : array-like (float)
-        An array containing an image. Only used if pixel_values is defined and
-        a single image is created. (npix, npix)
-    imgs : dict
-        A dictionary containing filter_code keys and img values. Only used if a
-        FilterCollection is passed.
-    combined_imgs : list
-        A list containing any other image objects that were combined to
-        make a composite image object.
-    depths : float/dict
-        The depth of this observation. Can either be a single value or a
-        value per filter in a dictionary.
-    snrs : float/dict
-        The desired signal to noise of this observation. Assuming a
-        signal-to-noise ratio of the form SN R= S / N = S / sqrt(sigma).
-        Can either be a single SNR or a SNR per filter in a dictionary.
-    apertures : float/dict
-        The radius of the aperture depth is defined in, if not a point
-        source depth, in the same units as the image resolution. Can either
-        be a single radius or a radius per filter in a dictionary.
-    Methods
-    -------
-    get_hist_imgs
-        Sorts particles into singular pixels. If an array of pixel_values is
-        passed then this is just a wrapper for numpy.histogram2d. Based on the
-        inputs this function will either create multiple images (when filters
-        is not None), storing them in a dictionary that is returned, or create
-        a single image which is returned as an array.
-    get_imgs
-        Sorts particles into pixels, smoothing by a user provided kernel. Based
-        on the inputs this function will either create multiple images (when
-        filters is not None), storing them in a dictionary that is returned,
-        or create a single image which is returned as an array.
-    get_psfed_imgs
-        Applies a user provided PSF to the images contained within this object.
-        Note that a PSF for each filter must be provided in a dictionary if
-        images have been made for each filter.
-    get_noisy_imgs
-        Applies noise defied by the user to the images contained within this
-        object. Note that noise can be defined in a number of ways see
-        documentation for details.
+
+    Attributes:
+        psfs (array-like/dict, float/array_like, float)
+            Either A single array describing a PSF to be used on all images or
+            a dictionary containing a PSF for each filter with
+            {filter_code: PSF} key-value pair structure.
+        filters (FilterCollection)
+            An imutable collection of Filter objects. If provided, images are made
+            for each filter.
+        img (array-like, float)
+            An array containing an image. Only used if a single image is
+            created. (npix, npix)
+        img_psf (array-like, float)
+            An array containing an image convolved with the PSF. Only used if
+            a single image is created. (npix, npix)
+        img_noise (array-like, float)
+            An array containing an image with noise. Only used if a single
+            image is created. (npix, npix)
+        imgs (dict, array-like, float)
+            A dictionary containing filter_code keys and img values. Only used if a
+            FilterCollection is passed.
+        imgs_psf (dict, array-like, float)
+            A dictionary containing filter_code keys and images with PSF as
+            values. Only used if a FilterCollection is passed.
+        imgs_noise (dict, array-like, float)
+            A dictionary containing filter_code keys and images with noise as
+            values. Only used if a FilterCollection is passed.
+        rgb_image (array-like, float)
+            An RGB image. (npix, npix, 3)
+        combined_imgs (list)
+            A list containing any other image objects that were combined to
+            make a composite image object.
+        depths (float/dict, float)
+            The depth of this observation. Can either be a single value or a
+            value per filter in a dictionary.
+        snrs (float/dict, float)
+            The desired signal to noise of this observation. Assuming a
+            signal-to-noise ratio of the form SN R= S / N = S / sqrt(sigma).
+            Can either be a single SNR or a SNR per filter in a dictionary.
+        apertures (float/dict, float)
+            The radius of the aperture depth is defined in, if not a point
+            source depth, in the same units as the image resolution. Can either
+            be a single radius or a radius per filter in a dictionary.
+        weight_map (array-like, float)
+            The pixel weight map used for noise application. Only used if a
+            single image is made.
+        noise_arr (array-like, float)
+            The noise array itself. Only used if a single image is made.
+        noise_arrs (dict, array-like, float)
+            A dictionary of noise arrays for each filter. Only used if a
+            FilterCollection is passed.
+        weight_maps (dict, array-like, float)
+            A dictionary of weight maps for each filter. Only used if a
+            FilterCollection is passed.
     """
 
     def __init__(
@@ -85,46 +92,36 @@ class Image:
         filters=(),
         psfs=None,
         depths=None,
-        apertures=None,
         snrs=None,
+        apertures=None,
     ):
         """
         Intialise the Image.
-        Parameters
-        ----------
-        resolution : float
-            The size a pixel.
-        npix : int
-            The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU.
-        fov : float
-            The width of the image/ifu. If coordinates are being used to make
-            the image this should have the same units as those coordinates.
-        filters : obj (FilterCollection)
-            An object containing the Filter objects for which images are
-            required.
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
-        depths : float/dict
-            The depth of this observation. Can either be a single value or a
-            value per filter in a dictionary.
-        snrs : float/dict
-            The desired signal to noise of this observation. Assuming a
-            signal-to-noise ratio of the form SN R= S / N = S / sqrt(sigma).
-            Can either be a single SNR or a SNR per filter in a dictionary.
-        apertures : float/dict
-            The radius of the aperture depth is defined in, if not a point
-            source depth, in the same units as the image resolution. Can either
-            be a single radius or a radius per filter in a dictionary.
+
+        Args:
+            filters (FilterCollection)
+                An imutable collection of Filter objects. If provided, images
+                are made for each filter.
+            psfs (array-like/dict, float/array_like, float)
+                Either A single array describing a PSF to be used on all images or
+                a dictionary containing a PSF for each filter with
+                {filter_code: PSF} key-value pair structure.
+            depths (float/dict, float)
+                The depth of this observation. Can either be a single value or a
+                value per filter in a dictionary.
+            snrs (float/dict, float)
+                The desired signal to noise of this observation. Assuming a
+                signal-to-noise ratio of the form SN R= S / N = S / sqrt(sigma).
+                Can either be a single SNR or a SNR per filter in a dictionary.
+            apertures (float/dict, float)
+                The radius of the aperture depth is defined in, if not a point
+                source depth, in the same units as the image resolution. Can
+                either be a single radius or a radius per filter in a dictionary.
         """
 
         # Define attributes to hold the PSF information
         self.psfs = psfs
         self._normalise_psfs
-
-        # Intialise IFU attributes
-        self.ifu_obj = None
-        self.ifu = None
 
         # Set up filter objects
         self.filters = filters
@@ -164,18 +161,18 @@ class Image:
         Note: Once a new composite Image object is returned this will contain
         the combined image objects in the combined_imgs dictionary.
 
-        Parameters
-        ----------
-        other_img : obj (Image/ParticleImage/ParametricImage)
-            The other image to be combined with self.
-        Returns
-        -------
-        composite_img : obj (Image)
-             A new Image object contain the composite image of self and
-             other_img.
+        Args:
+            other_img (Image/ParticleImage/ParametricImage)
+                The other image to be combined with self.
+
+        Returns:
+            composite_img : obj (Image)
+                A new Image object contain the composite image of self and
+                other_img.
         """
 
         # Make sure the images are compatible dimensions
+
         if (
             self.resolution != other_img.resolution
             or self.fov != other_img.fov
@@ -329,16 +326,13 @@ class Image:
     def get_hist_imgs(self):
         """
         A generic function to calculate an image with no smoothing.
-        Parameters
-        ----------
-        None
-        Returns
-        -------
-        img/imgs : array_like (float)/dictionary
-            If pixel_values is provided: A 2D array containing particles
-            smoothed and sorted into an image. (npix, npix)
-            If a filter list is provided: A dictionary containing 2D array with
-            particles smoothed and sorted into the image. (npix, npix)
+
+        Returns:
+            img/imgs (array_like/dictionary, float)
+                If pixel_values is provided: A 2D array containing particles
+                smoothed and sorted into an image. (npix, npix)
+                If a filter list is provided: A dictionary containing 2D array
+                with particles smoothed and sorted into the image. (npix, npix)
         """
 
         # Handle the possible cases (multiple filters or single image)
@@ -368,17 +362,18 @@ class Image:
         """
         A generic method to calculate an image where particles are smoothed over
         a kernel.
+
         If pixel_values is defined then a single image is made and returned,
         if a filter list has been provided a image is made for each filter and
         returned in a dictionary. If neither of these situations has happened
         an error will have been produced at earlier stages.
-        Returns
-        -------
-        img/imgs : array_like (float)/dictionary
-            If pixel_values is provided: A 2D array containing particles
-            smoothed and sorted into an image. (npix, npix)
-            If a filter list is provided: A dictionary containing 2D array with
-            particles smoothed and sorted into the image. (npix, npix)
+
+        Returns:
+            img/imgs (array_like/dictionary, float)
+                If pixel_values is provided: A 2D array containing particles
+                smoothed and sorted into an image. (npix, npix)
+                If a filter list is provided: A dictionary containing 2D array with
+                particles smoothed and sorted into the image. (npix, npix)
         """
 
         # Handle the possible cases (multiple filters or single image)
@@ -426,6 +421,7 @@ class Image:
         """
         Convolve the imgs stored in this object with the set of psfs passed to
         this method.
+
         This function will handle the different cases for image creation. If
         there are multiple filters it will use the psf for each filters,
         unless a single psf is provided in which case each filter will be
@@ -438,22 +434,17 @@ class Image:
         is more efficient and robust to start at the super resolution initially
         and then downsample after the fact.
 
-        Parameters
-        ----------
-        psfs : array-like (float)/dict
-            Either A single array describing a PSF or a dictionary containing a
-        Returns
-        -------
-        img/imgs : array_like (float)/dictionary
-            If pixel_values exists: A singular image convolved with the PSF.
-            If a filter list exists: Each img in self.imgs is returned
-            convolved with the corresponding PSF (or the single PSF if an array
-            was supplied for psf).
-        Raises
-        -------
-        InconsistentArguments
-            If a dictionary of PSFs is provided that doesn't match the filters
-            an error is raised.
+        Returns:
+            img/imgs (array_like/dictionary, float)
+                If pixel_values exists: A singular image convolved with the PSF.
+                If a filter list exists: Each img in self.imgs is returned
+                convolved with the corresponding PSF (or the single PSF if an
+                array was supplied for psf).
+
+        Raises:
+            InconsistentArguments
+                If a dictionary of PSFs is provided that doesn't match the
+                filters an error is raised.
         """
 
         # Get a local variable for the psfs
@@ -512,30 +503,30 @@ class Image:
         """
         Make and add a noise array to this image defined by either a depth and
         signal-to-noise in an aperture or by an explicit noise pixel value.
-        Parameters
-        ----------
-        img : array-like (float)
-            The image to add noise to.
-        depth : float
-            The depth of this observation.
-        snr : float
-            The desired signal to noise of this observation. Assuming a
-            signal-to-noise ratio of the form SN R= S / N = S / sqrt(sigma).
-        aperture : float
-            The radius of the aperture depth is defined in, if not a point
-            source depth, in the same units as the image resolution.
-        noise : float
-            The standard deviation of the noise distribution. If noise is
-            provided then depth, snr and aperture are ignored.
-        Returns
-        -------
-        noisy_img : array_like (float)
-            The image with a noise contribution.
-        Raises
-        -------
-        InconsistentArguments
-            If noise isn't explictly stated and either depth or snr is
-            missing an error is thrown.
+
+        Args
+            img (array-like, float)
+                The image to add noise to.
+            depth (float)
+                The depth of this observation.
+            snr (float)
+                The desired signal to noise of this observation. Assuming a
+                signal-to-noise ratio of the form SN R= S / N = S / sqrt(sigma).
+            aperture (float)
+                The radius of the aperture depth is defined in, if not a point
+                source depth, in the same units as the image resolution.
+            noise (float)
+                The standard deviation of the noise distribution. If noise is
+                provided then depth, snr and aperture are ignored.
+
+        Returns:
+            noisy_img (array_like, float)
+                The image with a noise contribution.
+
+        Raises:
+            InconsistentArguments
+                If noise isn't explictly stated and either depth or snr is
+                missing an error is thrown.
         """
 
         # Ensure we have valid inputs
@@ -587,25 +578,23 @@ class Image:
         Note that the noise will be applied to the psfed images by default
         if they exist (those stored in self.imgs_psf). If those images do not
         exist then it will be applied to the standard images in self.imgs.
-        Parameters
-        ----------
-        noises : float/dict
-            The standard deviation of the noise distribution. If noises is
-            provided then depth, snr and aperture are ignored. Can either be a
-            single value or a value per filter in a dictionary.
-        Returns
-        -------
-        noisy_img : array_like (float)
-            The image with a noise contribution.
-        Raises
-        -------
-        InconsistentArguments
-            If dictionaries are provided and each filter doesn't have an entry
-            and error is thrown.
+
+        Args:
+            noises (float/dict, float)
+                The standard deviation of the noise distribution. If noises is
+                provided then depth, snr and aperture are ignored. Can either be a
+                single value or a value per filter in a dictionary.
+        Returns:
+            noisy_img (array_like, float)
+                The image with a noise contribution.
+
+        Raises:
+            InconsistentArguments
+                If dictionaries are provided and each filter doesn't have an entry
+                and error is thrown.
         """
 
-        # Check we have a valid set of PSFs
-        # TODO: could move these to a check args function.
+        # Check we have a valid set of noise attributes
         if len(self.filters) == 0 and (
             isinstance(self.depths, dict)
             or isinstance(self.snrs, dict)
@@ -766,44 +755,41 @@ class Image:
         to each filter. If they are provided then then they will be global
         across all filters.
 
-        Parameters
-        ----------
-        img_type : str
-            The type of images to combine. Can be "standard" for noiseless
-            and psfless images (self.imgs), "psf" for images with psf
-            (self.imgs_psf), or "noise" for images with noise
-            (self.imgs_noise).
-        filter_code : str
-            The filter code of the image to be plotted. If provided a plot is
-            made only for this filter. This is not needed if the image object
-            only contains a single image.
-        show : bool
-            Whether to show the plot or not (Default False).
-        vmin : float
-            The minimum value of the normalisation range.
-        vmax : float
-            The maximum value of the normalisation range.
-        scaling_func : function
-            A function to scale the image by. This function should take a
-            single array and produce an array of the same shape but scaled in
-            the desired manner.
-        cmap : str
-            The name of the matplotlib colormap for image plotting. Can be any
-            valid string that can be passed to the cmap argument of imshow.
-            Defaults to "Greys_r".
+        Args:
+            img_type (str)
+                The type of images to combine. Can be "standard" for noiseless
+                and psfless images (self.imgs), "psf" for images with psf
+                (self.imgs_psf), or "noise" for images with noise
+                (self.imgs_noise).
+            filter_code (str)
+                The filter code of the image to be plotted. If provided a plot is
+                made only for this filter. This is not needed if the image object
+                only contains a single image.
+            show (bool)
+                Whether to show the plot or not (Default False).
+            vmin (float)
+                The minimum value of the normalisation range.
+            vmax (float)
+                The maximum value of the normalisation range.
+            scaling_func (function)
+                A function to scale the image by. This function should take a
+                single array and produce an array of the same shape but scaled in
+                the desired manner.
+            cmap (str)
+                The name of the matplotlib colormap for image plotting. Can be any
+                valid string that can be passed to the cmap argument of imshow.
+                Defaults to "Greys_r".
 
-        Returns
-        ----------
-        matplotlib.pyplot.figure
-            The figure object containing the plot
-        matplotlib.pyplot.figure.axis
-            The axis object containing the image.
+        Returns:
+            matplotlib.pyplot.figure
+                The figure object containing the plot
+            matplotlib.pyplot.figure.axis
+                The axis object containing the image.
 
-        Raises
-        ----------
-        MissingImage
-            If the requested image type has not yet been created and stored in
-            this image object an exception is raised.
+        Raises:
+            UnknownImageType
+                If the requested image type has not yet been created and stored in
+                this image object an exception is raised.
         """
 
         # Handle the scaling function for less branches
@@ -954,8 +940,8 @@ class Image:
 
         Raises:
             MissingImage
-                If the requested image type has not yet been created and stored in
-                this image object an exception is raised.
+                If there is no image then there's nothing to plot and an error
+                is thrown.
         """
 
         # Ensure an img exists
@@ -998,27 +984,27 @@ class Image:
         Makes an rgb image of specified filters with optional weights in
         each filter.
 
-        Parameters
-        ----------
-        r_filters : dict (str: array_like (str))
-            A dictionary containing lists of each filter to combine to create
-            the red, green, and blue channels. e.g. {"R": "Webb/NIRCam.F277W",
-            "G": "Webb/NIRCam.F150W", "B": "Webb/NIRCam.F090W"}.
-        img_type : str
-            The type of images to combine. Can be "standard" for noiseless
-            and psfless images (self.imgs), "psf" for images with psf
-            (self.imgs_psf), or "noise" for images with noise
-            (self.imgs_noise).
-        weights : dict (str: array_like (str))
-            A dictionary of weights for each filter. Defaults to equal weights.
-        scaling_func : function
-            A function to scale the image by. Defaults to arcsinh. This
-            function should take a single array and produce an array of the
-            same shape but scaled in the desired manner.
-        Returns
-        ----------
-        array_like (float)
-            The image array itself
+        Args:
+            rgb_filters (dict, array_like, str)
+                A dictionary containing lists of each filter to combine to create
+                the red, green, and blue channels. e.g. {"R": "Webb/NIRCam.F277W",
+                "G": "Webb/NIRCam.F150W", "B": "Webb/NIRCam.F090W"}.
+            img_type (str)
+                The type of images to combine. Can be "standard" for noiseless
+                and psfless images (self.imgs), "psf" for images with psf
+                (self.imgs_psf), or "noise" for images with noise
+                (self.imgs_noise).
+            weights (dict, array_like, float)
+                A dictionary of weights for each filter. Defaults to equal
+                weights.
+            scaling_func (function)
+                A function to scale the image by. Defaults to arcsinh. This
+                function should take a single array and produce an array of the
+                same shape but scaled in the desired manner.
+
+        Returns:
+            array_like (float)
+                The image array itself.
         """
 
         # Handle the scaling function for less branches
@@ -1069,29 +1055,26 @@ class Image:
         """
         Plot an RGB image.
 
-        Parameters
-        ----------
-        show : bool
-            Whether to show the plot or not (Default False).
-        vmin : float
-            The minimum value of the normalisation range.
-        vmax : float
-            The maximum value of the normalisation range.
+        Args:
+            show (bool)
+                Whether to show the plot or not (Default False).
+            vmin (float)
+                The minimum value of the normalisation range.
+            vmax (float)
+                The maximum value of the normalisation range.
 
-        Returns
-        ----------
-        matplotlib.pyplot.figure
-            The figure object containing the plot
-        matplotlib.pyplot.figure.axis
-            The axis object containing the image.
-        array_like (float)
-            The rgb image array itself.
+        Returns:
+            matplotlib.pyplot.figure
+                The figure object containing the plot
+            matplotlib.pyplot.figure.axis
+                The axis object containing the image.
+            array_like (float)
+                The rgb image array itself.
 
-        Raises
-        ----------
-        MissingImage
-            If the RGB image has not yet been created and stored in this image
-            object an exception is raised.
+        Raises:
+            MissingImage
+                If the RGB image has not yet been created and stored in this image
+                object an exception is raised.
         """
 
         # If the image hasn't been made throw an error
@@ -1180,6 +1163,13 @@ class ParticleImage(ParticleScene, Image):
     This can either be used by passing explict arrays of positions and values
     to sort into pixels or by passing SED and Stars Synthesizer objects. Images
     can be created with or without a PSF and noise.
+
+    Inherits from ParticleScene and Image.
+
+    Attributes:
+        pixel_values
+            The particles property array ot be softed into pixels. Only used
+            if an Sed is not passed.
     """
 
     def __init__(
@@ -1205,47 +1195,63 @@ class ParticleImage(ParticleScene, Image):
     ):
         """
         Intialise the ParticleImage.
-        Parameters
-        ----------
-        resolution : float
-            The size a pixel.
-        npix : int
-            The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU.
-        fov : float
-            The width of the image/ifu. If coordinates are being used to make
-            the image this should have the same units as those coordinates.
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
-        filters : obj (FilterCollection)
-            An object containing the Filter objects for which images are
-            required.
-        positons : array-like (float)
-            The position of particles to be sorted into the image.
-        pixel_values : array-like (float)
-            The values to be sorted/smoothed into pixels. Only needed if an sed
-            and filters are not used.
-        smoothing_lengths : array-like (float)
-            The values describing the size of the smooth kernel for each
-            particle. Only needed if star objects are not passed.
-        centre : array-like (float)
-            The centre to use for the image if not the geometric centre of
-            the particle distribution.
-        rest_frame : bool
-            Are we making an observation in the rest frame?
-        redshift : float
-            The redshift of the observation. Used when converting rest frame
-            luminosity to flux.
-        cosmo : obj (astropy.cosmology)
-            A cosmology object from astropy, used for cosmological calculations
-            when converting rest frame luminosity to flux.
-        igm : obj (Inoue14/Madau96)
-            Object containing the absorbtion due to an intergalactic medium.
-        kernel (array-like, float)
-            The values from one of the kernels from the kernel_functions module.
-            Only used for smoothed images.
-        kernel_threshold (float)
-            The kernel's impact parameter threshold (by default 1).
+
+        NOTE: any two of (resolution, npix, fov) must be stated with units where
+        appropriate.
+
+        Args:
+            resolution (unyt_quantity)
+                The size a pixel.
+            npix (int)
+                The number of pixels along an axis of the image or number of
+                spaxels in the image plane of the IFU.
+            fov (unyt_quantity)
+                The width of the image/ifu. If coordinates are being used to make
+                the image this should have the same units as those coordinates.
+            sed (Sed)
+                An sed object containing the spectra for this observation.
+            filters (FilterCollection)
+                An object containing the Filter objects for which images are
+                required.
+            positons (array-like, float)
+                The position of particles to be sorted into the image.
+            pixel_values (array-like, float)
+                The values to be sorted/smoothed into pixels. Only needed if an sed
+                and filters are not used.
+            smoothing_lengths (array-like, float)
+                The values describing the size of the smooth kernel for each
+                particle. Only needed if star objects are not passed.
+            centre (array-like, float)
+                The centre to use for the image if not the geometric centre of
+                the particle distribution.
+            rest_frame (bool)
+                Are we making an observation in the rest frame?
+            redshift (float)
+                The redshift of the observation. Used when converting rest frame
+                luminosity to flux.
+            cosmo (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            psfs (array-like/dict, float/array_like, float)
+                Either A single array describing a PSF to be used on all images or
+                a dictionary containing a PSF for each filter with
+                {filter_code: PSF} key-value pair structure.
+            depths (float/dict, float)
+                The depth of this observation. Can either be a single value or a
+                value per filter in a dictionary.
+            snrs (float/dict, float)
+                The desired signal to noise of this observation. Assuming a
+                signal-to-noise ratio of the form SN R= S / N = S / sqrt(sigma).
+                Can either be a single SNR or a SNR per filter in a dictionary.
+            apertures (float/dict, float)
+                The radius of the aperture depth is defined in, if not a point
+                source depth, in the same units as the image resolution. Can
+                either be a single radius or a radius per filter in a dictionary.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
         """
 
         # Sanitize inputs
@@ -1295,11 +1301,10 @@ class ParticleImage(ParticleScene, Image):
                 The values to sort into pixels. If None self.pixel_values is
                 used. If both are None an error is raised.
 
-        Returns
-        -------
-        img : array_like (float)
-            A 2D array containing the pixel values sorted into the image.
-            (npix, npix)
+        Returns:
+            img : array_like (float)
+                A 2D array containing the pixel values sorted into the image.
+                (npix, npix)
         """
 
         # Get the pixel values if necessary
@@ -1327,11 +1332,10 @@ class ParticleImage(ParticleScene, Image):
                 The values to sort into pixels. If None self.pixel_values is
                 used. If both are None an error is raised.
 
-        Returns
-        -------
-        img : array_like (float)
-            A 2D array containing particles sorted into an image.
-            (npix, npix)
+        Returns:
+            img : array_like (float)
+                A 2D array containing particles sorted into an image.
+                (npix, npix)
 
         Raises:
             InconsistentArguments
@@ -1381,25 +1385,25 @@ class ParametricImage(Scene, Image):
     The Image object, containing attributes and methods for calculating images
     from parametric morphologies.
 
-    Attributes
-    ----------
-    morphology : obj (BaseMorphology and children)
-        The object that describes the parameters and creates the density grid
-        for a particular morphology.
+    Inherits from Scene and Image.
 
+    Attributes:
+        morphology (BaseMorphology and children)
+            The object that describes the parameters and creates the density grid
+            for a particular morphology.
     """
 
     def __init__(
         self,
         morphology,
         resolution,
-        filters=None,
-        sed=None,
         npix=None,
         fov=None,
-        cosmo=None,
-        redshift=None,
+        sed=None,
+        filters=None,
         rest_frame=True,
+        redshift=None,
+        cosmo=None,
         psfs=None,
         depths=None,
         apertures=None,
@@ -1408,48 +1412,54 @@ class ParametricImage(Scene, Image):
         """
         Intialise the ParametricImage.
 
-        Parameters
-        ----------
-        morphology : obj (Morphology)
-            The object that describes the parameters and creates the density
-            grid for the desired morphology to be imaged.
-        resolution : float
-            The size a pixel.
-        filters : obj (FilterCollection)
-            An object containing a collection of filters.
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
-        npix : int
-            The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU.
-        fov : float
-            The width of the image/ifu. If coordinates are being used to make
-            the image this should have the same units as those coordinates.
-        cosmo : obj (astropy.cosmology)
-            A cosmology object from astropy, used for cosmological calculations
-            when converting rest frame luminosity to flux.
-        redshift : float
-            The redshift of the observation. Used when converting rest frame
-            luminosity to flux.
-        rest_frame : bool
-            Are we making an observation in the rest frame?
-        psfs : array-like (float)/dict
-            The Point Spread Function to convolve with the image. Can be a
-            single array or a dictionary with a PSF for each Filter.
-        depths : float/dict
-            The depth of this observation. Can either be a single value or a
-            value per filter in a dictionary.
-        apertures : float/dict
-            The radius of the aperture depth is defined in, if not a point
-            source depth, in the same units as the image resolution. Can either
-            be a single radius or a radius per filter in a dictionary.
-        snrs : float/dict
-            The desired signal to noise of this observation. Assuming a
-            signal-to-noise ratio of the form SN R= S / N = S / sqrt(sigma).
-            Can either be a single SNR or a SNR per filter in a dictionary.
-        super_resolution_factor : int
-            The factor by which the resolution is divided to make the super
-            resolution image used for PSF convolution.
+        NOTE: any two of (resolution, npix, fov) must be stated with units where
+        appropriate.
+
+        Args:
+            morphology (Morphology)
+                The object that describes the parameters and creates the density
+                grid for the desired morphology to be imaged.
+            resolution (unyt_quantity)
+                The size a pixel.
+            npix (int)
+                The number of pixels along an axis of the image or number of
+                spaxels in the image plane of the IFU.
+            fov (unyt_quantity)
+                The width of the image/ifu. If coordinates are being used to make
+                the image this should have the same units as those coordinates.
+            sed (Sed)
+                An sed object containing the spectra for this observation.
+            filters (FilterCollection)
+                An object containing the Filter objects for which images are
+                required.
+            rest_frame (bool)
+                Are we making an observation in the rest frame?
+            redshift (float)
+                The redshift of the observation. Used when converting rest frame
+                luminosity to flux.
+            cosmo (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            psfs (array-like/dict, float/array_like, float)
+                Either A single array describing a PSF to be used on all images or
+                a dictionary containing a PSF for each filter with
+                {filter_code: PSF} key-value pair structure.
+            depths (float/dict, float)
+                The depth of this observation. Can either be a single value or a
+                value per filter in a dictionary.
+            snrs (float/dict, float)
+                The desired signal to noise of this observation. Assuming a
+                signal-to-noise ratio of the form SN R= S / N = S / sqrt(sigma).
+                Can either be a single SNR or a SNR per filter in a dictionary.
+            apertures (float/dict, float)
+                The radius of the aperture depth is defined in, if not a point
+                source depth, in the same units as the image resolution. Can
+                either be a single radius or a radius per filter in a dictionary.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
         """
 
         # Sanitize inputs
@@ -1491,8 +1501,9 @@ class ParametricImage(Scene, Image):
         """
         Checks all arguments agree and do not conflict.
 
-        Raises
-        ----------
+        Raises:
+            UnimplementedFunctionality
+                Filters must be provided to a ParametricImage
         """
 
         # For now ensure we have filters. Filterless images are not currently
