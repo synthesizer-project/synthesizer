@@ -16,7 +16,7 @@ Example usage:
 
 """
 import numpy as np
-from unyt import kpc, unyt_quantity
+from unyt import kpc, Myr, unyt_quantity
 from scipy.spatial import cKDTree
 
 from synthesizer.particle import Stars
@@ -1035,43 +1035,10 @@ class Galaxy(BaseGalaxy):
 
         return gamma
 
-    def create_stellarmass_hist(self, resolution, npix=None, fov=None):
-        """
-        Calculate a 2D histogram of the galaxy's mass distribution.
-
-        NOTE: Either npix or fov must be defined.
-
-        Parameters
-        ----------
-        resolution : float
-           The size of a pixel.
-        npix : int
-            The number of pixels along an axis.
-        fov : float
-            The width of the image in image coordinates.
-
-        Returns
-        -------
-        Image : array-like
-            A 2D array containing the image.
-
-        """
-
-        # Instantiate the Image object.
-        img = ParticleImage(
-            resolution,
-            npix,
-            fov,
-            stars=self.stars,
-            pixel_values=self.stars.initial_masses,
-        )
-
-        return img.get_hist_imgs()
-
     def make_images(
         self,
         resolution,
-        fov=None,
+        fov,
         img_type="hist",
         sed=None,
         filters=(),
@@ -1093,53 +1060,50 @@ class Galaxy(BaseGalaxy):
         arguments allowed by the ParticleImage class. These methods can be
         either a simple histogram or smoothing particles over a kernel. Either
         of these operations can be done with or without a PSF and noise.
-        NOTE: Either npix or fov must be defined.
-        Parameters
-        ----------
-        resolution : float
-           The size of a pixel.
-           (Ignoring any supersampling defined by psf_resample_factor)
-        npix : int
-            The number of pixels along an axis.
-        fov : float
-            The width of the image in image coordinates.
-        img_type : str
-            The type of image to be made, either "hist" -> a histogram, or
-            "smoothed" -> particles smoothed over a kernel.
-        sed : obj (SED)
-            An sed object containing the spectra for this image.
-        filters : obj (FilterCollection)
-            An imutable collection of Filter objects. If provided images are
-            made for each filter.
-        pixel_values : array-like (float)
-            The values to be sorted/smoothed into pixels. Only needed if an sed
-            and filters are not used.
-        psfs : dict
-            A dictionary containing the psf in each filter where the key is
-            each filter code and the value is the psf in that filter.
-        depths : dict
-            A dictionary containing the depth of an observation in each filter
-            where the key is each filter code and the value is the depth in
-            that filter.
-        aperture : float/dict
-            Either a float describing the size of the aperture in which the
-            depth is defined or a dictionary containing the size of the depth
-            aperture in each filter.
-        rest_frame : bool
-            Are we making an observation in the rest frame?
-        cosmo : obj (astropy.cosmology)
-            A cosmology object from astropy, used for cosmological calculations
-            when converting rest frame luminosity to flux.
-        psf_resample_factor : float
-            The factor by which the image should be resampled for robust PSF
-            convolution. Note the images after PSF application will be
-            downsampled to the native pixel scale.
-        kernel (array-like, float)
-            The values from one of the kernels from the kernel_functions module.
-            Only used for smoothed images.
-        kernel_threshold (float)
-            The kernel's impact parameter threshold (by default 1).
-        Returns
+
+        Args:
+            resolution : float
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov : float
+                The width of the image in image coordinates.
+            img_type : str
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            sed : obj (SED)
+                An sed object containing the spectra for this image.
+            filters : obj (FilterCollection)
+                An imutable collection of Filter objects. If provided images are
+                made for each filter.
+            pixel_values : array-like (float)
+                The values to be sorted/smoothed into pixels. Only needed if an sed
+                and filters are not used.
+            psfs : dict
+                A dictionary containing the psf in each filter where the key is
+                each filter code and the value is the psf in that filter.
+            depths : dict
+                A dictionary containing the depth of an observation in each filter
+                where the key is each filter code and the value is the depth in
+                that filter.
+            aperture : float/dict
+                Either a float describing the size of the aperture in which the
+                depth is defined or a dictionary containing the size of the depth
+                aperture in each filter.
+            rest_frame : bool
+                Are we making an observation in the rest frame?
+            cosmo : obj (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            psf_resample_factor : float
+                The factor by which the image should be resampled for robust PSF
+                convolution. Note the images after PSF application will be
+                downsampled to the native pixel scale.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+            Returns
         -------
         Image : array-like
             A 2D array containing the image.
@@ -1155,8 +1119,9 @@ class Galaxy(BaseGalaxy):
             resolution=resolution,
             fov=fov,
             sed=sed,
-            stars=self.stars,
             filters=filters,
+            positions=self.stars.coordinates,
+            smoothing_lengths=self.stars.smoothing_lengths,
             pixel_values=pixel_values,
             rest_frame=rest_frame,
             redshift=self.redshift,
@@ -1210,3 +1175,430 @@ class Galaxy(BaseGalaxy):
             raise exceptions.UnknownImageType(
                 "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
             )
+
+    def make_stellar_mass_map(
+        self,
+        resolution,
+        fov,
+        img_type="hist",
+        cosmo=None,
+        kernel=None,
+        kernel_threshold=1,
+    ):
+        """
+        Makes a mass map, either with or without smoothing.
+
+        Args:
+            resolution (float)
+                The size of a pixel.
+            fov (float)
+                The width of the image in image coordinates.
+            img_type (str)
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            cosmo (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+
+        Returns:
+            Image
+        """
+
+        # Instantiate the Image object.
+        img = ParticleImage(
+            resolution=resolution,
+            fov=fov,
+            positions=self.stars.coordinates,
+            smoothing_lengths=self.stars.smoothing_lengths,
+            pixel_values=self.stars.current_masses,
+            redshift=self.redshift,
+            cosmo=cosmo,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+        )
+
+        # Make the image, handling incorrect image types
+        if img_type == "hist":
+            # Compute the image
+            img.get_hist_imgs()
+
+        elif img_type == "smoothed":
+            # Compute image
+            img.get_imgs()
+
+        else:
+            raise exceptions.UnknownImageType(
+                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+            )
+
+        return img
+
+    def make_gas_mass_map(
+        self,
+        resolution,
+        fov,
+        img_type="hist",
+        cosmo=None,
+        kernel=None,
+        kernel_threshold=1,
+    ):
+        """
+        Makes a mass map, either with or without smoothing.
+
+        Args:
+            resolution (float)
+                The size of a pixel.
+            fov (float)
+                The width of the image in image coordinates.
+            img_type (str)
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            cosmo (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+
+        Returns:
+            Image
+        """
+
+        # Instantiate the Image object.
+        img = ParticleImage(
+            resolution=resolution,
+            fov=fov,
+            positions=self.gas.coordinates,
+            smoothing_lengths=self.gas.smoothing_lengths,
+            pixel_values=self.gas.masses,
+            redshift=self.redshift,
+            cosmo=cosmo,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+        )
+
+        # Make the image, handling incorrect image types
+        if img_type == "hist":
+            # Compute the image
+            img.get_hist_imgs()
+
+        elif img_type == "smoothed":
+            # Compute image
+            img.get_imgs()
+
+        else:
+            raise exceptions.UnknownImageType(
+                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+            )
+
+        return img
+
+    def make_stellar_age_map(
+        self,
+        resolution,
+        fov,
+        img_type="hist",
+        cosmo=None,
+        kernel=None,
+        kernel_threshold=1,
+    ):
+        """
+        Makes a age map, either with or without smoothing. The
+        age in a pixel is the initial mass weighted average age in that
+        pixel.
+
+        Args:
+            resolution (float)
+                The size of a pixel.
+            fov (float)
+                The width of the image in image coordinates.
+            img_type (str)
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            cosmo (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+
+        Returns:
+            Image
+        """
+
+        # Instantiate the Image object.
+        img = ParticleImage(
+            resolution=resolution,
+            fov=fov,
+            positions=self.stars.coordinates,
+            smoothing_lengths=self.stars.smoothing_lengths,
+            pixel_values=self.stars.ages * self.stars.initial_masses,
+            redshift=self.redshift,
+            cosmo=cosmo,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+        )
+
+        # Make the image, handling incorrect image types
+        if img_type == "hist":
+            # Compute the image
+            img.get_hist_imgs()
+
+        elif img_type == "smoothed":
+            # Compute image
+            img.get_imgs()
+
+        else:
+            raise exceptions.UnknownImageType(
+                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+            )
+
+        # Set up the initial mass image
+        mass_img = ParticleImage(
+            resolution=resolution,
+            fov=fov,
+            positions=self.stars.coordinates,
+            smoothing_lengths=self.stars.smoothing_lengths,
+            pixel_values=self.stars.initial_masses,
+            redshift=self.redshift,
+            cosmo=cosmo,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+        )
+
+        # Make the initial mass map
+        if img_type == "hist":
+            # Compute the image
+            mass_img.get_hist_imgs()
+
+        else:
+            # Compute image
+            mass_img.get_imgs()
+
+            # Divide out the mass contribution to get the mean metallicity
+        img.img /= mass_img.img
+
+        return img
+
+    def make_stellar_metallicity_map(
+        self,
+        resolution,
+        fov,
+        img_type="hist",
+        cosmo=None,
+        kernel=None,
+        kernel_threshold=1,
+    ):
+        """
+        Makes a stellar metallicity map, either with or without smoothing. The
+        metallicity in a pixel is the mass weighted average metallicity in that
+        pixel.
+
+        Args:
+            resolution (float)
+                The size of a pixel.
+            fov (float)
+                The width of the image in image coordinates.
+            img_type (str)
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            cosmo (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+
+        Returns:
+            Image
+        """
+
+        # Instantiate the Image object.
+        img = ParticleImage(
+            resolution=resolution,
+            fov=fov,
+            positions=self.stars.coordinates,
+            smoothing_lengths=self.stars.smoothing_lengths,
+            pixel_values=self.stars.metallicities * self.stars.current_masses,
+            redshift=self.redshift,
+            cosmo=cosmo,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+        )
+
+        # Make the image, handling incorrect image types
+        if img_type == "hist":
+            # Compute the image
+            img.get_hist_imgs()
+
+        elif img_type == "smoothed":
+            # Compute image
+            img.get_imgs()
+
+        else:
+            raise exceptions.UnknownImageType(
+                f"Unknown img_type {img_type}. (Options are 'hist' or 'smoothed')"
+            )
+
+        # Make the mass image
+        mass_img = self.make_stellar_mass_map(
+            resolution, fov, img_type, cosmo, kernel, kernel_threshold
+        )
+
+        # Divide out the mass contribution to get the mean metallicity
+        img.img /= mass_img.img
+
+        return img
+
+    def make_sfr_map(
+        self,
+        resolution,
+        fov,
+        img_type="hist",
+        cosmo=None,
+        kernel=None,
+        kernel_threshold=1,
+        age_bin=100 * Myr,
+    ):
+        """
+        Makes a SFR map, either with or without smoothing. Only stars younger
+        than age_bin are included in the map. This is calculated by computing
+        the initial mass map for stars in the age bin and then dividing by the
+        size of the age bin.
+
+        Args:
+            resolution (float)
+                The size of a pixel.
+            fov (float)
+                The width of the image in image coordinates.
+            img_type (str)
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            cosmo (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+            age_bin (unyt_quantity/float)
+                The size of the age bin used to calculate the star formation
+                rate. If supplied without units, the unit system is assumed.
+
+        Returns:
+            Image
+        """
+
+        # Convert the age bin if necessary
+        if isinstance(age_bin, unyt_quantity):
+            if age_bin.units != self.stars.ages.units:
+                age_bin = age_bin.to(self.stars.ages.units)
+        else:
+            age_bin *= self.stars.ages.units
+
+        # Get the mask for stellar particles in the age bin
+        mask = self.stars.ages < age_bin
+
+        #  Warn if we have stars to plot in this bin
+        if self.stars.ages[mask].size == 0:
+            print("The SFR is 0! (there are 0 stars in the age bin)")
+
+        # Instantiate the Image object.
+        img = ParticleImage(
+            resolution=resolution,
+            fov=fov,
+            positions=self.stars.coordinates[mask, :],
+            smoothing_lengths=self.stars.smoothing_lengths[mask],
+            pixel_values=self.stars.initial_masses[mask],
+            redshift=self.redshift,
+            cosmo=cosmo,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+        )
+
+        # Make the initial mass map, handling incorrect image types
+        if img_type == "hist":
+            # Compute the image
+            img.get_hist_imgs()
+
+        elif img_type == "smoothed":
+            # Compute image
+            img.get_imgs()
+
+        else:
+            raise exceptions.UnknownImageType(
+                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+            )
+
+        # Convert the initial mass map to SFR
+        img.img /= age_bin
+
+        return img
+
+    def make_ssfr_map(
+        self,
+        resolution,
+        fov,
+        img_type="hist",
+        cosmo=None,
+        kernel=None,
+        kernel_threshold=1,
+        age_bin=100 * Myr,
+    ):
+        """
+        Makes a SFR map, either with or without smoothing. Only stars younger
+        than age_bin are included in the map. This is calculated by computing
+        the initial mass map for stars in the age bin and then dividing by the
+        size of the age bin.
+
+        Args:
+            resolution (float)
+                The size of a pixel.
+            fov (float)
+                The width of the image in image coordinates.
+            img_type (str)
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            cosmo (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+            age_bin (unyt_quantity/float)
+                The size of the age bin used to calculate the star formation
+                rate. If supplied without units, the unit system is assumed.
+
+        Returns:
+            Image
+        """
+
+        # Get the SFR map
+        img = self.make_sfr_map(
+            resolution=resolution,
+            fov=fov,
+            img_type=img_type,
+            cosmo=cosmo,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            age_bin=age_bin,
+        )
+
+        # Convert the SFR map to sSFR
+        img.img /= self.stellar_mass
+
+        return img
