@@ -88,25 +88,28 @@ class Image:
     """
 
     # Define the slots to reduce the memory footprint
-    __slots__ = [
-        "psfs",
-        "filters",
-        "img",
-        "img_psf",
-        "img_noise",
-        "imgs",
-        "imgs_psf",
-        "imgs_noise",
-        "rgb_image",
-        "combined_imgs",
-        "depths",
-        "snrs",
-        "apertures",
-        "weight_map",
-        "noise_arr",
-        "noise_arrs",
-        "weights_maps",
-    ]
+    # TODO: For some reason defining these slots cause a "TypeError: multiple
+    # bases have instance lay-out conflict" error at import. I can't fathom
+    # why! For now left commented out.
+    # __slots__ = [
+    #     "psfs",
+    #     "filters",
+    #     "img",
+    #     "img_psf",
+    #     "img_noise",
+    #     "imgs",
+    #     "imgs_psf",
+    #     "imgs_noise",
+    #     "rgb_image",
+    #     "combined_imgs",
+    #     "depths",
+    #     "snrs",
+    #     "apertures",
+    #     "weight_map",
+    #     "noise_arr",
+    #     "noise_arrs",
+    #     "weights_maps",
+    # ]
 
     def __init__(
         self,
@@ -1425,11 +1428,11 @@ class ParametricImage(Scene, Image):
     """
 
     # Define slots to reduce memory footprint
-    __slots__ = [
-        "morphology",
-        "density_grid",
-        "smooth_value",
-    ]
+    # __slots__ = [
+    #     "morphology",
+    #     "density_grid",
+    #     "smooth_value",
+    # ]
 
     def __init__(
         self,
