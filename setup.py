@@ -105,14 +105,13 @@ class BuildExt(build_ext):
 extensions = [
     Extension(path, sources=[source])
     for path, source in {
-        "synthesizer.extensions.csed": "synthesizer/extensions/csed.c",
+        "synthesizer.extensions.integrated_spectra": "synthesizer/extensions/integrated_spectra.c",
+        "synthesizer.extensions.particle_spectra": "synthesizer/extensions/particle_spectra.c",
         "synthesizer.extensions.weights": "synthesizer/extensions/weights.c",
         "synthesizer.extensions.los": "synthesizer/extensions/los.c",
         "synthesizer.imaging.extensions.spectral_cube": "synthesizer/imaging/extensions/spectral_cube.c",
         "synthesizer.imaging.extensions.image": "synthesizer/imaging/extensions/image.c",
     }.items()
-    # Extension("synthesizer.weights", ["synthesizer/weights.pyx"],
-    #     define_macros=[('CYTHON_TRACE', '1')])
 ]
 
 setup(

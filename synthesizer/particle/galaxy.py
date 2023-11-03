@@ -456,7 +456,7 @@ class Galaxy(BaseGalaxy):
 
             return np.zeros(len(grid.lam))
 
-        from ..extensions.csed import compute_integrated_sed
+        from ..extensions.integrated_spectra import compute_integrated_sed
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
@@ -514,7 +514,7 @@ class Galaxy(BaseGalaxy):
 
             return np.zeros(len(grid.lam))
 
-        from ..extensions.csed import compute_particle_seds
+        from ..extensions.particle_spectra import compute_particle_seds
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
