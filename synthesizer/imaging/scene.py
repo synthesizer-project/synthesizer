@@ -8,52 +8,49 @@ from scipy.ndimage import zoom
 
 from synthesizer.particle import Stars
 import synthesizer.exceptions as exceptions
+from synthesizer.units import Quantity
 
 
 class Scene:
     """
-    The parent class for all "observations". These include:
-    - Flux/rest frame luminosity images in photometric bands.
-    - Images of underlying properties such as SFR, stellar mass, etc.
-    - Data cubes (IFUs) containing spatially resolved spectra.
-    This parent contains the attributes and methods common to all observation
-    types to reduce boilerplate.
-    Attributes
-    ----------
-    resolution : float
-        The size a pixel.
-    npix : int
-        The number of pixels along an axis of the image or number of spaxels
-        in the image plane of the IFU.
-    fov : float
-        The width of the image/ifu. If coordinates are being used to make the
-        image this should have the same units as those coordinates.
-    sed : obj (SED)
-        An sed object containing the spectra for this observation.
-    survey : obj (Survey)
-        WorkInProgress
-    spatial_unit : obj (unyt.unit)
-        The units of the spatial image/IFU information (coordinates,
-        resolution, fov, apertures, etc.).
-    Raises
-    ----------
-    InconsistentArguments
-        If an incompatible combination of arguments is provided an error is
-        raised.
+    The parent class for all "images" containing all information related to the
+    "scene" being imaged.
+
+    Attributes:
+        resolution (float)
+            The size a pixel.
+        npix (int)
+            The number of pixels along an axis of the image or number of spaxels
+            in the image plane of the IFU.
+        fov (float)
+            The width of the image/ifu. If coordinates are being used to make the
+            image this should have the same units as those coordinates.
+        sed (SED)
+            An sed object containing the spectra for this observation.
+
+    Raises:
+        InconsistentArguments
+            If an incompatible combination of arguments is provided an error is
+            raised.
     """
 
     # Define slots to reduce memory overhead of this class and limit the
     # possible attributes.
     __slots__ = [
-        "resolution",
-        "fov",
+        "_resolution",
+        "_fov",
         "npix",
         "sed",
-        "survey",
-        "spatial_unit",
-        "orig_resolution",
+        "_orig_resolution",
         "orig_npix",
+        "cosmo",
+        "redshift",
     ]
+
+    # Define quantities
+    resolution = Quantity()
+    fov = Quantity()
+    orig_resolution = Quantity()
 
     def __init__(
         self,
@@ -91,16 +88,10 @@ class Scene:
         # Check what we've been given
         self._check_scene_args(resolution, fov, npix)
 
-        # Define the spatial units of the image
-        self.spatial_unit = resolution.units
-
         # Scene resolution, width and pixel information
         self.resolution = resolution.value
         self.fov = fov
         self.npix = npix
-
-        # Check unit consistency
-        self._convert_scene_coords()
 
         # Attributes containing data
         self.sed = sed
@@ -160,9 +151,9 @@ class Scene:
         """
 
         # Compute how many pixels fall in the FOV
-        self.npix = int(math.ceil(self.fov / self.resolution))
+        self.npix = int(math.ceil(self._fov / self._resolution))
         if self.orig_npix is None:
-            self.orig_npix = int(math.ceil(self.fov / self.resolution))
+            self.orig_npix = int(math.ceil(self._fov / self._resolution))
 
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
@@ -176,32 +167,6 @@ class Scene:
 
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
-
-    def _convert_scene_coords(self):
-        """
-        Ensures that the resolution and FOV are in consistent units.
-        """
-
-        # If we haven't been given an FOV there's nothing to do.
-        if self.fov is None:
-            return
-
-        # Otherwise, do we need to convert the FOV to the correct units?
-        elif self.fov.units != self.spatial_unit:
-            # If the units have the same dimension convert them
-            if self.fov.units.same_dimensions_as(self.spatial_unit):
-                self.fov.to(self.spatial_unit)
-
-            # For now raise an error, in the future we could handle length to
-            # angle conversions.
-            else:
-                raise exceptions.UnimplementedFunctionality(
-                    "Conversion between length and angular units for "
-                    "resolution and FOV not yet supported."
-                )
-
-        # Strip off the units
-        self.fov = self.fov.value
 
     def _resample(self, factor):
         """
@@ -320,9 +285,7 @@ class ParticleScene(Scene):
     types to reduce boilerplate.
     Attributes
     ----------
-    particles (Stars/Gas/DarkMatter/BlackHoles)
-        The object containing the particles to be placed in a image.
-    coords : array-like (float)
+    coordinates : array-like (float)
         The position of particles to be sorted into the image.
     centre : array-like (float)
         The coordinates around which the image will be centered.
@@ -346,17 +309,20 @@ class ParticleScene(Scene):
 
     # Define slots to reduce memory overhead of this class
     __slots__ = [
-        "coords",
-        "coord_unit",
-        "centre",
+        "_coordinates",
+        "_centre",
         "pix_pos",
         "npart",
-        "smoothing_lengths",
-        "smooth_unit",
+        "_smoothing_lengths",
         "kernel",
         "kernel_threshold",
         "kernel_dim",
     ]
+
+    # Define quantities
+    coordinates = Quantity()
+    centre = Quantity()
+    smoothing_lengths = Quantity()
 
     def __init__(
         self,
@@ -364,7 +330,7 @@ class ParticleScene(Scene):
         npix=None,
         fov=None,
         sed=None,
-        positions=None,
+        coordinates=None,
         smoothing_lengths=None,
         centre=None,
         cosmo=None,
@@ -409,7 +375,7 @@ class ParticleScene(Scene):
 
         # Check what we've been given
         self._check_part_args(
-            resolution, positions, centre, cosmo, sed, kernel, smoothing_lengths
+            resolution, coordinates, centre, cosmo, sed, kernel, smoothing_lengths
         )
 
         # Initilise the parent class
@@ -424,35 +390,29 @@ class ParticleScene(Scene):
             redshift=redshift,
         )
 
-        # Handle the particle positions, here we make a copy to avoid changing
+        # Handle the particle coordinates, here we make a copy to avoid changing
         # the original values
-        self.coords = np.copy(positions)
-        self.coord_unit = positions.units
+        self.coordinates = np.copy(coordinates)
 
-        # If the positions are not already centred centre them
+        # If the coordinates are not already centred centre them
         self.centre = centre
-        self._centre_coords()
+        self._centre_coordinates()
 
         # Store the smoothing lengths because we again need a copy
         if smoothing_lengths is not None:
             self.smoothing_lengths = np.copy(smoothing_lengths)
-            self.smooth_unit = smoothing_lengths.units
         else:
             self.smoothing_lengths = None
-            self.smooth_unit = None
 
-        # Convert coordinates to the image's spatial units
-        self._convert_to_img_units()
-
-        # Shift positions to start at 0
-        self.coords += self.fov / 2
+        # Shift coordinates to start at 0
+        self.coordinates += self.fov / 2
 
         # Calculate the position of particles in pixel coordinates
-        self.pix_pos = np.zeros(self.coords.shape, dtype=np.int32)
+        self.pix_pos = np.zeros(self.coordinates.shape, dtype=np.int32)
         self._get_pixel_pos()
 
         # How many particle are there?
-        self.npart = self.coords.shape[0]
+        self.npart = self.coordinates.shape[0]
 
         # Set up the kernel attributes we need
         if kernel is not None:
@@ -465,7 +425,7 @@ class ParticleScene(Scene):
             self.kernel_threshold = None
 
     def _check_part_args(
-        self, resolution, positions, centre, cosmo, sed, kernel, smoothing_lengths
+        self, resolution, coordinates, centre, cosmo, sed, kernel, smoothing_lengths
     ):
         """
         Ensures we have a valid combination of inputs.
@@ -483,8 +443,6 @@ class ParticleScene(Scene):
            If the centre does not lie within the range of coordinates an error
            is raised.
         """
-
-        # TODO: check units work for array based images.
 
         # Get the spatial units
         spatial_unit = resolution.units
@@ -509,12 +467,12 @@ class ParticleScene(Scene):
 
         # Need to ensure we have a per particle SED
         if sed is not None:
-            if sed.lnu.shape[0] != positions.shape[0]:
+            if sed.lnu.shape[0] != coordinates.shape[0]:
                 raise exceptions.InconsistentArguments(
                     "The shape of the SED array:",
                     sed.lnu.shape,
                     "does not agree with the number of stellar particles "
-                    "(%d)" % positions.shape[0],
+                    "(%d)" % coordinates.shape[0],
                 )
 
         # Missing cosmology
@@ -523,15 +481,15 @@ class ParticleScene(Scene):
                 "When working in an angular unit system a cosmology object"
                 " must be given."
             )
-        # The passed centre does not lie within the range of positions
+        # The passed centre does not lie within the range of coordinates
         if centre is not None:
             if (
-                centre[0] < np.min(positions[:, 0])
-                or centre[0] > np.max(positions[:, 0])
-                or centre[1] < np.min(positions[:, 1])
-                or centre[1] > np.max(positions[:, 1])
-                or centre[2] < np.min(positions[:, 2])
-                or centre[2] > np.max(positions[:, 2])
+                centre[0] < np.min(coordinates[:, 0])
+                or centre[0] > np.max(coordinates[:, 0])
+                or centre[1] < np.min(coordinates[:, 1])
+                or centre[1] > np.max(coordinates[:, 1])
+                or centre[2] < np.min(coordinates[:, 2])
+                or centre[2] > np.max(coordinates[:, 2])
             ):
                 raise exceptions.InconsistentCoordinates(
                     "The centre lies outside of the coordinate range. "
@@ -540,12 +498,12 @@ class ParticleScene(Scene):
 
         # Need to ensure we have a per particle SED
         if sed is not None:
-            if sed.lnu.shape[0] != positions.shape[0]:
+            if sed.lnu.shape[0] != coordinates.shape[0]:
                 raise exceptions.InconsistentArguments(
                     "The shape of the SED array:",
                     sed.lnu.shape,
                     "does not agree with the number of coordinates "
-                    "(%d)" % positions.shape[0],
+                    "(%d)" % coordinates.shape[0],
                 )
 
         # Ensure we aren't trying to smooth particles without smoothing lengths
@@ -554,7 +512,7 @@ class ParticleScene(Scene):
                 "Trying to smooth particles which don't have smoothing lengths!"
             )
 
-    def _centre_coords(self):
+    def _centre_coordinates(self):
         """
         Centre coordinates on the geometric mean or the user provided centre.
 
@@ -563,108 +521,17 @@ class ParticleScene(Scene):
 
         # Calculate the centre if necessary
         if self.centre is None:
-            self.centre = np.mean(self.coords, axis=0)
+            self.centre = np.mean(self._coordinates, axis=0)
 
         # Centre the coordinates
-        self.coords -= self.centre
+        self.coordinates -= self._centre
 
     def _get_pixel_pos(self):
         """
-        Convert particle positions to interger pixel coordinates.
+        Convert particle coordinates to interger pixel coordinates.
         These later help speed up sorting particles into pixels since their
         index is precomputed here.
         """
 
-        # Convert sim positions to pixel positions
-        self.pix_pos = np.int32(np.floor(self.coords / self.resolution))
-
-    def _convert_to_img_units(self):
-        """
-        Convert the passed coordinates (and smoothing lengths) to the scene's
-        spatial unit system.
-        """
-
-        # TODO: missing redshift information in Scene
-
-        # Is there anything to do here?
-        if self.coord_unit == self.spatial_unit:
-            return
-
-        # If they are the same dimension do the conversion.
-        elif self.spatial_unit.same_dimensions_as(self.coord_unit):
-            # First do the coordinates
-            self.coords *= self.coord_unit
-            self.coords.convert_to_units(self.spatial_unit)
-            self.coords = self.coords.value
-
-        # # Otherwise, handle conversion between length and angle
-        # elif self.spatial_unit.same_dimensions_as(
-        #     arcsec
-        # ) and self.particles.coord_units.same_dimensions_as(kpc):
-
-        #     # Convert coordinates from comoving to physical coordinates
-        #     self.coords *= 1 / (1 + self.particles.redshift)
-
-        #     # Get the conversion factor for arcsec and kpc at this redshift
-        #     arcsec_per_kpc_proper = self.cosmo.arcsec_per_kpc_proper(
-        #         self.particles.redshift
-        #     ).value
-
-        #     # First we need to convert to kpc
-        #     if self.particles.coord_units != kpc:
-
-        #         # First do the coordinates
-        #         self.coords *= self.particles.coord_units
-        #         self.coords.convert_to_units(kpc)
-        #         self.coords = self.coords.value
-
-        #     # Now we can convert to arcsec
-        #     self.coords *= arcsec_per_kpc_proper * arcsec
-
-        #     # Finally convert to the image unit system if needed
-        #     if self.spatial_unit != arcsec:
-        #         self.coords.convert_to_units(self.spatial_unit)
-
-        #     # And strip off the unit
-        #     self.coords = self.coords.value
-
-        else:
-            raise exceptions.UnimplementedFunctionality(
-                "Unrecognised combination of image and coordinate units. Feel "
-                "free to raise an issue on Github. Currently supported input"
-                " dimensions are length or angle for image units and only "
-                "length for coordinate units."
-            )
-
-        # And now do the smoothing lengths
-        if self.smoothing_lengths is not None:
-            # If they are the same dimension do the conversion.
-            if self.spatial_unit.same_dimensions_as(self.smooth_unit):
-                self.smoothing_lengths *= self.smooth_unit
-                self.smoothing_lengths.convert_to_units(self.spatial_unit)
-                self.smoothing_lengths = self.smoothing_lengths.value
-
-            # # Otherwise, handle conversion between length and angle
-            # elif self.spatial_unit.same_dimensions_as(
-            #     arcsec
-            # ) and self.particles.coord_units.same_dimensions_as(kpc):
-
-            #     # Convert coordinates from comoving to physical coordinates
-            #     self.smoothing_lengths *= 1 / (1 + self.particles.redshift)
-
-            #     # First we need to convert to kpc
-            #     if self.particles.coord_units != kpc:
-            #         self.smoothing_lengths *= self.particles.coord_units
-            #         self.smoothing_lengths.convert_to_units(kpc)
-            #         self.smoothing_lengths = self.smoothing_lengths.value
-
-            #     # Now we can convert to arcsec
-            #     self.smoothing_lengths *= arcsec_per_kpc_proper * arcsec
-
-            #     # Finally convert to the image unit system if needed
-            #     if self.spatial_unit != arcsec:
-            #         self.coords.convert_to_units(self.spatial_unit)
-            #         self.smoothing_lengths.convert_to_units(self.spatial_unit)
-
-            #     # And strip off the unit
-            #     self.smoothing_lengths = self.smoothing_lengths.value
+        # Convert sim coordinates to pixel coordinates
+        self.pix_pos = np.int32(np.floor(self._coordinates / self._resolution))
