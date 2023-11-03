@@ -117,8 +117,18 @@ class Sed:
                     "Wavelength grids must be identical"
                 )
 
+            # Get the other lnu array
+            other_lnu = other_sed._lnu
+
+            # If the the number of dimensions differ between the lnu arrays we
+            # need to promote the smaller one
+            if new_lnu.ndim < other_lnu.ndim:
+                new_lnu = np.array((new_lnu,))
+            elif new_lnu.ndim > other_lnu.ndim:
+                other_lnu = np.array((other_lnu,))
+
             # Concatenate this lnu array
-            new_lnu = np.concatenate(new_lnu, other_sed._lnu)
+            new_lnu = np.concatenate((new_lnu, other_lnu))
 
         return Sed(self._lam, new_lnu)
 
