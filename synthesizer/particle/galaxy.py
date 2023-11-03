@@ -1062,7 +1062,7 @@ class Galaxy(BaseGalaxy):
         of these operations can be done with or without a PSF and noise.
 
         Args:
-            resolution : float
+            resolution (Quantity, float)
                 The size of a pixel.
                 (Ignoring any supersampling defined by psf_resample_factor)
             fov : float
