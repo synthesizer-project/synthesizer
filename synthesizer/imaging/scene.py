@@ -99,7 +99,7 @@ class Scene:
         self._check_scene_args(resolution, fov, npix)
 
         # Scene resolution, width and pixel information
-        self.resolution = resolution.value
+        self.resolution = resolution
         self.fov = fov
         self.npix = npix
 
