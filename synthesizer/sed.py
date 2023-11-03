@@ -26,7 +26,7 @@ class Sed:
         lnu (ndarray)
             the spectral luminosity density
 
-    Methods:    
+    Methods:
     """
 
     # Define Quantities, for details see units.py
@@ -55,7 +55,7 @@ class Sed:
         # Set the wavelength
         self.lam = lam  # \AA
 
-        # If no lnu is provided create an empty array with the same shape as
+        # If no lnu is provided create an empty array with the same shape as
         # lam.
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
@@ -108,7 +108,6 @@ class Sed:
 
         # Loop over the other seds
         for other_sed in other_seds:
-
             # Ensure the wavelength arrays are compatible
             # NOTE: this is probably overkill and too costly. We
             # could instead check the first and last entry and the shape.
@@ -118,14 +117,22 @@ class Sed:
                     "Wavelength grids must be identical"
                 )
 
+            # Get the other lnu array
+            other_lnu = other_sed._lnu
+
+            # If the the number of dimensions differ between the lnu arrays we
+            # need to promote the smaller one
+            if new_lnu.ndim < other_lnu.ndim:
+                new_lnu = np.array((new_lnu,))
+            elif new_lnu.ndim > other_lnu.ndim:
+                other_lnu = np.array((other_lnu,))
+
             # Concatenate this lnu array
-            new_lnu = np.concatenate(new_lnu, other_sed._lnu)
+            new_lnu = np.concatenate((new_lnu, other_lnu))
 
         return Sed(self._lam, new_lnu)
 
-
     def __add__(self, second_sed):
-
         """
         Overide addition operator to allow two Sed objects to be added
         together.
@@ -149,21 +156,16 @@ class Sed:
         # could instead check the first and last entry and the shape.
         # In rare instances this could fail though.
         if not np.array_equal(self._lam, second_sed._lam):
-            raise exceptions.InconsistentAddition(
-                "Wavelength grids must be identical"
-            )
+            raise exceptions.InconsistentAddition("Wavelength grids must be identical")
 
         # Ensure the lnu arrays are compatible
         # This check is redudant for Sed.lnu.shape = (nlam, ) spectra but will
         # not erroneously error. Nor is it expensive.
         if self._lnu.shape[0] != second_sed._lnu.shape[0]:
-            raise exceptions.InconsistentAddition(
-                "SEDs must have same dimensions"
-            )
+            raise exceptions.InconsistentAddition("SEDs must have same dimensions")
 
         # They're compatible, add them
         return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
-
 
     def __str__(self):
         """
@@ -193,7 +195,6 @@ class Sed:
     def _spec_dims(self):
         return np.ndim(self.lnu)
 
-
     def _get_lnu_at_nu(self, nu, kind=False):
         """
         A simple internal function for getting lnu at nu assuming the default
@@ -214,7 +215,7 @@ class Sed:
     def get_lnu_at_nu(self, nu, kind=False):
         """
         Return lnu with units at a provided frequency using 1d interpolation.
-        
+
         Args:
             wavelength (array or float)
                 wavelength(s) of interest
@@ -227,14 +228,13 @@ class Sed:
 
         """
 
-        return self._get_lnu_at_nu(nu.to(units.nu).value, kind=kind)\
-            * units.lnu
+        return self._get_lnu_at_nu(nu.to(units.nu).value, kind=kind) * units.lnu
 
     def _get_lnu_at_lam(self, lam, kind=False):
         """
         Return lnu without units at a provided wavelength using 1d
         interpolation.
-        
+
         Args:
             lam (array or float)
                 wavelength(s) of interest
@@ -250,7 +250,7 @@ class Sed:
     def get_lnu_at_lam(self, lam, kind=False):
         """
         Return lnu at a provided wavelength.
-        
+
         Args:
             lam (array or float)
                 wavelength(s) of interest
@@ -261,10 +261,9 @@ class Sed:
 
         """
 
-        return self._get_lnu_at_lam(lam.to(units.lam).value, kind=kind)\
-            * units.lnu
+        return self._get_lnu_at_lam(lam.to(units.lam).value, kind=kind) * units.lnu
 
-    def measure_bolometric_luminosity(self, method='trapz'):
+    def measure_bolometric_luminosity(self, method="trapz"):
         """
         Calculate the bolometric luminosity of the SED by simply integrating
         the SED.
@@ -273,56 +272,54 @@ class Sed:
             method (str)
                 The method used to calculate the bolometric luminosity. Options
                 include 'trapz' and 'quad'.
-       
+
         Returns:
             bolometric_luminosity (float)
                 The bolometric luminosity.
-        
+
         """
 
-        if method == 'trapz':
+        if method == "trapz":
             bolometric_luminosity = np.trapz(self.lnu[::-1], x=self.nu[::-1])
-        if method == 'quad':
-            bolometric_luminosity = integrate.quad(self._get_lnu_at_nu,
-                                                   1E12, 1E16)[0] \
-                                                    * units.luminosity
+        if method == "quad":
+            bolometric_luminosity = (
+                integrate.quad(self._get_lnu_at_nu, 1e12, 1e16)[0] * units.luminosity
+            )
 
         return bolometric_luminosity
 
-    def measure_window_luminosity(self, window, method='trapz'):
-
+    def measure_window_luminosity(self, window, method="trapz"):
         """
         Measure the luminosity in a spectral window.
 
         Args:
             window (tuple of floats)
                 The window in wavelength
-        
+
         Returns:
             luminosity (float)
                 The luminosity in the window.
         """
 
-        if method == 'quad':
+        if method == "quad":
             """
             Convert wavelength limits to frequency limits and convert to
             base units.
             """
             lims = (c / np.array(window)).to(units.nu).value
-            luminosity = integrate.quad(self._get_lnu_at_nu, *lims)[0]\
-                * units.luminosity
+            luminosity = (
+                integrate.quad(self._get_lnu_at_nu, *lims)[0] * units.luminosity
+            )
 
-        if method == 'trapz':
-             # define a pseudo transmission function
+        if method == "trapz":
+            # define a pseudo transmission function
             transmission = (self.lam > window[0]) & (self.lam < window[1])
             transmission = transmission.astype(float)
-            luminosity = np.trapz(self.lnu[::-1] * transmission[::-1],
-                                  x=self.nu[::-1])
+            luminosity = np.trapz(self.lnu[::-1] * transmission[::-1], x=self.nu[::-1])
 
         return luminosity.to(units.luminosity)
 
-    def measure_window_lnu(self, window, method='trapz'):
-
+    def measure_window_lnu(self, window, method="trapz"):
         """
         Measure lnu in a spectral window.
 
@@ -337,57 +334,62 @@ class Sed:
                 The luminosity in the window.
         """
 
-        if method == 'average':
-
+        if method == "average":
             # define a pseudo transmission function
             transmission = (self.lam > window[0]) & (self.lam < window[1])
             transmission = transmission.astype(float)
 
             if self._spec_dims == 2:
-
-                Lnu = np.array([np.sum(_lnu * transmission) /
-                                np.sum(transmission)
-                                for _lnu in self._lnu]) * units.lnu
+                Lnu = (
+                    np.array(
+                        [
+                            np.sum(_lnu * transmission) / np.sum(transmission)
+                            for _lnu in self._lnu
+                        ]
+                    )
+                    * units.lnu
+                )
 
             else:
-
                 Lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
 
-        if method == 'trapz':
-
+        if method == "trapz":
             # define a pseudo transmission function
             transmission = (self.lam > window[0]) & (self.lam < window[1])
             transmission = transmission.astype(float)
 
             nu = self.nu[::-1]
-            
+
             if self._spec_dims == 2:
+                Lnu = (
+                    np.array(
+                        [
+                            np.trapz(_lnu[::-1] * transmission[::-1] / nu, x=nu)
+                            / np.trapz(transmission[::-1] / nu, x=nu)
+                            for _lnu in self._lnu
+                        ]
+                    )
+                    * units.lnu
+                )
 
-                Lnu = np.array([
-                    np.trapz(_lnu[::-1] * transmission[::-1] / nu, x=nu) / 
-                    np.trapz(transmission[::-1]/nu, x=nu)
-                    for _lnu in self._lnu]) * units.lnu
-                
             else:
-
                 lnu = self.lnu[::-1]
-                Lnu = np.trapz(lnu * transmission[::-1] / nu, x=nu) / \
-                    np.trapz(transmission[::-1]/nu, x=nu)
+                Lnu = np.trapz(lnu * transmission[::-1] / nu, x=nu) / np.trapz(
+                    transmission[::-1] / nu, x=nu
+                )
 
-        # note: not yet adapted for multiple SEDs            
-        if method == 'quad':
-
+        # note: not yet adapted for multiple SEDs
+        if method == "quad":
             # define limits in base units
             lims = (c / window).to(units.nu).value
 
             def func(x):
-                return self._get_lnu_at_nu(x)/x
+                return self._get_lnu_at_nu(x) / x
 
             def inv(x):
-                return 1/x
-            
-            Lnu = integrate.quad(func, *lims)[0] / \
-                integrate.quad(inv, *lims)[0]
+                return 1 / x
+
+            Lnu = integrate.quad(func, *lims)[0] / integrate.quad(inv, *lims)[0]
 
             Lnu = Lnu * units.lnu
 
@@ -406,7 +408,7 @@ class Sed:
 
         Returns:
             break
-                The ratio of the luminosity in the two windows. 
+                The ratio of the luminosity in the two windows.
         """
         return self.measure_window_lnu(red) / self.measure_window_lnu(blue)
 
@@ -425,7 +427,7 @@ class Sed:
 
         return self.measure_break(blue, red)
 
-    def measure_d4000(self, definition='Bruzual83'):
+    def measure_d4000(self, definition="Bruzual83"):
         """
         Measure the D4000 index using either the Bruzual83 or Balogh
         definitions.
@@ -438,11 +440,11 @@ class Sed:
             float
                 The Balmer break strength
         """
-        if definition == 'Bruzual83':
+        if definition == "Bruzual83":
             blue = (3750, 3950) * Angstrom
             red = (4050, 4250) * Angstrom
 
-        if definition == 'Balogh':
+        if definition == "Balogh":
             blue = (3850, 3950) * Angstrom
             red = (4000, 4100) * Angstrom
 
@@ -462,25 +464,24 @@ class Sed:
 
         # if a single window is provided
         if len(window) == 2:
-
             s = (self.lam > window[0]) & (self.lam < window[1])
 
             if self._spec_dims == 2:
+                beta = np.array(
+                    [
+                        linregress(np.log10(self._lam[s]), np.log10(_lnu[..., s]))[0]
+                        - 2.0
+                        for _lnu in self.lnu
+                    ]
+                )
 
-                beta = np.array([
-                    linregress(np.log10(self._lam[s]),
-                               np.log10(_lnu[..., s]))[0] - 2.0
-                    for _lnu in self.lnu
-                ])
-            
             else:
+                beta = (
+                    linregress(np.log10(self._lam[s]), np.log10(self._lnu[s]))[0] - 2.0
+                )
 
-                beta = linregress(np.log10(self._lam[s]),
-                                  np.log10(self._lnu[s]))[0] - 2.0
-
-        # if two windows are provided 
+        # if two windows are provided
         elif len(window) == 4:
-
             # define the red and blue windows
             blue = window[:2]
             red = window[2:]
@@ -488,15 +489,16 @@ class Sed:
             # measure the red and blue windows
             lnu_blue = self.measure_window_lnu(blue)
             lnu_red = self.measure_window_lnu(red)
-            
-            # measure beta
-            beta = np.log10(lnu_blue / lnu_red) / np.log10(np.mean(blue) /
-                                                           np.mean(red)) - 2.0
-            
-        else:
 
+            # measure beta
+            beta = (
+                np.log10(lnu_blue / lnu_red) / np.log10(np.mean(blue) / np.mean(red))
+                - 2.0
+            )
+
+        else:
             # raise exception
-            print('a window of len 2 or 4 must be provided')
+            print("a window of len 2 or 4 must be provided")
 
         return beta
 
@@ -561,7 +563,7 @@ class Sed:
         Returns:
             fnu (ndarray)
                 Spectral flux density calcualted at d=10 pc
-            
+
         """
 
         # Store the redshift for later use
@@ -653,11 +655,9 @@ class Sed:
                 )
             )
 
-        return 2.5 * np.log10(self.broadband_fluxes[f2] /
-                              self.broadband_fluxes[f1])
+        return 2.5 * np.log10(self.broadband_fluxes[f2] / self.broadband_fluxes[f1])
 
     def measure_index(self, feature, blue, red):
-
         """
         Measure an asorption feature index.
 
@@ -687,43 +687,44 @@ class Sed:
         # later.
 
         if self._spec_dims == 2:
-
             # set up output array
             index = np.zeros(len(self.lnu)) * units.lam
 
-            # Note: I'm sure this could be done better.
+            # Note: I'm sure this could be done better.
             for i, _lnu in enumerate(self.lnu):
-                continuum_fit = np.polyfit([np.mean(blue), np.mean(red)],
-                                           [lnu_blue[i], lnu_red[i]], 1)
+                continuum_fit = np.polyfit(
+                    [np.mean(blue), np.mean(red)], [lnu_blue[i], lnu_red[i]], 1
+                )
 
                 # use the continuum fit to define the continuum
-                continuum = ((continuum_fit[0] *
-                              feature_lam.to(units.lam).value) 
-                              + continuum_fit[1]) * units.lnu
+                continuum = (
+                    (continuum_fit[0] * feature_lam.to(units.lam).value)
+                    + continuum_fit[1]
+                ) * units.lnu
 
                 # define the continuum subtracted spectrum
                 feature_lum = _lnu[transmission]
-                feature_lum_continuum_subtracted = -(feature_lum - continuum)\
-                    / continuum
+                feature_lum_continuum_subtracted = (
+                    -(feature_lum - continuum) / continuum
+                )
 
                 # measure index
-                index[i] = np.trapz(feature_lum_continuum_subtracted,
-                                    x=feature_lam)
+                index[i] = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
 
         else:
-
-            continuum_fit = np.polyfit([np.mean(blue), np.mean(red)],
-                                       [lnu_blue, lnu_red], 1)
+            continuum_fit = np.polyfit(
+                [np.mean(blue), np.mean(red)], [lnu_blue, lnu_red], 1
+            )
 
             # use the continuum fit to define the continuum
-            continuum = ((continuum_fit[0] * feature_lam.to(units.lam).value)
-                         + continuum_fit[1]) * units.lnu
+            continuum = (
+                (continuum_fit[0] * feature_lam.to(units.lam).value) + continuum_fit[1]
+            ) * units.lnu
 
             # define the continuum subtracted spectrum
             feature_lum = self.lnu[transmission]
 
-            feature_lum_continuum_subtracted = -(feature_lum - continuum) / \
-                continuum
+            feature_lum_continuum_subtracted = -(feature_lum - continuum) / continuum
 
             # measure index
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
@@ -736,24 +737,25 @@ class Sed:
 
         Args:
             n (int or float)
-      
+
         Returns:
             (sed.Sed)
                 A rebinned Sed
         """
 
         if isinstance(n, int):
-            sed = Sed(rebin_1d(self.lam, n, func=np.mean),
-                      rebin_1d(self.lnu, n, func=np.mean))
+            sed = Sed(
+                rebin_1d(self.lam, n, func=np.mean), rebin_1d(self.lnu, n, func=np.mean)
+            )
 
         elif isinstance(n, float):
             raise exceptions.UnimplementedFunctionality(
-                'Non-integer resampling not yet implemented.'
+                "Non-integer resampling not yet implemented."
             )
 
         else:
             raise exceptions.InconsistentArguments(
-                'Sampling factor must be integer or float.'
+                "Sampling factor must be integer or float."
             )
 
         return sed
@@ -795,8 +797,7 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
     ionisation_wavelength = h * c / ionisation_energy
 
     x = lam.to("Angstrom").value
-    y = lum.to("erg/s").value / (h.to("erg/Hz").value *
-                                 c.to("Angstrom/s").value)
+    y = lum.to("erg/s").value / (h.to("erg/Hz").value * c.to("Angstrom/s").value)
 
     def f(x_):
         return np.interp(x_, x, y)
@@ -805,7 +806,6 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
         f, 0, ionisation_wavelength.to("Angstrom").value, limit=limit
     )[0]
 
-    
 
 # def rebin(l, f, n):  # rebin SED [currently destroys original]
 #     n_len = int(np.floor(len(l) / n))
