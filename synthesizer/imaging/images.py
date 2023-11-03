@@ -235,7 +235,7 @@ class Image:
                 sed=self.sed,
                 particles=self.particles,
                 filters=None,
-                positions=self.coords * self.coord_unit,
+                coordinates=self.coords * self.coord_unit,
                 pixel_values=None,
                 smoothing_lengths=None,
                 centre=None,
@@ -1160,7 +1160,7 @@ class Image:
 class ParticleImage(ParticleScene, Image):
     """
     The Image object used when creating images from particle distributions.
-    This can either be used by passing explict arrays of positions and values
+    This can either be used by passing explict arrays of coordinates and values
     to sort into pixels or by passing SED and Stars Synthesizer objects. Images
     can be created with or without a PSF and noise.
 
@@ -1179,7 +1179,7 @@ class ParticleImage(ParticleScene, Image):
         fov=None,
         sed=None,
         filters=None,
-        positions=None,
+        coordinates=None,
         pixel_values=None,
         smoothing_lengths=None,
         centre=None,
@@ -1213,7 +1213,7 @@ class ParticleImage(ParticleScene, Image):
             filters (FilterCollection)
                 An object containing the Filter objects for which images are
                 required.
-            positons (array-like, float)
+            coordinates (array-like, float)
                 The position of particles to be sorted into the image.
             pixel_values (array-like, float)
                 The values to be sorted/smoothed into pixels. Only needed if an sed
@@ -1265,7 +1265,7 @@ class ParticleImage(ParticleScene, Image):
             npix=npix,
             fov=fov,
             sed=sed,
-            positions=positions,
+            coordinates=coordinates,
             smoothing_lengths=smoothing_lengths,
             centre=centre,
             cosmo=cosmo,
