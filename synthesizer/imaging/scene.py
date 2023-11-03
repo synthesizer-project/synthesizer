@@ -17,21 +17,24 @@ class Scene:
     "scene" being imaged.
 
     Attributes:
-        resolution (float)
+        resolution (Quantity, float)
             The size a pixel.
         npix (int)
             The number of pixels along an axis of the image or number of spaxels
             in the image plane of the IFU.
-        fov (float)
+        fov (Quantity, float)
             The width of the image/ifu. If coordinates are being used to make the
             image this should have the same units as those coordinates.
-        sed (SED)
+        sed (Sed)
             An sed object containing the spectra for this observation.
-
-    Raises:
-        InconsistentArguments
-            If an incompatible combination of arguments is provided an error is
-            raised.
+        orig_resolution (Quantity, float)
+            The original resolution (only used when images are resampled).
+        orig_npix (int)
+            The original npic (only used when images are resampled).
+        cosmo (astropy.cosmology)
+            The Astropy object containing the cosmological model.
+        redshift (float)
+            The redshift of the observation.
     """
 
     # Define slots to reduce memory overhead of this class and limit the
@@ -63,26 +66,30 @@ class Scene:
         redshift=None,
     ):
         """
-        Intialise the Observation.
-        Parameters
-        ----------
-        resolution : Quantity (float * unyt.unit)
-            The size a pixel.
-        npix : int
-            The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU.
-        fov : Quantity (float * unyt.unit)
-            The width of the image/ifu. If coordinates are being used to make
-            the image this should have the same units as those coordinates.
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
-        rest_frame : bool
-            Is the observation in the rest frame or observer frame. Default
-            is rest frame (True).
-        Raises
-        ------
-        InconsistentArguments
-           Errors when an incorrect combination of arguments is passed.
+        Intialise the Scene.
+
+        Args:
+            resolution (unyt_quantity)
+                The size a pixel.
+            npix (int)
+                The number of pixels along an axis of the image or number of
+                spaxels in the image plane of the IFU.
+            fov (unyt_quantity)
+                The width of the image/ifu. If coordinates are being used to make
+                the image this should have the same units as those coordinates.
+            sed (Sed)
+                An sed object containing the spectra for this observation.
+            rest_frame (bool)
+                Is the observation in the rest frame or observer frame. Default
+                is rest frame (True).
+            cosmo (astropy.cosmology)
+                The Astropy object containing the cosmological model.
+            redshift (float)
+                The redshift of the observation.
+
+        Raises:
+            InconsistentArguments
+                Errors when an incorrect combination of arguments is passed.
         """
 
         # Check what we've been given
@@ -117,16 +124,18 @@ class Scene:
     def _check_scene_args(self, resolution, fov, npix):
         """
         Ensures we have a valid combination of inputs.
-        Parameters
-        ----------
-        fov : float
-            The width of the image.
-        npix : int
-            The number of pixels in the image.
-        Raises
-        ------
-        InconsistentArguments
-           Errors when an incorrect combination of arguments is passed.
+
+        Args:
+            resolution (unyt_quantity)
+                The size of a pixel.
+            fov (unyt_quantity)
+                The width of the image.
+            npix (int)
+                The number of pixels in the image.
+
+        Raises:
+            InconsistentArguments
+               Errors when an incorrect combination of arguments is passed.
         """
 
         # Missing units on resolution
@@ -173,11 +182,10 @@ class Scene:
         Helper function to resample all images contained within this instance
         by the stated factor using interpolation.
 
-        Parameters
-        ----------
-        factor : float
-            The factor by which to resample the image, >1 increases resolution,
-            <1 decreases resolution.
+        Args:
+            factor (float)
+                The factor by which to resample the image, >1 increases
+                resolution, <1 decreases resolution.
         """
 
         # Perform the conversion on the basic image properties
@@ -222,16 +230,15 @@ class Scene:
         resolution and then downsample it after done with the high resolution
         version.
 
-        Parameters
-        ----------
-        factor : float
-            The factor by which to resample the image, >1 increases resolution,
-            <1 decreases resolution.
-        Raises
-        -------
-        ValueError
-            If the incorrect resample function is called an error is raised to
-            ensure the user does not erroneously resample.
+        Args:
+            factor (float)
+                The factor by which to resample the image, >1 increases
+                resolution, <1 decreases resolution.
+
+        Raises:
+            ValueError
+                If the incorrect resample function is called an error is raised
+                to ensure the user does not erroneously resample.
         """
 
         # Check factor (NOTE: this doesn't actually cause an issue
@@ -253,16 +260,15 @@ class Scene:
         resolution and then downsample it after done with the high resolution
         version.
 
-        Parameters
-        ----------
-        factor : float
-            The factor by which to resample the image, >1 increases resolution,
-            <1 decreases resolution.
-        Raises
-        -------
-        ValueError
-            If the incorrect resample function is called an error is raised to
-            ensure the user does not erroneously resample.
+        Args:
+            factor (float)
+                The factor by which to resample the image, >1 increases
+                resolution, <1 decreases resolution.
+
+        Raises:
+            ValueError
+                If the incorrect resample function is called an error is raised
+                to ensure the user does not erroneously resample.
         """
 
         # Check factor (NOTE: this doesn't actually cause an issue
@@ -277,34 +283,32 @@ class Scene:
 
 class ParticleScene(Scene):
     """
-    The parent class for all "observations". These include:
-    - Flux/rest frame luminosity images in photometric bands.
-    - Images of underlying properties such as SFR, stellar mass, etc.
-    - Data cubes (IFUs) containing spatially resolved spectra.
-    This parent contains the attributes and methods common to all observation
-    types to reduce boilerplate.
-    Attributes
-    ----------
-    coordinates : array-like (float)
-        The position of particles to be sorted into the image.
-    centre : array-like (float)
-        The coordinates around which the image will be centered.
-    pix_pos : array-like (float)
-        The integer coordinates of particles in pixel units.
-    npart : int
-        The number of stellar particles.
-    kernel (array-like, float)
-        The values from one of the kernels from the kernel_functions module.
-        Only used for smoothed images.
-    kernel_dim:
-        The number of elements in the kernel.
-    kernel_threshold (float)
-        The kernel's impact parameter threshold (by default 1).
-    Raises
-    ----------
-    InconsistentArguments
-        If an incompatible combination of arguments is provided an error is
-        raised.
+    The parent class for all "images" of particles, containing all information
+    related to the "scene" being imaged.
+
+    Attributes:
+        coordinates (Quantity, array-like, float)
+            The position of particles to be sorted into the image.
+        centre (Quantity, array-like, float)
+            The coordinates around which the image will be centered.
+        pix_pos (array-like, float)
+            The integer coordinates of particles in pixel units.
+        npart (int)
+            The number of stellar particles.
+        smoothing_lengths (Quantity, array-like, float)
+            The smoothing lengths describing each particles SPH kernel.
+        kernel (array-like, float)
+            The values from one of the kernels from the kernel_functions module.
+            Only used for smoothed images.
+        kernel_dim (int)
+            The number of elements in the kernel.
+        kernel_threshold (float)
+            The kernel's impact parameter threshold (by default 1).
+
+    Raises:
+        InconsistentArguments
+            If an incompatible combination of arguments is provided an error is
+            raised.
     """
 
     # Define slots to reduce memory overhead of this class
@@ -333,44 +337,51 @@ class ParticleScene(Scene):
         coordinates=None,
         smoothing_lengths=None,
         centre=None,
+        rest_frame=True,
         cosmo=None,
         redshift=None,
-        rest_frame=True,
         kernel=None,
         kernel_threshold=1,
     ):
         """
-        Intialise the ParticleObservation.
-        Parameters
-        ----------
-        resolution : float
-            The size a pixel.
-        npix : int
-            The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU.
-        fov : float
-            The width of the image/ifu. If coordinates are being used to make
-            the image this should have the same units as those coordinates.
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
-        positons : array-like (float)
-            The position of particles to be sorted into the image.
-        smoothing_lengths : array-like (float)
-            The values describing the size of the smooth kernel for each
-            particle. Only needed if star objects are not passed.
-        centre : array-like (float)
-            The coordinates around which the image will be centered. The if one
-            is not provided then the geometric centre is calculated and used.
-        kernel (array-like, float)
-            The values from one of the kernels from the kernel_functions module.
-            Only used for smoothed images.
-        kernel_threshold (float)
-            The kernel's impact parameter threshold (by default 1).
-        Raises
-        ------
-        InconsistentArguments
-            If an incompatible combination of arguments is provided an error is
-            raised.
+        Intialise the ParticleScene.
+
+        Args:
+            resolution (float)
+                The size a pixel.
+            npix (int)
+                The number of pixels along an axis of the image or number of
+                spaxels in the image plane of the IFU.
+            fov (float)
+                The width of the image/ifu. If coordinates are being used to make
+                the image this should have the same units as those coordinates.
+            sed (Sed)
+                An sed object containing the spectra for this observation.
+            coordinates (array-like, float)
+                The position of particles to be sorted into the image.
+            smoothing_lengths (array-like, float)
+                The values describing the size of the smooth kernel for each
+                particle. Only needed if star objects are not passed.
+            centre (array-like, float)
+                The coordinates around which the image will be centered. The if one
+                is not provided then the geometric centre is calculated and used.
+            rest_frame (bool)
+                Is the observation in the rest frame or observer frame. Default
+                is rest frame (True).
+            cosmo (astropy.cosmology)
+                The Astropy object containing the cosmological model.
+            redshift (float)
+                The redshift of the observation.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+
+        Raises:
+            InconsistentArguments
+                If an incompatible combination of arguments is provided an error is
+                raised.
         """
 
         # Check what we've been given
@@ -429,19 +440,32 @@ class ParticleScene(Scene):
     ):
         """
         Ensures we have a valid combination of inputs.
-        Parameters
-        ----------
-        positons : array-like (float)
-            The position of particles to be sorted into the image.
-        centre : array-like (float)
-            The coordinates around which the image will be centered.
-        Raises
-        ------
-        InconsistentArguments
-           Errors when an incorrect combination of arguments is passed.
-        InconsistentCoordinates
-           If the centre does not lie within the range of coordinates an error
-           is raised.
+
+        Args:
+            resolution (float)
+                The size a pixel.
+            coordinates (array-like, float)
+                The position of particles to be sorted into the image.
+            centre (array-like, float)
+                The coordinates around which the image will be centered. The if one
+                is not provided then the geometric centre is calculated and used.
+            cosmo (astropy.cosmology)
+                The Astropy object containing the cosmological model.
+            sed (Sed)
+                An sed object containing the spectra for this observation.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            smoothing_lengths (array-like, float)
+                The values describing the size of the smooth kernel for each
+                particle. Only needed if star objects are not passed.
+
+        Raises:
+            InconsistentArguments
+               Errors when an incorrect combination of arguments is passed.
+            InconsistentCoordinates
+               If the centre does not lie within the range of coordinates an error
+               is raised.
         """
 
         # Get the spatial units
