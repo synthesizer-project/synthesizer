@@ -238,11 +238,11 @@ class Image:
         if isinstance(self, ParametricImage):
             composite_img = ParametricImage(
                 morphology=None,
-                resolution=self.resolution * self.spatial_unit,
+                resolution=self.resolution,
                 filters=self.filters,
                 sed=self.sed,
                 npix=None,
-                fov=self.fov * self.spatial_unit,
+                fov=self.fov,
                 cosmo=self.cosmo,
                 redshift=self.redshift,
                 rest_frame=self.rest_frame,
@@ -253,13 +253,13 @@ class Image:
             )
         else:
             composite_img = ParticleImage(
-                resolution=self.resolution * self.spatial_unit,
+                resolution=self.resolution,
                 npix=None,
-                fov=self.fov * self.spatial_unit,
+                fov=self.fov,
                 sed=self.sed,
                 particles=self.particles,
                 filters=None,
-                coordinates=self.coordinates * self.coord_unit,
+                coordinates=self.coordinates,
                 pixel_values=None,
                 smoothing_lengths=None,
                 centre=None,
@@ -300,15 +300,15 @@ class Image:
             composite_img.img = self.img + other_img.img
 
         # Are we adding a single band/property image to a dictionary?
-        elif self.img is not None and len(other_img.imgs) > 0:
+        if self.img is not None and len(other_img.imgs) > 0:
             for key, img in other_img.imgs.items():
                 composite_img.imgs[key] = img + self.img
-        elif other_img.img is not None and len(self.imgs) > 0:
+        if other_img.img is not None and len(self.imgs) > 0:
             for key, img in self.imgs.items():
                 composite_img.imgs[key] = other_img.img + self.imgs[key]
 
         # Otherwise, we are simply combining images in multiple filters
-        else:
+        if len(self.imgs) > 0 and len(other_img.imgs) > 0:
             for key, img in self.imgs.items():
                 composite_img.imgs[key] = img + other_img.imgs[key]
 
@@ -1538,7 +1538,8 @@ class ParametricImage(Scene, Image):
         self.morphology = morphology
 
         # Ready the density grid for the image
-        self.density_grid = self._get_density_grid()
+        if self.morphology is not None:
+            self.density_grid = self._get_density_grid()
 
         # Set the value to smooth over the density grid
         self.smooth_value = smooth_value
