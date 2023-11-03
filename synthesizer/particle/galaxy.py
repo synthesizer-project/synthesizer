@@ -1385,7 +1385,7 @@ class Galaxy(BaseGalaxy):
             mass_img.get_imgs()
 
             # Divide out the mass contribution to get the mean metallicity
-        img.img /= mass_img.img
+        img.img[img.img > 0] /= mass_img.img[mass_img.img > 0]
 
         return img
 
@@ -1457,7 +1457,207 @@ class Galaxy(BaseGalaxy):
         )
 
         # Divide out the mass contribution to get the mean metallicity
-        img.img /= mass_img.img
+        img.img[img.img > 0] /= mass_img.img[mass_img.img > 0]
+
+        return img
+
+    def make_gas_metallicity_map(
+        self,
+        resolution,
+        fov,
+        img_type="hist",
+        cosmo=None,
+        kernel=None,
+        kernel_threshold=1,
+    ):
+        """
+        Makes a gas metallicity map, either with or without smoothing. The
+        metallicity in a pixel is the mass weighted average metallicity in that
+        pixel.
+
+        TODO: make dust map!
+
+        Args:
+            resolution (float)
+                The size of a pixel.
+            fov (float)
+                The width of the image in image coordinates.
+            img_type (str)
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            cosmo (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+
+        Returns:
+            Image
+        """
+
+        # Instantiate the Image object.
+        img = ParticleImage(
+            resolution=resolution,
+            fov=fov,
+            positions=self.gas.coordinates,
+            smoothing_lengths=self.gas.smoothing_lengths,
+            pixel_values=self.gas.metallicities * self.gas.masses,
+            redshift=self.redshift,
+            cosmo=cosmo,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+        )
+
+        # Make the image, handling incorrect image types
+        if img_type == "hist":
+            # Compute the image
+            img.get_hist_imgs()
+
+        elif img_type == "smoothed":
+            # Compute image
+            img.get_imgs()
+
+        else:
+            raise exceptions.UnknownImageType(
+                f"Unknown img_type {img_type}. (Options are 'hist' or 'smoothed')"
+            )
+
+        # Make the mass image
+        mass_img = self.make_gas_mass_map(
+            resolution, fov, img_type, cosmo, kernel, kernel_threshold
+        )
+
+        # Divide out the mass contribution to get the mean metallicity
+        img.img[img.img > 0] /= mass_img.img[mass_img.img > 0]
+
+        return img
+
+    def make_stellar_metal_mass_map(
+        self,
+        resolution,
+        fov,
+        img_type="hist",
+        cosmo=None,
+        kernel=None,
+        kernel_threshold=1,
+    ):
+        """
+        Makes a stellar metal mass map, either with or without smoothing.
+
+        Args:
+            resolution (float)
+                The size of a pixel.
+            fov (float)
+                The width of the image in image coordinates.
+            img_type (str)
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            cosmo (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+
+        Returns:
+            Image
+        """
+
+        # Instantiate the Image object.
+        img = ParticleImage(
+            resolution=resolution,
+            fov=fov,
+            positions=self.stars.coordinates,
+            smoothing_lengths=self.stars.smoothing_lengths,
+            pixel_values=self.stars.metallicities * self.stars.current_masses,
+            redshift=self.redshift,
+            cosmo=cosmo,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+        )
+
+        # Make the image, handling incorrect image types
+        if img_type == "hist":
+            # Compute the image
+            img.get_hist_imgs()
+
+        elif img_type == "smoothed":
+            # Compute image
+            img.get_imgs()
+
+        else:
+            raise exceptions.UnknownImageType(
+                f"Unknown img_type {img_type}. (Options are 'hist' or 'smoothed')"
+            )
+
+        return img
+
+    def make_gas_metal_mass_map(
+        self,
+        resolution,
+        fov,
+        img_type="hist",
+        cosmo=None,
+        kernel=None,
+        kernel_threshold=1,
+    ):
+        """
+        Makes a gas metal mass map, either with or without smoothing.
+
+        TODO: make dust map!
+
+        Args:
+            resolution (float)
+                The size of a pixel.
+            fov (float)
+                The width of the image in image coordinates.
+            img_type (str)
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            cosmo (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+
+        Returns:
+            Image
+        """
+
+        # Instantiate the Image object.
+        img = ParticleImage(
+            resolution=resolution,
+            fov=fov,
+            positions=self.gas.coordinates,
+            smoothing_lengths=self.gas.smoothing_lengths,
+            pixel_values=self.gas.metallicities * self.gas.masses,
+            redshift=self.redshift,
+            cosmo=cosmo,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+        )
+
+        # Make the image, handling incorrect image types
+        if img_type == "hist":
+            # Compute the image
+            img.get_hist_imgs()
+
+        elif img_type == "smoothed":
+            # Compute image
+            img.get_imgs()
+
+        else:
+            raise exceptions.UnknownImageType(
+                f"Unknown img_type {img_type}. (Options are 'hist' or 'smoothed')"
+            )
 
         return img
 
