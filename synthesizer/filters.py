@@ -1083,9 +1083,9 @@ class Filter:
         """
 
         return np.sqrt(
-            np.trapz(self.original_lam * self.original_t, x=self.original_lam)
-            / np.trapz(self.original_t / self.original_lam, x=self.original_lam)
-        )
+            np.trapz(self._original_lam * self.original_t, x=self._original_lam)
+            / np.trapz(self.original_t / self._original_lam, x=self._original_lam)
+        ) * self.original_lam.units
 
     def pivT(self):
         """
@@ -1098,7 +1098,7 @@ class Filter:
                 Transmission at pivot wavelength.
         """
 
-        return np.interp(self.pivwv(), self.original_lam, self.original_t)
+        return np.interp(self.pivwv().value, self._original_lam, self.original_t)
 
     def meanwv(self):
         """
@@ -1113,11 +1113,11 @@ class Filter:
 
         return np.exp(
             np.trapz(
-                np.log(self.original_lam) * self.original_t / self.original_lam,
-                x=self.original_lam,
+                np.log(self._original_lam) * self.original_t / self._original_lam,
+                x=self._original_lam,
             )
-            / np.trapz(self.original_t / self.original_lam, x=self.original_lam)
-        )
+            / np.trapz(self.original_t / self._original_lam, x=self._original_lam)
+        ) * self.original_lam.units
 
     def bandw(self):
         """
@@ -1133,14 +1133,14 @@ class Filter:
         # Calculate the left and right hand side.
         A = np.sqrt(
             np.trapz(
-                (np.log(self.original_lam / self.meanwv()) ** 2)
+                (np.log(self._original_lam / self.meanwv().value) ** 2)
                 * self.original_t
-                / self.original_lam,
-                x=self.original_lam,
+                / self._original_lam,
+                x=self._original_lam,
             )
         )
 
-        B = np.sqrt(np.trapz(self.original_t / self.original_lam, x=self.original_lam))
+        B = np.sqrt(np.trapz(self.original_t / self._original_lam, x=self._original_lam))
 
         return self.meanwv() * (A / B)
 
@@ -1180,7 +1180,7 @@ class Filter:
                 The rectangular width.
         """
 
-        return np.trapz(self.original_t, x=self.original_lam) / self.Tpeak()
+        return np.trapz(self.original_t, x=self._original_lam) / self.Tpeak()
 
     def max(self):
         """
