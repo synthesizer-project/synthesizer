@@ -912,6 +912,85 @@ class Image:
 
         return fig, ax
 
+    def plot_map(
+        self,
+        show=False,
+        vmin=None,
+        vmax=None,
+        extent=None,
+        cmap="Greys_r",
+        cbar_label=None,
+        norm=None,
+        tick_formatter=None,
+    ):
+        """
+        Plot a map. Unlike an image we want a colorbar and know ahead of time
+        there is only 1 image in the Image and only a "standard" image.
+
+        Args:
+            show (bool)
+                Whether to show the plot or not (Default False).
+            extent (array_like)
+                The extent of the x and y axes.
+            cmap (str)
+                The name of the matplotlib colormap for image plotting. Can be any
+                valid string that can be passed to the cmap argument of imshow.
+                Defaults to "Greys_r".
+            cbar_label (str)
+                The label for the colorbar.
+            norm (function)
+                A normalisation function. This can be custom made or one of
+                matplotlib's normalisation functions. It must take an array and
+                return the same array after normalisation.
+            tick_formatter (matplotlib.ticker.FuncFormatter)
+                An instance of the tick formatter for formatting the colorbar
+                ticks.
+
+        Returns:
+            matplotlib.pyplot.figure
+                The figure object containing the plot
+            matplotlib.pyplot.figure.axis
+                The axis object containing the image.
+
+        Raises:
+            MissingImage
+                If the requested image type has not yet been created and stored in
+                this image object an exception is raised.
+        """
+
+        # Ensure an img exists
+        if self.img is None:
+            raise exceptions.MissingImage("There is no image to plot!")
+
+        # Get the image
+        img = self.img
+
+        # Set up the figure
+        fig = plt.figure(figsize=(3.5, 3.5))
+
+        # Create the axis
+        ax = fig.add_subplot(111)
+
+        # Plot the image and remove the surrounding axis
+        im = ax.imshow(
+            img,
+            extent=extent,
+            origin="lower",
+            interpolation="nearest",
+            cmap=cmap,
+            norm=norm,
+        )
+
+        # Make the colorbar with the format if provided
+        cbar = fig.colorbar(im, format=tick_formatter)
+        if cbar_label is not None:
+            cbar.set_label(cbar_label)
+
+        if show:
+            plt.show()
+
+        return fig, ax
+
     def make_rgb_image(
         self, rgb_filters, img_type="standard", weights=None, scaling_func=None
     ):
