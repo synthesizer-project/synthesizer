@@ -1338,6 +1338,10 @@ class ParticleImage(ParticleScene, Image):
         if pixel_values is None:
             pixel_values = self.pixel_values
 
+        # Strip off any units
+        if isinstance(pixel_values, (unyt_quantity, unyt_array)):
+            pixel_values = pixel_values.value
+
         self.img = np.histogram2d(
             self.pix_pos[:, 0],
             self.pix_pos[:, 1],
