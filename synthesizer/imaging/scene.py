@@ -422,7 +422,7 @@ class ParticleScene(Scene):
         self.coordinates += self.fov / 2
 
         # Calculate the position of particles in pixel coordinates
-        self.pix_pos = np.zeros(self.coordinates.shape, dtype=np.int32)
+        self.pix_pos = np.zeros(self._coordinates.shape, dtype=np.int32)
         self._get_pixel_pos()
 
         # How many particle are there?
@@ -548,7 +548,7 @@ class ParticleScene(Scene):
 
         # Calculate the centre if necessary
         if self.centre is None:
-            self.centre = np.mean(self._coordinates, axis=0)
+            self.centre = np.mean(self._coordinates, axis=0) * self.coordinates.units
 
         # Centre the coordinates
         self._coordinates -= self._centre
