@@ -109,8 +109,8 @@ extensions = [
         "synthesizer.extensions.particle_spectra": "synthesizer/extensions/particle_spectra.c",
         "synthesizer.extensions.weights": "synthesizer/extensions/weights.c",
         "synthesizer.extensions.los": "synthesizer/extensions/los.c",
-        "synthesizer.imaging.extensions.sph_kernel_calc": "synthesizer/imaging/extensions/sph_kernel_calc.c",
-        "synthesizer.imaging.extensions.ckernel_functions": "synthesizer/imaging/extensions/ckernel_functions.c",
+        "synthesizer.imaging.extensions.spectral_cube": "synthesizer/imaging/extensions/spectral_cube.c",
+        "synthesizer.imaging.extensions.image": "synthesizer/imaging/extensions/image.c",
     }.items()
 ]
 

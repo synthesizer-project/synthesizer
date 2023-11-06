@@ -3,6 +3,7 @@ import h5py
 import numpy as np
 
 from astropy.cosmology import FlatLambdaCDM
+from unyt import Msun, kpc, yr
 
 from .particle.galaxy import Galaxy
 
@@ -14,6 +15,7 @@ def _load_CAMELS(
     metals,
     s_oxygen,
     s_hydrogen,
+    s_hsmls,
     coods,
     masses,
     g_coods,
@@ -21,7 +23,8 @@ def _load_CAMELS(
     g_metallicities,
     g_hsml,
     star_forming,
-    dtm=0.3
+    redshift,
+    dtm=0.3,
 ):
     """
     Load CAMELS galaxies into a galaxy object
@@ -70,25 +73,27 @@ def _load_CAMELS(
         galaxies[i] = Galaxy()
 
         galaxies[i].load_stars(
-            imasses[b:e],
-            ages[b:e],
+            imasses[b:e] * Msun,
+            ages[b:e] * yr,
             metals[b:e],
             s_oxygen=s_oxygen[b:e],
             s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :],
-            current_masses=masses[b:e],
+            coordinates=coods[b:e, :] * kpc,
+            current_masses=masses[b:e] * Msun,
+            smoothing_lengths=s_hsmls[b:e] * kpc,
         )
 
     begin, end = get_len(lens[:, 0])
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i].load_gas(
-            coordinates=g_coods[b:e],
-            masses=g_masses[b:e],
+            coordinates=g_coods[b:e] * kpc,
+            masses=g_masses[b:e] * Msun,
             metals=g_metallicities[b:e],
             star_forming=star_forming[b:e],
-            smoothing_lengths=g_hsml[b:e],
+            smoothing_lengths=g_hsml[b:e] * kpc,
             dust_to_metal_ratio=dtm,
         )
+        galaxies[i].redshift = redshift
 
     return galaxies
 
@@ -100,6 +105,7 @@ def load_CAMELS_IllustrisTNG(
     fof_dir=None,
     verbose=False,
     dtm=0.3,
+    physical=False,
 ):
     """
     Load CAMELS-IllustrisTNG galaxies
@@ -118,6 +124,8 @@ def load_CAMELS_IllustrisTNG(
             verbosity flag
         dtm (float):
             dust-to-metals ratio to apply to all gas particles
+        physical (bool):
+            Should the coordinates be converted to physical?
 
     Returns:
         galaxies (object):
@@ -131,6 +139,7 @@ def load_CAMELS_IllustrisTNG(
         imasses = hf["PartType4/GFM_InitialMass"][:]
         _metals = hf["PartType4/GFM_Metals"][:]
         metallicity = hf["PartType4/GFM_Metallicity"][:]
+        hsmls = hf["PartType4/SubfindHsml"][:]
 
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
@@ -139,6 +148,7 @@ def load_CAMELS_IllustrisTNG(
         g_hsml = hf["PartType0/SubfindHsml"][:]
 
         scale_factor = hf["Header"].attrs["Time"]
+        redshift = 1 / scale_factor - 1
         Om0 = hf["Header"].attrs["Omega0"]
         h = hf["Header"].attrs["HubbleParam"]
 
@@ -175,6 +185,7 @@ def load_CAMELS_IllustrisTNG(
     metallicity = metallicity[~mask]
     masses = masses[~mask]
     _metals = _metals[~mask]
+    hsmls = hsmls[~mask]
 
     masses = (masses * 1e10) / h
     g_masses = (g_masses * 1e10) / h
@@ -184,6 +195,13 @@ def load_CAMELS_IllustrisTNG(
 
     s_oxygen = _metals[:, 4]
     s_hydrogen = 1.0 - np.sum(_metals[:, 1:], axis=1)
+
+    # If asked, convert coordinates to physical kpc
+    if physical:
+        coods *= scale_factor
+        g_coods *= scale_factor
+        hsmls *= scale_factor
+        g_hsml *= scale_factor
 
     # convert formation times to ages
     cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
@@ -198,6 +216,7 @@ def load_CAMELS_IllustrisTNG(
         metals=metallicity,
         s_oxygen=s_oxygen,
         s_hydrogen=s_hydrogen,
+        s_hsmls=hsmls,
         coods=coods,
         masses=masses,
         g_coods=g_coods,
@@ -205,6 +224,7 @@ def load_CAMELS_IllustrisTNG(
         g_metallicities=g_metals,
         g_hsml=g_hsml,
         star_forming=star_forming,
+        redshift=redshift,
         dtm=dtm,
     )
 
@@ -214,7 +234,7 @@ def load_CAMELS_Astrid(
     snap_name="snap_090.hdf5",
     fof_name="fof_subhalo_tab_090.hdf5",
     fof_dir=None,
-    dtm=0.3
+    dtm=0.3,
 ):
     """
     Load CAMELS-Astrid galaxies
@@ -289,7 +309,7 @@ def load_CAMELS_Astrid(
         g_metallicities=g_metals,
         g_hsml=g_hsml,
         star_forming=star_forming,
-        dtm=dtm
+        dtm=dtm,
     )
 
 
@@ -298,7 +318,7 @@ def load_CAMELS_SIMBA(
     snap_name="snap_033.hdf5",
     fof_name="fof_subhalo_tab_033.hdf5",
     fof_dir=None,
-    dtm=0.3
+    dtm=0.3,
 ):
     """
     Load CAMELS-SIMBA galaxies
@@ -375,6 +395,7 @@ def load_CAMELS_SIMBA(
         star_forming=star_forming,
         dtm=dtm,
     )
+
 
 def load_FLARES(f, region, tag):
     """

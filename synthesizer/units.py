@@ -68,13 +68,17 @@ default_units = {
     "smoothing_lengths": Mpc,
     "softening_length": Mpc,
     "velocities": km / s,
-    "masses": Msun.in_base('galactic'),
-    "initial_masses": Msun.in_base('galactic'),
-    "current_masses": Msun.in_base('galactic'),
+    "masses": Msun.in_base("galactic"),
+    "initial_masses": Msun.in_base("galactic"),
+    "current_masses": Msun.in_base("galactic"),
     "ages": yr,
-    "accretion_rate": Msun.in_base('galactic') / yr,
+    "accretion_rate": Msun.in_base("galactic") / yr,
     "bol_luminosity": erg / s,
     "bb_temperature": K,
+    "resolution": Mpc,
+    "fov": Mpc,
+    "orig_resolution": Mpc,
+    "centre": Mpc,
 }
 
 
@@ -206,6 +210,15 @@ class Units(metaclass=UnitSingleton):
             Bolometric luminositiy unit.
         bb_temperature (unyt.unit_object.Unit)
             Black hole big bump temperature unit.
+
+        resolution (unyt.unit_object.Unit)
+            Image resolution unit.
+        fov (unyt.unit_object.Unit)
+            Field of View unit.
+        orig_resolution (unyt.unit_object.Unit)
+            Original resolution (for resampling) unit.
+        centre (unyt.unit_object.Unit)
+            Centre of the image unit.
     """
 
     def __init__(self, units=None, force=False):
@@ -266,17 +279,27 @@ class Units(metaclass=UnitSingleton):
         self.velocities = km / s
 
         # Masses
-        self.masses = Msun.in_base('galactic')
-        self.initial_masses = Msun.in_base('galactic')  # initial mass of stellar particles
-        self.current_masses = Msun.in_base('galactic')  # current mass of stellar particles
+        self.masses = Msun.in_base("galactic")
+        self.initial_masses = Msun.in_base(
+            "galactic"
+        )  # initial mass of stellar particles
+        self.current_masses = Msun.in_base(
+            "galactic"
+        )  # current mass of stellar particles
 
         # Time quantities
         self.ages = yr  # Stellar ages
 
         # Black holes quantities
-        self.accretion_rate = Msun.in_base('galactic') / yr
+        self.accretion_rate = Msun.in_base("galactic") / yr
         self.bol_luminosity = erg / s
         self.bb_temperature = K
+
+        # Imaging quantities
+        self.resolution = Mpc
+        self.fov = Mpc
+        self.orig_resolution = Mpc
+        self.centre = Mpc
 
         # Do we have any modifications to the default unit system
         if units is not None:
