@@ -52,18 +52,17 @@ To add jupyter notebooks to the documentation:
 - If you're creating a new sub-directory of documentation, you will need to carry out a couple more steps:
 1. Create a new `.rst` file in that directory
 2. Update `source/index.rst` with the path to that `.rst` file
-3. Add a line to the *pytest* section of `.github/workflows/python-app.yml` to add the ntoebooks to the testing suite. It should look something like this
-
-    ...
-    name: Test with pytest
-      run: |
-        pytest
-        pytest --nbmake docs/source/*.ipynb
-        pytest --nbmake docs/source/cosmo/*.ipynb
-        pytest --nbmake docs/source/grids/*.ipynb
-        pytest --nbmake docs/source/imaging/*.ipynb
-        pytest --nbmake docs/source/parametric/*.ipynb
-        pytest --nbmake docs/source/your_new_directory/*.ipynb
+3. Add a line to the *pytest* section of `.github/workflows/python-app.yml` to add the notebooks to the testing suite. It should look something like this
+  
+        name: Test with pytest
+          run: |
+             pytest
+             pytest --nbmake docs/source/*.ipynb
+             pytest --nbmake docs/source/cosmo/*.ipynb
+             pytest --nbmake docs/source/grids/*.ipynb
+             pytest --nbmake docs/source/imaging/*.ipynb
+             pytest --nbmake docs/source/parametric/*.ipynb
+             pytest --nbmake docs/source/your_new_directory/*.ipynb
 
 Example toctree:
 
