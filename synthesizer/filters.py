@@ -24,6 +24,7 @@ import urllib.request
 import matplotlib.pyplot as plt
 from scipy import integrate
 from unyt import Angstrom, c, Hz, unyt_array
+from urllib.error import URLError
 
 import synthesizer.exceptions as exceptions
 from synthesizer.units import Quantity
