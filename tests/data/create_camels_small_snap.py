@@ -1,20 +1,20 @@
 import numpy as np
 import h5py
 
-_dir = '.'
-snap_name = 'LH_1_snap_031.hdf5'
-fof_name = 'LH_1_fof_subhalo_tab_031.hdf5' 
+_dir = "."
+snap_name = "LH_1_snap_031.hdf5"
+fof_name = "LH_1_fof_subhalo_tab_031.hdf5"
 N = 10  # number of galaxies to extract
-ignore_N = 1 # number of galaxies to ignore
+ignore_N = 1  # number of galaxies to ignore
 
-with h5py.File(f'{_dir}/{snap_name}', 'r') as hf:
-
+with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
     form_time = hf["PartType4/GFM_StellarFormationTime"][:]
     coods = hf["PartType4/Coordinates"][:]
     masses = hf["PartType4/Masses"][:]
     imasses = hf["PartType4/GFM_InitialMass"][:]
     _metals = hf["PartType4/GFM_Metals"][:]
     metallicity = hf["PartType4/GFM_Metallicity"][:]
+    hsmls = hf["PartType4/SubfindHsml"][:]
 
     g_sfr = hf["PartType0/StarFormationRate"][:]
     g_masses = hf["PartType0/Masses"][:]
@@ -27,40 +27,44 @@ with h5py.File(f'{_dir}/{snap_name}', 'r') as hf:
     h = hf["Header"].attrs["HubbleParam"]
 
 
-with h5py.File(f'{_dir}/{fof_name}', 'r') as hf:
-    lens = hf['Subhalo/SubhaloLenType'][:]
+with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
+    lens = hf["Subhalo/SubhaloLenType"][:]
 
-
-lens4 = np.append(0, np.cumsum(lens[:ignore_N+N,4]))
-lens0 = np.append(0, np.cumsum(lens[:ignore_N+N,0]))
+lens4 = np.append(0, np.cumsum(lens[: ignore_N + N, 4]))
+lens0 = np.append(0, np.cumsum(lens[: ignore_N + N, 0]))
 
 # ignore the first `ignore_N` galaxies (often massive)
 lens4 = lens4[ignore_N:]
 lens0 = lens0[ignore_N:]
 
-with h5py.File(f'camels_snap.hdf5', 'w') as hf:
-	hf.require_group('PartType4')
-	hf.require_group('PartType0')
-	hf.require_group('Header')
+with h5py.File(f"camels_snap.hdf5", "w") as hf:
+    hf.require_group("PartType4")
+    hf.require_group("PartType0")
 
-	hf.create_dataset('PartType4/GFM_StellarFormationTime', data=form_time[lens4[0]:lens4[-1]])
-	hf.create_dataset('PartType4/Coordinates', data=coods[lens4[0]:lens4[-1]])
-	hf.create_dataset('PartType4/Masses', data=masses[lens4[0]:lens4[-1]])
-	hf.create_dataset('PartType4/GFM_InitialMass', data=imasses[lens4[0]:lens4[-1]])
-	hf.create_dataset('PartType4/GFM_Metals', data=_metals[lens4[0]:lens4[-1]])
-	hf.create_dataset('PartType4/GFM_Metallicity', data=metallicity[lens4[0]:lens4[-1]])
+    hf.require_group("Header")
 
-	hf.create_dataset('PartType0/StarFormationRate', data=g_sfr[lens0[0]:lens0[-1]])
-	hf.create_dataset('PartType0/Masses', data=g_masses[lens0[0]:lens0[-1]])
-	hf.create_dataset('PartType0/GFM_Metallicity', data=g_metals[lens0[0]:lens0[-1]])
-	hf.create_dataset('PartType0/Coordinates', data=g_coods[lens0[0]:lens0[-1]])
-	hf.create_dataset('PartType0/SubfindHsml', data=g_hsml[lens0[0]:lens0[-1]])
+    hf.create_dataset(
+        "PartType4/GFM_StellarFormationTime", data=form_time[lens4[0] : lens4[-1]]
+    )
+    hf.create_dataset("PartType4/Coordinates", data=coods[lens4[0] : lens4[-1], :])
+    hf.create_dataset("PartType4/Masses", data=masses[lens4[0] : lens4[-1]])
+    hf.create_dataset("PartType4/GFM_InitialMass", data=imasses[lens4[0] : lens4[-1]])
+    hf.create_dataset("PartType4/GFM_Metals", data=_metals[lens4[0] : lens4[-1]])
+    hf.create_dataset(
+        "PartType4/GFM_Metallicity", data=metallicity[lens4[0] : lens4[-1]]
+    )
+    hf.create_dataset("PartType4/SubfindHsml", data=hsmls[lens4[0] : lens4[-1]])
 
-	hf['Header'].attrs[u'Time'] = scale_factor
-	hf['Header'].attrs[u'Omega0'] = Om0
-	hf['Header'].attrs[u'HubbleParam'] = h
+    hf.create_dataset("PartType0/StarFormationRate", data=g_sfr[lens0[0] : lens0[-1]])
+    hf.create_dataset("PartType0/Masses", data=g_masses[lens0[0] : lens0[-1]])
+    hf.create_dataset("PartType0/GFM_Metallicity", data=g_metals[lens0[0] : lens0[-1]])
+    hf.create_dataset("PartType0/Coordinates", data=g_coods[lens0[0] : lens0[-1], :])
+    hf.create_dataset("PartType0/SubfindHsml", data=g_hsml[lens0[0] : lens0[-1]])
 
-with h5py.File(f'camels_subhalo.hdf5', 'w') as hf:
-	hf.require_group('Subhalo')
-	hf.create_dataset('Subhalo/SubhaloLenType', data=lens[ignore_N:ignore_N+N, :])
+    hf["Header"].attrs["Time"] = scale_factor
+    hf["Header"].attrs["Omega0"] = Om0
+    hf["Header"].attrs["HubbleParam"] = h
 
+with h5py.File(f"camels_subhalo.hdf5", "w") as hf:
+    hf.require_group("Subhalo")
+    hf.create_dataset("Subhalo/SubhaloLenType", data=lens[ignore_N : ignore_N + N, :])
