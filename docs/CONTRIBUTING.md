@@ -28,12 +28,12 @@ First we're going to make some small changes to the git configuration to prevent
 
 1. First, add the following lines to the end of the `.git/config` file at the root of the synthesizer repository
 
-    [filter "strip-notebook-output"]
-    clean = "jupyter nbconvert --ClearOutputPreprocessor.enabled=True --ClearMetadataPreprocessor.enabled=True --to=notebook --stdin --stdout --log-level=ERROR"
+        [filter "strip-notebook-output"]
+        clean = "jupyter nbconvert --ClearOutputPreprocessor.enabled=True --ClearMetadataPreprocessor.enabled=True --to=notebook --stdin --stdout --log-level=ERROR"
 
 2. Then (if it does not already exist) create a file called `.gitattributes` in the root of the synthesizer repository, and add the following
 
-    *.ipynb filter=strip-notebook-output
+        *.ipynb filter=strip-notebook-output
 
 
 This will reset all instances of `execution_count` with `null`, and replace the `metadata` tag with an empty dictionary, and prevent spurious git diffs to notebooks when they have been run multiple times.
