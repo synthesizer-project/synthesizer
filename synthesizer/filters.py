@@ -432,11 +432,7 @@ class FilterCollection:
                     max_lam = this_max
 
             # Create wavelength array
-            new_lam = np.arange(
-                min_lam,
-                max_lam + lam_resolution,
-                lam_resolution
-            )
+            new_lam = np.arange(min_lam, max_lam + lam_resolution, lam_resolution)
 
             if verbose:
                 print(
@@ -669,10 +665,7 @@ class FilterCollection:
                     )
 
         if redshift is None:
-            print(
-                "Filter containing rest_frame_lam=%.2e Angstrom: %s" % (lam,
-                                                                        fcode)
-            )
+            print("Filter containing rest_frame_lam=%.2e Angstrom: %s" % (lam, fcode))
         else:
             print(
                 "Filter containing rest_frame_lam=%.2e Angstrom "
@@ -893,8 +886,15 @@ class Filter:
             f"fps/getdata.php?format=ascii&id={self.observatory}"
             f"/{self.instrument}.{self.filter_}"
         )
-        with urllib.request.urlopen(self.svo_url) as f:
-            df = np.loadtxt(f)
+
+        # Make a request for the data and handle a failure more informatively
+        try:
+            with urllib.request.urlopen(self.svo_url) as f:
+                df = np.loadtxt(f)
+        except URLError:
+            raise exceptions.SVOInaccessible(
+                "The SVO Database is not responding. Is it down?"
+            )
 
         # Throw an error if we didn't find the filter.
         if df.size == 0:
@@ -991,7 +991,6 @@ class Filter:
         # Get the correct x array to integrate w.r.t and work out if we need
         # to shift the transmission curve.
         if nu is not None:
-
             # Ensure the passed frequencies have units
             if not isinstance(nu, unyt_array):
                 nu *= Hz
@@ -1008,7 +1007,6 @@ class Filter:
                 lam = (c / nu).to(Angstrom).value
 
         elif lam is not None:
-
             # Ensure the passed wavelengths have no units
             if isinstance(lam, unyt_array):
                 lam = lam.value
@@ -1030,13 +1028,7 @@ class Filter:
         if need_shift:
             # Ok, shift the tranmission curve by interpolating onto the
             # provided wavelengths
-            t = np.interp(
-                lam,
-                self._original_lam,
-                self.original_t,
-                left=0.0,
-                right=0.0
-            )
+            t = np.interp(lam, self._original_lam, self.original_t, left=0.0, right=0.0)
 
         else:
             # We can use the standard transmission array
@@ -1082,10 +1074,13 @@ class Filter:
                 Pivot wavelength.
         """
 
-        return np.sqrt(
-            np.trapz(self._original_lam * self.original_t, x=self._original_lam)
-            / np.trapz(self.original_t / self._original_lam, x=self._original_lam)
-        ) * self.original_lam.units
+        return (
+            np.sqrt(
+                np.trapz(self._original_lam * self.original_t, x=self._original_lam)
+                / np.trapz(self.original_t / self._original_lam, x=self._original_lam)
+            )
+            * self.original_lam.units
+        )
 
     def pivT(self):
         """
@@ -1111,13 +1106,16 @@ class Filter:
                 Mean wavelength.
         """
 
-        return np.exp(
-            np.trapz(
-                np.log(self._original_lam) * self.original_t / self._original_lam,
-                x=self._original_lam,
+        return (
+            np.exp(
+                np.trapz(
+                    np.log(self._original_lam) * self.original_t / self._original_lam,
+                    x=self._original_lam,
+                )
+                / np.trapz(self.original_t / self._original_lam, x=self._original_lam)
             )
-            / np.trapz(self.original_t / self._original_lam, x=self._original_lam)
-        ) * self.original_lam.units
+            * self.original_lam.units
+        )
 
     def bandw(self):
         """
@@ -1140,7 +1138,9 @@ class Filter:
             )
         )
 
-        B = np.sqrt(np.trapz(self.original_t / self._original_lam, x=self._original_lam))
+        B = np.sqrt(
+            np.trapz(self.original_t / self._original_lam, x=self._original_lam)
+        )
 
         return self.meanwv() * (A / B)
 
