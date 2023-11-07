@@ -28,12 +28,12 @@ First we're going to make some small changes to the git configuration to prevent
 
 1. First, add the following lines to the end of the `.git/config` file at the root of the synthesizer repository
 
-    [filter "strip-notebook-output"]
-    clean = "jupyter nbconvert --ClearOutputPreprocessor.enabled=True --ClearMetadataPreprocessor.enabled=True --to=notebook --stdin --stdout --log-level=ERROR"
+        [filter "strip-notebook-output"]
+        clean = "jupyter nbconvert --ClearOutputPreprocessor.enabled=True --ClearMetadataPreprocessor.enabled=True --to=notebook --stdin --stdout --log-level=ERROR"
 
 2. Then (if it does not already exist) create a file called `.gitattributes` in the root of the synthesizer repository, and add the following
 
-    *.ipynb filter=strip-notebook-output
+        *.ipynb filter=strip-notebook-output
 
 
 This will reset all instances of `execution_count` with `null`, and replace the `metadata` tag with an empty dictionary, and prevent spurious git diffs to notebooks when they have been run multiple times.
@@ -52,18 +52,17 @@ To add jupyter notebooks to the documentation:
 - If you're creating a new sub-directory of documentation, you will need to carry out a couple more steps:
 1. Create a new `.rst` file in that directory
 2. Update `source/index.rst` with the path to that `.rst` file
-3. Add a line to the *pytest* section of `.github/workflows/python-app.yml` to add the ntoebooks to the testing suite. It should look something like this
-
-    ...
-    name: Test with pytest
-      run: |
-        pytest
-        pytest --nbmake docs/source/*.ipynb
-        pytest --nbmake docs/source/cosmo/*.ipynb
-        pytest --nbmake docs/source/grids/*.ipynb
-        pytest --nbmake docs/source/imaging/*.ipynb
-        pytest --nbmake docs/source/parametric/*.ipynb
-        pytest --nbmake docs/source/your_new_directory/*.ipynb
+3. Add a line to the *pytest* section of `.github/workflows/python-app.yml` to add the notebooks to the testing suite. It should look something like this
+  
+        name: Test with pytest
+          run: |
+             pytest
+             pytest --nbmake docs/source/*.ipynb
+             pytest --nbmake docs/source/cosmo/*.ipynb
+             pytest --nbmake docs/source/grids/*.ipynb
+             pytest --nbmake docs/source/imaging/*.ipynb
+             pytest --nbmake docs/source/parametric/*.ipynb
+             pytest --nbmake docs/source/your_new_directory/*.ipynb
 
 Example toctree:
 

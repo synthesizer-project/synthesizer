@@ -120,6 +120,8 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         rest_frame=True,
         cosmo=None,
         redshift=None,
+        kernel=None,
+        kernel_threshold=1,
     ):
         """
         Intialise the ParticleSpectralCube.
@@ -152,6 +154,11 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         cosmo : obj (astropy.cosmology)
             A cosmology object from astropy, used for cosmological calculations
             when converting rest frame luminosity to flux.
+        kernel (array-like, float)
+            The values from one of the kernels from the kernel_functions module.
+            Only used for smoothed images.
+        kernel_threshold (float)
+            The kernel's impact parameter threshold (by default 1).
         Raises
         ------
         InconsistentArguments
@@ -176,6 +183,8 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             cosmo=cosmo,
             redshift=redshift,
             rest_frame=rest_frame,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
         )
         SpectralCube.__init__(
             self,
@@ -270,28 +279,27 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             pixels. [npix, npix, spectral_resolution]
         """
 
-        from .extensions.sph_kernel_calc import make_ifu
+        from .extensions.spectral_cube import make_ifu
 
         # Prepare the inputs, we need to make sure we are passing C contiguous
         # arrays.
-        # TODO: Would be more memory efficient to pass the position array
-        #       and handle C extraction.
         sed_vals = np.ascontiguousarray(self.sed_values, dtype=np.float64)
         smls = np.ascontiguousarray(self.smoothing_lengths, dtype=np.float64)
         xs = np.ascontiguousarray(self.coords[:, 0], dtype=np.float64)
         ys = np.ascontiguousarray(self.coords[:, 1], dtype=np.float64)
-        zs = np.ascontiguousarray(self.coords[:, 2], dtype=np.float64)
 
         self.ifu = make_ifu(
             sed_vals,
             smls,
             xs,
             ys,
-            zs,
+            self.kernel,
             self.resolution,
             self.npix,
             self.coords.shape[0],
             self.spectral_resolution,
+            self.kernel_threshold,
+            self.kernel_dim,
         )
 
         return self.ifu

@@ -1,4 +1,7 @@
-""" Definitions for image objects
+""" Definitions for image scene objects
+
+These should not be explictly used by the user. Instead the user interfaces with
+Images and Galaxys
 """
 import math
 import numpy as np
@@ -6,53 +9,54 @@ import unyt
 from unyt import arcsec, kpc
 from scipy.ndimage import zoom
 
+from synthesizer.particle import Stars
 import synthesizer.exceptions as exceptions
+from synthesizer.units import Quantity
 
 
 class Scene:
     """
-    The parent class for all "observations". These include:
-    - Flux/rest frame luminosity images in photometric bands.
-    - Images of underlying properties such as SFR, stellar mass, etc.
-    - Data cubes (IFUs) containing spatially resolved spectra.
-    This parent contains the attributes and methods common to all observation
-    types to reduce boilerplate.
-    Attributes
-    ----------
-    resolution : float
-        The size a pixel.
-    npix : int
-        The number of pixels along an axis of the image or number of spaxels
-        in the image plane of the IFU.
-    fov : float
-        The width of the image/ifu. If coordinates are being used to make the
-        image this should have the same units as those coordinates.
-    sed : obj (SED)
-        An sed object containing the spectra for this observation.
-    survey : obj (Survey)
-        WorkInProgress
-    spatial_unit : obj (unyt.unit)
-        The units of the spatial image/IFU information (coordinates,
-        resolution, fov, apertures, etc.).
-    Raises
-    ----------
-    InconsistentArguments
-        If an incompatible combination of arguments is provided an error is
-        raised.
+    The parent class for all "images" containing all information related to the
+    "scene" being imaged.
+
+    Attributes:
+        resolution (Quantity, float)
+            The size a pixel.
+        npix (int)
+            The number of pixels along an axis of the image or number of spaxels
+            in the image plane of the IFU.
+        fov (Quantity, float)
+            The width of the image/ifu. If coordinates are being used to make the
+            image this should have the same units as those coordinates.
+        sed (Sed)
+            An sed object containing the spectra for this observation.
+        orig_resolution (Quantity, float)
+            The original resolution (only used when images are resampled).
+        orig_npix (int)
+            The original npic (only used when images are resampled).
+        cosmo (astropy.cosmology)
+            The Astropy object containing the cosmological model.
+        redshift (float)
+            The redshift of the observation.
     """
 
     # Define slots to reduce memory overhead of this class and limit the
     # possible attributes.
     __slots__ = [
-        "resolution",
-        "fov",
+        "_resolution",
+        "_fov",
         "npix",
         "sed",
-        "survey",
-        "spatial_unit",
-        "orig_resolution",
+        "_orig_resolution",
         "orig_npix",
+        "cosmo",
+        "redshift",
     ]
+
+    # Define quantities
+    resolution = Quantity()
+    fov = Quantity()
+    orig_resolution = Quantity()
 
     def __init__(
         self,
@@ -65,41 +69,39 @@ class Scene:
         redshift=None,
     ):
         """
-        Intialise the Observation.
-        Parameters
-        ----------
-        resolution : Quantity (float * unyt.unit)
-            The size a pixel.
-        npix : int
-            The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU.
-        fov : Quantity (float * unyt.unit)
-            The width of the image/ifu. If coordinates are being used to make
-            the image this should have the same units as those coordinates.
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
-        rest_frame : bool
-            Is the observation in the rest frame or observer frame. Default
-            is rest frame (True).
-        Raises
-        ------
-        InconsistentArguments
-           Errors when an incorrect combination of arguments is passed.
+        Intialise the Scene.
+
+        Args:
+            resolution (unyt_quantity)
+                The size a pixel.
+            npix (int)
+                The number of pixels along an axis of the image or number of
+                spaxels in the image plane of the IFU.
+            fov (unyt_quantity)
+                The width of the image/ifu. If coordinates are being used to make
+                the image this should have the same units as those coordinates.
+            sed (Sed)
+                An sed object containing the spectra for this observation.
+            rest_frame (bool)
+                Is the observation in the rest frame or observer frame. Default
+                is rest frame (True).
+            cosmo (astropy.cosmology)
+                The Astropy object containing the cosmological model.
+            redshift (float)
+                The redshift of the observation.
+
+        Raises:
+            InconsistentArguments
+                Errors when an incorrect combination of arguments is passed.
         """
 
         # Check what we've been given
         self._check_scene_args(resolution, fov, npix)
 
-        # Define the spatial units of the image
-        self.spatial_unit = resolution.units
-
         # Scene resolution, width and pixel information
-        self.resolution = resolution.value
+        self.resolution = resolution
         self.fov = fov
         self.npix = npix
-
-        # Check unit consistency
-        self._convert_scene_coords()
 
         # Attributes containing data
         self.sed = sed
@@ -125,16 +127,18 @@ class Scene:
     def _check_scene_args(self, resolution, fov, npix):
         """
         Ensures we have a valid combination of inputs.
-        Parameters
-        ----------
-        fov : float
-            The width of the image.
-        npix : int
-            The number of pixels in the image.
-        Raises
-        ------
-        InconsistentArguments
-           Errors when an incorrect combination of arguments is passed.
+
+        Args:
+            resolution (unyt_quantity)
+                The size of a pixel.
+            fov (unyt_quantity)
+                The width of the image.
+            npix (int)
+                The number of pixels in the image.
+
+        Raises:
+            InconsistentArguments
+               Errors when an incorrect combination of arguments is passed.
         """
 
         # Missing units on resolution
@@ -159,9 +163,9 @@ class Scene:
         """
 
         # Compute how many pixels fall in the FOV
-        self.npix = int(math.ceil(self.fov / self.resolution))
+        self.npix = int(math.ceil(self._fov / self._resolution))
         if self.orig_npix is None:
-            self.orig_npix = int(math.ceil(self.fov / self.resolution))
+            self.orig_npix = int(math.ceil(self._fov / self._resolution))
 
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
@@ -176,42 +180,15 @@ class Scene:
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
 
-    def _convert_scene_coords(self):
-        """
-        Ensures that the resolution and FOV are in consistent units.
-        """
-
-        # If we haven't been given an FOV there's nothing to do.
-        if self.fov is None:
-            return
-
-        # Otherwise, do we need to convert the FOV to the correct units?
-        elif self.fov.units != self.spatial_unit:
-            # If the units have the same dimension convert them
-            if self.fov.units.same_dimensions_as(self.spatial_unit):
-                self.fov.to(self.spatial_unit)
-
-            # For now raise an error, in the future we could handle length to
-            # angle conversions.
-            else:
-                raise exceptions.UnimplementedFunctionality(
-                    "Conversion between length and angular units for "
-                    "resolution and FOV not yet supported."
-                )
-
-        # Strip off the units
-        self.fov = self.fov.value
-
     def _resample(self, factor):
         """
         Helper function to resample all images contained within this instance
         by the stated factor using interpolation.
 
-        Parameters
-        ----------
-        factor : float
-            The factor by which to resample the image, >1 increases resolution,
-            <1 decreases resolution.
+        Args:
+            factor (float)
+                The factor by which to resample the image, >1 increases
+                resolution, <1 decreases resolution.
         """
 
         # Perform the conversion on the basic image properties
@@ -256,16 +233,15 @@ class Scene:
         resolution and then downsample it after done with the high resolution
         version.
 
-        Parameters
-        ----------
-        factor : float
-            The factor by which to resample the image, >1 increases resolution,
-            <1 decreases resolution.
-        Raises
-        -------
-        ValueError
-            If the incorrect resample function is called an error is raised to
-            ensure the user does not erroneously resample.
+        Args:
+            factor (float)
+                The factor by which to resample the image, >1 increases
+                resolution, <1 decreases resolution.
+
+        Raises:
+            ValueError
+                If the incorrect resample function is called an error is raised
+                to ensure the user does not erroneously resample.
         """
 
         # Check factor (NOTE: this doesn't actually cause an issue
@@ -287,16 +263,15 @@ class Scene:
         resolution and then downsample it after done with the high resolution
         version.
 
-        Parameters
-        ----------
-        factor : float
-            The factor by which to resample the image, >1 increases resolution,
-            <1 decreases resolution.
-        Raises
-        -------
-        ValueError
-            If the incorrect resample function is called an error is raised to
-            ensure the user does not erroneously resample.
+        Args:
+            factor (float)
+                The factor by which to resample the image, >1 increases
+                resolution, <1 decreases resolution.
+
+        Raises:
+            ValueError
+                If the incorrect resample function is called an error is raised
+                to ensure the user does not erroneously resample.
         """
 
         # Check factor (NOTE: this doesn't actually cause an issue
@@ -311,33 +286,50 @@ class Scene:
 
 class ParticleScene(Scene):
     """
-    The parent class for all "observations". These include:
-    - Flux/rest frame luminosity images in photometric bands.
-    - Images of underlying properties such as SFR, stellar mass, etc.
-    - Data cubes (IFUs) containing spatially resolved spectra.
-    This parent contains the attributes and methods common to all observation
-    types to reduce boilerplate.
-    Attributes
-    ----------
-    stars : obj (Stars)
-        The object containing the stars to be placed in a image.
-    coords : array-like (float)
-        The position of particles to be sorted into the image.
-    centre : array-like (float)
-        The coordinates around which the image will be centered.
-    pix_pos : array-like (float)
-        The integer coordinates of particles in pixel units.
-    npart : int
-        The number of stellar particles.
-    Raises
-    ----------
-    InconsistentArguments
-        If an incompatible combination of arguments is provided an error is
-        raised.
+    The parent class for all "images" of particles, containing all information
+    related to the "scene" being imaged.
+
+    Attributes:
+        coordinates (Quantity, array-like, float)
+            The position of particles to be sorted into the image.
+        centre (Quantity, array-like, float)
+            The coordinates around which the image will be centered.
+        pix_pos (array-like, float)
+            The integer coordinates of particles in pixel units.
+        npart (int)
+            The number of stellar particles.
+        smoothing_lengths (Quantity, array-like, float)
+            The smoothing lengths describing each particles SPH kernel.
+        kernel (array-like, float)
+            The values from one of the kernels from the kernel_functions module.
+            Only used for smoothed images.
+        kernel_dim (int)
+            The number of elements in the kernel.
+        kernel_threshold (float)
+            The kernel's impact parameter threshold (by default 1).
+
+    Raises:
+        InconsistentArguments
+            If an incompatible combination of arguments is provided an error is
+            raised.
     """
 
     # Define slots to reduce memory overhead of this class
-    __slots__ = ["stars", "coords", "centre", "pix_pos", "npart", "smoothing_lengths"]
+    __slots__ = [
+        "_coordinates",
+        "_centre",
+        "pix_pos",
+        "npart",
+        "_smoothing_lengths",
+        "kernel",
+        "kernel_threshold",
+        "kernel_dim",
+    ]
+
+    # Define quantities
+    coordinates = Quantity()
+    centre = Quantity()
+    smoothing_lengths = Quantity()
 
     def __init__(
         self,
@@ -345,49 +337,60 @@ class ParticleScene(Scene):
         npix=None,
         fov=None,
         sed=None,
-        stars=None,
-        positions=None,
+        coordinates=None,
         smoothing_lengths=None,
         centre=None,
+        rest_frame=True,
         cosmo=None,
         redshift=None,
-        rest_frame=True,
+        kernel=None,
+        kernel_threshold=1,
     ):
         """
-        Intialise the ParticleObservation.
-        Parameters
-        ----------
-        resolution : float
-            The size a pixel.
-        npix : int
-            The number of pixels along an axis of the image or number of
-            spaxels in the image plane of the IFU.
-        fov : float
-            The width of the image/ifu. If coordinates are being used to make
-            the image this should have the same units as those coordinates.
-        sed : obj (SED)
-            An sed object containing the spectra for this observation.
-        stars : obj (Stars)
-            The object containing the stars to be placed in a image.
-        survey : obj (Survey)
-            WorkInProgress
-        positons : array-like (float)
-            The position of particles to be sorted into the image.
-        smoothing_lengths : array-like (float)
-            The values describing the size of the smooth kernel for each
-            particle. Only needed if star objects are not passed.
-        centre : array-like (float)
-            The coordinates around which the image will be centered. The if one
-            is not provided then the geometric centre is calculated and used.
-        Raises
-        ------
-        InconsistentArguments
-            If an incompatible combination of arguments is provided an error is
-            raised.
+        Intialise the ParticleScene.
+
+        Args:
+            resolution (float)
+                The size a pixel.
+            npix (int)
+                The number of pixels along an axis of the image or number of
+                spaxels in the image plane of the IFU.
+            fov (float)
+                The width of the image/ifu. If coordinates are being used to make
+                the image this should have the same units as those coordinates.
+            sed (Sed)
+                An sed object containing the spectra for this observation.
+            coordinates (array-like, float)
+                The position of particles to be sorted into the image.
+            smoothing_lengths (array-like, float)
+                The values describing the size of the smooth kernel for each
+                particle. Only needed if star objects are not passed.
+            centre (array-like, float)
+                The coordinates around which the image will be centered. The if one
+                is not provided then the geometric centre is calculated and used.
+            rest_frame (bool)
+                Is the observation in the rest frame or observer frame. Default
+                is rest frame (True).
+            cosmo (astropy.cosmology)
+                The Astropy object containing the cosmological model.
+            redshift (float)
+                The redshift of the observation.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+
+        Raises:
+            InconsistentArguments
+                If an incompatible combination of arguments is provided an error is
+                raised.
         """
 
         # Check what we've been given
-        self._check_part_args(resolution, stars, positions, centre, cosmo, sed)
+        self._check_part_args(
+            resolution, coordinates, centre, cosmo, sed, kernel, smoothing_lengths
+        )
 
         # Initilise the parent class
         Scene.__init__(
@@ -401,68 +404,72 @@ class ParticleScene(Scene):
             redshift=redshift,
         )
 
-        # Initialise stars attribute
-        self.stars = stars
-
-        # Handle the particle positions, here we make a copy to avoid changing
+        # Handle the particle coordinates, here we make a copy to avoid changing
         # the original values
-        if self.stars is not None:
-            self.coords = np.copy(self.stars._coordinates)
-            self.coord_unit = self.stars.coordinates.units
-        else:
-            self.coords = np.copy(positions)
-            self.coord_unit = positions.units
+        self.coordinates = np.copy(coordinates)
 
-        # If the positions are not already centred centre them
+        # If the coordinates are not already centred centre them
         self.centre = centre
-        self._centre_coords()
+        self._centre_coordinates()
 
         # Store the smoothing lengths because we again need a copy
-        if self.stars is not None:
-            self.smoothing_lengths = np.copy(self.stars._smoothing_lengths)
-            self.smooth_unit = self.stars.smoothing_lengths.units
+        if smoothing_lengths is not None:
+            self.smoothing_lengths = np.copy(smoothing_lengths)
         else:
-            if smoothing_lengths is not None:
-                self.smoothing_lengths = np.copy(smoothing_lengths)
-                self.smooth_unit = smoothing_lengths.units
-            else:
-                self.smoothing_lengths = None
-                self.smooth_unit = None
+            self.smoothing_lengths = None
 
-        # Convert coordinates to the image's spatial units
-        self._convert_to_img_units()
-
-        # Shift positions to start at 0
-        self.coords += self.fov / 2
+        # Shift coordinates to start at 0
+        self.coordinates += self.fov / 2
 
         # Calculate the position of particles in pixel coordinates
-        self.pix_pos = np.zeros(self.coords.shape, dtype=np.int32)
+        self.pix_pos = np.zeros(self._coordinates.shape, dtype=np.int32)
         self._get_pixel_pos()
 
         # How many particle are there?
-        self.npart = self.coords.shape[0]
+        self.npart = self.coordinates.shape[0]
 
-    def _check_part_args(self, resolution, stars, positions, centre, cosmo, sed):
+        # Set up the kernel attributes we need
+        if kernel is not None:
+            self.kernel = kernel
+            self.kernel_dim = kernel.size
+            self.kernel_threshold = kernel_threshold
+        else:
+            self.kernel = None
+            self.kernel_dim = None
+            self.kernel_threshold = None
+
+    def _check_part_args(
+        self, resolution, coordinates, centre, cosmo, sed, kernel, smoothing_lengths
+    ):
         """
         Ensures we have a valid combination of inputs.
-        Parameters
-        ----------
-        stars : obj (Stars)
-            The object containing the stars to be placed in a image.
-        positons : array-like (float)
-            The position of particles to be sorted into the image.
-        centre : array-like (float)
-            The coordinates around which the image will be centered.
-        Raises
-        ------
-        InconsistentArguments
-           Errors when an incorrect combination of arguments is passed.
-        InconsistentCoordinates
-           If the centre does not lie within the range of coordinates an error
-           is raised.
-        """
 
-        # TODO: check units work for array based images.
+        Args:
+            resolution (float)
+                The size a pixel.
+            coordinates (array-like, float)
+                The position of particles to be sorted into the image.
+            centre (array-like, float)
+                The coordinates around which the image will be centered. The if one
+                is not provided then the geometric centre is calculated and used.
+            cosmo (astropy.cosmology)
+                The Astropy object containing the cosmological model.
+            sed (Sed)
+                An sed object containing the spectra for this observation.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions module.
+                Only used for smoothed images.
+            smoothing_lengths (array-like, float)
+                The values describing the size of the smooth kernel for each
+                particle. Only needed if star objects are not passed.
+
+        Raises:
+            InconsistentArguments
+               Errors when an incorrect combination of arguments is passed.
+            InconsistentCoordinates
+               If the centre does not lie within the range of coordinates an error
+               is raised.
+        """
 
         # Get the spatial units
         spatial_unit = resolution.units
@@ -475,35 +482,25 @@ class ParticleScene(Scene):
                     "spectra has been passed."
                 )
 
-        # Check the stars we have been given.
-        if stars is not None:
-            # Ensure we haven't been handed a resampled set of stars
-            if stars.resampled:
-                raise exceptions.UnimplementedFunctionality(
-                    "Functionality to make images from resampled stellar "
-                    "distributions is currently unsupported. Contact the "
-                    "authors if you wish to contribute this behaviour."
-                )
+        # If we are working in terms of angles we need redshifts for the
+        # particles.
+        if spatial_unit.same_dimensions_as(arcsec) and self.redshift is None:
+            raise exceptions.InconsistentArguments(
+                "When working in an angular unit system the provided "
+                "particles need a redshift associated to them. Particles.redshift"
+                " can either be a single redshift for all particles or an "
+                "array of redshifts for each star."
+            )
 
-            # If we are working in terms of angles we need redshifts for the
-            # stars.
-            if spatial_unit.same_dimensions_as(arcsec) and stars.redshift is None:
+        # Need to ensure we have a per particle SED
+        if sed is not None:
+            if sed.lnu.shape[0] != coordinates.shape[0]:
                 raise exceptions.InconsistentArguments(
-                    "When working in an angular unit system the provided "
-                    "stars need a redshift associated to them. Stars.redshift"
-                    " can either be a single redshift for all stars or an "
-                    "array of redshifts for each star."
+                    "The shape of the SED array:",
+                    sed.lnu.shape,
+                    "does not agree with the number of stellar particles "
+                    "(%d)" % coordinates.shape[0],
                 )
-
-            # Need to ensure we have a per particle SED
-            if sed is not None:
-                if sed.lnu.shape[0] != stars.nparticles:
-                    raise exceptions.InconsistentArguments(
-                        "The shape of the SED array:",
-                        sed.lnu.shape,
-                        "does not agree with the number of stellar particles "
-                        "(%d)" % stars.nparticles,
-                    )
 
         # Missing cosmology
         if spatial_unit.same_dimensions_as(arcsec) and cosmo is None:
@@ -511,43 +508,38 @@ class ParticleScene(Scene):
                 "When working in an angular unit system a cosmology object"
                 " must be given."
             )
-
-        # Missing positions
-        if stars is None and positions is None:
-            raise exceptions.InconsistentArguments(
-                "Either stars or positions must be specified!"
-            )
-
-        # The passed centre does not lie within the range of positions
+        # The passed centre does not lie within the range of coordinates
         if centre is not None:
-            if stars is None:
-                pos = positions
-            else:
-                pos = stars.coordinates
-                if (
-                    centre[0] < np.min(pos[:, 0])
-                    or centre[0] > np.max(pos[:, 0])
-                    or centre[1] < np.min(pos[:, 1])
-                    or centre[1] > np.max(pos[:, 1])
-                    or centre[2] < np.min(pos[:, 2])
-                    or centre[2] > np.max(pos[:, 2])
-                ):
-                    raise exceptions.InconsistentCoordinates(
-                        "The centre lies outside of the coordinate range. "
-                        "Are they already centred?"
-                    )
+            if (
+                centre[0] < np.min(coordinates[:, 0])
+                or centre[0] > np.max(coordinates[:, 0])
+                or centre[1] < np.min(coordinates[:, 1])
+                or centre[1] > np.max(coordinates[:, 1])
+                or centre[2] < np.min(coordinates[:, 2])
+                or centre[2] > np.max(coordinates[:, 2])
+            ):
+                raise exceptions.InconsistentCoordinates(
+                    "The centre lies outside of the coordinate range. "
+                    "Are they already centred?"
+                )
 
         # Need to ensure we have a per particle SED
-        if sed is not None and positions is not None:
-            if sed.lnu.shape[0] != positions.shape[0]:
+        if sed is not None:
+            if sed.lnu.shape[0] != coordinates.shape[0]:
                 raise exceptions.InconsistentArguments(
                     "The shape of the SED array:",
                     sed.lnu.shape,
                     "does not agree with the number of coordinates "
-                    "(%d)" % positions.shape[0],
+                    "(%d)" % coordinates.shape[0],
                 )
 
-    def _centre_coords(self):
+        # Ensure we aren't trying to smooth particles without smoothing lengths
+        if kernel is not None and smoothing_lengths is None:
+            raise exceptions.InconsistentArguments(
+                "Trying to smooth particles which don't have smoothing lengths!"
+            )
+
+    def _centre_coordinates(self):
         """
         Centre coordinates on the geometric mean or the user provided centre.
 
@@ -556,108 +548,17 @@ class ParticleScene(Scene):
 
         # Calculate the centre if necessary
         if self.centre is None:
-            self.centre = np.mean(self.coords, axis=0)
+            self.centre = np.mean(self._coordinates, axis=0) * self.coordinates.units
 
         # Centre the coordinates
-        self.coords -= self.centre
+        self._coordinates -= self._centre
 
     def _get_pixel_pos(self):
         """
-        Convert particle positions to interger pixel coordinates.
+        Convert particle coordinates to interger pixel coordinates.
         These later help speed up sorting particles into pixels since their
         index is precomputed here.
         """
 
-        # Convert sim positions to pixel positions
-        self.pix_pos = np.int32(np.floor(self.coords / self.resolution))
-
-    def _convert_to_img_units(self):
-        """
-        Convert the passed coordinates (and smoothing lengths) to the scene's
-        spatial unit system.
-        """
-
-        # TODO: missing redshift information in Scene
-
-        # Is there anything to do here?
-        if self.coord_unit == self.spatial_unit:
-            return
-
-        # If they are the same dimension do the conversion.
-        elif self.spatial_unit.same_dimensions_as(self.coord_unit):
-            # First do the coordinates
-            self.coords *= self.coord_unit
-            self.coords.convert_to_units(self.spatial_unit)
-            self.coords = self.coords.value
-
-        # # Otherwise, handle conversion between length and angle
-        # elif self.spatial_unit.same_dimensions_as(
-        #     arcsec
-        # ) and self.stars.coord_units.same_dimensions_as(kpc):
-
-        #     # Convert coordinates from comoving to physical coordinates
-        #     self.coords *= 1 / (1 + self.stars.redshift)
-
-        #     # Get the conversion factor for arcsec and kpc at this redshift
-        #     arcsec_per_kpc_proper = self.cosmo.arcsec_per_kpc_proper(
-        #         self.stars.redshift
-        #     ).value
-
-        #     # First we need to convert to kpc
-        #     if self.stars.coord_units != kpc:
-
-        #         # First do the coordinates
-        #         self.coords *= self.stars.coord_units
-        #         self.coords.convert_to_units(kpc)
-        #         self.coords = self.coords.value
-
-        #     # Now we can convert to arcsec
-        #     self.coords *= arcsec_per_kpc_proper * arcsec
-
-        #     # Finally convert to the image unit system if needed
-        #     if self.spatial_unit != arcsec:
-        #         self.coords.convert_to_units(self.spatial_unit)
-
-        #     # And strip off the unit
-        #     self.coords = self.coords.value
-
-        else:
-            raise exceptions.UnimplementedFunctionality(
-                "Unrecognised combination of image and coordinate units. Feel "
-                "free to raise an issue on Github. Currently supported input"
-                " dimensions are length or angle for image units and only "
-                "length for coordinate units."
-            )
-
-        # And now do the smoothing lengths
-        if self.smoothing_lengths is not None:
-            # If they are the same dimension do the conversion.
-            if self.spatial_unit.same_dimensions_as(self.smooth_unit):
-                self.smoothing_lengths *= self.smooth_unit
-                self.smoothing_lengths.convert_to_units(self.spatial_unit)
-                self.smoothing_lengths = self.smoothing_lengths.value
-
-            # # Otherwise, handle conversion between length and angle
-            # elif self.spatial_unit.same_dimensions_as(
-            #     arcsec
-            # ) and self.stars.coord_units.same_dimensions_as(kpc):
-
-            #     # Convert coordinates from comoving to physical coordinates
-            #     self.smoothing_lengths *= 1 / (1 + self.stars.redshift)
-
-            #     # First we need to convert to kpc
-            #     if self.stars.coord_units != kpc:
-            #         self.smoothing_lengths *= self.stars.coord_units
-            #         self.smoothing_lengths.convert_to_units(kpc)
-            #         self.smoothing_lengths = self.smoothing_lengths.value
-
-            #     # Now we can convert to arcsec
-            #     self.smoothing_lengths *= arcsec_per_kpc_proper * arcsec
-
-            #     # Finally convert to the image unit system if needed
-            #     if self.spatial_unit != arcsec:
-            #         self.coords.convert_to_units(self.spatial_unit)
-            #         self.smoothing_lengths.convert_to_units(self.spatial_unit)
-
-            #     # And strip off the unit
-            #     self.smoothing_lengths = self.smoothing_lengths.value
+        # Convert sim coordinates to pixel coordinates
+        self.pix_pos = np.int32(np.floor(self._coordinates / self._resolution))
