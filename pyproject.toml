@@ -1,0 +1,133 @@
+[project]
+name = "synthesizer"
+
+# Dynamic version numbers from git
+dynamic = ["version"]
+
+# Tagline for Synthesizer
+description = "A package for synthetic observations of the Universe"
+
+# A longer description of Synthesizer
+readme = "README.md"
+
+# Minimum Python version
+requires-python = ">=3.8"
+
+# The licence
+license = {file = "LICENSE.md"}
+
+# Project keywords
+keywords = [
+  "galaxy",
+  "modelling",
+  "smoothed particle hydrodynamics",
+  "particles",
+  "nbody",
+  "galaxy formation",
+  "parametric",
+  "theory",
+  "sph",
+  "cosmology",
+  "galaxy evolution",
+  "survey",
+  "space telescope",
+  "SED",
+  "sed",
+  "spectral energy distribution",
+  "stellar population",
+  "synthesis",
+]
+
+# Synthesizer authors
+authors = [
+  {name = "C. Lovell", email = "christopher.lovell@port.ac.uk" },
+  {name = "W. J. Roper", email = "w.roper@sussex.ac.uk" },
+  {name = "A. J. Vijayan", email = "apavi@space.dtu.dk" },
+  {name = "S. M. Wilkins", email = "s.wilkins@sussex.ac.uk" },
+]
+
+# Synthesizer maintainers
+maintainers = [
+  {name = "C. Lovell", email = "christopher.lovell@port.ac.uk" },
+  {name = "W. J. Roper", email = "w.roper@sussex.ac.uk" },
+  {name = "A. J. Vijayan", email = "apavi@space.dtu.dk" },
+  {name = "S. M. Wilkins", email = "s.wilkins@sussex.ac.uk" },
+]
+
+# Classifiers
+classifiers = [  # Optional
+  # How mature is this project? Common values are
+  #   3 - Alpha
+  #   4 - Beta
+  #   5 - Production/Stable
+  "Development Status :: 3 - Alpha",  # 3 Alpha/4 Beta/5 Production/Stable
+  "Intended Audience :: Astronomers",
+  "Topic :: Synthetic Observations",
+  "License :: GNU GENERAL PUBLIC LICENSE v3.0",
+
+  # Supported Python versions
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3 :: Only",
+]
+
+# Dependancies
+dependencies = [
+  "nbmake",
+  "astropy",
+  "h5py",
+  "mpmath",
+  "numpy>=1.23",
+  "packaging",
+  "pyerfa",
+  "pyparsing",
+  "PyYAML",
+  "scipy",
+  "unyt",
+  "cmasher",
+  "dust_attenuation@git+https://github.com/karllark/dust_attenuation.git@v0.5.dev",
+  "dust_extinction",
+  "nbsphinx",
+  "matplotlib",
+  "spectres",
+]
+
+# Optionla dependencies for specific use cases.
+[project.optional-dependencies]
+dev = ["black"]
+test = ["pytest"]
+
+# We have multiple root level directories with code so we have to tell
+# setuptools where to look
+[tool.setuptools.packages.find]
+where = ["synthesizer"]
+
+# Project urls
+[project.urls]
+"Homepage" = "https://github.com/flaresimulations/synthesizer"
+"Bug Reports" = "https://github.com/flaresimulations/synthesizer/issues"
+"Source" = "https://github.com/flaresimulations/synthesizer"
+"Documentation" = "https://flaresimulations.github.io/synthesizer/"
+
+# Entry points
+[project.scripts]  # Optional
+init_bc03="grids.grid_bc03:main"
+init_fsps="grids.grid_fsps:main"
+
+# Package data
+# package-data = {}
+
+# Set up the build system
+[build-system]
+
+# Use latest setuotools, setuptools_scm for git versioning and
+# numpy (numpy includes are needed for compilation of C extensions)
+requires = ["setuptools>=64", "setuptools_scm>=8", "numpy>=1.23"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+
+# Make a version file at build time
+version_file = "synthesizer/_version.py"
