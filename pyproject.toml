@@ -1,5 +1,5 @@
 [project]
-name = "synthesizer"
+name = "cosmos-synthesizer"
 
 # Dynamic version numbers from git
 dynamic = ["version"]
