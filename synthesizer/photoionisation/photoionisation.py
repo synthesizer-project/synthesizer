@@ -5,10 +5,9 @@ from unyt import eV
 
 @dataclass
 class Ions:
-
     """
     A dataclass holding the ionisation energy of various ions amongst other
-    properties and methods
+    properties and methods.
 
     Used for calculating ionising photon luminosities (Q).
 
@@ -36,12 +35,17 @@ class Ions:
 
 def calculate_Q_from_U(U_avg, n_h):
     """
-    Args
-    U - units: dimensionless
-    n_h - units: cm^-3
+    Calcualte Q for a given U assuming a n_h
+
+    Args:
+        U (float) 
+            Ionisation parameter
+        n_h (float)
+            Hyodrogen density (units: cm^-3)
 
     Returns
-    Q - units: s^-1
+        float
+            Ionising photon luminosity (units: s^-1)
     """
     alpha_B = 2.59e-13  # cm^3 s^-1
     c_cm = 2.99e8 * 100  # cm s^-1
@@ -54,12 +58,17 @@ def calculate_Q_from_U(U_avg, n_h):
 
 def calculate_U_from_Q(Q_avg, n_h=100):
     """
-    Args
-    Q - units: s^-1
-    n_h - units: cm^-3
+    Calcualte the ionisation parameter for given Q assuming a n_h
+
+    Args:
+        Q (float) 
+            Ionising photon luminosity (units: s^-1)
+        n_h (float)
+            Hyodrogen density (units: cm^-3)
 
     Returns
-    U - units: dimensionless
+        float
+            Ionisation parameter
     """
     alpha_B = 2.59e-13  # cm^3 s^-1
     c_cm = 2.99e8 * 100  # cm s^-1
