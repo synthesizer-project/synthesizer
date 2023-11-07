@@ -99,11 +99,6 @@ dependencies = [
 dev = ["black"]
 test = ["pytest"]
 
-# We have multiple root level directories with code so we have to tell
-# setuptools where to look
-[tool.setuptools.packages.find]
-where = ["synthesizer"]
-
 # Project urls
 [project.urls]
 "Homepage" = "https://github.com/flaresimulations/synthesizer"
@@ -117,7 +112,8 @@ init_bc03="grids.grid_bc03:main"
 init_fsps="grids.grid_fsps:main"
 
 # Package data
-# package-data = {}
+[tool.setuptools.package-data]
+data = ["src/synthesizer/data/*.txt", "src/synthesizer/data/*.npz"]
 
 # Set up the build system
 [build-system]
@@ -130,4 +126,4 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 
 # Make a version file at build time
-version_file = "synthesizer/_version.py"
+version_file = "src/synthesizer/_version.py"
