@@ -40,7 +40,7 @@ keywords = [
 
 # Synthesizer authors
 authors = [
-  {name = "C. Lovell", email = "christopher.lovell@port.ac.uk" },
+  {name = "C. C. Lovell", email = "christopher.lovell@port.ac.uk" },
   {name = "W. J. Roper", email = "w.roper@sussex.ac.uk" },
   {name = "A. J. Vijayan", email = "apavi@space.dtu.dk" },
   {name = "S. M. Wilkins", email = "s.wilkins@sussex.ac.uk" },
@@ -48,7 +48,7 @@ authors = [
 
 # Synthesizer maintainers
 maintainers = [
-  {name = "C. Lovell", email = "christopher.lovell@port.ac.uk" },
+  {name = "C. C. Lovell", email = "christopher.lovell@port.ac.uk" },
   {name = "W. J. Roper", email = "w.roper@sussex.ac.uk" },
   {name = "A. J. Vijayan", email = "apavi@space.dtu.dk" },
   {name = "S. M. Wilkins", email = "s.wilkins@sussex.ac.uk" },
@@ -94,7 +94,7 @@ dependencies = [
   "spectres",
 ]
 
-# Optionla dependencies for specific use cases.
+# Optional dependencies for specific use cases.
 [project.optional-dependencies]
 dev = ["black"]
 test = ["pytest"]
