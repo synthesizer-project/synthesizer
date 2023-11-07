@@ -6,6 +6,7 @@ grid. Can optionally generate an array of input files for selected parameters.
 import numpy as np
 import shutil
 from unyt import c, h, angstrom, unyt_array
+from synthesizer.photoionisation import calculate_Q_from_U
 
 
 class ShapeCommands:
