@@ -1,34 +1,36 @@
-""" Setup file for synthesizer
+""" Setup file for synthesizer.
 
-TODO: ADD GUBBINS, LICENCE, COLLABORATION DETAILS ETC
+Most the of the build is defined in pyproject.toml but C extensions are not
+supported in pyproject.toml yet. To enable the compilation of the C extensions
+we use the legacy setup.py. This is ONLY used for the C extensions.
 """
-# from distutils.core import setup, Extension
-from setuptools import setup, Extension, find_packages
+import tempfile
+
+from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
-
-from distutils.errors import CompileError
-
-# We first need a numpy install to run setup.py
-from setuptools import dist
-
-dist.Distribution().fetch_build_eggs(["numpy==1.23.4"])
+from setuptools.errors import CompileError
 
 import numpy as np
-
-# The below is taken from PySPHveiwer. Might need to change and adapt but
-# it's a good starting point.
-
-# First we find out what link/etc. flags we want based on the compiler.
 
 
 def has_flags(compiler, flags):
     """
-    This checks whether our C compiler allows for a flag to be passed,
-    by compiling a small test program.
-    """
-    import tempfile
-    from distutils.errors import CompileError
+    A function to check whether the C compiler allows for a flag to be passed.
 
+    This is tested by compiling a small temporary test program.
+
+    Args:
+        compiler
+            The loaded C compiler.
+        flags (list)
+            A list of compiler flags to test the compiler with.
+
+    Returns
+        bool
+            Success/Failure
+    """
+
+    # Attempt to compile a temporary C file
     with tempfile.NamedTemporaryFile("w", suffix=".c") as f:
         f.write("int main (int argc, char **argv) { return 0; }")
         try:
@@ -38,10 +40,14 @@ def has_flags(compiler, flags):
     return True
 
 
-# Build a build extension class that allows for finer selection of flags.
-
-
 class BuildExt(build_ext):
+    """
+    A class for building extensions with a specific set of accepted compiler
+    flags.
+
+    NOTE: Windows is currently not explictly supported.
+    """
+
     # Never check these; they're always added.
     # Note that we don't support MSVC here.
     compile_flags = {
@@ -55,7 +61,14 @@ class BuildExt(build_ext):
     }
 
     def build_extensions(self):
+        """
+        A method to set up the build extensions with the correct compiler flags.
+        """
+
+        # Get local useful variables
         ct = self.compiler.compiler_type
+
+        # Set up the flags and links for compilation
         opts = self.compile_flags.get(ct, [])
         links = []
 
@@ -95,66 +108,34 @@ class BuildExt(build_ext):
         #                        "If you are on Windows, please reach out on the GitHub and we can try "
         #                        "to find a solution.")
 
+        # Apply the flags and links
         for ext in self.extensions:
             ext.extra_compile_args = opts
             ext.extra_link_args = links
 
+        # Build the extensions
         build_ext.build_extensions(self)
 
 
+# Define the extension source files
+src_files = {
+    "synthesizer.extensions.integrated_spectra": "synthesizer/extensions/integrated_spectra.c",
+    "synthesizer.extensions.particle_spectra": "synthesizer/extensions/particle_spectra.c",
+    "synthesizer.extensions.los": "synthesizer/extensions/los.c",
+    "synthesizer.imaging.extensions.spectral_cube": "synthesizer/imaging/extensions/spectral_cube.c",
+    "synthesizer.imaging.extensions.image": "synthesizer/imaging/extensions/image.c",
+}
+
+# Create the extension objects
 extensions = [
-    Extension(path, sources=[source])
-    for path, source in {
-        "synthesizer.extensions.integrated_spectra": "synthesizer/extensions/integrated_spectra.c",
-        "synthesizer.extensions.particle_spectra": "synthesizer/extensions/particle_spectra.c",
-        "synthesizer.extensions.weights": "synthesizer/extensions/weights.c",
-        "synthesizer.extensions.los": "synthesizer/extensions/los.c",
-        "synthesizer.imaging.extensions.spectral_cube": "synthesizer/imaging/extensions/spectral_cube.c",
-        "synthesizer.imaging.extensions.image": "synthesizer/imaging/extensions/image.c",
-    }.items()
+    Extension(
+        path,
+        sources=[source],
+        include_dirs=[np.get_include()],
+        py_limited_api=True,
+    )
+    for path, source in src_files.items()
 ]
 
-setup(
-    name="synthesizer",
-    version="0.1.0",
-    description="Tools ",
-    # WILL NOTE: Lists of authors are not actually allowed by setuptools...
-    # There are better package management solutions these days that do,
-    # but I haven't deleved into those depths
-    author="Chris Lovell, Jussi Kuusisto, Will Roper, Stephen Wilkins",
-    author_email="FILL EMAILS, w.roper@sussex.ac.uk",
-    url="https://github.com/flaresimulations/synthesizer",
-    packages=find_packages(),
-    install_requires=[  # Need to actually write the module to know this...
-        "numpy>=1.14.5",
-        "scipy>=1.7",
-    ],
-    # extras_require={"plotting": ["matplotlib>=2.2.0", "jupyter"]},
-    # setup_requires=["pytest-runner", "flake8"],
-    # tests_require=["pytest"],
-    entry_points={
-        "console_scripts": [
-            "init_bc03=grids.grid_bc03:main",
-            "init_fsps=grids.grid_fsps:main",
-        ]
-    },
-    include_package_data=True,
-    include_dirs=[np.get_include()],
-    package_data={"synthesizer": ["*.c", "*.txt"]},
-    cmdclass=dict(build_ext=BuildExt),
-    ext_modules=extensions,
-    # Need to populate these properly
-    # license="GNU GPL v3",
-    # classifiers=[
-    #     "Programming Language :: Python :: 3.7",
-    #     "Programming Language :: Python :: 3.8",
-    #     "Programming Language :: Python :: 3.9",
-    #     "Programming Language :: Python :: 3.10",
-    #     "Programming Language :: Python :: 3.11",
-    #     "Topic :: Utilities",
-    # ],
-    keywords="galaxy modelling smoothed particle hydrodynamics particles nbody"
-    " galaxy formation parametric theory sph cosmology galaxy evolution survey"
-    " space telescope SED sed spectral energy distribution stellar population "
-    "synthesis",
-)
+# Finally, call the setup
+setup(cmdclass={build_ext: BuildExt}, ext_modules=extensions)
