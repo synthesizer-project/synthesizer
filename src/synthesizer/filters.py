@@ -724,10 +724,12 @@ class FilterCollection:
                 f_grp.attrs["instrument"] = filt.instrument
                 f_grp.attrs["filter_"] = filt.filter_
             elif filt.filter_type == "TopHat":
-                f_grp.attrs["lam_min"] = filt._lam_min
-                f_grp.attrs["lam_max"] = filt._lam_max
-                f_grp.attrs["lam_eff"] = filt._lam_eff
-                f_grp.attrs["lam_fwhm"] = filt._lam_fwhm
+                if filt._lam_min is not None:
+                    f_grp.attrs["lam_min"] = filt._lam_min
+                    f_grp.attrs["lam_max"] = filt._lam_max
+                else:
+                    f_grp.attrs["lam_eff"] = filt._lam_eff
+                    f_grp.attrs["lam_fwhm"] = filt._lam_fwhm
 
             # Create transmission dataset
             f_grp.create_dataset("Transmission", data=filt.t)
