@@ -58,23 +58,25 @@ def UVJ(new_lam=None):
 
 class FilterCollection:
     """
-    Holds a collection of filters and enables various quality of life
-    operations such as plotting, adding, looping, len, and comparisons as if
-    the collection was a simple list.
+    Holds a collection of filters (`Filter` objects) and enables various quality 
+    of life operations such as plotting, adding, looping, len, and comparisons 
+    as if the collection was a simple list.
 
-    Filters can be derived from the SVO database
-    (http://svo2.cab.inta-csic.es/svo/theory/fps3/), specific top hat filter
+    Filters can be derived from the 
+    `SVO database <http://svo2.cab.inta-csic.es/svo/theory/fps3/>`__
+    , specific top hat filter
     properties or generic filter transmission curves and a wavelength array.
 
-    All filters are defined in terms of the same wavelength array.
+    All filters in the `FilterCollection` are defined in terms of the 
+    same wavelength array.
 
-    In addition to creating Filters from user defined arguments, a HDF5 file of
-    a FilterCollection can be created and later loaded at instantiation to
-    load a saved FilterCollection.
+    In addition to creating `Filter`s from user defined arguments, a HDF5 file of
+    a `FilterCollection` can be created and later loaded at instantiation to
+    load a saved `FilterCollection`.
 
     Attributes:
         filters (dict, Filter)
-            A list containing the individual Filter objects.
+            A list containing the individual `Filter` objects.
         filter_codes (list, string)
             A list of the names of each filter. For SVO filters these have to
             have the form "Observatory/Instrument.Filter" matching the
