@@ -29,6 +29,7 @@ from urllib.error import URLError
 
 import synthesizer.exceptions as exceptions
 from synthesizer.units import Quantity
+from synthesizer._version import __version__
 
 
 def UVJ(new_lam=None):
@@ -688,6 +689,9 @@ class FilterCollection:
 
         # Open the HDF5 file  (will overwrite existing files at path)
         hdf = h5py.File(path, "w")
+
+        # Include the Synthesizer version
+        hdf.attrs["synthesizer_version"] = __version__
 
         # Wrtie the FilterCollection attributes
         hdf.attrs["nfilters"] = self.nfilters
