@@ -19,6 +19,7 @@ transmission curves:
       filter_codes=fs, tophat_dict=tophats, generic_dict=generics, new_lam=lams
   )
 """
+import h5py
 import numpy as np
 import urllib.request
 import matplotlib.pyplot as plt
@@ -66,22 +67,22 @@ class FilterCollection:
 
     All filters are defined in terms of the same wavelength array.
 
-    Args:
-        filters : (dict, Filter)
+    Attributes:
+        filters (dict, Filter)
             A list containing the individual Filter objects.
-        filter_codes : (list, string)
+        filter_codes (list, string)
             A list of the names of each filter. For SVO filters these have to
             have the form "Observatory/Instrument.Filter" matching the
             database, but for all other filter types this can be an arbitrary
             label.
-        lam : array-like (float)
+        lam (array-like, float)
             The wavelength array for which each filter's transmission curve is
             defined.
         nfilters (int)
             The number of filters in this collection.
-        mean_lams (array-like, float)
+        mean_lams (Quantity, array-like, float)
             The mean wavelength of each Filter in the collection.
-        pivot_lams (array-like, float)
+        pivot_lams (Quantity, array-like, float)
             The mean wavelength of each Filter in the collection.
     """
 
@@ -676,6 +677,65 @@ class FilterCollection:
 
         return f
 
+    def write_filters(self, path):
+        """
+        Writes the current state of the FilterCollection to a HDF5 file.
+
+        Args:
+            path (str)
+                The file path at which to save the FilterCollection.
+        """
+
+        # Open the HDF5 file  (will overwrite existing files at path)
+        hdf = h5py.File(path, "w")
+
+        # Wrtie the FilterCollection attributes
+        hdf.attrs["nfilters"] = self.nfilters
+
+        # Write the wavelengths
+        hdf.create_dataset("Wavelengths", data=self._lam)
+
+        # Write the mean and pivot wavelengths
+        hdf.attrs["mean_lams"] = self._mean_lams
+        hdf.attrs["pivot_lams"] = self._pivot_lams
+
+        # Write the filter codes
+        hdf.attrs["filter_codes"] = self.filter_codes
+
+        # For each filter...
+        for fcode, filt in self.filters.items():
+            # Create the filter group
+            f_grp = hdf.create_group(fcode)
+
+            # Write out the filter type
+            f_grp.attrs["filter_type"] = filt.filter_type
+
+            # Write out the filter code
+            f_grp.attrs["filter_code"] = filt.filter_code
+
+            # Write out the type specific attributes
+            if filt.filter_type == "SVO":
+                f_grp.attrs["svo_url"] = filt.svo_url
+                f_grp.attrs["observatory"] = filt.observatory
+                f_grp.attrs["instrument"] = filt.instrument
+                f_grp.attrs["filter_"] = filt.filter_
+            elif filt.filter_type == "TopHat":
+                f_grp.attrs["lam_min"] = filt._lam_min
+                f_grp.attrs["lam_max"] = filt._lam_max
+                f_grp.attrs["lam_eff"] = filt._lam_eff
+                f_grp.attrs["lam_fwhm"] = filt._lam_fwhm
+
+            # Create transmission dataset
+            f_grp.create_dataset("Transmission", data=filt.t)
+
+            # For an SVO filter we need the original wavelength and
+            # transmission curves
+            if filt.filter_type == "SVO":
+                f_grp.create_dataset("Original_Wavelength", data=filt._original_lam)
+                f_grp.create_dataset("Original_Transmission", data=filt.original_t)
+
+        hdf.close()
+
 
 class Filter:
     """
@@ -689,42 +749,42 @@ class Filter:
         http://stsdas.stsci.edu/stsci_python_epydoc/SynphotManual.pdf
 
     Attributes:
-        filter_code : string
+        filter_code (string)
             The full name defining this Filter.
-        observatory : string
+        observatory (string)
             The name of the observatory
-        instrument : string
+        instrument (string)
             The name of the instrument.
-        filter_ : string
+        filter_ (string)
             The name of the filter.
-        filter_type : string
+        filter_type (string)
             A string describing the filter type: "SVO", "TopHat", or "Generic".
-        lam_min : float
+        lam_min (Quantity)
             If a top hat filter: The minimum wavelength where transmission is
             nonzero.
-        lam_max : float
+        lam_max (Quantity)
             If a top hat filter: The maximum wavelength where transmission is
             nonzero.
-        lam_eff : float
+        lam_eff (Quantity)
             If a top hat filter: The effective wavelength of the filter curve.
-        lam_fwhm : float
+        lam_fwhm (Quantity)
             If a top hat filter: The FWHM of the filter curve.
-        svo_url : string
+        svo_url (string)
             If an SVO filter: the url from which the data was extracted.
-        t : array-like (float)
+        t (array-like, float)
             The transmission curve.
-        lam : array-like (float)
+        lam (Quantity, array-like, float)
             The wavelength array for which the transmission is defined.
-        nu : array-like (float)
+        nu (Quantity, array-like, float)
             The frequency array for which the transmission is defined. Derived
             from self.lam.
-        original_lam : array-like (float)
+        original_lam (Quantity, array-like, float)
             The original wavelength extracted from SVO. In a non-SVO filter
             self.original_lam == self.lam.
-        original_nu : array-like (float)
+        original_nu (Quantity, array-like, float)
             The original frequency derived from self.original_lam. In a non-SVO
             filter self.original_nu == self.nu.
-        original_t : array-like (float)
+        original_t (array-like, float)
             The original transmission extracted from SVO. In a non-SVO filter
             self.original_t == self.t.
     """
