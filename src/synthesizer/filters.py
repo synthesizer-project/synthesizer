@@ -199,11 +199,11 @@ class FilterCollection:
 
     def _load_filters(self, path):
         """
-        Loads a FilterCollection from a HDF5 file.
+        Loads a `FilterCollection` from a HDF5 file.
 
         Args:
             path (str)
-                The file path at which to save the FilterCollection.
+                The file path from which to load the `FilterCollection`.
         """
 
         # Open the HDF5 file
