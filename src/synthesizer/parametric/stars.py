@@ -40,7 +40,10 @@ class Stars(StarsComponent):
         metal_hist (array-like, float)
         sf_hist_func (function)
         metal_hist_func (function)
-        morphology (synthesizer.morphology.*)
+        morphology (morphology.* e.g. Sersic2D)
+            An instance of one of the morphology classes describing the
+            stellar population's morphology. This can be any of the family of
+            morphology classes from synthesizer.morphology.
         metallicity_grid_type (string)
     """
 
@@ -60,7 +63,10 @@ class Stars(StarsComponent):
             log10ages (array-like, float)
             metallicities (array-like, float)
             sfzh (array-like, float)
-            morphology (synthesizer.morphology.*)
+            morphology (morphology.* e.g. Sersic2D)
+                An instance of one of the morphology classes describing the
+                stellar population's morphology. This can be any of the family
+                of morphology classes from synthesizer.morphology.
             sf_hist_func (function)
             metal_hist_func (function)
         """

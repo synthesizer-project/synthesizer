@@ -17,31 +17,28 @@ class Galaxy(BaseGalaxy):
 
     def __init__(
         self,
-        sfzh,
-        morph=None,
+        stars,
         name="parametric galaxy",
         redshift=None,
     ):
         """__init__ method for ParametricGalaxy
 
         Args:
+            stars (parametric.Stars)
+                An instance of parametric.Stars containing the combined star
+                formation and metallicity history of this galaxy.
             name (str)
                 A name to identify the galaxy. Only used for external labelling,
                 has no internal use.
-            sfzh (object, BinnedSFZH)
-                An instance of BinnedSFZH containing the combined star
-                formation and metallicity histories.
-            morph (object, morphology.* e.g. Sersic2D)
-                An instance of one of the morphology classes describing the
-                galaxy's morphology. This can be any of the family of
-                morphology classes from synthesizer.morphology.
+            redshift (float)
+                The redshift of the galaxy.
 
         Raises:
             InconsistentArguments
         """
 
         # Check we haven't been given Stars
-        if isinstance(sfzh, ParticleStars):
+        if isinstance(stars, ParticleStars):
             raise exceptions.InconsistentArguments(
                 "Stars passed instead of SFZH object (BinnedSFZH)."
                 " Did you mean synthesizer.particle.Galaxy instead?"
@@ -49,16 +46,22 @@ class Galaxy(BaseGalaxy):
 
         self.name = name
 
-        self.sfzh = sfzh
+        # Attach the parametric stars object
+        self.stars = stars
+
         # add an extra dimension to the sfzh to allow the fast summation
         # **** TODO: Get rid of this expression or
         # use this throughout?
-        self.sfzh_ = np.expand_dims(self.sfzh.sfzh, axis=2)
+        self.sfzh = np.expand_dims(self.stars.sfzh, axis=2)
 
-        self.morph = morph
-        self.spectra = {}  # dictionary holding spectra
-        self.lines = {}  # dictionary holding lines
-        self.images = {}  # dictionary holding images
+        # Define the dictionary to hold spectra
+        self.spectra = {}
+
+        # Define the dictionary to hold lines
+        self.lines = {}
+
+        # Define the dictionary to hold images
+        self.images = {}
 
         # The redshift of the galaxy
         self.redshift = redshift
@@ -484,7 +487,7 @@ class Galaxy(BaseGalaxy):
 
         # Instantiate the Image object.
         img = ParametricImage(
-            morphology=self.morph,
+            morphology=self.stars.morphology,
             resolution=resolution,
             fov=fov,
             sed=sed,
