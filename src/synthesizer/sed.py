@@ -840,11 +840,129 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
     )[0]
 
 
-# def rebin(l, f, n):  # rebin SED [currently destroys original]
-#     n_len = int(np.floor(len(l) / n))
-#     _l = l[: n_len * n]
-#     _f = f[: n_len * n]
-#     nl = np.mean(_l.reshape(n_len, n), axis=1)
-#     nf = np.sum(_f.reshape(n_len, n), axis=1) / n
+def plot_spectra(
+        fig=None, ax=None, show=False, spectra_to_plot=None, ylimits=("peak", 5), figsize=(3.5, 5)
+):
+    """
+    Plots either a specific spectra.
 
-#     return nl, nf
+    Args:
+        show (bool)
+            Flag for whether to show the plot or just return the
+            figure and axes.
+        spectra_to_plot (None, list)
+            List of named spectra to plot that are present in
+            `galaxy.spectra`.
+        ylimits (named_tuple)
+            Limits to apply to the axes.
+        figsize (tuple)
+            Tuple with size 2 defining the figure size.
+
+    Returns:
+        fig
+            The matplotlib figure object for the plot.
+        ax
+            The matplotlib axes object containing the plotted data.
+    """
+
+    fig = plt.figure(figsize=figsize)
+
+    left = 0.15
+    height = 0.6
+    bottom = 0.1
+    width = 0.8
+
+    ax = fig.add_axes((left, bottom, width, height))
+
+    if not isinstance(spectra_to_plot, list):
+        spectra_to_plot = list(self.spectra.keys())
+
+    # only plot FIR if 'total' is plotted otherwise just plot UV-NIR
+    if "total" in spectra_to_plot:
+        xlim = [2.0, 7.0]
+    else:
+        xlim = [2.0, 4.5]
+
+    ypeak = -100
+    for sed_name in spectra_to_plot:
+        sed = self.spectra[sed_name]
+        ax.plot(
+            np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, label=sed_name
+        )
+
+        if np.max(np.log10(sed.lnu)) > ypeak:
+            ypeak = np.max(np.log10(sed.lnu))
+
+    # ax.set_xlim([2.5, 4.2])
+
+    if ylimits[0] == "peak":
+        if ypeak == ypeak:
+            ylim = [ypeak - ylimits[1], ypeak + 0.5]
+        ax.set_ylim(ylim)
+
+    ax.set_xlim(xlim)
+
+    ax.legend(fontsize=8, labelspacing=0.0)
+    ax.set_xlabel(r"$\rm log_{10}(\lambda/\AA)$")
+    ax.set_ylabel(r"$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$")
+
+    if show:
+        plt.show()
+
+    return fig, ax
+
+def plot_observed_spectra(
+    cosmo,
+    z,
+    fc=None,
+    show=False,
+    spectra_to_plot=None,
+    figsize=(3.5, 5.0),
+    verbose=True,
+):
+    """
+    plots all spectra associated with a galaxy object
+
+    Args:
+
+    Returns:
+    """
+
+    fig = plt.figure(figsize=figsize)
+
+    left = 0.15
+    height = 0.7
+    bottom = 0.1
+    width = 0.8
+
+    ax = fig.add_axes((left, bottom, width, height))
+    filter_ax = ax.twinx()
+
+    if not isinstance(spectra_to_plot, list):
+        spectra_to_plot = list(self.spectra.keys())
+
+    for sed_name in spectra_to_plot:
+        sed = self.spectra[sed_name]
+        sed.get_fnu(cosmo, z)
+        ax.plot(sed.obslam, sed.fnu, lw=1, alpha=0.8, label=sed_name)
+        print(sed_name)
+
+        if fc:
+            sed.get_broadband_fluxes(fc, verbose=verbose)
+            for f in fc:
+                wv = f.pivwv()
+                filter_ax.plot(f.lam, f.t)
+                ax.scatter(wv, sed.broadband_fluxes[f.filter_code], zorder=4)
+
+    # ax.set_xlim([5000., 100000.])
+    # ax.set_ylim([0., 100])
+    filter_ax.set_ylim([3, 0])
+    ax.legend(fontsize=8, labelspacing=0.0)
+    ax.set_xlabel(r"$\rm log_{10}(\lambda_{obs}/\AA)$")
+    ax.set_ylabel(r"$\rm log_{10}(f_{\nu}/nJy)$")
+
+    if show:
+        plt.show()
+
+    return fig, ax
+
