@@ -40,6 +40,8 @@ class Stars(StarsComponent):
         metal_hist (array-like, float)
         sf_hist_func (function)
         metal_hist_func (function)
+        morphology (synthesizer.morphology.*)
+        metallicity_grid_type (string)
     """
 
     def __init__(
@@ -55,33 +57,60 @@ class Stars(StarsComponent):
         Initialise the parametric stellar population.
 
         Args:
-            log10ages
+            log10ages (array-like, float)
+            metallicities (array-like, float)
+            sfzh (array-like, float)
+            morphology (synthesizer.morphology.*)
+            sf_hist_func (function)
+            metal_hist_func (function)
         """
+
+        # Instantiate the parent
+        StarsComponent(10 ** log10ages, metallicities)
+
+        # Set the age grid properties
         self.log10ages = log10ages
-        self.ages = 10**log10ages
         self.log10ages_lims = [self.log10ages[0], self.log10ages[-1]]
-        self.metallicities = metallicities
+
+        # Set the metallicity grid properties
         self.metallicities_lims = [self.metallicities[0], self.metallicities[-1]]
         self.log10metallicities = np.log10(metallicities)
         self.log10metallicities_lims = [
             self.log10metallicities[0],
             self.log10metallicities[-1],
         ]
-        self.sfzh = sfzh  # 2D star formation and metal enrichment history
-        self.sf_hist = np.sum(self.sfzh, axis=1)  # 1D star formation history
-        self.metal_hist = np.sum(self.sfzh, axis=0)  # metallicity distribution
-        self.sf_hist_func = (
-            sf_hist_func  # function used to generate the star formation history if given
-        )
-        self.metal_hist_func = metal_hist_func  # function used to generate the metallicity history/distribution if given
 
-        # --- check if metallicities on regular grid in log10metallicity or metallicity or not at all (e.g. BPASS
+        # Set the 2D star formation metallicity history grid
+        self.sfzh = sfzh
+
+        # Project the SFZH to get the 1D SFH
+        self.sf_hist = np.sum(self.sfzh, axis=1)
+
+        # Project the SFZH to get the 1D ZH
+        self.metal_hist = np.sum(self.sfzh, axis=0)
+
+        # Store the function used to make the star formation history if given
+        self.sf_hist_func = sf_hist_func
+
+        # Store the function used to make the metallicity history if given
+        self.metal_hist_func = metal_hist_func
+
+        # Attach the morphology model
+        self.morphology = morphology
+
+        # Check if metallicities are uniformly binned in log10metallicity or
+        # linear metallicity or not at all (e.g. BPASS)
         if len(set(self.metallicities[:-1] - self.metallicities[1:])) == 1:
-            self.metallicity_grid = "Z"
+            # Regular linearly
+            self.metallicity_grid_type = "Z"
+
         elif len(set(self.log10metallicities[:-1] - self.log10metallicities[1:])) == 1:
-            self.metallicity_grid = "log10Z"
+            # Regular in logspace
+            self.metallicity_grid_type = "log10Z"
+
         else:
-            self.metallicity_grid = None
+            # Irregular
+            self.metallicity_grid_type = None
 
     def calculate_median_age(self):
         """calculate the median age"""
