@@ -3,6 +3,7 @@
 
 """
 import numpy as np
+from unyt import yr
 
 from synthesizer.stats import weighted_median, weighted_mean
 
