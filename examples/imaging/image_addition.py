@@ -41,7 +41,7 @@ morph = Sersic2D(r_eff_kpc=1.0 * kpc, n=1.0, ellip=0.5, theta=35.0)
 galaxy = Galaxy(morph=morph, sfzh=sfzh)
 
 # Get specrtra
-sed = galaxy.get_spectra_incident(grid)
+sed = galaxy.stars.get_spectra_incident(grid)
 
 # Create a filter collection
 filter_codes1 = ["JWST/NIRCam.F090W", "JWST/NIRCam.F150W", "JWST/NIRCam.F200W"]

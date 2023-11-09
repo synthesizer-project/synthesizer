@@ -12,7 +12,7 @@ spectra for all particles in a simulation.)
 Example usage:
 
     galaxy = Galaxy(stars, gas, black_holes, ...)
-    galaxy.get_spectra_incident(...)
+    galaxystars.get_spectra_incident(...)
 
 """
 import numpy as np
@@ -417,7 +417,7 @@ class Galaxy(BaseGalaxy):
         Generate the luminosity for a given grid key spectra for all
         stars in this galaxy object. Can optionally apply masks.
 
-        Base class for :func:`~particle.ParticleGalaxy.get_spectra_incident`
+        Base class for :func:`~particle.ParticleGalaxystars.get_spectra_incident`
         and other related methods
 
         Args:
@@ -475,7 +475,7 @@ class Galaxy(BaseGalaxy):
         Generate the luminosity for a given grid key spectra for all
         stars in this galaxy object. Can optionally apply masks.
 
-        Base class for :func:`~particle.ParticleGalaxy.get_spectra_incident`
+        Base class for :func:`~particle.ParticleGalaxystars.get_spectra_incident`
         and other related methods
 
         Args:

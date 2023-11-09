@@ -40,7 +40,7 @@ if __name__ == "__main__":
         to an sed object """
     _g = gals[0]
 
-    _spec = _g.get_spectra_incident(grid)
+    _spec = _g.stars.get_spectra_incident(grid)
     _g.plot_spectra()
     plt.show()
 
@@ -51,19 +51,19 @@ if __name__ == "__main__":
     # plt.legend()
     # plt.show()
 
-    spec = _g.get_spectra_nebular(grid)
+    spec = _g.stars.get_spectra_nebular(grid)
     _g.plot_spectra()
     plt.show()
 
-    spec = _g.get_spectra_reprocessed(grid, fesc=0.1)
+    spec = _g.stars.get_spectra_reprocessed(grid, fesc=0.1)
     _g.plot_spectra()
     plt.show()
 
-    spec = _g.get_spectra_screen(grid, tau_v=0.32)
+    spec = _g.stars.get_spectra_screen(grid, tau_v=0.32)
     _g.plot_spectra()
     plt.show()
 
-    spec = _g.get_spectra_CharlotFall(grid, tau_v_ISM=0.33, tau_v_BC=0.67)
+    spec = _g.stars.get_spectra_CharlotFall(grid, tau_v_ISM=0.33, tau_v_BC=0.67)
     _g.plot_spectra()
     plt.show()
 
@@ -72,7 +72,7 @@ if __name__ == "__main__":
         and combine into a single sed object afterwards """
     _specs = np.vstack(
         [
-            _g.get_spectra_CharlotFall(grid, tau_v_ISM=0.33, tau_v_BC=0.67)._lnu
+            _g.stars.get_spectra_CharlotFall(grid, tau_v_ISM=0.33, tau_v_BC=0.67)._lnu
             for _g in gals
         ]
     )
@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
     _specs = np.vstack(
         [
-            gals[_g].get_spectra_CharlotFall(grid, tau_v_ISM=0.33, tau_v_BC=0.67)._lnu
+            gals[_g].stars.get_spectra_CharlotFall(grid, tau_v_ISM=0.33, tau_v_BC=0.67)._lnu
             for _g in mask
         ]
     )

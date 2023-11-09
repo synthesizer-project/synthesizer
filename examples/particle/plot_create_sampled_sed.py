@@ -57,7 +57,7 @@ galaxy = Galaxy(stars=stars)
 # --- this generates stellar and intrinsic spectra
 # galaxy.generate_intrinsic_spectra(grid, fesc=0.0) # calculate only integrated SEDs
 # calculates for every star particle, slow but necessary for LOS.
-galaxy.get_spectra_incident(grid)
+galaxy.stars.get_spectra_incident(grid)
 
 # --- generate dust screen
 # galaxy.get_screen(0.5) # tau_v
