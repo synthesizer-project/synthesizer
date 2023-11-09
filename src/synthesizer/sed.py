@@ -13,9 +13,6 @@ from synthesizer.units import Quantity, Units
 from synthesizer.igm import Inoue14
 
 
-units = Units()
-
-
 class Sed:
 
     """
@@ -218,7 +215,7 @@ class Sed:
         pstr += f"Number of wavelength points: {len(self._lam)} \n"
         pstr += f"Wavelength range: [{np.min(self.lam):.2f}, \
             {np.max(self.lam):.2f}] \n"
-        pstr += f"log10(Peak luminosity/{units.lnu}): \
+        pstr += f"log10(Peak luminosity/{self.lnu.units}): \
             {np.log10(np.max(self.lnu)):.2f} \n"
         bolometric_luminosity = self.measure_bolometric_luminosity()
         pstr += f"log10(Bolometric luminosity/{bolometric_luminosity.units}): \
@@ -264,7 +261,9 @@ class Sed:
 
         """
 
-        return self._get_lnu_at_nu(nu.to(units.nu).value, kind=kind) * units.lnu
+        return (
+            self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind) * self.lnu.units
+        )
 
     def _get_lnu_at_lam(self, lam, kind=False):
         """
@@ -297,7 +296,10 @@ class Sed:
 
         """
 
-        return self._get_lnu_at_lam(lam.to(units.lam).value, kind=kind) * units.lnu
+        return (
+            self._get_lnu_at_lam(lam.to(self.lam.units).value, kind=kind)
+            * self.lnu.units
+        )
 
     def measure_bolometric_luminosity(self, method="trapz"):
         """
@@ -319,7 +321,7 @@ class Sed:
             bolometric_luminosity = np.trapz(self.lnu[::-1], x=self.nu[::-1])
         if method == "quad":
             bolometric_luminosity = (
-                integrate.quad(self._get_lnu_at_nu, 1e12, 1e16)[0] * units.luminosity
+                integrate.quad(self._get_lnu_at_nu, 1e12, 1e16)[0] * self.lnu.units
             )
 
         return bolometric_luminosity
@@ -342,10 +344,8 @@ class Sed:
             Convert wavelength limits to frequency limits and convert to
             base units.
             """
-            lims = (c / np.array(window)).to(units.nu).value
-            luminosity = (
-                integrate.quad(self._get_lnu_at_nu, *lims)[0] * units.luminosity
-            )
+            lims = (c / np.array(window)).to(self.nu.units).value
+            luminosity = integrate.quad(self._get_lnu_at_nu, *lims)[0] * self.lnu.units
 
         if method == "trapz":
             # define a pseudo transmission function
@@ -353,7 +353,7 @@ class Sed:
             transmission = transmission.astype(float)
             luminosity = np.trapz(self.lnu[::-1] * transmission[::-1], x=self.nu[::-1])
 
-        return luminosity.to(units.luminosity)
+        return luminosity.to(self.lnu.units)
 
     def measure_window_lnu(self, window, method="trapz"):
         """
@@ -383,7 +383,7 @@ class Sed:
                             for _lnu in self._lnu
                         ]
                     )
-                    * units.lnu
+                    * self.lnu.units
                 )
 
             else:
@@ -405,7 +405,7 @@ class Sed:
                             for _lnu in self._lnu
                         ]
                     )
-                    * units.lnu
+                    * self.lnu.units
                 )
 
             else:
@@ -417,7 +417,7 @@ class Sed:
         # note: not yet adapted for multiple SEDs
         if method == "quad":
             # define limits in base units
-            lims = (c / window).to(units.nu).value
+            lims = (c / window).to(self.nu.units).value
 
             def func(x):
                 return self._get_lnu_at_nu(x) / x
@@ -427,9 +427,9 @@ class Sed:
 
             Lnu = integrate.quad(func, *lims)[0] / integrate.quad(inv, *lims)[0]
 
-            Lnu = Lnu * units.lnu
+            Lnu = Lnu * self.lnu.units
 
-        return Lnu.to(units.lnu)
+        return Lnu.to(self.lnu.units)
 
     def measure_break(self, blue, red):
         """
@@ -556,7 +556,7 @@ class Sed:
         for f in filters:
             # Apply the filter transmission curve and store the resulting
             # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu) * units.lnu
+            bb_lum = f.apply_filter(self._lnu, nu=self._nu) * self.lnu.units
             self.broadband_luminosities[f.filter_code] = bb_lum
 
         return self.broadband_luminosities
@@ -724,7 +724,7 @@ class Sed:
 
         if self._spec_dims == 2:
             # set up output array
-            index = np.zeros(len(self.lnu)) * units.lam
+            index = np.zeros(len(self.lnu)) * self.lam.units
 
             # Note: I'm sure this could be done better.
             for i, _lnu in enumerate(self.lnu):
@@ -734,9 +734,9 @@ class Sed:
 
                 # use the continuum fit to define the continuum
                 continuum = (
-                    (continuum_fit[0] * feature_lam.to(units.lam).value)
+                    (continuum_fit[0] * feature_lam.to(self.lam.units).value)
                     + continuum_fit[1]
-                ) * units.lnu
+                ) * self.lnu.units
 
                 # define the continuum subtracted spectrum
                 feature_lum = _lnu[transmission]
@@ -754,8 +754,9 @@ class Sed:
 
             # use the continuum fit to define the continuum
             continuum = (
-                (continuum_fit[0] * feature_lam.to(units.lam).value) + continuum_fit[1]
-            ) * units.lnu
+                (continuum_fit[0] * feature_lam.to(self.lam.units).value)
+                + continuum_fit[1]
+            ) * self.lnu.units
 
             # define the continuum subtracted spectrum
             feature_lum = self.lnu[transmission]
