@@ -22,12 +22,13 @@ import warnings
 
 import numpy as np
 
+from synthesizer.components import StarsComponent
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer import exceptions
 
 
-class Stars(Particles):
+class Stars(Particles, StarsComponent):
     """
     The base Stars class. This contains all data a collection of stars could
     contain. It inherits from the base Particles class holding attributes and
@@ -74,7 +75,6 @@ class Stars(Particles):
 
     # Define the allowed attributes
     __slots__ = [
-        "metallicities",
         "nparticles",
         "tau_v",
         "alpha_enhancement",
@@ -92,13 +92,11 @@ class Stars(Particles):
         "_softening_lengths",
         "_masses",
         "_initial_masses",
-        "_ages",
         "_current_masses",
     ]
 
     # Define class level Quantity attributes
     initial_masses = Quantity()
-    ages = Quantity()
     current_masses = Quantity()
     smoothing_lengths = Quantity()
 
@@ -116,7 +114,6 @@ class Stars(Particles):
         smoothing_lengths=None,
         s_oxygen=None,
         s_hydrogen=None,
-        imf_hmass_slope=None,
         softening_length=None,
     ):
         """
@@ -154,7 +151,7 @@ class Stars(Particles):
                 The slope of high mass end of the initial mass function (WIP)
         """
 
-        # Instantiate parent
+        # Instantiate parents
         Particles.__init__(
             self,
             coordinates=coordinates,
@@ -164,6 +161,7 @@ class Stars(Particles):
             softening_length=softening_length,
             nparticles=len(initial_masses),
         )
+        StarsComponent(ages, metallicities)
 
         # Set always required stellar particle properties
         self.initial_masses = initial_masses
