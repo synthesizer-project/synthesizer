@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.line import Line
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 
@@ -31,6 +32,7 @@ class StarsComponent:
         "_ages",
         "metallicities",
         "spectra",
+        "lines",
     ]
 
     # Define quantities
@@ -54,6 +56,9 @@ class StarsComponent:
 
         # Define the spectra dictionary to hold the stellar spectra
         self.spectra = {}
+
+        # Define the line dictionary to hold the stellar emission lines
+        self.lines = {}
 
         # The common stellar attributes between particle and parametric stars
         self.ages = ages
@@ -746,53 +751,54 @@ class StarsComponent:
             young_old_thresh=young_old_thresh,
         )
 
-    def get_line_intrinsic(self, grid, line_ids, fesc=0.0, update=True):
+    def get_line_intrinsic(self, grid, line_ids, fesc=0.0):
         """
-        Calculates **intrinsic** properties (luminosity, continuum, EW)
+        Calculates the intrinsic properties (luminosity, continuum, EW)
         for a set of lines.
 
         Args:
-            grid (object, Grid):
-                A Grid object
-            line_ids (list or str):
+            grid (Grid):
+                A Grid object.
+            line_ids (list/str):
                 A list of line_ids or a str denoting a single line.
                 Doublets can be specified as a nested list or using a
-                comma (e.g. 'OIII4363,OIII4959')
+                comma (e.g. 'OIII4363,OIII4959').
             fesc (float):
                 The Lyman continuum escaped fraction, the fraction of
-                ionising photons that entirely escaped
+                ionising photons that entirely escaped.
 
         Returns:
             lines (dictionary-like, object):
                 A dictionary containing line objects.
         """
 
-        # if only one line specified convert to a list to avoid writing a
+        # If only one line specified convert to a list to avoid writing a
         # longer if statement
-        if type(line_ids) is str:
+        if isinstance(line_ids, str):
             line_ids = [line_ids]
 
-        # dictionary holding Line objects
+        # Dictionary holding Line objects
         lines = {}
 
+        # Loop over lines, doublet, etc
         for line_id in line_ids:
-            # if the line id a doublet in string form
+            # If the line id a doublet in string form
             # (e.g. 'OIII4959,OIII5007') convert it to a list
             if isinstance(line_id, str):
                 if len(line_id.split(",")) > 1:
                     line_id = line_id.split(",")
 
-            # if the line_id is a str denoting a single line
+            # If the line_id is a str denoting a single line
             if isinstance(line_id, str):
                 grid_line = grid.lines[line_id]
                 wavelength = grid_line["wavelength"]
 
-                #  line luminosity erg/s
+                # Line luminosity erg/s
                 luminosity = np.sum(
                     (1 - fesc) * grid_line["luminosity"] * self.sfzh.sfzh, axis=(0, 1)
                 )
 
-                #  continuum at line wavelength, erg/s/Hz
+                # Continuum at line wavelength, erg/s/Hz
                 continuum = np.sum(grid_line["continuum"] * self.sfzh.sfzh, axis=(0, 1))
 
                 # NOTE: this is currently incorrect and should be made of the
@@ -806,7 +812,7 @@ class StarsComponent:
                 #     (1-fesc)*grid_line['nebular_continuum'] * self.sfzh.sfzh,
                 #               axis=(0, 1))  # affected by fesc
 
-            # else if the line is list or tuple denoting a doublet (or higher)
+            # Else if the line is list or tuple denoting a doublet (or higher)
             elif isinstance(line_id, (list, tuple)):
                 luminosity = []
                 continuum = []
@@ -815,29 +821,31 @@ class StarsComponent:
                 for line_id_ in line_id:
                     grid_line = grid.lines[line_id_]
 
-                    # wavelength [\AA]
+                    # Wavelength
                     wavelength.append(grid_line["wavelength"])
 
-                    #  line luminosity erg/s
+                    # Line luminosity erg/s
                     luminosity.append(
                         (1 - fesc)
                         * np.sum(grid_line["luminosity"] * self.sfzh.sfzh, axis=(0, 1))
                     )
 
-                    #  continuum at line wavelength, erg/s/Hz
+                    # Continuum at line wavelength, erg/s/Hz
                     continuum.append(
                         np.sum(grid_line["continuum"] * self.sfzh.sfzh, axis=(0, 1))
                     )
 
             else:
-                # throw exception
-                pass
+                raise exceptions.InconsistentArguments(
+                    "line_id must be a string for a single line or a tuple"
+                    " of strings for multiple lines!"
+                )
 
+            # Create the Line object
             line = Line(line_id, wavelength, luminosity, continuum)
             lines[line.id] = line
 
-        if update:
-            self.lines[line.id] = line
+        self.lines[line.id] = line
 
         return lines
 
@@ -850,42 +858,39 @@ class StarsComponent:
         tau_v_stellar=None,
         dust_curve_nebular=PowerLaw(slope=-1.0),
         dust_curve_stellar=PowerLaw(slope=-1.0),
-        update=True,
     ):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a
         set of lines. Allows the nebular and stellar attenuation to be set
         separately.
 
-        Parameters
-        ----------
-        grid : obj (Grid)
-            The Grid
-        line_ids : list or str
-            A list of line_ids or a str denoting a single line. Doublets can be
-            specified as a nested list or using a comma
-            (e.g. 'OIII4363,OIII4959')
-        fesc : float
-            The Lyman continuum escaped fraction, the fraction of
-            ionising photons that entirely escaped
-        tau_v_nebular : float
-            V-band optical depth of the nebular emission
-        tau_v_stellar : float
-            V-band optical depth of the stellar emission
-        dust_curve_nebular : obj (dust_curve)
-            A dust_curve object specifying the dust curve
-            for the nebular emission
-        dust_curve_stellar : obj (dust_curve)
-            A dust_curve object specifying the dust curve
-            for the stellar emission
+        Args:
+            grid (Grid)
+                The Grid object.
+            line_ids (list/str)
+                A list of line_ids or a str denoting a single line. Doublets can be
+                specified as a nested list or using a comma
+                (e.g. 'OIII4363,OIII4959').
+            fesc (float)
+                The Lyman continuum escaped fraction, the fraction of
+                ionising photons that entirely escaped.
+            tau_v_nebular (float)
+                V-band optical depth of the nebular emission.
+            tau_v_stellar (float)
+                V-band optical depth of the stellar emission.
+            dust_curve_nebular (dust_curve)
+                A dust_curve object specifying the dust curve.
+                for the nebular emission
+            dust_curve_stellar (dust_curve)
+                A dust_curve object specifying the dust curve
+                for the stellar emission.
 
-        Returns
-        -------
-        lines : dictionary-like (obj)
-             A dictionary containing line objects.
+        Returns:
+            lines (dict)
+                A dictionary containing line objects.
         """
 
-        # if the intrinsic lines haven't already been calculated and saved
+        # If the intrinsic lines haven't already been calculated and saved
         # then generate them
         if "intrinsic" not in self.lines:
             intrinsic_lines = self.get_line_intrinsic(
@@ -894,11 +899,12 @@ class StarsComponent:
         else:
             intrinsic_lines = self.lines["intrinsic"]
 
-        # dictionary holding lines
+        # Dictionary holding lines
         lines = {}
 
+        # Loop over lines
         for line_id, intrinsic_line in intrinsic_lines.items():
-            # calculate attenuation
+            # Calculate attenuation
             transmission_nebular = dust_curve_nebular.attenuate(
                 tau_v_nebular, intrinsic_line._wavelength
             )
@@ -906,9 +912,11 @@ class StarsComponent:
                 tau_v_stellar, intrinsic_line._wavelength
             )
 
+            # Attenuate the spectra
             luminosity = intrinsic_line._luminosity * transmission_nebular
             continuum = intrinsic_line._continuum * transmission_stellar
 
+            # Create the Line object
             line = Line(
                 intrinsic_line.id, intrinsic_line._wavelength, luminosity, continuum
             )
@@ -922,8 +930,7 @@ class StarsComponent:
 
             lines[line.id] = line
 
-        if update:
-            self.lines["attenuated"] = lines
+        self.lines["attenuated"] = lines
 
         return lines
 
@@ -934,7 +941,6 @@ class StarsComponent:
         fesc=0.0,
         tau_v=None,
         dust_curve=PowerLaw(slope=-1.0),
-        update=True,
     ):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a set
@@ -943,20 +949,19 @@ class StarsComponent:
         the more general method above.
 
         Args:
-            grid : obj (Grid)
-                The Grid
-            line_ids : list or str
-                A list of line_ids or a str denoting a single line. Doublets
-                can be specified as a nested list or using a comma
-                (e.g. 'OIII4363,OIII4959')
-            fesc : float
+            grid (Grid)
+                The Grid object.
+            line_ids (list/str)
+                A list of line_ids or a str denoting a single line. Doublets can be
+                specified as a nested list or using a comma
+                (e.g. 'OIII4363,OIII4959').
+            fesc (float)
                 The Lyman continuum escaped fraction, the fraction of
-                ionising photons that entirely escaped
-            tau_v : float
-                V-band optical depth
-            dust_curve : obj (dust_curve)
-                A dust_curve object specifying the dust curve for
-                the nebular emission
+                ionising photons that entirely escaped.
+            tau_v (float)
+                V-band optical depth.
+            dust_curve (dust_curve)
+                A dust_curve object specifying the dust curve.
 
         Returns:
             lines : dictionary-like (obj)
