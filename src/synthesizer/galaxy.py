@@ -82,9 +82,9 @@ def galaxy(
             )
 
     # Now we know we are ok instantiate the correct object
-    if isinstance(stars, Stars):
+    if isinstance(stars, ParametricStars):
         return ParametricGalaxy(
-            sfzh=stars,
+            stars=stars,
             redshift=redshift,
             name=name,
         )
