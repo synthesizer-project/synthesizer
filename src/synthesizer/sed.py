@@ -13,6 +13,9 @@ from synthesizer.units import Quantity, Units
 from synthesizer.igm import Inoue14
 
 
+units = Units()
+
+
 class Sed:
 
     """
@@ -825,7 +828,7 @@ class Sed:
                 raise exceptions.InconsistentArguments(
                     "Masks are only applicable for Seds containing multiple spectra"
                 )
-            if self._lnu.shape[0] != self.mask.size:
+            if self._lnu.shape[0] != mask.size:
                 raise exceptions.InconsistentArguments(
                     "Mask and spectra are incompatible shapes "
                     f"({mask.shape}, {self._lnu.shape})"
@@ -847,15 +850,18 @@ class Sed:
         # Compute the transmission
         transmission = dust_curve.get_transmission(tau_v, self._lam)
 
+        # Get a copy of the rest frame spectra, we need to avoid
+        # modifying the original
+        spectra = np.copy(self._lnu)
+
         # Apply the transmission curve to the rest frame spectra with or
         # without applying a mask
         if mask is None:
-            spectra = self._lnu * transmission
+            spectra *= transmission
         else:
-            spectra = self._lnu
             spectra[mask] *= transmission
 
-        return Sed(self._lam, spectra)
+        return Sed(self.lam, spectra)
 
 
 def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
