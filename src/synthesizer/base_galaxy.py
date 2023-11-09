@@ -1,10 +1,12 @@
+""" A module for common functionality in Parametric and Particle Galaxies
+
+The class described in this module should never be directly instatiated. It
+only contains common attributes and methods to reduce boilerplate.
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 
 from synthesizer.sed import Sed
-from synthesizer.dust.attenuation import PowerLaw
-from synthesizer import exceptions
-from synthesizer.line import Line
 from synthesizer.particle import Stars as ParticleStars
 from synthesizer.parametric import BinnedSFZH as ParametricStars
 
