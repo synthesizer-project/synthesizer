@@ -13,7 +13,22 @@ from synthesizer.parametric import BinnedSFZH as ParametricStars
 
 class BaseGalaxy:
     """
-    The base galaxy class
+    The base galaxy class.
+
+    This should never be directly instantiated. It instead contains the common
+    functionality and attributes needed for parametric and particle galaxies.
+
+    Attributes:
+        spectra (dict, Sed)
+            The dictionary containing a Galaxy's spectra. Each entry is an
+            Sed object. This dictionary only contains combined spectra from
+            All components that make up the Galaxy (Stars, Gas, BlackHoles).
+        stars (particle.Stars/parametric.Stars)
+            The Stars object holding information about the stellar population.
+        gas (particle.Gas/parametric.Gas)
+            The Gas object holding information about the gas distribution.
+        black_holes (particle.BlackHoles/parametric.BlackHole)
+            The BlackHole/s object holding information about the black hole/s.
     """
 
     def __init__(self, stars, gas, black_holes, **kwargs):
@@ -295,4 +310,4 @@ class BaseGalaxy:
         if show:
             plt.show()
 
-        return fig, ax  # , filter_ax
+        return fig, ax
