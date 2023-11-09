@@ -267,8 +267,7 @@ class StarsComponent:
         radiation (if fesc>0), the transmitted emission, and the nebular
         emission. The transmitted emission is the emission that is
         transmitted through the gas. In addition to returning the intrinsic
-        spectra this saves the incident, nebular, and escaped spectra if
-        update is set to True.
+        spectra this saves the incident, nebular, and escaped spectra.
 
         Args:
             grid (obj):
@@ -893,7 +892,7 @@ class StarsComponent:
         # then generate them
         if "intrinsic" not in self.lines:
             intrinsic_lines = self.get_line_intrinsic(
-                grid, line_ids, fesc=fesc, update=update
+                grid, line_ids, fesc=fesc,
             )
         else:
             intrinsic_lines = self.lines["intrinsic"]
