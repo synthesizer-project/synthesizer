@@ -9,7 +9,7 @@ from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, Angstrom
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.utils import rebin_1d
-from synthesizer.units import Quantity, Units
+from synthesizer.units import Quantity
 from synthesizer.igm import Inoue14
 
 
@@ -321,7 +321,7 @@ class Sed:
             bolometric_luminosity = np.trapz(self.lnu[::-1], x=self.nu[::-1])
         if method == "quad":
             bolometric_luminosity = (
-                integrate.quad(self._get_lnu_at_nu, 1e12, 1e16)[0] * self.lnu.units
+                integrate.quad(self._get_lnu_at_nu, 1e12, 1e16)[0] * self.lnu.units * Hz
             )
 
         return bolometric_luminosity
@@ -345,7 +345,9 @@ class Sed:
             base units.
             """
             lims = (c / np.array(window)).to(self.nu.units).value
-            luminosity = integrate.quad(self._get_lnu_at_nu, *lims)[0] * self.lnu.units
+            luminosity = (
+                integrate.quad(self._get_lnu_at_nu, *lims)[0] * self.lnu.units * Hz
+            )
 
         if method == "trapz":
             # define a pseudo transmission function
@@ -353,7 +355,7 @@ class Sed:
             transmission = transmission.astype(float)
             luminosity = np.trapz(self.lnu[::-1] * transmission[::-1], x=self.nu[::-1])
 
-        return luminosity.to(self.lnu.units)
+        return luminosity.to(self.lnu.units * Hz)
 
     def measure_window_lnu(self, window, method="trapz"):
         """
