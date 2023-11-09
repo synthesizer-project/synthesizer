@@ -14,7 +14,7 @@ from ..stats import weighted_median, weighted_mean
 from ..plt import single_histxy, mlabel
 
 
-class BinnedSFZH:
+class Stars:
 
     """this is a simple class for holding a binned star formation and metal enrichment history. This can be extended with other methods."""
 

@@ -22,12 +22,13 @@ import warnings
 
 import numpy as np
 
+from synthesizer.components import StarsComponent
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer import exceptions
 
 
-class Stars(Particles):
+class Stars(Particles, StarsComponent):
     """
     The base Stars class. This contains all data a collection of stars could
     contain. It inherits from the base Particles class holding attributes and
