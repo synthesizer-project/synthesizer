@@ -5,7 +5,6 @@ particle.Stars and parametric.BinnedSFZH and contains attributes
 and methods common between them.
 """
 import numpy as np
-import matplotlib.pyplot as plt
 
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
