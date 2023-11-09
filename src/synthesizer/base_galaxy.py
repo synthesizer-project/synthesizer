@@ -7,8 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from synthesizer.sed import Sed
-from synthesizer.particle import Stars as ParticleStars
-from synthesizer.parametric import Stars as ParametricStars
 
 
 class BaseGalaxy:
@@ -52,7 +50,7 @@ class BaseGalaxy:
         self.gas = gas
         self.black_holes = black_holes
 
-        if not isinstance(self, (ParametricStars, ParticleStars)):
+        if isinstance(self, BaseGalaxy):
             raise Warning(
                 "Instantiating a BaseGalaxy object is not "
                 "supported behaviour. Instead, you should "

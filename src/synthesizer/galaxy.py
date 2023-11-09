@@ -20,12 +20,10 @@ OR
 gal = galaxy(stars=parametric.Stars(...),  ...)
 
 """
-import warnings
 
 from synthesizer import exceptions
-from synthesizer.particle import ParticleStars, Gas, BlackHoles
 from synthesizer.particle import Galaxy as ParticleGalaxy
-from synthesizer.parametric import ParametricStars
+from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.parametric import Galaxy as ParametricGalaxy
 
 

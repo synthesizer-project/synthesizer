@@ -26,7 +26,7 @@ from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
 from synthesizer.imaging.images import ParticleImage
-from synthesizer.parametric import Stars
+from synthesizer.parametric import Stars as ParametricStars
 
 
 class Galaxy(BaseGalaxy):
@@ -81,9 +81,9 @@ class Galaxy(BaseGalaxy):
         """
 
         # Check we haven't been given a SFZH
-        if isinstance(stars, Stars):
+        if isinstance(stars, ParametricStars):
             raise exceptions.InconsistentArguments(
-                "Stars passed instead of particle based Stars object."
+                "Parametric Stars passed instead of particle based Stars object."
                 " Did you mean synthesizer.parametric.Galaxy instead?"
             )
 
