@@ -75,26 +75,26 @@ class Stars(Particles, StarsComponent):
     """
 
     # Define the allowed attributes
-    __slots__ = [
-        "nparticles",
-        "tau_v",
-        "alpha_enhancement",
-        "imf_hmass_slope",
-        "log10ages",
-        "log10metallicities",
-        "resampled",
-        "velocities",
-        "s_oxygen",
-        "s_hydrogen",
-        "nstars",
-        "tau_v",
-        "_coordinates",
-        "_smoothing_lengths",
-        "_softening_lengths",
-        "_masses",
-        "_initial_masses",
-        "_current_masses",
-    ]
+    # __slots__ = [
+    #     "nparticles",
+    #     "tau_v",
+    #     "alpha_enhancement",
+    #     "imf_hmass_slope",
+    #     "log10ages",
+    #     "log10metallicities",
+    #     "resampled",
+    #     "velocities",
+    #     "s_oxygen",
+    #     "s_hydrogen",
+    #     "nstars",
+    #     "tau_v",
+    #     "_coordinates",
+    #     "_smoothing_lengths",
+    #     "_softening_lengths",
+    #     "_masses",
+    #     "_initial_masses",
+    #     "_current_masses",
+    # ]
 
     # Define class level Quantity attributes
     initial_masses = Quantity()
@@ -1070,7 +1070,7 @@ def sample_sfhz(sfzh, nstar, initial_mass=1, **kwargs):
     Create "fake" stellar particles by sampling a SFZH.
 
     Args:
-        sfhz (BinnedSFZH)
+        sfhz (Stars)
             The Star Formation Z (Metallicity) History object.
         nstar (int)
             The number of stellar particles to produce.

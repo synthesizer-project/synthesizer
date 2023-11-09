@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from synthesizer.sed import Sed
 from synthesizer.particle import Stars as ParticleStars
-from synthesizer.parametric import BinnedSFZH as ParametricStars
+from synthesizer.parametric import Stars as ParametricStars
 
 
 class BaseGalaxy:

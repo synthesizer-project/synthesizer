@@ -1,5 +1,5 @@
 import numpy as np
-from synthesizer.parametric.sfzh import BinnedSFZH
+from synthesizer.parametric.sfzh import Stars
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 from synthesizer.particle.stars import Stars
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
@@ -247,7 +247,7 @@ def _load_SCSAM_parametric_galaxy(SFH, age_lst, Z_lst, method, grid, verbose=Fal
     new_SFH *= norm_SFH
 
     # Create Binned SFZH object
-    sfzh = BinnedSFZH(log10ages=grid.log10age, metallicities=grid.metallicity,
+    sfzh = Stars(log10ages=grid.log10age, metallicities=grid.metallicity,
                       sfzh=new_SFH)
     
     # Create galaxy object
