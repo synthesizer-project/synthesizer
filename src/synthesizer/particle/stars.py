@@ -166,7 +166,10 @@ class Stars(Particles):
         )
 
         # Set always required stellar particle properties
-        self.initial_masses = np.array(initial_masses)
+        self.initial_masses = initial_masses
+        if isinstance(initial_masses, list):
+            raise exceptions.InconsistentArguments(
+                'Initial mass should be numpy or unyt array.')
         self.ages = ages
         self.metallicities = metallicities
 
