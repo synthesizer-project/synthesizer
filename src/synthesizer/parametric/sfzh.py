@@ -385,7 +385,7 @@ class SFH:
     
     class ExponentiallyDeclining(Common):
         """
-        An expoenentially declining star formation history
+        An exponentially declining star formation history
         """
 
         def __init__(self, parameters):
@@ -399,5 +399,24 @@ class SFH:
 
             if age < self.initial_age:
                 return np.exp(-1 * (self.initial_age - age) / self.tau)
+            else:
+                return 0.0
+    
+    class DelayedExponentiallyDeclining(Common):
+        """
+        A delayed exponentially declining star formation history
+        """
+
+        def __init__(self, parameters):
+            self.name = "Delayed Exponentially Declining"
+            self.parameters = parameters
+            self.initial_age = self.parameters["initial_age"].to("yr").value
+            self.tau = self.parameters["tau"].to("yr").value
+
+        def sfr_(self, age):
+            """age is lookback time"""
+
+            if age < self.initial_age:
+                return (self.initial_age - age) * np.exp(-1 * (self.initial_age - age) / self.tau)
             else:
                 return 0.0
