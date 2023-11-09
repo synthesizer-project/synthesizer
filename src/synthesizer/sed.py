@@ -488,7 +488,7 @@ class Sed:
 
             Lnu = Lnu * self.lnu.units
 
-         else:
+        else:
             raise exceptions.UnrecognisedOption(
                 f"Unrecognised integration method ({method}). "
                 "Options are 'average', 'trapz' or 'quad'"
@@ -992,7 +992,9 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
 
     # Defintion integration arrays
     x = lam.to(angstrom).value
-    y = (llam * lam).to(erg/s).value / (h.to(erg/Hz).value * c.to(angstrom/s).value)
+    y = (llam * lam).to(erg / s).value / (
+        h.to(erg / Hz).value * c.to(angstrom / s).value
+    )
 
     return integrate.quad(
         lambda x_: np.interp(x_, x, y),
@@ -1000,4 +1002,3 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
         ionisation_wavelength.to(angstrom).value,
         limit=limit,
     )[0]
-
