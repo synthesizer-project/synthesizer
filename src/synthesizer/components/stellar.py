@@ -13,7 +13,7 @@ from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 
 
-class StellarComponent:
+class StarsComponent:
     """
     The parent class for stellar components of a galaxy.
 
@@ -29,13 +29,12 @@ class StellarComponent:
     # Define slots
     __slots__ = [
         "_ages",
-        "_metallicities",
+        "metallicities",
         "spectra",
     ]
 
     # Define quantities
     ages = Quantity()
-    metallicities = Quantity()
 
     def __init__(
         self,
