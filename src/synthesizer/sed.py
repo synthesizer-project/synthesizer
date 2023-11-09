@@ -674,7 +674,7 @@ class Sed:
         self.obsnu = self._nu
 
         # Compute the flux SED and apply unit conversions to get to nJy
-        self.fnu = self.lnu / (4 * np.pi * (10 * pc))
+        self.fnu = self.lnu / (4 * np.pi * (10 * pc) ** 2)
 
         return self.fnu
 
