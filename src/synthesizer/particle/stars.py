@@ -166,7 +166,7 @@ class Stars(Particles):
         )
 
         # Set always required stellar particle properties
-        self.initial_masses = initial_masses
+        self.initial_masses = np.array(initial_masses)
         self.ages = ages
         self.metallicities = metallicities
 
