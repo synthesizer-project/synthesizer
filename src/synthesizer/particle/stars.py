@@ -24,6 +24,7 @@ import numpy as np
 
 from synthesizer.components import StarsComponent
 from synthesizer.particle.particles import Particles
+from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 from synthesizer import exceptions
 
@@ -168,6 +169,9 @@ class Stars(Particles, StarsComponent):
         self.ages = ages
         self.metallicities = metallicities
 
+        # Define the dictionary to hold particle spectra
+        self.particle_spectra = {}
+
         # Set the optional keyword arguments
 
         # Set the SPH kernel smoothing lengths
@@ -246,6 +250,223 @@ class Stars(Particles, StarsComponent):
         pstr += "-" * 10
 
         return pstr
+
+    def _prepare_sed_args(self, grid, fesc, spectra_type, mask=None):
+        """
+        A method to prepare the arguments for SED computation with the C
+        functions.
+
+        Args:
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            fesc (float)
+                The escape fraction.
+            spectra_type (str)
+                The type of spectra to extract from the Grid. This must match a
+                type of spectra stored in the Grid.
+            mask (bool)
+                A mask to be applied to the stars. Spectra will only be computed
+                and returned for stars with True in the mask.
+        """
+
+        # Make a dummy mask if none has been passed
+        if mask is None:
+            mask = np.ones(self.nparticles, dtype=bool)
+
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(grid.log10age, dtype=np.float64),
+            np.ascontiguousarray(np.log10(grid.metallicity), dtype=np.float64),
+        ]
+        part_props = [
+            np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
+            np.ascontiguousarray(self.log10metallicities[mask], dtype=np.float64),
+        ]
+        part_mass = np.ascontiguousarray(
+            self._initial_masses[mask], dtype=np.float64
+        )
+        npart = np.int32(self.nparticles)
+        nlam = np.int32(grid.spectra[spectra_type].shape[-1])
+
+        # Slice the spectral grids and pad them with copies of the edges.
+        grid_spectra = np.ascontiguousarray(grid.spectra[spectra_type], np.float64)
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+        grid_dims[ind + 1] = nlam
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        return (
+            grid_spectra,
+            grid_props,
+            part_props,
+            part_mass,
+            fesc,
+            grid_dims,
+            len(grid_props),
+            npart,
+            nlam,
+        )
+
+    def generate_lnu(
+            self,
+            grid,
+            spectra_name,
+            fesc=0.0,
+            young=False,
+            old=False,
+            verbose=False,
+    ):
+        """
+        Generate the integrated rest frame spectra for a given grid key
+        spectra for all stars. Can optionally apply masks.
+
+        Args:
+            grid (Grid)
+                The spectral grid object.
+            spectra_name (string)
+                The name of the target spectra inside the grid file.
+            fesc (float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud (defaults to 0.0).
+            young (bool/float)
+                If not False, specifies age in Myr at which to filter
+                for young star particles.
+            old (bool/float)
+                If not False, specifies age in Myr at which to filter
+                for old star particles.
+            verbose (bool)
+                Flag for verbose output.
+
+        Returns:
+            Numpy array of integrated spectra in units of (erg / s / Hz).
+        """
+
+        # Ensure we have a total key in the grid. If not error.
+        if spectra_name not in list(grid.spectra.keys()):
+            raise exceptions.MissingSpectraType(
+                "The Grid does not contain the key '%s'" % spectra_name
+            )
+
+        # Get particle age masks
+        mask = self._get_masks(young, old)
+
+        # Ensure and warn that the masking hasn't removed everything
+        if np.sum(mask) == 0:
+            if verbose:
+                print("Age mask has filtered out all particles")
+
+            return np.zeros(len(grid.lam))
+
+        from ..extensions.integrated_spectra import compute_integrated_sed
+
+        # Prepare the arguments for the C function.
+        args = self._prepare_sed_args(
+            grid, fesc=fesc, spectra_type=spectra_name, mask=mask
+        )
+
+        # Get the integrated spectra in grid units (erg / s / Hz)
+        spec = compute_integrated_sed(*args)
+
+        return spec
+
+    def generate_particle_lnu(
+        self, grid, spectra_name, fesc=0.0, young=False, old=False, verbose=False
+    ):
+        """
+        Generate the particle rest frame spectra for a given grid key spectra
+        for all stars. Can optionally apply masks.
+
+        Args:
+            grid (Grid)
+                The spectral grid object.
+            spectra_name (string)
+                The name of the target spectra inside the grid file.
+            fesc (float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud (defaults to 0.0).
+            young (bool/float)
+                If not False, specifies age in Myr at which to filter
+                for young star particles.
+            old (bool/float)
+                If not False, specifies age in Myr at which to filter
+                for old star particles.
+            verbose (bool)
+                Flag for verbose output.
+
+        Returns:
+            Numpy array of integrated spectra in units of (erg / s / Hz).
+        """
+
+        # Ensure we have a total key in the grid. If not error.
+        if spectra_name not in list(grid.spectra.keys()):
+            raise exceptions.MissingSpectraType(
+                "The Grid does not contain the key '%s'" % spectra_name
+            )
+
+        # Get particle age masks
+        mask = self._get_masks(young, old)
+
+        # Ensure and warn that the masking hasn't removed everything
+        if np.sum(mask) == 0:
+            if verbose:
+                print("Age mask has filtered out all particles")
+
+            return np.zeros(len(grid.lam))
+
+        from ..extensions.particle_spectra import compute_particle_seds
+
+        # Prepare the arguments for the C function.
+        args = self._prepare_sed_args(
+            grid, fesc=fesc, spectra_type=spectra_name, mask=mask
+        )
+
+        # Get the integrated spectra in grid units (erg / s / Hz)
+        spec = compute_particle_seds(*args)
+
+        return spec
+
+    def _get_masks(self, young=None, old=None):
+        """
+        Get masks for which components we are handling, if a sub-component
+        has not been requested it's necessarily all particles.
+
+        Args:
+            young (float):
+                Age in Myr at which to filter for young star particles.
+            old (float):
+                Age in Myr at which to filter for old star particles.
+
+        Raises:
+            InconsistentParameter
+                Can't select for both young and old components
+                simultaneously
+
+        """
+
+        # We can't have both young and old set
+        if young and old:
+            raise exceptions.InconsistentParameter(
+                "Galaxy sub-component can not be simultaneously young and old"
+            )
+
+        # Get the appropriate mask
+        if young:
+            # Mask out old stars
+            s = self.stars.log10ages <= np.log10(young)
+        elif old:
+            # Mask out young stars
+            s = self.stars.log10ages > np.log10(old)
+        else:
+            # Nothing to mask out
+            s = np.ones(self.nparticles, dtype=bool)
+
+        return s
 
     def renormalise_mass(self, stellar_mass):
         """
@@ -437,58 +658,289 @@ class Stars(Particles, StarsComponent):
         # Set resampled flag
         self.resampled = True
 
+    def get_particle_spectra_linecont(
+        self,
+        grid,
+        fesc=0.0,
+        fesc_LyA=1.0,
+        young=False,
+        old=False,
+    ):
+        """
+        Generate the line contribution spectra. This is only invoked if
+        fesc_LyA < 1.
 
-def sample_sfhz(sfzh, nstar, initial_mass=1, **kwargs):
-    """
-    Create "fake" stellar particles by sampling a SFZH.
+        Args:
+            grid (obj):
+                Spectral grid object.
+            fesc (float):
+                Fraction of stellar emission that escapeds unattenuated from
+                the birth cloud (defaults to 0.0).
+            fesc_LyA (float)
+                Fraction of Lyman-alpha emission that can escape unimpeded
+                by the ISM/IGM.
+            young (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for young star particles.
+            old (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for old star particles.
 
-    Args:
-        sfhz (BinnedSFZH)
-            The Star Formation Z (Metallicity) History object.
-        nstar (int)
-            The number of stellar particles to produce.
-        intial_mass (int)
-            The intial mass of the fake stellar particles.
+        Returns:
+            numpy.ndarray
+                The line contribution spectra.
+        """
 
-    Returns:
-        stars (Stars)
-            An instance of Stars containing the fake stellar particles.
-    """
+        # Generate contribution of line emission alone and reduce the
+        # contribution of Lyman-alpha
+        linecont = self.generate_particle_lnu(
+            grid, spectra_name="linecont", old=old, young=young
+        )
 
-    # Normalise the sfhz to produce a histogram (binned in time) between 0
-    # and 1.
-    hist = sfzh.sfzh / np.sum(sfzh.sfzh)
+        # Multiply by the Lyamn-continuum escape fraction
+        linecont *= 1 - fesc
 
-    # Compute the cumaltive distribution function
-    cdf = np.cumsum(hist.flatten())
-    cdf = cdf / cdf[-1]
+        # Get index of Lyman-alpha
+        idx = grid.get_nearest_index(1216.0, grid.lam)
+        linecont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
 
-    # Get a random sample from the cdf
-    values = np.random.rand(nstar)
-    value_bins = np.searchsorted(cdf, values)
+        return linecont
 
-    # Convert 1D random indices to 2D indices
-    x_idx, y_idx = np.unravel_index(
-        value_bins, (len(sfzh.log10ages), len(sfzh.log10metallicities))
-    )
+    def get_particle_spectra_incident(self, grid, young=False, old=False, label=""):
+        """
+        Generate the incident (equivalent to pure stellar for stars) spectra
+        using the provided Grid.
 
-    # Extract the sampled ages and metallicites and create an array
-    random_from_cdf = np.column_stack(
-        (sfzh.log10ages[x_idx], sfzh.log10metallicities[y_idx])
-    )
+        Args:
+            grid (obj):
+                Spectral grid object.
+            young (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for young star particles.
+            old (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for old star particles.
+            label (string)
+                A modifier for the spectra dictionary key such that the
+                key is label + "_incident".
 
-    # Extract the individual logged quantities
-    log10ages, log10metallicities = random_from_cdf.T
+        Returns:
+            Sed
+                An Sed object containing the stellar spectra.
+        """
 
-    # Instantiate Stars object with extra keyword arguments
-    stars = Stars(
-        initial_mass * np.ones(nstar),
-        10**log10ages,
-        10**log10metallicities,
-        **kwargs,
-    )
+        # Get the incident spectra
+        lnu = self.generate_particle_lnu(grid, "incident", young=young, old=old)
 
-    return stars
+        # Create the Sed object
+        sed = Sed(grid.lam, lnu)
+
+        # Store the Sed object
+        self.particle_spectra[label + "incident"] = sed
+
+        return sed
+
+    def get_particle_spectra_transmitted(
+        self,
+        grid,
+        fesc=0.0,
+        young=False,
+        old=False,
+        label="",
+    ):
+        """
+        Generate the transmitted spectra using the provided Grid. This is the
+        emission which is transmitted through the gas as calculated by the
+        photoionisation code.
+
+        Args:
+            grid (obj):
+                Spectral grid object.
+            fesc (float):
+                Fraction of stellar emission that escapeds unattenuated from
+                the birth cloud (defaults to 0.0).
+            young (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for young star particles.
+            old (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for old star particles.
+            label (string)
+                A modifier for the spectra dictionary key such that the
+                key is label + "_transmitted".
+
+        Returns:
+            Sed
+                An Sed object containing the transmitted spectra.
+        """
+
+        # Get the transmitted spectra
+        lnu = (1.0 - fesc) * self.generate_particle_lnu(
+            grid, "transmitted", young=young, old=old
+        )
+
+        # Create the Sed object
+        sed = Sed(grid.lam, lnu)
+
+        # Store the Sed object
+        self.particle_spectra[label + "transmitted"] = sed
+
+        return sed
+
+    def get_particle_spectra_nebular(
+        self,
+        grid,
+        fesc=0.0,
+        young=False,
+        old=False,
+        label="",
+    ):
+        """
+        Generate nebular spectra from a grid object and star particles.
+        The grid object must contain a nebular component.
+
+        Args:
+            grid (obj):
+                Spectral grid object.
+            fesc (float):
+                Fraction of stellar emission that escapeds unattenuated from
+                the birth cloud (defaults to 0.0).
+            young (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for young star particles.
+            old (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for old star particles.
+            label (string)
+                A modifier for the spectra dictionary key such that the
+                key is label + "_nebular".
+
+        Returns:
+            Sed
+                An Sed object containing the nebular spectra.
+        """
+
+        # Get the nebular emission spectra
+        lnu = self.generate_particle_lnu(grid, "nebular", young=young, old=old)
+
+        # Apply the escape fraction
+        lnu *= 1 - fesc
+
+        # Create the Sed object
+        sed = Sed(grid.lam, lnu)
+
+        # Store the Sed object
+        self.particle_spectra[label + "nebular"] = sed
+
+        return sed
+
+    def get_particle_spectra_reprocessed(
+        self,
+        grid,
+        fesc=0.0,
+        fesc_LyA=1.0,
+        young=False,
+        old=False,
+        label="",
+    ):
+        """
+        Generates the intrinsic spectra, this is the sum of the escaping
+        radiation (if fesc>0), the transmitted emission, and the nebular
+        emission. The transmitted emission is the emission that is
+        transmitted through the gas. In addition to returning the intrinsic
+        spectra this saves the incident, nebular, and escaped spectra if
+        update is set to True.
+
+        Args:
+            grid (obj):
+                Spectral grid object.
+            fesc (float):
+                Fraction of stellar emission that escapeds unattenuated from
+                the birth cloud (defaults to 0.0).
+            fesc_LyA (float)
+                Fraction of Lyman-alpha emission that can escape unimpeded
+                by the ISM/IGM.
+            young (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for young star particles.
+            old (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for old star particles.
+            label (string)
+                A modifier for the spectra dictionary key such that the
+                key is label + "_transmitted".
+
+        Updates:
+            incident:
+            transmitted
+            nebular
+            reprocessed
+            intrinsic
+
+            if fesc>0:
+                escaped
+
+        Returns:
+            Sed
+                An Sed object containing the intrinsic spectra.
+        """
+
+        # The incident emission
+        incident = self.get_particle_spectra_incident(
+            grid,
+            young=young,
+            old=old,
+            label=label,
+        )
+
+        # The emission which escapes the gas
+        if fesc > 0:
+            escaped = Sed(grid.lam, fesc * incident._lnu)
+
+        # The stellar emission which **is** reprocessed by the gas
+        transmitted = self.get_particle_spectra_transmitted(
+            grid, fesc, young=young, old=old, label=label
+        )
+
+        # The nebular emission
+        nebular = self.get_particle_spectra_nebular(
+            grid, fesc, young=young, old=old, label=label
+        )
+
+        # If the Lyman-alpha escape fraction is <1.0 suppress it.
+        if fesc_LyA < 1.0:
+            # Get the new line contribution to the spectrum
+            linecont = self.get_particle_spectra_linecont(
+                grid,
+                fesc=fesc,
+                fesc_LyA=fesc_LyA,
+            )
+
+            # Get the nebular continuum emission
+            nebular_continuum = self.generate_particle_lnu(
+                grid, "nebular_continuum", young=young, old=old
+            )
+            nebular_continuum *= 1 - fesc
+
+            # Redefine the nebular emission
+            nebular._lnu = linecont + nebular_continuum
+
+        # The reprocessed emission, the sum of transmitted, and nebular
+        reprocessed = nebular + transmitted
+
+        # The intrinsic emission, the sum of escaped, transmitted, and nebular
+        # if escaped exists other its simply the reprocessed
+        if fesc > 0:
+            intrinsic = reprocessed + escaped
+        else:
+            intrinsic = reprocessed
+
+        if fesc > 0:
+            self.particle_spectra[label + "escaped"] = escaped
+        self.particle_spectra[label + "reprocessed"] = reprocessed
+        self.particle_spectra[label + "intrinsic"] = intrinsic
+
+        return reprocessed
 
     def plot_spectra(
         self, show=False, spectra_to_plot=None, ylimits=("peak", 5), figsize=(3.5, 5)
@@ -612,3 +1064,56 @@ def sample_sfhz(sfzh, nstar, initial_mass=1, **kwargs):
             plt.show()
 
         return fig, ax
+
+def sample_sfhz(sfzh, nstar, initial_mass=1, **kwargs):
+    """
+    Create "fake" stellar particles by sampling a SFZH.
+
+    Args:
+        sfhz (BinnedSFZH)
+            The Star Formation Z (Metallicity) History object.
+        nstar (int)
+            The number of stellar particles to produce.
+        intial_mass (int)
+            The intial mass of the fake stellar particles.
+
+    Returns:
+        stars (Stars)
+            An instance of Stars containing the fake stellar particles.
+    """
+
+    # Normalise the sfhz to produce a histogram (binned in time) between 0
+    # and 1.
+    hist = sfzh.sfzh / np.sum(sfzh.sfzh)
+
+    # Compute the cumaltive distribution function
+    cdf = np.cumsum(hist.flatten())
+    cdf = cdf / cdf[-1]
+
+    # Get a random sample from the cdf
+    values = np.random.rand(nstar)
+    value_bins = np.searchsorted(cdf, values)
+
+    # Convert 1D random indices to 2D indices
+    x_idx, y_idx = np.unravel_index(
+        value_bins, (len(sfzh.log10ages), len(sfzh.log10metallicities))
+    )
+
+    # Extract the sampled ages and metallicites and create an array
+    random_from_cdf = np.column_stack(
+        (sfzh.log10ages[x_idx], sfzh.log10metallicities[y_idx])
+    )
+
+    # Extract the individual logged quantities
+    log10ages, log10metallicities = random_from_cdf.T
+
+    # Instantiate Stars object with extra keyword arguments
+    stars = Stars(
+        initial_mass * np.ones(nstar),
+        10**log10ages,
+        10**log10metallicities,
+        **kwargs,
+    )
+
+    return stars
+
