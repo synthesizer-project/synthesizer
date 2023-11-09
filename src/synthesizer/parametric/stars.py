@@ -112,6 +112,66 @@ class Stars(StarsComponent):
             # Irregular
             self.metallicity_grid_type = None
 
+    def generate_lnu(self, grid, spectra_name, old=False, young=False):
+        """
+        Calculate rest frame spectra from an SPS Grid.
+
+        This is a flexible base method which extracts the rest frame spectra of
+        this galaxy from the SPS grid based on the passed arguments. More
+        sophisticated types of spectra are produced by the get_spectra_*
+        methods on BaseGalaxy, which call this method.
+
+        Args:
+            grid (object, Grid):
+                The SPS Grid object from which to extract spectra.
+            spectra_name (str):
+                A string denoting the desired type of spectra. Must match a
+                key on the Grid.
+            old (bool/float):
+                Are we extracting only old stars? If so only SFZH bins with
+                log10(Ages) > old will be included in the spectra. Defaults to
+                False.
+            young (bool/float):
+                Are we extracting only young stars? If so only SFZH bins with
+                log10(Ages) <= young will be included in the spectra. Defaults
+                to False.
+
+        Returns:
+            The Galaxy's rest frame spectra in erg / s / Hz.
+        """
+
+        # Ensure arguments make sense
+        if old * young:
+            raise ValueError("Cannot provide old and young stars together")
+
+        # Get the indices of non-zero entries in the SFZH
+        non_zero_inds = np.where(self.sfzh > 0)
+
+        # Make the mask for relevent SFZH bins
+        if old:
+            sfzh_mask = self.log10ages[non_zero_inds[0]] > old
+        elif young:
+            sfzh_mask = self.log10ages[non_zero_inds[0]] <= young
+        else:
+            sfzh_mask = np.ones(
+                len(self.log10ages[non_zero_inds[0]]),
+                dtype=bool,
+            )
+
+        # Account for the SFZH mask in the non-zero indices
+        non_zero_inds = (
+            non_zero_inds[0][sfzh_mask], non_zero_inds[1][sfzh_mask]
+        )
+
+        # Compute the spectra
+        spectra = np.sum(
+            grid.spectra[spectra_name][non_zero_inds[0], non_zero_inds[1], :]
+            * self.sfzh[non_zero_inds[0], non_zero_inds[1], :],
+            axis=0,
+        )
+
+        return spectra
+
     def calculate_median_age(self):
         """calculate the median age"""
 
