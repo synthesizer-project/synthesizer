@@ -2,6 +2,10 @@
 
 
 """
+import numpy as np
+
+from synthesizer.stats import weighted_median, weighted_mean
+
 
 class SFH:
 

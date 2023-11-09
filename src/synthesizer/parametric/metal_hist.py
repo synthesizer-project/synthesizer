@@ -2,6 +2,8 @@
 
 
 """
+import numpy as np
+
 
 class ZH:
 
