@@ -972,7 +972,8 @@ class Sed:
 
 def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
     """
-    An improved function to calculate the ionising production rate.
+    A function to calculate the ionising production rate directly from
+    spectra.
 
     Args:
         lam (array-like, float)
