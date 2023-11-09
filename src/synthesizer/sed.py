@@ -1,16 +1,16 @@
+"""
+"""
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from scipy import integrate
 from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, Angstrom
 
-from . import exceptions
-from .utils import rebin_1d
-from .units import Quantity, Units
-from .igm import Inoue14
-
-
-units = Units()
+from synthesizer import exceptions
+from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.utils import rebin_1d
+from synthesizer.units import Quantity, Units
+from synthesizer.igm import Inoue14
 
 
 class Sed:
@@ -792,6 +792,70 @@ class Sed:
             )
 
         return sed
+
+    def apply_attenuation(
+        self,
+        tau_v,
+        dust_curve=PowerLaw(slope=-1.0),
+        mask=None,
+    ):
+        """
+        Apply attenuation to spectra.
+
+        Args:
+            tau_v (float/array-like, float)
+                The V-band optical depth for every star particle.
+            dust_curve (synthesizer.dust.attenuation.*)
+                An instance of one of the dust attenuation models. (defined in
+                synthesizer/dust/attenuation.py)
+            mask (array-like, bool)
+                A mask array with an entry for each spectra. Masked out
+                spectra will be ignored when applying the attenuation. Only
+                applicable for Sed's holding an (N, Nlam) array.
+
+        Returns:
+            Sed
+                A new Sed containing the rest frame spectra of self attenuated
+                by the transmission defined from tau_v and the dust curve.
+        """
+
+        # Ensure the mask is compatible with the spectra
+        if mask is not None:
+            if self._lnu.ndim < 2:
+                raise exceptions.InconsistentArguments(
+                    "Masks are only applicable for Seds containing multiple spectra"
+                )
+            if self._lnu.shape[0] != self.mask.size:
+                raise exceptions.InconsistentArguments(
+                    "Mask and spectra are incompatible shapes "
+                    f"({mask.shape}, {self._lnu.shape})"
+                )
+
+        # If tau_v is an array it needs to match the spectra shape
+        if isinstance(tau_v, np.ndarray):
+            if self._lnu.ndim < 2:
+                raise exceptions.InconsistentArguments(
+                    "Arrays of tau_v values are only applicable for Seds"
+                    " containing multiple spectra"
+                )
+            if self._lnu.shape[0] != self.tau_v.size:
+                raise exceptions.InconsistentArguments(
+                    "tau_v and spectra are incompatible shapes "
+                    f"({tau_v.shape}, {self._lnu.shape})"
+                )
+
+        # Compute the transmission
+        transmission = dust_curve.get_transmission(tau_v, self._lam)
+
+        # Apply the transmission curve to the rest frame spectra with or
+        # without applying a mask
+        if mask is None:
+            spectra = self._lnu * transmission
+        else:
+            spectra = self._lnu
+            spectra[mask] *= transmission
+
+        return Sed(self._lam, spectra)
 
 
 def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
