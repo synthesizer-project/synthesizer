@@ -72,7 +72,7 @@ class Stars(StarsComponent):
         """
 
         # Instantiate the parent
-        StarsComponent(10 ** log10ages, metallicities)
+        StarsComponent.__init__(self, 10 ** log10ages, metallicities)
 
         # Set the age grid properties
         self.log10ages = log10ages

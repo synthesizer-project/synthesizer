@@ -21,6 +21,7 @@ Example usages:
 import warnings
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from synthesizer.components import StarsComponent
 from synthesizer.particle.particles import Particles
@@ -75,26 +76,26 @@ class Stars(Particles, StarsComponent):
     """
 
     # Define the allowed attributes
-    # __slots__ = [
-    #     "nparticles",
-    #     "tau_v",
-    #     "alpha_enhancement",
-    #     "imf_hmass_slope",
-    #     "log10ages",
-    #     "log10metallicities",
-    #     "resampled",
-    #     "velocities",
-    #     "s_oxygen",
-    #     "s_hydrogen",
-    #     "nstars",
-    #     "tau_v",
-    #     "_coordinates",
-    #     "_smoothing_lengths",
-    #     "_softening_lengths",
-    #     "_masses",
-    #     "_initial_masses",
-    #     "_current_masses",
-    # ]
+    __slots__ = [
+        "nparticles",
+        "tau_v",
+        "alpha_enhancement",
+        "imf_hmass_slope",
+        "log10ages",
+        "log10metallicities",
+        "resampled",
+        "velocities",
+        "s_oxygen",
+        "s_hydrogen",
+        "nstars",
+        "tau_v",
+        "_coordinates",
+        "_smoothing_lengths",
+        "_softening_lengths",
+        "_masses",
+        "_initial_masses",
+        "_current_masses",
+    ]
 
     # Define class level Quantity attributes
     initial_masses = Quantity()
@@ -162,7 +163,7 @@ class Stars(Particles, StarsComponent):
             softening_length=softening_length,
             nparticles=len(initial_masses),
         )
-        StarsComponent(ages, metallicities)
+        StarsComponent.__init__(self, ages, metallicities)
 
         # Set always required stellar particle properties
         self.initial_masses = initial_masses
@@ -458,10 +459,10 @@ class Stars(Particles, StarsComponent):
         # Get the appropriate mask
         if young:
             # Mask out old stars
-            s = self.stars.log10ages <= np.log10(young)
+            s = self.log10ages <= np.log10(young)
         elif old:
             # Mask out young stars
-            s = self.stars.log10ages > np.log10(old)
+            s = self.log10ages > np.log10(old)
         else:
             # Nothing to mask out
             s = np.ones(self.nparticles, dtype=bool)
