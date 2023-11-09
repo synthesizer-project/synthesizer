@@ -1,7 +1,7 @@
 """ A module for particle and parametric stars.
 
 This should never be directly instantiated. Instead it is the parent class for
-particle.Stars and parametric.BinnedSFZH and contains attributes
+particle.Stars and parametric.Stars and contains attributes
 and methods common between them.
 """
 import numpy as np
@@ -27,12 +27,12 @@ class StarsComponent:
     """
 
     # Define slots
-    __slots__ = [
-        "_ages",
-        "metallicities",
-        "spectra",
-        "lines",
-    ]
+    # __slots__ = [
+    #     "_ages",
+    #     "metallicities",
+    #     "spectra",
+    #     "lines",
+    # ]
 
     # Define quantities
     ages = Quantity()
@@ -72,7 +72,7 @@ class StarsComponent:
             (
                 "generate_lnu should be overloaded by child classes:\n"
                 "`particle.Stars`\n"
-                "`parametric.BinnedSFZH`\n"
+                "`parametric.Stars`\n"
                 "You should not be seeing this!!!"
             )
         )

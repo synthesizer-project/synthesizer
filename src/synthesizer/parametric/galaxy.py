@@ -40,7 +40,7 @@ class Galaxy(BaseGalaxy):
         # Check we haven't been given Stars
         if isinstance(stars, ParticleStars):
             raise exceptions.InconsistentArguments(
-                "Stars passed instead of SFZH object (BinnedSFZH)."
+                "Stars passed instead of SFZH object (Stars)."
                 " Did you mean synthesizer.particle.Galaxy instead?"
             )
 
