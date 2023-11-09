@@ -1,2 +1,1 @@
-from .photoionisation import *
-import synthesizer.photoionisation.cloudy17 as cloudy17
+from synthesizer.photoionisation.photoionisation import Ions, calculate_Q_from_U, calculate_U_from_Q
