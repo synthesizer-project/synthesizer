@@ -74,7 +74,7 @@ if __name__ == "__main__":
     seds = {}
     for z in zs:
         # Generate spectra using pacman model (complex)
-        seds[z] = galaxy.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1)
+        seds[z] = galaxy.stars.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1)
 
         # Generate observed frame spectra
         seds[z].get_fnu(cosmo, z, igm=Madau96)

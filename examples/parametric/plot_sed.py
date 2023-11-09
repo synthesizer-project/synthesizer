@@ -49,44 +49,44 @@ if __name__ == "__main__":
     galaxy = Galaxy(sfzh)
 
     # generate pure stellar spectra alone
-    galaxy.get_spectra_incident(grid)
+    galaxy.stars.get_spectra_incident(grid)
     print("Pure stellar spectra")
     galaxy.plot_spectra(show=True)
 
     # generate intrinsic spectra (which includes reprocessing by gas)
-    galaxy.get_spectra_reprocessed(grid, fesc=0.5)
+    galaxy.stars.get_spectra_reprocessed(grid, fesc=0.5)
     print("Intrinsic spectra")
     galaxy.plot_spectra(show=True)
 
     # # --- simple dust and gas screen
-    galaxy.get_spectra_screen(grid, tau_v=0.1)
+    galaxy.stars.get_spectra_screen(grid, tau_v=0.1)
     print("Simple dust and gas screen")
     galaxy.plot_spectra(show=True)
 
     # --- CF00 model
-    galaxy.get_spectra_CharlotFall(
+    galaxy.stars.get_spectra_CharlotFall(
         grid, tau_v_ISM=0.1, tau_v_BC=0.1, alpha_ISM=-0.7, alpha_BC=-1.3
     )
     print("CF00 model")
     galaxy.plot_spectra(show=True)
 
     # # --- pacman model
-    galaxy.get_spectra_pacman(grid, tau_v=0.1, fesc=0.5)
+    galaxy.stars.get_spectra_pacman(grid, tau_v=0.1, fesc=0.5)
     print("Pacman model")
     galaxy.plot_spectra(show=True)
 
     # pacman model (no Lyman-alpha escape and no dust)
-    galaxy.get_spectra_pacman(grid, fesc=0.0, fesc_LyA=0.0)
+    galaxy.stars.get_spectra_pacman(grid, fesc=0.0, fesc_LyA=0.0)
     print("Pacman model (no Ly-alpha escape, and no dust)")
     galaxy.plot_spectra(show=True)
 
     # # --- pacman model (complex)
-    galaxy.get_spectra_pacman(grid, fesc=0.0, fesc_LyA=0.5, tau_v=0.6)
+    galaxy.stars.get_spectra_pacman(grid, fesc=0.0, fesc_LyA=0.5, tau_v=0.6)
     print("Pacman model (complex)")
     galaxy.plot_spectra(show=True)
 
     # --- CF00 model implemented within pacman model
-    galaxy.get_spectra_pacman(
+    galaxy.stars.get_spectra_pacman(
         grid, fesc=0.1, fesc_LyA=0.1, tau_v=[1.0, 1.0], alpha=[-1, -1],
         young_old_thresh=1e7
     )

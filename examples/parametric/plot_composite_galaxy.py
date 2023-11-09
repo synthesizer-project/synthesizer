@@ -66,7 +66,7 @@ if __name__ == "__main__":
     disk = Galaxy(morph=morph, sfzh=sfzh)
 
     # Generate stellar spectra
-    disk.get_spectra_incident(grid)
+    disk.stars.get_spectra_incident(grid)
 
     # Make images
     disk_img = disk.make_images(
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     bulge = Galaxy(morph=morph, sfzh=sfzh)
 
     # Get specrtra
-    bulge.get_spectra_incident(grid)
+    bulge.stars.get_spectra_incident(grid)
 
     # make images
     bulge_img = bulge.make_images(

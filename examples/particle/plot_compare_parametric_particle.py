@@ -44,7 +44,7 @@ sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, Zh)
 # CREATE PARAMETRIC SED
 
 parametric_galaxy = ParametricGalaxy(sfzh)
-parametric_galaxy.get_spectra_incident(grid)
+parametric_galaxy.stars.get_spectra_incident(grid)
 sed = parametric_galaxy.spectra["incident"]
 plt.plot(
     np.log10(sed.lam), np.log10(sed.lnu), label="parametric", lw=4, c="k", alpha=0.3
@@ -67,7 +67,7 @@ for N in [1, 10, 100]: # , 1000]:
     # particle_galaxy.generate_spectra(grid, fesc=0.0, integrated=True)
 
     # Calculate the stars SEDs
-    particle_galaxy.get_spectra_incident(grid)
+    particle_galaxy.stars.get_spectra_incident(grid)
 
     sed = particle_galaxy.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=f"particle (N={N})")
