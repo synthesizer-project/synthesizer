@@ -39,24 +39,53 @@ class Stars(StarsComponent):
 
     Attributes:
         log10ages (array-like, float)
-        ages (Quantity, array-like, float)
-        log10ages_lims (array_like_float)
+            The array of log10(ages) defining the age axis of the SFZH.
+        ages (array-like, float)
+            The array of ages defining the age axis of the SFZH.
         metallicities (array-like, float)
-        metallicities_lims (array-like, float)
+            The array of metallicitities defining the metallicity axies of
+            the SFZH.
         log10metallicities (array-like, float)
-        log10metallicities_lims (array-like, float)
-        sfzh (array-like, float)
-        sf_hist (array-like, float)
-        metal_hist (array-like, float)
-        sf_hist_func (function)
-        metal_hist_func (function)
+            The array of log10(metallicitities) defining the metallicity axes
+            of the SFZH.
+        initial_mass (unyt_quantity/float)
+            The total initial stellar mass.
         morphology (morphology.* e.g. Sersic2D)
             An instance of one of the morphology classes describing the
-            stellar population's morphology. This can be any of the family of
-            morphology classes from synthesizer.morphology.
+            stellar population's morphology. This can be any of the family
+            of morphology classes from synthesizer.morphology.
+        sfzh (array-like, float)
+            An array describing the binned SFZH. If provided all following
+            arguments are ignored.
+        sf_hist (array-like, float)
+            An array describing the star formation history.
+        metal_hist (array-like, float)
+            An array describing the metallity distribution.
+        sf_hist_func (SFH.*)
+            An instance of one of the child classes of SFH. This will be
+            used to calculate sf_hist and takes precendence over a passed
+            sf_hist if both are present.
+        metal_hist_func (ZH.*)
+            An instance of one of the child classes of ZH. This will be
+            used to calculate metal_hist and takes precendence over a
+            passed metal_hist if both are present.
+        instant_sf (float)
+            An age at which to compute an instantaneous SFH, i.e. all
+            stellar mass populating a single SFH bin.
+        instant_metallicity (float)
+            A metallicity at which to compute an instantaneous ZH, i.e. all
+            stellar populating a single ZH bin.
+        log10ages_lims (array_like_float)
+            The log10(age) limits of the SFZH grid.
+        metallicities_lims (array-like, float)
+            The metallicity limits of the SFZH grid.
+        log10metallicities_lims (array-like, float)
+            The log10(metallicity) limits of the SFZH grid.
         metallicity_grid_type (string)
-        initial_mass (Quanity)
-            The total initial stellar mass.
+            The type of gridding for the metallicity axis. Either:
+                - Regular linear ("Z")
+                - Regular logspace ("log10Z")
+                - Irregular (None)
     """
 
     # Define quantities
@@ -66,15 +95,15 @@ class Stars(StarsComponent):
             self,
             log10ages,
             metallicities,
-            sfzh=None,
+            initial_mass=1.0,
             morphology=None,
+            sfzh=None,
             sf_hist=None,
             metal_hist=None,
             sf_hist_func=None,
             metal_hist_func=None,
             instant_sf=None,
             instant_metallicity=None,
-            initial_mass=1.0,
     ):
         """
         Initialise the parametric stellar population.
@@ -90,20 +119,37 @@ class Stars(StarsComponent):
 
         Args:
             log10ages (array-like, float)
+                The array of ages defining the log10(age) axis of the SFZH.
             metallicities (array-like, float)
-            sfzh (array-like, float)
+                The array of metallicitities defining the metallicity axies of
+                the SFZH.
+            initial_mass (unyt_quantity/float)
+                The total initial stellar mass.
             morphology (morphology.* e.g. Sersic2D)
                 An instance of one of the morphology classes describing the
                 stellar population's morphology. This can be any of the family
                 of morphology classes from synthesizer.morphology.
+            sfzh (array-like, float)
+                An array describing the binned SFZH. If provided all following
+                arguments are ignored.
             sf_hist (array-like, float)
+                An array describing the star formation history.
             metal_hist (array-like, float)
-            sf_hist_func (function)
-            metal_hist_func (function)
+                An array describing the metallity distribution.
+            sf_hist_func (SFH.*)
+                An instance of one of the child classes of SFH. This will be
+                used to calculate sf_hist and takes precendence over a passed
+                sf_hist if both are present.
+            metal_hist_func (ZH.*)
+                An instance of one of the child classes of ZH. This will be
+                used to calculate metal_hist and takes precendence over a
+                passed metal_hist if both are present.
             instant_sf (float)
+                An age at which to compute an instantaneous SFH, i.e. all
+                stellar mass populating a single SFH bin.
             instant_metallicity (float)
-            initial_mass (Quanity)
-                The total initial stellar mass.
+                A metallicity at which to compute an instantaneous ZH, i.e. all
+                stellar populating a single ZH bin.
         """
 
         # Instantiate the parent
@@ -182,6 +228,14 @@ class Stars(StarsComponent):
 
         If functions are passed for sf_hist_func and metal_hist_func then
         the SFH and ZH arrays are computed first.
+
+        Args:
+            instant_sf (unyt_quantity/float)
+                An age at which to compute an instantaneous SFH, i.e. all
+                stellar mass populating a single SFH bin.
+            instant_metallicity (float)
+                A metallicity at which to compute an instantaneous ZH, i.e. all
+                stellar populating a single ZH bin.
         """
 
         # If no units assume unit system
@@ -409,23 +463,30 @@ class Stars(StarsComponent):
         return Line(line_id, wavelength, luminosity, continuum)
 
     def calculate_median_age(self):
-        """calculate the median age"""
-
+        """
+        Calculate the median age of the stellar population.
+        """
         return weighted_median(self.ages, self.sf_hist) * yr
 
     def calculate_mean_age(self):
-        """calculate the mean age"""
-
+        """
+        Calculate the mean age of the stellar population.
+        """
         return weighted_mean(self.ages, self.sf_hist) * yr
 
     def calculate_mean_metallicity(self):
-        """calculate the mean metallicity"""
-
+        """
+        Calculate the mean metallicity of the stellar population.
+        """
         return weighted_mean(self.metallicities, self.metal_hist)
 
     def __str__(self):
-        """print basic summary of the binned star formation and metal enrichment history"""
+        """
+        Overload the print function to give a basic summary of the
+        stellar population
+        """
 
+        # Define the output string
         pstr = ""
         pstr += "-" * 10 + "\n"
         pstr += "SUMMARY OF BINNED SFZH" + "\n"
@@ -433,30 +494,58 @@ class Stars(StarsComponent):
         pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
         pstr += f"mean metallicity: {self.calculate_mean_metallicity():.4f}" + "\n"
         pstr += "-" * 10 + "\n"
+
         return pstr
 
-    def __add__(self, second_sfzh):
-        """Add two SFZH histories together"""
+    def __add__(self, other_stars):
+        """
+        Add two Stars instances together.
 
-        if second_sfzh.sfzh.shape == self.sfzh.shape:
-            new_sfzh = self.sfzh + second_sfzh.sfzh
+        In simple terms this sums the SFZH grids of both Stars instances.
 
-            return Stars(self.log10ages, self.metallicities, new_sfzh)
+        This will only work for Stars objects with the same SFZH grid axes.
+
+        Args:
+            other_stars (parametric.Stars)
+                The other instance of Stars to add to this one.
+        """
+
+        if (np.all(self.log10ages == other_stars.log10ages) and
+            np.all(self.metallicities == other_stars.metallicities)):
+            new_sfzh = self.sfzh + other_stars.sfzh
 
         else:
             raise exceptions.InconsistentAddition("SFZH must be the same shape")
 
-    def plot(self, show=True):
-        """Make a nice plots of the binned SZFH"""
+        return Stars(self.log10ages, self.metallicities, new_sfzh)
 
+    def plot_sfzh(self, show=True):
+        """
+        Plot the binned SZFH.
+
+        Args:
+            show (bool)
+                Should we invoke plt.show()?
+
+        Returns:
+            fig
+                The Figure object contain the plot axes.
+            ax
+                The Axes object containing the plotted data.
+        """
+
+        # Create the figure and extra axes for histograms
         fig, ax, haxx, haxy = single_histxy()
 
-        # this is technically incorrect because metallicity is not on a an actual grid.
+        # Visulise the SFZH grid
         ax.pcolormesh(
-            self.log10ages, self.log10metallicities, self.sfzh.T, cmap=cmr.sunburst
+            self.log10ages,
+            self.log10metallicities,
+            self.sfzh.T,
+            cmap=cmr.sunburst,
         )
 
-        # --- add binned Z to right of the plot
+        # Add binned Z to right of the plot
         haxy.fill_betweenx(
             self.log10metallicities,
             self.metal_hist / np.max(self.metal_hist),
@@ -465,7 +554,7 @@ class Stars(StarsComponent):
             alpha=0.3,
         )
 
-        # --- add binned SF_HIST to top of the plot
+        # Add binned SF_HIST to top of the plot
         haxx.fill_between(
             self.log10ages,
             self.sf_hist / np.max(self.sf_hist),
@@ -474,17 +563,19 @@ class Stars(StarsComponent):
             alpha=0.3,
         )
 
-        # --- add SFR to top of the plot
+        # Add SFR to top of the plot
         if self.sf_hist_func:
             x = np.linspace(*self.log10ages_lims, 1000)
             y = self.sf_hist_func.sfr(10**x)
             haxx.plot(x, y / np.max(y))
 
+        # Set plot limits
         haxy.set_xlim([0.0, 1.2])
         haxy.set_ylim(*self.log10metallicities_lims)
         haxx.set_ylim([0.0, 1.2])
         haxx.set_xlim(self.log10ages_lims)
 
+        # Set labels
         ax.set_xlabel(mlabel("log_{10}(age/yr)"))
         ax.set_ylabel(mlabel("log_{10}Z"))
 
@@ -492,6 +583,7 @@ class Stars(StarsComponent):
         ax.set_ylim(*self.log10metallicities_lims)
         ax.set_xlim(*self.log10ages_lims)
 
+        # Shall we show it?
         if show:
             plt.show()
 
