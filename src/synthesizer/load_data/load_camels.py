@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 
 from astropy.cosmology import FlatLambdaCDM
+from unyt import Msun, kpc, yr
 
 from ..particle.galaxy import Galaxy
 from synthesizer.load_data.utils import get_len
@@ -14,6 +15,7 @@ def _load_CAMELS(
     metals,
     s_oxygen,
     s_hydrogen,
+    s_hsml,
     coods,
     masses,
     g_coods,
@@ -21,6 +23,7 @@ def _load_CAMELS(
     g_metallicities,
     g_hsml,
     star_forming,
+    redshift,
     dtm=0.3
 ):
     """
@@ -41,6 +44,8 @@ def _load_CAMELS(
             particle oxygen abundance array
         s_hydrogen (array):
             particle hydrogen abundance array
+        s_hsml (array):
+            star particle smoothing lengths array, comoving
         coods (array):
             particle coordinates array, comoving
         masses (array):
@@ -55,6 +60,8 @@ def _load_CAMELS(
             gas particle smoothing lengths array, comoving
         star_forming (array):
             boolean array flagging star forming gas particles
+        redshift (float):
+            galaxies redshift
         dtm (float):
             dust-to-metals ratio to apply to all particles
 
@@ -68,6 +75,7 @@ def _load_CAMELS(
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
+        galaxies[i].redshift = redshift
 
         galaxies[i].load_stars(
             imasses[b:e],
@@ -77,6 +85,7 @@ def _load_CAMELS(
             s_hydrogen=s_hydrogen[b:e],
             coordinates=coods[b:e, :],
             current_masses=masses[b:e],
+            smoothing_lengths=s_hsml[b:e] * kpc,
         )
 
     begin, end = get_len(lens[:, 0])
@@ -100,6 +109,7 @@ def load_CAMELS_IllustrisTNG(
     fof_dir=None,
     verbose=False,
     dtm=0.3,
+    physical=True
 ):
     """
     Load CAMELS-IllustrisTNG galaxies
@@ -118,6 +128,8 @@ def load_CAMELS_IllustrisTNG(
             verbosity flag
         dtm (float):
             dust-to-metals ratio to apply to all gas particles
+        physical (bool):
+            Should the coordinates be converted to physical?
 
     Returns:
         galaxies (object):
@@ -131,6 +143,7 @@ def load_CAMELS_IllustrisTNG(
         imasses = hf["PartType4/GFM_InitialMass"][:]
         _metals = hf["PartType4/GFM_Metals"][:]
         metallicity = hf["PartType4/GFM_Metallicity"][:]
+        hsml = hf["PartType4/SubfindHsml"][:]
 
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
@@ -139,6 +152,7 @@ def load_CAMELS_IllustrisTNG(
         g_hsml = hf["PartType0/SubfindHsml"][:]
 
         scale_factor = hf["Header"].attrs["Time"]
+        redshift = 1. / scale_factor - 1
         Om0 = hf["Header"].attrs["Omega0"]
         h = hf["Header"].attrs["HubbleParam"]
 
@@ -175,6 +189,7 @@ def load_CAMELS_IllustrisTNG(
     metallicity = metallicity[~mask]
     masses = masses[~mask]
     _metals = _metals[~mask]
+    hsml = hsml[~mask]
 
     masses = (masses * 1e10) / h
     g_masses = (g_masses * 1e10) / h
@@ -184,6 +199,13 @@ def load_CAMELS_IllustrisTNG(
 
     s_oxygen = _metals[:, 4]
     s_hydrogen = 1.0 - np.sum(_metals[:, 1:], axis=1)
+
+    # If asked, convert coordinates to physical kpc
+    if physical:
+        coods *= scale_factor
+        g_coods *= scale_factor
+        hsml *= scale_factor
+        g_hsml *= scale_factor
 
     # convert formation times to ages
     cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
@@ -198,6 +220,7 @@ def load_CAMELS_IllustrisTNG(
         metals=metallicity,
         s_oxygen=s_oxygen,
         s_hydrogen=s_hydrogen,
+        s_hsml=hsml,
         coods=coods,
         masses=masses,
         g_coods=g_coods,
@@ -205,6 +228,7 @@ def load_CAMELS_IllustrisTNG(
         g_metallicities=g_metals,
         g_hsml=g_hsml,
         star_forming=star_forming,
+        redshift=redshift,
         dtm=dtm,
     )
 
