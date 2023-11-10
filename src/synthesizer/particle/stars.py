@@ -1435,13 +1435,20 @@ class Stars(Particles, StarsComponent):
         return fig, ax
 
 
-def sample_sfhz(sfzh, nstar, initial_mass=1, **kwargs):
+def sample_sfhz(
+        sfzh,
+        log10ages,
+        log10metallicities,
+        nstar,
+        initial_mass=1,
+        **kwargs,
+):
     """
     Create "fake" stellar particles by sampling a SFZH.
 
     Args:
-        sfhz (Stars)
-            The Star Formation Z (Metallicity) History object.
+        sfhz (array-like, float)
+            The Star Formation Metallicity History grid (from parametric.Stars).
         nstar (int)
             The number of stellar particles to produce.
         intial_mass (int)
@@ -1454,7 +1461,7 @@ def sample_sfhz(sfzh, nstar, initial_mass=1, **kwargs):
 
     # Normalise the sfhz to produce a histogram (binned in time) between 0
     # and 1.
-    hist = sfzh.sfzh / np.sum(sfzh.sfzh)
+    hist = sfzh / np.sum(sfzh)
 
     # Compute the cumaltive distribution function
     cdf = np.cumsum(hist.flatten())
@@ -1466,12 +1473,12 @@ def sample_sfhz(sfzh, nstar, initial_mass=1, **kwargs):
 
     # Convert 1D random indices to 2D indices
     x_idx, y_idx = np.unravel_index(
-        value_bins, (len(sfzh.log10ages), len(sfzh.log10metallicities))
+        value_bins, (len(log10ages), len(log10metallicities))
     )
 
     # Extract the sampled ages and metallicites and create an array
     random_from_cdf = np.column_stack(
-        (sfzh.log10ages[x_idx], sfzh.log10metallicities[y_idx])
+        (log10ages[x_idx], log10metallicities[y_idx])
     )
 
     # Extract the individual logged quantities
