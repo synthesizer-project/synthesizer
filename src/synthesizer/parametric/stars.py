@@ -16,6 +16,7 @@ from synthesizer.components import StarsComponent
 from synthesizer.line import Line
 from synthesizer.stats import weighted_median, weighted_mean
 from synthesizer.plt import single_histxy, mlabel
+from synthesizer.units import Quantity
 
 
 class Stars(StarsComponent):
@@ -46,19 +47,38 @@ class Stars(StarsComponent):
             stellar population's morphology. This can be any of the family of
             morphology classes from synthesizer.morphology.
         metallicity_grid_type (string)
+        initial_mass (Quanity)
+            The total initial stellar mass.
     """
+
+    # Define quantities
+    initial_mass = Quantity()
 
     def __init__(
             self,
             log10ages,
             metallicities,
-            sfzh,
+            sfzh=None,
             morphology=None,
+            sf_hist=None,
+            metal_hist=None,
             sf_hist_func=None,
             metal_hist_func=None,
+            instant_sf=None,
+            instant_metallicity=None,
+            initial_mass=1.0,
     ):
         """
         Initialise the parametric stellar population.
+
+        Can either be instantiated by:
+        - Passing a SFZH grid explictly.
+        - Passing instant_sf and instant_metallicity to get an instantaneous
+          SFZH.
+        - Passing functions that describe the SFH and ZH.
+        - Passing arrays that describe the SFH and ZH.
+        - Passing any combination of SFH and ZH instant values, arrays
+          or functions.
 
         Args:
             log10ages (array-like, float)
@@ -68,8 +88,14 @@ class Stars(StarsComponent):
                 An instance of one of the morphology classes describing the
                 stellar population's morphology. This can be any of the family
                 of morphology classes from synthesizer.morphology.
+            sf_hist (array-like, float)
+            metal_hist (array-like, float)
             sf_hist_func (function)
             metal_hist_func (function)
+            instant_sf (float)
+            instant_metallicity (float)
+            initial_mass (Quanity)
+                The total initial stellar mass.
         """
 
         # Instantiate the parent
@@ -87,20 +113,41 @@ class Stars(StarsComponent):
             self.log10metallicities[-1],
         ]
 
-        # Set the 2D star formation metallicity history grid
-        self.sfzh = sfzh
-
-        # Project the SFZH to get the 1D SFH
-        self.sf_hist = np.sum(self.sfzh, axis=1)
-
-        # Project the SFZH to get the 1D ZH
-        self.metal_hist = np.sum(self.sfzh, axis=0)
-
         # Store the function used to make the star formation history if given
         self.sf_hist_func = sf_hist_func
 
         # Store the function used to make the metallicity history if given
         self.metal_hist_func = metal_hist_func
+
+        # Store the SFH array (if None recalculated below)
+        self.sf_hist = sf_hist
+
+        # Store the ZH array (if None recalculated below)
+        self.metal_hist = metal_hist
+
+        # Store the total initial stellar mass
+        self.initial_mass = initial_mass
+
+        # If we have been handed an explict SFZH grid we can ignore all the
+        # calculation methods
+        if sfzh is not None:
+
+            # Store the SFZH grid
+            self.sfzh = sfzh
+
+            # Project the SFZH to get the 1D SFH
+            self.sf_hist = np.sum(self.sfzh, axis=1)
+
+            # Project the SFZH to get the 1D ZH
+            self.metal_hist = np.sum(self.sfzh, axis=0)
+
+        else:
+
+            # Set up the array ready for the calculation
+            self.sfzh = np.zeros((len(log10ages), len(metallicities)))
+
+            # Compute the SFZH grid
+            self._get_sfzh(instant_sf, instant_metallicity)
 
         # Attach the morphology model
         self.morphology = morphology
@@ -111,13 +158,98 @@ class Stars(StarsComponent):
             # Regular linearly
             self.metallicity_grid_type = "Z"
 
-        elif len(set(self.log10metallicities[:-1] - self.log10metallicities[1:])) == 1:
+        elif len(set(
+                self.log10metallicities[:-1] - self.log10metallicities[1:]
+        )) == 1:
             # Regular in logspace
             self.metallicity_grid_type = "log10Z"
 
         else:
             # Irregular
             self.metallicity_grid_type = None
+
+    def _get_sfzh(self, instant_sf, instant_metallicity):
+        """
+        Computes the SFZH for all possible combinations of input.
+
+        If functions are passed for sf_hist_func and metal_hist_func then
+        the SFH and ZH arrays are computed first.
+        """
+
+        # If no units assume unit system
+        if not isinstance(instant_sf, unyt_quantity):
+            instant_sf *= self.ages.units
+
+        # Handle the instantaneous SFH case
+        if instant_sf is not None:
+
+            # Create SFH array
+            self.sf_hist = np.zeros(self.ages.size - 1)
+
+            # Get the bin
+            ia = (np.abs(self.ages - instant_sf)).argmin()
+            self.sf_hist[ia] = self.initial_mass
+
+        # A delta function for metallicity is a special case
+        # equivalent to instant_metallicity = metal_hist_func.metallicity
+        if self.metal_hist_func is not None:
+            if self.metal_hist_func.dist == "delta":
+                instant_metallicity = metal_hist_func.metallicity
+
+        # Handle the instantaneous ZH case
+        if instant_metallicity is not None:
+
+            # Create SFH array
+            self.metal_hist = np.zeros(self.metallicities.size - 1)
+
+            # Get the bin
+            imetal = (np.abs(self.metallicites - instant_metallicity)).argmin()
+            self.metal_hist[imetal] = self.initial_mass
+
+        # Calculate SFH from function if necessary
+        if self.sf_hist_func is not None and self.sf_hist is None:
+
+            # Set up SFH array
+            self.sf_hist = np.zeros(self.ages.size - 1)
+
+            # Loop over age bins calculating the amount of mass in each bin
+            min_age = 0
+            for ia, age in enumerate(self.ages[:-1]):
+                max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
+                sf = integrate.quad(sf_hist.sfr, min_age, max_age)[0]
+                self.sf_hist[ia] = sf
+                min_age = max_age
+
+        # Calculate SFH from function if necessary
+        if self.metal_hist_func is not None and self.metal_hist is None:
+
+            # Set up SFH array
+            self.metal_hist = np.zeros(self.metallicities.size - 1)
+
+            # Loop over age bins calculating the amount of mass in each bin
+            min_metal = 0
+            for imetal, metal in enumerate(self.metallcities[:-1]):
+                max_metal = np.mean([self.metallicities[ia + 1], self.metallicities[ia]])
+                sf = integrate.quad(metal_hist.metallicity, min_metal, max_metal)[0]
+                self.metal_hist[imetal] = sf
+                min_metal = max_metal
+
+        # Ensure that by this point we have an array for SFH and ZH
+        if self.sf_hist is None or self.metal_hist is None:
+            raise exceptions.InconsistentArguments(
+                "A method for defining both the SFH and ZH must be provided!\n"
+                "For each either an instantaneous"
+                " value, a SFH/ZH object, or an array must be passed"
+            )
+
+        # Finally, calculate the SFZH grid based on the above calculations
+        self.sfzh = self.sf_hist[:, np.newaxis] * self.metal_hist
+
+        # Normalise the SFZH grid
+        self.sfzh /= np.sum(self.sfzh)
+
+        # ... and multiply it by the initial mass of stars
+        self.sfzh *= self.initial_mass
 
     def generate_lnu(self, grid, spectra_name, old=False, young=False):
         """
@@ -366,7 +498,7 @@ def generate_instant_sfzh(
     iZ = (np.abs(metallicities - metallicity)).argmin()
     sfzh[ia, iZ] = stellar_mass
 
-    return Stars(log10ages, metallicities, sfzh)
+    return sfzh
 
 
 def generate_sfzh(log10ages, metallicities, sf_hist, metal_hist, stellar_mass=1.0):
@@ -392,7 +524,7 @@ def generate_sfzh(log10ages, metallicities, sf_hist, metal_hist, stellar_mass=1.
     sfzh /= np.sum(sfzh)
     sfzh *= stellar_mass
 
-    return Stars(log10ages, metallicities, sfzh, sf_hist_func=sf_hist, metal_hist_func=metal_hist)
+    return sfzh
 
 
 def generate_sfzh_from_array(log10ages, metallicities, sf_hist, metal_hist, stellar_mass=1.0):
@@ -405,10 +537,5 @@ def generate_sfzh_from_array(log10ages, metallicities, sf_hist, metal_hist, stel
         metal_hist = np.zeros(len(metallicities))
         metal_hist[iZ] = 1.0
 
-    sfzh = sf_hist[:, np.newaxis] * metal_hist
 
-    # --- normalise
-    sfzh /= np.sum(sfzh)
-    sfzh *= stellar_mass
-
-    return Stars(log10ages, metallicities, sfzh)
+    return sfzh

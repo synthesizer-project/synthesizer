@@ -3,6 +3,7 @@
 
 """
 import numpy as np
+from scipy import integrate
 from unyt import yr
 
 from synthesizer.stats import weighted_median, weighted_mean
@@ -139,3 +140,21 @@ class SFH:
                 )
             else:
                 return 0.0
+
+def generate_sf_hist(ages, sf_hist_, log10=False):
+    if log10:
+        ages = 10**ages
+
+    sf_hist = np.zeros(len(ages))
+
+    min_age = 0
+    for ia, age in enumerate(ages[:-1]):
+        max_age = int(np.mean([ages[ia + 1], ages[ia]]))  #  years
+        sf = integrate.quad(sf_hist_.sfr, min_age, max_age)[0]
+        sf_hist[ia] = sf
+        min_age = max_age
+
+    # --- normalise
+    sf_hist /= np.sum(sf_hist)
+
+    return sf_hist
