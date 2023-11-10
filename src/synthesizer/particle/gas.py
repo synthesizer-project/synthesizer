@@ -51,6 +51,7 @@ class Gas(Particles):
         "star_forming",
         "log10metallicities",
         "dust_to_metal_ratio",
+        "dust_masses",
         "_coordinates",
         "_velocities",
         "_smoothing_lengths",
@@ -72,6 +73,7 @@ class Gas(Particles):
         smoothing_lengths=None,
         softening_length=None,
         dust_to_metal_ratio=None,
+        dust_masses=None,
     ):
         """
         Initialise the gas object.
@@ -123,6 +125,19 @@ class Gas(Particles):
         # per gas particle.
         self.dust_to_metal_ratio = dust_to_metal_ratio
 
+        if dust_to_metal_ratio is not None:
+            # The dust to metal ratio for gas particles. Either a scalar
+            # or an array of values for each gas particle
+            self.dust_to_metal_ratio = dust_to_metal_ratio
+            self.calculate_dust_mass()
+        else:
+            self.dust_masses = dust_masses
+
+            # TODO: this should be removed when dust masses are
+            # properly propagated to LOS calculation
+            self.dust_to_metal_ratio = self.dust_masses /\
+                (self.masses * self.metallicities)
+
         # Check the arguments we've been given
         self._check_gas_args()
 
@@ -145,3 +160,11 @@ class Gas(Particles):
                         "Inconsistent gas array sizes! (nparticles=%d, "
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
+
+    def calculate_dust_mass(self):
+        """
+        Calculate dust mass from a given dust-to-metals ratio
+        and gas particle properties (mass and metallicity)
+        """
+        self.dust_masses = self.masses *\
+            self.metallicities * self.dust_to_metal_ratio                    
