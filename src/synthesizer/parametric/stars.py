@@ -246,7 +246,7 @@ class Stars(StarsComponent):
         if instant_sf is not None:
 
             # Create SFH array
-            self.sf_hist = np.zeros(self.ages.size - 1)
+            self.sf_hist = np.zeros(self.ages.size)
 
             # Get the bin
             ia = (np.abs(self.ages - instant_sf)).argmin()
@@ -262,7 +262,7 @@ class Stars(StarsComponent):
         if instant_metallicity is not None:
 
             # Create SFH array
-            self.metal_hist = np.zeros(self.metallicities.size - 1)
+            self.metal_hist = np.zeros(self.metallicities.size)
 
             # Get the bin
             imetal = (np.abs(self.metallicities - instant_metallicity)).argmin()
@@ -272,7 +272,7 @@ class Stars(StarsComponent):
         if self.sf_hist_func is not None and self.sf_hist is None:
 
             # Set up SFH array
-            self.sf_hist = np.zeros(self.ages.size - 1)
+            self.sf_hist = np.zeros(self.ages.size)
 
             # Loop over age bins calculating the amount of mass in each bin
             min_age = 0
@@ -286,7 +286,7 @@ class Stars(StarsComponent):
         if self.metal_hist_func is not None and self.metal_hist is None:
 
             # Set up SFH array
-            self.metal_hist = np.zeros(self.metallicities.size - 1)
+            self.metal_hist = np.zeros(self.metallicities.size)
 
             # Loop over age bins calculating the amount of mass in each bin
             min_metal = 0
@@ -466,13 +466,13 @@ class Stars(StarsComponent):
         """
         Calculate the median age of the stellar population.
         """
-        return weighted_median(self.ages, self.sf_hist) * yr
+        return weighted_median(self.ages, self.sf_hist) * self.ages.units
 
     def calculate_mean_age(self):
         """
         Calculate the mean age of the stellar population.
         """
-        return weighted_mean(self.ages, self.sf_hist) * yr
+        return weighted_mean(self.ages, self.sf_hist)
 
     def calculate_mean_metallicity(self):
         """
