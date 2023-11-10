@@ -24,6 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from synthesizer.components import StarsComponent
+from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.line import Line, LineCollection
 from synthesizer.particle.particles import Particles
 from synthesizer.sed import Sed
