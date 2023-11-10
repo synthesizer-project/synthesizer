@@ -1449,6 +1449,10 @@ def sample_sfhz(
     Args:
         sfhz (array-like, float)
             The Star Formation Metallicity History grid (from parametric.Stars).
+        log10ages (array-like, float)
+            The log of the SFZH age axis.
+        log10metallicities (array-like, float)
+            The log of the SFZH metallicities axis.
         nstar (int)
             The number of stellar particles to produce.
         intial_mass (int)
