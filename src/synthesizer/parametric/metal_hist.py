@@ -32,10 +32,10 @@ class ZH:
             self.parameters = parameters
             if "Z" in parameters.keys():
                 self.metallicity_ = parameters["Z"]
-                self.log10metallicity_ = np.log10(self.Z_)
+                self.log10metallicity_ = np.log10(self.metallicity_)
             elif "log10Z" in parameters.keys():
                 self.log10metallicity_ = parameters["log10Z"]
-                self.metallicity_ = 10**self.log10Z_
+                self.metallicity_ = 10**self.log10metallicity_
 
         def metallicity(self, *args):
             return self.metallicity_
