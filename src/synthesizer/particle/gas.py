@@ -74,6 +74,7 @@ class Gas(Particles):
         softening_length=None,
         dust_to_metal_ratio=None,
         dust_masses=None,
+        verbose=False
     ):
         """
         Initialise the gas object.
@@ -98,6 +99,8 @@ class Gas(Particles):
                 The ratio between dust and total metal content in a gas
                 particle. This can either be a single float or an array of
                 values for each gas particle.
+            dust_masses (array_like, float)
+                Mass of dust in each particle in Msun.
         """
 
         # Instantiate parent
@@ -125,12 +128,20 @@ class Gas(Particles):
         # per gas particle.
         self.dust_to_metal_ratio = dust_to_metal_ratio
 
+        if (dust_to_metal_ratio is None) & (dust_masses is None):
+            if verbose:
+                print(("Neither dust mass not dust to metal ratio "
+                       "provided. Assuming dust to metal ratio = 0.3"))
+            self.dust_to_metal_ratio = 0.3
+            self.calculate_dust_mass()
+
         if dust_to_metal_ratio is not None:
             # The dust to metal ratio for gas particles. Either a scalar
             # or an array of values for each gas particle
             self.dust_to_metal_ratio = dust_to_metal_ratio
             self.calculate_dust_mass()
-        else:
+
+        if dust_masses is not None:
             self.dust_masses = dust_masses
 
             # TODO: this should be removed when dust masses are
