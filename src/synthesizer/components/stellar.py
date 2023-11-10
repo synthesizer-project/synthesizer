@@ -8,7 +8,7 @@ import numpy as np
 
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
-from synthesizer.line import Line
+from synthesizer.line import Line, LineCollection
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 
@@ -71,6 +71,20 @@ class StarsComponent:
         raise Warning(
             (
                 "generate_lnu should be overloaded by child classes:\n"
+                "`particle.Stars`\n"
+                "`parametric.Stars`\n"
+                "You should not be seeing this!!!"
+            )
+        )
+
+    def generate_line(self, *args, **kwargs):
+        """
+        This method is a prototype for generating lines from SPS grids. It is
+        redefined on the child classes.
+        """
+        raise Warning(
+            (
+                "generate_line should be overloaded by child classes:\n"
                 "`particle.Stars`\n"
                 "`parametric.Stars`\n"
                 "You should not be seeing this!!!"
@@ -766,19 +780,19 @@ class StarsComponent:
                 ionising photons that entirely escaped.
 
         Returns:
-            lines (dictionary-like, object):
-                A dictionary containing line objects.
+            LineCollection
+                A dictionary like object containing line objects.
         """
 
         # If only one line specified convert to a list to avoid writing a
         # longer if statement
         if isinstance(line_ids, str):
-            line_ids = [line_ids]
+            line_ids = [line_ids, ]
 
         # Dictionary holding Line objects
         lines = {}
 
-        # Loop over lines, doublet, etc
+        # Loop over the lines
         for line_id in line_ids:
             # If the line id a doublet in string form
             # (e.g. 'OIII4959,OIII5007') convert it to a list
@@ -786,76 +800,29 @@ class StarsComponent:
                 if len(line_id.split(",")) > 1:
                     line_id = line_id.split(",")
 
-            # If the line_id is a str denoting a single line
-            if isinstance(line_id, str):
-                grid_line = grid.lines[line_id]
-                wavelength = grid_line["wavelength"]
+            # Compute the line object
+            line = self.generate_line(grid=grid, line_id=line_id, fesc=fesc)
 
-                # Line luminosity erg/s
-                luminosity = np.sum(
-                    (1 - fesc) * grid_line["luminosity"] * self.sfzh.sfzh, axis=(0, 1)
-                )
-
-                # Continuum at line wavelength, erg/s/Hz
-                continuum = np.sum(grid_line["continuum"] * self.sfzh.sfzh, axis=(0, 1))
-
-                # NOTE: this is currently incorrect and should be made of the
-                # separated nebular and stellar continuum emission
-                #
-                # proposed alternative
-                # stellar_continuum = np.sum(
-                #     grid_line['stellar_continuum'] * self.sfzh.sfzh,
-                #               axis=(0, 1))  # not affected by fesc
-                # nebular_continuum = np.sum(
-                #     (1-fesc)*grid_line['nebular_continuum'] * self.sfzh.sfzh,
-                #               axis=(0, 1))  # affected by fesc
-
-            # Else if the line is list or tuple denoting a doublet (or higher)
-            elif isinstance(line_id, (list, tuple)):
-                luminosity = []
-                continuum = []
-                wavelength = []
-
-                for line_id_ in line_id:
-                    grid_line = grid.lines[line_id_]
-
-                    # Wavelength
-                    wavelength.append(grid_line["wavelength"])
-
-                    # Line luminosity erg/s
-                    luminosity.append(
-                        (1 - fesc)
-                        * np.sum(grid_line["luminosity"] * self.sfzh.sfzh, axis=(0, 1))
-                    )
-
-                    # Continuum at line wavelength, erg/s/Hz
-                    continuum.append(
-                        np.sum(grid_line["continuum"] * self.sfzh.sfzh, axis=(0, 1))
-                    )
-
-            else:
-                raise exceptions.InconsistentArguments(
-                    "line_id must be a string for a single line or a tuple"
-                    " of strings for multiple lines!"
-                )
-
-            # Create the Line object
-            line = Line(line_id, wavelength, luminosity, continuum)
+            # Store this line
             lines[line.id] = line
 
-        self.lines[line.id] = line
+        # Create a line collection
+        line_collection = LineCollection(lines)
 
-        return lines
+        # Associate that line collection with the Stars object
+        self.lines["intrinsic"] = line_collection
+
+        return line_collection
 
     def get_line_attenuated(
         self,
         grid,
         line_ids,
         fesc=0.0,
-        tau_v_nebular=None,
-        tau_v_stellar=None,
-        dust_curve_nebular=PowerLaw(slope=-1.0),
-        dust_curve_stellar=PowerLaw(slope=-1.0),
+        tau_v_BC=None,
+        tau_v_ISM=None,
+        dust_curve_BC=PowerLaw(slope=-1.0),
+        dust_curve_ISM=PowerLaw(slope=-1.0),
     ):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a
@@ -872,20 +839,20 @@ class StarsComponent:
             fesc (float)
                 The Lyman continuum escaped fraction, the fraction of
                 ionising photons that entirely escaped.
-            tau_v_nebular (float)
+            tau_v_BS (float)
                 V-band optical depth of the nebular emission.
-            tau_v_stellar (float)
+            tau_v_ISM (float)
                 V-band optical depth of the stellar emission.
-            dust_curve_nebular (dust_curve)
+            dust_curve_BC (dust_curve)
                 A dust_curve object specifying the dust curve.
                 for the nebular emission
-            dust_curve_stellar (dust_curve)
+            dust_curve_ISM (dust_curve)
                 A dust_curve object specifying the dust curve
                 for the stellar emission.
 
         Returns:
-            lines (dict)
-                A dictionary containing line objects.
+            LineCollection
+                A dictionary like object containing line objects.
         """
 
         # If the intrinsic lines haven't already been calculated and saved
@@ -900,37 +867,44 @@ class StarsComponent:
         # Dictionary holding lines
         lines = {}
 
-        # Loop over lines
-        for line_id, intrinsic_line in intrinsic_lines.items():
+        # Loop over the intrinsic lines
+        for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # Calculate attenuation
-            transmission_nebular = dust_curve_nebular.attenuate(
-                tau_v_nebular, intrinsic_line._wavelength
+            T_BC = dust_curve_BC.get_transmission(
+                tau_v_BC, intrinsic_line._wavelength
             )
-            transmission_stellar = dust_curve_stellar.attenuate(
-                tau_v_stellar, intrinsic_line._wavelength
+            T_ISM = dust_curve_ISM.get_transmission(
+                tau_v_ISM, intrinsic_line._wavelength
             )
 
-            # Attenuate the spectra
-            luminosity = intrinsic_line._luminosity * transmission_nebular
-            continuum = intrinsic_line._continuum * transmission_stellar
+            # Apply attenuation
+            luminosity = intrinsic_line._luminosity * T_BC * T_ISM
+            continuum = intrinsic_line._continuum * T_ISM
 
-            # Create the Line object
+            # Create the line object
             line = Line(
-                intrinsic_line.id, intrinsic_line._wavelength, luminosity, continuum
+                line_id,
+                intrinsic_line._wavelength,
+                luminosity,
+                continuum,
             )
 
             # NOTE: the above is wrong and should be separated into stellar
             # and nebular continuum components:
-            # nebular_continuum = intrinsic_line._nebular_continuum * transmission_nebular
-            # stellar_continuum = intrinsic_line._stellar_continuum * transmission_stellar
-            # line = Line(intrinsic_line.id, intrinsic_line._wavelength, \
+            # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
+            # stellar_continuum = intrinsic_line._stellar_continuum * T_stellar
+            # line = Line(intrinsic_line.id, intrinsic_line._wavelength,
             # luminosity, nebular_continuum, stellar_continuum)
 
-            lines[line.id] = line
+            lines[line_id] = line
 
-        self.lines["attenuated"] = lines
+        # Create a line collection
+        line_collection = LineCollection(lines)
 
-        return lines
+        # Associate that line collection with the Stars object
+        self.lines["intrinsic"] = line_collection
+
+        return line_collection
 
     def get_line_screen(
         self,
@@ -962,16 +936,16 @@ class StarsComponent:
                 A dust_curve object specifying the dust curve.
 
         Returns:
-            lines : dictionary-like (obj)
-                A dictionary containing line objects.
+            LineCollection
+                A dictionary like object containing line objects.
         """
 
         return self.get_line_attenuated(
             grid,
             line_ids,
             fesc=fesc,
-            tau_v_nebular=tau_v,
-            tau_v_stellar=tau_v,
+            tau_v_BC=0,
+            tau_v_ISM=tau_v,
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve,
         )

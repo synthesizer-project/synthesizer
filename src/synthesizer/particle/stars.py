@@ -24,6 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from synthesizer.components import StarsComponent
+from synthesizer.line import Line, LineCollection
 from synthesizer.particle.particles import Particles
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
@@ -172,6 +173,9 @@ class Stars(Particles, StarsComponent):
 
         # Define the dictionary to hold particle spectra
         self.particle_spectra = {}
+
+        # Define the dictionary to hold particle lines
+        self.particle_lines = {}
 
         # Set the optional keyword arguments
 
@@ -376,6 +380,91 @@ class Stars(Particles, StarsComponent):
 
         return spec
 
+    def generate_line(self, grid, line_id, fesc):
+        """
+        Calculate rest frame line luminosity and continuum from an SPS Grid.
+
+        This is a flexible base method which extracts the rest frame line
+        luminosity of this stellar population from the SPS grid based on the
+        passed arguments.
+
+        Args:
+            grid (Grid):
+                A Grid object.
+            line_id (list/str):
+                A list of line_ids or a str denoting a single line.
+                Doublets can be specified as a nested list or using a
+                comma (e.g. 'OIII4363,OIII4959').
+            fesc (float):
+                The Lyman continuum escaped fraction, the fraction of
+                ionising photons that entirely escaped.
+
+        Returns:
+            Line
+                An instance of Line contain this lines wavelenth, luminosity,
+                and continuum.
+        """
+
+        # If the line_id is a str denoting a single line
+        if isinstance(line_id, str):
+
+            # Get the grid information we need
+            grid_line = grid.lines[line_id]
+            wavelength = grid_line["wavelength"]
+
+            # Line luminosity erg/s
+            luminosity = (1 - fesc) * np.sum(
+                grid_line["luminosity"] * self.initial_masses
+            )
+
+            # Continuum at line wavelength, erg/s/Hz
+            continuum = np.sum(grid_line["continuum"] * self.initial_masses)
+
+            # NOTE: this is currently incorrect and should be made of the
+            # separated nebular and stellar continuum emission
+            #
+            # proposed alternative
+            # stellar_continuum = np.sum(
+            #     grid_line['stellar_continuum'] * self.sfzh.sfzh,
+            #               axis=(0, 1))  # not affected by fesc
+            # nebular_continuum = np.sum(
+            #     (1-fesc)*grid_line['nebular_continuum'] * self.sfzh.sfzh,
+            #               axis=(0, 1))  # affected by fesc
+
+        # Else if the line is list or tuple denoting a doublet (or higher)
+        elif isinstance(line_id, (list, tuple)):
+
+            # Set up containers for the line information
+            luminosity = []
+            continuum = []
+            wavelength = []
+
+            # Loop over the ids in this container
+            for line_id_ in line_id:
+                grid_line = grid.lines[line_id_]
+
+                # Wavelength [\AA]
+                wavelength.append(grid_line["wavelength"])
+
+                # Line luminosity erg/s
+                luminosity.append(
+                    (1 - fesc)
+                    * np.sum(grid_line["luminosity"] * self.initial_masses)
+                )
+
+                # Continuum at line wavelength, erg/s/Hz
+                continuum.append(
+                    np.sum(grid_line["continuum"] * self.initial_masses)
+                )
+
+        else:
+            raise exceptions.InconsistentArguments(
+                "Unrecognised line_id! line_ids should contain strings"
+                " or lists/tuples for doublets"
+            )
+
+        return Line(line_id, wavelength, luminosity, continuum)
+
     def generate_particle_lnu(
         self, grid, spectra_name, fesc=0.0, young=False, old=False, verbose=False
     ):
@@ -431,6 +520,92 @@ class Stars(Particles, StarsComponent):
         spec = compute_particle_seds(*args)
 
         return spec
+
+    def generate_particle_line(self, grid, line_id, fesc):
+        """
+        Calculate rest frame line luminosity and continuum from an SPS Grid
+        for each individual stellar particle.
+
+        This is a flexible base method which extracts the rest frame line
+        luminosity of each star from the SPS grid based on the
+        passed arguments.
+
+        Args:
+            grid (Grid):
+                A Grid object.
+            line_id (list/str):
+                A list of line_ids or a str denoting a single line.
+                Doublets can be specified as a nested list or using a
+                comma (e.g. 'OIII4363,OIII4959').
+            fesc (float):
+                The Lyman continuum escaped fraction, the fraction of
+                ionising photons that entirely escaped.
+
+        Returns:
+            Line
+                An instance of Line containing this lines wavelenth, luminosity,
+                and continuum for each star particle.
+        """
+
+        # If the line_id is a str denoting a single line
+        if isinstance(line_id, str):
+
+            # Get the grid information we need
+            grid_line = grid.lines[line_id]
+            wavelength = grid_line["wavelength"]
+
+            # Line luminosity erg/s
+            luminosity = (1 - fesc) * (
+                grid_line["luminosity"] * self.initial_masses
+            )
+
+            # Continuum at line wavelength, erg/s/Hz
+            continuum = grid_line["continuum"] * self.initial_masses
+
+            # NOTE: this is currently incorrect and should be made of the
+            # separated nebular and stellar continuum emission
+            #
+            # proposed alternative
+            # stellar_continuum = np.sum(
+            #     grid_line['stellar_continuum'] * self.sfzh.sfzh,
+            #               axis=(0, 1))  # not affected by fesc
+            # nebular_continuum = np.sum(
+            #     (1-fesc)*grid_line['nebular_continuum'] * self.sfzh.sfzh,
+            #               axis=(0, 1))  # affected by fesc
+
+        # Else if the line is list or tuple denoting a doublet (or higher)
+        elif isinstance(line_id, (list, tuple)):
+
+            # Set up containers for the line information
+            luminosity = []
+            continuum = []
+            wavelength = []
+
+            # Loop over the ids in this container
+            for line_id_ in line_id:
+                grid_line = grid.lines[line_id_]
+
+                # Wavelength [\AA]
+                wavelength.append(grid_line["wavelength"])
+
+                # Line luminosity erg/s
+                luminosity.append(
+                    (1 - fesc)
+                    * grid_line["luminosity"] * self.initial_masses
+                )
+
+                # Continuum at line wavelength, erg/s/Hz
+                continuum.append(
+                    grid_line["continuum"] * self.initial_masses
+                )
+
+        else:
+            raise exceptions.InconsistentArguments(
+                "Unrecognised line_id! line_ids should contain strings"
+                " or lists/tuples for doublets"
+            )
+
+        return Line(line_id, wavelength, luminosity, continuum)
 
     def _get_masks(self, young=None, old=None):
         """
@@ -943,8 +1118,201 @@ class Stars(Particles, StarsComponent):
 
         return reprocessed
 
+    def get_particle_line_intrinsic(self, grid, line_ids, fesc=0.0):
+        """
+        Calculates the intrinsic properties (luminosity, continuum, EW)
+        for a set of lines for each particle.
+
+        Args:
+            grid (Grid):
+                A Grid object.
+            line_ids (list/str):
+                A list of line_ids or a str denoting a single line.
+                Doublets can be specified as a nested list or using a
+                comma (e.g. 'OIII4363,OIII4959').
+            fesc (float):
+                The Lyman continuum escaped fraction, the fraction of
+                ionising photons that entirely escaped.
+
+        Returns:
+            LineCollection
+                A dictionary like object containing line objects.
+        """
+
+        # If only one line specified convert to a list to avoid writing a
+        # longer if statement
+        if isinstance(line_ids, str):
+            line_ids = [line_ids, ]
+
+        # Dictionary holding Line objects
+        lines = {}
+
+        # Loop over the lines
+        for line_id in line_ids:
+            # If the line id a doublet in string form
+            # (e.g. 'OIII4959,OIII5007') convert it to a list
+            if isinstance(line_id, str):
+                if len(line_id.split(",")) > 1:
+                    line_id = line_id.split(",")
+
+            # Compute the line object
+            line = self.generate_particle_line(
+                grid=grid, line_id=line_id, fesc=fesc,
+            )
+
+            # Store this line
+            lines[line_id] = line
+
+        # Create a line collection
+        line_collection = LineCollection(lines)
+
+        # Associate that line collection with the Stars object
+        self.particle_lines["intrinsic"] = line_collection
+
+        return line_collection
+
+    def get_particle_line_attenuated(
+        self,
+        grid,
+        line_ids,
+        fesc=0.0,
+        tau_v_BC=None,
+        tau_v_ISM=None,
+        dust_curve_BC=PowerLaw(slope=-1.0),
+        dust_curve_ISM=PowerLaw(slope=-1.0),
+    ):
+        """
+        Calculates attenuated properties (luminosity, continuum, EW) for a
+        set of lines for each Start. Allows the nebular and stellar
+        attenuation to be set separately.
+
+        Args:
+            grid (Grid)
+                The Grid object.
+            line_ids (list/str)
+                A list of line_ids or a str denoting a single line. Doublets
+                can be specified as a nested list or using a comma
+                (e.g. 'OIII4363,OIII4959').
+            fesc (float)
+                The Lyman continuum escaped fraction, the fraction of
+                ionising photons that entirely escaped.
+            tau_v_BS (float)
+                V-band optical depth of the nebular emission.
+            tau_v_ISM (float)
+                V-band optical depth of the stellar emission.
+            dust_curve_BC (dust_curve)
+                A dust_curve object specifying the dust curve.
+                for the nebular emission
+            dust_curve_ISM (dust_curve)
+                A dust_curve object specifying the dust curve
+                for the stellar emission.
+
+        Returns:
+            LineCollection
+                A dictionary like object containing line objects.
+        """
+
+        # If the intrinsic lines haven't already been calculated and saved
+        # then generate them
+        if "intrinsic" not in self.particle_lines:
+            intrinsic_lines = self.get_particle_line_intrinsic(
+                grid, line_ids, fesc=fesc,
+            )
+        else:
+            intrinsic_lines = self.particle_lines["intrinsic"]
+
+        # Dictionary holding lines
+        lines = {}
+
+        # Loop over the intrinsic lines
+        for line_id, intrinsic_line in intrinsic_lines.lines.items():
+            # Calculate attenuation
+            T_BC = dust_curve_BC.get_transmission(
+                tau_v_BC, intrinsic_line._wavelength
+            )
+            T_ISM = dust_curve_ISM.get_transmission(
+                tau_v_ISM, intrinsic_line._wavelength
+            )
+
+            # Apply attenuation
+            luminosity = intrinsic_line._luminosity * T_BC * T_ISM
+            continuum = intrinsic_line._continuum * T_ISM
+
+            # Create the line object
+            line = Line(
+                line_id,
+                intrinsic_line._wavelength,
+                luminosity,
+                continuum,
+            )
+
+            # NOTE: the above is wrong and should be separated into stellar
+            # and nebular continuum components:
+            # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
+            # stellar_continuum = intrinsic_line._stellar_continuum * T_stellar
+            # line = Line(intrinsic_line.id, intrinsic_line._wavelength,
+            # luminosity, nebular_continuum, stellar_continuum)
+
+            lines[line_id] = line
+
+        # Create a line collection
+        line_collection = LineCollection(lines)
+
+        # Associate that line collection with the Stars object
+        self.particle_lines["intrinsic"] = line_collection
+
+        return line_collection
+
+    def get_particle_line_screen(
+        self,
+        grid,
+        line_ids,
+        fesc=0.0,
+        tau_v=None,
+        dust_curve=PowerLaw(slope=-1.0),
+    ):
+        """
+        Calculates attenuated properties (luminosity, continuum, EW) for a set
+        of lines assuming a simple dust screen (i.e. both nebular and stellar
+        emission feels the same dust attenuation). This is a wrapper around
+        the more general method above.
+
+        Args:
+            grid (Grid)
+                The Grid object.
+            line_ids (list/str)
+                A list of line_ids or a str denoting a single line. Doublets
+                can be specified as a nested list or using a comma
+                (e.g. 'OIII4363,OIII4959').
+            fesc (float)
+                The Lyman continuum escaped fraction, the fraction of
+                ionising photons that entirely escaped.
+            tau_v (float)
+                V-band optical depth.
+            dust_curve (dust_curve)
+                A dust_curve object specifying the dust curve.
+
+        Returns:
+            LineCollection
+                A dictionary like object containing line objects.
+        """
+
+        return self.get_particle_line_attenuated(
+            grid,
+            line_ids,
+            fesc=fesc,
+            tau_v_BC=0,
+            tau_v_ISM=tau_v,
+            dust_curve_nebular=dust_curve,
+            dust_curve_stellar=dust_curve,
+        )
+
     def plot_spectra(
-        self, show=False, spectra_to_plot=None, ylimits=("peak", 5), figsize=(3.5, 5)
+            self,
+            show=False,
+            spectra_to_plot=None,
+            ylimits=("peak", 5),
+            figsize=(3.5, 5),
     ):
         """
         plots all spectra associated with a galaxy object
@@ -1065,6 +1433,7 @@ class Stars(Particles, StarsComponent):
             plt.show()
 
         return fig, ax
+
 
 def sample_sfhz(sfzh, nstar, initial_mass=1, **kwargs):
     """

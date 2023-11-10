@@ -13,6 +13,7 @@ import cmasher as cmr
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
+from synthesizer.line import Line
 from synthesizer.stats import weighted_median, weighted_mean
 from synthesizer.plt import single_histxy, mlabel
 
@@ -123,9 +124,9 @@ class Stars(StarsComponent):
         Calculate rest frame spectra from an SPS Grid.
 
         This is a flexible base method which extracts the rest frame spectra of
-        this galaxy from the SPS grid based on the passed arguments. More
-        sophisticated types of spectra are produced by the get_spectra_*
-        methods on BaseGalaxy, which call this method.
+        this stellar popualtion from the SPS grid based on the passed
+        arguments. More sophisticated types of spectra are produced by the
+        get_spectra_* methods on StarsComponent, which call this method.
 
         Args:
             grid (object, Grid):
@@ -143,7 +144,7 @@ class Stars(StarsComponent):
                 to False.
 
         Returns:
-            The Galaxy's rest frame spectra in erg / s / Hz.
+            The Stars's integrated rest frame spectra in erg / s / Hz.
         """
 
         # Ensure arguments make sense
@@ -177,6 +178,91 @@ class Stars(StarsComponent):
         )
 
         return spectra
+
+    def generate_line(self, grid, line_id, fesc):
+        """
+        Calculate rest frame line luminosity and continuum from an SPS Grid.
+
+        This is a flexible base method which extracts the rest frame line
+        luminosity of this stellar population from the SPS grid based on the
+        passed arguments.
+
+        Args:
+            grid (Grid):
+                A Grid object.
+            line_id (list/str):
+                A list of line_ids or a str denoting a single line.
+                Doublets can be specified as a nested list or using a
+                comma (e.g. 'OIII4363,OIII4959').
+            fesc (float):
+                The Lyman continuum escaped fraction, the fraction of
+                ionising photons that entirely escaped.
+
+        Returns:
+            Line
+                An instance of Line contain this lines wavelenth, luminosity,
+                and continuum.
+        """
+
+        # If the line_id is a str denoting a single line
+        if isinstance(line_id, str):
+
+            # Get the grid information we need
+            grid_line = grid.lines[line_id]
+            wavelength = grid_line["wavelength"]
+
+            # Line luminosity erg/s
+            luminosity = (1 - fesc) * np.sum(
+                grid_line["luminosity"] * self.sfzh, axis=(0, 1)
+            )
+
+            # Continuum at line wavelength, erg/s/Hz
+            continuum = np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
+
+            # NOTE: this is currently incorrect and should be made of the
+            # separated nebular and stellar continuum emission
+            #
+            # proposed alternative
+            # stellar_continuum = np.sum(
+            #     grid_line['stellar_continuum'] * self.sfzh.sfzh,
+            #               axis=(0, 1))  # not affected by fesc
+            # nebular_continuum = np.sum(
+            #     (1-fesc)*grid_line['nebular_continuum'] * self.sfzh.sfzh,
+            #               axis=(0, 1))  # affected by fesc
+
+        # Else if the line is list or tuple denoting a doublet (or higher)
+        elif isinstance(line_id, (list, tuple):
+
+            # Set up containers for the line information
+            luminosity = []
+            continuum = []
+            wavelength = []
+
+            # Loop over the ids in this container
+            for line_id_ in line_id:
+                grid_line = grid.lines[line_id_]
+
+                # Wavelength [\AA]
+                wavelength.append(grid_line["wavelength"])
+
+                # Line luminosity erg/s
+                luminosity.append(
+                    (1 - fesc)
+                    * np.sum(grid_line["luminosity"] * self.sfzh, axis=(0, 1))
+                )
+
+                # Continuum at line wavelength, erg/s/Hz
+                continuum.append(
+                    np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
+                )
+
+        else:
+            raise exceptions.InconsistentArguments(
+                "Unrecognised line_id! line_ids should contain strings"
+                " or lists/tuples for doublets"
+            )
+
+        return Line(line_id, wavelength, luminosity, continuum)
 
     def calculate_median_age(self):
         """calculate the median age"""
@@ -268,23 +354,6 @@ class Stars(StarsComponent):
         return fig, ax
 
 
-def generate_sf_hist(ages, sf_hist_, log10=False):
-    if log10:
-        ages = 10**ages
-
-    SF_HIST = np.zeros(len(ages))
-
-    min_age = 0
-    for ia, age in enumerate(ages[:-1]):
-        max_age = int(np.mean([ages[ia + 1], ages[ia]]))  #  years
-        sf = integrate.quad(sf_hist_.sfr, min_age, max_age)[0]
-        SF_HIST[ia] = sf
-        min_age = max_age
-
-    # --- normalise
-    SF_HIST /= np.sum(SF_HIST)
-
-    return SF_HIST
 
 
 def generate_instant_sfzh(
