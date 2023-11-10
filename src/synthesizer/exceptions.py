@@ -208,4 +208,22 @@ class SVOInaccessible(Exception):
     def __str__(self):
         if self.message:
             return "{0} ".format(self.message)
-        return "Inconsistent parameter choice"
+        return "SVO database is down!"
+
+
+class UnrecognisedOption(Exception):
+    """
+    Generic exception class for when a string argument is not a recognised
+    option.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Unrecognised option."

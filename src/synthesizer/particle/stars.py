@@ -167,6 +167,12 @@ class Stars(Particles, StarsComponent):
         )
         StarsComponent.__init__(self, ages, metallicities)
 
+        # Ensure initial masses is an accepted type to avoid 
+        # issues when masking
+        if isinstance(initial_masses, list):
+            raise exceptions.InconsistentArguments(
+                'Initial mass should be numpy or unyt array.')
+
         # Set always required stellar particle properties
         self.initial_masses = initial_masses
         self.ages = ages
