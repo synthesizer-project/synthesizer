@@ -31,14 +31,14 @@ class ZH:
             self.dist = "delta"  # set distribution type
             self.parameters = parameters
             if "Z" in parameters.keys():
-                self.Z_ = parameters["Z"]
-                self.log10Z_ = np.log10(self.Z_)
+                self.metallicity_ = parameters["Z"]
+                self.log10metallicity_ = np.log10(self.Z_)
             elif "log10Z" in parameters.keys():
-                self.log10Z_ = parameters["log10Z"]
-                self.Z_ = 10**self.log10Z_
+                self.log10metallicity_ = parameters["log10Z"]
+                self.metallicity_ = 10**self.log10Z_
 
-        def Z(self, age):
-            return self.Z_
+        def metallicity(self, *args):
+            return self.metallicity_
 
-        def log10Z(self, age):
-            return self.log10Z_
+        def log10metallicity(self, *args):
+            return self.log10metallicity_
