@@ -451,53 +451,6 @@ class Galaxy(BaseGalaxy):
 
         return tau_v
 
-    def apply_attenuation(
-        self,
-        tau_v,
-        incident_spectra_type,
-        dust_curve=PowerLaw(slope=-1.0),
-        mask=None,
-    ):
-        """
-        Apply attenuation to a spectra.
-
-        Args:
-
-            tau_v (array-like, float)
-                The V-band optical depth for every star particle.
-
-            incident_spectra_type (str)
-                The key for the spectra to be attenuated.
-
-            dust_curve (synthesizer.dust.attenuation.*)
-                An instance of one of the dust attenuation models. (defined in
-                synthesizer/dust/attenuation.py)
-
-            mask (array-like, bool)
-                A mask array with an entry for each star particle. Masked out
-                particles (star particles with False in the mask) will be
-                ignored when applying the attenuation.
-        """
-
-        # Get the wavelength grid associated to the spectra
-        lam = self.spectra_array[incident_spectra_type]._lam
-
-        # Compute the transmission
-        transmission = dust_curve.get_transmission(tau_v, lam)
-
-        # These two should have the same shape so should work?
-        if mask is None:
-            sed = self.spectra_array[incident_spectra_type]._lnu * transmission
-            self.spectra_array["attenuated"] = Sed(lam, sed)
-            self.spectra["attenuated"] = Sed(lam, np.sum(sed, axis=0))
-        else:
-            sed = self.spectra_array[incident_spectra_type]._lnu
-            sed[mask] *= transmission
-            self.spectra_array["attenuated"] = Sed(lam, sed)
-            self.spectra["attenuated"] = Sed(lam, np.sum(sed, axis=0))
-
-        return self.spectra_array["attenuated"]
-
     def screen_dust_gamma_parameter(
         self,
         beta=0.1,
