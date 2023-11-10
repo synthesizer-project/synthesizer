@@ -382,3 +382,58 @@ class SFH:
                 )
             else:
                 return 0.0
+    
+    class ExponentiallyDeclining(Common):
+        """
+        An exponentially declining star formation history
+        """
+
+        def __init__(self, parameters):
+            self.name = "Exponentially Declining"
+            self.parameters = parameters
+            self.initial_age = self.parameters["initial_age"].to("yr").value
+            self.tau = self.parameters["tau"].to("yr").value
+
+        def sfr_(self, age):
+            """age is lookback time"""
+
+            if age < self.initial_age:
+                return np.exp(-1 * (self.initial_age - age) / self.tau)
+            else:
+                return 0.0
+    
+    class DelayedExponentiallyDeclining(Common):
+        """
+        A delayed exponentially declining star formation history
+        """
+
+        def __init__(self, parameters):
+            self.name = "Delayed Exponentially Declining"
+            self.parameters = parameters
+            self.initial_age = self.parameters["initial_age"].to("yr").value
+            self.tau = self.parameters["tau"].to("yr").value
+
+        def sfr_(self, age):
+            """age is lookback time"""
+
+            if age < self.initial_age:
+                return (self.initial_age - age) * np.exp(-1 * (self.initial_age - age) / self.tau)
+            else:
+                return 0.0
+
+    class DoublePowerLaw(Common):
+        """
+        A delayed exponentially declining star formation history
+        """
+
+        def __init__(self, parameters):
+            self.name = "Delayed Exponentially Declining"
+            self.parameters = parameters
+            self.tau = self.parameters["tau"].to("yr").value
+            self.alpha = self.parameters["alpha"]
+            self.beta = self.parameters["beta"]
+
+        def sfr_(self, age):
+            """age is lookback time"""
+
+            return ((age / self.tau)**self.alpha + (age / self.tau)**self.beta)**-1 
