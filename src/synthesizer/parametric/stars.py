@@ -1,11 +1,19 @@
 """ A module for creating and manipulating parametric stellar populations.
 
+This is the parametric analog of particle.Stars. It not only computes and holds
+the SFZH grid but everything describing a parametric Galaxy's stellar
+component.
 
+Example usage:
+
+    stars = Stars(log10ages, metallicities,
+                  sfzh=sfzh)
+    stars.get_spectra_incident(grid)
+    stars.plot_spectra()
 """
-import h5py
 import numpy as np
 from scipy import integrate
-from unyt import yr
+from unyt import yr, unyt_quantity
 
 
 import matplotlib.pyplot as plt
@@ -177,7 +185,7 @@ class Stars(StarsComponent):
         """
 
         # If no units assume unit system
-        if not isinstance(instant_sf, unyt_quantity):
+        if instant_sf is not None and not isinstance(instant_sf, unyt_quantity):
             instant_sf *= self.ages.units
 
         # Handle the instantaneous SFH case
@@ -194,7 +202,7 @@ class Stars(StarsComponent):
         # equivalent to instant_metallicity = metal_hist_func.metallicity
         if self.metal_hist_func is not None:
             if self.metal_hist_func.dist == "delta":
-                instant_metallicity = metal_hist_func.metallicity
+                instant_metallicity = self.metal_hist_func.metallicity()
 
         # Handle the instantaneous ZH case
         if instant_metallicity is not None:
@@ -203,7 +211,7 @@ class Stars(StarsComponent):
             self.metal_hist = np.zeros(self.metallicities.size - 1)
 
             # Get the bin
-            imetal = (np.abs(self.metallicites - instant_metallicity)).argmin()
+            imetal = (np.abs(self.metallicities - instant_metallicity)).argmin()
             self.metal_hist[imetal] = self.initial_mass
 
         # Calculate SFH from function if necessary
@@ -216,7 +224,7 @@ class Stars(StarsComponent):
             min_age = 0
             for ia, age in enumerate(self.ages[:-1]):
                 max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
-                sf = integrate.quad(sf_hist.sfr, min_age, max_age)[0]
+                sf = integrate.quad(self.sf_hist_func.sfr, min_age, max_age)[0]
                 self.sf_hist[ia] = sf
                 min_age = max_age
 
@@ -229,8 +237,12 @@ class Stars(StarsComponent):
             # Loop over age bins calculating the amount of mass in each bin
             min_metal = 0
             for imetal, metal in enumerate(self.metallcities[:-1]):
-                max_metal = np.mean([self.metallicities[ia + 1], self.metallicities[ia]])
-                sf = integrate.quad(metal_hist.metallicity, min_metal, max_metal)[0]
+                max_metal = np.mean(
+                    [self.metallicities[ia + 1], self.metallicities[ia]]
+                )
+                sf = integrate.quad(
+                    self.metal_hist_func.metallicity, min_metal, max_metal
+                )[0]
                 self.metal_hist[imetal] = sf
                 min_metal = max_metal
 
@@ -363,7 +375,7 @@ class Stars(StarsComponent):
             #               axis=(0, 1))  # affected by fesc
 
         # Else if the line is list or tuple denoting a doublet (or higher)
-        elif isinstance(line_id, (list, tuple):
+        elif isinstance(line_id, (list, tuple)):
 
             # Set up containers for the line information
             luminosity = []
