@@ -1,11 +1,11 @@
-""" All functionality related to spectra storage and manipulation.
+""" Functionality related to spectra storage and manipulation.
 
-When a spectra is computed from a Galaxy or a Galaxy component the resulting
-calculated spectra are stored in Sed objects. These provide helper functions
+When a spectra is computed from a `Galaxy` or a Galaxy component the resulting
+calculated spectra are stored in `Sed` objects. These provide helper functions
 for quick manipulation of the spectra. Seds can contain a single spectra or
 arbitrarily many with all methods capable of acting on both consistently.
 
-Examples usage:
+Example usage:
 
     sed = Sed(lams, lnu)
     sed.get_fnu(redshift)
