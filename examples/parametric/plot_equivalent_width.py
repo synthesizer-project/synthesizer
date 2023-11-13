@@ -10,7 +10,7 @@ Example for generating the equivalent width for a set of UV indices from a param
 import matplotlib.pyplot as plt
 
 from synthesizer.grid import Grid
-from synthesizer.parametric import SFH, ZDist, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy as Galaxy
 from synthesizer.sed import Sed
 from unyt import yr, Myr
@@ -63,15 +63,21 @@ def get_ew(index, feature, blue, red, Z, smass, grid, EqW, mode):
     Z_p = {"Z": Z}  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = smass
 
-    # --- define the functional form of the star formation and metal enrichment histories
+    # --- define the functional form of the star formation and metal
+    # enrichment histories
     sfh = SFH.Constant(**sfh_p)  # constant star formation
     print(sfh)  # print sfh summary
 
     metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
 
-    # --- get 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
+    # --- get 2D star formation and metal enrichment history for the
+    # given SPS grid. This is (age, Z).
     sfzh = Stars(
-        grid.log10age, grid.metallicity, sfh, metal_dist, stellar_mass=stellar_mass
+        grid.log10age,
+        grid.metallicity,
+        sf_hist_func=sfh,
+        metal_dist_func=metal_dist,
+        initial_mass=stellar_mass
     )
 
     # --- create a galaxy object

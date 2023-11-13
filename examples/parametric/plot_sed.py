@@ -11,7 +11,7 @@ including photometry. This example will:
 
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
-from synthesizer.parametric import SFH, ZDist, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
 
@@ -41,12 +41,16 @@ if __name__ == "__main__":
 
     # get the 2D star formation and metal enrichment history for the given SPS 
     # grid.
-    sfzh = Stars(
-        grid.log10age, grid.metallicity, sfh, metal_dist, stellar_mass=stellar_mass
+    stars = Stars(
+        grid.log10age,
+        grid.metallicity,
+        sf_hist_func=sfh,
+        metal_dist_func=metal_dist,
+        initial_mass=stellar_mass,
     )
 
     # create a galaxy object
-    galaxy = Galaxy(sfzh)
+    galaxy = Galaxy(stars)
 
     # generate pure stellar spectra alone
     galaxy.stars.get_spectra_incident(grid)
