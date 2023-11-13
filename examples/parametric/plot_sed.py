@@ -100,7 +100,7 @@ if __name__ == "__main__":
     # print galaxy summary
     print(galaxy)
 
-    sed = galaxy.spectra["attenuated"]
+    sed = galaxy.stars.spectra["attenuated"]
     print(sed)
 
     # generate broadband photometry using 3 top-hat filters

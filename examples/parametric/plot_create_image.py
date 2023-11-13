@@ -66,7 +66,7 @@ if __name__ == "__main__":
         morphology=morph,
         resolution=resolution,
         filters=filters,
-        sed=galaxy.spectra["incident"],
+        sed=galaxy.stars.spectra["incident"],
         fov=fov,
     )
 
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     img = galaxy.make_images(
         resolution=resolution,
         filters=filters,
-        sed=galaxy.spectra["incident"],
+        sed=galaxy.stars.spectra["incident"],
         fov=fov,
     )
 
