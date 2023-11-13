@@ -17,7 +17,6 @@ from unyt import yr, Myr, kpc, arcsec, Mpc
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.parametric import SFH, ZDist, ParametricStars
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.particle.gas import Gas
