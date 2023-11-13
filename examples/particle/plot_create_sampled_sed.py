@@ -45,7 +45,7 @@ print(sfzh)
 # --- create stars object
 
 N = 100  # number of particles for sampling
-stars = sample_sfhz(sfzh.sfzh, grid.log10age, np.log10(grid.metallicity), N)
+stars = sample_sfhz(sfzh.sfzh, sfzh.log10ages, sfzh.log10metallicities, N)
 
 # --- create galaxy object
 
