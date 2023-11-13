@@ -15,7 +15,7 @@ from synthesizer.filters import FilterCollection as Filters
 from synthesizer.parametric.morphology import Sersic2D
 from synthesizer.imaging.images import ParametricImage, ParticleImage
 from synthesizer.parametric.galaxy import Galaxy
-from synthesizer.parametric.sfzh import generate_instant_sfzh
+from synthesizer.parametric import generate_instant_sfzh
 
 # First set up some stuff so we can make demonstration images.
 

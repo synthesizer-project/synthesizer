@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from unyt import yr, Myr
 
 from synthesizer.grid import Grid
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, generate_sfzh
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
@@ -34,10 +34,10 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 # --- define the binned (parametric star formation history)
 
 Z_p = {"Z": 0.01}
-Zh = ZH.DeltaConstant(**Z_p)
+metal_dist = ZDist.DeltaConstant(**Z_p)
 sfh_p = {"duration": 100 * Myr}
-sfh = SFH.Constant(sfh_p)  # constant star formation
-sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, Zh)
+sfh = SFH.Constant(**sfh_p)  # constant star formation
+sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, metal_dist)
 
 
 # --------------------------------------------

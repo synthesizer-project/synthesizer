@@ -11,10 +11,10 @@ parameterisations
 import numpy as np
 from unyt import Myr
 
-from synthesizer.parametric.sfzh import (SFH,
-                                         ZH, 
-                                         generate_sfzh, 
-                                         generate_sfzh_from_array)
+from synthesizer.parametric import (SFH,
+                                         ZDist,
+                                         Stars,
+                                         Stars_from_array)
 
 # from synthesizer.plt import single, single_histxy, mlabel
 
@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     sfh = np.ones(len(log10ages))
     Z = 0.01
-    sfzh = generate_sfzh_from_array(log10ages, metallicities, sfh, Z)
+    sfzh = Stars_from_array(log10ages, metallicities, sfh, Z)
     print(sfzh)
     sfzh.plot()
 
@@ -42,26 +42,26 @@ if __name__ == "__main__":
     # histories
 
     Z_p = {"log10Z": -2.5}  # can also use linear metallicity e.g. {'Z': 0.01}
-    Zh = ZH.DeltaConstant(**Z_p)
-    print(Zh)  # print summary
+    metal_dist = ZDist.DeltaConstant(**Z_p)
+    print(metal_dist)  # print summary
 
     # make a constant SFH
 
     sfh_p = {"duration": 100 * Myr}
-    sfh = SFH.Constant(sfh_p)  # constant star formation
+    sfh = SFH.Constant(**sfh_p)  # constant star formation
     print(sfh)  # print summary
 
-    constant = generate_sfzh(log10ages, metallicities, sfh, Zh)
+    constant = generate_sfzh(log10ages, metallicities, sfh, metal_dist)
     print(constant)  # print summary of the star formation history
     constant.plot()
 
     # make an exponential SFH
 
     sfh_p = {"tau": 100 * Myr, "max_age": 200 * Myr}
-    sfh = SFH.TruncatedExponential(sfh_p)  # constant star formation
+    sfh = SFH.TruncatedExponential(**sfh_p)  # constant star formation
     print(sfh)  # print summary of the star formation history
 
-    exponential = generate_sfzh(log10ages, metallicities, sfh, Zh)
+    exponential = generate_sfzh(log10ages, metallicities, sfh, metal_dist)
     print(exponential)  # print summary of the star formation history
     exponential.plot()
 
