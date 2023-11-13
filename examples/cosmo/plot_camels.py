@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
-from synthesizer.load_data import load_CAMELS_IllustrisTNG
+from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 from synthesizer.filters import UVJ
 
 from synthesizer.particle.galaxy import Galaxy
