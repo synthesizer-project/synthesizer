@@ -42,7 +42,7 @@ print(sfzh)
 # --- create stars object
 
 N = 100  # number of particles for sampling
-stars = sample_sfhz(sfzh, N)
+stars = sample_sfhz(sfzh, grid.log10age, grid.log10metallicity, N)
 
 
 # --- open grid
