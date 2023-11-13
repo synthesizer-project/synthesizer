@@ -51,7 +51,7 @@ sfh = SFH.Constant(**sfh_p)  # constant star formation
 
 # Generate the star formation metallicity history
 mass = 10**10
-stars = ParametricStars(
+param_stars = ParametricStars(
     log10ages,
     metallicities,
     sf_hist_func=sfh,
@@ -85,9 +85,9 @@ for n in [10, 100]: # , 1000, 10000]:
         # we will also pass some keyword arguments for attributes
         # we will need for imaging
         stars = sample_sfhz(
-            stars.sfzh,
-            grid.log10age,
-            np.log10(grid.metallicity),
+            param_stars.sfzh,
+            param_stars.log10ages,
+            param_stars.log10metallicities,
             n,
             coordinates=coords,
             current_masses=np.full(n, 10**8.7 / n),
