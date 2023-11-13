@@ -293,7 +293,7 @@ class Stars(StarsComponent):
             min_metal = 0
             for imetal, metal in enumerate(self.metallicities[:-1]):
                 max_metal = np.mean(
-                    [self.metallicities[ia + 1], self.metallicities[ia]]
+                    [self.metallicities[imetal + 1], self.metallicities[imetal]]
                 )
                 sf = integrate.quad(
                     self.metal_dist_func.get_metallicity, min_metal, max_metal
