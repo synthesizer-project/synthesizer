@@ -37,15 +37,19 @@ Z_p = {"metallicity": 0.01}
 metal_dist = ZDist.DeltaConstant(**Z_p)
 sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation
-sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, metal_dist)
-
+sfzh = Stars(
+    grid.log10age,
+    grid.metallicity,
+    sf_hist_func=sfh,
+    metal_dist_func=metal_dist
+)
 
 # --------------------------------------------
 # CREATE PARAMETRIC SED
 
 parametric_galaxy = ParametricGalaxy(sfzh)
 parametric_galaxy.stars.get_spectra_incident(grid)
-sed = parametric_galaxy.spectra["incident"]
+sed = parametric_galaxy.stars.spectra["incident"]
 plt.plot(
     np.log10(sed.lam), np.log10(sed.lnu), label="parametric", lw=4, c="k", alpha=0.3
 )
@@ -69,7 +73,7 @@ for N in [1, 10, 100]: # , 1000]:
     # Calculate the stars SEDs
     particle_galaxy.stars.get_spectra_incident(grid)
 
-    sed = particle_galaxy.spectra["incident"]
+    sed = particle_galaxy.stars.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=f"particle (N={N})")
 
 

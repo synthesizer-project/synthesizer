@@ -8,9 +8,9 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator as RGI
 from scipy.interpolate import NearestNDInterpolator as NNI
 
-from synthesizer.parametric.stars import Stars as ParticleStars
+from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
-from synthesizer.particle.stars import Stars as ParametricStars
+from synthesizer.particle.stars import Stars as ParticleStars
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 
 

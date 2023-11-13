@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from unyt import yr, Myr
 
 from synthesizer.grid import Grid
-from synthesizer.parametric import SFH, ZDist, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, ParametricStars
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.particle.galaxy import Galaxy
@@ -28,7 +28,12 @@ metal_dist = ZDist.DeltaConstant(**Z_p)
 
 sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation
-sfzh = generate_sfzh(log10ages, metallicities, sfh, metal_dist)
+sfzh = ParametricStars(
+    log10ages,
+    metallicities,
+    sf_hist_func=sfh,
+    metal_dist_func=metal_dist
+)
 print(sfzh)
 # sfzh.plot()
 
@@ -70,7 +75,7 @@ galaxy.stars.get_spectra_incident(grid)
 # tau_vs = np.ones(N) * 0.5
 # galaxy.get_los(tau_vs)  # grid, tau_v_BC, tau_v_ISM
 
-for sed_type, sed in galaxy.spectra.items():
+for sed_type, sed in galaxy.stars.spectra.items():
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=sed_type)
 
 plt.legend()
