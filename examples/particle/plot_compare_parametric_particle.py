@@ -61,7 +61,7 @@ plt.plot(
 
 for N in [1, 10, 100]: # , 1000]:
     # --- create stars object
-    stars = sample_sfhz(sfzh, grid.log10age, grid.log10metallicites, N)
+    stars = sample_sfhz(sfzh, grid.log10age, grid.log10metallicity, N)
     # ensure that the total mass = 1 irrespective of N. This can be also acheived by setting the mass of the star particles in sample_sfhz but this will be easier most of the time.
     stars.renormalise_mass(1.0)
 
