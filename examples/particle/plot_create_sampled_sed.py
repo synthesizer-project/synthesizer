@@ -18,6 +18,11 @@ from synthesizer.particle.stars import Stars
 from synthesizer.particle.galaxy import Galaxy
 
 
+# Define the grid
+grid_name = "test_grid"
+grid_dir = "../../tests/test_grid/"
+grid = Grid(grid_name, grid_dir=grid_dir)
+
 # --- define the grid (normally this would be defined by an SPS grid)
 log10ages = np.arange(6.0, 10.5, 0.1)
 metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
@@ -43,18 +48,6 @@ print(sfzh)
 
 N = 100  # number of particles for sampling
 stars = sample_sfhz(sfzh, grid.log10age, grid.log10metallicity, N)
-
-
-# --- open grid
-
-# Get the location of this script, __file__ is the absolute path of this
-# script, however we just want to directory
-# script_path = os.path.abspath(os.path.dirname(__file__))
-
-# Define the grid
-grid_name = "test_grid"
-grid_dir = "../../tests/test_grid/"
-grid = Grid(grid_name, grid_dir=grid_dir)
 
 # --- create galaxy object
 
