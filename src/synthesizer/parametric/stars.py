@@ -278,7 +278,7 @@ class Stars(StarsComponent):
             min_age = 0
             for ia, age in enumerate(self.ages[:-1]):
                 max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
-                sf = integrate.quad(self.sf_hist_func.sfr, min_age, max_age)[0]
+                sf = integrate.quad(self.sf_hist_func.get_sfr, min_age, max_age)[0]
                 self.sf_hist[ia] = sf
                 min_age = max_age
 
@@ -575,7 +575,7 @@ class Stars(StarsComponent):
         # Add SFR to top of the plot
         if self.sf_hist_func:
             x = np.linspace(*self.log10ages_lims, 1000)
-            y = self.sf_hist_func.sfr(10**x)
+            y = self.sf_hist_func.get_sfr(10**x)
             haxx.plot(x, y / np.max(y))
 
         # Set plot limits
