@@ -43,28 +43,35 @@ def N09_tau(lam, slope, cent_lam, ampl, gamma):
     lam_v = 0.55
     k_lam = np.zeros_like(lam_micron)
 
-    ok1 = (lam_micron >= 0.12) * (lam_micron < 0.63)
-    ok2 = (lam_micron >= 0.63) * (lam_micron < 31.)
-    ok3 = (lam_micron < 0.12)
-    if np.sum(ok1) > 0:
+    # Masking for different regimes in the Calzetti curve
+    ok1 = (lam_micron >= 0.12) * (lam_micron < 0.63) # 0.12um<=lam<0.63um
+    ok2 = (lam_micron >= 0.63) * (lam_micron < 31.) # 0.63um<=lam<=31um
+    ok3 = (lam_micron < 0.12) # lam<0.12um
+    if np.sum(ok1) > 0: # equation 1
         k_lam[ok1] = -2.156 + (1.509 / lam_micron[ok1]) \
             - (0.198 / lam_micron[ok1]**2) \
             + (0.011 / lam_micron[ok1]**3)
         func = interpolate.interp1d(lam_micron[ok1], k_lam[ok1],
                                 fill_value="extrapolate")
-    if np.sum(ok2) > 0:
+    if np.sum(ok2) > 0: # equation 2
         k_lam[ok2] = -1.857 + (1.040 / lam_micron[ok2])
     if np.sum(ok3) > 0:
+        # Extrapolating the 0.12um<=lam<0.63um regime
         k_lam[ok3] = func(lam_micron[ok3])
     
+    # Using the Calzetti attenuation curve normalised 
+    # to Av=4.05
     k_lam = 4.05 + 2.659 * k_lam
     k_v = 4.05 + 2.659 * (-2.156 + (1.509 / lam_v)
         - (0.198 / lam_v**2)
         + (0.011 / lam_v**3))
 
+    # UV bump feature expression from Noll+2009
     D_lam = ampl * ((lam_micron * gamma) ** 2) \
         / ((lam_micron ** 2 - cent_lam ** 2) ** 2 + (lam_micron * gamma) ** 2)
     
+    # Normalising with the value at 0.55um, to obtain 
+    # normalised optical depth
     tau_x_v = (k_lam + D_lam)/k_v              
 
     return tau_x_v * (lam_micron/lam_v)**slope
