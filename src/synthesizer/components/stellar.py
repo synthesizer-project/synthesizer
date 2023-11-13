@@ -652,18 +652,6 @@ class StarsComponent:
             if alpha[1] is None:
                 alpha[1] = dust_curve.slope
 
-            # Get transmission curve for ISM
-            dust_curve.slope = alpha[0]
-            transmission_ISM = dust_curve.get_transmission(tau_v[0], grid.lam)
-
-            # Get transmission curve for birth cloud
-            dust_curve.slope = alpha[1]
-            transmission_BC = dust_curve.get_transmission(tau_v[1], grid.lam)
-
-            # Define yound and old transmissions
-            transmission_young = transmission_ISM * transmission_BC
-            transmission_old = transmission_ISM
-
             # Calculate attenuated spectra of young stars
             dust_curve.slope = alpha[1]  # use the BC slope
             young_attenuated = self.spectra["young_reprocessed"].apply_attenuation(
