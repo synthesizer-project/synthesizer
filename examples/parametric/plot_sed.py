@@ -37,7 +37,7 @@ if __name__ == "__main__":
     sfh = SFH.Constant(sfh_p)  # constant star formation
     print(sfh)  # print sfh summary
 
-    Zh = ZH.DeltaConstant(Z_p)  # constant metallicity
+    Zh = ZH.DeltaConstant(**Z_p)  # constant metallicity
 
     # get the 2D star formation and metal enrichment history for the given SPS 
     # grid.

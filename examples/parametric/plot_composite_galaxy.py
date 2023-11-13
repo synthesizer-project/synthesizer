@@ -54,7 +54,7 @@ if __name__ == "__main__":
     # Define the functional form of the star formation and metal enrichment
     # histories
     sfh = SFH.Constant(sfh_p)  # constant star formation
-    Zh = ZH.DeltaConstant(Z_p)  # constant metallicity
+    Zh = ZH.DeltaConstant(**Z_p)  # constant metallicity
 
     # Get the 2D star formation and metal enrichment history for the given
     # SPS grid. This is (age, Z).
