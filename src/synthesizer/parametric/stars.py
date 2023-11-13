@@ -256,7 +256,7 @@ class Stars(StarsComponent):
         # equivalent to instant_metallicity = metal_dist_func.metallicity
         if self.metal_dist_func is not None:
             if self.metal_dist_func.name == "DeltaConstant":
-                instant_metallicity = self.metal_dist_func.metallicity()
+                instant_metallicity = self.metal_dist_func.get_metallicity()
 
         # Handle the instantaneous ZH case
         if instant_metallicity is not None:
