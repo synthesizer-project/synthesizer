@@ -61,7 +61,7 @@ class Gas(Particles):
 
     # Define class level Quantity attributes
     smoothing_lengths = Quantity()
-    dust_masses = Qunatity()
+    dust_masses = Quantity()
 
     def __init__(
         self,
