@@ -44,11 +44,12 @@ if __name__ == "__main__":
         grid.metallicity,
         sf_hist_func=sfh,
         metal_dist_func=metal_dist,
-        initial_mass=10**9
+        initial_mass=10**9,
+        morphology=morph,
     )
 
     # Initialise a parametric Galaxy
-    galaxy = Galaxy(sfzh, morph=morph)
+    galaxy = Galaxy(sfzh)
 
     # Generate stellar spectra
     galaxy.stars.get_spectra_incident(grid)

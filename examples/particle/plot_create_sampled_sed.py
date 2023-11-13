@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from unyt import yr, Myr
 
 from synthesizer.grid import Grid
+from synthesizer.parametric import SFH, ZDist
+from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.parametric import SFH, ZDist, ParametricStars
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
