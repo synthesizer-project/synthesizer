@@ -15,7 +15,7 @@ from unyt import kpc, Myr
 
 from synthesizer.filters import UVJ
 from synthesizer.parametric.galaxy import Galaxy
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.morphology import Sersic2D
 from synthesizer.grid import Grid
 from synthesizer.imaging.images import ParametricImage
@@ -34,13 +34,18 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
-    # Define the SFZH
+    # Define the SFZDist
     Z_p = {"Z": 0.01}
-    Zh = ZH.DeltaConstant(**Z_p)
+    metal_dist = ZDist.DeltaConstant(**Z_p)
     sfh_p = {"duration": 100 * Myr}
-    sfh = SFH.Constant(sfh_p)  # constant star formation
-    sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, Zh, 
-                         stellar_mass=10**9)
+    sfh = SFH.Constant(**sfh_p)  # constant star formation
+    sfzh = Stars(
+        grid.log10age,
+        grid.metallicity,
+        sf_hist_func=sfh,
+        metal_dist_func=metal_dist,
+        initial_mass=10**9
+    )
 
     # Initialise a parametric Galaxy
     galaxy = Galaxy(sfzh, morph=morph)

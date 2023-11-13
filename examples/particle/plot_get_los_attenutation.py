@@ -15,7 +15,7 @@ import matplotlib.gridspec as gridspec
 from unyt import yr, Myr, kpc, arcsec, Mpc
 
 from synthesizer.grid import Grid
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, generate_sfzh
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.particle.gas import Gas
@@ -44,13 +44,13 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 log10ages = np.arange(6.0, 10.5, 0.1)
 metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
 Z_p = {"Z": 0.01}
-Zh = ZH.DeltaConstant(**Z_p)
+metal_dist = ZDist.DeltaConstant(**Z_p)
 sfh_p = {"duration": 100 * Myr}
-sfh = SFH.Constant(sfh_p)  # constant star formation
+sfh = SFH.Constant(**sfh_p)  # constant star formation
 
 # Generate the star formation metallicity history
 mass = 10**10
-sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=mass)
+sfzh = generate_sfzh(log10ages, metallicities, sfh, metal_dist, stellar_mass=mass)
 
 for n in [10, 100]: # , 1000, 10000]:
     xs = []

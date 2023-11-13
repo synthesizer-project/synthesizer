@@ -16,8 +16,8 @@ import numpy as np
 
 from synthesizer.grid import Grid
 from synthesizer.parametric.morphology import Sersic2D
-from synthesizer.parametric.sfzh import SFH, ZH
-from synthesizer.parametric.sfzh import generate_sfzh, generate_instant_sfzh
+from synthesizer.parametric import SFH, ZDist
+from synthesizer.parametric import Stars, generate_instant_sfzh
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.filters import UVJ
 
@@ -45,25 +45,25 @@ if __name__ == "__main__":
     # Define morphology
     morph = Sersic2D(r_eff_kpc=1.0 * kpc, n=1.0, ellip=0.5, theta=35.0)
 
-    # Define the parameters of the star formation and metal enrichment
-    # histories
-    sfh_p = {"duration": 10 * Myr}
-    Z_p = {"log10Z": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
-    stellar_mass = 10**8.5
-
     # Define the functional form of the star formation and metal enrichment
     # histories
-    sfh = SFH.Constant(sfh_p)  # constant star formation
-    Zh = ZH.DeltaConstant(**Z_p)  # constant metallicity
+    sfh = SFH.Constant(duration=10 * Myr)
+    metal_dist = ZDist.DeltaConstant(log10metallicity=-2.0)
 
     # Get the 2D star formation and metal enrichment history for the given
     # SPS grid. This is (age, Z).
-    sfzh = generate_sfzh(
-        grid.log10age, grid.metallicity, sfh, Zh, stellar_mass=stellar_mass
+    stellar_mass = 10 ** 8.5
+    sfzh = Stars(
+        grid.log10age,
+        grid.metallicity,
+        sf_hist_func=sfh,
+        metal_dist_func=metal_dist,
+        initial_mass=stellar_mass,
+        morphology=morph,
     )
 
     # Initialise Galaxy object
-    disk = Galaxy(morph=morph, sfzh=sfzh)
+    disk = Galaxy(sfzh=sfzh)
 
     # Generate stellar spectra
     disk.stars.get_spectra_incident(grid)
@@ -87,11 +87,16 @@ if __name__ == "__main__":
     # Define bulge morphology
     morph = Sersic2D(r_eff_kpc=1.0 * kpc, n=4.0)
 
-    # Define the parameters of the star formation and metal enrichment
-    # histories
-    stellar_mass = 2e10
-    sfzh = generate_instant_sfzh(
-        grid.log10age, grid.metallicity, 10.0, 0.01, stellar_mass=stellar_mass
+    # Get the 2D star formation and metal enrichment history for the given
+    # SPS grid. This is (age, Z).
+    stellar_mass = 10 ** 10
+    sfzh = Stars(
+        grid.log10age,
+        grid.metallicity,
+        sf_hist_func=sfh,
+        metal_dist_func=metal_dist,
+        initial_mass=stellar_mass,
+        morphology=morph,
     )
 
     # Get galaxy object

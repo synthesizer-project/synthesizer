@@ -13,7 +13,7 @@ including photometry. This example will:
 
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, generate_sfzh
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
 from synthesizer.igm import Madau96
@@ -47,13 +47,13 @@ if __name__ == "__main__":
 
     # define the functional form of the star formation and metal enrichment 
     # histories
-    sfh = SFH.Constant(sfh_p)  # constant star formation
-    Zh = ZH.DeltaConstant(**Z_p)  # constant metallicity
+    sfh = SFH.Constant(**sfh_p)  # constant star formation
+    metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
 
     # get the 2D star formation and metal enrichment history for the given SPS 
     # grid. This is (age, Z).
-    sfzh = generate_sfzh(
-        grid.log10age, grid.metallicity, sfh, Zh, stellar_mass=stellar_mass
+    sfzh = Stars(
+        grid.log10age, grid.metallicity, sfh, metal_dist, stellar_mass=stellar_mass
     )
 
     # create a galaxy object
