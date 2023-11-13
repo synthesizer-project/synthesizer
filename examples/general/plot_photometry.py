@@ -4,7 +4,7 @@ Photometry example
 
 An example demonstrating the observed spectrum for a parametric galaxy 
 including photometry. This example will:
-- build a parametric galaxy (see make_sfzh and make_sed).
+- build a parametric galaxy (see make_stars and make_sed).
 - calculate spectral luminosity density (see make_sed).
 - calculate observed frame spectra (requires comsology and redshift).
 - calculate observed frame fluxes at various redshifts.
@@ -18,7 +18,7 @@ import matplotlib.gridspec as gridspec
 
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
-from synthesizer.parametric import SFH, ZDist, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr, c, angstrom
@@ -48,12 +48,16 @@ if __name__ == "__main__":
 
     # get the 2D star formation and metal enrichment history for the given
     # SPS grid. This is (age, Z).
-    sfzh = Stars(
-        grid.log10age, grid.metallicity, sfh, metal_dist, stellar_mass=stellar_mass
+    stars = Stars(
+        grid.log10age,
+        grid.metallicity,
+        sf_hist_func=sfh,
+        metal_dist_func=metal_dist,
+        initial_mass=stellar_mass
     )
 
     # create a galaxy object
-    galaxy = Galaxy(sfzh)
+    galaxy = Galaxy(stars)
 
     # Define Filters
     filter_codes = [

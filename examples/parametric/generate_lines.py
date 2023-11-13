@@ -5,7 +5,7 @@ Generate lines from parametric galaxy
 Example for generating a emission lines for a parametric galaxy. This example 
 will:
 - show the available lines to a grid
-- build a parametric galaxy (see make_sfzh and make_sed)
+- build a parametric galaxy (see make_stars and make_sed)
 - calculate intrinsic line properties
 - calculate dust-attenuated line properties
 """
@@ -37,12 +37,12 @@ if __name__ == "__main__":
 
     # get the 2D star formation and metal enrichment history for the given SPS 
     # grid and print summary.
-    sfzh = Stars(grid.log10age, grid.metallicity, sf_hist_func=sfh,
+    stars = Stars(grid.log10age, grid.metallicity, sf_hist_func=sfh,
                  metal_dist_func=metal_dist)
-    print(sfzh)
+    print(stars)
 
     # create the Galaxy object and print a summary
-    galaxy = Galaxy(sfzh)
+    galaxy = Galaxy(stars)
     print(galaxy)
 
     # define list of lines that we're interested in. Note that we can provide
