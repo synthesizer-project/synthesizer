@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 from unyt import yr, Myr
 
 from synthesizer.grid import Grid
-from synthesizer.parametric import SFH, ZDist, generate_sfzh
+from synthesizer.parametric import SFH, ZDist
+from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
@@ -37,7 +38,7 @@ Z_p = {"metallicity": 0.01}
 metal_dist = ZDist.DeltaConstant(**Z_p)
 sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation
-sfzh = Stars(
+sfzh = ParametricStars(
     grid.log10age,
     grid.metallicity,
     sf_hist_func=sfh,
