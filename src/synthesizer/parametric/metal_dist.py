@@ -1,5 +1,18 @@
-""" A module for creating and manipulating metallicity histories.
+""" A module for creating and manipulating metallicity distributions.
 
+NOTE: This module is imported as ZDist in parametric.__init__ enabling the
+      syntax shown below.
+
+Example usage:
+
+    from synthesizer.parametric import ZDist
+
+    print(ZDist.parametrisations)
+
+    metal_dist = ZDist.DeltaConstant(...)
+    metal_dist = ZDist.Normal(...)
+
+    metal_dist.get_metallicity(metals)
 
 """
 import numpy as np
