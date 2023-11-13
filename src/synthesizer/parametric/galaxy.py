@@ -51,13 +51,10 @@ class Galaxy(BaseGalaxy):
         # add an extra dimension to the sfzh to allow the fast summation
         # **** TODO: Get rid of this expression or
         # use this throughout?
-        self.sfzh = np.expand_dims(self.stars.sfzh, axis=2)
+        self.sfzh = self.stars.sfzh
 
         # Define the dictionary to hold spectra
         self.spectra = {}
-
-        # Define the dictionary to hold lines
-        self.lines = {}
 
         # Define the dictionary to hold images
         self.images = {}
@@ -85,11 +82,13 @@ class Galaxy(BaseGalaxy):
         pstr += str(self.__class__) + "\n"
         pstr += (
             f"log10(stellar mass formed/Msol): \
-            {np.log10(np.sum(self.sfzh.sfzh))}"
+            {np.log10(np.sum(self.sfzh))}"
             + "\n"
         )
-        pstr += f"available SEDs: {list(self.spectra.keys())}" + "\n"
-        pstr += f"available lines: {list(self.lines.keys())}" + "\n"
+        pstr += "available SEDs: \n"
+        pstr += f"    Stellar:  {list(self.stars.spectra.keys())}" + "\n"
+        pstr += f"    Combined: {list(self.spectra.keys())}" + "\n"
+        pstr += f"available lines: {list(self.stars.lines.keys())}" + "\n"
         pstr += f"available images: {list(self.images.keys())}" + "\n"
         pstr += "-" * 10 + "\n"
         return pstr
@@ -111,38 +110,41 @@ class Galaxy(BaseGalaxy):
             and images.
         """
 
-        new_sfzh = self.sfzh + second_galaxy.sfzh
-        new_galaxy = Galaxy(new_sfzh)
+        # Sum the Stellar populations
+        new_stars = self.stars + second_galaxy.stars
+
+        # Create the new galaxy
+        new_galaxy = Galaxy(new_stars)
 
         # add together spectra
-        for spec_name, spectra in self.spectra.items():
-            if spec_name in second_galaxy.spectra.keys():
-                new_galaxy.spectra[spec_name] = (
-                    spectra + second_galaxy.spectra[spec_name]
+        for spec_name, spectra in self.stars.spectra.items():
+            if spec_name in second_galaxy.stars.spectra.keys():
+                new_galaxy.stars.spectra[spec_name] = (
+                    spectra + second_galaxy.stars.spectra[spec_name]
                 )
             else:
-                exceptions.InconsistentAddition(
+                raise exceptions.InconsistentAddition(
                     "Both galaxies must contain the same spectra to be \
                     added together"
                 )
 
         # add together lines
-        for line_type in self.lines.keys():
-            new_galaxy.lines[line_type] = {}
+        for line_type in self.stars.lines.keys():
+            new_galaxy.spectra.lines[line_type] = {}
 
-            if line_type not in second_galaxy.lines.keys():
-                exceptions.InconsistentAddition(
+            if line_type not in second_galaxy.stars.lines.keys():
+                raise exceptions.InconsistentAddition(
                     "Both galaxies must contain the same sets of line types \
                         (e.g. intrinsic / attenuated)"
                 )
             else:
-                for line_name, line in self.lines[line_type].items():
-                    if line_name in second_galaxy.spectra[line_type].keys():
-                        new_galaxy.lines[line_type][line_name] = (
-                            line + second_galaxy.lines[line_type][line_name]
+                for line_name, line in self.stars.lines[line_type].items():
+                    if line_name in second_galaxy.stars.lines[line_type].keys():
+                        new_galaxy.stars.lines[line_type][line_name] = (
+                            line + second_galaxy.stars.lines[line_type][line_name]
                         )
                     else:
-                        exceptions.InconsistentAddition(
+                        raise exceptions.InconsistentAddition(
                             "Both galaxies must contain the same emission \
                                 lines to be added together"
                         )
@@ -152,7 +154,7 @@ class Galaxy(BaseGalaxy):
             if img_name in second_galaxy.images.keys():
                 new_galaxy.images[img_name] = image + second_galaxy.images[img_name]
             else:
-                exceptions.InconsistentAddition(
+                raise exceptions.InconsistentAddition(
                     (
                         "Both galaxies must contain the same"
                         " images to be added together"
@@ -173,7 +175,7 @@ class Galaxy(BaseGalaxy):
             Log of the ionising photon luminosity over the grid dimensions
         """
 
-        return np.sum(10 ** grid.log10Q["HI"] * self.sfzh.sfzh, axis=(0, 1))
+        return np.sum(10 ** grid.log10Q["HI"] * self.sfzh, axis=(0, 1))
 
     def make_images(
         self,

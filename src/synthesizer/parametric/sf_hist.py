@@ -13,6 +13,14 @@ class SFH:
 
     """A collection of classes describing parametric star formation histories"""
 
+    # Define a list of the available parametrisations
+    parametrisations = (
+        "Constant",
+        "Exponential"
+        "TruncatedExponential",
+        "LogNormal",
+    )
+
     class Common:
         def sfr(self, age):
             if isinstance(age, np.ndarray) | isinstance(age, list):
@@ -54,8 +62,8 @@ class SFH:
             pstr += "-" * 10 + "\n"
             pstr += "SUMMARY OF PARAMETERISED STAR FORMATION HISTORY" + "\n"
             pstr += str(self.__class__) + "\n"
-            for parameter_name, parameter_value in self.parameters.items():
-                pstr += f"{parameter_name}: {parameter_value}" + "\n"
+            # for parameter_name, parameter_value in self.parameters.items():
+            #     pstr += f"{parameter_name}: {parameter_value}" + "\n"
             pstr += f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
             pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
             pstr += "-" * 10 + "\n"
