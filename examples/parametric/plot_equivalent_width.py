@@ -67,7 +67,7 @@ def get_ew(index, feature, blue, red, Z, smass, grid, EqW, mode):
     sfh = SFH.Constant(sfh_p)  # constant star formation
     print(sfh)  # print sfh summary
 
-    Zh = ZH.deltaConstant(Z_p)  # constant metallicity
+    Zh = ZH.DeltaConstant(Z_p)  # constant metallicity
 
     # --- get 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
     sfzh = generate_sfzh(
