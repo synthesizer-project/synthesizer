@@ -51,7 +51,7 @@ class Gas(Particles):
         "star_forming",
         "log10metallicities",
         "dust_to_metal_ratio",
-        "dust_masses",
+        "_dust_masses",
         "_coordinates",
         "_velocities",
         "_smoothing_lengths",
@@ -61,6 +61,7 @@ class Gas(Particles):
 
     # Define class level Quantity attributes
     smoothing_lengths = Quantity()
+    dust_masses = Qunatity()
 
     def __init__(
         self,
