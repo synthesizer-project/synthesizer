@@ -9,6 +9,11 @@ class ZH:
 
     """A collection of classes describing the metallicity history (and distribution)"""
 
+    # Define a list of the available parametrisations
+    parametrisations = (
+        "deltaConstant",
+    )
+
     class Common:
         def __str__(self):
             """print basic summary of the parameterised star formation history"""
@@ -17,8 +22,8 @@ class ZH:
             pstr += "-" * 10 + "\n"
             pstr += "SUMMARY OF PARAMETERISED METAL ENRICHMENT HISTORY" + "\n"
             pstr += str(self.__class__) + "\n"
-            for parameter_name, parameter_value in self.parameters.items():
-                pstr += f"{parameter_name}: {parameter_value}" + "\n"
+            # for parameter_name, parameter_value in self.parameters.items():
+            #     pstr += f"{parameter_name}: {parameter_value}" + "\n"
             pstr += "-" * 10 + "\n"
             return pstr
 

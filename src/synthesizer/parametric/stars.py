@@ -315,7 +315,7 @@ class Stars(StarsComponent):
         self.sfzh /= np.sum(self.sfzh)
 
         # ... and multiply it by the initial mass of stars
-        self.sfzh *= self.initial_mass
+        self.sfzh *= self._initial_mass
 
     def generate_lnu(self, grid, spectra_name, old=False, young=False):
         """
@@ -363,6 +363,9 @@ class Stars(StarsComponent):
                 dtype=bool,
             )
 
+        # Add an extra dimension to enable later summation
+        sfzh = np.expand_dims(self.sfzh, axis=2)
+
         # Account for the SFZH mask in the non-zero indices
         non_zero_inds = (
             non_zero_inds[0][sfzh_mask], non_zero_inds[1][sfzh_mask]
@@ -371,7 +374,7 @@ class Stars(StarsComponent):
         # Compute the spectra
         spectra = np.sum(
             grid.spectra[spectra_name][non_zero_inds[0], non_zero_inds[1], :]
-            * self.sfzh[non_zero_inds[0], non_zero_inds[1], :],
+            * sfzh[non_zero_inds[0], non_zero_inds[1], :],
             axis=0,
         )
 
@@ -415,7 +418,9 @@ class Stars(StarsComponent):
             )
 
             # Continuum at line wavelength, erg/s/Hz
-            continuum = np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
+            continuum = np.sum(
+                grid_line["continuum"] * self.sfzh, axis=(0, 1)
+            )
 
             # NOTE: this is currently incorrect and should be made of the
             # separated nebular and stellar continuum emission
@@ -446,12 +451,16 @@ class Stars(StarsComponent):
                 # Line luminosity erg/s
                 luminosity.append(
                     (1 - fesc)
-                    * np.sum(grid_line["luminosity"] * self.sfzh, axis=(0, 1))
+                    * np.sum(
+                        grid_line["luminosity"] * self.sfzh, axis=(0, 1)
+                    )
                 )
 
                 # Continuum at line wavelength, erg/s/Hz
                 continuum.append(
-                    np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
+                    np.sum(
+                        grid_line["continuum"] * self.sfzh, axis=(0, 1)
+                    )
                 )
 
         else:
@@ -517,7 +526,7 @@ class Stars(StarsComponent):
         else:
             raise exceptions.InconsistentAddition("SFZH must be the same shape")
 
-        return Stars(self.log10ages, self.metallicities, new_sfzh)
+        return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
 
     def plot_sfzh(self, show=True):
         """
