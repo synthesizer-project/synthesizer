@@ -92,7 +92,7 @@ class Common:
         if isinstance(age, (np.ndarray, list)):
             return np.array([self._sfr(a) for a in age])
 
-        return self.sfr(age)
+        return self._sfr(age)
 
     def calculate_sfh(self, t_range=(0, 10 ** 10), dt=10 ** 6):
         """
