@@ -33,7 +33,7 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 
 # --- define the binned (parametric star formation history)
 
-Z_p = {"Z": 0.01}
+Z_p = {"metallicity": 0.01}
 metal_dist = ZDist.DeltaConstant(**Z_p)
 sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation

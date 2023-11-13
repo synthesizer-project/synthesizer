@@ -60,7 +60,7 @@ def get_ew(index, feature, blue, red, Z, smass, grid, EqW, mode):
     
     sfh_p = {"duration": 100 * Myr}
 
-    Z_p = {"Z": Z}  # can also use linear metallicity e.g. {'Z': 0.01}
+    Z_p = {"metallicity": Z}  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = smass
 
     # --- define the functional form of the star formation and metal
@@ -133,7 +133,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         if i == 0 or i == 3 or i == 6:
             plt.ylabel("EW (\u212B)", fontsize=8)
         if i > 5:
-            plt.xlabel("Z", fontsize=8)
+            plt.xlabel("metallicity", fontsize=8)
 
         if index == 1501 or index == 1719:
             label = "UV_" + str(index)
