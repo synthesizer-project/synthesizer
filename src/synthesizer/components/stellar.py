@@ -378,7 +378,7 @@ class StarsComponent:
     def get_spectra_screen(
         self,
         grid,
-        tau_v=None,
+        tau_v,
         dust_curve=PowerLaw(slope=-1.0),
         young=False,
         old=False,
@@ -428,14 +428,10 @@ class StarsComponent:
             label=label,
         )
 
-        # Get the dust transmission curve
-        if tau_v is not None:
-            transmission = dust_curve.get_transmission(tau_v, grid.lam)
-        else:
-            transmission = 1.0
-
-        # Create the Sed object
-        emergent = Sed(grid.lam, transmission * self.spectra["intrinsic"]._lnu)
+        # Apply the dust screen
+        emergent = self.spectra["intrinsic"].apply_attenuation(
+            tau_v, dust_curve=dust_curve
+        )
 
         # Store the Sed object
         self.spectra["emergent"] = emergent
@@ -546,10 +542,6 @@ class StarsComponent:
                     "a single dust screen situation."
                 )
 
-        # Initialise output spectra
-        self.spectra["attenuated"] = Sed(grid.lam)
-        self.spectra["emergent"] = Sed(grid.lam)
-
         # Generate intrinsic spectra for young and old particles
         # separately before summing them if we have been given
         # a threshold
@@ -573,11 +565,6 @@ class StarsComponent:
             #   - nebular
             #   - reprocessed = transmitted + nebular
             #   - intrinsic = transmitted + reprocessed
-
-            self.spectra["young_attenuated"] = Sed(grid.lam)
-            self.spectra["old_attenuated"] = Sed(grid.lam)
-            self.spectra["young_emergent"] = Sed(grid.lam)
-            self.spectra["old_emergent"] = Sed(grid.lam)
 
             # Generate the young gas reprocessed spectra
             # add a label so saves e.g. 'escaped_young' etc.
@@ -638,13 +625,11 @@ class StarsComponent:
             # Single screen dust, no separate birth cloud attenuation
             dust_curve.slope = alpha
 
-            # Calculate dust attenuation
-            transmission = dust_curve.get_transmission(tau_v, grid.lam)
-
             # Calculate the attenuated emission
-            self.spectra["attenuated"]._lnu = (
-                transmission * self.spectra["reprocessed"]._lnu
+            attenuated = self.spectra["reprocessed"].apply_attenuation(
+                tau_v, dust_curve=dust_curve
             )
+            self.spectra["attenuated"] = attenuated
 
         elif np.isscalar(tau_v) is False:
             # Apply separate attenuation to both the young and old components.
@@ -679,24 +664,36 @@ class StarsComponent:
             transmission_young = transmission_ISM * transmission_BC
             transmission_old = transmission_ISM
 
-            # Calculate attenuated spectra
-            self.spectra["young_attenuated"]._lnu = (
-                transmission_young * self.spectra["young_reprocessed"]._lnu
+            # Calculate attenuated spectra of young stars
+            dust_curve.slope = alpha[1]  # use the BC slope
+            young_attenuated = self.spectra["young_reprocessed"].apply_attenuation(
+                tau_v[1], dust_curve=dust_curve
             )
-            self.spectra["old_attenuated"]._lnu = (
-                transmission_old * self.spectra["old_reprocessed"]._lnu
+            dust_curve.slope = alpha[0]  # use the ISM slope
+            young_attenuated = young_attenuated.apply_attenuation(
+                tau_v[0], dust_curve=dust_curve
             )
-            self.spectra["attenuated"]._lnu = (
-                self.spectra["young_attenuated"]._lnu
-                + self.spectra["old_attenuated"]._lnu
+            self.spectra["young_attenuated"] = young_attenuated
+
+            # Calculate attenuated spectra of old stars
+            old_attenuated = self.spectra["old_reprocessed"].apply_attenuation(
+                tau_v[0], dust_curve=dust_curve
             )
+            self.spectra["old_attenuated"] = old_attenuated
+
+            # Get the combined attenuated spectra
+            self.spectra["attenuated"] = young_attenuated + old_attenuated
 
             # Set emergent spectra based on fesc (for young and old particles)
-            if not fesc > 0:
+            self.spectra["young_emergent"] = Sed(grid.lam)
+            self.spectra["old_emergent"] = Sed(grid.lam)
+            if fesc <= 0:
                 self.spectra["young_emergent"]._lnu = self.spectra[
                     "young_attenuated"
                 ]._lnu
-                self.spectra["old_emergent"]._lnu = self.spectra["old_attenuated"]._lnu
+                self.spectra["old_emergent"]._lnu = self.spectra[
+                    "old_attenuated"
+                ]._lnu
             else:
                 self.spectra["young_emergent"]._lnu = (
                     self.spectra["young_escaped"]._lnu
@@ -708,7 +705,8 @@ class StarsComponent:
                 )
 
         # Set emergent spectra based on fesc (for all particles)
-        if not fesc > 0:
+        self.spectra["emergent"] = Sed(grid.lam)
+        if fesc <= 0:
             self.spectra["emergent"]._lnu = self.spectra["attenuated"]._lnu
         else:
             self.spectra["emergent"]._lnu = (
