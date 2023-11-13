@@ -85,7 +85,7 @@ for n in [10, 100]: # , 1000, 10000]:
         # we will also pass some keyword arguments for attributes
         # we will need for imaging
         stars = sample_sfhz(
-            stars,
+            stars.sfzh,
             grid.log10age,
             np.log10(grid.metallicity),
             n,
