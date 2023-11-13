@@ -42,7 +42,7 @@ if __name__ == "__main__":
     # histories
 
     Z_p = {"log10Z": -2.5}  # can also use linear metallicity e.g. {'Z': 0.01}
-    Zh = ZH.DeltaConstant(Z_p)
+    Zh = ZH.DeltaConstant(**Z_p)
     print(Zh)  # print summary
 
     # make a constant SFH

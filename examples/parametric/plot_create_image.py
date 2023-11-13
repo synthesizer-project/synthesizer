@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
     # Define the SFZH
     Z_p = {"Z": 0.01}
-    Zh = ZH.DeltaConstant(Z_p)
+    Zh = ZH.DeltaConstant(**Z_p)
     sfh_p = {"duration": 100 * Myr}
     sfh = SFH.Constant(sfh_p)  # constant star formation
     sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, Zh, 
