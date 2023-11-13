@@ -5,16 +5,14 @@ Create sampled SED
 this example generates a sample of star particles from a 2D SFZH. In this case it is generated from a parametric star formation history with constant star formation.
 """
 
-import os
 import numpy as np
 import matplotlib.pyplot as plt
-from unyt import yr, Myr
+from unyt import Myr
 
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfhz
-from synthesizer.particle.stars import Stars
 from synthesizer.particle.galaxy import Galaxy
 
 
@@ -47,7 +45,7 @@ print(sfzh)
 # --- create stars object
 
 N = 100  # number of particles for sampling
-stars = sample_sfhz(sfzh, grid.log10age, grid.log10metallicity, N)
+stars = sample_sfhz(sfzh, grid.log10age, np.log10(grid.metallicity), N)
 
 # --- create galaxy object
 
