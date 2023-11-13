@@ -6,7 +6,7 @@ Load SC-SAM example data into a list of galaxy objects.
 """
 
 import numpy as np
-from synthesizer.load_sam_data import load_SCSAM
+from synthesizer.load_data.load_scsam import load_SCSAM
 from synthesizer.grid import Grid
 import matplotlib.pyplot as plt
 
