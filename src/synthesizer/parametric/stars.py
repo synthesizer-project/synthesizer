@@ -59,16 +59,16 @@ class Stars(StarsComponent):
             arguments are ignored.
         sf_hist (array-like, float)
             An array describing the star formation history.
-        metal_hist (array-like, float)
+        metal_dist (array-like, float)
             An array describing the metallity distribution.
         sf_hist_func (SFH.*)
             An instance of one of the child classes of SFH. This will be
             used to calculate sf_hist and takes precendence over a passed
             sf_hist if both are present.
-        metal_hist_func (ZH.*)
+        metal_dist_func (ZH.*)
             An instance of one of the child classes of ZH. This will be
-            used to calculate metal_hist and takes precendence over a
-            passed metal_hist if both are present.
+            used to calculate metal_dist and takes precendence over a
+            passed metal_dist if both are present.
         instant_sf (float)
             An age at which to compute an instantaneous SFH, i.e. all
             stellar mass populating a single SFH bin.
@@ -99,9 +99,9 @@ class Stars(StarsComponent):
             morphology=None,
             sfzh=None,
             sf_hist=None,
-            metal_hist=None,
+            metal_dist=None,
             sf_hist_func=None,
-            metal_hist_func=None,
+            metal_dist_func=None,
             instant_sf=None,
             instant_metallicity=None,
     ):
@@ -134,16 +134,16 @@ class Stars(StarsComponent):
                 arguments are ignored.
             sf_hist (array-like, float)
                 An array describing the star formation history.
-            metal_hist (array-like, float)
+            metal_dist (array-like, float)
                 An array describing the metallity distribution.
             sf_hist_func (SFH.*)
                 An instance of one of the child classes of SFH. This will be
                 used to calculate sf_hist and takes precendence over a passed
                 sf_hist if both are present.
-            metal_hist_func (ZH.*)
+            metal_dist_func (ZH.*)
                 An instance of one of the child classes of ZH. This will be
-                used to calculate metal_hist and takes precendence over a
-                passed metal_hist if both are present.
+                used to calculate metal_dist and takes precendence over a
+                passed metal_dist if both are present.
             instant_sf (float)
                 An age at which to compute an instantaneous SFH, i.e. all
                 stellar mass populating a single SFH bin.
@@ -171,13 +171,13 @@ class Stars(StarsComponent):
         self.sf_hist_func = sf_hist_func
 
         # Store the function used to make the metallicity history if given
-        self.metal_hist_func = metal_hist_func
+        self.metal_dist_func = metal_dist_func
 
         # Store the SFH array (if None recalculated below)
         self.sf_hist = sf_hist
 
         # Store the ZH array (if None recalculated below)
-        self.metal_hist = metal_hist
+        self.metal_dist = metal_dist
 
         # Store the total initial stellar mass
         self.initial_mass = initial_mass
@@ -193,7 +193,7 @@ class Stars(StarsComponent):
             self.sf_hist = np.sum(self.sfzh, axis=1)
 
             # Project the SFZH to get the 1D ZH
-            self.metal_hist = np.sum(self.sfzh, axis=0)
+            self.metal_dist = np.sum(self.sfzh, axis=0)
 
         else:
 
@@ -226,7 +226,7 @@ class Stars(StarsComponent):
         """
         Computes the SFZH for all possible combinations of input.
 
-        If functions are passed for sf_hist_func and metal_hist_func then
+        If functions are passed for sf_hist_func and metal_dist_func then
         the SFH and ZH arrays are computed first.
 
         Args:
@@ -253,20 +253,20 @@ class Stars(StarsComponent):
             self.sf_hist[ia] = self.initial_mass
 
         # A delta function for metallicity is a special case
-        # equivalent to instant_metallicity = metal_hist_func.metallicity
-        if self.metal_hist_func is not None:
-            if self.metal_hist_func.dist == "delta":
-                instant_metallicity = self.metal_hist_func.metallicity()
+        # equivalent to instant_metallicity = metal_dist_func.metallicity
+        if self.metal_dist_func is not None:
+            if self.metal_dist_func.name == "DeltaConstant":
+                instant_metallicity = self.metal_dist_func.metallicity()
 
         # Handle the instantaneous ZH case
         if instant_metallicity is not None:
 
             # Create SFH array
-            self.metal_hist = np.zeros(self.metallicities.size)
+            self.metal_dist = np.zeros(self.metallicities.size)
 
             # Get the bin
             imetal = (np.abs(self.metallicities - instant_metallicity)).argmin()
-            self.metal_hist[imetal] = self.initial_mass
+            self.metal_dist[imetal] = self.initial_mass
 
         # Calculate SFH from function if necessary
         if self.sf_hist_func is not None and self.sf_hist is None:
@@ -283,25 +283,26 @@ class Stars(StarsComponent):
                 min_age = max_age
 
         # Calculate SFH from function if necessary
-        if self.metal_hist_func is not None and self.metal_hist is None:
+        if self.metal_dist_func is not None and self.metal_dist is None:
 
             # Set up SFH array
-            self.metal_hist = np.zeros(self.metallicities.size)
+            self.metal_dist = np.zeros(self.metallicities.size)
 
-            # Loop over age bins calculating the amount of mass in each bin
+            # Loop over metallicity bins calculating the amount of mass in
+            # each bin
             min_metal = 0
-            for imetal, metal in enumerate(self.metallcities[:-1]):
+            for imetal, metal in enumerate(self.metallicities[:-1]):
                 max_metal = np.mean(
                     [self.metallicities[ia + 1], self.metallicities[ia]]
                 )
                 sf = integrate.quad(
-                    self.metal_hist_func.metallicity, min_metal, max_metal
+                    self.metal_dist_func.get_metallicity, min_metal, max_metal
                 )[0]
-                self.metal_hist[imetal] = sf
+                self.metal_dist[imetal] = sf
                 min_metal = max_metal
 
         # Ensure that by this point we have an array for SFH and ZH
-        if self.sf_hist is None or self.metal_hist is None:
+        if self.sf_hist is None or self.metal_dist is None:
             raise exceptions.InconsistentArguments(
                 "A method for defining both the SFH and ZH must be provided!\n"
                 "For each either an instantaneous"
@@ -309,7 +310,7 @@ class Stars(StarsComponent):
             )
 
         # Finally, calculate the SFZH grid based on the above calculations
-        self.sfzh = self.sf_hist[:, np.newaxis] * self.metal_hist
+        self.sfzh = self.sf_hist[:, np.newaxis] * self.metal_dist
 
         # Normalise the SFZH grid
         self.sfzh /= np.sum(self.sfzh)
@@ -487,7 +488,7 @@ class Stars(StarsComponent):
         """
         Calculate the mean metallicity of the stellar population.
         """
-        return weighted_mean(self.metallicities, self.metal_hist)
+        return weighted_mean(self.metallicities, self.metal_dist)
 
     def __str__(self):
         """
@@ -557,7 +558,7 @@ class Stars(StarsComponent):
         # Add binned Z to right of the plot
         haxy.fill_betweenx(
             self.log10metallicities,
-            self.metal_hist / np.max(self.metal_hist),
+            self.metal_dist / np.max(self.metal_dist),
             step="mid",
             color="k",
             alpha=0.3,
