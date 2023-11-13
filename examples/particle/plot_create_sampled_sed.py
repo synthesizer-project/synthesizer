@@ -23,7 +23,7 @@ metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
 
 # --- define the parameters of the star formation and metal enrichment histories
 
-Z_p = {"Z": 0.01}
+Z_p = {"metallicity": 0.01}
 metal_dist = ZDist.DeltaConstant(**Z_p)
 
 sfh_p = {"duration": 100 * Myr}
