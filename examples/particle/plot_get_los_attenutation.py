@@ -87,7 +87,7 @@ for n in [10, 100]: # , 1000, 10000]:
         stars = sample_sfhz(
             stars,
             grid.log10age,
-            grid.log10metallicity,
+            np.log10(grid.metallicity),
             n,
             coordinates=coords,
             current_masses=np.full(n, 10**8.7 / n),
