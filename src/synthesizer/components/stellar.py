@@ -6,6 +6,7 @@ and methods common between them.
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from unyt import Myr, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
@@ -125,6 +126,9 @@ class StarsComponent:
                 The line contribution spectra.
         """
 
+        # Make sure young and old in Myr, if provided
+        young, old = self.check_young_old_units(young, old)
+
         # Generate contribution of line emission alone and reduce the
         # contribution of Lyman-alpha
         linecont = self.generate_lnu(
@@ -162,6 +166,9 @@ class StarsComponent:
             Sed
                 An Sed object containing the stellar spectra.
         """
+
+        # Make sure young and old in Myr, if provided
+        young, old = self.check_young_old_units(young, old)
 
         # Get the incident spectra
         lnu = self.generate_lnu(grid, "incident", young=young, old=old)
@@ -208,6 +215,9 @@ class StarsComponent:
                 An Sed object containing the transmitted spectra.
         """
 
+        # Make sure young and old in Myr, if provided
+        young, old = self.check_young_old_units(young, old)
+
         # Get the transmitted spectra
         lnu = (1.0 - fesc) * self.generate_lnu(
             grid, "transmitted", young=young, old=old
@@ -253,6 +263,9 @@ class StarsComponent:
             Sed
                 An Sed object containing the nebular spectra.
         """
+
+        # Make sure young and old in Myr, if provided
+        young, old = self.check_young_old_units(young, old)
 
         # Get the nebular emission spectra
         lnu = self.generate_lnu(grid, "nebular", young=young, old=old)
@@ -317,6 +330,9 @@ class StarsComponent:
             Sed
                 An Sed object containing the intrinsic spectra.
         """
+
+        # Make sure young and old in Myr, if provided
+        young, old = self.check_young_old_units(young, old)
 
         # The incident emission
         incident = self.get_spectra_incident(
@@ -410,6 +426,9 @@ class StarsComponent:
             Sed
                 An Sed object containing the dust attenuated spectra.
         """
+
+        # Make sure young and old in Myr, if provided
+        young, old = self.check_young_old_units(young, old)
 
         # Generate intrinsic spectra using full star formation and metal
         # enrichment history or all particles
@@ -936,6 +955,34 @@ class StarsComponent:
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve,
         )
+
+    def check_young_old_units(self, young, old):
+        """
+        Checks whether the `young` and `old` arguments to many
+        spectra generation methods are in the right units (Myr)
+
+        Args:
+            young (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for young star particles.
+            old (bool, float):
+                If not False, specifies age in Myr at which to filter
+                for old star particles.
+        """
+
+        if young:
+            if isinstance(young, (unyt_quantity)):
+                young = young.to("Myr")
+            else:
+                young *= Myr
+
+        if old:
+            if isinstance(old, (unyt_quantity)):
+                old = old.to("Myr")
+            else:
+                old *= Myr
+
+        return young, old
 
     def plot_spectra(
             self,
