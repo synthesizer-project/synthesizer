@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from scipy import interpolate
-from unyt import um
+from unyt import Angstrom, unyt_quantity, unyt_array
 
 from dust_extinction.grain_models import WD01
 
@@ -19,7 +19,8 @@ def N09_tau(lam, slope, cent_lam, ampl, gamma):
 
     Args:
         lam (array-like, float)
-            The input wavelength array.
+            The input wavelength array (expected in AA units, 
+            global unit).
 
         slope (float)
             The slope of the attenuation curve.
@@ -39,7 +40,10 @@ def N09_tau(lam, slope, cent_lam, ampl, gamma):
     """
 
     # Wavelength in microns
-    lam_micron = lam.to(um).value
+    if isinstance(lam, (unyt_quantity, unyt_array)):
+        lam_micron = lam.to('um').v
+    else:
+        lam_micron = lam/1e4
     lam_v = 0.55
     k_lam = np.zeros_like(lam_micron)
 
@@ -226,7 +230,7 @@ class MW_N18(AttenuationLaw):
         Args:
             lam (float/array, float)
                 An array of wavelengths or a single wavlength at which to
-                calculate optical depths.
+                calculate optical depths (in AA, global unit).
             interp (str)
                 The type of interpolation to use. Can be ‘linear’, ‘nearest’,
                 ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’,
@@ -246,7 +250,12 @@ class MW_N18(AttenuationLaw):
             fill_value="extrapolate",
         )
 
-        return func(lam.to("Angstrom").v) / self.tau_lam_v
+        if isinstance(lam, (unyt_quantity, unyt_array)):
+            _lam = lam.to('Angstrom').v
+        else:
+            _lam = lam
+
+        return func(lam) / self.tau_lam_v
 
 
 class Calzetti2000(AttenuationLaw):
@@ -307,7 +316,7 @@ class Calzetti2000(AttenuationLaw):
         Args:
             lam (float/array-like, float)
                 An array of wavelengths or a single wavlength at which to
-                calculate optical depths.
+                calculate optical depths (in AA, global unit).
 
         Returns:
             float/array-like, float
@@ -370,13 +379,17 @@ class GrainsWD01:
         Args:
             lam (float/array-like, float)
                 An array of wavelengths or a single wavlength at which to
-                calculate optical depths. Must have unyts attached.
+                calculate optical depths (in AA, global unit).
 
         Returns:
             float/array-like, float
                 The optical depth.
         """
-        return self.emodel(lam.to_astropy())
+        if isinstance(lam, (unyt_quantity, unyt_array)):
+            _lam = lam.to('Angstrom').v
+        else:
+            _lam = lam
+        return self.emodel((_lam*Angstrom).to_astropy())
 
     def get_transmission(self, tau_v, lam):
         """
@@ -397,4 +410,8 @@ class GrainsWD01:
                 for singular tau_v values or (tau_v.size, lam.size) tau_v
                 is an array.
         """
-        return self.emodel.extinguish(x=lam.to_astropy(), Av=1.086 * tau_v)
+        if isinstance(lam, (unyt_quantity, unyt_array)):
+            _lam = lam.to('Angstrom').v
+        else:
+            _lam = lam
+        return self.emodel.extinguish(x=(_lam*Angstrom).to_astropy(), Av=1.086 * tau_v)
