@@ -62,6 +62,8 @@ class Sed:
     fnu = Quantity()
     obsnu = Quantity()
     obslam = Quantity()
+    luminosity = Quantity()
+    llam = Quantity()
 
     def __init__(self, lam, lnu=None, description=None):
         """
@@ -254,6 +256,29 @@ class Sed:
         pstr += "-" * 10
 
         return pstr
+
+
+    @property
+    def luminosity(self):
+        """
+        Get the spectra in terms of luminosity.
+
+        Returns
+            luminosity (unyt_array)
+                The luminosity array.
+        """
+        return self.lnu * self.nu
+
+    @property
+    def llam(self):
+        """
+        Get the spectral luminosity density per Angstrom.
+
+        Returns
+            luminosity (unyt_array)
+                The pectral luminosity density per Angstrom array.
+        """
+        return self.nu * self.lnu / self.lam
 
     @property
     def _spec_dims(self):
