@@ -3,6 +3,7 @@ from scipy import integrate
 from unyt import h, c, kb, um, erg, s, Hz
 from unyt import accepts
 from unyt.dimensions import temperature as temperature_dim
+from unyt import Angstrom, unyt_quantity, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.utils import planck
@@ -52,16 +53,20 @@ class EmissionBase:
             limit=100
         )[0]
 
-    def lnu(self, lam):
+    def lnu(self, _lam):
         """
         Returns the normalised lnu for the provided wavelength grid
 
         Parameters
         ----------
-        lam: unyt_array
-            Wavelength grid
+        _lam: (float/array-like, float)
+                An array of wavelengths (expected in AA, global unit)
 
         """
+        if isinstance(_lam, (unyt_quantity, unyt_array)):
+            lam = _lam
+        else:
+            lam = _lam * Angstrom
 
         return (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
 
