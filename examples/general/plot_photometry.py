@@ -4,7 +4,7 @@ Photometry example
 
 An example demonstrating the observed spectrum for a parametric galaxy 
 including photometry. This example will:
-- build a parametric galaxy (see make_sfzh and make_sed).
+- build a parametric galaxy (see make_stars and make_sed).
 - calculate spectral luminosity density (see make_sed).
 - calculate observed frame spectra (requires comsology and redshift).
 - calculate observed frame fluxes at various redshifts.
@@ -18,7 +18,7 @@ import matplotlib.gridspec as gridspec
 
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr, c, angstrom
@@ -38,22 +38,26 @@ if __name__ == "__main__":
 
     # define the parameters of the star formation and metal enrichment histories
     sfh_p = {"duration": 10 * Myr}
-    Z_p = {"log10Z": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    Z_p = {"log10metallicity": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = 1e9
 
     # define the functional form of the star formation and metal
     # enrichment histories
-    sfh = SFH.Constant(sfh_p)  # constant star formation
-    Zh = ZH.deltaConstant(Z_p)  # constant metallicity
+    sfh = SFH.Constant(**sfh_p)  # constant star formation
+    metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
 
     # get the 2D star formation and metal enrichment history for the given
     # SPS grid. This is (age, Z).
-    sfzh = generate_sfzh(
-        grid.log10age, grid.metallicity, sfh, Zh, stellar_mass=stellar_mass
+    stars = Stars(
+        grid.log10age,
+        grid.metallicity,
+        sf_hist_func=sfh,
+        metal_dist_func=metal_dist,
+        initial_mass=stellar_mass
     )
 
     # create a galaxy object
-    galaxy = Galaxy(sfzh)
+    galaxy = Galaxy(stars)
 
     # Define Filters
     filter_codes = [
@@ -74,7 +78,7 @@ if __name__ == "__main__":
     seds = {}
     for z in zs:
         # Generate spectra using pacman model (complex)
-        seds[z] = galaxy.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1)
+        seds[z] = galaxy.stars.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1)
 
         # Generate observed frame spectra
         seds[z].get_fnu(cosmo, z, igm=Madau96)

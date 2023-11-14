@@ -10,7 +10,7 @@ Example for generating the equivalent width for a set of UV indices from a param
 import matplotlib.pyplot as plt
 
 from synthesizer.grid import Grid
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy as Galaxy
 from synthesizer.sed import Sed
 from unyt import yr, Myr
@@ -60,18 +60,24 @@ def get_ew(index, feature, blue, red, Z, smass, grid, EqW, mode):
     
     sfh_p = {"duration": 100 * Myr}
 
-    Z_p = {"Z": Z}  # can also use linear metallicity e.g. {'Z': 0.01}
+    Z_p = {"metallicity": Z}  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = smass
 
-    # --- define the functional form of the star formation and metal enrichment histories
-    sfh = SFH.Constant(sfh_p)  # constant star formation
+    # --- define the functional form of the star formation and metal
+    # enrichment histories
+    sfh = SFH.Constant(**sfh_p)  # constant star formation
     print(sfh)  # print sfh summary
 
-    Zh = ZH.deltaConstant(Z_p)  # constant metallicity
+    metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
 
-    # --- get 2D star formation and metal enrichment history for the given SPS grid. This is (age, Z).
-    sfzh = generate_sfzh(
-        grid.log10age, grid.metallicity, sfh, Zh, stellar_mass=stellar_mass
+    # --- get 2D star formation and metal enrichment history for the
+    # given SPS grid. This is (age, Z).
+    sfzh = Stars(
+        grid.log10age,
+        grid.metallicity,
+        sf_hist_func=sfh,
+        metal_dist_func=metal_dist,
+        initial_mass=stellar_mass
     )
 
     # --- create a galaxy object
@@ -79,9 +85,9 @@ def get_ew(index, feature, blue, red, Z, smass, grid, EqW, mode):
 
     # --- generate equivalent widths
     if mode == 0:
-        galaxy.get_spectra_incident(grid)
+        galaxy.stars.get_spectra_incident(grid)
     else:
-        galaxy.get_spectra_intrinsic(grid, fesc=0.5)
+        galaxy.stars.get_spectra_intrinsic(grid, fesc=0.5)
 
     EqW.append(galaxy.get_equivalent_width(feature, blue, red))
     return EqW
@@ -127,7 +133,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         if i == 0 or i == 3 or i == 6:
             plt.ylabel("EW (\u212B)", fontsize=8)
         if i > 5:
-            plt.xlabel("Z", fontsize=8)
+            plt.xlabel("metallicity", fontsize=8)
 
         if index == 1501 or index == 1719:
             label = "UV_" + str(index)

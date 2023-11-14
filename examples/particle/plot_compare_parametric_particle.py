@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 from unyt import yr, Myr
 
 from synthesizer.grid import Grid
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric import SFH, ZDist
+from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
@@ -33,19 +34,23 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 
 # --- define the binned (parametric star formation history)
 
-Z_p = {"Z": 0.01}
-Zh = ZH.deltaConstant(Z_p)
+Z_p = {"metallicity": 0.01}
+metal_dist = ZDist.DeltaConstant(**Z_p)
 sfh_p = {"duration": 100 * Myr}
-sfh = SFH.Constant(sfh_p)  # constant star formation
-sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, Zh)
-
+sfh = SFH.Constant(**sfh_p)  # constant star formation
+sfzh = ParametricStars(
+    grid.log10age,
+    grid.metallicity,
+    sf_hist_func=sfh,
+    metal_dist_func=metal_dist
+)
 
 # --------------------------------------------
 # CREATE PARAMETRIC SED
 
 parametric_galaxy = ParametricGalaxy(sfzh)
-parametric_galaxy.get_spectra_incident(grid)
-sed = parametric_galaxy.spectra["incident"]
+parametric_galaxy.stars.get_spectra_incident(grid)
+sed = parametric_galaxy.stars.spectra["incident"]
 plt.plot(
     np.log10(sed.lam), np.log10(sed.lnu), label="parametric", lw=4, c="k", alpha=0.3
 )
@@ -56,7 +61,7 @@ plt.plot(
 
 for N in [1, 10, 100]: # , 1000]:
     # --- create stars object
-    stars = sample_sfhz(sfzh, N)
+    stars = sample_sfhz(sfzh.sfzh, sfzh.log10ages, sfzh.log10metallicities, N)
     # ensure that the total mass = 1 irrespective of N. This can be also acheived by setting the mass of the star particles in sample_sfhz but this will be easier most of the time.
     stars.renormalise_mass(1.0)
 
@@ -67,9 +72,9 @@ for N in [1, 10, 100]: # , 1000]:
     # particle_galaxy.generate_spectra(grid, fesc=0.0, integrated=True)
 
     # Calculate the stars SEDs
-    particle_galaxy.get_spectra_incident(grid)
+    particle_galaxy.stars.get_spectra_incident(grid)
 
-    sed = particle_galaxy.spectra["incident"]
+    sed = particle_galaxy.stars.spectra["incident"]
     plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=f"particle (N={N})")
 
 
