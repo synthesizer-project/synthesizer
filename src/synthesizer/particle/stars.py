@@ -56,9 +56,9 @@ class Stars(Particles, StarsComponent):
         alpha_enhancement (array-like, float)
             The alpha enhancement [alpha/Fe] of each stellar particle.
         log10ages (array-like, float)
-            Convnience attribute containing log10(age).
+            Convenience attribute containing log10(age in yr).
         log10metallicities (array-like, float)
-            Convnience attribute containing log10(metallicity).
+            Convenience attribute containing log10(metallicity).
         resampled (bool)
             Flag for whether the young particles have been resampled.
         current_masses (array-like, float)
@@ -203,6 +203,7 @@ class Stars(Particles, StarsComponent):
         self.s_hydrogen = s_hydrogen
 
         # Compute useful logged quantities
+        # TODO: should be changed to a property to avoid data duplication
         self.log10ages = np.log10(self.ages)
         self.log10metallicities = np.log10(self.metallicities)
 
