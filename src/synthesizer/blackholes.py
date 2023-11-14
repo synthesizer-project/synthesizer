@@ -41,7 +41,7 @@ class UnifiedAGN:
                 'agnsed' model.
             log10Mbh (float)
                 The log10 of the blackhole mass in units of the Sun's mass.
-                Default value is 9.0.
+                Default value is 9.0. 
             log10MbhdotEdd (float)
                 The log10 accretion rate expressed in units of the Eddington
                 accretion rate. Default value is 0.0, i.e. accreting at
@@ -114,7 +114,7 @@ class UnifiedAGN:
 
     def _get_grid_point(self, grid, gridt, isotropic=False):
         """
-        Internal method used to get the grid point 
+        Private method used to get the grid point.
 
         """
 
@@ -125,14 +125,14 @@ class UnifiedAGN:
             # for log10nH and log10U the parameters are labelled e.g. 'log10nH_nlr'
             if parameter in ['log10nH', 'log10U']:
                 parameter = parameter+'_'+gridt
-
-
             parameters.append(getattr(self, parameter))
+
+
 
         return grid.get_grid_point(parameters)
 
 
-    def calculate_disc(self, **kwargs):
+    def get_spectra_disc(self, **kwargs):
         """
         Generate the disc spectra, updating the parameters if required.
 
@@ -177,7 +177,7 @@ class UnifiedAGN:
 
 
 
-    def calculate_lr(self, line_region, **kwargs):
+    def get_spectra_lr(self, line_region, **kwargs):
         """
         Generate the spectra of a generic line region, updating the parameters if required.
 
@@ -212,7 +212,7 @@ class UnifiedAGN:
 
     
 
-    def calculate_torus(self, **kwargs):
+    def get_spectra_torus(self, **kwargs):
 
         """
         Generate the torus, updating the parameters if required.
@@ -246,7 +246,7 @@ class UnifiedAGN:
         # create new Sed object containing dust spectra
         self.spectra['torus'] = Sed(disc.lam, lnu=lnu)
 
-    def calculate_total(self, **kwargs):
+    def get_spectra(self, **kwargs):
 
         """
         Generate the spectra, updating the parameters if required.
@@ -260,10 +260,10 @@ class UnifiedAGN:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        self.calculate_disc()
-        self.calculate_lr('nlr')
-        self.calculate_lr('blr')
-        self.calculate_torus()
+        self.get_spectra_disc()
+        self.get_spectra_lr('nlr')
+        self.get_spectra_lr('blr')
+        self.get_spectra_torus()
 
         self.spectra['total'] = self.spectra['disc'] + \
             self.spectra['blr'] + self.spectra['nlr'] + self.spectra['torus']
