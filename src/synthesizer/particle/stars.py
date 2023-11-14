@@ -297,7 +297,11 @@ class Stars(Particles, StarsComponent):
         part_mass = np.ascontiguousarray(
             self._initial_masses[mask], dtype=np.float64
         )
-        npart = np.int32(self.nparticles)
+
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(np.sum(mask))
+
+        # Make sure we get the wavelength index of the grid array
         nlam = np.int32(grid.spectra[spectra_type].shape[-1])
 
         # Slice the spectral grids and pad them with copies of the edges.
@@ -383,9 +387,7 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        spec = compute_integrated_sed(*args)
-
-        return spec
+        return compute_integrated_sed(*args)
 
     def generate_line(self, grid, line_id, fesc):
         """
@@ -641,10 +643,10 @@ class Stars(Particles, StarsComponent):
         # Get the appropriate mask
         if young:
             # Mask out old stars
-            s = self.log10ages <= np.log10(young * 1e6)
+            s = self.log10ages <= np.log10(young.to("yr"))
         elif old:
             # Mask out young stars
-            s = self.log10ages > np.log10(old * 1e6)
+            s = self.log10ages > np.log10(old.to("yr"))
         else:
             # Nothing to mask out
             s = np.ones(self.nparticles, dtype=bool)
