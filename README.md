@@ -57,7 +57,3 @@ A code paper is currently in preparation. For now please cite [Vijayan et al. 20
 ## Licence
 
 [GNU General Public License v3.0](https://github.com/flaresimulations/synthesizer/blob/main/LICENSE.md)
-
-## Authors
-
-See [here](AUTHORS.rst) for details on the core authors.
