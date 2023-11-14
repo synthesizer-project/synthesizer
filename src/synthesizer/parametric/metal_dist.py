@@ -12,7 +12,7 @@ Example usage:
     metal_dist = ZDist.DeltaConstant(...)
     metal_dist = ZDist.Normal(...)
 
-    metal_dist.get_metallicity(metals)
+    metal_dist.get_dist_weight(metals)
 
 """
 import numpy as np
@@ -71,16 +71,16 @@ class Common:
         pstr += "-" * 10 + "\n"
         return pstr
 
-    def _metallicity(self, metal):
+    def _weight(self, metal):
         """
-        Prototype for child defined metallicity functions.
+        Prototype for child defined distribution functions.
         """
         raise exceptions.UnimplementedFunctionality(
             "This should never be called from the parent."
             "How did you get here!?"
         )
 
-    def get_metallicity(self, metal):
+    def get_dist_weight(self, metal):
         """
         Return the weight of the bin/s defined by metal.
 
@@ -91,9 +91,9 @@ class Common:
 
         # If we have been handed an array we need to loop
         if isinstance(metal, (np.ndarray, list)):
-            return np.array([self._metallicity(z) for z in metal])
+            return np.array([self._weight(z) for z in metal])
 
-        return self._metallicity(metal)
+        return self._weight(metal)
 
 
 class DeltaConstant(Common):
@@ -149,9 +149,13 @@ class DeltaConstant(Common):
         """
         Return the single metallicity.
 
-        NOTE: DeltaConstant is a special case where get_metallicity is overrode
-        instead of _metallicity because a single metallicity must always be
-        returned for no inputs.
+        NOTE: DeltaConstant is a special case where get_dist_weight is not
+        applicable because a single metallicity must always be rather than a
+        weight.
+
+        Returns:
+            float
+                The metallicity.
         """
 
         # Check for bad behaviour
@@ -168,9 +172,13 @@ class DeltaConstant(Common):
         """
         Return the log base 10 of the single metallicity.
 
-        NOTE: DeltaConstant is a special case where get_log10_metallicity is
-        overrode instead of _log10_metallicity because a single metallicity
-        must always be returned for no inputs.
+        NOTE: DeltaConstant is a special case where get_dist_weight is not
+        applicable because a single metallicity must always be rather than a
+        weight.
+
+        Returns:
+            float
+                The log10(metallicity).
         """
 
         # Check for bad behaviour
@@ -220,7 +228,7 @@ class Normal(Common):
         self.mean = mean
         self.sigma = sigma
 
-    def _metallicity(self, metal):
+    def _weight(self, metal):
         """
         Return the distribution at a metallicity.
 

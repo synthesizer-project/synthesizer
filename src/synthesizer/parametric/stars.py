@@ -296,7 +296,7 @@ class Stars(StarsComponent):
                     [self.metallicities[imetal + 1], self.metallicities[imetal]]
                 )
                 sf = integrate.quad(
-                    self.metal_dist_func.get_metallicity, min_metal, max_metal
+                    self.metal_dist_func.get_dist_weight, min_metal, max_metal
                 )[0]
                 self.metal_dist[imetal] = sf
                 min_metal = max_metal
