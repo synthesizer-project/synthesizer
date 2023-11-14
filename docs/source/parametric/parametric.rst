@@ -7,7 +7,7 @@ In the following we show some examples of how to do this:
 .. toctree::
    :maxdepth: 2
 
-   make_sfzh
+   make_stars
    generate_sed
    generate_lines
    generate_composite_galaxy
