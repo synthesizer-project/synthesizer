@@ -77,7 +77,7 @@ class Common:
         """
         raise exceptions.UnimplementedFunctionality(
             "This should never be called from the parent."
-            "How did you get here!?"
+            " How did you get here!?"
         )
 
     def get_dist_weight(self, metal):
@@ -87,6 +87,10 @@ class Common:
         Args:
             metal (float/array-like, float)
                 The metallicity bin/s to evaluate.
+
+        Returns:
+            float
+                The weight at metal or each value in metal.
         """
 
         # If we have been handed an array we need to loop
@@ -162,7 +166,7 @@ class DeltaConstant(Common):
         if len(args) > 0:
             raise exceptions.InconsistentArguments(
                 "A DeltaConstant metallicity distribution takes no arguments."
-                "It can only return a single value and should not be passed"
+                " It can only return a single value and should not be passed"
                 "any arguments."
             )
 
@@ -185,7 +189,7 @@ class DeltaConstant(Common):
         if len(args) > 0:
             raise exceptions.InconsistentArguments(
                 "A DeltaConstant metallicity distribution takes no arguments."
-                "It can only return a single value and should not be passed"
+                " It can only return a single value and should not be passed"
                 "any arguments."
             )
 
