@@ -640,10 +640,10 @@ class Stars(Particles, StarsComponent):
         # Get the appropriate mask
         if young:
             # Mask out old stars
-            s = self.log10ages <= np.log10(young)
+            s = self.log10ages <= np.log10(young * 1e6)
         elif old:
             # Mask out young stars
-            s = self.log10ages > np.log10(old)
+            s = self.log10ages > np.log10(old * 1e6)
         else:
             # Nothing to mask out
             s = np.ones(self.nparticles, dtype=bool)
