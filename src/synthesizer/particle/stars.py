@@ -56,9 +56,9 @@ class Stars(Particles, StarsComponent):
         alpha_enhancement (array-like, float)
             The alpha enhancement [alpha/Fe] of each stellar particle.
         log10ages (array-like, float)
-            Convnience attribute containing log10(age).
+            Convenience attribute containing log10(age in yr).
         log10metallicities (array-like, float)
-            Convnience attribute containing log10(metallicity).
+            Convenience attribute containing log10(metallicity).
         resampled (bool)
             Flag for whether the young particles have been resampled.
         current_masses (array-like, float)
@@ -203,6 +203,7 @@ class Stars(Particles, StarsComponent):
         self.s_hydrogen = s_hydrogen
 
         # Compute useful logged quantities
+        # TODO: should be changed to a property to avoid data duplication
         self.log10ages = np.log10(self.ages)
         self.log10metallicities = np.log10(self.metallicities)
 
@@ -296,7 +297,11 @@ class Stars(Particles, StarsComponent):
         part_mass = np.ascontiguousarray(
             self._initial_masses[mask], dtype=np.float64
         )
-        npart = np.int32(self.nparticles)
+
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(np.sum(mask))
+
+        # Make sure we get the wavelength index of the grid array
         nlam = np.int32(grid.spectra[spectra_type].shape[-1])
 
         # Slice the spectral grids and pad them with copies of the edges.
@@ -382,9 +387,7 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        spec = compute_integrated_sed(*args)
-
-        return spec
+        return compute_integrated_sed(*args)
 
     def generate_line(self, grid, line_id, fesc):
         """
@@ -640,10 +643,10 @@ class Stars(Particles, StarsComponent):
         # Get the appropriate mask
         if young:
             # Mask out old stars
-            s = self.log10ages <= np.log10(young)
+            s = self.log10ages <= np.log10(young.to("yr"))
         elif old:
             # Mask out young stars
-            s = self.log10ages > np.log10(old)
+            s = self.log10ages > np.log10(old.to("yr"))
         else:
             # Nothing to mask out
             s = np.ones(self.nparticles, dtype=bool)
