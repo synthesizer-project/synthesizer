@@ -17,6 +17,18 @@ All new PRs should follow these guidelines. We adhere to the pep8 style guide, a
 Some specific examples of common style issues:
 - Do not use capatilised single letters for attributes. For example, `T` could be transmission or temperature. Instead, one should write out the full word.
 - Operators should be surrounded with whitespace.
+- We use `get_` and/or `calculate_` nomenclature for methods that perform a calculation and return the result to the user.
+- Variables should adhere to snake_case style while class names should be in PascalCase.
+- Block comments should have their first letter capitalised, i.e.
+```
+# This is a block comment
+x = y
+```
+- While inline comments should be proceeded by two whitespaces and start with a lowercase letter, i.e.
+```
+z = x * 2  # this is an inline comment
+```
+- Inheritance should use `Parent.__init__` instansiation of the parent class over `super()` for clarity.
 
 ## Contributing to the Documentation
 The synthesizer documentation is written in a combination of restructuredText, Jupyter notebooks and Python scripts. 
