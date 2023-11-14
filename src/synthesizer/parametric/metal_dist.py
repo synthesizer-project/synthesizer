@@ -95,30 +95,6 @@ class Common:
 
         return self._metallicity(metal)
 
-    def _log10_metallicity(self, metal):
-        """
-        Prototype for child defined log10 metallicity functions.
-        """
-        raise exceptions.UnimplementedFunctionality(
-            "This should never be called from the parent."
-            "How did you get here!?"
-        )
-
-    def get_log10_metallicity(self, metal):
-        """
-        Return the weight of the bin/s defined by metal.
-
-        Args:
-            metal (float/array-like, float)
-                The metallicity bin/s to evaluate.
-        """
-
-        # If we have been handed an array we need to loop
-        if isinstance(metal, (np.ndarray, list)):
-            return np.array([self._log10_metallicity(z) for z in metal])
-
-        return self._metallicity(metal)
-
 
 class DeltaConstant(Common):
     """
@@ -246,22 +222,16 @@ class Normal(Common):
 
     def _metallicity(self, metal):
         """
-        Return the dsitrbution with at a metallicity.
+        Return the distribution at a metallicity.
 
         Args:
             metal (float)
                 The (linear) metallicity at which to evaluate the distribution.
+        
+        Returns:
+            float
+                The weight of the metallicity distribution at metal.
         """
         norm = 1 / (self.sigma * np.sqrt(2 * np.pi))
         exponent = ((metal - self.mean) / self.sigma) ** 2
         return norm * np.exp(-0.5 * exponent)
-
-    def _log10_metallicity(self, metal):
-        """
-        Return the log base 10 of the single metallicity.
-
-        Args:
-            metal (float)
-                The (linear) metallicity at which to evaluate the distribution.
-        """
-        return np.log10(self._metallicity(metal))
