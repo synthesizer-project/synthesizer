@@ -418,9 +418,9 @@ class Grid:
             pstr += f"{axis}: {getattr(self, axis)} \n"
         for k, v in self.parameters.items():
             pstr += f"{k}: {v} \n"
-        if self.spectra:
-            pstr += f"available lines: {self.available_lines}\n"
         if self.lines:
+            pstr += f"available lines: {self.available_lines}\n"
+        if self.spectra:
             pstr += f"available spectra: {self.available_spectra}\n"
         pstr += "-" * 30 + "\n"
 
