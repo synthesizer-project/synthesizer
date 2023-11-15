@@ -1221,11 +1221,13 @@ def plot_spectra(
             else:
                 lams_above = spectra.lam[spectra.fnu > ylimits[0]]
 
-            # Derive the x limits
-            xlimits = [
-                10 ** (np.log10(np.min(lams_above)) * 0.9),
-                10 ** (np.log10(np.max(lams_above)) * 1.1),
-            ]
+            # Saftey skip if no values are above the limit
+            if lams_above.size > 0:
+                # Derive the x limits
+                xlimits = [
+                    10 ** (np.log10(np.min(lams_above)) * 0.9),
+                    10 ** (np.log10(np.max(lams_above)) * 1.1),
+                ]
 
         else:
             # Define initial xlimits
@@ -1238,6 +1240,10 @@ def plot_spectra(
                     lams_above = sed.lam[sed.lnu > ylimits[0]]
                 else:
                     lams_above = sed.lam[sed.fnu > ylimits[0]]
+
+                # Saftey skip if no values are above the limit
+                if lams_above.size == 0:
+                    continue
 
                 # Derive the x limits
                 x_low = 10 ** (np.log10(np.min(lams_above)) * 0.9)
