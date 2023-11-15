@@ -324,7 +324,7 @@ class Grid:
             else:
                 raise Exception(
                     ("No lines available on this grid object. "
-                     "Either set `read_lines=True`, or load a grid "
+                     "Either set `read_lines=False`, or load a grid "
                      "containing line information"))
 
             # If read_lines is True read all available lines in the grid,
@@ -418,9 +418,9 @@ class Grid:
             pstr += f"{axis}: {getattr(self, axis)} \n"
         for k, v in self.parameters.items():
             pstr += f"{k}: {v} \n"
-        if self.spectra:
-            pstr += f"available lines: {self.available_lines}\n"
         if self.lines:
+            pstr += f"available lines: {self.available_lines}\n"
+        if self.spectra:
             pstr += f"available spectra: {self.available_spectra}\n"
         pstr += "-" * 30 + "\n"
 

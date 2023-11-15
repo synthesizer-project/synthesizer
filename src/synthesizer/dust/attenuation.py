@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from scipy import interpolate
-from unyt import um
+from unyt import Angstrom, unyt_quantity, unyt_array
 
 from dust_extinction.grain_models import WD01
 
@@ -14,12 +14,13 @@ __all__ = ["PowerLaw", "MW_N18", "Calzetti2000", "GrainsWD01"]
 def N09_tau(lam, slope, cent_lam, ampl, gamma):
     """
     Attenuation curve using a modified version of the Calzetti
-    attenuation (Charlot+2000) law allowing for a varying UV slope
+    attenuation (Calzetti+2000) law allowing for a varying UV slope
     and the presence of a UV bump; from Noll+2009
 
     Args:
         lam (array-like, float)
-            The input wavelength array.
+            The input wavelength array (expected in AA units, 
+            global unit).
 
         slope (float)
             The slope of the attenuation curve.
@@ -39,26 +40,45 @@ def N09_tau(lam, slope, cent_lam, ampl, gamma):
     """
 
     # Wavelength in microns
-    tmp_lam = np.arange(0.12, 2.2, 0.001)
+    if isinstance(lam, (unyt_quantity, unyt_array)):
+        lam_micron = lam.to('um').v
+    else:
+        lam_micron = lam/1e4
     lam_v = 0.55
-    k_lam = np.zeros_like(tmp_lam)
+    k_lam = np.zeros_like(lam_micron)
 
-    ok = (tmp_lam < 0.63)
-    k_lam[ok] = -2.156 + (1.509 / tmp_lam[ok]) \
-        - (0.198 / tmp_lam[ok] ** 2) \
-        + (0.011 / tmp_lam[ok] ** 3)
-    k_lam[~ok] = -1.857 + (1.040 / tmp_lam[~ok])
-    k_lam = 4.05 + 2.659 * k_lam
-
-    D_lam = ampl * ((tmp_lam * gamma) ** 2) \
-        / ((tmp_lam ** 2 - cent_lam ** 2) ** 2 + (tmp_lam * gamma) ** 2)
-
-    tau_x_v = (1 / 4.05) * (k_lam + D_lam) * ((tmp_lam / lam_v) ** slope)
-
-    func = interpolate.interp1d(tmp_lam, tau_x_v,
+    # Masking for different regimes in the Calzetti curve
+    ok1 = (lam_micron >= 0.12) * (lam_micron < 0.63) # 0.12um<=lam<0.63um
+    ok2 = (lam_micron >= 0.63) * (lam_micron < 31.) # 0.63um<=lam<=31um
+    ok3 = (lam_micron < 0.12) # lam<0.12um
+    if np.sum(ok1) > 0: # equation 1
+        k_lam[ok1] = -2.156 + (1.509 / lam_micron[ok1]) \
+            - (0.198 / lam_micron[ok1]**2) \
+            + (0.011 / lam_micron[ok1]**3)
+        func = interpolate.interp1d(lam_micron[ok1], k_lam[ok1],
                                 fill_value="extrapolate")
+    if np.sum(ok2) > 0: # equation 2
+        k_lam[ok2] = -1.857 + (1.040 / lam_micron[ok2])
+    if np.sum(ok3) > 0:
+        # Extrapolating the 0.12um<=lam<0.63um regime
+        k_lam[ok3] = func(lam_micron[ok3])
+    
+    # Using the Calzetti attenuation curve normalised 
+    # to Av=4.05
+    k_lam = 4.05 + 2.659 * k_lam
+    k_v = 4.05 + 2.659 * (-2.156 + (1.509 / lam_v)
+        - (0.198 / lam_v**2)
+        + (0.011 / lam_v**3))
 
-    return func(lam.to(um))
+    # UV bump feature expression from Noll+2009
+    D_lam = ampl * ((lam_micron * gamma) ** 2) \
+        / ((lam_micron ** 2 - cent_lam ** 2) ** 2 + (lam_micron * gamma) ** 2)
+    
+    # Normalising with the value at 0.55um, to obtain 
+    # normalised optical depth
+    tau_x_v = (k_lam + D_lam)/k_v              
+
+    return tau_x_v * (lam_micron/lam_v)**slope
 
 
 class AttenuationLaw:
@@ -210,7 +230,7 @@ class MW_N18(AttenuationLaw):
         Args:
             lam (float/array, float)
                 An array of wavelengths or a single wavlength at which to
-                calculate optical depths.
+                calculate optical depths (in AA, global unit).
             interp (str)
                 The type of interpolation to use. Can be ‘linear’, ‘nearest’,
                 ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’,
@@ -230,7 +250,12 @@ class MW_N18(AttenuationLaw):
             fill_value="extrapolate",
         )
 
-        return func(lam.to("Angstrom").v) / self.tau_lam_v
+        if isinstance(lam, (unyt_quantity, unyt_array)):
+            _lam = lam.to('Angstrom').v
+        else:
+            _lam = lam
+
+        return func(lam) / self.tau_lam_v
 
 
 class Calzetti2000(AttenuationLaw):
@@ -253,7 +278,7 @@ class Calzetti2000(AttenuationLaw):
 
     """
 
-    def __init__(self, slope=0, cent_lam=0.2175, ampl=1, gamma=0.035):
+    def __init__(self, slope=0, cent_lam=0.2175, ampl=0, gamma=0.035):
         """
         Initialise the dust curve.
 
@@ -291,7 +316,7 @@ class Calzetti2000(AttenuationLaw):
         Args:
             lam (float/array-like, float)
                 An array of wavelengths or a single wavlength at which to
-                calculate optical depths.
+                calculate optical depths (in AA, global unit).
 
         Returns:
             float/array-like, float
@@ -354,13 +379,17 @@ class GrainsWD01:
         Args:
             lam (float/array-like, float)
                 An array of wavelengths or a single wavlength at which to
-                calculate optical depths. Must have unyts attached.
+                calculate optical depths (in AA, global unit).
 
         Returns:
             float/array-like, float
                 The optical depth.
         """
-        return self.emodel(lam.to_astropy())
+        if isinstance(lam, (unyt_quantity, unyt_array)):
+            _lam = lam.to('Angstrom').v
+        else:
+            _lam = lam
+        return self.emodel((_lam*Angstrom).to_astropy())
 
     def get_transmission(self, tau_v, lam):
         """
@@ -381,4 +410,8 @@ class GrainsWD01:
                 for singular tau_v values or (tau_v.size, lam.size) tau_v
                 is an array.
         """
-        return self.emodel.extinguish(x=lam.to_astropy(), Av=1.086 * tau_v)
+        if isinstance(lam, (unyt_quantity, unyt_array)):
+            _lam = lam.to('Angstrom').v
+        else:
+            _lam = lam
+        return self.emodel.extinguish(x=(_lam*Angstrom).to_astropy(), Av=1.086 * tau_v)
