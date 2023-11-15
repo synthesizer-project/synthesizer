@@ -13,7 +13,7 @@ including photometry. This example will:
 
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
 from synthesizer.igm import Madau96
@@ -42,25 +42,29 @@ if __name__ == "__main__":
     # define the parameters of the star formation and metal enrichment 
     # histories
     sfh_p = {"duration": 10 * Myr}
-    Z_p = {"log10Z": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    Z_p = {"log10metallicity": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = 1e8
 
     # define the functional form of the star formation and metal enrichment 
     # histories
-    sfh = SFH.Constant(sfh_p)  # constant star formation
-    Zh = ZH.deltaConstant(Z_p)  # constant metallicity
+    sfh = SFH.Constant(**sfh_p)  # constant star formation
+    metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
 
     # get the 2D star formation and metal enrichment history for the given SPS 
     # grid. This is (age, Z).
-    sfzh = generate_sfzh(
-        grid.log10age, grid.metallicity, sfh, Zh, stellar_mass=stellar_mass
+    stars = Stars(
+        grid.log10age,
+        grid.metallicity,
+        sf_hist_func=sfh,
+        metal_dist_func=metal_dist,
+        initial_mass=stellar_mass,
     )
 
     # create a galaxy object
-    galaxy = Galaxy(sfzh)
+    galaxy = Galaxy(stars)
 
     # generate spectra using pacman model (complex)
-    sed = galaxy.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1)
+    sed = galaxy.stars.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1)
 
     # now calculate the observed frame spectra
     z = 10.0  # redshift

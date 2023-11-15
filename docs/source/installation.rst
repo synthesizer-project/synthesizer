@@ -19,12 +19,18 @@ First create a virtual python environment (``synthesizer`` has been tested with 
 Cloning and installing the code
 ###############################
 
-You can then clone the latest version of ``synthesizer`` from `github <https://github.com/flaresimulations/synthesizer>`_, install the requirements, and finally install ``synthesizer``::
+You can then clone the latest version of ``synthesizer`` from `github <https://github.com/flaresimulations/synthesizer>`_, and finally install it::
 
     git clone https://github.com/flaresimulations/synthesizer.git
     cd synthesizer
-    pip install -r requirements.txt
-    python setup.py install
+    pip install -e .
+
+This installs it in *editable* mode, so any changes in the code base will be reflected in the installation. 
+
+Make sure you stay up to date with the latest versions through git::
+
+    cd synthesizer
+    git pull origin main
 
 Downloading SPS grids
 #####################

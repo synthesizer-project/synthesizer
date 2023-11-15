@@ -1,10 +1,17 @@
+""" A module for interfacing with the outputs of Semi Analytic Models.
+
+Currently implemented are loading methods for
+- SC-SAM (using a parametric method)
+- SC-SAM (using a particle method)
+"""
 import numpy as np
-from synthesizer.parametric.sfzh import BinnedSFZH
-from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
-from synthesizer.particle.stars import Stars
-from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 from scipy.interpolate import RegularGridInterpolator as RGI
 from scipy.interpolate import NearestNDInterpolator as NNI
+
+from synthesizer.parametric.stars import Stars as ParametricStars
+from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+from synthesizer.particle.stars import Stars as ParticleStars
+from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 
 
 def load_SCSAM(fname, method, grid=None, verbose=False):
@@ -177,8 +184,8 @@ def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
         print('Generating SED...')
 
     # Create stars object
-    stars = Stars(initial_masses=p_imass, ages=p_age,
-                  metallicities=p_Z)
+    stars = ParticleStars(initial_masses=p_imass, ages=p_age,
+                          metallicities=p_Z)
 
     if verbose:
         print('Creating galaxy object...')
@@ -247,10 +254,13 @@ def _load_SCSAM_parametric_galaxy(SFH, age_lst, Z_lst, method, grid, verbose=Fal
     new_SFH *= norm_SFH
 
     # Create Binned SFZH object
-    sfzh = BinnedSFZH(log10ages=grid.log10age, metallicities=grid.metallicity,
-                      sfzh=new_SFH)
+    stars = ParametricStars(
+        log10ages=grid.log10age,
+        metallicities=grid.metallicity,
+        sfzh=new_SFH,
+    )
     
     # Create galaxy object
-    parametric_galaxy = ParametricGalaxy(sfzh)
+    parametric_galaxy = ParametricGalaxy(stars)
 
     return parametric_galaxy
