@@ -13,6 +13,7 @@ Example usage:
     sed.get_broadband_fluxes(filters)
 """
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from scipy import integrate
@@ -1042,74 +1043,192 @@ def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
 
 
 def plot_spectra(
+    spectra,
     fig=None,
     ax=None,
     show=False,
-    spectra_to_plot=None,
-    ylimits=("peak", 5),
+    ylimits=(),
+    xlimits=(),
     figsize=(3.5, 5),
+    label=None,
+    draw_legend=True,
+    rest_frame=True,
+    x_units=None,
+    y_units=None,
 ):
     """
-    Plots either a specific spectra.
+    Plots either a specific spectra or all spectra provided in a dictionary.
+
+    This is a generic plotting function to be used either directly or to be
+    wrapped by helper methods through Synthesizer.
 
     Args:
+        spectra (dict/Sed)
+            The Sed objects from which to plot. This can either be a dictionary
+            of Sed objects to plot multiple or a single Sed object to only plot
+            one.
+        fig (matplotlib.pyplot.figure)
+            The figure containing the axis. By default one is created in this
+            function.
+        ax (matplotlib.axes)
+            The axis to plot the data on. By default one is created in this
+            function.
         show (bool)
             Flag for whether to show the plot or just return the
             figure and axes.
-        spectra_to_plot (None, list)
-            List of named spectra to plot that are present in
-            `galaxy.spectra`.
-        ylimits (named_tuple)
-            Limits to apply to the axes.
+        ylimits (tuple)
+            The limits to apply to the y axis. If not provided the limits
+            will be calculated with the lower limit set to 1000 (100) times less
+            than the peak of the spectrum for rest_frame (observed) spectra.
+        xlimits (tuple)
+            The limits to apply to the x axis. If not provided the optimal
+            limits are found based on the ylimits.
         figsize (tuple)
             Tuple with size 2 defining the figure size.
+        label (string)
+            The label to give the spectra. Only applicable when Sed is a single
+            spectra.
+        draw_legend (bool)
+            Whether to draw the legend.
+        rest_frame (bool)
+            Whether to plot the rest frame spectra. If False the observed
+            spectra is plotted.
+        x_units (unyt.unit_object.Unit)
+            The units of the x axis. This will be converted to a string
+            and included in the axis label. By default the internal unit system
+            is assumed unless this is passed.
+        y_units (unyt.unit_object.Unit)
+            The units of the y axis. This will be converted to a string
+            and included in the axis label. By default the internal unit system
+            is assumed unless this is passed.
 
     Returns:
-        fig
+        fig (matplotlib.pyplot.figure)
             The matplotlib figure object for the plot.
-        ax
+        ax (matplotlib.axes)
             The matplotlib axes object containing the plotted data.
     """
 
-    fig = plt.figure(figsize=figsize)
+    # If we don't already have a figure, make one
+    if fig is None:
+        # Set up the figure
+        fig = plt.figure(figsize=figsize)
 
-    left = 0.15
-    height = 0.6
-    bottom = 0.1
-    width = 0.8
+        # Define the axes geometry
+        left = 0.15
+        height = 0.6
+        bottom = 0.1
+        width = 0.8
 
-    ax = fig.add_axes((left, bottom, width, height))
+        # Create the axes
+        ax = fig.add_axes((left, bottom, width, height))
 
-    if not isinstance(spectra_to_plot, list):
-        spectra_to_plot = list(self.spectra.keys())
+        # Set the scale to log log
+        ax.loglog()
 
-    # only plot FIR if 'total' is plotted otherwise just plot UV-NIR
-    if "total" in spectra_to_plot:
-        xlim = [2.0, 7.0]
+    # Do we have a single spectra?
+    if isinstance(spectra, Sed):
+        # Get the wavelengths to plot
+        lam = spectra.lam
+
+        # Get the appropriate luminosity/flux
+        if rest_frame:
+            plt_spectra = spectra.lnu
+        else:
+            plt_spectra = spectra.fnu
+
+        # Plot the spectra
+        ax.plot(lam, plt_spectra, lw=1, alpha=0.8, label=label)
+
     else:
-        xlim = [2.0, 4.5]
+        # Loop over the dict we have been handed
+        for key, sed in spectra.items():
+            # Get the wavelengths to plot
+            lam = sed.lam
 
-    ypeak = -100
-    for sed_name in spectra_to_plot:
-        sed = self.spectra[sed_name]
-        ax.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, label=sed_name)
+            # Get the appropriate luminosity/flux
+            if rest_frame:
+                plt_spectra = sed.lnu
+            else:
+                plt_spectra = sed.fnu
 
-        if np.max(np.log10(sed.lnu)) > ypeak:
-            ypeak = np.max(np.log10(sed.lnu))
+            # Plot this spectra
+            ax.plot(lam, plt_spectra, lw=1, alpha=0.8, label=key)
 
-    # ax.set_xlim([2.5, 4.2])
+    # Do we not have y limtis?
+    if len(ylimits) == 0:
+        # Find the current limits
+        ylimits = ax.get_ylim()
 
-    if ylimits[0] == "peak":
-        if ypeak == ypeak:
-            ylim = [ypeak - ylimits[1], ypeak + 0.5]
-        ax.set_ylim(ylim)
+        # Set the lower limit to be 100 times lower than the peak for rest frame
+        # and 100 times lower than the peak for observed
+        if rest_frame:
+            ylimits[0] = ylimits[1] / 1000
+        else:
+            ylimits[0] = ylimits[1] / 100
 
-    ax.set_xlim(xlim)
+    # Do we not have x limits?
+    if len(xlimits) > 0:
+        # Need to do this differently for multiple or singular seds
+        if isinstance(spectra, Sed):
+            # Set up xlimits
+            xlimits = []
 
-    ax.legend(fontsize=8, labelspacing=0.0)
-    ax.set_xlabel(r"$\rm log_{10}(\lambda/\AA)$")
-    ax.set_ylabel(r"$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$")
+            # Derive the x limits from data above the ylimits
+            if rest_frame:
+                lams_above = sed.lam[sed.lnu > ylimits[0]]
+            else:
+                lams_above = sed.lam[sed.fnu > ylimits[0]]
 
+            # Derive the x limits
+            xlimits[0] = np.min(lams_above) * (1 - 0.1)
+            xlimits[1] = np.max(lams_above) * (1 + 0.1)
+
+        else:
+            # Define initial xlimits
+            xlimits = [np.inf, -np.inf]
+
+            # Loop over spectra and get the total required limits
+            for sed in spectra:
+                # Derive the x limits from data above the ylimits
+                if rest_frame:
+                    lams_above = sed.lam[sed.lnu > ylimits[0]]
+                else:
+                    lams_above = sed.lam[sed.fnu > ylimits[0]]
+
+                # Derive the x limits
+                x_low = np.min(lams_above) * (1 - 0.1)
+                x_up = np.max(lams_above) * (1 + 0.1)
+
+                # Update limits
+                if x_low < xlimits[0]:
+                    xlimits[0] = x_low
+                if x_up > xlimits[1]:
+                    xlimits[1] = x_up
+
+    # Set the limits
+    ax.set_xlim(*xlimits)
+    ax.set_ylim(*ylimits)
+
+    # Make the legend
+    if draw_legend:
+        ax.legend(fontsize=8, labelspacing=0.0)
+
+    # Parse the units for the labels
+    if x_units is None:
+        x_units = str(lam.units)
+    else:
+        x_units = str(x_units)
+    if y_units is None:
+        y_units = str(plt_spectra.units)
+    else:
+        y_units = str(y_units)
+
+    # Label the axes
+    ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]")
+    ax.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]")
+
+    # Are we showing?
     if show:
         plt.show()
 
@@ -1117,56 +1236,82 @@ def plot_spectra(
 
 
 def plot_observed_spectra(
-    cosmo,
-    z,
-    fc=None,
+    spectra,
+    fig=None,
+    ax=None,
     show=False,
-    spectra_to_plot=None,
-    figsize=(3.5, 5.0),
-    verbose=True,
+    ylimits=(),
+    xlimits=(),
+    figsize=(3.5, 5),
+    label=None,
+    draw_legend=True,
+    x_units=None,
+    y_units=None,
 ):
     """
-    plots all spectra associated with a galaxy object
+    Plots either a specific observed spectra or all observed spectra
+    provided in a dictionary.
+
+    This function is a wrapper around plot_spectra.
+
+    This is a generic plotting function to be used either directly or to be
+    wrapped by helper methods through Synthesizer.
 
     Args:
+        spectra (dict/Sed)
+            The Sed objects from which to plot. This can either be a dictionary
+            of Sed objects to plot multiple or a single Sed object to only plot
+            one.
+        fig (matplotlib.pyplot.figure)
+            The figure containing the axis. By default one is created in this
+            function.
+        ax (matplotlib.axes)
+            The axis to plot the data on. By default one is created in this
+            function.
+        show (bool)
+            Flag for whether to show the plot or just return the
+            figure and axes.
+        ylimits (tuple)
+            The limits to apply to the y axis. If not provided the limits
+            will be calculated with the lower limit set to 1000 (100) times less
+            than the peak of the spectrum for rest_frame (observed) spectra.
+        xlimits (tuple)
+            The limits to apply to the x axis. If not provided the optimal
+            limits are found based on the ylimits.
+        figsize (tuple)
+            Tuple with size 2 defining the figure size.
+        label (string)
+            The label to give the spectra. Only applicable when Sed is a single
+            spectra.
+        draw_legend (bool)
+            Whether to draw the legend.
+        x_units (unyt.unit_object.Unit)
+            The units of the x axis. This will be converted to a string
+            and included in the axis label. By default the internal unit system
+            is assumed unless this is passed.
+        y_units (unyt.unit_object.Unit)
+            The units of the y axis. This will be converted to a string
+            and included in the axis label. By default the internal unit system
+            is assumed unless this is passed.
 
     Returns:
+        fig (matplotlib.pyplot.figure)
+            The matplotlib figure object for the plot.
+        ax (matplotlib.axes)
+            The matplotlib axes object containing the plotted data.
     """
 
-    fig = plt.figure(figsize=figsize)
-
-    left = 0.15
-    height = 0.7
-    bottom = 0.1
-    width = 0.8
-
-    ax = fig.add_axes((left, bottom, width, height))
-    filter_ax = ax.twinx()
-
-    if not isinstance(spectra_to_plot, list):
-        spectra_to_plot = list(self.spectra.keys())
-
-    for sed_name in spectra_to_plot:
-        sed = self.spectra[sed_name]
-        sed.get_fnu(cosmo, z)
-        ax.plot(sed.obslam, sed.fnu, lw=1, alpha=0.8, label=sed_name)
-        print(sed_name)
-
-        if fc:
-            sed.get_broadband_fluxes(fc, verbose=verbose)
-            for f in fc:
-                wv = f.pivwv()
-                filter_ax.plot(f.lam, f.t)
-                ax.scatter(wv, sed.broadband_fluxes[f.filter_code], zorder=4)
-
-    # ax.set_xlim([5000., 100000.])
-    # ax.set_ylim([0., 100])
-    filter_ax.set_ylim([3, 0])
-    ax.legend(fontsize=8, labelspacing=0.0)
-    ax.set_xlabel(r"$\rm log_{10}(\lambda_{obs}/\AA)$")
-    ax.set_ylabel(r"$\rm log_{10}(f_{\nu}/nJy)$")
-
-    if show:
-        plt.show()
-
-    return fig, ax
+    return plot_spectra(
+        spectra,
+        fig=fig,
+        ax=ax,
+        show=show,
+        ylimits=ylimits,
+        xlimits=xlimits,
+        figsize=figsize,
+        label=label,
+        draw_legend=draw_legend,
+        rest_frame=False,
+        x_units=x_units,
+        y_units=y_units,
+    )
