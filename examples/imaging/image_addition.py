@@ -15,7 +15,7 @@ from synthesizer.filters import FilterCollection as Filters
 from synthesizer.parametric.morphology import Sersic2D
 from synthesizer.imaging.images import ParametricImage, ParticleImage
 from synthesizer.parametric.galaxy import Galaxy
-from synthesizer.parametric.sfzh import generate_instant_sfzh
+from synthesizer.parametric import Stars
 
 # First set up some stuff so we can make demonstration images.
 
@@ -28,20 +28,25 @@ grid_name = "test_grid"
 grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
-# Define the parameters of the star formation and metal enrichment histories
-stellar_mass = 1e10
-sfzh = generate_instant_sfzh(
-    grid.log10age, grid.metallicity, 10., 0.01,
-    stellar_mass=stellar_mass)
-
 # Define an arbitrary morphology to feed the imaging
 morph = Sersic2D(r_eff_kpc=1.0 * kpc, n=1.0, ellip=0.5, theta=35.0)
 
+# Define the parameters of the star formation and metal enrichment histories
+stellar_mass = 1e10
+stars = Stars(
+    grid.log10age,
+    grid.metallicity,
+    instant_sf=10.,
+    instant_metallicity=0.01,
+    initial_mass=stellar_mass,
+    morphology=morph
+)
+
 # Get galaxy object
-galaxy = Galaxy(morph=morph, sfzh=sfzh)
+galaxy = Galaxy(stars=stars)
 
 # Get specrtra
-sed = galaxy.get_spectra_incident(grid)
+sed = galaxy.stars.get_spectra_incident(grid)
 
 # Create a filter collection
 filter_codes1 = ["JWST/NIRCam.F090W", "JWST/NIRCam.F150W", "JWST/NIRCam.F200W"]

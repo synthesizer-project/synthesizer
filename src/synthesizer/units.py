@@ -70,7 +70,9 @@ default_units = {
     "velocities": km / s,
     "masses": Msun.in_base("galactic"),
     "initial_masses": Msun.in_base("galactic"),
+    "initial_mass": Msun.in_base("galactic"),
     "current_masses": Msun.in_base("galactic"),
+    "dust_masses": Msun.in_base("galactic"),
     "ages": yr,
     "accretion_rate": Msun.in_base("galactic") / yr,
     "bol_luminosity": erg / s,
@@ -198,8 +200,12 @@ class Units(metaclass=UnitSingleton):
             Particle masses unit.
         initial_masses (unyt.unit_object.Unit)
             Stellar particle initial mass unit.
+        initial_mass (unyt.unit_object.Unit)
+            Stellar population initial mass unit.
         current_masses (unyt.unit_object.Unit)
             Stellar particle current mass unit.
+        dust_masses (unyt.unit_object.Unit)
+            Gas particle dust masses unit.
 
         ages (unyt.unit_object.Unit)
             Stellar particle age unit.
@@ -283,9 +289,15 @@ class Units(metaclass=UnitSingleton):
         self.initial_masses = Msun.in_base(
             "galactic"
         )  # initial mass of stellar particles
+        self.initial_mass = Msun.in_base(
+            "galactic"
+        )  # initial mass of stellar population
         self.current_masses = Msun.in_base(
             "galactic"
         )  # current mass of stellar particles
+        self.dust_masses = Msun.in_base(
+            "galactic"
+        )  # current dust mass of gas particles
 
         # Time quantities
         self.ages = yr  # Stellar ages

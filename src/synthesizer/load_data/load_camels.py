@@ -1,11 +1,11 @@
-import sys
 import h5py
 import numpy as np
 
 from astropy.cosmology import FlatLambdaCDM
 from unyt import Msun, kpc, yr
 
-from .particle.galaxy import Galaxy
+from ..particle.galaxy import Galaxy
+from synthesizer.load_data.utils import get_len
 
 
 def _load_CAMELS(
@@ -15,7 +15,7 @@ def _load_CAMELS(
     metals,
     s_oxygen,
     s_hydrogen,
-    s_hsmls,
+    s_hsml,
     coods,
     masses,
     g_coods,
@@ -24,7 +24,7 @@ def _load_CAMELS(
     g_hsml,
     star_forming,
     redshift,
-    dtm=0.3,
+    dtm=0.3
 ):
     """
     Load CAMELS galaxies into a galaxy object
@@ -44,6 +44,8 @@ def _load_CAMELS(
             particle oxygen abundance array
         s_hydrogen (array):
             particle hydrogen abundance array
+        s_hsml (array):
+            star particle smoothing lengths array, comoving
         coods (array):
             particle coordinates array, comoving
         masses (array):
@@ -58,6 +60,8 @@ def _load_CAMELS(
             gas particle smoothing lengths array, comoving
         star_forming (array):
             boolean array flagging star forming gas particles
+        redshift (float):
+            galaxies redshift
         dtm (float):
             dust-to-metals ratio to apply to all particles
 
@@ -71,29 +75,29 @@ def _load_CAMELS(
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
+        galaxies[i].redshift = redshift
 
         galaxies[i].load_stars(
-            imasses[b:e] * Msun,
-            ages[b:e] * yr,
+            imasses[b:e],
+            ages[b:e],
             metals[b:e],
             s_oxygen=s_oxygen[b:e],
             s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :] * kpc,
-            current_masses=masses[b:e] * Msun,
-            smoothing_lengths=s_hsmls[b:e] * kpc,
+            coordinates=coods[b:e, :],
+            current_masses=masses[b:e],
+            smoothing_lengths=s_hsml[b:e] * kpc,
         )
 
     begin, end = get_len(lens[:, 0])
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i].load_gas(
-            coordinates=g_coods[b:e] * kpc,
-            masses=g_masses[b:e] * Msun,
+            coordinates=g_coods[b:e],
+            masses=g_masses[b:e],
             metals=g_metallicities[b:e],
             star_forming=star_forming[b:e],
-            smoothing_lengths=g_hsml[b:e] * kpc,
+            smoothing_lengths=g_hsml[b:e],
             dust_to_metal_ratio=dtm,
         )
-        galaxies[i].redshift = redshift
 
     return galaxies
 
@@ -105,7 +109,7 @@ def load_CAMELS_IllustrisTNG(
     fof_dir=None,
     verbose=False,
     dtm=0.3,
-    physical=False,
+    physical=True
 ):
     """
     Load CAMELS-IllustrisTNG galaxies
@@ -139,7 +143,7 @@ def load_CAMELS_IllustrisTNG(
         imasses = hf["PartType4/GFM_InitialMass"][:]
         _metals = hf["PartType4/GFM_Metals"][:]
         metallicity = hf["PartType4/GFM_Metallicity"][:]
-        hsmls = hf["PartType4/SubfindHsml"][:]
+        hsml = hf["PartType4/SubfindHsml"][:]
 
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
@@ -148,7 +152,7 @@ def load_CAMELS_IllustrisTNG(
         g_hsml = hf["PartType0/SubfindHsml"][:]
 
         scale_factor = hf["Header"].attrs["Time"]
-        redshift = 1 / scale_factor - 1
+        redshift = 1. / scale_factor - 1
         Om0 = hf["Header"].attrs["Omega0"]
         h = hf["Header"].attrs["HubbleParam"]
 
@@ -185,7 +189,7 @@ def load_CAMELS_IllustrisTNG(
     metallicity = metallicity[~mask]
     masses = masses[~mask]
     _metals = _metals[~mask]
-    hsmls = hsmls[~mask]
+    hsml = hsml[~mask]
 
     masses = (masses * 1e10) / h
     g_masses = (g_masses * 1e10) / h
@@ -200,7 +204,7 @@ def load_CAMELS_IllustrisTNG(
     if physical:
         coods *= scale_factor
         g_coods *= scale_factor
-        hsmls *= scale_factor
+        hsml *= scale_factor
         g_hsml *= scale_factor
 
     # convert formation times to ages
@@ -216,7 +220,7 @@ def load_CAMELS_IllustrisTNG(
         metals=metallicity,
         s_oxygen=s_oxygen,
         s_hydrogen=s_hydrogen,
-        s_hsmls=hsmls,
+        s_hsml=hsml,
         coods=coods,
         masses=masses,
         g_coods=g_coods,
@@ -234,7 +238,7 @@ def load_CAMELS_Astrid(
     snap_name="snap_090.hdf5",
     fof_name="fof_subhalo_tab_090.hdf5",
     fof_dir=None,
-    dtm=0.3,
+    dtm=0.3
 ):
     """
     Load CAMELS-Astrid galaxies
@@ -261,7 +265,10 @@ def load_CAMELS_Astrid(
         form_time = hf["PartType4/GFM_StellarFormationTime"][:]
         coods = hf["PartType4/Coordinates"][:]
         masses = hf["PartType4/Masses"][:]
-        imasses = np.ones(len(masses)) * 0.00155  # TODO: update with correct scaling
+
+        # TODO: update with correct scaling
+        imasses = np.ones(len(masses)) * 0.00155
+
         _metals = hf["PartType4/GFM_Metals"][:]
         metallicity = hf["PartType4/GFM_Metallicity"][:]
 
@@ -309,16 +316,16 @@ def load_CAMELS_Astrid(
         g_metallicities=g_metals,
         g_hsml=g_hsml,
         star_forming=star_forming,
-        dtm=dtm,
+        dtm=dtm
     )
 
 
-def load_CAMELS_SIMBA(
+def load_CAMELS_Simba(
     _dir=".",
     snap_name="snap_033.hdf5",
     fof_name="fof_subhalo_tab_033.hdf5",
     fof_dir=None,
-    dtm=0.3,
+    dtm=0.3
 ):
     """
     Load CAMELS-SIMBA galaxies
@@ -395,90 +402,3 @@ def load_CAMELS_SIMBA(
         star_forming=star_forming,
         dtm=dtm,
     )
-
-
-def load_FLARES(f, region, tag):
-    """
-    Load FLARES galaxies from a FLARES master file
-
-    Args:
-        f (string):
-            master file location
-        region (string):
-            FLARES region to load
-        tag (string):
-            snapshot tag to load
-
-    Returns:
-        galaxies (object):
-            `ParticleGalaxy` object containing stars
-    """
-
-    with h5py.File(f, "r") as hf:
-        lens = hf[f"{region}/{tag}/Galaxy/S_Length"][:]
-        ages = hf[f"{region}/{tag}/Particle/S_Age"][:]  # Gyr
-        coods = hf[f"{region}/{tag}/Particle/S_Coordinates"][:].T
-        mass = hf[f"{region}/{tag}/Particle/S_Mass"][:]  # 1e10 Msol
-        imass = hf[f"{region}/{tag}/Particle/S_MassInitial"][:]  # 1e10 Msol
-        # metals = hf[f'{region}/{tag}/Particle/S_Z'][:]
-        metals = hf[f"{region}/{tag}/Particle/S_Z_smooth"][:]
-        s_oxygen = hf[f"{region}/{tag}/Particle/S_Abundance_Oxygen"][:]
-        s_hydrogen = hf[f"{region}/{tag}/Particle/S_Abundance_Hydrogen"][:]
-        # ids = hf[f'{region}/{tag}/Particle/S_ID'][:]
-        # index = hf[f'{region}/{tag}/Particle/S_Index'][:]
-        # hf[f'{pre}/S_Vel']
-
-    ages = ages * 1e9  # yr
-    mass = mass * 1e10  # Msol
-    imass = imass * 1e10  # Msol
-
-    begin, end = get_len(lens)
-
-    galaxies = [None] * len(begin)
-    for i, (b, e) in enumerate(zip(begin, end)):
-        galaxies[i] = Galaxy()
-        galaxies[i].load_stars(
-            mass[b:e],
-            ages[b:e],
-            metals[b:e],
-            s_oxygen=s_oxygen[b:e],
-            s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :],
-        )
-
-    return galaxies
-
-
-def get_len(Length):
-    """
-    Find the beginning and ending indices from a length array
-
-    Args:
-        Length (array):
-            array of number of particles
-
-    Returns:
-        begin (array):
-            beginning indices
-        end (array):
-            ending indices
-    """
-
-    begin = np.zeros(len(Length), dtype=np.int64)
-    end = np.zeros(len(Length), dtype=np.int64)
-    begin[1:] = np.cumsum(Length)[:-1]
-    end = np.cumsum(Length)
-    return begin, end
-
-
-def main():
-    # e.g.
-    # '/cosma7/data/dp004/dc-love2/codes/flares/data/FLARES_30_sp_info.hdf5'
-    _f = sys.argv[1]
-    tag = sys.argv[2]  # '/010_z005p000/'
-    load_FLARES(_f, tag)
-    return None
-
-
-if __name__ == "__main__":
-    main()
