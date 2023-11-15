@@ -6,7 +6,7 @@ only contains common attributes and methods to reduce boilerplate.
 import numpy as np
 import matplotlib.pyplot as plt
 
-from synthesizer.sed import Sed
+from synthesizer.sed import Sed, plot_spectra, plot_observed_spectra
 
 
 class BaseGalaxy:
@@ -188,124 +188,213 @@ class BaseGalaxy:
         return self.A(1500.0)
 
     def plot_spectra(
-        self, show=False, spectra_to_plot=None, ylimits=("peak", 5), figsize=(3.5, 5)
+        self,
+        spectra_to_plot=True,
+        stellar_spectra_to_plot=False,
+        gas_spectra_to_plot=False,
+        black_hole_spectra_to_plot=False,
+        show=False,
+        ylimits=(),
+        xlimits=(),
+        figsize=(3.5, 5),
     ):
         """
-        plots all spectra associated with a galaxy object
+        Plots either a specific spectra or all spectra provided in a dictionary.
+
+        This is a generic plotting function to be used either directly or to be
+        wrapped by helper methods through Synthesizer.
 
         Args:
-            show (bool):
-                flag for whether to show the plot or just return the
-                figure and axes
-            spectra_to_plot (None, list):
-                list of named spectra to plot that are present in
-                `galaxy.spectra`
-            figsize (tuple):
-                tuple with size 2 defining the figure size
+            spectra_to_plot (bool/list, string/string)
+                The specific combined galaxy spectra to plot. (e.g "total")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            stellar_spectra_to_plot (bool/list, string/string)
+                The specific stellar spectra to plot. (e.g. "incident")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            gas_spectra_to_plot (bool/list, string/string)
+                The specific gas spectra to plot. (e.g. "total")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            black_hole_spectra_to_plot (bool/list, string/string)
+                The specific black hole spectra to plot. (e.g "blr")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            show (bool)
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            ylimits (tuple)
+                The limits to apply to the y axis. If not provided the limits
+                will be calculated with the lower limit set to 1000 (100)
+                times less than the peak of the spectrum for rest_frame
+                (observed) spectra.
+            xlimits (tuple)
+                The limits to apply to the x axis. If not provided the optimal
+                limits are found based on the ylimits.
+            figsize (tuple)
+                Tuple with size 2 defining the figure size.
 
         Returns:
-            fig (object)
-            ax (object)
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
         """
+        # We need to construct the dictionary of all spectra to plot for each
+        # component based on what we've been passed
+        spectra = {}
 
-        fig = plt.figure(figsize=figsize)
+        # Get the combined spectra
+        if spectra_to_plot:
+            if isinstance(spectra_to_plot, list):
+                spectra.update({self.spectra[key] for key in spectra_to_plot})
+            else:
+                spectra.update(self.spectra)
 
-        left = 0.15
-        height = 0.6
-        bottom = 0.1
-        width = 0.8
+        # Get the stellar spectra
+        if stellar_spectra_to_plot:
+            if isinstance(stellar_spectra_to_plot, list):
+                spectra.update(
+                    {self.stars.spectra[key] for key in stellar_spectra_to_plot}
+                )
+            else:
+                spectra.update(self.stars.spectra)
 
-        ax = fig.add_axes((left, bottom, width, height))
+        # Get the gas spectra
+        if gas_spectra_to_plot:
+            if isinstance(gas_spectra_to_plot, list):
+                spectra.update({self.gas.spectra[key] for key in gas_spectra_to_plot})
+            else:
+                spectra.update(self.gas.spectra)
 
-        if not isinstance(spectra_to_plot, list):
-            spectra_to_plot = list(self.spectra.keys())
+        # Get the black hole spectra
+        if black_hole_spectra_to_plot:
+            if isinstance(black_hole_spectra_to_plot, list):
+                spectra.update(
+                    {
+                        self.black_holes.spectra[key]
+                        for key in black_hole_spectra_to_plot
+                    }
+                )
+            else:
+                spectra.update(self.black_holes.spectra)
 
-        # only plot FIR if 'total' is plotted otherwise just plot UV-NIR
-        if "total" in spectra_to_plot:
-            xlim = [2.0, 7.0]
-        else:
-            xlim = [2.0, 4.5]
-
-        ypeak = -100
-        for sed_name in spectra_to_plot:
-            sed = self.spectra[sed_name]
-            ax.plot(
-                np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, label=sed_name
-            )
-
-            if np.max(np.log10(sed.lnu)) > ypeak:
-                ypeak = np.max(np.log10(sed.lnu))
-
-        # ax.set_xlim([2.5, 4.2])
-
-        if ylimits[0] == "peak":
-            if ypeak == ypeak:
-                ylim = [ypeak - ylimits[1], ypeak + 0.5]
-            ax.set_ylim(ylim)
-
-        ax.set_xlim(xlim)
-
-        ax.legend(fontsize=8, labelspacing=0.0)
-        ax.set_xlabel(r"$\rm log_{10}(\lambda/\AA)$")
-        ax.set_ylabel(r"$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$")
-
-        if show:
-            plt.show()
-
-        return fig, ax
+        return plot_spectra(
+            spectra,
+            show=show,
+            ylimits=ylimits,
+            xlimits=xlimits,
+            figsize=figsize,
+            draw_legend=isinstance(spectra, dict),
+        )
 
     def plot_observed_spectra(
         self,
-        cosmo,
-        z,
-        fc=None,
+        spectra_to_plot=True,
+        stellar_spectra_to_plot=False,
+        gas_spectra_to_plot=False,
+        black_hole_spectra_to_plot=False,
         show=False,
-        spectra_to_plot=None,
-        figsize=(3.5, 5.0),
-        verbose=True,
+        ylimits=(),
+        xlimits=(),
+        figsize=(3.5, 5),
     ):
         """
-        plots all spectra associated with a galaxy object
+        Plots either a specific spectra or all spectra provided in a dictionary.
+
+        This is a generic plotting function to be used either directly or to be
+        wrapped by helper methods through Synthesizer.
 
         Args:
+            spectra_to_plot (bool/list, string/string)
+                The specific combined galaxy spectra to plot. (e.g "total")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            stellar_spectra_to_plot (bool/list, string/string)
+                The specific stellar spectra to plot. (e.g. "incident")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            gas_spectra_to_plot (bool/list, string/string)
+                The specific gas spectra to plot. (e.g. "total")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            black_hole_spectra_to_plot (bool/list, string/string)
+                The specific black hole spectra to plot. (e.g "blr")
+                    - If True all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            show (bool)
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            ylimits (tuple)
+                The limits to apply to the y axis. If not provided the limits
+                will be calculated with the lower limit set to 1000 (100)
+                times less than the peak of the spectrum for rest_frame
+                (observed) spectra.
+            xlimits (tuple)
+                The limits to apply to the x axis. If not provided the optimal
+                limits are found based on the ylimits.
+            figsize (tuple)
+                Tuple with size 2 defining the figure size.
 
         Returns:
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
         """
+        # We need to construct the dictionary of all spectra to plot for each
+        # component based on what we've been passed
+        spectra = {}
 
-        fig = plt.figure(figsize=figsize)
+        # Get the combined spectra
+        if spectra_to_plot:
+            if isinstance(spectra_to_plot, list):
+                spectra.update({self.spectra[key] for key in spectra_to_plot})
+            else:
+                spectra.update(self.spectra)
 
-        left = 0.15
-        height = 0.7
-        bottom = 0.1
-        width = 0.8
+        # Get the stellar spectra
+        if stellar_spectra_to_plot:
+            if isinstance(stellar_spectra_to_plot, list):
+                spectra.update(
+                    {self.stars.spectra[key] for key in stellar_spectra_to_plot}
+                )
+            else:
+                spectra.update(self.stars.spectra)
 
-        ax = fig.add_axes((left, bottom, width, height))
-        filter_ax = ax.twinx()
+        # Get the gas spectra
+        if gas_spectra_to_plot:
+            if isinstance(gas_spectra_to_plot, list):
+                spectra.update({self.gas.spectra[key] for key in gas_spectra_to_plot})
+            else:
+                spectra.update(self.gas.spectra)
 
-        if not isinstance(spectra_to_plot, list):
-            spectra_to_plot = list(self.spectra.keys())
+        # Get the black hole spectra
+        if black_hole_spectra_to_plot:
+            if isinstance(black_hole_spectra_to_plot, list):
+                spectra.update(
+                    {
+                        self.black_holes.spectra[key]
+                        for key in black_hole_spectra_to_plot
+                    }
+                )
+            else:
+                spectra.update(self.black_holes.spectra)
 
-        for sed_name in spectra_to_plot:
-            sed = self.spectra[sed_name]
-            sed.get_fnu(cosmo, z)
-            ax.plot(sed.obslam, sed.fnu, lw=1, alpha=0.8, label=sed_name)
-            print(sed_name)
-
-            if fc:
-                sed.get_broadband_fluxes(fc, verbose=verbose)
-                for f in fc:
-                    wv = f.pivwv()
-                    filter_ax.plot(f.lam, f.t)
-                    ax.scatter(wv, sed.broadband_fluxes[f.filter_code], zorder=4)
-
-        # ax.set_xlim([5000., 100000.])
-        # ax.set_ylim([0., 100])
-        filter_ax.set_ylim([3, 0])
-        ax.legend(fontsize=8, labelspacing=0.0)
-        ax.set_xlabel(r"$\rm log_{10}(\lambda_{obs}/\AA)$")
-        ax.set_ylabel(r"$\rm log_{10}(f_{\nu}/nJy)$")
-
-        if show:
-            plt.show()
-
-        return fig, ax
+        return plot_observed_spectra(
+            spectra,
+            show=show,
+            ylimits=ylimits,
+            xlimits=xlimits,
+            figsize=figsize,
+            draw_legend=isinstance(spectra, dict),
+        )
