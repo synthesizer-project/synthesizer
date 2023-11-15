@@ -11,7 +11,7 @@ from unyt import Myr, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.line import Line, LineCollection
-from synthesizer.sed import Sed
+from synthesizer.sed import Sed, plot_spectra, plot_observed_spectra
 from synthesizer.units import Quantity
 
 
@@ -698,9 +698,7 @@ class StarsComponent:
                 self.spectra["young_emergent"]._lnu = self.spectra[
                     "young_attenuated"
                 ]._lnu
-                self.spectra["old_emergent"]._lnu = self.spectra[
-                    "old_attenuated"
-                ]._lnu
+                self.spectra["old_emergent"]._lnu = self.spectra["old_attenuated"]._lnu
             else:
                 self.spectra["young_emergent"]._lnu = (
                     self.spectra["young_escaped"]._lnu
@@ -793,7 +791,9 @@ class StarsComponent:
         # If only one line specified convert to a list to avoid writing a
         # longer if statement
         if isinstance(line_ids, str):
-            line_ids = [line_ids, ]
+            line_ids = [
+                line_ids,
+            ]
 
         # Dictionary holding Line objects
         lines = {}
@@ -865,7 +865,9 @@ class StarsComponent:
         # then generate them
         if "intrinsic" not in self.lines:
             intrinsic_lines = self.get_line_intrinsic(
-                grid, line_ids, fesc=fesc,
+                grid,
+                line_ids,
+                fesc=fesc,
             )
         else:
             intrinsic_lines = self.lines["intrinsic"]
@@ -876,9 +878,7 @@ class StarsComponent:
         # Loop over the intrinsic lines
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # Calculate attenuation
-            T_BC = dust_curve_BC.get_transmission(
-                tau_v_BC, intrinsic_line._wavelength
-            )
+            T_BC = dust_curve_BC.get_transmission(tau_v_BC, intrinsic_line._wavelength)
             T_ISM = dust_curve_ISM.get_transmission(
                 tau_v_ISM, intrinsic_line._wavelength
             )
@@ -985,128 +985,115 @@ class StarsComponent:
         return young, old
 
     def plot_spectra(
-            self,
-            show=False,
-            spectra_to_plot=None,
-            ylimits=("peak", 5),
-            figsize=(3.5, 5),
+        self,
+        spectra_to_plot=None,
+        show=False,
+        ylimits=(),
+        xlimits=(),
+        figsize=(3.5, 5),
     ):
         """
-        plots all spectra associated with a galaxy object
+        Plots either a specific spectra or all spectra provided in a dictionary.
+
+        This is a generic plotting function to be used either directly or to be
+        wrapped by helper methods through Synthesizer.
 
         Args:
-            show (bool):
-                flag for whether to show the plot or just return the
-                figure and axes
-            spectra_to_plot (None, list):
-                list of named spectra to plot that are present in
-                `galaxy.spectra`
-            figsize (tuple):
-                tuple with size 2 defining the figure size
+            spectra_to_plot (string/list, string)
+                The specific spectra to plot.
+                    - If None all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            show (bool)
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            ylimits (tuple)
+                The limits to apply to the y axis. If not provided the limits
+                will be calculated with the lower limit set to 1000 (100) times less
+                than the peak of the spectrum for rest_frame (observed) spectra.
+            xlimits (tuple)
+                The limits to apply to the x axis. If not provided the optimal
+                limits are found based on the ylimits.
+            figsize (tuple)
+                Tuple with size 2 defining the figure size.
 
         Returns:
-            fig (object)
-            ax (object)
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
         """
-
-        fig = plt.figure(figsize=figsize)
-
-        left = 0.15
-        height = 0.6
-        bottom = 0.1
-        width = 0.8
-
-        ax = fig.add_axes((left, bottom, width, height))
-
-        if not isinstance(spectra_to_plot, list):
-            spectra_to_plot = list(self.spectra.keys())
-
-        # only plot FIR if 'total' is plotted otherwise just plot UV-NIR
-        if "total" in spectra_to_plot:
-            xlim = [2.0, 7.0]
+        # Handling whether we are plotting all spectra, specific spectra, or
+        # a single spectra
+        if spectra_to_plot is None:
+            spectra = self.spectra
+        elif isinstance(spectra_to_plot, list):
+            spectra = {self.spectra[key] for key in spectra_to_plot}
         else:
-            xlim = [2.0, 4.5]
+            spectra = self.spectra[spectra_to_plot]
 
-        ypeak = -100
-        for sed_name in spectra_to_plot:
-            sed = self.spectra[sed_name]
-            ax.plot(
-                np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, label=sed_name
-            )
-
-            if np.max(np.log10(sed.lnu)) > ypeak:
-                ypeak = np.max(np.log10(sed.lnu))
-
-        # ax.set_xlim([2.5, 4.2])
-
-        if ylimits[0] == "peak":
-            if ypeak == ypeak:
-                ylim = [ypeak - ylimits[1], ypeak + 0.5]
-            ax.set_ylim(ylim)
-
-        ax.set_xlim(xlim)
-
-        ax.legend(fontsize=8, labelspacing=0.0)
-        ax.set_xlabel(r"$\rm log_{10}(\lambda/\AA)$")
-        ax.set_ylabel(r"$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$")
-
-        if show:
-            plt.show()
-
-        return fig, ax
+        return plot_spectra(
+            spectra,
+            show=show,
+            ylimits=ylimits,
+            xlimits=xlimits,
+            figsize=figsize,
+            draw_legend=isinstance(spectra, dict),
+        )
 
     def plot_observed_spectra(
         self,
-        cosmo,
-        z,
-        fc=None,
-        show=False,
         spectra_to_plot=None,
-        figsize=(3.5, 5.0),
-        verbose=True,
+        show=False,
+        ylimits=(),
+        xlimits=(),
+        figsize=(3.5, 5),
     ):
         """
-        plots all spectra associated with a galaxy object
+        Plots either a specific spectra or all spectra provided in a dictionary.
+
+        This is a generic plotting function to be used either directly or to be
+        wrapped by helper methods through Synthesizer.
 
         Args:
+            spectra_to_plot (string/list, string)
+                The specific spectra to plot.
+                    - If None all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            show (bool)
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            ylimits (tuple)
+                The limits to apply to the y axis. If not provided the limits
+                will be calculated with the lower limit set to 1000 (100) times less
+                than the peak of the spectrum for rest_frame (observed) spectra.
+            xlimits (tuple)
+                The limits to apply to the x axis. If not provided the optimal
+                limits are found based on the ylimits.
+            figsize (tuple)
+                Tuple with size 2 defining the figure size.
 
         Returns:
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
         """
+        # Handling whether we are plotting all spectra, specific spectra, or
+        # a single spectra
+        if spectra_to_plot is None:
+            spectra = self.spectra
+        elif isinstance(spectra_to_plot, list):
+            spectra = {self.spectra[key] for key in spectra_to_plot}
+        else:
+            spectra = self.spectra[spectra_to_plot]
 
-        fig = plt.figure(figsize=figsize)
-
-        left = 0.15
-        height = 0.7
-        bottom = 0.1
-        width = 0.8
-
-        ax = fig.add_axes((left, bottom, width, height))
-        filter_ax = ax.twinx()
-
-        if not isinstance(spectra_to_plot, list):
-            spectra_to_plot = list(self.spectra.keys())
-
-        for sed_name in spectra_to_plot:
-            sed = self.spectra[sed_name]
-            sed.get_fnu(cosmo, z)
-            ax.plot(sed.obslam, sed.fnu, lw=1, alpha=0.8, label=sed_name)
-            print(sed_name)
-
-            if fc:
-                sed.get_broadband_fluxes(fc, verbose=verbose)
-                for f in fc:
-                    wv = f.pivwv()
-                    filter_ax.plot(f.lam, f.t)
-                    ax.scatter(wv, sed.broadband_fluxes[f.filter_code], zorder=4)
-
-        # ax.set_xlim([5000., 100000.])
-        # ax.set_ylim([0., 100])
-        filter_ax.set_ylim([3, 0])
-        ax.legend(fontsize=8, labelspacing=0.0)
-        ax.set_xlabel(r"$\rm log_{10}(\lambda_{obs}/\AA)$")
-        ax.set_ylabel(r"$\rm log_{10}(f_{\nu}/nJy)$")
-
-        if show:
-            plt.show()
-
-        return fig, ax
+        return plot_observed_spectra(
+            spectra,
+            show=show,
+            ylimits=ylimits,
+            xlimits=xlimits,
+            figsize=figsize,
+            draw_legend=isinstance(spectra, dict),
+        )
