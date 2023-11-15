@@ -48,26 +48,26 @@ if __name__ == "__main__":
 
         # Get SEDs for the particle galaxy object
         particle_galaxy = particle_galaxies[i]
-        particle_galaxy.get_spectra_incident(grid)
-        particle_galaxy.get_spectra_reprocessed(grid, fesc=0.1)
-        particle_galaxy.get_spectra_screen(grid, tau_v=0.33)
-        particle_sed = particle_galaxy.spectra[spectrum]
+        particle_galaxy.stars.get_spectra_incident(grid)
+        particle_galaxy.stars.get_spectra_reprocessed(grid, fesc=0.1)
+        particle_galaxy.stars.get_spectra_screen(grid, tau_v=0.33)
+        particle_sed = particle_galaxy.stars.spectra[spectrum]
         particle_SEDs.append(particle_sed.lnu)
 
         # Get SEDs for the parametric NNI galaxy object
         parametric_NNI_galaxy = parametric_NNI_galaxies[i]
-        parametric_NNI_galaxy.get_spectra_incident(grid)
-        parametric_NNI_galaxy.get_spectra_reprocessed(grid, fesc=0.1)
-        parametric_NNI_galaxy.get_spectra_screen(grid, tau_v=0.33)
-        parametric_sed = parametric_NNI_galaxy.spectra[spectrum]
+        parametric_NNI_galaxy.stars.get_spectra_incident(grid)
+        parametric_NNI_galaxy.stars.get_spectra_reprocessed(grid, fesc=0.1)
+        parametric_NNI_galaxy.stars.get_spectra_screen(grid, tau_v=0.33)
+        parametric_sed = parametric_NNI_galaxy.stars.spectra[spectrum]
         parametric_NNI_SEDs.append(parametric_sed.lnu)
 
         # Get SEDs for the parametric RGI galaxy object
         parametric_RGI_galaxy = parametric_RGI_galaxies[i]
-        parametric_RGI_galaxy.get_spectra_incident(grid)
-        parametric_RGI_galaxy.get_spectra_reprocessed(grid, fesc=0.1)
-        parametric_RGI_galaxy.get_spectra_screen(grid, tau_v=0.33)
-        parametric_sed = parametric_RGI_galaxy.spectra[spectrum]
+        parametric_RGI_galaxy.stars.get_spectra_incident(grid)
+        parametric_RGI_galaxy.stars.get_spectra_reprocessed(grid, fesc=0.1)
+        parametric_RGI_galaxy.stars.get_spectra_screen(grid, tau_v=0.33)
+        parametric_sed = parametric_RGI_galaxy.stars.spectra[spectrum]
         parametric_RGI_SEDs.append(parametric_sed.lnu)
 
         

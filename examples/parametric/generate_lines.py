@@ -5,14 +5,14 @@ Generate lines from parametric galaxy
 Example for generating a emission lines for a parametric galaxy. This example 
 will:
 - show the available lines to a grid
-- build a parametric galaxy (see make_sfzh and make_sed)
+- build a parametric galaxy (see make_stars and make_sed)
 - calculate intrinsic line properties
 - calculate dust-attenuated line properties
 """
 
 
 from synthesizer.grid import Grid
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
 
@@ -30,23 +30,19 @@ if __name__ == "__main__":
     grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, 
                 read_lines=True)
 
-    # define the parameters of the star formation and metal enrichment 
+    # define the functional form of the star formation and metal enrichment
     # histories
-    sfh_p = {"duration": 100 * Myr}
-    Z_p = {"log10Z": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
-
-    # define the functional form of the star formation and metal enrichment 
-    # histories
-    sfh = SFH.Constant(sfh_p)  # constant star formation
-    Zh = ZH.deltaConstant(Z_p)  # constant metallicity
+    sfh = SFH.Constant(duration=100 * Myr)
+    metal_dist = ZDist.DeltaConstant(log10metallicity=-2.0)
 
     # get the 2D star formation and metal enrichment history for the given SPS 
     # grid and print summary.
-    sfzh = generate_sfzh(grid.log10age, grid.metallicity, sfh, Zh)
-    print(sfzh)
+    stars = Stars(grid.log10age, grid.metallicity, sf_hist_func=sfh,
+                 metal_dist_func=metal_dist)
+    print(stars)
 
     # create the Galaxy object and print a summary
-    galaxy = Galaxy(sfzh)
+    galaxy = Galaxy(stars)
     print(galaxy)
 
     # define list of lines that we're interested in. Note that we can provide

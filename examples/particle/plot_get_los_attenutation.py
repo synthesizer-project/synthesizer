@@ -15,7 +15,8 @@ import matplotlib.gridspec as gridspec
 from unyt import yr, Myr, kpc, arcsec, Mpc
 
 from synthesizer.grid import Grid
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric import SFH, ZDist
+from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.stars import Stars
 from synthesizer.particle.gas import Gas
@@ -43,14 +44,20 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 # Define the grid (normally this would be defined by an SPS grid)
 log10ages = np.arange(6.0, 10.5, 0.1)
 metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
-Z_p = {"Z": 0.01}
-Zh = ZH.deltaConstant(Z_p)
+Z_p = {"metallicity": 0.01}
+metal_dist = ZDist.DeltaConstant(**Z_p)
 sfh_p = {"duration": 100 * Myr}
-sfh = SFH.Constant(sfh_p)  # constant star formation
+sfh = SFH.Constant(**sfh_p)  # constant star formation
 
 # Generate the star formation metallicity history
 mass = 10**10
-sfzh = generate_sfzh(log10ages, metallicities, sfh, Zh, stellar_mass=mass)
+param_stars = ParametricStars(
+    log10ages,
+    metallicities,
+    sf_hist_func=sfh,
+    metal_dist_func=metal_dist,
+    initial_mass=mass,
+)
 
 for n in [10, 100]: # , 1000, 10000]:
     xs = []
@@ -78,7 +85,9 @@ for n in [10, 100]: # , 1000, 10000]:
         # we will also pass some keyword arguments for attributes
         # we will need for imaging
         stars = sample_sfhz(
-            sfzh,
+            param_stars.sfzh,
+            param_stars.log10ages,
+            param_stars.log10metallicities,
             n,
             coordinates=coords,
             current_masses=np.full(n, 10**8.7 / n),
