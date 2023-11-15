@@ -337,9 +337,9 @@ class Survey:
         for ind, gal in enumerate(self.galaxies):
             # Are we getting a flux or rest frame?
             if spectra_type == "incident":
-                _specs[ind, :] = gal.get_spectra_incident(grid)._lnu
+                _specs[ind, :] = gal.stars.get_spectra_incident(grid)._lnu
             elif spectra_type == "intrinsic":
-                _specs[ind, :] = gal.get_spectra_intrinsic(grid)._lnu
+                _specs[ind, :] = gal.stars.get_spectra_intrinsic(grid)._lnu
 
         # Create and store an SED object for these SEDs
         self.seds[spectra_type] = Sed(lam=grid.lam, lnu=_specs)
