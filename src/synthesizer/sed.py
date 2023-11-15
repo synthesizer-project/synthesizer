@@ -1152,6 +1152,9 @@ def plot_spectra(
             else:
                 plt_spectra = sed.fnu
 
+            # Prettify the label
+            key = key.replace("_", " ").title()
+
             # Plot this spectra
             ax.plot(lam, plt_spectra, lw=1, alpha=0.8, label=key)
 
