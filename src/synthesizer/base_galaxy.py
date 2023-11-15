@@ -358,7 +358,7 @@ class BaseGalaxy:
         # Get the combined spectra
         if spectra_to_plot:
             if isinstance(spectra_to_plot, list):
-                spectra.update({self.spectra[key] for key in spectra_to_plot})
+                spectra.update({key: self.spectra[key] for key in spectra_to_plot})
             else:
                 spectra.update(self.spectra)
 
@@ -366,7 +366,10 @@ class BaseGalaxy:
         if stellar_spectra_to_plot:
             if isinstance(stellar_spectra_to_plot, list):
                 spectra.update(
-                    {self.stars.spectra[key] for key in stellar_spectra_to_plot}
+                    {
+                        "Stellar " + key: self.stars.spectra[key]
+                        for key in stellar_spectra_to_plot
+                    }
                 )
             else:
                 spectra.update(self.stars.spectra)
@@ -374,7 +377,9 @@ class BaseGalaxy:
         # Get the gas spectra
         if gas_spectra_to_plot:
             if isinstance(gas_spectra_to_plot, list):
-                spectra.update({self.gas.spectra[key] for key in gas_spectra_to_plot})
+                spectra.update(
+                    {"Gas " + key: self.gas.spectra[key] for key in gas_spectra_to_plot}
+                )
             else:
                 spectra.update(self.gas.spectra)
 
@@ -383,7 +388,7 @@ class BaseGalaxy:
             if isinstance(black_hole_spectra_to_plot, list):
                 spectra.update(
                     {
-                        self.black_holes.spectra[key]
+                        "Black Hole" + key: self.black_holes.spectra[key]
                         for key in black_hole_spectra_to_plot
                     }
                 )
