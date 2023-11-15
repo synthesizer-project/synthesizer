@@ -1175,39 +1175,64 @@ def plot_spectra(
 
     # Do we not have y limtis?
     if len(ylimits) == 0:
-        # Find the current limits
-        ylimits = ax.get_ylim()
-
-        # Set the lower limit to be 100 times lower than the peak for rest frame
-        # and 100 times lower than the peak for observed
-        if rest_frame:
-            ylimits[0] = ylimits[1] / 1000
-        else:
-            ylimits[0] = ylimits[1] / 100
-
-    # Do we not have x limits?
-    if len(xlimits) > 0:
         # Need to do this differently for multiple or singular seds
         if isinstance(spectra, Sed):
-            # Set up xlimits
-            xlimits = []
-
-            # Derive the x limits from data above the ylimits
+            # Get the maximum
             if rest_frame:
-                lams_above = sed.lam[sed.lnu > ylimits[0]]
+                max_val = np.max(spectra.lnu)
             else:
-                lams_above = sed.lam[sed.fnu > ylimits[0]]
+                max_val = np.max(spectra.fnu)
 
             # Derive the x limits
-            xlimits[0] = np.min(lams_above) * (1 - 0.1)
-            xlimits[1] = np.max(lams_above) * (1 + 0.1)
+            ylimits = [
+                10 ** (np.log10(max_val) - 5),
+                10 ** (np.log10(max_val) * 1.05),
+            ]
+
+        else:
+            # Define initial xlimits
+            ylimits = [np.inf, -np.inf]
+
+            # Loop over spectra and get the total required limits
+            for sed in spectra.values():
+                # Get the maximum
+                if rest_frame:
+                    max_val = np.max(sed.lnu)
+                else:
+                    max_val = np.max(sed.fnu)
+
+                # Derive the x limits
+                y_up = 10 ** (np.log10(max_val) * 1.05)
+                y_low = 10 ** (np.log10(max_val) - 5)
+
+                # Update limits
+                if y_low < ylimits[0]:
+                    ylimits[0] = y_low
+                if y_up > ylimits[1]:
+                    ylimits[1] = y_up
+
+    # Do we not have x limits?
+    if len(xlimits) == 0:
+        # Need to do this differently for multiple or singular seds
+        if isinstance(spectra, Sed):
+            # Derive the x limits from data above the ylimits
+            if rest_frame:
+                lams_above = spectra.lam[spectra.lnu > ylimits[0]]
+            else:
+                lams_above = spectra.lam[spectra.fnu > ylimits[0]]
+
+            # Derive the x limits
+            xlimits = [
+                10 ** (np.log10(np.min(lams_above)) * 0.9),
+                10 ** (np.log10(np.max(lams_above)) * 1.1),
+            ]
 
         else:
             # Define initial xlimits
             xlimits = [np.inf, -np.inf]
 
             # Loop over spectra and get the total required limits
-            for sed in spectra:
+            for sed in spectra.values():
                 # Derive the x limits from data above the ylimits
                 if rest_frame:
                     lams_above = sed.lam[sed.lnu > ylimits[0]]
@@ -1215,8 +1240,8 @@ def plot_spectra(
                     lams_above = sed.lam[sed.fnu > ylimits[0]]
 
                 # Derive the x limits
-                x_low = np.min(lams_above) * (1 - 0.1)
-                x_up = np.max(lams_above) * (1 + 0.1)
+                x_low = 10 ** (np.log10(np.min(lams_above)) * 0.9)
+                x_up = 10 ** (np.log10(np.max(lams_above)) * 1.1)
 
                 # Update limits
                 if x_low < xlimits[0]:
@@ -1232,7 +1257,7 @@ def plot_spectra(
     if draw_legend:
         ax.legend(fontsize=8, labelspacing=0.0)
 
-    # Parse the units for the labels
+    # Parse the units for the labels and make them pretty
     if x_units is None:
         x_units = str(lam.units)
     else:
@@ -1241,10 +1266,12 @@ def plot_spectra(
         y_units = str(plt_spectra.units)
     else:
         y_units = str(y_units)
+    x_units = x_units.replace("/", " / ").replace("*", "")
+    y_units = y_units.replace("/", " / ").replace("*", "")
 
     # Label the axes
-    ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]")
-    ax.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]")
+    ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
+    ax.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
 
     # Are we showing?
     if show:
