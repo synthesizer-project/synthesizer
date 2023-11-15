@@ -301,6 +301,17 @@ class Sed:
                 The spectral luminosity density per Angstrom array.
         """
         return self.llam
+    
+    @property
+    def wavelength(self):
+        """
+        Alias to lam (wavelength array).
+
+        Returns
+            wavelength (unyt_array)
+                The wavelength array.
+        """
+        return self.lam
 
     @property
     def _spec_dims(self):
