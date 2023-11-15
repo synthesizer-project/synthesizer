@@ -1135,6 +1135,13 @@ def plot_spectra(
         if rest_frame:
             plt_spectra = spectra.lnu
         else:
+            # Ensure we have fluxes
+            if spectra.fnu is None:
+                raise exceptions.MissingSpectraType(
+                    "This Sed has no fluxes! Have you called Sed.get_fnu()?"
+                )
+
+            # Ok everything is fine
             plt_spectra = spectra.fnu
 
         # Plot the spectra
@@ -1150,6 +1157,14 @@ def plot_spectra(
             if rest_frame:
                 plt_spectra = sed.lnu
             else:
+                # Ensure we have fluxes
+                if sed.fnu is None:
+                    raise exceptions.MissingSpectraType(
+                        f"This Sed has no fluxes ({key})! "
+                        "Have you called Sed.get_fnu()?"
+                    )
+
+                # Ok everything is fine
                 plt_spectra = sed.fnu
 
             # Prettify the label
