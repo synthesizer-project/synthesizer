@@ -276,9 +276,31 @@ class Sed:
 
         Returns
             luminosity (unyt_array)
-                The pectral luminosity density per Angstrom array.
+                The spectral luminosity density per Angstrom array.
         """
         return self.nu * self.lnu / self.lam
+
+    @property
+    def luminosity_nu(self):
+        """
+        Alias to lnu.
+
+        Returns
+            luminosity (unyt_array)
+                The spectral luminosity density per Hz array.
+        """
+        return self.lnu 
+    
+    @property
+    def luminosity_lambda(self):
+        """
+        Alias to llam.
+
+        Returns
+            luminosity (unyt_array)
+                The spectral luminosity density per Angstrom array.
+        """
+        return self.llam
 
     @property
     def _spec_dims(self):
