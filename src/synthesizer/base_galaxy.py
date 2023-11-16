@@ -232,7 +232,7 @@ class BaseGalaxy:
             )
 
         # Loop over all stellar spectra
-        for sed in self.spectra.values():
+        for sed in self.stars.spectra.values():
             # Calculate the observed spectra
             sed.get_fnu(
                 cosmo=cosmo,
