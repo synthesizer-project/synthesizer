@@ -84,5 +84,5 @@ if __name__ == "__main__":
         filters=fc,
         show=True,
         combined_spectra=False,
-        stellar_spectra=True,
+        stellar_spectra=sed,
     )
