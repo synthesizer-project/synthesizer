@@ -40,16 +40,16 @@ class Galaxy(BaseGalaxy):
 
     """
 
-    __slots__ = [
-        "spectra",
-        "spectra_array",
-        "lam",
-        "stars",
-        "gas",
-        "sf_gas_metallicity",
-        "sf_gas_mass",
-        "gas_mass",
-    ]
+    # __slots__ = [
+    #     "spectra",
+    #     "spectra_array",
+    #     "lam",
+    #     "stars",
+    #     "gas",
+    #     "sf_gas_metallicity",
+    #     "sf_gas_mass",
+    #     "gas_mass",
+    # ]
 
     def __init__(
         self,
