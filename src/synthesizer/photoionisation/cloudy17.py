@@ -130,9 +130,9 @@ def create_cloudy_input(model_name, shape_commands, abundances,
 
     default_params = {
         # ionisation parameter
-        "log10U": -2,
+        "ionisation_parameter": 0.01,
         # radius in log10 parsecs, only important for spherical geometry
-        "log10radius": -2,
+        "radius": 0.01,
         # covering factor. Keep as 1 as it is more efficient to simply combine
         # SEDs to get != 1.0 values
         "covering_factor": False,
@@ -143,7 +143,7 @@ def create_cloudy_input(model_name, shape_commands, abundances,
         # K, if not provided the command is not used
         "T_floor": False,
         # Hydrogen density
-        "log10n_H": 2.5,
+        "hydrogen_density": 10**(2.5),
         # redshift, only necessary if CMB heating included
         "z": 0.0,
         # include CMB heating
@@ -257,7 +257,8 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     else:
         f_graphite, f_Si, f_pah = 0, 0, 0
 
-    log10U = params["log10U"]
+    U = params["ionisation_parameter"]
+    log10U = np.log10(U)
 
     # plane parallel geometry
     if params["geometry"] == "planeparallel":
@@ -272,10 +273,9 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     if params["geometry"] == "spherical":
         # in the spherical geometry case I think U is some average U, not U at
         # the inner face of the cloud.
-        log10Q = np.log10(calculate_Q_from_U(10**log10U,
-                                             10**params["log10n_H"]))
+        log10Q = np.log10(calculate_Q_from_U(U, params["hydrogen_density"]))
         cinput.append(f"Q(H) = {log10Q}\n")
-        cinput.append(f'radius {params["log10radius"]} log parsecs\n')
+        cinput.append(f'radius {np.log10(params["radius"])} log parsecs\n')
         cinput.append("sphere\n")
 
     # add background continuum
@@ -286,8 +286,8 @@ def create_cloudy_input(model_name, shape_commands, abundances,
         cinput.append(f'CMB {params["z"]}\n')
 
     # define hydrogend density
-    if params["log10n_H"]:
-        cinput.append(f'hden {params["log10n_H"]} log constant density\n')
+    if params["hydrogen_density"]:
+        cinput.append(f'hden {np.log10(params["hydrogen_density"])} log constant density\n')
 
     # covering factor
     if params["covering_factor"]:
