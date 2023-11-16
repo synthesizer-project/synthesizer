@@ -13,14 +13,14 @@ Example usages:
                      redshift=redshift, accretion_rate=accretion_rate, ...)
 """
 import numpy as np
-from unyt import c
-
+from unyt import c, deg
 from synthesizer.particle.particles import Particles
+from synthesizer.components import BlackholesComponent
 from synthesizer.units import Quantity
 from synthesizer import exceptions
 
 
-class BlackHoles(Particles):
+class BlackHoles(Particles, BlackholesComponent):
     """
     The base BlackHoles class. This contains all data a collection of black
     holes could contain. It inherits from the base Particles class holding
@@ -49,46 +49,49 @@ class BlackHoles(Particles):
     """
 
     # Define the allowed attributes
-    __slots__ = [
-        "_masses",
-        "_coordinates",
-        "_velocities",
-        "metallicities",
-        "nparticles",
-        "redshift",
-        "_accretion_rate",
-        "_bb_temperature",
-        "_bol_luminosity",
-        "_softening_lengths",
-        "nbh",
-    ]
-
-    # Define class level Quantity attributes
-    accretion_rate = Quantity()
-    bol_luminosity = Quantity()
-    bb_temperature = Quantity()
-    masses = Quantity()
+    # TODO: update this
+    # __slots__ = [
+    #     "_masses",
+    #     "_coordinates",
+    #     "_velocities",
+    #     "metallicities",
+    #     "nparticles",
+    #     "redshift",
+    #     "_accretion_rate",
+    #     "_bb_temperature",
+    #     "_bol_luminosity",
+    #     "_softening_lengths",
+    #     "nbh",
+    # ]
 
     def __init__(
         self,
         masses,
+        accretion_rates,
+        epsilons=0.1,
+        inclinations=None,
+        spins=None,
         metallicities=None,
         redshift=None,
-        accretion_rate=None,
         coordinates=None,
         velocities=None,
         softening_length=None,
     ):
         """
-        Intialise the Stars instance. The first 3 arguments are always required.
-        All other arguments are optional attributes applicable in different
-        situations.
+        Intialise the Stars instance. The first two arguments are always 
+        required. All other arguments are optional attributes applicable 
+        in different situations.
 
         Args:
             masses (array-like, float)
                 The mass of each particle in Msun.
             metallicities (array-like, float)
                 The metallicity of the region surrounding the/each black hole.
+            epsilons (array-like, float)
+                The radiative efficiency. By default set to 0.1.
+            inclination (array-like, float)
+                The inclination of the blackhole. Necessary for many emission 
+                models.
             redshift (float)
                 The redshift/s of the black hole particles.
             accretion_rate (array-like, float)
@@ -105,7 +108,7 @@ class BlackHoles(Particles):
         #  TODO: handle when individual values are passed instead of arrays,
         # i.e. when there is only a single black hole.
 
-        # Instantiate parent
+        # Instantiate parents
         Particles.__init__(
             self,
             coordinates=coordinates,
@@ -116,26 +119,24 @@ class BlackHoles(Particles):
             nparticles=len(masses),
         )
 
-        # Accretion rate in Msun / yr
-        self.accretion_rate = accretion_rate
-
-        # Bolometric luminosity
-        self.bol_luminosity = None
-
-        # Calculate the big bump temperature
-        self.bb_temperature = (
-            2.24e9 * self._accretion_rate ** (1 / 4) * self._masses**-0.5
+        # for the time being this takes plural quantities but gives 
+        # BlackholesComponent sing
+        BlackholesComponent.__init__(
+            self,
+            mass=masses,
+            accretion_rate=accretion_rates,
+            epsilon=epsilons,
+            inclination=inclinations,
+            spin=spins,
+            metallicity=metallicities,
         )
-
-        # The metallicity of the region surrounding the black hole.
-        self.metallicities = metallicities
 
         # Set a frontfacing clone of the number of particles with clearer
         # naming
         self.nbh = self.nparticles
 
         # Check the arguments we've been given
-        self._check_bh_args()
+        # self._check_bh_args()
 
     def _check_bh_args(self):
         """
@@ -157,35 +158,16 @@ class BlackHoles(Particles):
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
 
-    def calculate_bolometric_luminosity(self, epsilon=0.1):
+
+    def calculate_random_inclination(self):
         """
-        Create the black hole bolometric luminosity
-
-        Parameters
-        ----------
-        mdot: unyt_array or float
-            The black hole accretion rate. If not unyt_array assume Msun/yr
-
-        epsilon: float
-            The radiative efficiency, by default 0.1.
-
-        Returns
-        ----------
-        unyt_array
-            The black hole bolometric luminosity
-
+        Add random inclinations to blackholes.
         """
 
-        self.bol_luminosity = epsilon * self.accretion_rate * c**2
+        self.inclination = deg * np.random.uniform(
+            low=0.,
+            high=90.,
+            size=self.nparticles)
 
-        return self.bol_luminosity
 
 
-# class Cloudy:
-
-#     """
-#     A class to hold routines for employing the Cloudy AGN model.
-#     """
-
-#     def __init__(self):
-#         return None
