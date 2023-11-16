@@ -303,6 +303,7 @@ class BaseGalaxy:
         ylimits=(),
         xlimits=(),
         figsize=(3.5, 5),
+        filters=None,
     ):
         """
         Plots either a specific spectra or all spectra provided in a dictionary.
@@ -344,6 +345,9 @@ class BaseGalaxy:
                 limits are found based on the ylimits.
             figsize (tuple)
                 Tuple with size 2 defining the figure size.
+            filters (FilterCollection)
+                If given then the photometry is computed and both the photometry
+                and filter curves are plotted
 
         Returns:
             fig (matplotlib.pyplot.figure)
@@ -402,4 +406,5 @@ class BaseGalaxy:
             xlimits=xlimits,
             figsize=figsize,
             draw_legend=isinstance(spectra, dict),
+            filters=filters,
         )
