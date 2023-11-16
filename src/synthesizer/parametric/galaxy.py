@@ -43,14 +43,19 @@ class Galaxy(BaseGalaxy):
                 " Did you mean synthesizer.particle.Galaxy instead?"
             )
 
+        # Instantiate the parent
+        BaseGalaxy.__init__(
+            self,
+            stars=stars,
+            gas=None,
+            black_holes=None,
+            redshift=redshift,
+        )
+
+        # The name
         self.name = name
 
-        # Attach the parametric stars object
-        self.stars = stars
-
-        # add an extra dimension to the sfzh to allow the fast summation
-        # **** TODO: Get rid of this expression or
-        # use this throughout?
+        # Local pointer to SFZH array
         self.sfzh = self.stars.sfzh
 
         # Define the dictionary to hold spectra
@@ -58,9 +63,6 @@ class Galaxy(BaseGalaxy):
 
         # Define the dictionary to hold images
         self.images = {}
-
-        # The redshift of the galaxy
-        self.redshift = redshift
 
     def __str__(self):
         """Function to print a basic summary of the Galaxy object.

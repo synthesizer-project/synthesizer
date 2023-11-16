@@ -29,7 +29,7 @@ class BaseGalaxy:
             The BlackHole/s object holding information about the black hole/s.
     """
 
-    def __init__(self, stars, gas, black_holes, **kwargs):
+    def __init__(self, stars, gas, black_holes, redshift, **kwargs):
         """
         Instantiate the base Galaxy class.
 
@@ -49,6 +49,9 @@ class BaseGalaxy:
         self.stars = stars
         self.gas = gas
         self.black_holes = black_holes
+
+        # The redshift of the galaxy
+        self.redshift = redshift
 
         if isinstance(self, BaseGalaxy):
             raise Warning(
@@ -420,6 +423,7 @@ class BaseGalaxy:
 
         return plot_observed_spectra(
             spectra,
+            self.redshift,
             show=show,
             ylimits=ylimits,
             xlimits=xlimits,
