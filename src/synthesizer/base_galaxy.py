@@ -358,6 +358,12 @@ class BaseGalaxy:
         if combined_spectra:
             if isinstance(combined_spectra, list):
                 spectra.update({key: self.spectra[key] for key in combined_spectra})
+            elif isinstance(combined_spectra, Sed):
+                spectra.update(
+                    {
+                        "combined_spectra": combined_spectra,
+                    }
+                )
             else:
                 spectra.update(self.spectra)
 
@@ -370,6 +376,12 @@ class BaseGalaxy:
                         for key in stellar_spectra
                     }
                 )
+            elif isinstance(stellar_spectra, Sed):
+                spectra.update(
+                    {
+                        "stellar_spectra": stellar_spectra,
+                    }
+                )
             else:
                 spectra.update(self.stars.spectra)
 
@@ -378,6 +390,12 @@ class BaseGalaxy:
             if isinstance(gas_spectra, list):
                 spectra.update(
                     {"Gas " + key: self.gas.spectra[key] for key in gas_spectra}
+                )
+            elif isinstance(gas_spectra, Sed):
+                spectra.update(
+                    {
+                        "gas_spectra": gas_spectra,
+                    }
                 )
             else:
                 spectra.update(self.gas.spectra)
@@ -389,6 +407,12 @@ class BaseGalaxy:
                     {
                         "Black Hole" + key: self.black_holes.spectra[key]
                         for key in black_hole_spectra
+                    }
+                )
+            elif isinstance(black_hole_spectra, Sed):
+                spectra.update(
+                    {
+                        "black_hole_spectra": black_hole_spectra,
                     }
                 )
             else:

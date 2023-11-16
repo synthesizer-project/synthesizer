@@ -1172,9 +1172,6 @@ def plot_spectra(
 
     # Loop over the dict we have been handed
     for key, sed in spectra.items():
-        # Get the wavelengths to plot
-        lam = sed.lam
-
         # Get the appropriate luminosity/flux and wavelengths
         if rest_frame:
             plt_spectra = sed.lnu
