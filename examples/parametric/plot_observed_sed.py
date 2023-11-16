@@ -83,4 +83,6 @@ if __name__ == "__main__":
     galaxy.plot_observed_spectra(
         filters=fc,
         show=True,
+        combined_spectra=False,
+        stellar_spectra=True,
     )
