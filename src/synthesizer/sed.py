@@ -1371,6 +1371,7 @@ def plot_observed_spectra(
     if filters is not None:
         # Add a filter axis
         filter_ax = ax.twinx()
+        filter_ax.set_ylim(0, None)
 
         # PLot each filter curve
         for f in filters:
