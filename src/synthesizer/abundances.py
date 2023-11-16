@@ -287,6 +287,9 @@ class Abundances(Elements):
 
         # Set helium mass fraction following Bressan et al. (2012)
         self.helium_mass_fraction = 0.2485 + 1.7756 * self.metallicity
+
+        print('huh')
+
         self.Y = self.helium_mass_fraction
         # Define mass fraction in hydrogen
         self.hydrogen_mass_fraction = 1.0 - self.helium_mass_fraction - self.metallicity
