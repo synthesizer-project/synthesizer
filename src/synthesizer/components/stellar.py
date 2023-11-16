@@ -993,10 +993,8 @@ class StarsComponent:
         figsize=(3.5, 5),
     ):
         """
-        Plots either a specific spectra or all spectra provided in a dictionary.
-
-        This is a generic plotting function to be used either directly or to be
-        wrapped by helper methods through Synthesizer.
+        Plots either specific spectra (specified via spectra_to_plot) or all
+        spectra on the child Stars object.
 
         Args:
             spectra_to_plot (string/list, string)

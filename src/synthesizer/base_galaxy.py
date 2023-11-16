@@ -202,10 +202,10 @@ class BaseGalaxy:
         figsize=(3.5, 5),
     ):
         """
-        Plots either a specific spectra or all spectra provided in a dictionary.
-
-        This is a generic plotting function to be used either directly or to be
-        wrapped by helper methods through Synthesizer.
+        Plots either specific observed spectra (specified via combined_spectra,
+        stellar_spectra, gas_spectra, and/or black_hole_spectra) or all spectra
+        for any of the spectra arguments that are True. If any are false that
+        component is ignored.
 
         Args:
             combined_spectra (bool/list, string/string)
@@ -304,10 +304,10 @@ class BaseGalaxy:
         filters=None,
     ):
         """
-        Plots either a specific spectra or all spectra provided in a dictionary.
-
-        This is a generic plotting function to be used either directly or to be
-        wrapped by helper methods through Synthesizer.
+        Plots either specific observed spectra (specified via combined_spectra,
+        stellar_spectra, gas_spectra, and/or black_hole_spectra) or all spectra
+        for any of the spectra arguments that are True. If any are false that
+        component is ignored.
 
         Args:
             combined_spectra (bool/list, string/string)
