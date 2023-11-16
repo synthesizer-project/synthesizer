@@ -1144,7 +1144,9 @@ def plot_spectra(
 
     # Make a singular Sed a dictionary for ease below
     if isinstance(spectra, Sed):
-        spectra = {label if label is not None else "spectra": spectra, }
+        spectra = {
+            label if label is not None else "spectra": spectra,
+        }
 
         # Don't draw a legend if not label given
         if label is None and draw_legend:
@@ -1181,8 +1183,7 @@ def plot_spectra(
             # Ensure we have fluxes
             if sed.fnu is None:
                 raise exceptions.MissingSpectraType(
-                    f"This Sed has no fluxes ({key})! "
-                    "Have you called Sed.get_fnu()?"
+                    f"This Sed has no fluxes ({key})! " "Have you called Sed.get_fnu()?"
                 )
 
             # Ok everything is fine
@@ -1197,7 +1198,6 @@ def plot_spectra(
 
     # Do we not have y limtis?
     if len(ylimits) == 0:
-
         # Define initial xlimits
         ylimits = [np.inf, -np.inf]
 
@@ -1267,8 +1267,12 @@ def plot_spectra(
     y_units = y_units.replace("/", r"\ / \ ").replace("*", " \ ")
 
     # Label the axes
-    ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
-    ax.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
+    if rest_frame
+        ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
+        ax.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
+    else:
+        ax.set_xlabel(r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$")
+        ax.set_ylabel(r"$F_{\nu}/[\mathrm{" + y_units + r"}]$")
 
     # Are we showing?
     if show:
@@ -1365,15 +1369,29 @@ def plot_observed_spectra(
 
     # Are we including photometry and filters?
     if filters is not None:
-
         # Add a filter axis
         filter_ax = ax.twinx()
 
+        # PLot each filter curve
+        for f in filters:
+            filter_ax.plot(f.lam, f.t)
+
         # Make a singular Sed a dictionary for ease below
         if isinstance(spectra, Sed):
-            spectra = {label if label is not None else "spectra": spectra, }
+            spectra = {
+                label if label is not None else "spectra": spectra,
+            }
 
         # Loop over spectra plotting photometry and filter curves
         for sed in spectra:
+            # Get the photometry
+            sed.get_broadband_fluxes(filters)
 
-            #
+            # Plot the photometry for each filter
+            for f in filters:
+                piv_lam = f.pivwv()
+                ax.scatter(
+                    piv_lam,
+                    sed.broadband_fluxes[f.filter_code],
+                    zorder=4,
+                )
