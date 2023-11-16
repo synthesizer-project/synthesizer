@@ -36,7 +36,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
                  cov_nlr=0.1,
                  v_nlr=500*km/s,
                  theta_torus=10*deg,
-                 torus_emission_model=Greybody(1000*K,1.5),
+                 torus_emission_model=Greybody(1000*K, 1.5),
                  **kwargs,
                  ):
 
@@ -78,7 +78,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
         self.disc_model = disc_model
         self.grid_dir = grid_dir
         self.metallicity = metallicity
-        self.metallicity = metallicity
         self.U_blr = U_blr
         self.log10U_blr = np.log10(U_blr)
         self.n_H_blr = n_H_blr
@@ -104,11 +103,13 @@ class UnifiedAGN(BlackHoleEmissionModel):
                              grid_dir=self.grid_dir,
                              read_lines=False)
 
-        # Get grid parameters
+        # Get grid parameters from the grid 
         self.grid_parameters = self.nlr_grid.axes[:]
 
         # Replace grid parameters with renamed version.
-        # TODO: to eliminate this by changing the grid naming
+        # TODO: to eliminate this by changing the grid naming.
+        # These parameter names were chosen to align with the original
+        # grid creation but can be harmonised to synthesizer standards.
         if 'log10Mbh' in self.grid_parameters:
             index = self.grid_parameters.index('log10Mbh')
             self.grid_parameters[index] = 'log10mass'
@@ -127,6 +128,22 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 self.disc_parameters.append(parameter)
 
 
+        # list of parameters. This is a placeholder for something cleverer.
+        self.parameters = [
+            'metallicity',
+            'U_blr',
+            'n_H_blr',
+            'cov_blr',
+            'v_blr',
+            'U_nlr',
+            'n_H_nlr',
+            'cov_nlr',
+            'v_nlr',
+            'theta_torus',
+            'torus_emission_model',
+            ]
+        self.parameters += self.disc_parameters
+
         # dictionary holding LineCollections for each (relevant) component
         self.lines = {}
 
@@ -142,12 +159,17 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # update parameters
         for key, value in kwargs.items():
             setattr(self, key, value)
+            # Save logged versions. 
+            # This will ultimately be eliminated by changing the grid axes, but...
+            if key in ['mass', 'accretion_rate', 'accretion_rate_eddington']:
+                setattr(self, 'log10'+key, np.log10(value))
 
         # check that all disc parameters
-        for parameter in self.disc_parameters:
-            if parameter not in kwargs.keys():
-                raise MissingArgument(f'{parameter} needs to be provided')
-            
+        # reinstate this when the grid axes are renamed
+        # for parameter in self.disc_parameters:
+        #     if parameter not in kwargs.keys():
+        #         raise MissingArgument(f'{parameter} needs to be provided')
+                
     def _get_grid_point(self, grid, gridt, isotropic=False):
         """
         Private method used to get the grid point.
