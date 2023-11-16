@@ -130,8 +130,8 @@ class BlackholesComponent:
             ('accretion_rate_eddington', 'accretion_rates_eddington'),
             ('epsilon', 'epsilons'),
             ('eddington_ratio', 'eddington_ratios')]:    
-
             setattr(self, plural, getattr(self, singular))
+
 
     def calculate_bolometric_luminosity(self):
         """
@@ -222,7 +222,8 @@ class BlackholesComponent:
 
         parameters = {}
         for parameter in emission_model.parameters:
-            if parameter in self.__dict:
+            print(parameter)
+            if parameter in self.__dict__:
                 parameters[parameter] = getattr(self, parameter)
 
         print(parameters)
