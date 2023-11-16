@@ -53,7 +53,7 @@ class BaseGalaxy:
         # The redshift of the galaxy
         self.redshift = redshift
 
-        if isinstance(self, BaseGalaxy):
+        if getattr(self, "galaxy_type") is None:
             raise Warning(
                 "Instantiating a BaseGalaxy object is not "
                 "supported behaviour. Instead, you should "
