@@ -283,9 +283,6 @@ class Abundances(Elements):
         # set depletions to be zero
         self.depletion = {element: 0.0 for element in self.all_elements}
 
-        print(self.metallicity)
-        print(type(self.metallicity))
-
         # Set helium mass fraction following Bressan et al. (2012)
         self.helium_mass_fraction = 0.2485 + 1.7756 * self.metallicity
 
