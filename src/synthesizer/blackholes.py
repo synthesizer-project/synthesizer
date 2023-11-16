@@ -1,6 +1,8 @@
 """
 A generic blackholes class currently holding (ultimately) various blackhole 
-emission models.
+emission models. 
+
+TODO: this should probably be moved into components/blackholes.py
 """
 
 import numpy as np
@@ -10,7 +12,16 @@ from synthesizer.grid import Grid
 from synthesizer.sed import Sed
 from synthesizer.exceptions import MissingArgument
 
-class UnifiedAGN:
+
+class BlackHoleEmissionModel:
+    """
+    Potential parent class for blackhole emission models.
+    """
+
+    pass
+
+
+class UnifiedAGN(BlackHoleEmissionModel):
 
     def __init__(self,
                  grid_dir=None,
@@ -83,20 +94,38 @@ class UnifiedAGN:
         self.theta_torus = theta_torus
         self.torus_emission_model = torus_emission_model
 
-        # open NLR and BLR grids
+        # Open NLR and BLR grids
+        # TODO: replace this by a single file.
         self.nlr_grid = Grid(grid_name=f'{disc_model}_cloudy-c17.03-nlr',
-                            grid_dir=grid_dir,
-                            read_lines=False)
+                             grid_dir=grid_dir,
+                             read_lines=False)
         
         self.blr_grid = Grid(grid_name=f'{disc_model}_cloudy-c17.03-blr',
-                        grid_dir=self.grid_dir,
-                        read_lines=False)
+                             grid_dir=self.grid_dir,
+                             read_lines=False)
 
-        # get grid parameters
-        self.grid_parameters = set(self.nlr_grid.axes[:])
+        # Get grid parameters
+        self.grid_parameters = self.nlr_grid.axes[:]
 
-        # get disc parameters
-        self.disc_parameters = self.grid_parameters - set(['metallicity', 'log10U', 'log10n_H'])
+        # Replace grid parameters with renamed version.
+        # TODO: to eliminate this by changing the grid naming
+        if 'log10Mbh' in self.grid_parameters:
+            index = self.grid_parameters.index('log10Mbh')
+            self.grid_parameters[index] = 'log10mass'
+        if 'log10MdotEdd' in self.grid_parameters:
+            index = self.grid_parameters.index('log10MdotEdd')
+            self.grid_parameters[index] = 'log10accretion_rate_eddington'
+        if 'cosinc' in self.grid_parameters:
+            index = self.grid_parameters.index('cosinc')
+            self.grid_parameters[index] = 'inclination'
+
+        # Get disc parameters by removing line region parameters
+        # TODO: replace this by saving something in the Grid file.
+        self.disc_parameters = []
+        for parameter in self.grid_parameters:
+            if parameter not in ['metallicity', 'log10U', 'log10n_H']:
+                self.disc_parameters.append(parameter)
+
 
         # dictionary holding LineCollections for each (relevant) component
         self.lines = {}
@@ -119,7 +148,6 @@ class UnifiedAGN:
             if parameter not in kwargs.keys():
                 raise MissingArgument(f'{parameter} needs to be provided')
             
-
     def _get_grid_point(self, grid, gridt, isotropic=False):
         """
         Private method used to get the grid point.
@@ -128,7 +156,7 @@ class UnifiedAGN:
 
         # calculate the grid point.
         parameters = []
-        for parameter in grid.axes:
+        for parameter in self.grid_parameters:
             # for log10nH and log10U the parameters are labelled e.g. 'log10nH_nlr'
             if parameter in ['log10n_H', 'log10U']:
                 parameter = parameter+'_'+gridt
@@ -203,7 +231,6 @@ class UnifiedAGN:
         self.lines[line_region] = None
 
     def _get_spectra_torus(self):
-
         """
         Generate the torus.
 
@@ -228,7 +255,6 @@ class UnifiedAGN:
         self.spectra['torus'] = Sed(disc.lam, lnu=lnu)
 
     def get_spectra(self, **kwargs):
-
         """
         Generate the spectra, updating the parameters if required.
 
@@ -238,8 +264,6 @@ class UnifiedAGN:
         """
 
         # update parameters
-
-        print(kwargs)
         self._update_parameters(**kwargs)
 
         self._get_spectra_disc()
@@ -250,45 +274,7 @@ class UnifiedAGN:
         self.spectra['total'] = self.spectra['disc'] + \
             self.spectra['blr'] + self.spectra['nlr'] + self.spectra['torus']
         
-        # CALCULATE LINES
-        self.lines['total'] = None
-
-        return self.spectra['total'], self.lines['total']
+        return self.spectra['total']
     
 
-# class UnifiedAGNSED(UnifiedBase):
 
-#     def __init__(self,
-#                  log10Mbh=9.,
-#                  log10MdotEdd=0.,
-#                  inclination=45*deg,
-#                  spin=None,
-#                  **kwargs
-#                  ):
-
-#         """
-#         Arguments:
-#             log10Mbh (float)
-#                 The log10 of the blackhole mass in units of the Sun's mass.
-#                 Default value is 9.0. 
-#             log10MbhdotEdd (float)
-#                 The log10 accretion rate expressed in units of the Eddington
-#                 accretion rate. Default value is 0.0, i.e. accreting at
-#                 Eddington.
-#             spin (float)
-#                 The dimensionless spin of the blackhole. Not used in the 
-#                 default model.
-#             inclination (unyt.unit_object.Unit)
-#                 The inclination of the disc relative to the observer such that
-#                 inclination=0 is viewing the disc face on. Default is 45 deg.
-#         """
-
-#         self.grid_dir = grid_dir 
-#         self.log10Mbh = log10Mbh
-#         self.log10MdotEdd = log10MdotEdd
-#         self.spin = spin
-#         self.inclination = inclination
-#         self.cosinc = inclination
-
-#         # get arguments from UnifiedBase
-#         UnifiedBase.__init__(self, kwargs)
