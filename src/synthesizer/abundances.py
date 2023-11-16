@@ -248,8 +248,8 @@ class Abundances(Elements):
         self,
         metallicity=Elements.solar_metallicity,
         alpha=0.0,
-        carbon_to_oxygen_ratio="Dopita2006",
-        nitrogen_to_oxygen_ratio="Dopita2006",
+        carbon_abundance="Dopita2006",
+        nitrogen_abundance="Dopita2006",
         dust_to_metal_ratio=False
     ):
         """
@@ -261,10 +261,10 @@ class Abundances(Elements):
             Mass fraction in metals, default is Solar metallicity.
         alpha: float
             Enhancement of the alpha elements
-        carbon_to_oxygen_ratio: float, str
-            log10(C/O) ratio. A str is the name of the function f(Z) to use instead.
-        nitrogen_to_oxygen_ratio: float, str
-            log10(N/O) ratio. A str is the name of the function f(Z) to use instead.
+        carbon_abundance: float, str
+            The total Carbon abundance. A str is the name of the function f(Z) to use instead.
+        nitrogen_abundance: float, str
+            The total Nitrogen abundance. A str is the name of the function f(Z) to use instead.
         dust_to_metal_ratio: float
             the fraction of metals in dust
 
@@ -276,8 +276,8 @@ class Abundances(Elements):
         self.metallicity = metallicity  # mass fraction in metals
         self.Z = self.metallicity # because this has specific meaning
         self.alpha = alpha
-        self.carbon_to_oxygen_ratio = carbon_to_oxygen_ratio
-        self.nitrogen_to_oxygen_ratio = nitrogen_to_oxygen_ratio
+        self.carbon_abundance = carbon_abundance
+        self.nitrogen_abundance = nitrogen_abundance
         self.dust_to_metal_ratio = dust_to_metal_ratio
 
         # set depletions to be zero
@@ -306,9 +306,9 @@ class Abundances(Elements):
             total[e] += alpha
 
         # Rescale Nitrogen
-        if isinstance(nitrogen_to_oxygen_ratio, float):
-            total["N"] += nitrogen_to_oxygen_ratio
-        elif isinstance(nitrogen_to_oxygen_ratio, str):
+        if isinstance(nitrogen_abundance, float):
+            total["N"] += nitrogen_abundance
+        elif isinstance(nitrogen_abundance, str):
             # if N == 'Feltre2016':
             #     """ apply scaling for secondary Nitrogen production using relation in Feltre16.
             #         this is itself based on Groves (2004).
@@ -319,7 +319,7 @@ class Abundances(Elements):
             #     total['N'] = NH + total['H'] + (self.sol['N']-self.sol['H'])
             #     print(total['N'])
 
-            if nitrogen_to_oxygen_ratio == "Dopita2006":
+            if nitrogen_abundance == "Dopita2006":
                 """
                 Scaling applied to match with our solar metallicity, this done by
                 solving the equation to get the adopted solar metallicity.
@@ -330,10 +330,10 @@ class Abundances(Elements):
                 )
 
         # Rescale Carbon
-        if isinstance(carbon_to_oxygen_ratio, float):
-            total["C"] += carbon_to_oxygen_ratio
-        elif isinstance(carbon_to_oxygen_ratio, str):
-            if carbon_to_oxygen_ratio == "Dopita2006":
+        if isinstance(carbon_abundance, float):
+            total["C"] += carbon_abundance
+        elif isinstance(carbon_abundance, str):
+            if carbon_abundance == "Dopita2006":
                 """
                 Scaling applied to match with our solar metallicity, this done by
                 solving the equation to get the adopted solar metallicity.
@@ -441,8 +441,8 @@ class Abundances(Elements):
         pstr += f"Z: {self.Z:.3f}\n"
         pstr += f"Z/Z_sol: {self.metallicity/self.solar_metallicity:.2g}\n"
         pstr += f"alpha: {self.alpha:.3f}\n"
-        pstr += f"carbon_to_oxygen_ratio: {self.carbon_to_oxygen_ratio} (scaling of C/H relative to Solar)\n"
-        pstr += f"nitrogen_to_oxygen_ratio: {self.nitrogen_to_oxygen_ratio} (scaling of N/H relative to Solar)\n"
+        pstr += f"carbon_abundance: {self.carbon_abundance} \n"
+        pstr += f"nitrogen_abundance: {self.nitrogen_abundance} \n"
         pstr += f"dust-to-metal ratio: {self.dust_to_metal_ratio}\n"
         pstr += f"MAX dust-to-metal ratio: {self.max_dust_to_metal_ratio:.3f}\n"
 
