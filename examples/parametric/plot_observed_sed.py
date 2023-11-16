@@ -59,14 +59,16 @@ if __name__ == "__main__":
         initial_mass=stellar_mass,
     )
 
+    # Define redshift
+    z = 10.0
+
     # create a galaxy object
-    galaxy = Galaxy(stars)
+    galaxy = Galaxy(stars, redshift=z)
 
     # generate spectra using pacman model (complex)
     sed = galaxy.stars.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1)
 
     # now calculate the observed frame spectra
-    z = 10.0  # redshift
     sed.get_fnu(
         cosmo, z, igm=Madau96
     )  # generate observed frame spectra, assume Madau96 IGM model

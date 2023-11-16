@@ -1043,6 +1043,7 @@ class StarsComponent:
 
     def plot_observed_spectra(
         self,
+        redshift,
         spectra_to_plot=None,
         show=False,
         ylimits=(),
@@ -1057,6 +1058,8 @@ class StarsComponent:
         wrapped by helper methods through Synthesizer.
 
         Args:
+            redshift (float)
+                The redshift of the observation.
             spectra_to_plot (string/list, string)
                 The specific spectra to plot.
                     - If None all spectra are plotted.
@@ -1095,6 +1098,7 @@ class StarsComponent:
 
         return plot_observed_spectra(
             spectra,
+            redshift,
             show=show,
             ylimits=ylimits,
             xlimits=xlimits,
