@@ -237,7 +237,7 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     which will again introduce issues on mass conservation.
     """
 
-    if (abundances.d2m > 0) & params["grains"]:
+    if (abundances.dust_to_metal_ratio > 0) & params["grains"]:
         delta_C = 10 ** abundances.total["C"] - 10 ** abundances.gas["C"]
         delta_PAH = 0.01 * (10 ** abundances.total["C"])
         delta_graphite = delta_C - delta_PAH
