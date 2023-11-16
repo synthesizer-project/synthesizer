@@ -85,6 +85,9 @@ class Galaxy(BaseGalaxy):
                 " Did you mean synthesizer.parametric.Galaxy instead?"
             )
 
+        # Set the type of galaxy
+        self.galaxy_type = "Particle"
+
         # Instantiate the parent
         BaseGalaxy.__init__(
             self,
