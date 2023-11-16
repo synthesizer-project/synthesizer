@@ -289,8 +289,8 @@ class Sed:
             luminosity (unyt_array)
                 The spectral luminosity density per Hz array.
         """
-        return self.lnu 
-    
+        return self.lnu
+
     @property
     def luminosity_lambda(self):
         """
@@ -301,7 +301,7 @@ class Sed:
                 The spectral luminosity density per Angstrom array.
         """
         return self.llam
-    
+
     @property
     def wavelength(self):
         """
@@ -1142,6 +1142,15 @@ def plot_spectra(
             The matplotlib axes object containing the plotted data.
     """
 
+    # Make a singular Sed a dictionary for ease below
+    if isinstance(spectra, Sed):
+        spectra = {label if label is not None else "spectra": spectra, }
+
+        # Don't draw a legend if not label given
+        if label is None and draw_legend:
+            print("No label given, we will not draw a legened")
+            draw_legend = False
+
     # If we don't already have a figure, make one
     if fig is None:
         # Set up the figure
@@ -1159,134 +1168,83 @@ def plot_spectra(
         # Set the scale to log log
         ax.loglog()
 
-    # Do we have a single spectra?
-    if isinstance(spectra, Sed):
+    # Loop over the dict we have been handed
+    for key, sed in spectra.items():
         # Get the wavelengths to plot
-        lam = spectra.lam
+        lam = sed.lam
 
-        # Get the appropriate luminosity/flux
+        # Get the appropriate luminosity/flux and wavelengths
         if rest_frame:
-            plt_spectra = spectra.lnu
+            plt_spectra = sed.lnu
+            lam = sed.lam
         else:
             # Ensure we have fluxes
-            if spectra.fnu is None:
+            if sed.fnu is None:
                 raise exceptions.MissingSpectraType(
-                    "This Sed has no fluxes! Have you called Sed.get_fnu()?"
+                    f"This Sed has no fluxes ({key})! "
+                    "Have you called Sed.get_fnu()?"
                 )
 
             # Ok everything is fine
-            plt_spectra = spectra.fnu
+            plt_spectra = sed.fnu
+            lam = sed.obslam
 
-        # Plot the spectra
-        ax.plot(lam, plt_spectra, lw=1, alpha=0.8, label=label)
+        # Prettify the label
+        key = key.replace("_", " ").title()
 
-    else:
-        # Loop over the dict we have been handed
-        for key, sed in spectra.items():
-            # Get the wavelengths to plot
-            lam = sed.lam
-
-            # Get the appropriate luminosity/flux
-            if rest_frame:
-                plt_spectra = sed.lnu
-            else:
-                # Ensure we have fluxes
-                if sed.fnu is None:
-                    raise exceptions.MissingSpectraType(
-                        f"This Sed has no fluxes ({key})! "
-                        "Have you called Sed.get_fnu()?"
-                    )
-
-                # Ok everything is fine
-                plt_spectra = sed.fnu
-
-            # Prettify the label
-            key = key.replace("_", " ").title()
-
-            # Plot this spectra
-            ax.plot(lam, plt_spectra, lw=1, alpha=0.8, label=key)
+        # Plot this spectra
+        ax.plot(lam, plt_spectra, lw=1, alpha=0.8, label=key)
 
     # Do we not have y limtis?
     if len(ylimits) == 0:
-        # Need to do this differently for multiple or singular seds
-        if isinstance(spectra, Sed):
+
+        # Define initial xlimits
+        ylimits = [np.inf, -np.inf]
+
+        # Loop over spectra and get the total required limits
+        for sed in spectra.values():
             # Get the maximum
             if rest_frame:
-                max_val = np.max(spectra.lnu)
+                max_val = np.max(sed.lnu)
             else:
-                max_val = np.max(spectra.fnu)
+                max_val = np.max(sed.fnu)
 
             # Derive the x limits
-            ylimits = [
-                10 ** (np.log10(max_val) - 5),
-                10 ** (np.log10(max_val) * 1.05),
-            ]
+            y_up = 10 ** (np.log10(max_val) * 1.05)
+            y_low = 10 ** (np.log10(max_val) - 5)
 
-        else:
-            # Define initial xlimits
-            ylimits = [np.inf, -np.inf]
-
-            # Loop over spectra and get the total required limits
-            for sed in spectra.values():
-                # Get the maximum
-                if rest_frame:
-                    max_val = np.max(sed.lnu)
-                else:
-                    max_val = np.max(sed.fnu)
-
-                # Derive the x limits
-                y_up = 10 ** (np.log10(max_val) * 1.05)
-                y_low = 10 ** (np.log10(max_val) - 5)
-
-                # Update limits
-                if y_low < ylimits[0]:
-                    ylimits[0] = y_low
-                if y_up > ylimits[1]:
-                    ylimits[1] = y_up
+            # Update limits
+            if y_low < ylimits[0]:
+                ylimits[0] = y_low
+            if y_up > ylimits[1]:
+                ylimits[1] = y_up
 
     # Do we not have x limits?
     if len(xlimits) == 0:
-        # Need to do this differently for multiple or singular seds
-        if isinstance(spectra, Sed):
+        # Define initial xlimits
+        xlimits = [np.inf, -np.inf]
+
+        # Loop over spectra and get the total required limits
+        for sed in spectra.values():
             # Derive the x limits from data above the ylimits
             if rest_frame:
-                lams_above = spectra.lam[spectra.lnu > ylimits[0]]
+                lams_above = sed.lam[sed.lnu > ylimits[0]]
             else:
-                lams_above = spectra.lam[spectra.fnu > ylimits[0]]
+                lams_above = sed.obslam[sed.fnu > ylimits[0]]
 
             # Saftey skip if no values are above the limit
-            if lams_above.size > 0:
-                # Derive the x limits
-                xlimits = [
-                    10 ** (np.log10(np.min(lams_above)) * 0.9),
-                    10 ** (np.log10(np.max(lams_above)) * 1.1),
-                ]
+            if lams_above.size == 0:
+                continue
 
-        else:
-            # Define initial xlimits
-            xlimits = [np.inf, -np.inf]
+            # Derive the x limits
+            x_low = 10 ** (np.log10(np.min(lams_above)) * 0.9)
+            x_up = 10 ** (np.log10(np.max(lams_above)) * 1.1)
 
-            # Loop over spectra and get the total required limits
-            for sed in spectra.values():
-                # Derive the x limits from data above the ylimits
-                if rest_frame:
-                    lams_above = sed.lam[sed.lnu > ylimits[0]]
-                else:
-                    lams_above = sed.lam[sed.fnu > ylimits[0]]
-
-                # Saftey skip if no values are above the limit
-                if lams_above.size == 0:
-                    continue
-
-                # Derive the x limits
-                x_low = 10 ** (np.log10(np.min(lams_above)) * 0.9)
-                x_up = 10 ** (np.log10(np.max(lams_above)) * 1.1)
-
-                # Update limits
-                if x_low < xlimits[0]:
-                    xlimits[0] = x_low
-                if x_up > xlimits[1]:
-                    xlimits[1] = x_up
+            # Update limits
+            if x_low < xlimits[0]:
+                xlimits[0] = x_low
+            if x_up > xlimits[1]:
+                xlimits[1] = x_up
 
     # Set the limits
     ax.set_xlim(*xlimits)
@@ -1331,6 +1289,7 @@ def plot_observed_spectra(
     draw_legend=True,
     x_units=None,
     y_units=None,
+    filters=None,
 ):
     """
     Plots either a specific observed spectra or all observed spectra
@@ -1377,6 +1336,9 @@ def plot_observed_spectra(
             The units of the y axis. This will be converted to a string
             and included in the axis label. By default the internal unit system
             is assumed unless this is passed.
+        filters (FilterCollection)
+            If given then the photometry is computed and both the photometry
+            and filter curves are plotted
 
     Returns:
         fig (matplotlib.pyplot.figure)
@@ -1385,7 +1347,8 @@ def plot_observed_spectra(
             The matplotlib axes object containing the plotted data.
     """
 
-    return plot_spectra(
+    # Get the observed spectra plot
+    fig, ax = plot_spectra(
         spectra,
         fig=fig,
         ax=ax,
@@ -1399,3 +1362,18 @@ def plot_observed_spectra(
         x_units=x_units,
         y_units=y_units,
     )
+
+    # Are we including photometry and filters?
+    if filters is not None:
+
+        # Add a filter axis
+        filter_ax = ax.twinx()
+
+        # Make a singular Sed a dictionary for ease below
+        if isinstance(spectra, Sed):
+            spectra = {label if label is not None else "spectra": spectra, }
+
+        # Loop over spectra plotting photometry and filter curves
+        for sed in spectra:
+
+            #
