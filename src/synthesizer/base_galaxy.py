@@ -189,10 +189,10 @@ class BaseGalaxy:
 
     def plot_spectra(
         self,
-        spectra_to_plot=True,
-        stellar_spectra_to_plot=False,
-        gas_spectra_to_plot=False,
-        black_hole_spectra_to_plot=False,
+        combined_spectra=True,
+        stellar_spectra=False,
+        gas_spectra=False,
+        black_hole_spectra=False,
         show=False,
         ylimits=(),
         xlimits=(),
@@ -205,22 +205,22 @@ class BaseGalaxy:
         wrapped by helper methods through Synthesizer.
 
         Args:
-            spectra_to_plot (bool/list, string/string)
+            combined_spectra (bool/list, string/string)
                 The specific combined galaxy spectra to plot. (e.g "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            stellar_spectra_to_plot (bool/list, string/string)
+            stellar_spectra (bool/list, string/string)
                 The specific stellar spectra to plot. (e.g. "incident")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            gas_spectra_to_plot (bool/list, string/string)
+            gas_spectra (bool/list, string/string)
                 The specific gas spectra to plot. (e.g. "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            black_hole_spectra_to_plot (bool/list, string/string)
+            black_hole_spectra (bool/list, string/string)
                 The specific black hole spectra to plot. (e.g "blr")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
@@ -250,36 +250,31 @@ class BaseGalaxy:
         spectra = {}
 
         # Get the combined spectra
-        if spectra_to_plot:
-            if isinstance(spectra_to_plot, list):
-                spectra.update({self.spectra[key] for key in spectra_to_plot})
+        if combined_spectra:
+            if isinstance(combined_spectra, list):
+                spectra.update({self.spectra[key] for key in combined_spectra})
             else:
                 spectra.update(self.spectra)
 
         # Get the stellar spectra
-        if stellar_spectra_to_plot:
-            if isinstance(stellar_spectra_to_plot, list):
-                spectra.update(
-                    {self.stars.spectra[key] for key in stellar_spectra_to_plot}
-                )
+        if stellar_spectra:
+            if isinstance(stellar_spectra, list):
+                spectra.update({self.stars.spectra[key] for key in stellar_spectra})
             else:
                 spectra.update(self.stars.spectra)
 
         # Get the gas spectra
-        if gas_spectra_to_plot:
-            if isinstance(gas_spectra_to_plot, list):
-                spectra.update({self.gas.spectra[key] for key in gas_spectra_to_plot})
+        if gas_spectra:
+            if isinstance(gas_spectra, list):
+                spectra.update({self.gas.spectra[key] for key in gas_spectra})
             else:
                 spectra.update(self.gas.spectra)
 
         # Get the black hole spectra
-        if black_hole_spectra_to_plot:
-            if isinstance(black_hole_spectra_to_plot, list):
+        if black_hole_spectra:
+            if isinstance(black_hole_spectra, list):
                 spectra.update(
-                    {
-                        self.black_holes.spectra[key]
-                        for key in black_hole_spectra_to_plot
-                    }
+                    {self.black_holes.spectra[key] for key in black_hole_spectra}
                 )
             else:
                 spectra.update(self.black_holes.spectra)
@@ -295,10 +290,10 @@ class BaseGalaxy:
 
     def plot_observed_spectra(
         self,
-        spectra_to_plot=True,
-        stellar_spectra_to_plot=False,
-        gas_spectra_to_plot=False,
-        black_hole_spectra_to_plot=False,
+        combined_spectra=True,
+        stellar_spectra=False,
+        gas_spectra=False,
+        black_hole_spectra=False,
         show=False,
         ylimits=(),
         xlimits=(),
@@ -312,22 +307,22 @@ class BaseGalaxy:
         wrapped by helper methods through Synthesizer.
 
         Args:
-            spectra_to_plot (bool/list, string/string)
+            combined_spectra (bool/list, string/string)
                 The specific combined galaxy spectra to plot. (e.g "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            stellar_spectra_to_plot (bool/list, string/string)
+            stellar_spectra (bool/list, string/string)
                 The specific stellar spectra to plot. (e.g. "incident")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            gas_spectra_to_plot (bool/list, string/string)
+            gas_spectra (bool/list, string/string)
                 The specific gas spectra to plot. (e.g. "total")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
                     - If a single string then only that spectra is plotted.
-            black_hole_spectra_to_plot (bool/list, string/string)
+            black_hole_spectra (bool/list, string/string)
                 The specific black hole spectra to plot. (e.g "blr")
                     - If True all spectra are plotted.
                     - If a list of strings each specifc spectra is plotted.
@@ -360,40 +355,40 @@ class BaseGalaxy:
         spectra = {}
 
         # Get the combined spectra
-        if spectra_to_plot:
-            if isinstance(spectra_to_plot, list):
-                spectra.update({key: self.spectra[key] for key in spectra_to_plot})
+        if combined_spectra:
+            if isinstance(combined_spectra, list):
+                spectra.update({key: self.spectra[key] for key in combined_spectra})
             else:
                 spectra.update(self.spectra)
 
         # Get the stellar spectra
-        if stellar_spectra_to_plot:
-            if isinstance(stellar_spectra_to_plot, list):
+        if stellar_spectra:
+            if isinstance(stellar_spectra, list):
                 spectra.update(
                     {
                         "Stellar " + key: self.stars.spectra[key]
-                        for key in stellar_spectra_to_plot
+                        for key in stellar_spectra
                     }
                 )
             else:
                 spectra.update(self.stars.spectra)
 
         # Get the gas spectra
-        if gas_spectra_to_plot:
-            if isinstance(gas_spectra_to_plot, list):
+        if gas_spectra:
+            if isinstance(gas_spectra, list):
                 spectra.update(
-                    {"Gas " + key: self.gas.spectra[key] for key in gas_spectra_to_plot}
+                    {"Gas " + key: self.gas.spectra[key] for key in gas_spectra}
                 )
             else:
                 spectra.update(self.gas.spectra)
 
         # Get the black hole spectra
-        if black_hole_spectra_to_plot:
-            if isinstance(black_hole_spectra_to_plot, list):
+        if black_hole_spectra:
+            if isinstance(black_hole_spectra, list):
                 spectra.update(
                     {
                         "Black Hole" + key: self.black_holes.spectra[key]
-                        for key in black_hole_spectra_to_plot
+                        for key in black_hole_spectra
                     }
                 )
             else:
