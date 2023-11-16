@@ -274,7 +274,7 @@ class Abundances(Elements):
 
         # save all parameters to object
         self.metallicity = metallicity  # mass fraction in metals
-        self.Z = self.metallicity # because this has specific meaning
+        self.Z = self.metallicity  # because this has specific meaning
         self.alpha = alpha
         self.carbon_abundance = carbon_abundance
         self.nitrogen_abundance = nitrogen_abundance
@@ -282,6 +282,8 @@ class Abundances(Elements):
 
         # set depletions to be zero
         self.depletion = {element: 0.0 for element in self.all_elements}
+
+        print(self.metallicity)
 
         # Set helium mass fraction following Bressan et al. (2012)
         self.helium_mass_fraction = 0.2485 + 1.7756 * self.metallicity
