@@ -245,7 +245,7 @@ class Elements:
 
 class Abundances(Elements):
     def __init__(
-        self, Z=Elements.Z_sol, alpha=0.0, C="Dopita2006", N="Dopita2006", d2m=False
+        self, Z=Elements.Z_sol, alpha=0.0, C="Dopita2006", N="Dopita2006", dust_to_metal_ratio=False
     ):
         """
         A class for calcualting elemental abundances including various scaling and depletion on to dust
@@ -260,7 +260,7 @@ class Abundances(Elements):
             log10(C/O) ratio. A str is the name of the function f(Z) to use instead.
         N: float, str
             log10(N/O) ratio. A str is the name of the function f(Z) to use instead.
-        d2m: float
+        dust_to_metal_ratio: float
             the fraction of metals in dust
 
         Returns
@@ -272,7 +272,7 @@ class Abundances(Elements):
         self.alpha = alpha
         self.C = C
         self.N = N
-        self.d2m = d2m
+        self.dust_to_metal_ratio = dust_to_metal_ratio
 
         # set depletions to be zero
         self.depletion = {element: 0.0 for element in self.all_elements}
@@ -351,11 +351,11 @@ class Abundances(Elements):
         self.gas = deepcopy(total)
 
         # calculate the maximum dust-to-metal ratio possible
-        self.max_d2m = self.get_max_d2m()
+        self.max_dust_to_metal_ratio = self.get_max_dust_to_metal_ratio()
 
-        if d2m:
+        if dust_to_metal_ratio:
             # check that the dust to metal ratio is allowed
-            if d2m <= self.max_d2m:
+            if dust_to_metal_ratio <= self.max_dust_to_metal_ratio:
                 # get scaled depletion values, i.e. the fraction of each element which is depleted on to dust
                 self.get_depletions()
 
@@ -381,11 +381,11 @@ class Abundances(Elements):
             else:
                 # this doesn't work
                 InconsistentParameter(
-                    f"The dust-to-metal ratio (d2m) must be less than the maximum possible ratio ({self.max_d2m:.2f})"
+                    f"The dust-to-metal ratio (dust_to_metal_ratio) must be less than the maximum possible ratio ({self.max_dust_to_metal_ratio:.2f})"
                 )
 
         else:
-            # if not d2m ratio is provided set the dust to be None
+            # if not dust_to_metal_ratio ratio is provided set the dust to be None
             self.dust = {element: -99 for element in self.all_elements}
             self.depletion = {element: 0.0 for element in self.all_elements}
 
@@ -431,8 +431,8 @@ class Abundances(Elements):
         pstr += f"alpha: {self.alpha:.3f}\n"
         pstr += f"C: {self.C} (scaling of C/H relative to Solar)\n"
         pstr += f"N: {self.N} (scaling of N/H relative to Solar)\n"
-        pstr += f"dust-to-metal ratio: {self.d2m}\n"
-        pstr += f"MAX dust-to-metal ratio: {self.max_d2m:.3f}\n"
+        pstr += f"dust-to-metal ratio: {self.dust_to_metal_ratio}\n"
+        pstr += f"MAX dust-to-metal ratio: {self.max_dust_to_metal_ratio:.3f}\n"
 
         pstr += "-" * 10 + "\n"
         pstr += "element log10(X/H)_total (log10(X/H)+12) [depletion] log10(X/H)_gas log10(X/H)_dust \n"
@@ -468,7 +468,7 @@ class Abundances(Elements):
         This function returns the depletion after scaling using the solar abundances and depletion patterns from the dust-to-metal ratio. This is the fraction of each element that is depleted on to dust.
         """
         for element in self.all_elements:
-            self.depletion[element] = (self.d2m / self.max_d2m) * (
+            self.depletion[element] = (self.dust_to_metal_ratio / self.max_dust_to_metal_ratio) * (
                 1.0 - self.default_depletion[element]
             )
 
@@ -485,7 +485,7 @@ class Abundances(Elements):
             self.sol[e] - self.sol[ref_element]
         )
 
-    def get_max_d2m(self):
+    def get_max_dust_to_metal_ratio(self):
         """
         This function determine the maximum dust-to-metal ratio
         """
@@ -500,7 +500,7 @@ class Abundances(Elements):
 
         return dust / self.Z
 
-    def get_d2m(self):
+    def get_dust_to_metal_ratio(self):
         """
         This function measures the dust-to-metal ratio for the calculated depletion
         """
