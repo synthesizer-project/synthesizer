@@ -36,7 +36,7 @@ class Particles:
     """
 
     # Define the allowed attributes
-    __slots__ = ["redshift", "nparticles"]
+    # __slots__ = ["redshift", "nparticles"]
 
     # Define class level Quantity attributes
     coordinates = Quantity()
