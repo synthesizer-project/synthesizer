@@ -1267,7 +1267,7 @@ def plot_spectra(
     y_units = y_units.replace("/", r"\ / \ ").replace("*", " \ ")
 
     # Label the axes
-    if rest_frame
+    if rest_frame:
         ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
         ax.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
     else:
