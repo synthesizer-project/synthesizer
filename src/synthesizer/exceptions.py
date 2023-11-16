@@ -3,6 +3,22 @@ The definitions for Synthesizer specific errors.
 """
 
 
+class MissingArgument(Exception):
+    """
+    Generic exception class for missing argument.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Missing argument"
+
 class InconsistentParameter(Exception):
     """
     Generic exception class for inconsistent parameters.
