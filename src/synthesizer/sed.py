@@ -1280,6 +1280,7 @@ def plot_spectra(
 
 def plot_observed_spectra(
     spectra,
+    redshift,
     fig=None,
     ax=None,
     show=False,
@@ -1306,6 +1307,8 @@ def plot_observed_spectra(
             The Sed objects from which to plot. This can either be a dictionary
             of Sed objects to plot multiple or a single Sed object to only plot
             one.
+        redshift (float)
+            The redshift of the observation.
         fig (matplotlib.pyplot.figure)
             The figure containing the axis. By default one is created in this
             function.
@@ -1353,7 +1356,7 @@ def plot_observed_spectra(
         spectra,
         fig=fig,
         ax=ax,
-        show=show,
+        show=False,
         ylimits=ylimits,
         xlimits=xlimits,
         figsize=figsize,
@@ -1371,7 +1374,7 @@ def plot_observed_spectra(
 
         # PLot each filter curve
         for f in filters:
-            filter_ax.plot(f.lam, f.t)
+            filter_ax.plot(f.lam * (1 + redshift), f.t)
 
         # Make a singular Sed a dictionary for ease below
         if isinstance(spectra, Sed):
@@ -1380,7 +1383,7 @@ def plot_observed_spectra(
             }
 
         # Loop over spectra plotting photometry and filter curves
-        for sed in spectra:
+        for sed in spectra.values():
             # Get the photometry
             sed.get_broadband_fluxes(filters)
 
@@ -1388,7 +1391,12 @@ def plot_observed_spectra(
             for f in filters:
                 piv_lam = f.pivwv()
                 ax.scatter(
-                    piv_lam,
+                    piv_lam * (1 + redshift),
                     sed.broadband_fluxes[f.filter_code],
                     zorder=4,
                 )
+
+    if show:
+        plt.show()
+
+    return fig, ax
