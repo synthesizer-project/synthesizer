@@ -8,17 +8,13 @@ from unyt import deg, km, cm, s, K
 from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
-
+from synthesizer.exceptions import MissingArgument
 
 class UnifiedAGN:
 
     def __init__(self,
                  grid_dir=None,
-                 disc_model='agnsed',
-                 log10Mbh=9.,
-                 log10MdotEdd=0.,
-                 inclination=45*deg,
-                 spin=None,
+                 disc_model=None,
                  metallicity=0.01,
                  U_blr=0.1,
                  n_H_blr=1E9/cm**3,
@@ -29,29 +25,12 @@ class UnifiedAGN:
                  cov_nlr=0.1,
                  v_nlr=500*km/s,
                  theta_torus=10*deg,
-                 torus_emission_model=Greybody(1000*K,1.5)
+                 torus_emission_model=Greybody(1000*K,1.5),
+                 **kwargs,
                  ):
 
         """
         Arguments:
-            grid_dir (str)
-                The path to the grid directory.
-            disc_model (str)
-                The assumed disc model. Default is the non-relativistic 
-                'agnsed' model.
-            log10Mbh (float)
-                The log10 of the blackhole mass in units of the Sun's mass.
-                Default value is 9.0. 
-            log10MbhdotEdd (float)
-                The log10 accretion rate expressed in units of the Eddington
-                accretion rate. Default value is 0.0, i.e. accreting at
-                Eddington.
-            spin (float)
-                The dimensionless spin of the blackhole. Not used in the 
-                default model.
-            inclination (unyt.unit_object.Unit)
-                The inclination of the disc relative to the observer such that
-                inclination=0 is viewing the disc face on. Default is 45 deg.
             metallicity (float)
                 The metallicity of the NLR and BLR gas. The default is 0.01.
             U_blr (float)
@@ -82,15 +61,12 @@ class UnifiedAGN:
             torus_emission_model (synthesizer.dust.emission)
                 The torus emission model. A synthesizer dust emission model.
                 Default is a Greybody with T=1000*K and emissivity=1.6.
-        """
+            **kwargs 
 
-        self.grid_dir = grid_dir 
+        """
         self.disc_model = disc_model
-        self.log10Mbh = log10Mbh
-        self.log10MdotEdd = log10MdotEdd
-        self.spin = spin,
-        self.inclination = inclination
-        self.cosinc = inclination
+        self.grid_dir = grid_dir
+        self.metallicity = metallicity
         self.metallicity = metallicity
         self.U_blr = U_blr
         self.log10U_blr = np.log10(U_blr)
@@ -107,11 +83,42 @@ class UnifiedAGN:
         self.theta_torus = theta_torus
         self.torus_emission_model = torus_emission_model
 
+        # open NLR and BLR grids
+        self.nlr_grid = Grid(grid_name=f'{disc_model}_cloudy-c17.03-nlr',
+                            grid_dir=grid_dir,
+                            read_lines=False)
+        
+        self.blr_grid = Grid(grid_name=f'{disc_model}_cloudy-c17.03-blr',
+                        grid_dir=self.grid_dir,
+                        read_lines=False)
+
+        # get grid parameters
+        self.grid_parameters = set(self.nlr_grid.axes[:])
+
+        # get disc parameters
+        self.disc_parameters = self.grid_parameters - set(['metallicity', 'log10U', 'log10n_H'])
+
         # dictionary holding LineCollections for each (relevant) component
         self.lines = {}
 
         # dictionary holding Seds for each component (and sub-component)
         self.spectra = {}
+
+    def _update_parameters(self, **kwargs):
+
+        """
+        Updates parameters.
+        """
+
+        # update parameters
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        # check that all disc parameters
+        for parameter in self.disc_parameters:
+            if parameter not in kwargs.keys():
+                raise MissingArgument(f'{parameter} needs to be provided')
+            
 
     def _get_grid_point(self, grid, gridt, isotropic=False):
         """
@@ -122,18 +129,14 @@ class UnifiedAGN:
         # calculate the grid point.
         parameters = []
         for parameter in grid.axes:
-
             # for log10nH and log10U the parameters are labelled e.g. 'log10nH_nlr'
             if parameter in ['log10n_H', 'log10U']:
                 parameter = parameter+'_'+gridt
             parameters.append(getattr(self, parameter))
 
-
-
         return grid.get_grid_point(parameters)
 
-
-    def get_spectra_disc(self, **kwargs):
+    def _get_spectra_disc(self, **kwargs):
         """
         Generate the disc spectra, updating the parameters if required.
 
@@ -143,32 +146,21 @@ class UnifiedAGN:
                 transmitted disc emission.
         """
 
-        # read the AGN grid
-        # it will be better to encapsulate the 3 HDF5 files into a 
-        # single HDF5 with different datasets for the disc, NLR, and BLR
-        nlr_grid = Grid(grid_name=f'{self.disc_model}_cloudy-c17.03-nlr',
-                         grid_dir=self.grid_dir,
-                         read_lines=False)
-        
-        blr_grid = Grid(grid_name=f'{self.disc_model}_cloudy-c17.03-blr',
-                    grid_dir=self.grid_dir,
-                    read_lines=False)
-        
         # get grid points
-        nlr_grid_point = self._get_grid_point(nlr_grid, 'nlr')
-        blr_grid_point = self._get_grid_point(blr_grid, 'blr')
+        nlr_grid_point = self._get_grid_point(self.nlr_grid, 'nlr')
+        blr_grid_point = self._get_grid_point(self.blr_grid, 'blr')
 
         # calculate the incident spectra. It doesn't matter which spectra we
         # use here since we're just using the incident. Note: this assumes the 
         # NLR and BLR are not overlapping.
         self.spectra['disc_incident'] = \
-            nlr_grid.get_spectra(nlr_grid_point, spectra_id='incident')
+            self.nlr_grid.get_spectra(nlr_grid_point, spectra_id='incident')
 
         # calculate the transmitted spectra
-        nlr_spectra = nlr_grid.get_spectra(nlr_grid_point, 
-                                           spectra_id='transmitted')
-        blr_spectra = blr_grid.get_spectra(blr_grid_point, 
-                                           spectra_id='transmitted')
+        nlr_spectra = self.nlr_grid.get_spectra(nlr_grid_point,
+                                                spectra_id='transmitted')
+        blr_spectra = self.blr_grid.get_spectra(blr_grid_point,
+                                                spectra_id='transmitted')
         self.spectra['disc_transmitted'] = self.cov_nlr * nlr_spectra \
             + self.cov_blr * blr_spectra
             
@@ -179,10 +171,7 @@ class UnifiedAGN:
         # calculate the total spectra, the sum of escaping and transmitted
         self.spectra['disc'] = self.spectra['disc_transmitted'] + self.spectra['disc_escaped']
 
-
-
-
-    def get_spectra_lr(self, line_region, **kwargs):
+    def _get_spectra_lr(self, line_region, **kwargs):
         """
         Generate the spectra of a generic line region, updating the parameters if required.
 
@@ -191,16 +180,14 @@ class UnifiedAGN:
                 The NLR spectra
         """
 
-        # read the AGN grid
-        # it will be better to encapsulate the 3 HDF5 files into a 
-        # single HDF5 with different datasets for the disc, NLR, and BLR
-        grid = Grid(grid_name=f'{self.disc_model}_cloudy-c17.03-{line_region}',
-                    grid_dir=self.grid_dir,
-                    read_lines=False)
-
-
-
-
+        if line_region == 'nlr':
+            grid = self.nlr_grid
+        elif line_region == 'blr':
+            grid = self.blr_grid
+        else:
+            print('line region not recognised')
+        
+        # get the grid point
         grid_point = self._get_grid_point(grid, line_region)
 
         # covering fraction
@@ -215,26 +202,15 @@ class UnifiedAGN:
         # add lines TO BE ADDED
         self.lines[line_region] = None
 
-    
-
-    def get_spectra_torus(self, **kwargs):
+    def _get_spectra_torus(self):
 
         """
-        Generate the torus, updating the parameters if required.
-
+        Generate the torus.
 
         Returns
             spectra (dict, synthesizer.sed.Sed)
                 Dictionary of synthesizer Sed instances.
         """
-
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-        # the torus modelling requires that we have already calculated the 
-        # disc spectra. 
-        if 'disc' not in self.spectra.keys():
-            self.calculate_disc()
 
         disc = self.spectra['disc']
 
@@ -256,19 +232,20 @@ class UnifiedAGN:
         """
         Generate the spectra, updating the parameters if required.
 
-
         Returns
             spectra (dict, synthesizer.sed.Sed)
                 Dictionary of synthesizer Sed instances.
         """
 
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+        # update parameters
 
-        self.get_spectra_disc()
-        self.get_spectra_lr('nlr')
-        self.get_spectra_lr('blr')
-        self.get_spectra_torus()
+        print(kwargs)
+        self._update_parameters(**kwargs)
+
+        self._get_spectra_disc()
+        self._get_spectra_lr('nlr')
+        self._get_spectra_lr('blr')
+        self._get_spectra_torus()
 
         self.spectra['total'] = self.spectra['disc'] + \
             self.spectra['blr'] + self.spectra['nlr'] + self.spectra['torus']
@@ -277,3 +254,41 @@ class UnifiedAGN:
         self.lines['total'] = None
 
         return self.spectra['total'], self.lines['total']
+    
+
+# class UnifiedAGNSED(UnifiedBase):
+
+#     def __init__(self,
+#                  log10Mbh=9.,
+#                  log10MdotEdd=0.,
+#                  inclination=45*deg,
+#                  spin=None,
+#                  **kwargs
+#                  ):
+
+#         """
+#         Arguments:
+#             log10Mbh (float)
+#                 The log10 of the blackhole mass in units of the Sun's mass.
+#                 Default value is 9.0. 
+#             log10MbhdotEdd (float)
+#                 The log10 accretion rate expressed in units of the Eddington
+#                 accretion rate. Default value is 0.0, i.e. accreting at
+#                 Eddington.
+#             spin (float)
+#                 The dimensionless spin of the blackhole. Not used in the 
+#                 default model.
+#             inclination (unyt.unit_object.Unit)
+#                 The inclination of the disc relative to the observer such that
+#                 inclination=0 is viewing the disc face on. Default is 45 deg.
+#         """
+
+#         self.grid_dir = grid_dir 
+#         self.log10Mbh = log10Mbh
+#         self.log10MdotEdd = log10MdotEdd
+#         self.spin = spin
+#         self.inclination = inclination
+#         self.cosinc = inclination
+
+#         # get arguments from UnifiedBase
+#         UnifiedBase.__init__(self, kwargs)
