@@ -46,18 +46,18 @@ class Gas(Particles):
     """
 
     # Define the allowed attributes
-    __slots__ = [
-        "metallicities",
-        "star_forming",
-        "log10metallicities",
-        "dust_to_metal_ratio",
-        "_dust_masses",
-        "_coordinates",
-        "_velocities",
-        "_smoothing_lengths",
-        "_softening_lengths",
-        "_masses",
-    ]
+    # __slots__ = [
+    #     "metallicities",
+    #     "star_forming",
+    #     "log10metallicities",
+    #     "dust_to_metal_ratio",
+    #     "_dust_masses",
+    #     "_coordinates",
+    #     "_velocities",
+    #     "_smoothing_lengths",
+    #     "_softening_lengths",
+    #     "_masses",
+    # ]
 
     # Define class level Quantity attributes
     smoothing_lengths = Quantity()
