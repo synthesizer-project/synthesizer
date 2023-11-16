@@ -87,19 +87,20 @@ class Galaxy(BaseGalaxy):
                 " Did you mean synthesizer.parametric.Galaxy instead?"
             )
 
+        # Set the type of galaxy
+        self.galaxy_type = "Particle"
+
+        # Instantiate the parent
+        BaseGalaxy.__init__(
+            self,
+            stars=stars,
+            gas=gas,
+            black_holes=black_holes,
+            redshift=redshift,
+        )
+
         # Define a name for this galaxy
         self.name = name
-
-        # What is the redshift of this galaxy?
-        self.redshift = redshift
-
-        self.spectra = {}  # integrated spectra dictionary
-        self.spectra_array = {}  # spectra arrays dictionary
-
-        # Particle components
-        self.stars = stars  # a Stars object
-        self.gas = gas  # a Gas object
-        self.black_holes = black_holes  # A BlackHoles object
 
         # If we have them, record how many stellar / gas particles there are
         if self.stars:
