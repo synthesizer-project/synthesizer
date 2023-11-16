@@ -6,6 +6,8 @@ only contains common attributes and methods to reduce boilerplate.
 import numpy as np
 import matplotlib.pyplot as plt
 
+from synthesizer import exceptions
+from synthesizer.igm import Inoue14
 from synthesizer.sed import Sed, plot_spectra, plot_observed_spectra
 
 
@@ -189,6 +191,56 @@ class BaseGalaxy:
         """
 
         return self.A(1500.0)
+
+    def get_observed_spectra(self, cosmo, igm=Inoue14):
+        """
+        Calculate the observed spectra for all Sed objects within this galaxy.
+
+        This will run Sed.get_fnu(...) and populate Sed.fnu (and sed.obslam
+        and sed.obsnu) for all spectra in:
+            - Galaxy.spectra
+            - Galaxy.stars.spectra
+            - Galaxy.gas.spectra (WIP)
+            - Galaxy.black_holes.spectra (WIP)
+
+        Args:
+            cosmo (astropy.cosmology.Cosmology)
+                The cosmology object containing the cosmological model used
+                to calculate the luminosity distance.
+            igm (igm)
+                The object describing the intergalactic medium (defaults to
+                Inoue14).
+
+        Raises:
+
+        """
+
+        # Ensure we have a redshift
+        if self.redshift is None:
+            raise exceptions.MissingAttribute(
+                "This Galaxy has no redshift! Fluxes can't be"
+                " calculated without one."
+            )
+
+        # Loop over all combined spectra
+        for sed in self.spectra.values():
+            # Calculate the observed spectra
+            sed.get_fnu(
+                cosmo=cosmo,
+                z=self.redshift,
+                igm=igm,
+            )
+
+        # Loop over all stellar spectra
+        for sed in self.spectra.values():
+            # Calculate the observed spectra
+            sed.get_fnu(
+                cosmo=cosmo,
+                z=self.redshift,
+                igm=igm,
+            )
+
+        # TODO: Once implemented do this for gas and black holes too
 
     def plot_spectra(
         self,
