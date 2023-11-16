@@ -46,7 +46,7 @@ class ShapeCommands:
 
         # if lam is not a unyt_array assume it has units of angstrom and 
         # convert to a unyt_array
-        if isinstance(lam, unyt_array):
+        if not isinstance(lam, unyt_array):
             lam *= angstrom
 
         # define frequency
