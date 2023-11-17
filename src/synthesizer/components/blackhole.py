@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from unyt import Myr, deg, c, erg, s, Msun, unyt_quantity
+import inflect
 
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
@@ -21,7 +22,7 @@ class BlackholesComponent:
     This should never be instantiated directly.
 
     """
-
+    # TODO: reinstate this.
     # Define the allowed attributes
     # __slots__ = [
     #     "_mass",
@@ -32,7 +33,9 @@ class BlackholesComponent:
 
     # Define class level Quantity attributes
     accretion_rate = Quantity()
+    inclination = Quantity()
     bolometric_luminosity = Quantity()
+    eddington_luminosity = Quantity()
     bb_temperature = Quantity()
     mass = Quantity()
 
@@ -86,10 +89,10 @@ class BlackholesComponent:
         self.metallicity = metallicity
 
         # Define the spectra dictionary to hold the stellar spectra
-        self.spectra = {}
+        self.spectra = []
 
         # Define the line dictionary to hold the stellar emission lines
-        self.lines = {}
+        self.lines = []
 
         # If mass, accretion_rate, and epsilon provided calculate the
         # bolometric luminosity.
@@ -115,6 +118,13 @@ class BlackholesComponent:
         # bolometric_luminosity / eddington_luminosity.
         if ((self.mass is not None) and (self.accretion_rate is not None) and (self.epsilon is not None)):
             self.calculate_accretion_rate_eddington()
+
+        # If inclination, calculate the cosine of the inclination, required by 
+        # some models (e.g. AGNSED).
+        if (self.inclination is not None):
+            self.consine_inclination = np.cos(
+                self.inclination.to('radian').value)
+
 
         # I will be hated for this. But left in for now to provide access to
         # both and not break the EmissionModel.
@@ -158,7 +168,7 @@ class BlackholesComponent:
 
         # Note: the factor 1.257E38 comes from:
         # 4*pi*G*mp*c*Msun/sigma_thompson
-        self.eddington_luminosity = (1.257E38 * erg / s / Msun) * self.mass 
+        self.eddington_luminosity = 1.257E38 * self._mass 
     
         return self.eddington_luminosity
     
@@ -202,8 +212,8 @@ class BlackholesComponent:
                 The black hole accretion rate in units of the Eddington rate.
         """
 
-        self.accretion_rate_eddington = (self.bolometric_luminosity /
-                                         self.eddington_luminosity)
+        self.accretion_rate_eddington = (self._bolometric_luminosity /
+                                         self._eddington_luminosity)
 
         return self.accretion_rate_eddington
 
@@ -220,14 +230,22 @@ class BlackholesComponent:
         # get the parameters that this particular emission model requires
         # TODO: this is horrible and will break when __slots__ exists.
 
-        parameters = {}
+        emission_model_parameters = {}
         for parameter in emission_model.parameters:
-            print(parameter)
-            if parameter in self.__dict__:
-                parameters[parameter] = getattr(self, parameter)
+            if parameter in self.__dict__: 
+                emission_model_parameters[parameter] = getattr(self, parameter)
+                print(parameter, '| provided')
+            elif '_'+parameter in self.__dict__:
+                emission_model_parameters[parameter] = getattr(self, '_'+parameter)
+                print(parameter, '| provided')
+            else:
+                print(parameter, '| not provided')
 
-        print(parameters)
-       
+        print(emission_model_parameters)
 
+        for values in zip(*[x for x in emission_model_parameters.values()]):
+            parameters = dict(zip(emission_model_parameters.keys(), values))
 
-        # self.spectra = emission_model(emission_model_parameters)
+            self.spectra.append(emission_model.get_spectra(**parameters))
+
+        return self.spectra
