@@ -24,7 +24,59 @@ class BlackHoleEmissionModel:
 
 class Template(BlackHoleEmissionModel):
 
-    def __init__(self, )
+    """
+    Use a template for the emission model. 
+
+    The template is simply scaled by bolometric luminosity.
+    
+    """
+
+    def __init__(self, filename=None, lam=None, lnu=None):
+
+        """
+        
+        Arguments:
+            filename (str)
+                The filename (including full path) to a file containing the 
+                template. The file should contain two columns with wavelength
+                and luminosity (lnu).
+            lam (array)
+                Wavelength array.
+            lnu (array)
+                Luminosity array.
+        
+        """
+
+        if filename:
+
+            # to be implemented implement later
+            pass
+
+        if lam and lnu:
+            
+            # initialise a synthesizer Sed object
+            sed = Sed(lam=lam, lnu=lnu)
+
+            # normalise
+            # TODO: add a method to Sed that does this.
+            normalisation = sed.measure_bolometric_luminosity()
+            sed.lnu /= normalisation
+
+    def get_spectra(self, bolometric_luminosity):
+
+        """
+        
+        Calculating the blackhole spectra. This is done by simply scaling the 
+        normalised template by the bolometric luminosity
+
+        Arguments:
+            bolometric_luminosity (float)
+                The bolometric luminosity of the blackhole(s).
+        
+        """
+
+        return {'total': self.normalisation * self.sed}
+
 
 
 class UnifiedAGN(BlackHoleEmissionModel):
@@ -92,9 +144,10 @@ class UnifiedAGN(BlackHoleEmissionModel):
         self.covering_fraction_blr = covering_fraction_blr
         self.velocity_dispersion_blr = velocity_dispersion_blr
         # NLR parameters
-        self.hydrogen_density_blr = hydrogen_density_blr
-        self.covering_fraction_blr = covering_fraction_blr
-        self.velocity_dispersion_blr = velocity_dispersion_blr
+        self.ionisation_parameter_nlr = ionisation_parameter_nlr
+        self.hydrogen_density_nlr = hydrogen_density_nlr
+        self.covering_fraction_nlr = covering_fraction_nlr
+        self.velocity_dispersion_nlr = velocity_dispersion_nlr
         # Torus parameters
         self.theta_torus = theta_torus
         self.torus_emission_model = torus_emission_model
@@ -112,8 +165,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # Get grid parameters from the grid 
         self.grid_parameters = self.nlr_grid.axes[:]
 
-        
-
         # Get disc parameters by removing line region parameters
         # TODO: replace this by saving something in the Grid file.
         self.disc_parameters = []
@@ -124,21 +175,9 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 self.disc_parameters.append(parameter)
 
 
-        # list of parameters. This is a placeholder for something cleverer.
-        self.parameters = [
-            'metallicity',
-            'U_blr',
-            'n_H_blr',
-            'cov_blr',
-            'v_blr',
-            'U_nlr',
-            'n_H_nlr',
-            'cov_nlr',
-            'v_nlr',
-            'theta_torus',
-            'torus_emission_model',
-            ]
-        self.parameters += self.disc_parameters
+        # list of all parameters. This is a placeholder for something cleverer.
+        self.parameters = self.__dir__
+
 
         # dictionary holding LineCollections for each (relevant) component
         self.lines = {}
