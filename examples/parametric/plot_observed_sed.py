@@ -36,7 +36,7 @@ if __name__ == "__main__":
         for f in ["F090W", "F115W", "F150W", "F200W", "F277W", "F356W", "F444W"]
     ]  # define a list of filter codes
     filter_codes += [f"JWST/MIRI.{f}" for f in ["F770W"]]
-    fc = FilterCollection(filter_codes)
+    fc = FilterCollection(filter_codes, new_lam=grid.lam)
 
     # define the parameters of the star formation and metal enrichment
     # histories
@@ -66,11 +66,18 @@ if __name__ == "__main__":
     galaxy = Galaxy(stars, redshift=z)
 
     # generate spectra using pacman model (complex)
-    sed = galaxy.stars.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1)
+    sed = galaxy.stars.get_spectra_pacman(
+        grid,
+        fesc=0.5,
+        fesc_LyA=0.5,
+        tau_v=0.1,
+    )
 
     # now calculate the observed frame spectra
     sed.get_fnu(
-        cosmo, z, igm=Madau96
+        cosmo,
+        z,
+        igm=Madau96,
     )  # generate observed frame spectra, assume Madau96 IGM model
 
     # measure broadband fluxes
@@ -80,11 +87,14 @@ if __name__ == "__main__":
     for filter, flux in fluxes.items():
         print(f"{filter}: {flux:.2f}")
 
+    # Calculate the observed spectra for all stellar spectra
+    galaxy.get_observed_spectra(cosmo, igm=Madau96)
+
     # make plot of observed including broadband fluxes (if filter collection
     # object given)
     galaxy.plot_observed_spectra(
         filters=fc,
         show=True,
         combined_spectra=False,
-        stellar_spectra=sed,
+        stellar_spectra=True,
     )
