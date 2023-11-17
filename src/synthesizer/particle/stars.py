@@ -528,6 +528,32 @@ class Stars(Particles, StarsComponent):
                 "The Grid does not contain the key '%s'" % spectra_name
             )
 
+        # Check the fraction of particles outside of the grid (these will be
+        # pinned to the edge of the grid) by finding those inside
+        age_inside_mask = np.logical_and(
+            self.log10ages < grid.log10age[-1],
+            self.log10ages > grid.log10age[0],
+        )
+        met_inside_mask = np.logical_and(
+            self.metallicities < grid.metallicity[-1],
+            grid.metallicity[0] < self.metallicities,
+        )
+        inside_mask = np.logical_and(age_inside_mask, met_inside_mask)
+        n_out = self.metallicities[~inside_mask].size
+        ratio_out = n_out / self.nparticles
+
+        # Tell the user if there are particles outside the grid, or worst case
+        # error if too many are outside
+        if ratio_out > 0.5:
+            raise exceptions.GridError(
+                f"More than {ratio_out * 100:.2f}% of particles"
+                " lay outside of the grid axis ranges. This will result"
+                " in highly biased spectra. Check the particle properties"
+                " and select an appropriate grid."
+            )
+        elif ratio_out > 0:
+            print(f"{ratio_out * 100:.2f}% of particles lie outside the grid!")
+
         # Get particle age masks
         mask = self._get_masks(young, old)
 
