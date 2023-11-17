@@ -68,6 +68,8 @@ class ScalingFunctions:
                 )
 
             return abundance
+        
+
 
     class C:
 
@@ -387,11 +389,22 @@ class Abundances(Elements):
             total[e] += alpha
 
 
+        # Set holding elements that don't need to be rescaled.
+        unscaled_metals = set([])
+
         # If abundances argument is provided go ahead and set the abundances.
         if abundances:
 
             # loop over each element in the dictionary
             for element, value in abundances.items():
+                
+                # Setting alpha, nitrogen_abundance, or carbon_abundance will 
+                # result in the metallicity no longer being correct. To account 
+                # for this we need to rescale the abundances to recover the 
+                # correct metallicity. However, we don't want to rescale the 
+                # things we've changed. For this reason, here we record the 
+                # elements which have changed. See below for the rescaling.
+                unscaled_metals.add('N')
 
                 # if value is a float simply set the abundance to this value.
                 if isinstance(value, float):
@@ -408,104 +421,30 @@ class Abundances(Elements):
                     scaling_function = getattr(element_functions, value)
                     total[element] = scaling_function(metallicity)
 
+        # Set of the metals to be scaled, see above.
+        scaled_metals = set(self.metals) - unscaled_metals
 
+        # Calculate the mass in unscaled, scaled, and non-metals.
+        mass_in_unscaled_metals = self.get_mass(list(unscaled_metals), a=total)
+        mass_in_scaled_metals = self.get_mass(list(scaled_metals), a=total)
+        mass_in_non_metals = self.get_mass(['H', 'He'], a=total)
 
-        # Rescale Nitrogen.
-        # If nitrogen_abundance is a float then rescale the Solar relative 
-        # value by the amount given.
-        if isinstance(nitrogen_abundance, float):
-            total["N"] = nitrogen_abundance
+        # Now, calculate the scaling factor. The metallicity is:
+        # metallicity = scaling*mass_in_scaled_metals + mass_in_unscaled_metals
+        #  / (scaling*mass_in_scaled_metals + mass_in_non_metals + 
+        # mass_in_unscaled_metals)
+        # and so (by rearranging) the scaling factor is:
+        scaling = (mass_in_unscaled_metals - metallicity *
+                   mass_in_unscaled_metals - metallicity *
+                   mass_in_non_metals) / (mass_in_scaled_metals *
+                                          (metallicity - 1))
 
-        # If nitrogen_abundance is a string use the named function to 
-        # the metallicity.
-        elif isinstance(nitrogen_abundance, str):
-            # if N == 'Feltre2016':
-            #     """ apply scaling for secondary Nitrogen production using relation in Feltre16.
-            #         this is itself based on Groves (2004).
-            #         [N/H] = [O/H](10**1.6 + 10**(2.33+log10 [O/H])) """
-
-            #     OH = (total['O']-total['H']) - (self.sol['O']-self.sol['H'])
-            #     NH = OH*(10**1.6 + 10**(2.33+OH))
-            #     total['N'] = NH + total['H'] + (self.sol['N']-self.sol['H'])
-            #     print(total['N'])
-
-            if nitrogen_abundance == "Dopita2006":
-                """
-                Scaling applied to match with our solar metallicity, this done by
-                solving the equation to get the adopted solar metallicity.
-                """
-                Dopita_solar_metallicity = 0.016
-                total["N"] = np.log10(
-                    1.1E-5 * (self.metallicity / Dopita_solar_metallicity) 
-                    + 4.9E-5 * (self.metallicity / Dopita_solar_metallicity) ** 2
-                )
-            else:
-                raise UnrecognisedOption(f'{nitrogen_abundance} is not a \
-                                         recognised scaling function name')
-     
-        # If it's a function the use this instead.
-        # elif callable(nitrogen_abundance):
-        # else:
-        #     raise UnrecognisedOption(f'{nitrogen_abundance} is not recognised')
-
-
-        # Rescale Carbon
-        if isinstance(carbon_abundance, float):
-            total["C"] = carbon_abundance
-        elif isinstance(carbon_abundance, str):
-            if carbon_abundance == "Dopita2006":
-                """
-                Scaling applied to match with our solar metallicity, this done by
-                solving the equation to get the adopted solar metallicity.
-                """
-                Dopita_solar_metallicity = 0.016
-                total["C"] = np.log10(
-                    6E-5 * (self.metallicity / Dopita_solar_metallicity) + 2E-4 *
-                    (self.metallicity / Dopita_solar_metallicity) ** 2
-                )
-
-            else:
-                raise UnrecognisedOption(f'{carbon_abundance} is not a \
-                                         recognised scaling function name')
-
-        # If it's a function the use this instead.
-        # elif callable(nitrogen_abundance):
-        # else:
-        #     raise UnrecognisedOption(f'{carbon_abundance} is not recognised')
+        # now apply this scaling
+        for i in scaled_metals:
+            total[i] += np.log10(scaling)
 
         # save as attribute
         self.total = total
-
-        # Setting alpha, nitrogen_abundance, or carbon_abundance will result
-        # in the metallicity no longer being correct. To account for this we 
-        # need to rescale the abundances to recover the correct metallicity.
-        # However, we don't want to rescale the things we've changed making
-        # this complicated.
-
-        # This is the old method, but it doesn't quite work.
-        # correction = np.log10(self.metallicity / self.get_metallicity(total))
-        # for i in self.metals:
-        #     total[i] += correction
-
-        # set of the metals that are not to be scaled
-        unscaled_metals = set([])
-        if nitrogen_abundance:
-            unscaled_metals.add('N')
-        if carbon_abundance:
-            unscaled_metals.add('C')
-        
-        # set of the metals to be scaled
-        scaled_metals = set(self.metals) - unscaled_metals
-
-        mass_in_unscaled_metals = self.get_mass(list(unscaled_metals))
-        mass_in_scaled_metals = self.get_mass(list(scaled_metals))
-        mass_in_non_metals = self.get_mass(['H','He'])
-
-        # metallicity = scaling*mass_in_scaled_metals + mass_in_unscaled_metals / (scaling*mass_in_scaled_metals + mass_in_non_metals + mass_in_unscaled_metals)
-        scaling = (mass_in_unscaled_metals - metallicity * mass_in_unscaled_metals - metallicity * mass_in_non_metals) / (mass_in_scaled_metals * (metallicity - 1))
-
-        for i in scaled_metals:
-            total[i] += np.log10(scaling)
 
         # copy total to be gas
         self.gas = deepcopy(total)
