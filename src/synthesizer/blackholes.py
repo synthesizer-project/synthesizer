@@ -78,8 +78,12 @@ class Template(BlackHoleEmissionModel):
         return {'total': self.normalisation * self.sed}
 
 
-
 class UnifiedAGN(BlackHoleEmissionModel):
+
+    """
+    The Unified AGN model.
+    The combines a disc model, along with modelling of the NLR, BLR, and torus.
+    """
 
     def __init__(self,
                  grid_dir=None,
@@ -154,16 +158,15 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         # Open NLR and BLR grids
         # TODO: replace this by a single file.
-        self.nlr_grid = Grid(grid_name=f'{disc_model}_cloudy-c17.03-nlr',
-                             grid_dir=grid_dir,
-                             read_lines=False)
+        self.grid = {}
+        for line_region in ['nlr', 'blr']:
+            self.grid[line_region] = Grid(
+                grid_name=f'{disc_model}_cloudy-c17.03-{line_region}',
+                grid_dir=grid_dir,
+                read_lines=False)
         
-        self.blr_grid = Grid(grid_name=f'{disc_model}_cloudy-c17.03-blr',
-                             grid_dir=self.grid_dir,
-                             read_lines=False)
-
-        # Get grid parameters from the grid 
-        self.grid_parameters = self.nlr_grid.axes[:]
+        # Get axes from the grid, this allows us to obtain the disc parameters.
+        self.grid_parameters = self.grid['nlr'].axes[:]
 
         # Get disc parameters by removing line region parameters
         # TODO: replace this by saving something in the Grid file.
@@ -175,9 +178,22 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 self.disc_parameters.append(parameter)
 
 
-        # list of all parameters. This is a placeholder for something cleverer.
-        self.parameters = self.__dir__
+        # TODO: need to extract a list of torus model parameters.
+        # self.torus_parameters = []
 
+        # Get a list of parameters. Almost certainly a better way of doing this.
+        self.parameters = self.disc_parameters + [
+            'metallicity',
+            'ionisation_parameter_blr',
+            'hydrogen_density_blr',
+            'covering_fraction_blr',
+            'svelocity_dispersion_blr',
+            'ionisation_parameter_nlr',
+            'hydrogen_density_nlr',
+            'covering_fraction_nlr',
+            'velocity_dispersion_nlr',
+            'theta_torus',
+        ]
 
         # dictionary holding LineCollections for each (relevant) component
         self.lines = {}
@@ -190,22 +206,11 @@ class UnifiedAGN(BlackHoleEmissionModel):
         """
         Updates parameters.
         """
-
         # update parameters
         for key, value in kwargs.items():
             setattr(self, key, value)
-            # Save logged versions. 
-            # This will ultimately be eliminated by changing the grid axes, but...
-            if key in ['mass', 'accretion_rate', 'accretion_rate_eddington']:
-                setattr(self, 'log10'+key, np.log10(value))
-
-        # check that all disc parameters
-        # reinstate this when the grid axes are renamed
-        # for parameter in self.disc_parameters:
-        #     if parameter not in kwargs.keys():
-        #         raise MissingArgument(f'{parameter} needs to be provided')
-                
-    def _get_grid_point(self, grid, gridt, isotropic=False):
+          
+    def _get_grid_point(self, line_region, isotropic=False):
         """
         Private method used to get the grid point.
 
@@ -214,12 +219,13 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # calculate the grid point.
         parameters = []
         for parameter in self.grid_parameters:
-            # for log10nH and log10U the parameters are labelled e.g. 'log10nH_nlr'
-            if parameter in ['log10n_H', 'log10U']:
-                parameter = parameter+'_'+gridt
+            # for hydrogen_density and ionisation_paramter the parameters are
+            # labelled e.g. 'hydrogen_density_nlr'.
+            if parameter in ['hydrogen_density', 'ionisation_parameter']:
+                parameter = parameter+'_'+line_region
             parameters.append(getattr(self, parameter))
 
-        return grid.get_grid_point(parameters)
+        return self.grid[line_region].get_grid_point(parameters)
 
     def _get_spectra_disc(self, **kwargs):
         """
@@ -232,25 +238,28 @@ class UnifiedAGN(BlackHoleEmissionModel):
         """
 
         # get grid points
-        nlr_grid_point = self._get_grid_point(self.nlr_grid, 'nlr')
-        blr_grid_point = self._get_grid_point(self.blr_grid, 'blr')
+        nlr_grid_point = self._get_grid_point('nlr')
+        blr_grid_point = self._get_grid_point('blr')
 
         # calculate the incident spectra. It doesn't matter which spectra we
         # use here since we're just using the incident. Note: this assumes the 
         # NLR and BLR are not overlapping.
         self.spectra['disc_incident'] = \
-            self.nlr_grid.get_spectra(nlr_grid_point, spectra_id='incident')
+            self.grid['nlr'].get_spectra(nlr_grid_point, spectra_id='incident')
 
         # calculate the transmitted spectra
-        nlr_spectra = self.nlr_grid.get_spectra(nlr_grid_point,
-                                                spectra_id='transmitted')
-        blr_spectra = self.blr_grid.get_spectra(blr_grid_point,
-                                                spectra_id='transmitted')
-        self.spectra['disc_transmitted'] = self.cov_nlr * nlr_spectra \
-            + self.cov_blr * blr_spectra
+        nlr_spectra = self.grid['nlr'].get_spectra(nlr_grid_point,
+                                                   spectra_id='transmitted')
+        blr_spectra = self.grid['blr'].get_spectra(blr_grid_point,
+                                                   spectra_id='transmitted')
+        self.spectra['disc_transmitted'] = (self.covering_fraction_nlr *
+                                            nlr_spectra +
+                                            self.covering_fraction_blr *
+                                            blr_spectra)
             
-        # calculate the escaping spectra. 
-        self.spectra['disc_escaped'] = (1 - self.cov_blr - self.cov_nlr) *\
+        # calculate the escaping spectra.
+        self.spectra['disc_escaped'] = (
+            1 - self.covering_fraction_blr - self.covering_fraction_nlr) *\
             self.spectra['disc_incident']
 
         # calculate the total spectra, the sum of escaping and transmitted
@@ -258,28 +267,27 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
     def _get_spectra_lr(self, line_region, **kwargs):
         """
-        Generate the spectra of a generic line region, updating the parameters if required.
+        Generate the spectra of a generic line region.
 
+        Arguments:
+            line_region (str)
+                The specific line region, i.e. 'nlr' or 'blr'.
+        
         Returns:
             synthesizer.sed.Sed
                 The NLR spectra
         """
-
-        if line_region == 'nlr':
-            grid = self.nlr_grid
-        elif line_region == 'blr':
-            grid = self.blr_grid
-        else:
-            print('line region not recognised')
         
         # get the grid point
-        grid_point = self._get_grid_point(grid, line_region)
+        grid_point = self._get_grid_point(line_region)
 
         # covering fraction
-        cov = getattr(self, f'cov_{line_region}')
+        covering_fraction = getattr(self, f'covering_fraction_{line_region}')
 
-        # get spectra
-        sed = cov * grid.get_spectra(grid_point, spectra_id='nebular')
+        # get the nebular spectra of the line region
+        sed = covering_fraction * self.grid[line_region].get_spectra(
+            grid_point,
+            spectra_id='nebular')
 
         # add line to spectra broadening here
         self.spectra[line_region] = sed
@@ -330,8 +338,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         self.spectra['total'] = self.spectra['disc'] + \
             self.spectra['blr'] + self.spectra['nlr'] + self.spectra['torus']
-        
-        return self.spectra['total']
+    
+        return self.spectra
     
 
 
