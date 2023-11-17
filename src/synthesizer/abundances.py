@@ -41,11 +41,13 @@ class ScalingFunctions:
     
     """
 
-    class N:
+    class Dopita2006:
 
         """ Scaling functions for Nitrogen."""
+        ads = 'https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract'
+        doi = '10.1086/508261'
 
-        def Dopita2006(metallicity):
+        def N(metallicity):
 
             """
             
@@ -69,15 +71,10 @@ class ScalingFunctions:
 
             return abundance
         
-
-
-    class C:
-
-        """ Scaling functions for Carbon."""
-
-        def Dopita2006(metallicity):
+        def C(metallicity):
 
             """
+            Scaling functions for Carbon.
             
             Arguments:
                 metallicity (float)
@@ -362,13 +359,14 @@ class Abundances(Elements):
         self.depletion = {element: 0.0 for element in self.all_elements}
 
         # Set helium mass fraction following Bressan et al. (2012)
+        # 10.1111/j.1365-2966.2012.21948.x
+        # https://ui.adsabs.harvard.edu/abs/2012MNRAS.427..127B/abstract
         self.helium_mass_fraction = 0.2485 + 1.7756 * self.metallicity
 
         # Define mass fraction in hydrogen
         self.hydrogen_mass_fraction = (1.0 - self.helium_mass_fraction 
                                        - self.metallicity)
         
-
         # logathrimic total abundance of element relative to H
         total = {}
 
@@ -415,10 +413,10 @@ class Abundances(Elements):
                 elif isinstance(value, str):
 
                     # get the class holding functions for this element
-                    element_functions = getattr(ScalingFunctions, element)
+                    study_functions = getattr(ScalingFunctions, value)
 
                     # get the specific function request by value
-                    scaling_function = getattr(element_functions, value)
+                    scaling_function = getattr(study_functions, element)
                     total[element] = scaling_function(metallicity)
 
         # Set of the metals to be scaled, see above.
