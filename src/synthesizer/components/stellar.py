@@ -991,6 +991,7 @@ class StarsComponent:
         ylimits=(),
         xlimits=(),
         figsize=(3.5, 5),
+        **kwargs
     ):
         """
         Plots either specific spectra (specified via spectra_to_plot) or all
@@ -1014,6 +1015,8 @@ class StarsComponent:
                 limits are found based on the ylimits.
             figsize (tuple)
                 Tuple with size 2 defining the figure size.
+            kwargs (dict)
+                arguments to the `sed.plot_spectra` method called from this wrapper
 
         Returns:
             fig (matplotlib.pyplot.figure)
@@ -1037,4 +1040,5 @@ class StarsComponent:
             xlimits=xlimits,
             figsize=figsize,
             draw_legend=isinstance(spectra, dict),
+            **kwargs
         )
