@@ -243,3 +243,21 @@ class UnrecognisedOption(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "Unrecognised option."
+
+
+class MissingAttribute(Exception):
+    """
+    Generic exception class for when a required attribute is missing on an
+    object.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Missing attribute"
