@@ -1150,7 +1150,7 @@ def plot_spectra(
 
         # Don't draw a legend if not label given
         if label is None and draw_legend:
-            print("No label given, we will not draw a legened")
+            print("No label given, we will not draw a legend")
             draw_legend = False
 
     # If we don't already have a figure, make one
