@@ -21,20 +21,26 @@ class BlackHoleEmissionModel:
     pass
 
 
+
+class Template(BlackHoleEmissionModel):
+
+    def __init__(self, )
+
+
 class UnifiedAGN(BlackHoleEmissionModel):
 
     def __init__(self,
                  grid_dir=None,
                  disc_model=None,
                  metallicity=0.01,
-                 U_blr=0.1,
-                 n_H_blr=1E9/cm**3,
-                 cov_blr=0.1,
-                 v_blr=2000*km/s,
-                 U_nlr=0.01,
-                 n_H_nlr=1E4/cm**3,
-                 cov_nlr=0.1,
-                 v_nlr=500*km/s,
+                 ionisation_parameter_blr=0.1,
+                 hydrogen_density_blr=1E9/cm**3,
+                 covering_fraction_blr=0.1,
+                 velocity_dispersion_blr=2000*km/s,
+                 ionisation_parameter_nlr=0.01,
+                 hydrogen_density_nlr=1E4/cm**3,
+                 covering_fraction_nlr=0.1,
+                 velocity_dispersion_nlr=500*km/s,
                  theta_torus=10*deg,
                  torus_emission_model=Greybody(1000*K, 1.5),
                  **kwargs,
@@ -44,27 +50,27 @@ class UnifiedAGN(BlackHoleEmissionModel):
         Arguments:
             metallicity (float)
                 The metallicity of the NLR and BLR gas. The default is 0.01.
-            U_blr (float)
+            ionisation_parameter_blr (float)
                 The  ionisation parameter in the BLR. Default value
                 is 0.1.
-            n_H_blr (unyt.unit_object.Unit)
+            hydrogen_density_blr (unyt.unit_object.Unit)
                 The  hydrogen density in the BLR. Default value
                 is 1E9/cm**3.
-            cov_blr (float)
+            covering_fraction_blr (float)
                 The covering fraction of the BLR. Default value is 0.1.
-            v_blr (unyt.unit_object.Unit)
+            velocity_dispersion_blr (unyt.unit_object.Unit)
                 The velocity disperson of the BLR. Default value is 
                 2000*km/s.
-            U_nlr (float)
+            ionisation_parameter_nlr (float)
                 The ionisation parameter in the BLR. Default value
                 is 0.01.
-            n_H_nlr (unyt.unit_object.Unit)
-                The hydrogen density in the BLR. Default value
+            hydrogen_density_nlr (unyt.unit_object.Unit)
+                The hydrogen density in the NLR. Default value
                 is 1E4/cm**3.
-            cov_nlr (float)
-                The covering fraction of the BLR. Default value is 0.1.
-            v_nlr (unyt.unit_object.Unit)
-                The velocity disperson of the BLR. Default value is 
+            covering_fraction_nlr (float)
+                The covering fraction of the NLR. Default value is 0.1.
+            velocity_dispersion_nlr (unyt.unit_object.Unit)
+                The velocity disperson of the NLR. Default value is 
                 500*km/s.
             theta_torus (float)
                 The opening angle of the torus component. Default value is
@@ -73,23 +79,23 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 The torus emission model. A synthesizer dust emission model.
                 Default is a Greybody with T=1000*K and emissivity=1.6.
             **kwargs 
+                Addition parameters for the specific disc model.
 
         """
         self.disc_model = disc_model
         self.grid_dir = grid_dir
+        # used for NLR and BLR
         self.metallicity = metallicity
-        self.U_blr = U_blr
-        self.log10U_blr = np.log10(U_blr)
-        self.n_H_blr = n_H_blr
-        self.log10n_H_blr = np.log10(n_H_blr.to('1/cm**3').value)
-        self.cov_blr = cov_blr
-        self.v_blr = v_blr
-        self.U_nlr = U_nlr
-        self.log10U_nlr = np.log10(U_nlr)
-        self.n_H_nlr = n_H_nlr
-        self.log10n_H_nlr = np.log10(n_H_nlr.to('1/cm**3').value)
-        self.cov_nlr = cov_nlr
-        self.v_nlr = v_nlr
+        # BLR parameters
+        self.ionisation_parameter_blr = ionisation_parameter_blr
+        self.hydrogen_density_blr = hydrogen_density_blr
+        self.covering_fraction_blr = covering_fraction_blr
+        self.velocity_dispersion_blr = velocity_dispersion_blr
+        # NLR parameters
+        self.hydrogen_density_blr = hydrogen_density_blr
+        self.covering_fraction_blr = covering_fraction_blr
+        self.velocity_dispersion_blr = velocity_dispersion_blr
+        # Torus parameters
         self.theta_torus = theta_torus
         self.torus_emission_model = torus_emission_model
 
@@ -106,25 +112,15 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # Get grid parameters from the grid 
         self.grid_parameters = self.nlr_grid.axes[:]
 
-        # Replace grid parameters with renamed version.
-        # TODO: to eliminate this by changing the grid naming.
-        # These parameter names were chosen to align with the original
-        # grid creation but can be harmonised to synthesizer standards.
-        if 'log10Mbh' in self.grid_parameters:
-            index = self.grid_parameters.index('log10Mbh')
-            self.grid_parameters[index] = 'log10mass'
-        if 'log10MdotEdd' in self.grid_parameters:
-            index = self.grid_parameters.index('log10MdotEdd')
-            self.grid_parameters[index] = 'log10accretion_rate_eddington'
-        if 'cosinc' in self.grid_parameters:
-            index = self.grid_parameters.index('cosinc')
-            self.grid_parameters[index] = 'inclination'
+        
 
         # Get disc parameters by removing line region parameters
         # TODO: replace this by saving something in the Grid file.
         self.disc_parameters = []
         for parameter in self.grid_parameters:
-            if parameter not in ['metallicity', 'log10U', 'log10n_H']:
+            if parameter not in ['metallicity',
+                                 'ionisation_parameter',
+                                 'hydrogen_density']:
                 self.disc_parameters.append(parameter)
 
 
