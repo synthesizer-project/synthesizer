@@ -158,16 +158,18 @@ class BlackHoles(Particles, BlackholesComponent):
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
 
-
     def calculate_random_inclination(self):
         """
         Add random inclinations to blackholes.
+        TODO: move to the component level?
         """
 
-        self.inclination = deg * np.random.uniform(
+        self.inclination = np.random.uniform(
             low=0.,
-            high=90.,
+            high=np.pi/2.,
             size=self.nparticles)
+        
+        self.cosine_inclination = np.cos(self.inclination)
 
 
 
