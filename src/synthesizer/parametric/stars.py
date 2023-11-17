@@ -24,6 +24,7 @@ from synthesizer.components import StarsComponent
 from synthesizer.line import Line
 from synthesizer.stats import weighted_median, weighted_mean
 from synthesizer.plt import single_histxy, mlabel
+from synthesizer.parametric import SFH, ZDist
 from synthesizer.units import Quantity
 
 
@@ -160,17 +161,53 @@ class Stars(StarsComponent):
             self.log10metallicities[-1],
         ]
 
-        # Store the function used to make the star formation history if given
-        self.sf_hist_func = sf_hist_func
+        # Store the SFH we've been given, this is either...
+        if issubclass(sf_hist, SFH.Common):
+            self.sf_hist_func = sf_hist  # a SFH function
+            self.sf_hist = None
+            instant_sf = None
+        elif isinstance(sf_hist, float):
+            instant_sf = sf_hist  # an instantaneous SFH
+            self.sf_hist_func = None
+            self.sf_hist = None
+        elif isinstance(sf_hist, np.ndarray):
+            self.sf_hist = sf_hist  # a numpy array
+            self.sf_hist_func = None
+            instant_sf = None
+        elif sf_hist is None:
+            self.sf_hist = None  # we must have been passed a SFZH
+            self.sf_hist_func = None
+            instant_sf = None
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Unrecognised sf_hist type ({type(sf_hist)}! This should be"
+                " either a float, an instance of a SFH function from the "
+                "SFH module, or a single float."
+            )
 
-        # Store the function used to make the metallicity history if given
-        self.metal_dist_func = metal_dist_func
-
-        # Store the SFH array (if None recalculated below)
-        self.sf_hist = sf_hist
-
-        # Store the ZH array (if None recalculated below)
-        self.metal_dist = metal_dist
+        # Store the metallicity distribution we've been given, this is either...
+        if issubclass(metal_dist, ZDist.Common):
+            self.metal_dist_func = metal_dist  # a ZDist function
+            self.metal_dist = None
+            instant_metallicity = None
+        elif isinstance(metal_dist, float):
+            instant_metallicity = metal_dist  # an instantaneous SFH
+            self.metal_dist_func = None
+            self.metal_dist = None
+        elif isinstance(metal_dist, np.ndarray):
+            self.metal_dist = metal_dist  # a numpy array
+            self.metal_dist_func = None
+            instant_metallicity = None
+        elif metal_dist is None:
+            self.metal_dist = None  # we must have been passed a SFZH
+            self.metal_dist_func = None
+            instant_metallicity = None
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Unrecognised metal_dist type ({type(metal_dist)}! This "
+                "should be either a float, an instance of a ZDist function "
+                "from the ZDist module, or a single float."
+            )
 
         # Store the total initial stellar mass
         self.initial_mass = initial_mass
