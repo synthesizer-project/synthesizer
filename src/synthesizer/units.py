@@ -35,6 +35,7 @@ from unyt import (
     km,
     Msun,
     K,
+    deg,
     unyt_quantity,
     unyt_array,
     dimensionless,
@@ -83,6 +84,8 @@ default_units = {
     "bol_luminosity": erg / s,
     "bb_temperature": K,
     "bb_temperatures": K,
+    "inclination": deg,
+    "inclinations": deg,
     "resolution": Mpc,
     "fov": Mpc,
     "orig_resolution": Mpc,
@@ -274,6 +277,8 @@ class Units(metaclass=UnitSingleton):
         self.luminosities = erg / s  
         self.bolometric_luminosity = erg / s  
         self.bolometric_luminosities = erg / s  
+        self.eddington_luminosity = erg / s  
+        self.eddington_luminosities = erg / s  
         self.lnu = erg / s / Hz  # spectral luminosity density
         self.llam = erg / s / Angstrom  # spectral luminosity density
         self.continuum = erg / s / Hz  # continuum level of an emission line
@@ -316,6 +321,7 @@ class Units(metaclass=UnitSingleton):
         self.accretion_rate = Msun.in_base("galactic") / yr
         self.accretion_rates = Msun.in_base("galactic") / yr
         self.bb_temperature = K
+        self.inclination = deg
 
         # Imaging quantities
         self.resolution = Mpc
