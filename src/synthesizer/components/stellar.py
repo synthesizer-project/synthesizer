@@ -289,6 +289,7 @@ class StarsComponent:
         young=False,
         old=False,
         label="",
+        verbose=False,
     ):
         """
         Generates the intrinsic spectra, this is the sum of the escaping
@@ -296,6 +297,10 @@ class StarsComponent:
         emission. The transmitted emission is the emission that is
         transmitted through the gas. In addition to returning the intrinsic
         spectra this saves the incident, nebular, and escaped spectra.
+
+        Note, if a grid that has not been post-processed through a 
+        photoionisation code is provided (i.e. read_lines=False) this will
+        just call `get_spectra_incident`. 
 
         Args:
             grid (obj):
@@ -312,9 +317,11 @@ class StarsComponent:
             old (bool, float):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
-            label (string)
+            label (string):
                 A modifier for the spectra dictionary key such that the
                 key is label + "_transmitted".
+            verbose (bool):
+                verbose output flag
 
         Updates:
             incident:
@@ -330,9 +337,29 @@ class StarsComponent:
             Sed
                 An Sed object containing the intrinsic spectra.
         """
-
+        
         # Make sure young and old in Myr, if provided
         young, old = self.check_young_old_units(young, old)
+
+        # Check if grid has been run through a photoionisation code
+        if grid.read_lines is False:
+            if verbose:
+                print(
+                    ("The grid you are using has not been post-processed "
+                     "through a photoionisation code. This method will "
+                     "just return the incident stellar emission. Are "
+                     "you sure this is the method you want to use?")
+                )
+
+            spec = self.get_spectra_incident(
+                grid=grid,
+                young=young,
+                old=old,
+                label=label
+            )
+
+            self.spectra[f'{label}intrinsic'] = self.spectra[f'{label}incident']
+            return spec
 
         # The incident emission
         incident = self.get_spectra_incident(
@@ -385,9 +412,9 @@ class StarsComponent:
             intrinsic = reprocessed
 
         if fesc > 0:
-            self.spectra[label + "escaped"] = escaped
-        self.spectra[label + "reprocessed"] = reprocessed
-        self.spectra[label + "intrinsic"] = intrinsic
+            self.spectra[f'{label}escaped'] = escaped
+        self.spectra[f'{label}reprocessed'] = reprocessed
+        self.spectra[f'{label}intrinsic'] = intrinsic
 
         return reprocessed
 
@@ -561,6 +588,12 @@ class StarsComponent:
                     "a single dust screen situation."
                 )
 
+        # If grid has photoinoisation outputs, use the reprocessed outputs
+        if grid.read_lines:
+            reprocessed_name = 'reprocessed'
+        else:  # otherwise just use the intrinsic stellar spectra
+            reprocessed_name = 'intrinsic'
+
         # Generate intrinsic spectra for young and old particles
         # separately before summing them if we have been given
         # a threshold
@@ -608,18 +641,20 @@ class StarsComponent:
             )
 
             # Combine young and old spectra
-            self.spectra["incident"] = (
-                self.spectra["young_incident"] + self.spectra["old_incident"]
-            )
-            self.spectra["transmitted"] = (
-                self.spectra["young_transmitted"] + self.spectra["old_transmitted"]
-            )
-            self.spectra["nebular"] = (
-                self.spectra["young_nebular"] + self.spectra["old_nebular"]
-            )
-            self.spectra["reprocessed"] = (
-                self.spectra["young_reprocessed"] + self.spectra["old_reprocessed"]
-            )
+            if grid.read_lines:
+                self.spectra["incident"] = (
+                    self.spectra["young_incident"] + self.spectra["old_incident"]
+                )
+                self.spectra["transmitted"] = (
+                    self.spectra["young_transmitted"] + self.spectra["old_transmitted"]
+                )
+                self.spectra["nebular"] = (
+                    self.spectra["young_nebular"] + self.spectra["old_nebular"]
+                )
+                self.spectra["reprocessed"] = (
+                    self.spectra["young_reprocessed"] + self.spectra["old_reprocessed"]
+                )
+
             self.spectra["intrinsic"] = (
                 self.spectra["young_intrinsic"] + self.spectra["old_intrinsic"]
             )
@@ -645,7 +680,7 @@ class StarsComponent:
             dust_curve.slope = alpha
 
             # Calculate the attenuated emission
-            attenuated = self.spectra["reprocessed"].apply_attenuation(
+            attenuated = self.spectra[reprocessed_name].apply_attenuation(
                 tau_v, dust_curve=dust_curve
             )
             self.spectra["attenuated"] = attenuated
@@ -673,9 +708,11 @@ class StarsComponent:
 
             # Calculate attenuated spectra of young stars
             dust_curve.slope = alpha[1]  # use the BC slope
-            young_attenuated = self.spectra["young_reprocessed"].apply_attenuation(
-                tau_v[1], dust_curve=dust_curve
-            )
+            young_attenuated = self.spectra[f"young_{reprocessed_name}"].\
+                    apply_attenuation(
+                    tau_v[1], dust_curve=dust_curve
+                )
+
             dust_curve.slope = alpha[0]  # use the ISM slope
             young_attenuated = young_attenuated.apply_attenuation(
                 tau_v[0], dust_curve=dust_curve
@@ -683,9 +720,10 @@ class StarsComponent:
             self.spectra["young_attenuated"] = young_attenuated
 
             # Calculate attenuated spectra of old stars
-            old_attenuated = self.spectra["old_reprocessed"].apply_attenuation(
-                tau_v[0], dust_curve=dust_curve
-            )
+            old_attenuated = self.spectra[f"old_{reprocessed_name}"].\
+                    apply_attenuation(
+                    tau_v[0], dust_curve=dust_curve
+                )
             self.spectra["old_attenuated"] = old_attenuated
 
             # Get the combined attenuated spectra
