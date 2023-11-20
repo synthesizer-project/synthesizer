@@ -135,8 +135,8 @@ class Stars(StarsComponent):
                     - An age at which to compute an instantaneous SFH, i.e. all
                       stellar mass populating a single SFH bin.
                     - An array describing the star formation history.
-                    -  An instance of one of the child classes of SFH. This
-                       will be used to calculate an array describing the SFH.
+                    - An instance of one of the child classes of SFH. This
+                      will be used to calculate an array describing the SFH.
             metal_dist (float/unyt_quantity/array-like, float/ZDist.*)
                 Either:
                     - A metallicity at which to compute an instantaneous
