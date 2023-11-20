@@ -495,7 +495,14 @@ class Stars(Particles, StarsComponent):
         return Line(line_id, wavelength, luminosity, continuum)
 
     def generate_particle_lnu(
-        self, grid, spectra_name, fesc=0.0, young=False, old=False, verbose=False
+        self,
+        grid,
+        spectra_name,
+        fesc=0.0,
+        young=False,
+        old=False,
+        verbose=False,
+        do_grid_check=True,
     ):
         """
         Generate the particle rest frame spectra for a given grid key spectra
@@ -516,7 +523,16 @@ class Stars(Particles, StarsComponent):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             verbose (bool)
-                Flag for verbose output.
+                Flag for verbose output. By default False.
+            do_grid_check (bool)
+                Whether to check how many particles lie outside the grid. This
+                is True by default and provides a vital sanity check. There
+                are instances when you may want to turn this off:
+                    - You know particles will lie outside the grid and want
+                      this behaviour. In this case the check is redundant.
+                    - You know your particle lie within the grid but don't
+                      want to waste compute checking. This case is useful when
+                      working with large particle counts.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
@@ -525,34 +541,34 @@ class Stars(Particles, StarsComponent):
         # Ensure we have a total key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
             raise exceptions.MissingSpectraType(
-                "The Grid does not contain the key '%s'" % spectra_name
+                f"The Grid does not contain the key '{spectra_name}'"
             )
 
-        # Check the fraction of particles outside of the grid (these will be
-        # pinned to the edge of the grid) by finding those inside
-        age_inside_mask = np.logical_and(
-            self.log10ages < grid.log10age[-1],
-            self.log10ages > grid.log10age[0],
-        )
-        met_inside_mask = np.logical_and(
-            self.metallicities < grid.metallicity[-1],
-            grid.metallicity[0] < self.metallicities,
-        )
-        inside_mask = np.logical_and(age_inside_mask, met_inside_mask)
-        n_out = self.metallicities[~inside_mask].size
-        ratio_out = n_out / self.nparticles
-
-        # Tell the user if there are particles outside the grid, or worst case
-        # error if too many are outside
-        if ratio_out > 0.5:
-            raise exceptions.GridError(
-                f"More than {ratio_out * 100:.2f}% of particles"
-                " lay outside of the grid axis ranges. This will result"
-                " in highly biased spectra. Check the particle properties"
-                " and select an appropriate grid."
+        # Are we checking the particles are consistent with the grid?
+        if do_grid_check:
+            # Check the fraction of particles outside of the grid (these will be
+            # pinned to the edge of the grid) by finding those inside
+            age_inside_mask = np.logical_and(
+                self.log10ages < grid.log10age[-1],
+                self.log10ages > grid.log10age[0],
             )
-        elif ratio_out > 0:
-            print(f"{ratio_out * 100:.2f}% of particles lie outside the grid!")
+            met_inside_mask = np.logical_and(
+                self.metallicities < grid.metallicity[-1],
+                grid.metallicity[0] < self.metallicities,
+            )
+
+            # Combine the boolean arrays for each axis
+            inside_mask = np.logical_and(age_inside_mask, met_inside_mask)
+
+            # Get the number outside
+            n_out = self.metallicities[~inside_mask].size
+
+            # Compute the ratio of those outside to total number
+            ratio_out = n_out / self.nparticles
+
+            # Tell the user if there are particles outside the grid
+            if ratio_out > 0:
+                print(f"{ratio_out * 100:.2f}% of particles lie outside the grid!")
 
         # Get particle age masks
         mask = self._get_masks(young, old)
