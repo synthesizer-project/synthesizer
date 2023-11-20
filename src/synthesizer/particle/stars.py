@@ -166,11 +166,12 @@ class Stars(Particles, StarsComponent):
         )
         StarsComponent.__init__(self, ages, metallicities)
 
-        # Ensure initial masses is an accepted type to avoid 
+        # Ensure initial masses is an accepted type to avoid
         # issues when masking
         if isinstance(initial_masses, list):
             raise exceptions.InconsistentArguments(
-                'Initial mass should be numpy or unyt array.')
+                "Initial mass should be numpy or unyt array."
+            )
 
         # Set always required stellar particle properties
         self.initial_masses = initial_masses
@@ -294,9 +295,7 @@ class Stars(Particles, StarsComponent):
             np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
             np.ascontiguousarray(self.log10metallicities[mask], dtype=np.float64),
         ]
-        part_mass = np.ascontiguousarray(
-            self._initial_masses[mask], dtype=np.float64
-        )
+        part_mass = np.ascontiguousarray(self._initial_masses[mask], dtype=np.float64)
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
@@ -330,13 +329,14 @@ class Stars(Particles, StarsComponent):
         )
 
     def generate_lnu(
-            self,
-            grid,
-            spectra_name,
-            fesc=0.0,
-            young=False,
-            old=False,
-            verbose=False,
+        self,
+        grid,
+        spectra_name,
+        fesc=0.0,
+        young=False,
+        old=False,
+        verbose=False,
+        do_grid_check=True,
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -358,16 +358,51 @@ class Stars(Particles, StarsComponent):
                 for old star particles.
             verbose (bool)
                 Flag for verbose output.
+            do_grid_check (bool)
+                Whether to check how many particles lie outside the grid. This
+                is True by default and provides a vital sanity check. There
+                are instances when you may want to turn this off:
+                    - You know particles will lie outside the grid and want
+                      this behaviour. In this case the check is redundant.
+                    - You know your particle lie within the grid but don't
+                      want to waste compute checking. This case is useful when
+                      working with large particle counts.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
         """
 
-        # Ensure we have a total key in the grid. If not error.
+        # Ensure we have a key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
             raise exceptions.MissingSpectraType(
                 "The Grid does not contain the key '%s'" % spectra_name
             )
+
+        # Are we checking the particles are consistent with the grid?
+        if do_grid_check:
+            # Check the fraction of particles outside of the grid (these will be
+            # pinned to the edge of the grid) by finding those inside
+            age_inside_mask = np.logical_and(
+                self.log10ages < grid.log10age[-1],
+                self.log10ages > grid.log10age[0],
+            )
+            met_inside_mask = np.logical_and(
+                self.metallicities < grid.metallicity[-1],
+                grid.metallicity[0] < self.metallicities,
+            )
+
+            # Combine the boolean arrays for each axis
+            inside_mask = np.logical_and(age_inside_mask, met_inside_mask)
+
+            # Get the number outside
+            n_out = self.metallicities[~inside_mask].size
+
+            # Compute the ratio of those outside to total number
+            ratio_out = n_out / self.nparticles
+
+            # Tell the user if there are particles outside the grid
+            if ratio_out > 0:
+                print(f"{ratio_out * 100:.2f}% of particles lie outside the grid!")
 
         # Get particle age masks
         mask = self._get_masks(young, old)
@@ -416,7 +451,6 @@ class Stars(Particles, StarsComponent):
 
         # If the line_id is a str denoting a single line
         if isinstance(line_id, str):
-
             # Get the grid information we need
             grid_line = grid.lines[line_id]
             wavelength = grid_line["wavelength"]
@@ -442,7 +476,6 @@ class Stars(Particles, StarsComponent):
 
         # Else if the line is list or tuple denoting a doublet (or higher)
         elif isinstance(line_id, (list, tuple)):
-
             # Set up containers for the line information
             luminosity = []
             continuum = []
@@ -457,14 +490,11 @@ class Stars(Particles, StarsComponent):
 
                 # Line luminosity erg/s
                 luminosity.append(
-                    (1 - fesc)
-                    * np.sum(grid_line["luminosity"] * self.initial_masses)
+                    (1 - fesc) * np.sum(grid_line["luminosity"] * self.initial_masses)
                 )
 
                 # Continuum at line wavelength, erg/s/Hz
-                continuum.append(
-                    np.sum(grid_line["continuum"] * self.initial_masses)
-                )
+                continuum.append(np.sum(grid_line["continuum"] * self.initial_masses))
 
         else:
             raise exceptions.InconsistentArguments(
@@ -475,7 +505,14 @@ class Stars(Particles, StarsComponent):
         return Line(line_id, wavelength, luminosity, continuum)
 
     def generate_particle_lnu(
-        self, grid, spectra_name, fesc=0.0, young=False, old=False, verbose=False
+        self,
+        grid,
+        spectra_name,
+        fesc=0.0,
+        young=False,
+        old=False,
+        verbose=False,
+        do_grid_check=True,
     ):
         """
         Generate the particle rest frame spectra for a given grid key spectra
@@ -496,7 +533,16 @@ class Stars(Particles, StarsComponent):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             verbose (bool)
-                Flag for verbose output.
+                Flag for verbose output. By default False.
+            do_grid_check (bool)
+                Whether to check how many particles lie outside the grid. This
+                is True by default and provides a vital sanity check. There
+                are instances when you may want to turn this off:
+                    - You know particles will lie outside the grid and want
+                      this behaviour. In this case the check is redundant.
+                    - You know your particle lie within the grid but don't
+                      want to waste compute checking. This case is useful when
+                      working with large particle counts.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
@@ -505,8 +551,34 @@ class Stars(Particles, StarsComponent):
         # Ensure we have a total key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
             raise exceptions.MissingSpectraType(
-                "The Grid does not contain the key '%s'" % spectra_name
+                f"The Grid does not contain the key '{spectra_name}'"
             )
+
+        # Are we checking the particles are consistent with the grid?
+        if do_grid_check:
+            # Check the fraction of particles outside of the grid (these will be
+            # pinned to the edge of the grid) by finding those inside
+            age_inside_mask = np.logical_and(
+                self.log10ages < grid.log10age[-1],
+                self.log10ages > grid.log10age[0],
+            )
+            met_inside_mask = np.logical_and(
+                self.metallicities < grid.metallicity[-1],
+                grid.metallicity[0] < self.metallicities,
+            )
+
+            # Combine the boolean arrays for each axis
+            inside_mask = np.logical_and(age_inside_mask, met_inside_mask)
+
+            # Get the number outside
+            n_out = self.metallicities[~inside_mask].size
+
+            # Compute the ratio of those outside to total number
+            ratio_out = n_out / self.nparticles
+
+            # Tell the user if there are particles outside the grid
+            if ratio_out > 0:
+                print(f"{ratio_out * 100:.2f}% of particles lie outside the grid!")
 
         # Get particle age masks
         mask = self._get_masks(young, old)
@@ -558,15 +630,12 @@ class Stars(Particles, StarsComponent):
 
         # If the line_id is a str denoting a single line
         if isinstance(line_id, str):
-
             # Get the grid information we need
             grid_line = grid.lines[line_id]
             wavelength = grid_line["wavelength"]
 
             # Line luminosity erg/s
-            luminosity = (1 - fesc) * (
-                grid_line["luminosity"] * self.initial_masses
-            )
+            luminosity = (1 - fesc) * (grid_line["luminosity"] * self.initial_masses)
 
             # Continuum at line wavelength, erg/s/Hz
             continuum = grid_line["continuum"] * self.initial_masses
@@ -584,7 +653,6 @@ class Stars(Particles, StarsComponent):
 
         # Else if the line is list or tuple denoting a doublet (or higher)
         elif isinstance(line_id, (list, tuple)):
-
             # Set up containers for the line information
             luminosity = []
             continuum = []
@@ -599,14 +667,11 @@ class Stars(Particles, StarsComponent):
 
                 # Line luminosity erg/s
                 luminosity.append(
-                    (1 - fesc)
-                    * grid_line["luminosity"] * self.initial_masses
+                    (1 - fesc) * grid_line["luminosity"] * self.initial_masses
                 )
 
                 # Continuum at line wavelength, erg/s/Hz
-                continuum.append(
-                    grid_line["continuum"] * self.initial_masses
-                )
+                continuum.append(grid_line["continuum"] * self.initial_masses)
 
         else:
             raise exceptions.InconsistentArguments(
@@ -1151,7 +1216,9 @@ class Stars(Particles, StarsComponent):
         # If only one line specified convert to a list to avoid writing a
         # longer if statement
         if isinstance(line_ids, str):
-            line_ids = [line_ids, ]
+            line_ids = [
+                line_ids,
+            ]
 
         # Dictionary holding Line objects
         lines = {}
@@ -1166,7 +1233,9 @@ class Stars(Particles, StarsComponent):
 
             # Compute the line object
             line = self.generate_particle_line(
-                grid=grid, line_id=line_id, fesc=fesc,
+                grid=grid,
+                line_id=line_id,
+                fesc=fesc,
             )
 
             # Store this line
@@ -1225,7 +1294,9 @@ class Stars(Particles, StarsComponent):
         # then generate them
         if "intrinsic" not in self.particle_lines:
             intrinsic_lines = self.get_particle_line_intrinsic(
-                grid, line_ids, fesc=fesc,
+                grid,
+                line_ids,
+                fesc=fesc,
             )
         else:
             intrinsic_lines = self.particle_lines["intrinsic"]
@@ -1236,9 +1307,7 @@ class Stars(Particles, StarsComponent):
         # Loop over the intrinsic lines
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # Calculate attenuation
-            T_BC = dust_curve_BC.get_transmission(
-                tau_v_BC, intrinsic_line._wavelength
-            )
+            T_BC = dust_curve_BC.get_transmission(tau_v_BC, intrinsic_line._wavelength)
             T_ISM = dust_curve_ISM.get_transmission(
                 tau_v_ISM, intrinsic_line._wavelength
             )
@@ -1318,12 +1387,12 @@ class Stars(Particles, StarsComponent):
 
 
 def sample_sfhz(
-        sfzh,
-        log10ages,
-        log10metallicities,
-        nstar,
-        initial_mass=1,
-        **kwargs,
+    sfzh,
+    log10ages,
+    log10metallicities,
+    nstar,
+    initial_mass=1,
+    **kwargs,
 ):
     """
     Create "fake" stellar particles by sampling a SFZH.
@@ -1363,9 +1432,7 @@ def sample_sfhz(
     )
 
     # Extract the sampled ages and metallicites and create an array
-    random_from_cdf = np.column_stack(
-        (log10ages[x_idx], log10metallicities[y_idx])
-    )
+    random_from_cdf = np.column_stack((log10ages[x_idx], log10metallicities[y_idx]))
 
     # Extract the individual logged quantities
     log10ages, log10metallicities = random_from_cdf.T
@@ -1379,4 +1446,3 @@ def sample_sfhz(
     )
 
     return stars
-
