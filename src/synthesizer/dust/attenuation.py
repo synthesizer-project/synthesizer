@@ -7,6 +7,7 @@ from dust_extinction.grain_models import WD01
 
 from synthesizer import exceptions
 
+
 this_dir, this_filename = os.path.split(__file__)
 
 __all__ = ["PowerLaw", "MW_N18", "Calzetti2000", "GrainsWD01"]
@@ -218,7 +219,7 @@ class MW_N18(AttenuationLaw):
 
         description = "MW extinction curve from Desika"
         AttenuationLaw.__init__(self, description)
-        self.data = np.load(f"{this_dir}/data/MW_N18.npz")
+        self.data = np.load(f"{this_dir}/../data/MW_N18.npz")
         self.tau_lam_v = np.interp(
             5500.0, self.data.f.mw_df_lam[::-1], self.data.f.mw_df_chi[::-1]
         )
