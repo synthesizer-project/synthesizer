@@ -16,7 +16,85 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-from .exceptions import InconsistentParameter
+from synthesizer.exceptions import (
+    InconsistentParameter,
+    UnrecognisedOption
+    )
+
+
+class ScalingFunctions:
+
+    """
+    This is a class holds scaling functions for individual elements. In each
+    case the function returns the logarthimic abundance relative to Hydrogen
+    for a given metallicity.
+    
+    Example:
+
+    ScalingFunctions.N.Dopita2006(0.016)
+
+    or
+
+    element_functions = getattr(ScalingFunctions, 'N')
+    scaling_function = getattr(element_functions, 'Dopita2006')
+    scaling_function(0.016)
+    
+    """
+
+    class Dopita2006:
+
+        """ Scaling functions for Nitrogen."""
+        ads = 'https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract'
+        doi = '10.1086/508261'
+
+        def N(metallicity):
+
+            """
+            
+            Arguments:
+                metallicity (float)
+                    The metallicity (mass fraction in metals)
+            
+            Returns:
+                abundance (float)
+                    The logarithmic abundance relative to Hydrogen.
+            
+            """
+
+            # the metallicity scaled to the Dopita (2006) value
+            dopita_solar_metallicity = 0.016
+            scaled_metallicity = metallicity / dopita_solar_metallicity
+
+            abundance = np.log10(
+                    1.1E-5 * scaled_metallicity + 4.9E-5 * (scaled_metallicity) ** 2
+                )
+
+            return abundance
+        
+        def C(metallicity):
+
+            """
+            Scaling functions for Carbon.
+            
+            Arguments:
+                metallicity (float)
+                    The metallicity (mass fraction in metals)
+            
+            Returns:
+                abundance (float)
+                    The logarithmic abundance relative to Hydrogen.
+            
+            """
+
+            # the metallicity scaled to the Dopita (2006) value
+            dopita_solar_metallicity = 0.016
+            scaled_metallicity = metallicity / dopita_solar_metallicity
+
+            abundance = np.log10(
+                    6E-5 * scaled_metallicity + 2E-4 * (scaled_metallicity) ** 2
+                )
+
+            return abundance
 
 
 class Elements:
@@ -165,7 +243,7 @@ class Elements:
     # https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/abstract
 
     # Asplund (2009) Solar - HOWEVER, running metallicity() on the solar abundances below yields 0.0135
-    Z_sol = 0.0134
+    solar_metallicity = 0.0134
 
     sol = {}
     # These are log10(N_element/N_H) ratios
@@ -245,118 +323,138 @@ class Elements:
 
 class Abundances(Elements):
     def __init__(
-        self, Z=Elements.Z_sol, alpha=0.0, C="Dopita2006", N="Dopita2006", d2m=False
+        self,
+        metallicity=Elements.solar_metallicity,
+        alpha=0.0,
+        abundances=False,
+        carbon_abundance=False,
+        nitrogen_abundance=False,
+        dust_to_metal_ratio=False
     ):
         """
         A class for calcualting elemental abundances including various scaling and depletion on to dust
 
-        Arguments
-        ----------
-        Z : float
-            Mass fraction in metals, default is Solar metallicity.
-        alpha: float
-            Enhancement of the alpha elements
-        C: float, str
-            log10(C/O) ratio. A str is the name of the function f(Z) to use instead.
-        N: float, str
-            log10(N/O) ratio. A str is the name of the function f(Z) to use instead.
-        d2m: float
-            the fraction of metals in dust
+        Arguments:
+            metallicity (float)
+                ass fraction in metals, default is Solar metallicity.
+            alpha (float)
+                Enhancement of the alpha elements.
+            abundances (dict)
+                A dictionary containing the abundances for specific elements or 
+                functions to calculate them for the specified metallicity.
+            dust_to_metal_ratio (float)
+                the fraction of metals in dust.
 
-        Returns
-        -------
+
         """
 
         # save all parameters to object
-        self.Z = Z  # mass fraction in metals
+        self.metallicity = metallicity  # mass fraction in metals
         self.alpha = alpha
-        self.C = C
-        self.N = N
-        self.d2m = d2m
+        self.carbon_abundance = carbon_abundance
+        self.nitrogen_abundance = nitrogen_abundance
+        self.dust_to_metal_ratio = dust_to_metal_ratio
 
         # set depletions to be zero
         self.depletion = {element: 0.0 for element in self.all_elements}
 
-        # Set helium abundance following Bressan et al. (2012)
-        self.Y = 0.2485 + 1.7756 * self.Z
+        # Set helium mass fraction following Bressan et al. (2012)
+        # 10.1111/j.1365-2966.2012.21948.x
+        # https://ui.adsabs.harvard.edu/abs/2012MNRAS.427..127B/abstract
+        self.helium_mass_fraction = 0.2485 + 1.7756 * self.metallicity
 
         # Define mass fraction in hydrogen
-        self.X = 1.0 - self.Y - self.Z
-
+        self.hydrogen_mass_fraction = (1.0 - self.helium_mass_fraction 
+                                       - self.metallicity)
+        
         # logathrimic total abundance of element relative to H
         total = {}
 
         # hydrogen is by definition 0.0
         total["H"] = 0.0
-        total["He"] = np.log10(self.Y / self.X / self.A["He"])
+        total["He"] = np.log10(self.helium_mass_fraction /
+                               self.hydrogen_mass_fraction /
+                               self.A["He"])
 
-        # Scale elemental abundances from solar abundances based on given metallicity
+        # Scale elemental abundances from solar abundances based on given
+        # metallicity
         for e in self.metals:
-            total[e] = self.sol[e] + np.log10(Z / self.Z_sol)
+            total[e] = self.sol[e] + np.log10(self.metallicity /
+                                              self.solar_metallicity)
 
         # Scale alpha-element abundances from solar abundances
         for e in self.alpha_elements:
             total[e] += alpha
 
-        # Rescale Nitrogen
-        if isinstance(N, float):
-            total["N"] += N
-        elif isinstance(N, str):
-            # if N == 'Feltre2016':
-            #     """ apply scaling for secondary Nitrogen production using relation in Feltre16.
-            #         this is itself based on Groves (2004).
-            #         [N/H] = [O/H](10**1.6 + 10**(2.33+log10 [O/H])) """
 
-            #     OH = (total['O']-total['H']) - (self.sol['O']-self.sol['H'])
-            #     NH = OH*(10**1.6 + 10**(2.33+OH))
-            #     total['N'] = NH + total['H'] + (self.sol['N']-self.sol['H'])
-            #     print(total['N'])
+        # Set holding elements that don't need to be rescaled.
+        unscaled_metals = set([])
 
-            if N == "Dopita2006":
-                """
-                Scaling applied to match with our solar metallicity, this done by
-                solving the equation to get the adopted solar metallicity.
-                """
-                Dopita_Z_sol = 0.016
-                total["N"] = np.log10(
-                    1.1e-5 * (Z / Dopita_Z_sol) + 4.9e-5 * (Z / Dopita_Z_sol) ** 2
-                )
+        # If abundances argument is provided go ahead and set the abundances.
+        if abundances:
 
-        # Rescale Carbon
-        if isinstance(C, float):
-            total["C"] += C
-        elif isinstance(C, str):
-            if C == "Dopita2006":
-                """
-                Scaling applied to match with our solar metallicity, this done by
-                solving the equation to get the adopted solar metallicity.
-                """
-                Dopita_Z_sol = 0.016
-                total["C"] = np.log10(
-                    6e-5 * (Z / Dopita_Z_sol) + 2e-4 * (Z / Dopita_Z_sol) ** 2
-                )
+            # loop over each element in the dictionary
+            for element, value in abundances.items():
+                
+                # Setting alpha, nitrogen_abundance, or carbon_abundance will 
+                # result in the metallicity no longer being correct. To account 
+                # for this we need to rescale the abundances to recover the 
+                # correct metallicity. However, we don't want to rescale the 
+                # things we've changed. For this reason, here we record the 
+                # elements which have changed. See below for the rescaling.
+                unscaled_metals.add('N')
 
-            else:
-                print("ERROR: Supplied scaling is not known")
+                # if value is a float simply set the abundance to this value.
+                if isinstance(value, float):
+                    total[element] = value
 
-        # rescale abundances to recover correct Z
+                # if value is a str use this to call the specific function to
+                # calculate the abundance from the metallicity.
+                elif isinstance(value, str):
 
-        correction = np.log10(Z / self.get_metallicity(total))
+                    # get the class holding functions for this element
+                    study_functions = getattr(ScalingFunctions, value)
 
-        for i in self.metals:
-            total[i] += correction
+                    # get the specific function request by value
+                    scaling_function = getattr(study_functions, element)
+                    total[element] = scaling_function(metallicity)
+
+        # Set of the metals to be scaled, see above.
+        scaled_metals = set(self.metals) - unscaled_metals
+
+        # Calculate the mass in unscaled, scaled, and non-metals.
+        mass_in_unscaled_metals = self.get_mass(list(unscaled_metals), a=total)
+        mass_in_scaled_metals = self.get_mass(list(scaled_metals), a=total)
+        mass_in_non_metals = self.get_mass(['H', 'He'], a=total)
+
+        # Now, calculate the scaling factor. The metallicity is:
+        # metallicity = scaling*mass_in_scaled_metals + mass_in_unscaled_metals
+        #  / (scaling*mass_in_scaled_metals + mass_in_non_metals + 
+        # mass_in_unscaled_metals)
+        # and so (by rearranging) the scaling factor is:
+        scaling = (mass_in_unscaled_metals - metallicity *
+                   mass_in_unscaled_metals - metallicity *
+                   mass_in_non_metals) / (mass_in_scaled_metals *
+                                          (metallicity - 1))
+
+        # now apply this scaling
+        for i in scaled_metals:
+            total[i] += np.log10(scaling)
+
+        # save as attribute
+        self.total = total
 
         # copy total to be gas
-        self.total = total
         self.gas = deepcopy(total)
 
         # calculate the maximum dust-to-metal ratio possible
-        self.max_d2m = self.get_max_d2m()
+        self.max_dust_to_metal_ratio = self.get_max_dust_to_metal_ratio()
 
-        if d2m:
+        if dust_to_metal_ratio:
             # check that the dust to metal ratio is allowed
-            if d2m <= self.max_d2m:
-                # get scaled depletion values, i.e. the fraction of each element which is depleted on to dust
+            if dust_to_metal_ratio <= self.max_dust_to_metal_ratio:
+                # get scaled depletion values, i.e. the fraction of each 
+                # element which is depleted on to dust
                 self.get_depletions()
 
                 # define dust abundances
@@ -381,11 +479,14 @@ class Abundances(Elements):
             else:
                 # this doesn't work
                 InconsistentParameter(
-                    f"The dust-to-metal ratio (d2m) must be less than the maximum possible ratio ({self.max_d2m:.2f})"
+                    f"The dust-to-metal ratio (dust_to_metal_ratio) must be \
+                    less than the maximum possible ratio \
+                    ({self.max_dust_to_metal_ratio:.2f})"
                 )
 
         else:
-            # if not d2m ratio is provided set the dust to be None
+            # If not dust_to_metal_ratio ratio is provided set the dust to be 
+            # None.
             self.dust = {element: -99 for element in self.all_elements}
             self.depletion = {element: 0.0 for element in self.all_elements}
 
@@ -424,25 +525,47 @@ class Abundances(Elements):
         # Add the content of the summary to the string to be printed
         pstr += "-" * 20 + "\n"
         pstr += f"ABUNDANCE PATTERN SUMMARY\n"
-        pstr += f"X: {self.X:.3f}\n"
-        pstr += f"Y: {self.Y:.3f}\n"
-        pstr += f"Z: {self.Z:.3f}\n"
-        pstr += f"Z/Z_sol: {self.Z/self.Z_sol:.2g}\n"
+        pstr += f"X: {self.hydrogen_mass_fraction:.3f}\n"
+        pstr += f"Y: {self.helium_mass_fraction:.3f}\n"
+        pstr += f"Z: {self.metallicity:.3f}\n"
+        pstr += f"Z/Z_sol: {self.metallicity/self.solar_metallicity:.2g}\n"
         pstr += f"alpha: {self.alpha:.3f}\n"
-        pstr += f"C: {self.C} (scaling of C/H relative to Solar)\n"
-        pstr += f"N: {self.N} (scaling of N/H relative to Solar)\n"
-        pstr += f"dust-to-metal ratio: {self.d2m}\n"
-        pstr += f"MAX dust-to-metal ratio: {self.max_d2m:.3f}\n"
+        pstr += f"carbon_abundance: {self.carbon_abundance} \n"
+        pstr += f"nitrogen_abundance: {self.nitrogen_abundance} \n"
+        pstr += f"dust-to-metal ratio: {self.dust_to_metal_ratio}\n"
+        pstr += f"MAX dust-to-metal ratio: {self.max_dust_to_metal_ratio:.3f}\n"
 
         pstr += "-" * 10 + "\n"
-        pstr += "element log10(X/H)_total (log10(X/H)+12) [depletion] log10(X/H)_gas log10(X/H)_dust \n"
+        pstr += "element log10(X/H)_total (log10(X/H)+12) [[X/H]] |depletion| log10(X/H)_gas log10(X/H)_dust \n"
         for ele in self.all_elements:
-            pstr += f"{self.name[ele]}: {self.total[ele]:.2f} ({self.total[ele]+12:.2f}) [{self.depletion[ele]:.2f}] {self.gas[ele]:.2f} {self.dust[ele]:.2f}\n"
+            pstr += f"{self.name[ele]}: {self.total[ele]:.2f} ({self.total[ele]+12:.2f}) [{self.total[ele]-self.sol[ele]:.2f}] |{self.depletion[ele]:.2f}| {self.gas[ele]:.2f} {self.dust[ele]:.2f}\n"
         pstr += "-" * 20
 
         return pstr
 
-    def get_metallicity(self, a=None):
+    def get_mass(self, elements, a=None):
+        """
+        Get the mass for a collection of elements.
+
+        Arguments:
+            elements (list, str)
+                A list of element names.
+            a (dict)
+                The component to use.
+
+        Returns:
+            mass (float)
+                The mass in those elements. Normally this needs to be 
+                normalised to be useful.
+        """
+
+        # if the component is not provided, assume it's the total
+        if not a:
+            a = self.total
+
+        return np.sum([self.A[i] * 10 ** (a[i]) for i in elements])
+
+    def get_metallicity(self, a=None, elements=None):
         """
         This function determines the mass fraction of the metals, or the metallicity
 
@@ -456,19 +579,28 @@ class Abundances(Elements):
         :rtype: float
         """
 
+        # if the component is not provided, assume it's the total
         if not a:
             a = self.total
 
-        return np.sum([self.A[i] * 10 ** (a[i]) for i in self.metals]) / np.sum(
-            [self.A[i] * 10 ** (a[i]) for i in self.all_elements]
-        )
+        # if a list of elements is not provided, assume it's all metals
+        if not elements:
+            elements = self.metals
+
+        # the mass in metals
+        mass_metals = np.sum([self.A[i] * 10 ** (a[i]) for i in elements])
+
+        # the total mass
+        mass_total = np.sum([self.A[i] * 10 ** (a[i]) for i in self.all_elements])
+
+        return mass_metals / mass_total
 
     def get_depletions(self):
         """
         This function returns the depletion after scaling using the solar abundances and depletion patterns from the dust-to-metal ratio. This is the fraction of each element that is depleted on to dust.
         """
         for element in self.all_elements:
-            self.depletion[element] = (self.d2m / self.max_d2m) * (
+            self.depletion[element] = (self.dust_to_metal_ratio / self.max_dust_to_metal_ratio) * (
                 1.0 - self.default_depletion[element]
             )
 
@@ -485,7 +617,7 @@ class Abundances(Elements):
             self.sol[e] - self.sol[ref_element]
         )
 
-    def get_max_d2m(self):
+    def get_max_dust_to_metal_ratio(self):
         """
         This function determine the maximum dust-to-metal ratio
         """
@@ -498,9 +630,9 @@ class Abundances(Elements):
                 * (1.0 - self.default_depletion[element])
             )
 
-        return dust / self.Z
+        return dust / self.metallicity
 
-    def get_d2m(self):
+    def get_dust_to_metal_ratio(self):
         """
         This function measures the dust-to-metal ratio for the calculated depletion
         """
@@ -511,7 +643,7 @@ class Abundances(Elements):
                 element
             ]
 
-        return dust / self.Z
+        return dust / self.metallicity
 
 
 # eventually move these to dedicated plotting module
