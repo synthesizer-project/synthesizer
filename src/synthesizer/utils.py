@@ -190,6 +190,12 @@ def Lnu_to_M(Lnu_):
 def planck(nu, T):
     """
     Planck's law
+        
+    Args:
+        nu (ndarray)
+            frequency
+        T  (array-like (float)/float)     
+            dust temperature            
     """
 
     return (2.0 * h * (nu**3) * (c**-2)) * (1.0 / (np.exp(h * nu / (kb * T)) - 1.0))
