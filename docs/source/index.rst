@@ -24,6 +24,7 @@ Contents
    
    installation
    grids/grids
+   abundances
    galaxies/galaxies
    spectra
    units
