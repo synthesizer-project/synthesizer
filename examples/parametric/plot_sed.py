@@ -50,12 +50,26 @@ if __name__ == "__main__":
     )
 
     # create a galaxy object
+<<<<<<< HEAD
     galaxy = Galaxy(stars)
 
+=======
+    galaxy = Galaxy(sfzh)
+    
+>>>>>>> e61936d (Added function to calculate delta lambda in grid.py)
     # generate pure stellar spectra alone
     galaxy.stars.get_spectra_incident(grid)
     print("Pure stellar spectra")
+<<<<<<< HEAD
     galaxy.plot_spectra(show=True, combined_spectra=False, stellar_spectra=True)
+=======
+    galaxy.plot_spectra(show=True)
+    
+    # delta lambda model for pure stellar spectra
+    galaxy.get_spectra_incident(grid)
+    print("Delta lambda Pure stellar spectra")
+    galaxy.plot_delta(show=True)
+>>>>>>> e61936d (Added function to calculate delta lambda in grid.py)
 
     # generate intrinsic spectra (which includes reprocessing by gas)
     galaxy.stars.get_spectra_reprocessed(grid, fesc=0.5)

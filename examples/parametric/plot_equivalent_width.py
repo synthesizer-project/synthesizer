@@ -8,6 +8,7 @@ Example for generating the equivalent width for a set of UV indices from a param
 """
 
 import matplotlib.pyplot as plt
+import csv
 
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
@@ -155,6 +156,13 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
             s=10,
         )
         plt.semilogx(grid.metallicity, EqW, linewidth=0.75, color="grey")
+        
+        csv_file = 'synthetic_ew.csv'
+        
+        with open(csv_file, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerows(EqW)
+        
         EqW.clear()
 
         plt.tight_layout()
@@ -164,7 +172,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
 
 
 if __name__ == "__main__":
-    grid_dir = "../../tests/test_grid"  # Change this directory to your own.
+    grid_dir = "../tests"  # Change this directory to your own.
     grid_name = "test_grid"  # Change this to the appropriate .hdf5
 
     index, index_window, blue_window, red_window = set_index()  # Retrieve UV indices
