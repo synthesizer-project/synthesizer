@@ -1,3 +1,7 @@
+"""Load Simba galaxy data from a caesar file and snapshot
+
+Method for loading galaxy and particle data for the [Simba](http://simba.roe.ac.uk/) simulation
+"""
 import h5py
 import numpy as np
 
