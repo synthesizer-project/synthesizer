@@ -78,6 +78,9 @@ class BlackholesComponent:
              
         """
 
+        # Initialise spectra
+        self.spectra = None
+
         # Save the arguments as attributes
         self.mass = mass
         self.accretion_rate = accretion_rate
@@ -87,12 +90,6 @@ class BlackholesComponent:
         self.spin = spin
         self.bolometric_luminosity = bolometric_luminosity
         self.metallicity = metallicity
-
-        # Define the spectra dictionary to hold the stellar spectra
-        self.spectra = []
-
-        # Define the line dictionary to hold the stellar emission lines
-        self.lines = []
 
         # If mass, accretion_rate, and epsilon provided calculate the
         # bolometric luminosity.
@@ -128,6 +125,7 @@ class BlackholesComponent:
 
         # I will be hated for this. But left in for now to provide access to
         # both and not break the EmissionModel.
+        # MOVE TO PARTICLE
         for singular, plural in [
             ('mass', 'masses'),
             ('accretion_rate', 'accretion_rates'),
@@ -217,7 +215,7 @@ class BlackholesComponent:
 
         return self.accretion_rate_eddington
 
-    def get_spectra(self, emission_model):
+    def get_spectra(self, emission_model, spectra_ids=None, verbose=True):
         """
         Generate blackhole spectra for a given emission_model.
         
@@ -227,25 +225,40 @@ class BlackholesComponent:
         
         """
 
-        # get the parameters that this particular emission model requires
-        # TODO: this is horrible and will break when __slots__ exists.
-
+        # Get the parameters that this particular emission model requires
         emission_model_parameters = {}
         for parameter in emission_model.parameters:
-            if parameter in self.__dict__: 
-                emission_model_parameters[parameter] = getattr(self, parameter)
-                print(parameter, '| provided')
-            elif '_'+parameter in self.__dict__:
-                emission_model_parameters[parameter] = getattr(self, '_'+parameter)
-                print(parameter, '| provided')
+            attr = getattr(self, parameter, None)
+            priv_attr = getattr(self, "_" + parameter, None)
+            if attr is not None:
+                emission_model_parameters[parameter] = attr
+                if verbose:
+                    print(parameter, '| provided')
+            elif priv_attr is not None:
+                emission_model_parameters[parameter] = priv_attr
+                if verbose:
+                    print(parameter, '| provided')
             else:
-                print(parameter, '| not provided')
+                if verbose:
+                    print(parameter, '| not provided')
 
-        print(emission_model_parameters)
 
-        for values in zip(*[x for x in emission_model_parameters.values()]):
+        # Loop over the blackholes associated to the model
+        for i, values in enumerate(zip(*[x for x in emission_model_parameters.values()])):
+            
+            # Create a dictionary of the parameters to be passed to the
+            # emission model.
             parameters = dict(zip(emission_model_parameters.keys(), values))
 
-            self.spectra.append(emission_model.get_spectra(**parameters))
-
+            # Get the spectra
+            spectra = emission_model.get_spectra(spectra_ids=spectra_ids, 
+                                                 **parameters)
+            
+            if self.spectra is None:
+                self.spectra = spectra
+            else:
+                for spectra_id, spectra_ in spectra.items():
+                    self.spectra[spectra_id] = self.spectra[spectra_id].concat(
+                        spectra_)
+      
         return self.spectra
