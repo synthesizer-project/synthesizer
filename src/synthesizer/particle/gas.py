@@ -142,13 +142,16 @@ class Gas(Particles):
             self.dust_to_metal_ratio = dust_to_metal_ratio
             self.calculate_dust_mass()
 
-        if dust_masses is not None:
+        else:  # if dust_masses is not None:
             self.dust_masses = dust_masses
 
             # TODO: this should be removed when dust masses are
             # properly propagated to LOS calculation
             self.dust_to_metal_ratio = self.dust_masses /\
                 (self.masses * self.metallicities)
+
+            self.dust_to_metal_ratio[self.dust_masses == 0.] = 0.
+            self.dust_to_metal_ratio[self.metallicities == 0.] = 0.
 
         # Check the arguments we've been given
         self._check_gas_args()
