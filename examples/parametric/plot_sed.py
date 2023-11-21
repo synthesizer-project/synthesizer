@@ -59,11 +59,6 @@ if __name__ == "__main__":
     galaxy.plot_spectra(show=True, combined_spectra=False, stellar_spectra=True)
 
     galaxy.plot_spectra(show=True)
-    
-    # delta lambda model for pure stellar spectra
-    galaxy.get_spectra_incident(grid)
-    print("Delta lambda Pure stellar spectra")
-    galaxy.plot_delta(show=True)
 
     # generate intrinsic spectra (which includes reprocessing by gas)
     galaxy.stars.get_spectra_reprocessed(grid, fesc=0.5)
