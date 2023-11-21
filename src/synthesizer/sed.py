@@ -156,6 +156,9 @@ class Sed:
                 new_lnu = np.array((new_lnu,))
             elif new_lnu.ndim > other_lnu.ndim:
                 other_lnu = np.array((other_lnu,))
+            elif new_lnu.ndim == other_lnu.ndim == 1:
+                new_lnu = np.array((new_lnu,))
+                other_lnu = np.array((other_lnu,))
 
             # Concatenate this lnu array
             new_lnu = np.concatenate((new_lnu, other_lnu))
