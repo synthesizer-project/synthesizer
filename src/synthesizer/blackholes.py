@@ -195,7 +195,20 @@ class UnifiedAGN(BlackHoleEmissionModel):
             'theta_torus',
         ]
 
+        # list of spectra 
+        self.spectra_id = [
+            'disc_incident',
+            'disc_escape',
+            'disc_transmitted',
+            'disc',
+            'nlr',
+            'blr',
+            'torus',
+            'emergent',
+        ]
+
         # dictionary holding LineCollections for each (relevant) component
+        # PROBABLY BETTER NOT TO ASSOCIATE THE SPECTRA WITH THE INSTANCE
         self.lines = {}
 
         # dictionary holding Seds for each component (and sub-component)
@@ -319,7 +332,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # create new Sed object containing dust spectra
         self.spectra['torus'] = Sed(disc.lam, lnu=lnu)
 
-    def get_spectra(self, **kwargs):
+    def get_spectra(self, spectra_ids=None, **kwargs):
         """
         Generate the spectra, updating the parameters if required.
 
@@ -336,10 +349,16 @@ class UnifiedAGN(BlackHoleEmissionModel):
         self._get_spectra_lr('blr')
         self._get_spectra_torus()
 
+        # Calculate the total spectra as the sum of the components
         self.spectra['total'] = self.spectra['disc'] + \
             self.spectra['blr'] + self.spectra['nlr'] + self.spectra['torus']
     
-        return self.spectra
+        # If spectra_ids are not provided use the full list
+        if spectra_ids is None:
+            return self.spectra
+        else:
+            return {spectra_id: self.spectra[spectra_ids]
+                    for spectra_id in spectra_ids}
     
 
 
