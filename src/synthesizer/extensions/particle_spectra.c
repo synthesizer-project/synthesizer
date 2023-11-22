@@ -18,10 +18,8 @@
 #include "weights.h"
 
 /**
- * @brief This calculates the grid weights in each grid cell.
- *
- * To do this for an N-dimensional array this is done recursively one dimension
- * at a time.
+ * @brief This calculates the spectra of a particle using a cloud in cell
+ *        approach.
  *
  * @param grid_props: An array of the properties along each grid axis.
  * @param part_props: An array of the particle properties, in the same property
@@ -111,6 +109,93 @@ void spectra_loop_cic(const double **grid_props, const double **part_props,
 
     /* Define the weight. */
     double weight = mass * fracs[icell];
+
+    /* Get the spectra ind. */
+    int unraveled_ind[ndim + 1];
+    get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+    unraveled_ind[ndim] = 0;
+    int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+    /* Add this grid cell's contribution to the spectra */
+    for (int ilam = 0; ilam < nlam; ilam++) {
+
+      /* Add the contribution to this wavelength. */
+      spectra[p * nlam + ilam] +=
+          grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight;
+    }
+  }
+}
+
+/**
+ * @brief This calculates the spectra of a particle using a nearest grid point
+ *        approach.
+ *
+ * @param grid_props: An array of the properties along each grid axis.
+ * @param part_props: An array of the particle properties, in the same property
+ *                    order as grid props.
+ * @param mass: The mass of the current particle.
+ * @param grid_spectra: The grid of SPS spectra.
+ * @param dims: The length of each grid dimension.
+ * @param ndim: The number of grid dimensions.
+ * @param spectra: The array of particle spectra.
+ * @param nlam: The number of wavelength elements.
+ * @param fesc: The escape fraction.
+ * @param p: The index of the current particle.
+ */
+void spectra_loop_ngp(const double **grid_props, const double **part_props,
+                      const double mass, const double *grid_spectra,
+                      const int *dims, const int ndim, double *spectra,
+                      const int nlam, const double fesc, const int p) {
+
+  /* Setup the index array. */
+  int part_indices[ndim][ndim];
+
+  /* Loop over dimensions finding the indicies. */
+  for (int dim = 0; dim < ndim; dim++) {
+
+    /* Get this array of grid properties for this dimension */
+    const double *grid_prop = grid_props[dim];
+
+    /* Get this particle property. */
+    const double part_val = part_props[dim][p];
+
+    /* Here we need to handle if we are outside the range of values. If so
+     * there's no point in searching and we return the edge nearest to the
+     * value. */
+    int part_cell;
+    if (part_val <= grid_prop[0]) {
+
+      /* Use the grid edge. */
+      part_cell = 0;
+
+    } else if (part_val > grid_prop[dims[dim] - 1]) {
+
+      /* Use the grid edge. */
+      part_cell = dims[dim] - 1;
+
+    } else {
+
+      /* Find the grid index corresponding to this particle property. */
+      part_cell =
+          binary_search(/*low*/ 1, /*high*/ dims[dim] - 1, grid_prop, part_val);
+    }
+
+    /* Set these indices. */
+    for (int jdim = 0; jdim < ndim; jdim++) {
+      part_indices[jdim * 2][dim] = part_cell - 1;
+      part_indices[jdim * 2 + 1][dim] = part_cell;
+    }
+  }
+
+  /* Now loop over this collection of cells collecting and setting their
+   * weights. */
+  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+
+    /* We have a contribution, get the flattened index into the grid array. */
+    const int grid_ind = get_flat_index(part_indices[icell], dims, ndim);
+
+    /* Define the weight. */
+    double weight = mass;
 
     /* Get the spectra ind. */
     int unraveled_ind[ndim + 1];
