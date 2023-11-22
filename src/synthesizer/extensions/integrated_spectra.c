@@ -2,185 +2,19 @@
  * C extension to calculate integrated SEDs for a galaxy's star particles.
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
+/* C includes */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+/* Python includes */
 #include <Python.h>
-
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-
 #include <numpy/ndarrayobject.h>
 #include <numpy/ndarraytypes.h>
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
-/* Define a macro to handle that bzero is non-standard. */
-#define bzero(b, len) (memset((b), '\0', (len)), (void)0)
-
-/**
- * @brief Compute an ndimensional index from a flat index.
- *
- * @param flat_ind: The flattened index to unravel.
- * @param ndim: The number of dimensions for the unraveled index.
- * @param dims: The size of each dimension.
- * @param indices: The output N-dimensional indices.
- */
-void get_indices_from_flat(int flat_ind, int ndim, const int *dims,
-                           int *indices) {
-
-  /* Loop over indices calculating each one. */
-  for (int i = 0; i < ndim; i++) {
-    indices[i] = flat_ind % dims[i];
-    flat_ind /= dims[i];
-  }
-}
-
-/**
- * @brief Compute a flat grid index based on the grid dimensions.
- *
- * @param multi_index: An array of N-dimensional indices.
- * @param dims: The length of each dimension.
- * @param ndim: The number of dimensions.
- */
-int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
-  int index = 0, stride = 1;
-  for (int i = ndims - 1; i >= 0; i--) {
-    index += stride * multi_index[i];
-    stride *= dims[i];
-  }
-
-  return index;
-}
-
-/**
- * @brief Performs a binary search for the index of an array corresponding to
- * a value.
- *
- * @param low: The initial low index (probably beginning of array).
- * @param high: The initial high index (probably size of array).
- * @param arr: The array to search in.
- * @param val: The value to search for.
- */
-int binary_search(int low, int high, const double *arr, const double val) {
-
-  /* While we don't have a pair of adjacent indices. */
-  int diff = high - low;
-  int mid;
-  while (diff > 1) {
-
-    /* Define the midpoint. */
-    mid = low + floor(diff / 2);
-
-    /* Where is the midpoint relative to the value? */
-    if (arr[mid] < val) {
-      low = mid;
-    } else {
-      high = mid;
-    }
-
-    /* Compute the new range. */
-    diff = high - low;
-  }
-  return low;
-}
-
-/**
- * @brief This calculates the grid weights in each grid cell.
- *
- * To do this for an N-dimensional array this is done recursively one dimension
- * at a time.
- *
- * @param grid_props: An array of the properties along each grid axis.
- * @param part_props: An array of the particle properties, in the same property
- *                    order as grid props.
- * @param mass: The mass of the current particle.
- * @param weights: The weight of each grid point.
- * @param dims: The length of each grid dimension.
- * @param ndim: The number of grid dimensions.
- * @param p: Index of the current particle.
- */
-void weight_loop_CIC(const double **grid_props, const double **part_props,
-                     const double mass, double *weights, const int *dims,
-                     const int ndim, const int p) {
-
-  /* Setup the index and mass fraction arrays. */
-  int frac_indices[(int)pow(2, (double)ndim)][ndim];
-  double fracs[(int)pow(2, (double)ndim)];
-
-  /* Set up the fractions. */
-  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
-    fracs[icell] = 1;
-  }
-
-  /* Loop over dimensions finding the mass weightings and indicies. */
-  for (int dim = 0; dim < ndim; dim++) {
-
-    /* Get this array of grid properties for this dimension */
-    const double *grid_prop = grid_props[dim];
-
-    /* Get this particle property. */
-    const double part_val = part_props[dim][p];
-
-    /* Define the starting indices. */
-    int low = 0, high = dims[dim] - 1;
-
-    /* Here we need to handle if we are outside the range of values. If so
-     * there's no point in searching and we return the edge nearest to the
-     * value. */
-    double frac;
-    if (part_val <= grid_prop[low]) {
-
-      /* Use the grid edge. */
-      low = -1;
-      high = 0;
-      frac = 1;
-
-    } else if (part_val > grid_prop[high]) {
-
-      /* Use the grid edge. */
-      low = -1;
-      high = dims[dim] - 1;
-      frac = 1;
-
-    } else {
-
-      /* Find the grid index corresponding to this particle property. */
-      high = binary_search(low, high, grid_prop, part_val);
-      low = high - 1;
-
-      /* Calculate the fraction. Note, here we do the high cell, low cell
-       * is calculated below. */
-      frac = (part_val - grid_prop[low]) / (grid_prop[high] - grid_prop[low]);
-    }
-
-    /* Set the fractions. */
-    fracs[dim * 2 + 1] *= frac;
-    fracs[dim * 2] *= 1 - frac;
-
-    /* Set these indices. */
-    for (int jdim = 0; jdim < ndim; jdim++) {
-      frac_indices[jdim * 2][dim] = low;
-      frac_indices[jdim * 2 + 1][dim] = high;
-    }
-  }
-
-  /* Now loop over this collection of cells collecting and setting their
-   * weights. */
-  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
-
-    /* Early skip for cells contributing a 0 fraction. */
-    if (fracs[icell] <= 0)
-      continue;
-
-    /* We have a contribution, get the flattened index into the grid array. */
-    const int weight_ind = get_flat_index(frac_indices[icell], dims, ndim);
-
-    /* Compute the weight. */
-    const double weight = mass * fracs[icell];
-
-    /* And finally add the weight. */
-    weights[weight_ind] += weight;
-  }
-}
+/* Local includes */
+#include "weights.h"
 
 /**
  * @brief Computes an integrated SED for a collection of particles.
