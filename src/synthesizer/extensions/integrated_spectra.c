@@ -124,6 +124,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
       weight_loop_ngp(grid_props, part_props, mass, grid_weights, dims, ndim,
                       p);
     } else {
+      /* Only print this warning once! */
       if (p == 0)
         printf(
             "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
