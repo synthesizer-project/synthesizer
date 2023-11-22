@@ -950,6 +950,7 @@ class Sed:
         """
 
         # Resample the Sed
+        # TODO: this should use spectres.
         if isinstance(n, int):
             sed = Sed(
                 rebin_1d(self.lam, n, func=np.mean), rebin_1d(self.lnu, n, func=np.mean)
