@@ -9,9 +9,9 @@
 
 /* Python includes */
 #include <Python.h>
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
 #include <numpy/ndarraytypes.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
 /* Local includes */
 #include "weights.h"
@@ -65,10 +65,6 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   /* Extract a pointer to the particle masses. */
   const double *part_mass = PyArray_DATA(np_part_mass);
-
-  /* Compute the number of weights we need. Adding on a buffer for
-   * accurate casting*/
-  const int nweights = pow(2, ndim) + 0.1;
 
   /* Allocate a single array for grid properties*/
   int nprops = 0;
