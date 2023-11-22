@@ -80,6 +80,11 @@ void spectra_loop_cic(const double **grid_props, const double **part_props,
       part_cell =
           binary_search(/*low*/ 1, /*high*/ dims[dim] - 1, grid_prop, part_val);
 
+      /* Make sure we have the cell containing the particle. */
+      if (grid_prop[part_cell] < part_val) {
+        part_cell += 1;
+      }
+
       /* Calculate the fraction. Note, here we do the cell containing the
        * particle, the cell below is calculated from this fraction. */
       frac = (part_val - grid_prop[part_cell - 1]) /

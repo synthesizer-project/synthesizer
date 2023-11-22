@@ -68,7 +68,13 @@ int binary_search(int low, int high, const double *arr, const double val) {
     /* Compute the new range. */
     diff = high - low;
   }
-  return low;
+
+  /* Return the nearest grid point. */
+  if ((val - arr[low]) < (arr[high] - val)) {
+    return high;
+  } else {
+    return low;
+  }
 }
 
 /**
@@ -127,7 +133,12 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
 
       /* Find the grid index corresponding to this particle property. */
       part_cell =
-          binary_search(/*low*/ 1, /*high*/ dims[dim] - 1, grid_prop, part_val);
+          binary_search(/*low*/ 0, /*high*/ dims[dim] - 1, grid_prop, part_val);
+
+      /* Make sure we have the cell containing the particle. */
+      if (grid_prop[part_cell] < part_val) {
+        part_cell += 1;
+      }
 
       /* Calculate the fraction. Note, here we do the cell containing the
        * particle, the cell below is calculated from this fraction. */
@@ -218,7 +229,7 @@ void weight_loop_ngp(const double **grid_props, const double **part_props,
 
       /* Find the grid index corresponding to this particle property. */
       part_cell =
-          binary_search(/*low*/ 1, /*high*/ dims[dim] - 1, grid_prop, part_val);
+          binary_search(/*low*/ 0, /*high*/ dims[dim] - 1, grid_prop, part_val);
     }
 
     /* Set the index. */
