@@ -68,9 +68,6 @@ def load_Simba(
     g_dustmass = (g_dustmass * 1e10) / h
     imasses = (imasses * 1e10) / h
 
-    # create mask of star forming gas particles
-    # star_forming = g_sfr > 0.0
-
     # get individual and summed metallicity components
     s_oxygen = _metals[:, 4]
     s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
@@ -119,7 +116,9 @@ def load_Simba(
     for i, (b, e) in enumerate(zip(begin, end)):
 
         # Use the H2 masses computed in Simba directly to
-        # estimate the star forming gas mass and metallicity
+        # estimate the star forming gas mass and metallicity.
+        # Alternative to setting star_forming property on
+        # each gas particle
         h2_masses = g_masses[b:e] * g_h2fraction[b:e]
         galaxies[i].sf_gas_mass = np.sum(h2_masses)
         galaxies[i].sf_gas_metallicity =\
@@ -130,7 +129,6 @@ def load_Simba(
             coordinates=g_coods[b:e],
             masses=g_masses[b:e],
             metals=g_metals[b:e],
-            # star_forming=star_forming[b:e],
             smoothing_lengths=g_hsml[b:e],
             dust_masses=g_dustmass[b:e],
         )
