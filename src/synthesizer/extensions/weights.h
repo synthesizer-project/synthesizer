@@ -2,10 +2,8 @@
  * A C module containing all the weights functions common to all particle
  * spectra extensions.
  *****************************************************************************/
+/* C includes */
 #include <math.h>
-
-/* Define a macro to handle that bzero is non-standard. */
-#define bzero(b, len) (memset((b), '\0', (len)), (void)0)
 
 /**
  * @brief Compute an ndimensional index from a flat index.
