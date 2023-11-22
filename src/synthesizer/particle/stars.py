@@ -264,7 +264,14 @@ class Stars(Particles, StarsComponent):
 
         return pstr
 
-    def _prepare_sed_args(self, grid, fesc, spectra_type, mask=None):
+    def _prepare_sed_args(
+        self,
+        grid,
+        fesc,
+        spectra_type,
+        mask,
+        grid_assignment_method,
+    ):
         """
         A method to prepare the arguments for SED computation with the C
         functions.
@@ -280,6 +287,15 @@ class Stars(Particles, StarsComponent):
             mask (bool)
                 A mask to be applied to the stars. Spectra will only be computed
                 and returned for stars with True in the mask.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
         """
 
         # Make a dummy mask if none has been passed
@@ -326,6 +342,7 @@ class Stars(Particles, StarsComponent):
             len(grid_props),
             npart,
             nlam,
+            grid_assignment_method,
         )
 
     def generate_lnu(
@@ -337,6 +354,7 @@ class Stars(Particles, StarsComponent):
         old=False,
         verbose=False,
         do_grid_check=True,
+        grid_assignment_method="cic",
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -367,6 +385,11 @@ class Stars(Particles, StarsComponent):
                     - You know your particle lie within the grid but don't
                       want to waste compute checking. This case is useful when
                       working with large particle counts.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
@@ -418,7 +441,11 @@ class Stars(Particles, StarsComponent):
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
-            grid, fesc=fesc, spectra_type=spectra_name, mask=mask
+            grid,
+            fesc=fesc,
+            spectra_type=spectra_name,
+            mask=mask,
+            grid_assignment_method=grid_assignment_method.lower(),
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
@@ -513,6 +540,7 @@ class Stars(Particles, StarsComponent):
         old=False,
         verbose=False,
         do_grid_check=True,
+        grid_assignment_method="cic",
     ):
         """
         Generate the particle rest frame spectra for a given grid key spectra
@@ -543,6 +571,11 @@ class Stars(Particles, StarsComponent):
                     - You know your particle lie within the grid but don't
                       want to waste compute checking. This case is useful when
                       working with large particle counts.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
@@ -594,7 +627,11 @@ class Stars(Particles, StarsComponent):
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
-            grid, fesc=fesc, spectra_type=spectra_name, mask=mask
+            grid,
+            fesc=fesc,
+            spectra_type=spectra_name,
+            mask=mask,
+            grid_assignment_method=grid_assignment_method.lower(),
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
@@ -915,6 +952,7 @@ class Stars(Particles, StarsComponent):
         fesc_LyA=1.0,
         young=False,
         old=False,
+        **kwargs,
     ):
         """
         Generate the line contribution spectra. This is only invoked if
@@ -935,6 +973,9 @@ class Stars(Particles, StarsComponent):
             old (bool, float):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
 
         Returns:
             numpy.ndarray
@@ -944,7 +985,11 @@ class Stars(Particles, StarsComponent):
         # Generate contribution of line emission alone and reduce the
         # contribution of Lyman-alpha
         linecont = self.generate_particle_lnu(
-            grid, spectra_name="linecont", old=old, young=young
+            grid,
+            spectra_name="linecont",
+            old=old,
+            young=young,
+            **kwargs,
         )
 
         # Multiply by the Lyamn-continuum escape fraction
@@ -956,7 +1001,14 @@ class Stars(Particles, StarsComponent):
 
         return linecont
 
-    def get_particle_spectra_incident(self, grid, young=False, old=False, label=""):
+    def get_particle_spectra_incident(
+        self,
+        grid,
+        young=False,
+        old=False,
+        label="",
+        **kwargs,
+    ):
         """
         Generate the incident (equivalent to pure stellar for stars) spectra
         using the provided Grid.
@@ -973,6 +1025,10 @@ class Stars(Particles, StarsComponent):
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_incident".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
+
 
         Returns:
             Sed
@@ -980,7 +1036,13 @@ class Stars(Particles, StarsComponent):
         """
 
         # Get the incident spectra
-        lnu = self.generate_particle_lnu(grid, "incident", young=young, old=old)
+        lnu = self.generate_particle_lnu(
+            grid,
+            "incident",
+            young=young,
+            old=old,
+            **kwargs,
+        )
 
         # Create the Sed object
         sed = Sed(grid.lam, lnu)
@@ -997,6 +1059,7 @@ class Stars(Particles, StarsComponent):
         young=False,
         old=False,
         label="",
+        **kwargs,
     ):
         """
         Generate the transmitted spectra using the provided Grid. This is the
@@ -1018,6 +1081,9 @@ class Stars(Particles, StarsComponent):
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_transmitted".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
 
         Returns:
             Sed
@@ -1026,7 +1092,11 @@ class Stars(Particles, StarsComponent):
 
         # Get the transmitted spectra
         lnu = (1.0 - fesc) * self.generate_particle_lnu(
-            grid, "transmitted", young=young, old=old
+            grid,
+            "transmitted",
+            young=young,
+            old=old,
+            **kwargs,
         )
 
         # Create the Sed object
@@ -1044,6 +1114,7 @@ class Stars(Particles, StarsComponent):
         young=False,
         old=False,
         label="",
+        **kwargs,
     ):
         """
         Generate nebular spectra from a grid object and star particles.
@@ -1064,6 +1135,9 @@ class Stars(Particles, StarsComponent):
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_nebular".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
 
         Returns:
             Sed
@@ -1071,7 +1145,9 @@ class Stars(Particles, StarsComponent):
         """
 
         # Get the nebular emission spectra
-        lnu = self.generate_particle_lnu(grid, "nebular", young=young, old=old)
+        lnu = self.generate_particle_lnu(
+            grid, "nebular", young=young, old=old, **kwargs
+        )
 
         # Apply the escape fraction
         lnu *= 1 - fesc
@@ -1092,6 +1168,7 @@ class Stars(Particles, StarsComponent):
         young=False,
         old=False,
         label="",
+        **kwargs,
     ):
         """
         Generates the intrinsic spectra, this is the sum of the escaping
@@ -1119,6 +1196,9 @@ class Stars(Particles, StarsComponent):
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_transmitted".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
 
         Updates:
             incident:
@@ -1141,6 +1221,7 @@ class Stars(Particles, StarsComponent):
             young=young,
             old=old,
             label=label,
+            **kwargs,
         )
 
         # The emission which escapes the gas
@@ -1149,12 +1230,17 @@ class Stars(Particles, StarsComponent):
 
         # The stellar emission which **is** reprocessed by the gas
         transmitted = self.get_particle_spectra_transmitted(
-            grid, fesc, young=young, old=old, label=label
+            grid,
+            fesc,
+            young=young,
+            old=old,
+            label=label,
+            **kwargs,
         )
 
         # The nebular emission
         nebular = self.get_particle_spectra_nebular(
-            grid, fesc, young=young, old=old, label=label
+            grid, fesc, young=young, old=old, label=label, **kwargs
         )
 
         # If the Lyman-alpha escape fraction is <1.0 suppress it.
@@ -1164,11 +1250,16 @@ class Stars(Particles, StarsComponent):
                 grid,
                 fesc=fesc,
                 fesc_LyA=fesc_LyA,
+                **kwargs,
             )
 
             # Get the nebular continuum emission
             nebular_continuum = self.generate_particle_lnu(
-                grid, "nebular_continuum", young=young, old=old
+                grid,
+                "nebular_continuum",
+                young=young,
+                old=old,
+                **kwargs,
             )
             nebular_continuum *= 1 - fesc
 
