@@ -114,7 +114,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     const double mass = part_mass[p];
 
     /* Finally, compute the weights for this particle. */
-    weight_loop_CIC(grid_props, part_props, mass, grid_weights, dims, ndim, p);
+    weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim, p);
 
   } /* Loop over particles. */
 

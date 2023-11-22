@@ -86,7 +86,7 @@ int binary_search(int low, int high, const double *arr, const double val) {
  * @param ndim: The number of grid dimensions.
  * @param p: Index of the current particle.
  */
-void weight_loop_CIC(const double **grid_props, const double **part_props,
+void weight_loop_cic(const double **grid_props, const double **part_props,
                      const double mass, double *weights, const int *dims,
                      const int ndim, const int p) {
 

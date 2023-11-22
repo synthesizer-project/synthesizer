@@ -35,7 +35,7 @@
  * @param fesc: The escape fraction.
  * @param p: The index of the current particle.
  */
-void spectra_loop_CIC(const double **grid_props, const double **part_props,
+void spectra_loop_cic(const double **grid_props, const double **part_props,
                       const double mass, const double *grid_spectra,
                       const int *dims, const int ndim, double *spectra,
                       const int nlam, const double fesc, const int p) {
@@ -224,7 +224,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     const double mass = part_mass[p];
 
     /* Finally, compute the weights for this particle. */
-    spectra_loop_CIC(grid_props, part_props, mass, grid_spectra, dims, ndim,
+    spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
                      spectra, nlam, fesc, p);
   }
 
