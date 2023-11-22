@@ -54,8 +54,8 @@ if __name__ == "__main__":
     stars = Stars(
         grid.log10age,
         grid.metallicity,
-        sf_hist_func=sfh,
-        metal_dist_func=metal_dist,
+        sf_hist=sfh,
+        metal_dist=metal_dist,
         initial_mass=stellar_mass,
     )
 

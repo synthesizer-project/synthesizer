@@ -54,12 +54,12 @@ mass = 10**10
 param_stars = ParametricStars(
     log10ages,
     metallicities,
-    sf_hist_func=sfh,
-    metal_dist_func=metal_dist,
+    sf_hist=sfh,
+    metal_dist=metal_dist,
     initial_mass=mass,
 )
 
-for n in [10, 100]: # , 1000, 10000]:
+for n in [10, 100]:  # , 1000, 10000]:
     xs = []
     loop_ys = []
     tree_ys = []
