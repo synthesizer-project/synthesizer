@@ -14,7 +14,6 @@ from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfhz
-from synthesizer.particle.stars import Stars
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 
@@ -42,7 +41,8 @@ sfzh = ParametricStars(
     grid.log10age,
     grid.metallicity,
     sf_hist_func=sfh,
-    metal_dist_func=metal_dist
+    metal_dist_func=metal_dist,
+    initial_mass=1,
 )
 
 # --------------------------------------------
@@ -59,7 +59,7 @@ plt.plot(
 # --------------------------------------------
 # CREATE PARTICLE SED
 
-for N in [1, 10, 100]: # , 1000]:
+for N in [1, 10, 100, 1000, 10000]:  # , 1000]:
     # --- create stars object
     stars = sample_sfhz(sfzh.sfzh, sfzh.log10ages, sfzh.log10metallicities, N)
     # ensure that the total mass = 1 irrespective of N. This can be also acheived by setting the mass of the star particles in sample_sfhz but this will be easier most of the time.
@@ -80,6 +80,6 @@ for N in [1, 10, 100]: # , 1000]:
 
 plt.legend()
 plt.xlim([2, 5])
-plt.ylim([10, 22])
+plt.ylim([18, 22])
 # plt.savefig(script_path + '/plots/compare_parametric_particle.png', dpi=200, bbox_inches='tight'); plt.close()
 plt.show()
