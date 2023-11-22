@@ -48,14 +48,15 @@ plt.plot(
 
 
 # Compute the particle Sed for a range of particle samples
-for N in [1, 10, 100, 1000]:
+for nstar in [1, 10, 100, 1000]:
     # Get the stars object
-    stars = sample_sfhz(sfzh.sfzh, sfzh.log10ages, sfzh.log10metallicities, N)
-
-    # Ensure that the total mass = 1 irrespective of N. This can be also
-    # acheived by setting the mass of the star particles in sample_sfhz
-    # but this will be easier most of the time.
-    stars.renormalise_mass(1.0)
+    stars = sample_sfhz(
+        sfzh.sfzh,
+        sfzh.log10ages,
+        sfzh.log10metallicities,
+        nstar,
+        initial_mass=1 / nstar,
+    )
 
     # Create galaxy object
     particle_galaxy = ParticleGalaxy(stars=stars)
@@ -68,7 +69,7 @@ for N in [1, 10, 100, 1000]:
     plt.plot(
         np.log10(ngp_sed.lam),
         np.log10(ngp_sed.lnu),
-        label=f"particle (N={N})",
+        label=f"particle (N={nstar})",
     )
 
 
