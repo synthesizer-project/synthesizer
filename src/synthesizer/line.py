@@ -6,7 +6,7 @@ Example usage:
 """
 import numpy as np
 
-from synthersizer.conversions import fnu_to_flam
+from synthesizer.conversions import fnu_to_flam
 from synthesizer.units import Quantity
 from synthesizer import exceptions
 
