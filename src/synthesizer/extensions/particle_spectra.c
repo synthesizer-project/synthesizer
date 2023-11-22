@@ -319,7 +319,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
       spectra_loop_ngp(grid_props, part_props, mass, grid_spectra, dims, ndim,
                        spectra, nlam, fesc, p);
     } else {
-      printf("Unrecognised gird assignment method (%s)! Falling back on CIC",
+      printf("Unrecognised gird assignment method (%s)! Falling back on CIC\n",
              method);
       spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
                        spectra, nlam, fesc, p);
