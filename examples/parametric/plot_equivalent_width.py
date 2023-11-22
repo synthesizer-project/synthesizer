@@ -32,9 +32,39 @@ def set_index():
     """
 
     index = [1370, 1400, 1425, 1460, 1501, 1533, 1550, 1719, 1853]
-    index_window = [[1360, 1380], [1385, 1410], [1413, 1435], [1450, 1470], [1496, 1506], [1530, 1537], [1530, 1560], [1705, 1729], [1838, 1858]]
-    blue_window = [[1345, 1354], [1345, 1354], [1345, 1354], [1436, 1447], [1482, 1491], [1482, 1491], [1482, 1491], [1675, 1684], [1797, 1807]]
-    red_window = [[1436, 1447], [1436, 1447], [1436, 1447], [1482, 1491], [1583, 1593], [1583, 1593], [1583, 1593], [1751, 1761], [1871, 1883]]
+    index_window = [
+        [1360, 1380],
+        [1385, 1410],
+        [1413, 1435],
+        [1450, 1470],
+        [1496, 1506],
+        [1530, 1537],
+        [1530, 1560],
+        [1705, 1729],
+        [1838, 1858],
+    ]
+    blue_window = [
+        [1345, 1354],
+        [1345, 1354],
+        [1345, 1354],
+        [1436, 1447],
+        [1482, 1491],
+        [1482, 1491],
+        [1482, 1491],
+        [1675, 1684],
+        [1797, 1807],
+    ]
+    red_window = [
+        [1436, 1447],
+        [1436, 1447],
+        [1436, 1447],
+        [1482, 1491],
+        [1583, 1593],
+        [1583, 1593],
+        [1583, 1593],
+        [1751, 1761],
+        [1871, 1883],
+    ]
 
     return index, index_window, blue_window, red_window
 
@@ -57,7 +87,7 @@ def get_ew(index, feature, blue, red, Z, smass, grid, EqW, mode):
     Raises:
         ValueError: If mode is invalid.
     """
-    
+
     sfh_p = {"duration": 100 * Myr}
 
     Z_p = {"metallicity": Z}  # can also use linear metallicity e.g. {'Z': 0.01}
@@ -75,9 +105,9 @@ def get_ew(index, feature, blue, red, Z, smass, grid, EqW, mode):
     sfzh = Stars(
         grid.log10age,
         grid.metallicity,
-        sf_hist_func=sfh,
-        metal_dist_func=metal_dist,
-        initial_mass=stellar_mass
+        sf_hist=sfh,
+        metal_dist=metal_dist,
+        initial_mass=stellar_mass,
     )
 
     # --- create a galaxy object
@@ -107,7 +137,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
     Returns:
         None
     """
-    
+
     # -- Calculate the equivalent width for each defined index
     for i, index in enumerate(uv_index):
         grid = Grid(grids, grid_dir=grid_dir)
