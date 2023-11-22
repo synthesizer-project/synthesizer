@@ -1,8 +1,14 @@
+""" A module containing functionality for working with spectral lines.
+
+TODO: Complete doc string.
+
+Example usage:
+"""
 import numpy as np
-from dataclasses import dataclass
-from .units import Quantity
-from .utils import fnu_to_flam
-from . import exceptions
+
+from synthersizer.conversions import fnu_to_flam
+from synthesizer.units import Quantity
+from synthesizer import exceptions
 
 
 def get_line_id(id):
