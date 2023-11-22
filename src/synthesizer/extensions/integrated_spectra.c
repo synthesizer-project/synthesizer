@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* Python includes */
 #include <Python.h>
@@ -40,10 +41,11 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   const PyObject *grid_tuple, *part_tuple;
   const PyArrayObject *np_grid_spectra;
   const PyArrayObject *np_part_mass, *np_ndims;
+  const char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOdOiii", &np_grid_spectra, &grid_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOdOiiis", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &fesc, &np_ndims, &ndim,
-                        &npart, &nlam))
+                        &npart, &nlam, &method))
     return NULL;
 
   /* Quick check to make sure our inputs are valid. */
@@ -113,8 +115,20 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     /* Get this particle's mass. */
     const double mass = part_mass[p];
 
-    /* Finally, compute the weights for this particle. */
-    weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim, p);
+    /* Finally, compute the weights for this particle using the
+     * requested method. */
+    if (strcmp(method, "cic") == 0) {
+      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim,
+                      p);
+    } else if (strcmp(method, "ngp")) {
+      weight_loop_ngp(grid_props, part_props, mass, grid_weights, dims, ndim,
+                      p);
+    } else {
+      printf("Unrecognised gird assignment method (%s)! Falling back on CIC",
+             method);
+      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim,
+                      p);
+    }
 
   } /* Loop over particles. */
 
