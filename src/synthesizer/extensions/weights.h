@@ -180,7 +180,7 @@ void weight_loop_ngp(const double **grid_props, const double **part_props,
                      const int ndim, const int p) {
 
   /* Setup the index array. */
-  int part_indices[ndim][ndim];
+  int part_indices[ndim];
 
   /* Loop over dimensions finding the indicies. */
   for (int dim = 0; dim < ndim; dim++) {
@@ -212,21 +212,13 @@ void weight_loop_ngp(const double **grid_props, const double **part_props,
           binary_search(/*low*/ 1, /*high*/ dims[dim] - 1, grid_prop, part_val);
     }
 
-    /* Set these indices. */
-    for (int jdim = 0; jdim < ndim; jdim++) {
-      part_indices[jdim * 2][dim] = part_cell - 1;
-      part_indices[jdim * 2 + 1][dim] = part_cell;
-    }
+    /* Set the index. */
+    part_indices[dim] = part_cell;
   }
 
-  /* Now loop over this collection of cells collecting and setting their
-   * weights. */
-  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+  /* Get the weight's index. */
+  const int weight_ind = get_flat_index(part_indices, dims, ndim);
 
-    /* We have a contribution, get the flattened index into the grid array. */
-    const int weight_ind = get_flat_index(part_indices[icell], dims, ndim);
-
-    /* Add the weight. */
-    weights[weight_ind] += mass;
-  }
+  /* Add the weight. */
+  weights[weight_ind] += mass;
 }

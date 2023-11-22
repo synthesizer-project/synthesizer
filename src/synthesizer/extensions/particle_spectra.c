@@ -149,7 +149,7 @@ void spectra_loop_ngp(const double **grid_props, const double **part_props,
                       const int nlam, const double fesc, const int p) {
 
   /* Setup the index array. */
-  int part_indices[ndim][ndim];
+  int part_indices[ndim];
 
   /* Loop over dimensions finding the indicies. */
   for (int dim = 0; dim < ndim; dim++) {
@@ -181,36 +181,25 @@ void spectra_loop_ngp(const double **grid_props, const double **part_props,
           binary_search(/*low*/ 1, /*high*/ dims[dim] - 1, grid_prop, part_val);
     }
 
-    /* Set these indices. */
-    for (int jdim = 0; jdim < ndim; jdim++) {
-      part_indices[jdim * 2][dim] = part_cell - 1;
-      part_indices[jdim * 2 + 1][dim] = part_cell;
-    }
+    /* Set the index. */
+    part_indices[dim] = part_cell;
   }
 
-  /* Now loop over this collection of cells collecting and setting their
-   * weights. */
-  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+  /* Get the weight's index. */
+  const int grid_ind = get_flat_index(part_indices, dims, ndim);
 
-    /* We have a contribution, get the flattened index into the grid array. */
-    const int grid_ind = get_flat_index(part_indices[icell], dims, ndim);
+  /* Get the spectra ind. */
+  int unraveled_ind[ndim + 1];
+  get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+  unraveled_ind[ndim] = 0;
+  int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
 
-    /* Define the weight. */
-    double weight = mass;
+  /* Add this grid cell's contribution to the spectra */
+  for (int ilam = 0; ilam < nlam; ilam++) {
 
-    /* Get the spectra ind. */
-    int unraveled_ind[ndim + 1];
-    get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-    unraveled_ind[ndim] = 0;
-    int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
-
-    /* Add this grid cell's contribution to the spectra */
-    for (int ilam = 0; ilam < nlam; ilam++) {
-
-      /* Add the contribution to this wavelength. */
-      spectra[p * nlam + ilam] +=
-          grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight;
-    }
+    /* Add the contribution to this wavelength. */
+    spectra[p * nlam + ilam] +=
+        grid_spectra[spectra_ind + ilam] * (1 - fesc) * mass;
   }
 }
 
