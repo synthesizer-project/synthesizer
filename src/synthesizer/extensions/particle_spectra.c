@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* Python includes */
 #include <Python.h>
@@ -235,10 +236,11 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   const PyObject *grid_tuple, *part_tuple;
   const PyArrayObject *np_grid_spectra;
   const PyArrayObject *np_part_mass, *np_ndims;
+  const char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOdOiii", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &fesc, &np_ndims, &ndim,
-                        &npart, &nlam))
+                        &npart, &nlam, &method))
     return NULL;
 
   /* Quick check to make sure our inputs are valid. */
@@ -308,9 +310,20 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     /* Get this particle's mass. */
     const double mass = part_mass[p];
 
-    /* Finally, compute the weights for this particle. */
-    spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
-                     spectra, nlam, fesc, p);
+    /* Finally, compute the spectra for this particle using the
+     * requested method. */
+    if (strcmp(method, "cic") == 0) {
+      spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
+                       spectra, nlam, fesc, p);
+    } else if (strcmp(method, "ngp")) {
+      spectra_loop_ngp(grid_props, part_props, mass, grid_spectra, dims, ndim,
+                       spectra, nlam, fesc, p);
+    } else {
+      printf("Unrecognised gird assignment method (%s)! Falling back on CIC",
+             method);
+      spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
+                       spectra, nlam, fesc, p);
+    }
   }
 
   /* Clean up memory! */
