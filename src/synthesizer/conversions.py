@@ -10,6 +10,7 @@ Example usage:
 
 """
 import numpy as np
+import unyt
 from unyt import c, nJy, erg, s, Hz
 
 
