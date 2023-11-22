@@ -33,24 +33,23 @@ if __name__ == "__main__":
     # define filters
     filter_codes = [
         f"JWST/NIRCam.{f}"
-        for f in ["F090W", "F115W", "F150W", "F200W", "F277W", "F356W", 
-                  "F444W"]
+        for f in ["F090W", "F115W", "F150W", "F200W", "F277W", "F356W", "F444W"]
     ]  # define a list of filter codes
     filter_codes += [f"JWST/MIRI.{f}" for f in ["F770W"]]
-    fc = FilterCollection(filter_codes)
+    fc = FilterCollection(filter_codes, new_lam=grid.lam)
 
-    # define the parameters of the star formation and metal enrichment 
+    # define the parameters of the star formation and metal enrichment
     # histories
     sfh_p = {"duration": 10 * Myr}
     Z_p = {"log10metallicity": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = 1e8
 
-    # define the functional form of the star formation and metal enrichment 
+    # define the functional form of the star formation and metal enrichment
     # histories
     sfh = SFH.Constant(**sfh_p)  # constant star formation
     metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
 
-    # get the 2D star formation and metal enrichment history for the given SPS 
+    # get the 2D star formation and metal enrichment history for the given SPS
     # grid. This is (age, Z).
     stars = Stars(
         grid.log10age,
@@ -60,16 +59,25 @@ if __name__ == "__main__":
         initial_mass=stellar_mass,
     )
 
+    # Define redshift
+    z = 10.0
+
     # create a galaxy object
-    galaxy = Galaxy(stars)
+    galaxy = Galaxy(stars, redshift=z)
 
     # generate spectra using pacman model (complex)
-    sed = galaxy.stars.get_spectra_pacman(grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1)
+    sed = galaxy.stars.get_spectra_pacman(
+        grid,
+        fesc=0.5,
+        fesc_LyA=0.5,
+        tau_v=0.1,
+    )
 
     # now calculate the observed frame spectra
-    z = 10.0  # redshift
     sed.get_fnu(
-        cosmo, z, igm=Madau96
+        cosmo,
+        z,
+        igm=Madau96,
     )  # generate observed frame spectra, assume Madau96 IGM model
 
     # measure broadband fluxes
@@ -79,10 +87,14 @@ if __name__ == "__main__":
     for filter, flux in fluxes.items():
         print(f"{filter}: {flux:.2f}")
 
-    # make plot of observed including broadband fluxes (if filter collection 
+    # Calculate the observed spectra for all stellar spectra
+    galaxy.get_observed_spectra(cosmo, igm=Madau96)
+
+    # make plot of observed including broadband fluxes (if filter collection
     # object given)
-    galaxy.plot_observed_spectra(cosmo,
-                                 z,
-                                 fc=fc,
-                                 # spectra_to_plot=["total"],
-                                 show=True)
+    galaxy.plot_observed_spectra(
+        filters=fc,
+        show=True,
+        combined_spectra=False,
+        stellar_spectra=True,
+    )

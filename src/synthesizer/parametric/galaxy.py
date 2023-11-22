@@ -6,7 +6,7 @@ from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.imaging.images import ParametricImage
-from synthesizer.art import Art
+from synthesizer.art import Art, get_centred_art
 from synthesizer.particle import Stars as ParticleStars
 
 
@@ -43,14 +43,22 @@ class Galaxy(BaseGalaxy):
                 " Did you mean synthesizer.particle.Galaxy instead?"
             )
 
+        # Set the type of galaxy
+        self.galaxy_type = "Parametric"
+
+        # Instantiate the parent
+        BaseGalaxy.__init__(
+            self,
+            stars=stars,
+            gas=None,
+            black_holes=None,
+            redshift=redshift,
+        )
+
+        # The name
         self.name = name
 
-        # Attach the parametric stars object
-        self.stars = stars
-
-        # add an extra dimension to the sfzh to allow the fast summation
-        # **** TODO: Get rid of this expression or
-        # use this throughout?
+        # Local pointer to SFZH array
         self.sfzh = self.stars.sfzh
 
         # Define the dictionary to hold spectra
@@ -58,9 +66,6 @@ class Galaxy(BaseGalaxy):
 
         # Define the dictionary to hold images
         self.images = {}
-
-        # The redshift of the galaxy
-        self.redshift = redshift
 
     def __str__(self):
         """Function to print a basic summary of the Galaxy object.
@@ -75,10 +80,13 @@ class Galaxy(BaseGalaxy):
             available SEDs, lines, and images.
         """
 
+        # Define the width to print within
+        width = 79
+
         pstr = ""
-        pstr += "-" * 10 + "\n"
-        pstr += "SUMMARY OF PARAMETRIC GALAXY" + "\n"
-        pstr += Art.galaxy + "\n"
+        pstr += "-" * width + "\n"
+        pstr += "SUMMARY OF PARAMETRIC GALAXY".center(width + 4) + "\n"
+        pstr += get_centred_art(Art.galaxy, width) + "\n"
         pstr += str(self.__class__) + "\n"
         pstr += (
             f"log10(stellar mass formed/Msol): \
@@ -86,11 +94,97 @@ class Galaxy(BaseGalaxy):
             + "\n"
         )
         pstr += "available SEDs: \n"
-        pstr += f"    Stellar:  {list(self.stars.spectra.keys())}" + "\n"
-        pstr += f"    Combined: {list(self.spectra.keys())}" + "\n"
-        pstr += f"available lines: {list(self.stars.lines.keys())}" + "\n"
-        pstr += f"available images: {list(self.images.keys())}" + "\n"
-        pstr += "-" * 10 + "\n"
+
+        # Define the connecting character for list wrapping
+        conn_char = "\n" + (15 * " ")
+
+        # Print stellar spectra keys
+        if len(self.stars.spectra) > 0:
+            # Print keys nicely so they don't spill over
+            spectra_keys = [""]
+            iline = 0
+            for key in self.stars.spectra.keys():
+                if len(spectra_keys[iline]) + len(key) + 2 < width - 14:
+                    spectra_keys[iline] += key + ", "
+                else:
+                    iline += 1
+                    spectra_keys.append("")
+
+            # Slice off the last two entries, we don't need then
+            spectra_keys[iline] = spectra_keys[iline][:-2]
+
+            pstr += "    Stellar:  [" + conn_char.join(spectra_keys) + "]" + "\n"
+
+        else:
+            pstr += "    Stellar:  []" + "\n"
+
+        # Print combined spectra keys
+        if len(self.spectra) > 0:
+            # Print keys nicely so they don't spill over
+            spectra_keys = [""]
+            iline = 0
+            for key in self.spectra.keys():
+                if len(spectra_keys[iline]) + len(key) + 2 < width - 14:
+                    spectra_keys[iline] += key + ", "
+                else:
+                    iline += 1
+                    spectra_keys.append("")
+
+            # Slice off the last two entries, we don't need then
+            spectra_keys[iline] = spectra_keys[iline][:-2]
+
+            pstr += "    Combined: [" + conn_char.join(spectra_keys) + "]" + "\n"
+
+        else:
+            pstr += "    Combined: []" + "\n"
+
+        # Print line keys
+        if len(self.stars.lines) > 0:
+            # Redefine the connecting character for list wrapping
+            conn_char = "\n" + (18 * " ")
+
+            # Print keys nicely so they don't spill over
+            line_keys = [""]
+            iline = 0
+            for key in self.stars.lines.keys():
+                if len(line_keys[iline]) + len(key) + 2 < width - 14:
+                    line_keys[iline] += key + ", "
+                else:
+                    iline += 1
+                    line_keys.append("")
+
+            # Slice off the last two entries, we don't need then
+            line_keys[iline] = line_keys[iline][:-2]
+
+            pstr += "available lines: [" + conn_char.join(line_keys) + "]" + "\n"
+
+        else:
+            pstr += "available lines: []" + "\n"
+
+        # Print image keys
+        if len(self.images) > 0:
+            # Redefine the connecting character for list wrapping
+            conn_char = "\n" + (19 * " ")
+
+            # Print keys nicely so they don't spill over
+            img_keys = [""]
+            iline = 0
+            for key in self.images.keys():
+                if len(img_keys[iline]) + len(key) + 2 < width - 14:
+                    img_keys[iline] += key + ", "
+                else:
+                    iline += 1
+                    img_keys.append("")
+
+            # Slice off the last two entries, we don't need then
+            img_keys[iline] = img_keys[iline][:-2]
+
+            pstr += "available images: [" + conn_char.join(img_keys) + "]" + "\n"
+
+        else:
+            pstr += "available images: []" + "\n"
+
+        pstr += "-" * width + "\n"
         return pstr
 
     def __add__(self, second_galaxy):
