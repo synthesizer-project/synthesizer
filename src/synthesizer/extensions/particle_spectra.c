@@ -97,6 +97,15 @@ void spectra_loop_cic(const double **grid_props, const double **part_props,
     }
   }
 
+  /* Normalise the fractions. */
+  double sum = 0;
+  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+    sum += fracs[icell];
+  }
+  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+    fracs[icell] /= sum;
+  }
+
   /* Now loop over this collection of cells collecting and setting their
    * weights. */
   for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {

@@ -131,7 +131,7 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
 
       /* Calculate the fraction. Note, here we do the cell containing the
        * particle, the cell below is calculated from this fraction. */
-      frac = (part_val - grid_prop[part_cell - 1]) /
+      frac = (part_val - grid_prop[part_cell]) /
              (grid_prop[part_cell] - grid_prop[part_cell - 1]);
     }
 
@@ -144,6 +144,15 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
       frac_indices[jdim * 2][dim] = part_cell - 1;
       frac_indices[jdim * 2 + 1][dim] = part_cell;
     }
+  }
+
+  /* Normalise the fractions. */
+  double sum = 0;
+  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+    sum += fracs[icell];
+  }
+  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+    fracs[icell] /= sum;
   }
 
   /* Now loop over this collection of cells collecting and setting their
