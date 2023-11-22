@@ -315,7 +315,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     if (strcmp(method, "cic") == 0) {
       spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
                        spectra, nlam, fesc, p);
-    } else if (strcmp(method, "ngp")) {
+    } else if (strcmp(method, "ngp") == 0) {
       spectra_loop_ngp(grid_props, part_props, mass, grid_spectra, dims, ndim,
                        spectra, nlam, fesc, p);
     } else {
