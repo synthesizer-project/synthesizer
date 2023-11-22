@@ -14,6 +14,7 @@
 #include <numpy/ndarraytypes.h>
 
 /* Local includes */
+#include "macros.h"
 #include "weights.h"
 
 /**
