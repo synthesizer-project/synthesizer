@@ -64,10 +64,11 @@ int binary_search(int low, int high, const double *arr, const double val) {
 
   /* While we don't have a pair of adjacent indices. */
   int diff = high - low;
+  int mid;
   while (diff > 1) {
 
     /* Define the midpoint. */
-    int mid = low + floor(diff / 2);
+    mid = low + floor(diff / 2);
 
     /* Where is the midpoint relative to the value? */
     if (arr[mid] < val) {
@@ -83,36 +84,41 @@ int binary_search(int low, int high, const double *arr, const double val) {
 }
 
 /**
- * @brief Calculates the mass fractions in each right most grid cell along
- *        each dimension.
+ * @brief This calculates the grid weights in each grid cell.
+ *
+ * To do this for an N-dimensional array this is done recursively one dimension
+ * at a time.
  *
  * @param grid_props: An array of the properties along each grid axis.
  * @param part_props: An array of the particle properties, in the same property
  *                    order as grid props.
- * @param p: Index of the current particle.
- * @param ndim: The number of grid dimensions.
+ * @param mass: The mass of the current particle.
+ * @param weights: The weight of each grid point.
  * @param dims: The length of each grid dimension.
- * @param npart: The number of particles in total.
- * @param frac_indices: The array for storing N-dimensional grid indicies.
- * @param fracs: The array for storing the mass fractions. NOTE: The left most
- *               grid cell's mass fraction is simply (1 - frac[dim])
+ * @param ndim: The number of grid dimensions.
+ * @param p: Index of the current particle.
  */
-void frac_loop(const double **grid_props, const double **part_props, int p,
-               const int ndim, const int *dims, const int npart,
-               int *frac_indices, double *fracs) {
+void weight_loop_CIC(const double **grid_props, const double **part_props,
+                     const double mass, double *weights, const int *dims,
+                     const int ndim, const int p) {
 
-  /* Loop over dimensions. */
+  /* Setup the index and mass fraction arrays. */
+  int frac_indices[(int)pow(2, (double)ndim)][ndim];
+  double fracs[(int)pow(2, (double)ndim)];
+
+  /* Set up the fractions. */
+  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+    fracs[icell] = 1;
+  }
+
+  /* Loop over dimensions finding the mass weightings and indicies. */
   for (int dim = 0; dim < ndim; dim++) {
 
-    /* Get this array of grid properties */
+    /* Get this array of grid properties for this dimension */
     const double *grid_prop = grid_props[dim];
 
     /* Get this particle property. */
     const double part_val = part_props[dim][p];
-
-    /**************************************************************************
-     * Get the cells corresponding to this particle and compute the fraction.
-     *************************************************************************/
 
     /* Define the starting indices. */
     int low = 0, high = dims[dim] - 1;
@@ -120,98 +126,59 @@ void frac_loop(const double **grid_props, const double **part_props, int p,
     /* Here we need to handle if we are outside the range of values. If so
      * there's no point in searching and we return the edge nearest to the
      * value. */
+    double frac;
     if (part_val <= grid_prop[low]) {
-      low = 0;
-      fracs[dim] = 0;
+
+      /* Use the grid edge. */
+      low = -1;
+      high = 0;
+      frac = 1;
+
     } else if (part_val > grid_prop[high]) {
-      low = dims[dim];
-      fracs[dim] = 0;
+
+      /* Use the grid edge. */
+      low = -1;
+      high = dims[dim] - 1;
+      frac = 1;
+
     } else {
 
       /* Find the grid index corresponding to this particle property. */
-      low = binary_search(low, high, grid_prop, part_val);
-      high = low + 1;
+      high = binary_search(low, high, grid_prop, part_val);
+      low = high - 1;
 
-      /* Calculate the fraction. Note, this represents the mass fraction in
-       * the high cell. */
-      fracs[dim] =
-          (part_val - grid_prop[low]) / (grid_prop[high] - grid_prop[low]);
+      /* Calculate the fraction. Note, here we do the high cell, low cell
+       * is calculated below. */
+      frac = (part_val - grid_prop[low]) / (grid_prop[high] - grid_prop[low]);
     }
+
+    /* Set the fractions. */
+    fracs[dim * 2 + 1] *= frac;
+    fracs[dim * 2] *= 1 - frac;
 
     /* Set these indices. */
-    frac_indices[dim] = low;
-  }
-}
-
-/**
- * @brief This calculates the grid weights in each grid cell.
- *
- * To do this for an N-dimensional array this is done recursively one dimension
- * at a time.
- *
- * @param mass: The mass of the current particle.
- * @param sub_indices: The indices in the 2**ndim subset of grid points being
- *                     computed in the current recursion (entries are 0 or 1).
- * @param frac_indices: The array for storing N-dimensional grid indicies.
- * @param low_indices: The index of the bottom corner grid point.
- * @param weights: The weight of each grid point.
- * @param fracs: The array for storing the mass fractions. NOTE: The left most
- *               grid cell's mass fraction is simply (1 - frac[dim])
- * @param dim: The current dimension in the recursion.
- * @param dims: The length of each grid dimension.
- * @param ndim: The number of grid dimensions.
- */
-void recursive_weight_loop(const double mass, short int *sub_indices,
-                           int *frac_indices, int *low_indices, double *weights,
-                           double *fracs, int dim, const int *dims,
-                           const int ndim) {
-
-  /* Are we done yet? */
-  if (dim >= ndim) {
-
-    /* Get the flattened index into the grid array. */
-    const int weight_ind = get_flat_index(frac_indices, dims, ndim);
-
-    /* Check whether we need a weight in this cell. */
-    for (int i = 0; i < ndim; i++) {
-      if ((sub_indices[i] == 1 && fracs[i] == 0 && frac_indices[i] == 0) ||
-          (sub_indices[i] == 1 && fracs[i] == 0 &&
-           frac_indices[i] == dims[i])) {
-        return;
-      }
+    for (int jdim = 0; jdim < ndim; jdim++) {
+      frac_indices[jdim * 2][dim] = low;
+      frac_indices[jdim * 2 + 1][dim] = high;
     }
+  }
+
+  /* Now loop over this collection of cells collecting and setting their
+   * weights. */
+  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+
+    /* Early skip for cells contributing a 0 fraction. */
+    if (fracs[icell] <= 0)
+      continue;
+
+    /* We have a contribution, get the flattened index into the grid array. */
+    const int weight_ind = get_flat_index(frac_indices[icell], dims, ndim);
 
     /* Compute the weight. */
-    double weight = mass;
-    for (int i = 0; i < ndim; i++) {
+    const double weight = mass * fracs[icell];
 
-      /* Account for the fractional contribution in this grid cell. */
-      if (sub_indices[i]) {
-        weight *= fracs[i];
-      } else {
-        weight *= (1 - fracs[i]);
-      }
-    }
-
-    /* And add the weight. */
+    /* And finally add the weight. */
     weights[weight_ind] += weight;
-
-    /* We're done! */
-    return;
-  }
-
-  /* Loop over this dimension */
-  for (int i = 0; i < ndim; i++) {
-
-    /* Where are we in the sub_array? */
-    sub_indices[dim] = i;
-
-    /* Where are we in the grid array? */
-    frac_indices[dim] = low_indices[dim] + i;
-
-    /* Recurse... */
-    recursive_weight_loop(mass, sub_indices, frac_indices, low_indices, weights,
-                          fracs, dim + 1, dims, ndim);
   }
 }
 
@@ -219,6 +186,7 @@ void recursive_weight_loop(const double mass, short int *sub_indices,
  * @brief Computes an integrated SED for a collection of particles.
  *
  * @param np_grid_spectra: The SPS spectra array.
+ * o
  * @param grid_tuple: The tuple containing arrays of grid axis properties.
  * @param part_tuple: The tuple of particle property arrays (in the same order
  *                    as grid_tuple).
@@ -308,43 +276,14 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     part_props[idim] = part_arr;
   }
 
-  /* Set up arrays to store grid indices for the weights, mass fractions
-   * and indices.
-   * NOTE: the wavelength index on frac_indices is always 0. */
-  double fracs[ndim];
-  int frac_indices[ndim + 1];
-  int low_indices[ndim + 1];
-  short int sub_indices[ndim];
-
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
-
-    /* Reset fraction and indices arrays to zero. */
-    for (int ind = 0; ind < ndim; ind++) {
-      fracs[ind] = 0;
-      sub_indices[ind] = 0;
-    }
-    for (int ind = 0; ind < ndim + 1; ind++) {
-      frac_indices[ind] = 0;
-      low_indices[ind] = 0;
-    }
 
     /* Get this particle's mass. */
     const double mass = part_mass[p];
 
-    /* Compute grid indices and the mass faction in each grid cell. */
-    frac_loop(grid_props, part_props, p, ndim, dims, npart, frac_indices,
-              fracs);
-
-    /* Make a copy of the indices of the fraction to avoid modification
-     * during recursion. */
-    for (int ind = 0; ind < ndim + 1; ind++) {
-      low_indices[ind] = frac_indices[ind];
-    }
-
     /* Finally, compute the weights for this particle. */
-    recursive_weight_loop(mass, sub_indices, frac_indices, low_indices,
-                          grid_weights, fracs, /*dim*/ 0, dims, ndim);
+    weight_loop_CIC(grid_props, part_props, mass, grid_weights, dims, ndim, p);
 
   } /* Loop over particles. */
 
