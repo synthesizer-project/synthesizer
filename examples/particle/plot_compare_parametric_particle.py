@@ -18,25 +18,18 @@ from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 
 
-# --- initialise the SPS grid
-# grid_name = 'bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2'
-# grid = Grid(grid_name)
-
-# Get the location of this script, __file__ is the absolute path of this
-# script, however we just want to directory
-# script_path = os.path.abspath(os.path.dirname(__file__))
-
 # Define the grid
 grid_name = "test_grid"
 grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
-# --- define the binned (parametric star formation history)
-
+# Define the SFH and metallicity distribution
 Z_p = {"metallicity": 0.01}
 metal_dist = ZDist.DeltaConstant(**Z_p)
 sfh_p = {"duration": 100 * Myr}
-sfh = SFH.Constant(**sfh_p)  # constant star formation
+sfh = SFH.Constant(**sfh_p)
+
+# Define the parametric stars
 sfzh = ParametricStars(
     grid.log10age,
     grid.metallicity,
@@ -45,9 +38,7 @@ sfzh = ParametricStars(
     initial_mass=1,
 )
 
-# --------------------------------------------
-# CREATE PARAMETRIC SED
-
+# Compute the parametric sed
 parametric_galaxy = ParametricGalaxy(sfzh)
 parametric_galaxy.stars.get_spectra_incident(grid)
 sed = parametric_galaxy.stars.spectra["incident"]
@@ -56,30 +47,32 @@ plt.plot(
 )
 
 
-# --------------------------------------------
-# CREATE PARTICLE SED
-
-for N in [1, 10, 100, 1000, 10000]:  # , 1000]:
-    # --- create stars object
+# Compute the particle Sed for a range of particle samples
+for N in [1, 10, 100, 1000]:
+    # Get the stars object
     stars = sample_sfhz(sfzh.sfzh, sfzh.log10ages, sfzh.log10metallicities, N)
-    # ensure that the total mass = 1 irrespective of N. This can be also acheived by setting the mass of the star particles in sample_sfhz but this will be easier most of the time.
+
+    # Ensure that the total mass = 1 irrespective of N. This can be also
+    # acheived by setting the mass of the star particles in sample_sfhz
+    # but this will be easier most of the time.
     stars.renormalise_mass(1.0)
 
-    # --- create galaxy object
+    # Create galaxy object
     particle_galaxy = ParticleGalaxy(stars=stars)
 
-    # --- this generates stellar and intrinsic spectra
-    # particle_galaxy.generate_spectra(grid, fesc=0.0, integrated=True)
+    # Calculate the stars SEDs using nearest grid point
+    ngp_sed = particle_galaxy.stars.get_spectra_incident(
+        grid, grid_assignment_method="ngp"
+    )
 
-    # Calculate the stars SEDs
-    particle_galaxy.stars.get_spectra_incident(grid)
-
-    sed = particle_galaxy.stars.spectra["incident"]
-    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label=f"particle (N={N})")
+    plt.plot(
+        np.log10(ngp_sed.lam),
+        np.log10(ngp_sed.lnu),
+        label=f"particle (N={N})",
+    )
 
 
 plt.legend()
 plt.xlim([2, 5])
 plt.ylim([18, 22])
-# plt.savefig(script_path + '/plots/compare_parametric_particle.png', dpi=200, bbox_inches='tight'); plt.close()
 plt.show()
