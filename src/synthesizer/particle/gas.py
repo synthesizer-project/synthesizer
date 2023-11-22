@@ -125,23 +125,18 @@ class Gas(Particles):
         # Set the smoothing lengths for these gas particles
         self.smoothing_lengths = smoothing_lengths
 
-        # The dust to metal ratio for gas particles. Either 1 value or a value
-        # per gas particle.
-        self.dust_to_metal_ratio = dust_to_metal_ratio
-
+        # 
         if (dust_to_metal_ratio is None) & (dust_masses is None):
             if verbose:
-                print(("Neither dust mass not dust to metal ratio "
+                print(("Neither dust mass nor dust to metal ratio "
                        "provided. Assuming dust to metal ratio = 0.3"))
             self.dust_to_metal_ratio = 0.3
             self.calculate_dust_mass()
-
-        if dust_to_metal_ratio is not None:
+        elif dust_to_metal_ratio is not None:
             # The dust to metal ratio for gas particles. Either a scalar
             # or an array of values for each gas particle
             self.dust_to_metal_ratio = dust_to_metal_ratio
             self.calculate_dust_mass()
-
         else:  # if dust_masses is not None:
             self.dust_masses = dust_masses
 
