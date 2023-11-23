@@ -21,7 +21,6 @@ class BlackHoleEmissionModel:
     pass
 
 
-
 class Template(BlackHoleEmissionModel):
 
     """
@@ -86,9 +85,10 @@ class UnifiedAGN(BlackHoleEmissionModel):
     """
 
     def __init__(self,
-                 grid_dir=None,
-                 disc_model=None,
-                 metallicity=0.01,
+                 disc_model,
+                 grid_dir,
+                 bolometric_luminosity=None,
+                 metallicity=None,
                  ionisation_parameter_blr=0.1,
                  hydrogen_density_blr=1E9/cm**3,
                  covering_fraction_blr=0.1,
@@ -99,13 +99,16 @@ class UnifiedAGN(BlackHoleEmissionModel):
                  velocity_dispersion_nlr=500*km/s,
                  theta_torus=10*deg,
                  torus_emission_model=Greybody(1000*K, 1.5),
-                 **kwargs,
                  ):
 
         """
         Arguments:
+            bolometric_luminosity (float)
+                This is needed to rescale the spectra since the grid is likely
+                to be coarse. Defaults to None since it should be provided.
             metallicity (float)
-                The metallicity of the NLR and BLR gas. The default is 0.01.
+                The metallicity of the NLR and BLR gas. Defaults to None since
+                it should be provided.
             ionisation_parameter_blr (float)
                 The  ionisation parameter in the BLR. Default value
                 is 0.1.
@@ -138,23 +141,41 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 Addition parameters for the specific disc model.
 
         """
+
+        # Create a dictionary of all the arguments (and self)
+        args = locals()
+        
+        # Save model and directory as attributes.
         self.disc_model = disc_model
         self.grid_dir = grid_dir
-        # used for NLR and BLR
-        self.metallicity = metallicity
-        # BLR parameters
-        self.ionisation_parameter_blr = ionisation_parameter_blr
-        self.hydrogen_density_blr = hydrogen_density_blr
-        self.covering_fraction_blr = covering_fraction_blr
-        self.velocity_dispersion_blr = velocity_dispersion_blr
-        # NLR parameters
-        self.ionisation_parameter_nlr = ionisation_parameter_nlr
-        self.hydrogen_density_nlr = hydrogen_density_nlr
-        self.covering_fraction_nlr = covering_fraction_nlr
-        self.velocity_dispersion_nlr = velocity_dispersion_nlr
-        # Torus parameters
-        self.theta_torus = theta_torus
+
+        # Save the torus model
         self.torus_emission_model = torus_emission_model
+
+        # These are the unified model parameters, i.e. all the non-disc and
+        # non-torus parameters that are needed.
+        self.unified_parameters = [
+            'bolometric_luminosity',
+            'metallicity',
+            'ionisation_parameter_blr',
+            'hydrogen_density_blr',
+            'covering_fraction_blr',
+            'velocity_dispersion_blr',
+            'ionisation_parameter_nlr',
+            'hydrogen_density_nlr',
+            'covering_fraction_nlr',
+            'velocity_dispersion_nlr',
+            'theta_torus',
+        ]
+
+        # Create dictionary of fixed parameters based on what was handed
+        self.fixed_parameters_dict = {}
+        for parameter in self.unified_parameters:
+            if args[parameter]:
+                self.fixed_parameters_dict[parameter] = args[parameter]
+
+        # Create a list of the fixed_parameters for convenience
+        self.fixed_parameters = list(self.fixed_parameters_dict.keys())
 
         # Open NLR and BLR grids
         # TODO: replace this by a single file.
@@ -177,26 +198,23 @@ class UnifiedAGN(BlackHoleEmissionModel):
                                  'hydrogen_density']:
                 self.disc_parameters.append(parameter)
 
-
         # TODO: need to extract a list of torus model parameters.
         # self.torus_parameters = []
 
-        # Get a list of parameters. Almost certainly a better way of doing this.
-        self.parameters = self.disc_parameters + [
-            'metallicity',
-            'ionisation_parameter_blr',
-            'hydrogen_density_blr',
-            'covering_fraction_blr',
-            'svelocity_dispersion_blr',
-            'ionisation_parameter_nlr',
-            'hydrogen_density_nlr',
-            'covering_fraction_nlr',
-            'velocity_dispersion_nlr',
-            'theta_torus',
-        ]
+        # Get a list of all parameters.
+        # TODO: need to add torus parameters
+        self.parameters = list(set(self.disc_parameters +
+                                   self.unified_parameters))
 
-        # list of spectra 
-        self.spectra_id = [
+        # Get a list of the parameters which are not fixed and need to be
+        # provided. This is used by the components.blackholes to know what
+        # needs to be provided
+        self.variable_parameters = list(set(self.parameters) -
+                                        set(self.fixed_parameters))
+
+        # List of spectra that can be created
+        self.available_spectra = [
+            'disc_incident_isotropic',
             'disc_incident',
             'disc_escape',
             'disc_transmitted',
@@ -204,45 +222,43 @@ class UnifiedAGN(BlackHoleEmissionModel):
             'nlr',
             'blr',
             'torus',
-            'emergent',
+            'total',
         ]
-
-        # dictionary holding LineCollections for each (relevant) component
-        # PROBABLY BETTER NOT TO ASSOCIATE THE SPECTRA WITH THE INSTANCE
-        self.lines = {}
-
-        # dictionary holding Seds for each component (and sub-component)
-        self.spectra = {}
-
-    def _update_parameters(self, **kwargs):
-
-        """
-        Updates parameters.
-        """
-        # update parameters
-        for key, value in kwargs.items():
-            setattr(self, key, value)
           
-    def _get_grid_point(self, line_region, isotropic=False):
+    def _get_grid_point(self, parameter_dict, line_region):
         """
-        Private method used to get the grid point.
+        Private method used to get the closest grid point for the specified
+        parameters.
 
+        Arguments
+            parameter_dict (dict)
+                A dictionary of all the parameters.
+            line_region (str)
+                The specific line region of interest ('nlr' or 'dlr').
+            
+        Returns
+            grid_point (tuple)
+                The closest grid point
         """
 
-        # calculate the grid point.
-        parameters = []
+        # make a list of the grid parameter values to use
+        grid_parameter_values = []
         for parameter in self.grid_parameters:
             # for hydrogen_density and ionisation_paramter the parameters are
             # labelled e.g. 'hydrogen_density_nlr'.
             if parameter in ['hydrogen_density', 'ionisation_parameter']:
                 parameter = parameter+'_'+line_region
-            parameters.append(getattr(self, parameter))
+            grid_parameter_values.append(parameter_dict[parameter])
 
-        return self.grid[line_region].get_grid_point(parameters)
+        return self.grid[line_region].get_grid_point(grid_parameter_values)
 
-    def _get_spectra_disc(self, **kwargs):
+    def _get_spectra_disc(self, parameter_dict):
         """
         Generate the disc spectra, updating the parameters if required.
+
+        Arguments
+            parameter_dict (dict)
+                A dictionary of all the parameters.
 
         Returns
             (dict, synthesizer.sed.Sed)
@@ -250,14 +266,17 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 transmitted disc emission.
         """
 
+        # output dictionary
+        spectra = {}
+
         # get grid points
-        nlr_grid_point = self._get_grid_point('nlr')
-        blr_grid_point = self._get_grid_point('blr')
+        nlr_grid_point = self._get_grid_point(parameter_dict, 'nlr')
+        blr_grid_point = self._get_grid_point(parameter_dict, 'blr')
 
         # calculate the incident spectra. It doesn't matter which spectra we
         # use here since we're just using the incident. Note: this assumes the 
         # NLR and BLR are not overlapping.
-        self.spectra['disc_incident'] = \
+        spectra['disc_incident'] = \
             self.grid['nlr'].get_spectra(nlr_grid_point, spectra_id='incident')
 
         # calculate the transmitted spectra
@@ -265,72 +284,96 @@ class UnifiedAGN(BlackHoleEmissionModel):
                                                    spectra_id='transmitted')
         blr_spectra = self.grid['blr'].get_spectra(blr_grid_point,
                                                    spectra_id='transmitted')
-        self.spectra['disc_transmitted'] = (self.covering_fraction_nlr *
-                                            nlr_spectra +
-                                            self.covering_fraction_blr *
-                                            blr_spectra)
+        spectra['disc_transmitted'] = (
+            parameter_dict['covering_fraction_nlr'] *
+            nlr_spectra +
+            parameter_dict['covering_fraction_blr'] *
+            blr_spectra
+            )
             
         # calculate the escaping spectra.
-        self.spectra['disc_escaped'] = (
-            1 - self.covering_fraction_blr - self.covering_fraction_nlr) *\
-            self.spectra['disc_incident']
+        spectra['disc_escaped'] = (
+            1 - parameter_dict['covering_fraction_blr'] -
+            parameter_dict['covering_fraction_nlr']) * spectra[
+                'disc_incident']
 
         # calculate the total spectra, the sum of escaping and transmitted
-        self.spectra['disc'] = self.spectra['disc_transmitted'] + self.spectra['disc_escaped']
+        spectra['disc'] = (spectra['disc_transmitted'] +
+                           spectra['disc_escaped'])
+        
+        return spectra
 
-    def _get_spectra_lr(self, line_region, **kwargs):
+    def _get_spectra_lr(self, parameter_dict, line_region):
         """
         Generate the spectra of a generic line region.
 
-        Arguments:
+        Arguments
+            parameter_dict (dict)
+                A dictionary of all the parameters.
             line_region (str)
                 The specific line region, i.e. 'nlr' or 'blr'.
-        
+            
         Returns:
             synthesizer.sed.Sed
                 The NLR spectra
         """
-        
-        # get the grid point
-        grid_point = self._get_grid_point(line_region)
 
-        # covering fraction
-        covering_fraction = getattr(self, f'covering_fraction_{line_region}')
+        # In the Unified AGN model the NLR/BLR is illuminated by the isotropic 
+        # disc emisison hence the need to replace this parameter if it exists.
+        # Not all models require an inclination though.
+        if 'cosine_inclination' in parameter_dict.keys():
+            parameter_dict['cosine_inclination'] = 0.5
+
+        # get the grid point
+        grid_point = self._get_grid_point(parameter_dict, line_region)
 
         # get the nebular spectra of the line region
-        sed = covering_fraction * self.grid[line_region].get_spectra(
-            grid_point,
-            spectra_id='nebular')
+        sed = (parameter_dict[f'covering_fraction_{line_region}'] *
+               self.grid[line_region].get_spectra(grid_point,
+                                                  spectra_id='nebular'))
 
-        # add line to spectra broadening here
-        self.spectra[line_region] = sed
+        return sed
 
-        # add lines TO BE ADDED
-        self.lines[line_region] = None
-
-    def _get_spectra_torus(self):
+    def _get_spectra_torus(self, parameter_dict):
         """
-        Generate the torus.
+        Generate the torus emission Sed.
+
+        Arguments
+            parameter_dict (dict)
+                A dictionary of all the parameters.
 
         Returns
             spectra (dict, synthesizer.sed.Sed)
                 Dictionary of synthesizer Sed instances.
         """
 
-        disc = self.spectra['disc']
+        # In the Unified AGN model the torus is illuminated by the isotropic
+        # disc emisison hence the need to replace this parameter if it exists.
+        # Not all models require an inclination though.
+        if 'cosine_inclination' in parameter_dict.keys():
+            parameter_dict['cosine_inclination'] = 0.5
+     
+        # Get NLR grid points
+        nlr_grid_point = self._get_grid_point(parameter_dict, 'nlr')
+
+        # Calcualte the disc emission, since this is incident it doesn't matter
+        # if we use the NLR or BLR grid as long as we use the correct grid 
+        # point.
+        disc_spectra = self.grid['nlr'].get_spectra(nlr_grid_point,
+                                            spectra_id='incident')
 
         # calculate the bolometric dust lunminosity as the difference between
         # the intrinsic and attenuated
-
-        torus_bolometric_luminosity = (self.theta_torus/(90*deg)) * \
-            disc.measure_bolometric_luminosity()
+        torus_bolometric_luminosity = (
+            (parameter_dict['theta_torus']/(90*deg)) *
+            disc_spectra.measure_bolometric_luminosity())
 
         # get the spectrum and normalise it properly
         lnu = torus_bolometric_luminosity.to("erg/s").value * \
-            self.torus_emission_model.lnu(disc.lam)
+            self.torus_emission_model.lnu(disc_spectra.lam)
 
-        # create new Sed object containing dust spectra
-        self.spectra['torus'] = Sed(disc.lam, lnu=lnu)
+        # create new Sed object containing torus spectra and return it
+        return Sed(disc_spectra.lam, lnu=lnu)
 
     def get_spectra(self, spectra_ids=None, **kwargs):
         """
@@ -341,24 +384,48 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 Dictionary of synthesizer Sed instances.
         """
 
-        # update parameters
-        self._update_parameters(**kwargs)
+        # Create a parameter dict by combining the fixed and provided 
+        # parameters
+        parameter_dict = self.fixed_parameters_dict | kwargs
 
-        self._get_spectra_disc()
-        self._get_spectra_lr('nlr')
-        self._get_spectra_lr('blr')
-        self._get_spectra_torus()
+        # Check if we have all the required parameters, if not raise an 
+        # exception and tell the user which are missing. Bolometric luminosity
+        # is not strictly required.
+        if (set(list(parameter_dict.keys())+['bolometric_luminosity']) != set(self.parameters)):
+            missing_parameters = (set(self.parameters) -
+                                  set(parameter_dict.keys()))
+            raise MissingArgument(f'These parameters: {missing_parameters} \
+                                  are missing!')
+
+        # Generate the spectra of the disc
+        spectra = self._get_spectra_disc(parameter_dict)
+        
+        # Generate the spectra of the line regions
+        for lr in ['nlr', 'blr']:
+            spectra[lr] = self._get_spectra_lr(parameter_dict, lr)
+
+        spectra['torus'] = self._get_spectra_torus(parameter_dict)
 
         # Calculate the total spectra as the sum of the components
-        self.spectra['total'] = self.spectra['disc'] + \
-            self.spectra['blr'] + self.spectra['nlr'] + self.spectra['torus']
+        spectra['total'] = (spectra['disc'] + spectra['blr'] + spectra['nlr']
+                            + spectra['torus'])
     
+        # Since we're using a coarse grid it might be necessary to rescale
+        # the spectra to the bolometric luminosity. This is requested when
+        # the emission model is called from a parametric or particle blackhole.
+        if 'bolometric_luminosity' in parameter_dict.keys():
+    
+            scaling = (parameter_dict['bolometric_luminosity'] /
+                       spectra['total'].measure_bolometric_luminosity())
+            for spectra_id, spectra_ in spectra.items():
+                spectra[spectra_id] = spectra_ * scaling
+
         # If spectra_ids are not provided use the full list
         if spectra_ids is None:
-            return self.spectra
+            return parameter_dict, spectra
         else:
-            return {spectra_id: self.spectra[spectra_ids]
-                    for spectra_id in spectra_ids}
+            return parameter_dict, {spectra_id: spectra[spectra_ids]
+                                    for spectra_id in spectra_ids}
     
 
 
