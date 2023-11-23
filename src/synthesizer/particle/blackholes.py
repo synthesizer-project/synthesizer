@@ -138,6 +138,23 @@ class BlackHoles(Particles, BlackholesComponent):
         # Check the arguments we've been given
         # self._check_bh_args()
 
+        # I will be hated for this. But left in for now to provide access to
+        # both and not break the EmissionModel.
+        # MOVE TO PARTICLE
+        for singular, plural in [
+            ('mass', 'masses'),
+            ('accretion_rate', 'accretion_rates'),
+            ('metallicity', 'metallicities'),
+            ('spin', 'spins'),
+            ('inclination', 'inclinations'),
+            ('epsilon', 'epsilons'),
+            ('bb_temperature', 'bb_temperatures'),
+            ('bolometric_luminosity', 'bolometric_luminosities'),
+            ('accretion_rate_eddington', 'accretion_rates_eddington'),
+            ('epsilon', 'epsilons'),
+            ('eddington_ratio', 'eddington_ratios')]:    
+            setattr(self, plural, getattr(self, singular))
+
     def _check_bh_args(self):
         """
         Sanitizes the inputs ensuring all arguments agree and are compatible.
