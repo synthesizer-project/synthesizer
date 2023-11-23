@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from unyt import Myr, deg, c, erg, s, Msun, unyt_quantity
 import inflect
-
+from copy import deepcopy
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.line import Line, LineCollection
@@ -91,9 +91,25 @@ class BlackholesComponent:
         self.bolometric_luminosity = bolometric_luminosity
         self.metallicity = metallicity
 
+        # Check to make sure that both accretion rate and bolometric luminosity
+        # haven't been provided because that could be confusing.
+        if ((self.accretion_rate is not None)
+                and (self.bolometric_luminosity is not None)):
+            raise exceptions.InconsistentArguments(
+                """Both accretion rate and bolometric luminosity provided but
+                that is confusing. Provide one or the other!""")
+
+        if ((self.accretion_rate_eddington is not None)
+                and (self.bolometric_luminosity is not None)):
+            raise exceptions.InconsistentArguments(
+                """Both accretion rate (in terms of Eddington) and bolometric
+                luminosity provided but that is confusing. Provide one or
+                the other!""")
+
         # If mass, accretion_rate, and epsilon provided calculate the
         # bolometric luminosity.
-        if ((self.mass is not None) and (self.accretion_rate is not None) and (self.epsilon is not None)):
+        if ((self.mass is not None) and (self.accretion_rate is not None)
+                and (self.epsilon is not None)):
             self.calculate_bolometric_luminosity()
 
         # If mass, accretion_rate, and epsilon provided calculate the
@@ -121,25 +137,6 @@ class BlackholesComponent:
         if (self.inclination is not None):
             self.consine_inclination = np.cos(
                 self.inclination.to('radian').value)
-
-
-        # I will be hated for this. But left in for now to provide access to
-        # both and not break the EmissionModel.
-        # MOVE TO PARTICLE
-        for singular, plural in [
-            ('mass', 'masses'),
-            ('accretion_rate', 'accretion_rates'),
-            ('metallicity', 'metallicities'),
-            ('spin', 'spins'),
-            ('inclination', 'inclinations'),
-            ('epsilon', 'epsilons'),
-            ('bb_temperature', 'bb_temperatures'),
-            ('bolometric_luminosity', 'bolometric_luminosities'),
-            ('accretion_rate_eddington', 'accretion_rates_eddington'),
-            ('epsilon', 'epsilons'),
-            ('eddington_ratio', 'eddington_ratios')]:    
-            setattr(self, plural, getattr(self, singular))
-
 
     def calculate_bolometric_luminosity(self):
         """
@@ -227,38 +224,33 @@ class BlackholesComponent:
 
         # Get the parameters that this particular emission model requires
         emission_model_parameters = {}
-        for parameter in emission_model.parameters:
+        for parameter in emission_model.variable_parameters:
             attr = getattr(self, parameter, None)
             priv_attr = getattr(self, "_" + parameter, None)
             if attr is not None:
                 emission_model_parameters[parameter] = attr
-                if verbose:
-                    print(parameter, '| provided')
             elif priv_attr is not None:
                 emission_model_parameters[parameter] = priv_attr
-                if verbose:
-                    print(parameter, '| provided')
-            else:
-                if verbose:
-                    print(parameter, '| not provided')
-
-
+    
         # Loop over the blackholes associated to the model
         for i, values in enumerate(zip(*[x for x in emission_model_parameters.values()])):
-            
+
             # Create a dictionary of the parameters to be passed to the
             # emission model.
             parameters = dict(zip(emission_model_parameters.keys(), values))
 
-            # Get the spectra
-            spectra = emission_model.get_spectra(spectra_ids=spectra_ids, 
-                                                 **parameters)
+            # Get the parameters and spectra 
+            parameter_dict, spectra = emission_model.get_spectra(
+                spectra_ids=spectra_ids, **parameters
+                )
             
             if self.spectra is None:
-                self.spectra = spectra
-            else:
+                # Necessary so not a pointer
+                self.spectra = deepcopy(spectra)
+            else:       
                 for spectra_id, spectra_ in spectra.items():
                     self.spectra[spectra_id] = self.spectra[spectra_id].concat(
                         spectra_)
-      
+                    
         return self.spectra
+        
