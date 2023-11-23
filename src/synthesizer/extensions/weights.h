@@ -146,6 +146,7 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
   for (int idim = 0; idim < ndim; idim++) {
     sub_dims[idim] = 2;
   }
+
   /* Now loop over this collection of cells collecting and setting their
    * weights. */
   for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
