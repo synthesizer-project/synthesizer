@@ -92,18 +92,18 @@ class Stars(StarsComponent):
     initial_mass = Quantity()
 
     def __init__(
-            self,
-            log10ages,
-            metallicities,
-            initial_mass=1.0,
-            morphology=None,
-            sfzh=None,
-            sf_hist=None,
-            metal_dist=None,
-            sf_hist_func=None,
-            metal_dist_func=None,
-            instant_sf=None,
-            instant_metallicity=None,
+        self,
+        log10ages,
+        metallicities,
+        initial_mass=1.0,
+        morphology=None,
+        sfzh=None,
+        sf_hist=None,
+        metal_dist=None,
+        sf_hist_func=None,
+        metal_dist_func=None,
+        instant_sf=None,
+        instant_metallicity=None,
     ):
         """
         Initialise the parametric stellar population.
@@ -153,7 +153,7 @@ class Stars(StarsComponent):
         """
 
         # Instantiate the parent
-        StarsComponent.__init__(self, 10 ** log10ages, metallicities)
+        StarsComponent.__init__(self, 10**log10ages, metallicities)
 
         # Set the age grid properties
         self.log10ages = log10ages
@@ -185,7 +185,6 @@ class Stars(StarsComponent):
         # If we have been handed an explict SFZH grid we can ignore all the
         # calculation methods
         if sfzh is not None:
-
             # Store the SFZH grid
             self.sfzh = sfzh
 
@@ -196,7 +195,6 @@ class Stars(StarsComponent):
             self.metal_dist = np.sum(self.sfzh, axis=0)
 
         else:
-
             # Set up the array ready for the calculation
             self.sfzh = np.zeros((len(log10ages), len(metallicities)))
 
@@ -212,9 +210,7 @@ class Stars(StarsComponent):
             # Regular linearly
             self.metallicity_grid_type = "Z"
 
-        elif len(set(
-                self.log10metallicities[:-1] - self.log10metallicities[1:]
-        )) == 1:
+        elif len(set(self.log10metallicities[:-1] - self.log10metallicities[1:])) == 1:
             # Regular in logspace
             self.metallicity_grid_type = "log10Z"
 
@@ -244,7 +240,6 @@ class Stars(StarsComponent):
 
         # Handle the instantaneous SFH case
         if instant_sf is not None:
-
             # Create SFH array
             self.sf_hist = np.zeros(self.ages.size)
 
@@ -260,7 +255,6 @@ class Stars(StarsComponent):
 
         # Handle the instantaneous ZH case
         if instant_metallicity is not None:
-
             # Create SFH array
             self.metal_dist = np.zeros(self.metallicities.size)
 
@@ -270,7 +264,6 @@ class Stars(StarsComponent):
 
         # Calculate SFH from function if necessary
         if self.sf_hist_func is not None and self.sf_hist is None:
-
             # Set up SFH array
             self.sf_hist = np.zeros(self.ages.size)
 
@@ -284,7 +277,6 @@ class Stars(StarsComponent):
 
         # Calculate SFH from function if necessary
         if self.metal_dist_func is not None and self.metal_dist is None:
-
             # Set up SFH array
             self.metal_dist = np.zeros(self.metallicities.size)
 
@@ -368,9 +360,7 @@ class Stars(StarsComponent):
         sfzh = np.expand_dims(self.sfzh, axis=2)
 
         # Account for the SFZH mask in the non-zero indices
-        non_zero_inds = (
-            non_zero_inds[0][sfzh_mask], non_zero_inds[1][sfzh_mask]
-        )
+        non_zero_inds = (non_zero_inds[0][sfzh_mask], non_zero_inds[1][sfzh_mask])
 
         # Compute the spectra
         spectra = np.sum(
@@ -408,7 +398,6 @@ class Stars(StarsComponent):
 
         # If the line_id is a str denoting a single line
         if isinstance(line_id, str):
-
             # Get the grid information we need
             grid_line = grid.lines[line_id]
             wavelength = grid_line["wavelength"]
@@ -419,9 +408,7 @@ class Stars(StarsComponent):
             )
 
             # Continuum at line wavelength, erg/s/Hz
-            continuum = np.sum(
-                grid_line["continuum"] * self.sfzh, axis=(0, 1)
-            )
+            continuum = np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
 
             # NOTE: this is currently incorrect and should be made of the
             # separated nebular and stellar continuum emission
@@ -436,7 +423,6 @@ class Stars(StarsComponent):
 
         # Else if the line is list or tuple denoting a doublet (or higher)
         elif isinstance(line_id, (list, tuple)):
-
             # Set up containers for the line information
             luminosity = []
             continuum = []
@@ -452,16 +438,12 @@ class Stars(StarsComponent):
                 # Line luminosity erg/s
                 luminosity.append(
                     (1 - fesc)
-                    * np.sum(
-                        grid_line["luminosity"] * self.sfzh, axis=(0, 1)
-                    )
+                    * np.sum(grid_line["luminosity"] * self.sfzh, axis=(0, 1))
                 )
 
                 # Continuum at line wavelength, erg/s/Hz
                 continuum.append(
-                    np.sum(
-                        grid_line["continuum"] * self.sfzh, axis=(0, 1)
-                    )
+                    np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
                 )
 
         else:
@@ -520,8 +502,9 @@ class Stars(StarsComponent):
                 The other instance of Stars to add to this one.
         """
 
-        if (np.all(self.log10ages == other_stars.log10ages) and
-            np.all(self.metallicities == other_stars.metallicities)):
+        if np.all(self.log10ages == other_stars.log10ages) and np.all(
+            self.metallicities == other_stars.metallicities
+        ):
             new_sfzh = self.sfzh + other_stars.sfzh
 
         else:
