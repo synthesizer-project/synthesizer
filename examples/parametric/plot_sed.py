@@ -55,10 +55,7 @@ if __name__ == "__main__":
     # generate pure stellar spectra alone
     galaxy.stars.get_spectra_incident(grid)
     print("Pure stellar spectra")
-
     galaxy.plot_spectra(show=True, combined_spectra=False, stellar_spectra=True)
-
-    galaxy.plot_spectra(show=True)
 
     # generate intrinsic spectra (which includes reprocessing by gas)
     galaxy.stars.get_spectra_reprocessed(grid, fesc=0.5)
