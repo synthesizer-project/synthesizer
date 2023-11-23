@@ -1,6 +1,6 @@
 import numpy as np
 from astropy.modeling.models import Sersic2D as Sersic2D_
-from unyt import kpc, mas
+from unyt import kpc, mas, unyt_array
 from unyt.dimensions import length, angle
 import matplotlib.pyplot as plt
 
@@ -18,14 +18,15 @@ class MorphologyBase:
         shows a plot of the model for a given resolution and npix
     """
 
-    def plot_density_grid(self, resolution, npix=None, cosmo=None, z=None):
+    def plot_density_grid(self, resolution, npix):
         """
-        Produce a plot of the current morphology
+        A simple method to produce a quick density plot.
 
-        Parameters
-        ----------
-        lam: float array
-            wavelength, expected mwith units
+        Arguments
+            resolution (float)
+                The resolution (in the same units provded to the child class).
+            npix (int)
+                The number of pixels.
         """
 
         bins = resolution * np.arange(-npix / 2, npix / 2)
@@ -36,7 +37,11 @@ class MorphologyBase:
 
         plt.figure()
         plt.imshow(
-            np.log10(img), origin="lower", interpolation="nearest", vmin=-1, vmax=2
+            np.log10(img),
+            origin="lower",
+            interpolation="nearest",
+            vmin=-1,
+            vmax=2
         )
         plt.show()
 
@@ -46,30 +51,61 @@ class Sersic2D(MorphologyBase):
     """
     A class holding the Sersic2D profile. This is a wrapper around the
     astropy.models.Sersic2D class.
-
-    Methods
-    -------
-    compute_density_grid
-        Calculates and returns the density grid defined by this Morphology
     """
 
     def __init__(
         self,
-        r_eff_kpc=None,
+        r_eff=None,
         r_eff_mas=None,
-        n=1,
-        ellip=0,
+        r_eff_kpc=None,
+        sersic_index=1,
+        ellipticity=0,
         theta=0.0,
         cosmo=None,
         redshift=None,
     ):
-        """ """
+        """
+        Initialise the morphology.
+        
+        Arguments
+            r_eff (unyt)
+                Effective radius. This is converted as required.
+            sersic_index (float)
+                Sersic index.
+            ellipticity (float)
+                Ellipticity.
+            theta (float)
+                Theta, the rotation angle.
+            cosmo (astro.cosmology)
+                astropy cosmology object.
+            redshift (float)
+                Redshift.
+
+        """
+        # check units of r_eff and convert if necessary
+        if isinstance(r_eff, unyt_array):
+            if r_eff.units.dimensions == length:
+                self.r_eff_kpc = r_eff.to('kpc').value
+                self.r_eff_mas
+            elif r_eff.units.dimensions == angle:
+                self.r_eff_mas = r_eff.to('mas').value
+            else:
+                raise exceptions.IncorrectUnits('The units of r_eff must \
+                have length or angle dimensions')
+            self.r_eff = r_eff
+        elif r_eff_mas:
+            self.r_eff_mas = r_eff_mas
+            self.r_eff = r_eff_mas * mas
+        elif r_eff_mas:
+            self.r_eff_kpc = r_eff_kpc
+            self.r_eff = r_eff_kpc * kpc
+        else:
+            raise exceptions.MissingAttribute("""
+            The effective radius must be provided""")
 
         # Define the parameter set
-        self.r_eff_kpc = r_eff_kpc
-        self.r_eff_mas = r_eff_mas
-        self.n = n
-        self.ellip = ellip
+        self.sersic_index = sersic_index
+        self.ellipticity = ellipticity
         self.theta = theta
 
         # Associate the cosmology and redshift to this object
@@ -145,19 +181,17 @@ class Sersic2D(MorphologyBase):
         This acts as a wrapper to astropy functionality (defined above) which
         only work in units of kpc or milliarcseconds (mas)
 
-        Parameters
-        ----------
-        xx: array-like (float)
-            x values on a 2D grid.
-        yy: array-like (float)
-            y values on a 2D grid.
-        units : unyt.unit
-            The units in which the coordinate grids are defined.
+        Arguments
+            xx: array-like (float)
+                x values on a 2D grid.
+            yy: array-like (float)
+                y values on a 2D grid.
+            units : unyt.unit
+                The units in which the coordinate grids are defined.
 
         Returns
-        ----------
-        density_grid : np.ndarray
-            The density grid produced
+            density_grid : np.ndarray
+                The density grid produced
         """
 
         # Ensure we have the model corresponding to the requested units
