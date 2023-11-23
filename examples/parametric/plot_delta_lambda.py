@@ -12,9 +12,15 @@ It includes the following steps:
 import numpy as np
 import matplotlib.pyplot as plt
 
+import synthesizer
+
+import importlib
+
+package_name = "synthesizer"
+
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
-from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
 
@@ -28,30 +34,43 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
-    # Define the parameters of the star formation and metal enrichment 
+       # define filters
+    filter_codes = [
+        f"JWST/NIRCam.{f}"
+        for f in ["F090W", "F115W", "F150W", "F200W", "F277W", "F356W", "F444W"]
+    ]  # define a list of filter codes
+    filter_codes += [f"JWST/MIRI.{f}" for f in ["F770W"]]
+    fc = FilterCollection(filter_codes, new_lam=grid.lam)
+
+    # define the parameters of the star formation and metal enrichment
     # histories
     sfh_p = {"duration": 10 * Myr}
-    Z_p = {"log10Z": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    Z_p = {"log10metallicity": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = 1e8
 
-    # Define the functional form of the star formation and metal enrichment 
+    # define the functional form of the star formation and metal enrichment
     # histories
-    sfh = SFH.Constant(sfh_p)  # constant star formation
-    print(sfh)  # print sfh summary
+    sfh = SFH.Constant(**sfh_p)  # constant star formation
+    metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
 
-    Zh = ZH.deltaConstant(Z_p)  # constant metallicity
-
-    # Get the 2D star formation and metal enrichment history for the given SPS 
-    # grid.
-    sfzh = generate_sfzh(
-        grid.log10age, grid.metallicity, sfh, Zh, stellar_mass=stellar_mass
+    # get the 2D star formation and metal enrichment history for the given SPS
+    # grid. This is (age, Z).
+    stars = Stars(
+        grid.log10age,
+        grid.metallicity,
+        sf_hist=sfh,
+        metal_dist=metal_dist,
+        initial_mass=stellar_mass,
     )
 
-    # Create a galaxy object
-    galaxy = Galaxy(sfzh)
+    # Define redshift
+    z = 10.0
+
+    # create a galaxy object
+    galaxy = Galaxy(stars, redshift=z)
     
     # Delta lambda model for pure stellar spectra
-    galaxy.get_spectra_incident(grid)
+    galaxy.stars.get_spectra_incident(grid)
     lam, delta_lam = Grid.get_delta_lambda(grid)
     print("Mean delta: ", np.mean(delta_lam))
     
