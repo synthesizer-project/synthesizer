@@ -23,7 +23,7 @@ from synthesizer.imaging.images import ParametricImage
 
 if __name__ == "__main__":
     # Define the morphology using a simple effective radius and slope
-    morph = Sersic2D(r_eff_kpc=1 * kpc, n=2.0)
+    morph = Sersic2D(r_eff=1 * kpc, sersic_index=1.0, ellipticity=0.5)
 
     # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
