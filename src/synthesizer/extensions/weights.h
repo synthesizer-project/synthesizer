@@ -4,6 +4,7 @@
  *****************************************************************************/
 /* C includes */
 #include <math.h>
+#include <string.h>
 
 /**
  * @brief Compute an ndimensional index from a flat index.
@@ -17,7 +18,7 @@ void get_indices_from_flat(int flat_ind, int ndim, const int *dims,
                            int *indices) {
 
   /* Loop over indices calculating each one. */
-  for (int i = 0; i < ndim; i++) {
+  for (int i = ndim - 1; i > -1; i--) {
     indices[i] = flat_ind % dims[i];
     flat_ind /= dims[i];
   }
@@ -59,7 +60,7 @@ int binary_search(int low, int high, const double *arr, const double val) {
     int mid = low + floor(diff / 2);
 
     /* Where is the midpoint relative to the value? */
-    if (val > arr[mid]) {
+    if (val >= arr[mid]) {
       low = mid;
     } else {
       high = mid;
@@ -69,12 +70,7 @@ int binary_search(int low, int high, const double *arr, const double val) {
     diff = high - low;
   }
 
-  /* Return the nearest grid point. */
-  if ((val - arr[low]) < (arr[high] - val)) {
-    return high;
-  } else {
-    return low;
-  }
+  return high;
 }
 
 /**
@@ -95,13 +91,8 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
                      const int ndim, const int p) {
 
   /* Setup the index and mass fraction arrays. */
-  int frac_indices[(int)pow(2, (double)ndim)][ndim];
-  double fracs[(int)pow(2, (double)ndim)];
-
-  /* Set up the fractions. */
-  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
-    fracs[icell] = 1;
-  }
+  int part_indices[ndim];
+  double axis_fracs[ndim];
 
   /* Loop over dimensions finding the mass weightings and indicies. */
   for (int dim = 0; dim < ndim; dim++) {
@@ -135,50 +126,59 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
       part_cell =
           binary_search(/*low*/ 0, /*high*/ dims[dim] - 1, grid_prop, part_val);
 
-      /* Make sure we have the cell containing the particle. */
-      if (grid_prop[part_cell] < part_val) {
-        part_cell += 1;
-      }
-
-      /* Calculate the fraction. Note, here we do the cell containing the
-       * particle, the cell below is calculated from this fraction. */
-      frac = (part_val - grid_prop[part_cell]) /
+      /* Calculate the fraction. Note, here we do the "low" cell, the cell
+       * above is calculated from this fraction. */
+      frac = (grid_prop[part_cell] - part_val) /
              (grid_prop[part_cell] - grid_prop[part_cell - 1]);
     }
 
-    /* Set the fractions. */
-    fracs[dim * 2 + 1] *= frac;
-    fracs[dim * 2] *= 1 - frac;
+    /* Set the fraction for this dimension. */
+    axis_fracs[dim] = (1 - frac);
 
-    /* Set these indices. */
-    for (int jdim = 0; jdim < ndim; jdim++) {
-      frac_indices[jdim * 2][dim] = part_cell - 1;
-      frac_indices[jdim * 2 + 1][dim] = part_cell;
-    }
+    /* Set this index. */
+    part_indices[dim] = part_cell;
   }
 
-  /* Normalise the fractions. */
-  double sum = 0;
-  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
-    sum += fracs[icell];
+  /* To combine fractions we will need an array of dimensions for the subset.
+   * These are always two in size, one for the low and one for high grid
+   * point. */
+  int sub_dims[ndim];
+  for (int idim = 0; idim < ndim; idim++) {
+    sub_dims[idim] = 2;
   }
-  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
-    fracs[icell] /= sum;
-  }
-
   /* Now loop over this collection of cells collecting and setting their
    * weights. */
   for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
 
+    /* Set up some index arrays we'll need. */
+    int subset_ind[ndim];
+    int frac_ind[ndim];
+
+    /* Get the multi-dimensional version of icell. */
+    get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
+
+    /* Multiply all contributing fractions and get the fractions index
+     * in the grid. */
+    double frac = 1;
+    for (int idim = 0; idim < ndim; idim++) {
+      if (subset_ind[idim] == 0) {
+        frac *= (1 - axis_fracs[idim]);
+        frac_ind[idim] = part_indices[idim] - 1;
+      } else {
+        frac *= axis_fracs[idim];
+        frac_ind[idim] = part_indices[idim];
+      }
+    }
+
     /* Early skip for cells contributing a 0 fraction. */
-    if (fracs[icell] <= 0)
+    if (frac <= 0)
       continue;
 
     /* We have a contribution, get the flattened index into the grid array. */
-    const int weight_ind = get_flat_index(frac_indices[icell], dims, ndim);
+    const int weight_ind = get_flat_index(frac_ind, dims, ndim);
 
     /* Add the weight. */
-    weights[weight_ind] += mass * fracs[icell];
+    weights[weight_ind] += (mass * frac);
   }
 }
 
@@ -232,8 +232,13 @@ void weight_loop_ngp(const double **grid_props, const double **part_props,
           binary_search(/*low*/ 0, /*high*/ dims[dim] - 1, grid_prop, part_val);
     }
 
-    /* Set the index. */
-    part_indices[dim] = part_cell;
+    /* Set the index to the closest grid point either side of part_val. */
+    if ((part_val - grid_prop[part_cell - 1]) <
+        (grid_prop[part_cell] - part_val)) {
+      part_indices[dim] = part_cell - 1;
+    } else {
+      part_indices[dim] = part_cell;
+    }
   }
 
   /* Get the weight's index. */
