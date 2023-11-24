@@ -18,7 +18,6 @@ import importlib
 
 package_name = "synthesizer"
 
-from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
@@ -33,14 +32,6 @@ if __name__ == "__main__":
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
-
-       # define filters
-    filter_codes = [
-        f"JWST/NIRCam.{f}"
-        for f in ["F090W", "F115W", "F150W", "F200W", "F277W", "F356W", "F444W"]
-    ]  # define a list of filter codes
-    filter_codes += [f"JWST/MIRI.{f}" for f in ["F770W"]]
-    fc = FilterCollection(filter_codes, new_lam=grid.lam)
 
     # define the parameters of the star formation and metal enrichment
     # histories
@@ -74,7 +65,6 @@ if __name__ == "__main__":
     lam, delta_lam = Grid.get_delta_lambda(grid)
     print("Mean delta: ", np.mean(delta_lam))
     
-    ylimits = ("peak", np.mean(delta_lam))
     figsize = (10, 5)
     
     fig = plt.figure(figsize=figsize)
@@ -86,27 +76,22 @@ if __name__ == "__main__":
 
     ax = fig.add_axes((left, bottom, width, height))
 
-    xlim = [2.6, 4.2]
-
-    ypeak = -100
+    ypeak = np.min(delta_lam)
+    ylimits = np.mean(delta_lam)
 
     ax.plot(np.log10(lam)[:-1], delta_lam, lw=1, alpha=0.8, label=grid_name)
 
-    if np.max(delta_lam) > ypeak:
-        ypeak = np.min(delta_lam)
-
+    xlim = [2.6, 4.2]
+    ylim = [ypeak - ylimits, ypeak + ylimits]
+    
     ax.set_xlim(xlim)
-
-    if ylimits[0] == "peak":
-        if ypeak == ypeak:
-            ylim = [ypeak - ylimits[1], ypeak + ylimits[1]]
-        ax.set_ylim(ylim)
-
-    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
 
     ax.legend(fontsize=8, labelspacing=0.0)
     ax.set_xlabel(r"$\rm log_{10}(\lambda/\AA)$")
     ax.set_ylabel(r"$\rm Δ(\lambda/\AA)$")
+    
+    plt.savefig('delta_lambda')
 
     plt.show()
 

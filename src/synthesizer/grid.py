@@ -601,13 +601,9 @@ class Grid:
        Returns:
        - tuple: A tuple containing the list of wavelengths and delta lambda.
        """
-        
-       # Delta lambda list
-       delta_lambda = []
-        
+
        # Calculate delta lambda for each wavelength
-       for i in range(0, len(self.lam)-1):
-           delta_lambda.append(np.log10(self.lam[i+1]) - np.log10(self.lam[i]))
+       delta_lambda = np.log10(self.lam[1:]) - np.log10(self.lam[:-1])
         
        # Return tuple of wavelengths and delta lambda
        return self.lam, delta_lambda
