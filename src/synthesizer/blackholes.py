@@ -6,7 +6,7 @@ TODO: this should probably be moved into components/blackholes.py
 """
 
 import numpy as np
-from unyt import deg, km, cm, s, K
+from unyt import deg, km, cm, s, K, rad
 from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
@@ -398,13 +398,30 @@ class UnifiedAGN(BlackHoleEmissionModel):
                                   are missing!')
 
         # Generate the spectra of the disc
-        spectra = self._get_spectra_disc(parameter_dict)
-        
-        # Generate the spectra of the line regions
-        for lr in ['nlr', 'blr']:
-            spectra[lr] = self._get_spectra_lr(parameter_dict, lr)
 
+        # Determine the inclination from the cosine_inclination
+        inclination = np.arccos(parameter_dict['cosine_inclination']) * rad
+
+        # If the inclination is too high (edge) on we don't see the disc, only
+        # the NLR and the torus.
+        if inclination < ((90 * deg) - parameter_dict['theta_torus']):
+            spectra = self._get_spectra_disc(parameter_dict)
+            spectra['blr'] = self._get_spectra_lr(parameter_dict, 'blr')
+        else:
+            spectra = {}
+
+        spectra['nlr'] = self._get_spectra_lr(parameter_dict, 'nlr')
         spectra['torus'] = self._get_spectra_torus(parameter_dict)
+
+        # If we don't see the BLR and disc still generate spectra but set them to zero
+        if inclination >= ((90 * deg) - parameter_dict['theta_torus']):
+            for spectra_id in ['blr', 
+                               'disc_transmitted', 
+                               'disc_incident', 
+                               'disc_escape', 
+                               'disc']:
+                spectra[spectra_id] = Sed(lam=spectra['nlr'].lam)
+        
 
         # Calculate the total spectra as the sum of the components
         spectra['total'] = (spectra['disc'] + spectra['blr'] + spectra['nlr']
