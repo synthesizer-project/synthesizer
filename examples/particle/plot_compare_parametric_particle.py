@@ -31,7 +31,10 @@ sfh = SFH.Constant(**sfh_p)
 
 # Define the parametric stars
 sfzh = ParametricStars(
-    grid.log10age, grid.metallicity, sf_hist=sfh, metal_dist=metal_dist
+    grid.log10age,
+    grid.metallicity,
+    sf_hist=sfh,
+    metal_dist=metal_dist,
     initial_mass=1,
 )
 
