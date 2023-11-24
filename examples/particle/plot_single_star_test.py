@@ -19,8 +19,8 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 stars = ParametricStars(
     grid.log10age,
     grid.metallicity,
-    instant_sf=1e7,
-    instant_metallicity=0.01,
+    sf_hist=1e7,
+    metal_dist=0.01,
     initial_mass=1,
 )
 
