@@ -13,7 +13,7 @@ Example usages:
                      redshift=redshift, accretion_rate=accretion_rate, ...)
 """
 import numpy as np
-from unyt import c, deg
+from unyt import c, deg, rad
 from synthesizer.particle.particles import Particles
 from synthesizer.components import BlackholesComponent
 from synthesizer.units import Quantity
@@ -184,9 +184,9 @@ class BlackHoles(Particles, BlackholesComponent):
         self.inclination = np.random.uniform(
             low=0.,
             high=np.pi/2.,
-            size=self.nparticles)
+            size=self.nparticles) * rad
         
-        self.cosine_inclination = np.cos(self.inclination)
+        self.cosine_inclination = np.cos(self.inclination.to('rad').value)
 
 
 
