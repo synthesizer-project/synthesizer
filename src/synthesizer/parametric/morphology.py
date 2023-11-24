@@ -56,8 +56,6 @@ class Sersic2D(MorphologyBase):
     def __init__(
         self,
         r_eff=None,
-        r_eff_mas=None,
-        r_eff_kpc=None,
         sersic_index=1,
         ellipticity=0,
         theta=0.0,
@@ -238,9 +236,11 @@ class PointSource(MorphologyBase):
         Initialise the morphology.
         
         Arguments
-            offset (unyt)
-                The [x,y] offset.
-            cosmo (astro.cosmology)
+            offset (unyt_array/float)
+                The [x,y] offset in angular or physical units from the centre 
+                of the image. The default (0,0) places the source in the centre
+                of the image. 
+            cosmo (astropy.cosmology)
                 astropy cosmology object.
             redshift (float)
                 Redshift.
