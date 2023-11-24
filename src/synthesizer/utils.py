@@ -6,7 +6,7 @@ Example usage:
     rebin_1d(arr, 10, func=np.sum)
 """
 import numpy as np
-from unyt import c, h, kb
+from unyt import c, h, kb, unyt_array, unyt_quantity
 
 
 def planck(nu, temperature):
@@ -30,31 +30,22 @@ def planck(nu, temperature):
     )
 
 
-def rebin_1d(a, i, func=np.sum):
+def has_units(x):
     """
-    A simple function for rebinning a 1D array using a specificed
-    function (e.g. sum or mean).
-
-    TODO: add exeption to make sure a is an 1D array and that i is an integer.
+    Check whether the passed variable has units, i.e. is a unyt_quanity or
+    unyt_array.
 
     Args:
-        a (ndarray)
-            the input 1D array
-        i (int)
-            integer rebinning factor, i.e. how many bins to rebin by
-        func (func)
-            the function to use (e.g. mean or sum)
+        x (generic variable)
+            The variables to check.
 
-
+    Returns:
+        bool
+            True if the variable has units, False otherwise.
     """
 
-    n = len(a)
+    # Do the check
+    if isinstance(x, (unyt_array, unyt_quantity)):
+        return True
 
-    # if array is not the right size truncate it
-    if n % i != 0:
-        a = a[: int(i * np.floor(n / i))]
-
-    x = len(a) // i
-    b = a.reshape(x, i)
-
-    return func(b, axis=1)
+    return False

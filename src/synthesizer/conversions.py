@@ -6,110 +6,160 @@ magnitude systems.
 
 Example usage:
 
-
+    lum = flux_to_luminosity(flux, cosmo, redshift)
+    fnu = apparent_mag_to_fnu(m)
+    ab_mag = absolute_mag_to_lnu(M)
 
 """
 import numpy as np
-import unyt
-from unyt import c, nJy, erg, s, Hz
+from unyt import c, nJy, erg, s, Hz, cm, pc
 
 
 def flux_to_luminosity(flux, cosmo, redshift):
     """
-    Converts flux in nJy to luminosity in erg / s / Hz.
-    Parameters
-    ----------
-    flux : array-like (float)/float
-        The flux to be converted to luminosity, can either be a singular
-        value or array.
-    cosmo : obj (astropy.cosmology)
-        The cosmology object used to calculate luminosity distance.
-    redshift : float
-        The redshift of the rest frame.
+    Converts flux to luminosity in erg / s / Hz.
+
+    This can either be flux -> luminosity per wavelength/frequency (intensity)
+    or power since all units are handled automatically by unyt.
+
+    Args:
+        flux (unyt_quantity/unyt_array)
+            The flux to be converted to luminosity, can either be a singular
+            value or array.
+        cosmo (astropy.cosmology)
+            The cosmology object used to calculate luminosity distance.
+        redshift (float)
+            The redshift of the rest frame.
+
+    Returns:
+        unyt_quantity/unyt_array
+            The converted luminosity.
     """
 
-    # Calculate the luminosity distance
-    lum_dist = cosmo.luminosity_distance(redshift).to("cm").value
+    # Calculate the luminosity distance (need to convert from astropy to unyt)
+    lum_dist = cosmo.luminosity_distance(redshift).to("cm").value * cm
 
     # Calculate the luminosity in interim units
     lum = flux * 4 * np.pi * lum_dist**2
 
     # And convert to erg / s / Hz
-    lum *= 1 / (1e9 * 1e23 * (1 + redshift))
+    lum /= 1 + redshift
 
-    return lum
+    return lum.to(erg / s / Hz)
 
 
-def fnu_to_m(fnu):
+def fnu_to_apparent_mag(fnu):
     """
-    Converts flux in nJy to apparent magnitude.
+    Converts flux to apparent magnitude.
 
-    Parameters
-    ----------
-    flux : array-like (float)/float
-        The flux to be converted, can either be a singular value or array.
-    """
+    Args:
+        flux (unyt_quantity/unyt_array)
+            The flux to be converted, can either be a singular value or array.
 
-    # Check whether we have units, if so convert to nJy
-    if isinstance(fnu, unyt.array.unyt_quantity):
-        fnu_ = fnu.to("nJy").value
-    else:
-        fnu_ = fnu
-
-    return -2.5 * np.log10(fnu_ / 1e9) + 8.9  # -- assumes flux in nJy
-
-
-def m_to_fnu(m):
-    """
-    Converts apparent magnitude to flux in nJy.
-
-    Parameters
-    ----------
-    m : array-like (float)/float
-        The apparent magnitude to be converted, can either be a singular value
-        or array.
+    Returns:
+        float
+            The apparent magnitude.
     """
 
-    return 1e9 * 10 ** (-0.4 * (m - 8.9)) * nJy
+    return -2.5 * np.log10(fnu / 10**9 * nJy) + 8.9
+
+
+def apparent_mag_to_fnu(app_mag):
+    """
+    Converts apparent magnitude to flux.
+
+    Args:
+        app_mag (float)
+            The apparent magnitude to be converted, can either be a singular
+            value or array.
+
+    Returns:
+        unyt_quantity/unyt_array
+            The flux.
+
+    """
+
+    return 10**9 * 10 ** (-0.4 * (app_mag - 8.9)) * nJy
 
 
 def flam_to_fnu(lam, flam):
-    """convert f_lam to f_nu
+    """
+    Converts flux in terms of wavelength (f_lam) to flux in terms of frequency
+    (f_nu).
 
-    arguments:
-    lam -- wavelength / \\AA
-    flam -- spectral luminosity density/erg/s/\\AA
+    Args:
+        lam (unyt_quantity/unyt_array)
+            The wavelength array the flux is defined at.
+        flam (unyt_quantity/unyt_array)
+            The flux in terms of wavelength.
+
+    Returns:
+        unyt_quantity/unyt_array
+            The flux in terms of frequency.
     """
 
-    lam_m = lam * 1e-10
+    # Delta lambda
+    lam_m = lam * 10**-10
 
-    return flam * lam / (c.value / lam_m)
+    return flam * lam / (c / lam_m)
 
 
 def fnu_to_flam(lam, fnu):
-    """convert f_nu to f_lam
+    """
+    Converts flux in terms of frequency (f_nu) to flux in terms of wavelength
+    (flam).
 
-    arguments:
-    lam -- wavelength/\\AA
-    flam -- spectral luminosity density/erg/s/\\AA
+    Args:
+        lam (unyt_quantity/unyt_array)
+            The wavelength array the flux is defined at.
+        fnu (unyt_quantity/unyt_array)
+            The flux in terms of frequency.
+
+    Returns:
+        unyt_quantity/unyt_array
+            The flux in terms of wavlength.
     """
 
+    # Delta lambda
     lam_m = lam * 1e-10
 
-    return fnu * (c.value / lam_m) / lam
+    return fnu * (c / lam_m) / lam
 
 
-def M_to_Lnu(M):
-    """Convert absolute magnitude (M) to L_nu"""
-    return 10 ** (-0.4 * (M + 48.6)) * constants.geo * erg / s / Hz
+def absolute_mag_to_lnu(ab_mag):
+    """Convert absolute magnitude (M) to luminosity.
+
+    Args:
+        ab_mag (float)
+            The absolute magnitude to convert.
+
+    Returns:
+        unyt_quantity/unyt_array
+            The luminosity in erg / s / Hz.
+    """
+
+    # Define the distance modulus at 10 pcs
+    dist_mod = 4 * np.pi * (10 * pc).to("cm").value ** 2
+
+    return 10 ** (-0.4 * (ab_mag + 48.6)) * dist_mod * erg / s / Hz
 
 
-def Lnu_to_M(Lnu_):
-    """Convert L_nu to absolute magnitude (M). If no unit
-    provided assumes erg/s/Hz."""
-    if type(Lnu_) == unyt.array.unyt_quantity:
-        Lnu = Lnu_.to("erg/s/Hz").value
-    else:
-        Lnu = Lnu_
+def lnu_to_absolute_mag(lnu):
+    """Convert luminosity to absolute magnitude (M).
 
-    return -2.5 * np.log10(Lnu / constants.geo) - 48.6
+    Args:
+        unyt_quantity/unyt_array
+            The luminosity to convert with units. Unyt
+
+    Returns:
+        float
+            The absolute magnitude.
+    """
+
+    # Define the distance modulus at 10 pcs
+    dist_mod = 4 * np.pi * ((10 * pc).to("cm").value * cm) ** 2
+
+    # Make sure the units are consistent
+    lnu = lnu.to(erg / s / Hz)
+
+    return -2.5 * np.log10(lnu / dist_mod / (erg / s / Hz)) - 48.6
