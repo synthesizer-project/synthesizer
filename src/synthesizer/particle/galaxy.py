@@ -609,7 +609,8 @@ class Galaxy(BaseGalaxy):
                 Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
-            Returns
+
+        Returns
         -------
         Image : array-like
             A 2D array containing the image.
@@ -626,8 +627,8 @@ class Galaxy(BaseGalaxy):
             fov=fov,
             sed=sed,
             filters=filters,
-            coordinates=self.stars.coordinates,
-            smoothing_lengths=self.stars.smoothing_lengths,
+            coordinates=self.stars._coordinates,
+            smoothing_lengths=self.stars._smoothing_lengths,
             pixel_values=pixel_values,
             rest_frame=rest_frame,
             redshift=self.redshift,
@@ -719,9 +720,9 @@ class Galaxy(BaseGalaxy):
         img = ParticleImage(
             resolution=resolution,
             fov=fov,
-            coordinates=self.stars.coordinates,
-            smoothing_lengths=self.stars.smoothing_lengths,
-            pixel_values=self.stars.current_masses,
+            coordinates=self.stars._coordinates,
+            smoothing_lengths=self.stars._smoothing_lengths,
+            pixel_values=self.stars._current_masses,
             redshift=self.redshift,
             cosmo=cosmo,
             kernel=kernel,
@@ -781,9 +782,9 @@ class Galaxy(BaseGalaxy):
         img = ParticleImage(
             resolution=resolution,
             fov=fov,
-            coordinates=self.gas.coordinates,
-            smoothing_lengths=self.gas.smoothing_lengths,
-            pixel_values=self.gas.masses,
+            coordinates=self.gas._coordinates,
+            smoothing_lengths=self.gas._smoothing_lengths,
+            pixel_values=self.gas._masses,
             redshift=self.redshift,
             cosmo=cosmo,
             kernel=kernel,
@@ -845,9 +846,9 @@ class Galaxy(BaseGalaxy):
         img = ParticleImage(
             resolution=resolution,
             fov=fov,
-            coordinates=self.stars.coordinates,
-            smoothing_lengths=self.stars.smoothing_lengths,
-            pixel_values=self.stars.ages * self.stars.initial_masses,
+            coordinates=self.stars._coordinates,
+            smoothing_lengths=self.stars._smoothing_lengths,
+            pixel_values=self.stars._ages * self.stars._initial_masses,
             redshift=self.redshift,
             cosmo=cosmo,
             kernel=kernel,
@@ -872,9 +873,9 @@ class Galaxy(BaseGalaxy):
         mass_img = ParticleImage(
             resolution=resolution,
             fov=fov,
-            coordinates=self.stars.coordinates,
-            smoothing_lengths=self.stars.smoothing_lengths,
-            pixel_values=self.stars.initial_masses,
+            coordinates=self.stars._coordinates,
+            smoothing_lengths=self.stars._smoothing_lengths,
+            pixel_values=self.stars._initial_masses,
             redshift=self.redshift,
             cosmo=cosmo,
             kernel=kernel,
@@ -934,9 +935,9 @@ class Galaxy(BaseGalaxy):
         img = ParticleImage(
             resolution=resolution,
             fov=fov,
-            coordinates=self.stars.coordinates,
-            smoothing_lengths=self.stars.smoothing_lengths,
-            pixel_values=self.stars.metallicities * self.stars.current_masses,
+            coordinates=self.stars._coordinates,
+            smoothing_lengths=self.stars._smoothing_lengths,
+            pixel_values=self.stars.metallicities * self.stars._current_masses,
             redshift=self.redshift,
             cosmo=cosmo,
             kernel=kernel,
@@ -1008,9 +1009,9 @@ class Galaxy(BaseGalaxy):
         img = ParticleImage(
             resolution=resolution,
             fov=fov,
-            coordinates=self.gas.coordinates,
-            smoothing_lengths=self.gas.smoothing_lengths,
-            pixel_values=self.gas.metallicities * self.gas.masses,
+            coordinates=self.gas._coordinates,
+            smoothing_lengths=self.gas._smoothing_lengths,
+            pixel_values=self.gas.metallicities * self.gas._masses,
             redshift=self.redshift,
             cosmo=cosmo,
             kernel=kernel,
@@ -1078,9 +1079,9 @@ class Galaxy(BaseGalaxy):
         img = ParticleImage(
             resolution=resolution,
             fov=fov,
-            coordinates=self.stars.coordinates,
-            smoothing_lengths=self.stars.smoothing_lengths,
-            pixel_values=self.stars.metallicities * self.stars.current_masses,
+            coordinates=self.stars._coordinates,
+            smoothing_lengths=self.stars._smoothing_lengths,
+            pixel_values=self.stars.metallicities * self.stars._current_masses,
             redshift=self.redshift,
             cosmo=cosmo,
             kernel=kernel,
@@ -1142,9 +1143,9 @@ class Galaxy(BaseGalaxy):
         img = ParticleImage(
             resolution=resolution,
             fov=fov,
-            coordinates=self.gas.coordinates,
-            smoothing_lengths=self.gas.smoothing_lengths,
-            pixel_values=self.gas.metallicities * self.gas.masses,
+            coordinates=self.gas._coordinates,
+            smoothing_lengths=self.gas._smoothing_lengths,
+            pixel_values=self.gas.metallicities * self.gas._masses,
             redshift=self.redshift,
             cosmo=cosmo,
             kernel=kernel,
@@ -1225,9 +1226,9 @@ class Galaxy(BaseGalaxy):
         img = ParticleImage(
             resolution=resolution,
             fov=fov,
-            coordinates=self.stars.coordinates[mask, :],
-            smoothing_lengths=self.stars.smoothing_lengths[mask],
-            pixel_values=self.stars.initial_masses[mask],
+            coordinates=self.stars._coordinates[mask, :],
+            smoothing_lengths=self.stars._smoothing_lengths[mask],
+            pixel_values=self.stars._initial_masses[mask],
             redshift=self.redshift,
             cosmo=cosmo,
             kernel=kernel,
