@@ -100,6 +100,7 @@ class StarsComponent:
         fesc_LyA=1.0,
         young=False,
         old=False,
+        **kwargs,
     ):
         """
         Generate the line contribution spectra. This is only invoked if
@@ -120,6 +121,9 @@ class StarsComponent:
             old (bool, float):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_lnu.
 
         Returns:
             numpy.ndarray
@@ -132,7 +136,11 @@ class StarsComponent:
         # Generate contribution of line emission alone and reduce the
         # contribution of Lyman-alpha
         linecont = self.generate_lnu(
-            grid, spectra_name="linecont", old=old, young=young
+            grid,
+            spectra_name="linecont",
+            old=old,
+            young=young,
+            **kwargs,
         )
 
         # Multiply by the Lyamn-continuum escape fraction
@@ -144,7 +152,14 @@ class StarsComponent:
 
         return linecont
 
-    def get_spectra_incident(self, grid, young=False, old=False, label=""):
+    def get_spectra_incident(
+        self,
+        grid,
+        young=False,
+        old=False,
+        label="",
+        **kwargs,
+    ):
         """
         Generate the incident (equivalent to pure stellar for stars) spectra
         using the provided Grid.
@@ -161,6 +176,9 @@ class StarsComponent:
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_incident".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_lnu.
 
         Returns:
             Sed
@@ -171,7 +189,13 @@ class StarsComponent:
         young, old = self.check_young_old_units(young, old)
 
         # Get the incident spectra
-        lnu = self.generate_lnu(grid, "incident", young=young, old=old)
+        lnu = self.generate_lnu(
+            grid,
+            "incident",
+            young=young,
+            old=old,
+            **kwargs,
+        )
 
         # Create the Sed object
         sed = Sed(grid.lam, lnu)
@@ -188,6 +212,7 @@ class StarsComponent:
         young=False,
         old=False,
         label="",
+        **kwargs,
     ):
         """
         Generate the transmitted spectra using the provided Grid. This is the
@@ -209,6 +234,9 @@ class StarsComponent:
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_transmitted".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_lnu.
 
         Returns:
             Sed
@@ -220,7 +248,11 @@ class StarsComponent:
 
         # Get the transmitted spectra
         lnu = (1.0 - fesc) * self.generate_lnu(
-            grid, "transmitted", young=young, old=old
+            grid,
+            "transmitted",
+            young=young,
+            old=old,
+            **kwargs,
         )
 
         # Create the Sed object
@@ -238,6 +270,7 @@ class StarsComponent:
         young=False,
         old=False,
         label="",
+        **kwargs,
     ):
         """
         Generate nebular spectra from a grid object and star particles.
@@ -258,6 +291,9 @@ class StarsComponent:
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_nebular".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_lnu.
 
         Returns:
             Sed
@@ -268,7 +304,13 @@ class StarsComponent:
         young, old = self.check_young_old_units(young, old)
 
         # Get the nebular emission spectra
-        lnu = self.generate_lnu(grid, "nebular", young=young, old=old)
+        lnu = self.generate_lnu(
+            grid,
+            "nebular",
+            young=young,
+            old=old,
+            **kwargs,
+        )
 
         # Apply the escape fraction
         lnu *= 1 - fesc
@@ -290,6 +332,7 @@ class StarsComponent:
         old=False,
         label="",
         verbose=False,
+        **kwargs,
     ):
         """
         Generates the intrinsic spectra, this is the sum of the escaping
@@ -298,9 +341,9 @@ class StarsComponent:
         transmitted through the gas. In addition to returning the intrinsic
         spectra this saves the incident, nebular, and escaped spectra.
 
-        Note, if a grid that has not been post-processed through a 
+        Note, if a grid that has not been post-processed through a
         photoionisation code is provided (i.e. read_lines=False) this will
-        just call `get_spectra_incident`. 
+        just call `get_spectra_incident`.
 
         Args:
             grid (obj):
@@ -322,6 +365,9 @@ class StarsComponent:
                 key is label + "_transmitted".
             verbose (bool):
                 verbose output flag
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_lnu.
 
         Updates:
             incident:
@@ -337,7 +383,7 @@ class StarsComponent:
             Sed
                 An Sed object containing the intrinsic spectra.
         """
-        
+
         # Make sure young and old in Myr, if provided
         young, old = self.check_young_old_units(young, old)
 
@@ -345,20 +391,23 @@ class StarsComponent:
         if grid.read_lines is False:
             if verbose:
                 print(
-                    ("The grid you are using has not been post-processed "
-                     "through a photoionisation code. This method will "
-                     "just return the incident stellar emission. Are "
-                     "you sure this is the method you want to use?")
+                    (
+                        "The grid you are using has not been post-processed "
+                        "through a photoionisation code. This method will "
+                        "just return the incident stellar emission. Are "
+                        "you sure this is the method you want to use?"
+                    )
                 )
 
             spec = self.get_spectra_incident(
                 grid=grid,
                 young=young,
                 old=old,
-                label=label
+                label=label,
+                **kwargs,
             )
 
-            self.spectra[f'{label}intrinsic'] = self.spectra[f'{label}incident']
+            self.spectra[f"{label}intrinsic"] = self.spectra[f"{label}incident"]
             return spec
 
         # The incident emission
@@ -367,6 +416,7 @@ class StarsComponent:
             young=young,
             old=old,
             label=label,
+            **kwargs,
         )
 
         # The emission which escapes the gas
@@ -375,12 +425,22 @@ class StarsComponent:
 
         # The stellar emission which **is** reprocessed by the gas
         transmitted = self.get_spectra_transmitted(
-            grid, fesc, young=young, old=old, label=label
+            grid,
+            fesc,
+            young=young,
+            old=old,
+            label=label,
+            **kwargs,
         )
 
         # The nebular emission
         nebular = self.get_spectra_nebular(
-            grid, fesc, young=young, old=old, label=label
+            grid,
+            fesc,
+            young=young,
+            old=old,
+            label=label,
+            **kwargs,
         )
 
         # If the Lyman-alpha escape fraction is <1.0 suppress it.
@@ -390,11 +450,16 @@ class StarsComponent:
                 grid,
                 fesc=fesc,
                 fesc_LyA=fesc_LyA,
+                **kwargs,
             )
 
             # Get the nebular continuum emission
             nebular_continuum = self.generate_lnu(
-                grid, "nebular_continuum", young=young, old=old
+                grid,
+                "nebular_continuum",
+                young=young,
+                old=old,
+                **kwargs,
             )
             nebular_continuum *= 1 - fesc
 
@@ -412,9 +477,9 @@ class StarsComponent:
             intrinsic = reprocessed
 
         if fesc > 0:
-            self.spectra[f'{label}escaped'] = escaped
-        self.spectra[f'{label}reprocessed'] = reprocessed
-        self.spectra[f'{label}intrinsic'] = intrinsic
+            self.spectra[f"{label}escaped"] = escaped
+        self.spectra[f"{label}reprocessed"] = reprocessed
+        self.spectra[f"{label}intrinsic"] = intrinsic
 
         return reprocessed
 
@@ -426,6 +491,7 @@ class StarsComponent:
         young=False,
         old=False,
         label="",
+        **kwargs,
     ):
         """
         Calculates dust attenuated spectra assuming a simple screen.
@@ -448,6 +514,9 @@ class StarsComponent:
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_transmitted".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_lnu.
 
         Returns:
             Sed
@@ -472,6 +541,7 @@ class StarsComponent:
             young=young,
             old=old,
             label=label,
+            **kwargs,
         )
 
         # Apply the dust screen
@@ -494,6 +564,7 @@ class StarsComponent:
         fesc=0.0,
         fesc_LyA=1.0,
         label="",
+        **kwargs,
     ):
         """
         Calculates dust attenuated spectra assuming the PACMAN dust/fesc model
@@ -527,6 +598,9 @@ class StarsComponent:
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_transmitted".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_lnu.
 
         Raises:
             InconsistentArguments:
@@ -590,9 +664,9 @@ class StarsComponent:
 
         # If grid has photoinoisation outputs, use the reprocessed outputs
         if grid.read_lines:
-            reprocessed_name = 'reprocessed'
+            reprocessed_name = "reprocessed"
         else:  # otherwise just use the intrinsic stellar spectra
-            reprocessed_name = 'intrinsic'
+            reprocessed_name = "intrinsic"
 
         # Generate intrinsic spectra for young and old particles
         # separately before summing them if we have been given
@@ -627,6 +701,7 @@ class StarsComponent:
                 young=young_old_thresh,
                 old=False,
                 label="young_",
+                **kwargs,
             )
 
             # Generate the old gas reprocessed spectra
@@ -638,6 +713,7 @@ class StarsComponent:
                 young=False,
                 old=young_old_thresh,
                 label="old_",
+                **kwargs,
             )
 
             # Combine young and old spectra
@@ -672,7 +748,12 @@ class StarsComponent:
             #   - reprocessed = transmitted + nebular
             #   - intrinsic = transmitted + reprocessed
             self.get_spectra_reprocessed(
-                grid, fesc, fesc_LyA=fesc_LyA, young=False, old=False
+                grid,
+                fesc,
+                fesc_LyA=fesc_LyA,
+                young=False,
+                old=False,
+                **kwargs,
             )
 
         if np.isscalar(tau_v):
@@ -708,10 +789,9 @@ class StarsComponent:
 
             # Calculate attenuated spectra of young stars
             dust_curve.slope = alpha[1]  # use the BC slope
-            young_attenuated = self.spectra[f"young_{reprocessed_name}"].\
-                    apply_attenuation(
-                    tau_v[1], dust_curve=dust_curve
-                )
+            young_attenuated = self.spectra[
+                f"young_{reprocessed_name}"
+            ].apply_attenuation(tau_v[1], dust_curve=dust_curve)
 
             dust_curve.slope = alpha[0]  # use the ISM slope
             young_attenuated = young_attenuated.apply_attenuation(
@@ -720,10 +800,9 @@ class StarsComponent:
             self.spectra["young_attenuated"] = young_attenuated
 
             # Calculate attenuated spectra of old stars
-            old_attenuated = self.spectra[f"old_{reprocessed_name}"].\
-                    apply_attenuation(
-                    tau_v[0], dust_curve=dust_curve
-                )
+            old_attenuated = self.spectra[f"old_{reprocessed_name}"].apply_attenuation(
+                tau_v[0], dust_curve=dust_curve
+            )
             self.spectra["old_attenuated"] = old_attenuated
 
             # Get the combined attenuated spectra
@@ -766,6 +845,7 @@ class StarsComponent:
         alpha_ISM=None,
         alpha_BC=None,
         young_old_thresh=7.0,
+        **kwargs,
     ):
         """
         Calculates dust attenuated spectra assuming the Charlot & Fall (2000)
@@ -789,6 +869,9 @@ class StarsComponent:
             young_old_thresh (float)
                 The threshold in log10(age/yr) for young/old stellar
                 populations.
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_lnu.
 
         Returns:
             Sed
@@ -803,6 +886,7 @@ class StarsComponent:
             tau_v=[tau_v_ISM, tau_v_BC],
             alpha=[alpha_ISM, alpha_BC],
             young_old_thresh=young_old_thresh,
+            **kwargs,
         )
 
     def get_line_intrinsic(self, grid, line_ids, fesc=0.0):
@@ -1029,7 +1113,7 @@ class StarsComponent:
         ylimits=(),
         xlimits=(),
         figsize=(3.5, 5),
-        **kwargs
+        **kwargs,
     ):
         """
         Plots either specific spectra (specified via spectra_to_plot) or all
@@ -1078,5 +1162,5 @@ class StarsComponent:
             xlimits=xlimits,
             figsize=figsize,
             draw_legend=isinstance(spectra, dict),
-            **kwargs
+            **kwargs,
         )
