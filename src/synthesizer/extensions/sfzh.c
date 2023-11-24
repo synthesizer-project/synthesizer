@@ -33,19 +33,15 @@
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
  */
-PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
+PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
-  const int ndim;
-  const int npart, nlam;
-  const double fesc;
+  const int ndim, npart;
   const PyObject *grid_tuple, *part_tuple;
-  const PyArrayObject *np_grid_spectra;
   const PyArrayObject *np_part_mass, *np_ndims;
   const char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOdOiiis", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &fesc, &np_ndims, &ndim,
-                        &npart, &nlam, &method))
+  if (!PyArg_ParseTuple(args, "OOOOiis", &grid_tuple, &part_tuple,
+                        &np_part_mass, &np_ndims, &ndim, &npart, &method))
     return NULL;
 
   /* Quick check to make sure our inputs are valid. */
@@ -53,15 +49,6 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     return NULL;
   if (npart == 0)
     return NULL;
-  if (nlam == 0)
-    return NULL;
-
-  /* Extract a pointer to the spectra grids */
-  const double *grid_spectra = PyArray_DATA(np_grid_spectra);
-
-  /* Set up arrays to hold the SEDs themselves. */
-  double *spectra = malloc(nlam * sizeof(double));
-  bzero(spectra, nlam * sizeof(double));
 
   /* Extract a pointer to the grid dims */
   const int *dims = PyArray_DATA(np_ndims);
@@ -81,8 +68,8 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     grid_size *= dims[dim];
 
   /* Allocate an array to hold the grid weights. */
-  double *grid_weights = malloc(grid_size * sizeof(double));
-  bzero(grid_weights, grid_size * sizeof(double));
+  double *sfzh = malloc(grid_size * sizeof(double));
+  bzero(sfzh, grid_size * sizeof(double));
 
   /* Unpack the grid property arrays into a single contiguous array. */
   for (int idim = 0; idim < ndim; idim++) {
@@ -118,82 +105,55 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     /* Finally, compute the weights for this particle using the
      * requested method. */
     if (strcmp(method, "cic") == 0) {
-      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim,
-                      p);
+      weight_loop_cic(grid_props, part_props, mass, sfzh, dims, ndim, p);
     } else if (strcmp(method, "ngp") == 0) {
-      weight_loop_ngp(grid_props, part_props, mass, grid_weights, dims, ndim,
-                      p);
+      weight_loop_ngp(grid_props, part_props, mass, sfzh, dims, ndim, p);
     } else {
       /* Only print this warning once! */
       if (p == 0)
         printf(
             "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
             method);
-      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim,
-                      p);
+      weight_loop_cic(grid_props, part_props, mass, sfzh, dims, ndim, p);
     }
 
   } /* Loop over particles. */
 
-  /* Loop over grid cells. */
-  for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
-
-    /* Get the weight. */
-    const double weight = grid_weights[grid_ind];
-
-    /* Skip zero weight cells. */
-    if (weight <= 0)
-      continue;
-
-    /* Get the spectra ind. */
-    int unraveled_ind[ndim + 1];
-    get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-    unraveled_ind[ndim] = 0;
-    int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
-
-    /* Add this grid cell's contribution to the spectra */
-    for (int ilam = 0; ilam < nlam; ilam++) {
-
-      /* Add the contribution to this wavelength. */
-      spectra[ilam] += grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight;
-    }
-  }
-
   /* Clean up memory! */
-  free(grid_weights);
   free(part_props);
   free(grid_props);
 
   /* Reconstruct the python array to return. */
-  npy_intp np_dims[1] = {
-      nlam,
-  };
-  PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
-      1, np_dims, NPY_FLOAT64, spectra);
+  npy_intp np_dims[ndim];
+  for (int idim = 0; idim < ndim; idim++) {
+    np_dims[idim] = dims[idim];
+  }
 
-  return Py_BuildValue("N", out_spectra);
+  PyArrayObject *out_sfzh = (PyArrayObject *)PyArray_SimpleNewFromData(
+      ndim, np_dims, NPY_FLOAT64, sfzh);
+
+  return Py_BuildValue("N", out_sfzh);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
-static PyMethodDef SedMethods[] = {
-    {"compute_integrated_sed", compute_integrated_sed, METH_VARARGS,
-     "Method for calculating integrated intrinsic spectra."},
-    {NULL, NULL, 0, NULL}};
+static PyMethodDef SFZHMethods[] = {{"compute_sfzh", compute_sfzh, METH_VARARGS,
+                                     "Method for calculating the SFZH."},
+                                    {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
-    "make_sed",                              /* m_name */
-    "A module to calculate integrated seds", /* m_doc */
+    "make_sfzh",                             /* m_name */
+    "A module to calculating particle SFZH", /* m_doc */
     -1,                                      /* m_size */
-    SedMethods,                              /* m_methods */
+    SFZHMethods,                             /* m_methods */
     NULL,                                    /* m_reload */
     NULL,                                    /* m_traverse */
     NULL,                                    /* m_clear */
     NULL,                                    /* m_free */
 };
 
-PyMODINIT_FUNC PyInit_integrated_spectra(void) {
+PyMODINIT_FUNC PyInit_sfzh(void) {
   PyObject *m = PyModule_Create(&moduledef);
   import_array();
   return m;

@@ -16,6 +16,21 @@ Here are just some examples of what synthesizer can do:
 
 Read the documentation [here](https://flaresimulations.github.io/synthesizer/).
 
+## Getting Started
+
+First clone the latest version of `synthesizer`
+
+    git clone https://github.com/flaresimulations/synthesizer.git
+
+To install, enter the `synthesizer` directory and install with pip. On unix:
+
+    cd synthesizer
+    pip install .
+
+Make sure you stay up to date with the latest versions through git:
+
+    git pull origin main
+
 ## Contributing
 
 Please see [here](docs/CONTRIBUTING.md) for contribution guidelines.

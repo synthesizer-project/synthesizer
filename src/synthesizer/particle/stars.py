@@ -21,11 +21,14 @@ Example usages:
 import warnings
 
 import numpy as np
+import cmasher as cmr
+import matplotlib.pyplot as plt
 
 from synthesizer.components import StarsComponent
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.line import Line, LineCollection
 from synthesizer.particle.particles import Particles
+from synthesizer.plt import single_histxy, mlabel
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 from synthesizer import exceptions
@@ -220,6 +223,10 @@ class Stars(Particles, StarsComponent):
         # Check the arguments we've been given
         self._check_star_args()
 
+        # Particle stars can calculate and attach a SFZH analogous to a
+        # parametric galaxy
+        self.sfzh = None
+
     def _check_star_args(self):
         """
         Sanitizes the inputs ensuring all arguments agree and are compatible.
@@ -264,7 +271,14 @@ class Stars(Particles, StarsComponent):
 
         return pstr
 
-    def _prepare_sed_args(self, grid, fesc, spectra_type, mask=None):
+    def _prepare_sed_args(
+        self,
+        grid,
+        fesc,
+        spectra_type,
+        mask,
+        grid_assignment_method,
+    ):
         """
         A method to prepare the arguments for SED computation with the C
         functions.
@@ -280,6 +294,15 @@ class Stars(Particles, StarsComponent):
             mask (bool)
                 A mask to be applied to the stars. Spectra will only be computed
                 and returned for stars with True in the mask.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
         """
 
         # Make a dummy mask if none has been passed
@@ -289,11 +312,11 @@ class Stars(Particles, StarsComponent):
         # Set up the inputs to the C function.
         grid_props = [
             np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(np.log10(grid.metallicity), dtype=np.float64),
+            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
         ]
         part_props = [
             np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
-            np.ascontiguousarray(self.log10metallicities[mask], dtype=np.float64),
+            np.ascontiguousarray(self.metallicities[mask], dtype=np.float64),
         ]
         part_mass = np.ascontiguousarray(self._initial_masses[mask], dtype=np.float64)
 
@@ -326,6 +349,7 @@ class Stars(Particles, StarsComponent):
             len(grid_props),
             npart,
             nlam,
+            grid_assignment_method,
         )
 
     def generate_lnu(
@@ -337,6 +361,7 @@ class Stars(Particles, StarsComponent):
         old=False,
         verbose=False,
         do_grid_check=True,
+        grid_assignment_method="cic",
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -367,6 +392,11 @@ class Stars(Particles, StarsComponent):
                     - You know your particle lie within the grid but don't
                       want to waste compute checking. This case is useful when
                       working with large particle counts.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
@@ -383,8 +413,8 @@ class Stars(Particles, StarsComponent):
             # Check the fraction of particles outside of the grid (these will be
             # pinned to the edge of the grid) by finding those inside
             age_inside_mask = np.logical_and(
-                self.log10ages < grid.log10age[-1],
-                self.log10ages > grid.log10age[0],
+                self.log10ages <= grid.log10age[-1],
+                self.log10ages >= grid.log10age[0],
             )
             met_inside_mask = np.logical_and(
                 self.metallicities < grid.metallicity[-1],
@@ -418,7 +448,11 @@ class Stars(Particles, StarsComponent):
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
-            grid, fesc=fesc, spectra_type=spectra_name, mask=mask
+            grid,
+            fesc=fesc,
+            spectra_type=spectra_name,
+            mask=mask,
+            grid_assignment_method=grid_assignment_method.lower(),
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
@@ -513,6 +547,7 @@ class Stars(Particles, StarsComponent):
         old=False,
         verbose=False,
         do_grid_check=True,
+        grid_assignment_method="cic",
     ):
         """
         Generate the particle rest frame spectra for a given grid key spectra
@@ -543,6 +578,11 @@ class Stars(Particles, StarsComponent):
                     - You know your particle lie within the grid but don't
                       want to waste compute checking. This case is useful when
                       working with large particle counts.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
@@ -559,8 +599,8 @@ class Stars(Particles, StarsComponent):
             # Check the fraction of particles outside of the grid (these will be
             # pinned to the edge of the grid) by finding those inside
             age_inside_mask = np.logical_and(
-                self.log10ages < grid.log10age[-1],
-                self.log10ages > grid.log10age[0],
+                self.log10ages <= grid.log10age[-1],
+                self.log10ages >= grid.log10age[0],
             )
             met_inside_mask = np.logical_and(
                 self.metallicities < grid.metallicity[-1],
@@ -594,7 +634,11 @@ class Stars(Particles, StarsComponent):
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
-            grid, fesc=fesc, spectra_type=spectra_name, mask=mask
+            grid,
+            fesc=fesc,
+            spectra_type=spectra_name,
+            mask=mask,
+            grid_assignment_method=grid_assignment_method.lower(),
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
@@ -915,6 +959,7 @@ class Stars(Particles, StarsComponent):
         fesc_LyA=1.0,
         young=False,
         old=False,
+        **kwargs,
     ):
         """
         Generate the line contribution spectra. This is only invoked if
@@ -935,6 +980,9 @@ class Stars(Particles, StarsComponent):
             old (bool, float):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
 
         Returns:
             numpy.ndarray
@@ -944,7 +992,11 @@ class Stars(Particles, StarsComponent):
         # Generate contribution of line emission alone and reduce the
         # contribution of Lyman-alpha
         linecont = self.generate_particle_lnu(
-            grid, spectra_name="linecont", old=old, young=young
+            grid,
+            spectra_name="linecont",
+            old=old,
+            young=young,
+            **kwargs,
         )
 
         # Multiply by the Lyamn-continuum escape fraction
@@ -956,7 +1008,14 @@ class Stars(Particles, StarsComponent):
 
         return linecont
 
-    def get_particle_spectra_incident(self, grid, young=False, old=False, label=""):
+    def get_particle_spectra_incident(
+        self,
+        grid,
+        young=False,
+        old=False,
+        label="",
+        **kwargs,
+    ):
         """
         Generate the incident (equivalent to pure stellar for stars) spectra
         using the provided Grid.
@@ -973,6 +1032,10 @@ class Stars(Particles, StarsComponent):
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_incident".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
+
 
         Returns:
             Sed
@@ -980,7 +1043,13 @@ class Stars(Particles, StarsComponent):
         """
 
         # Get the incident spectra
-        lnu = self.generate_particle_lnu(grid, "incident", young=young, old=old)
+        lnu = self.generate_particle_lnu(
+            grid,
+            "incident",
+            young=young,
+            old=old,
+            **kwargs,
+        )
 
         # Create the Sed object
         sed = Sed(grid.lam, lnu)
@@ -997,6 +1066,7 @@ class Stars(Particles, StarsComponent):
         young=False,
         old=False,
         label="",
+        **kwargs,
     ):
         """
         Generate the transmitted spectra using the provided Grid. This is the
@@ -1018,6 +1088,9 @@ class Stars(Particles, StarsComponent):
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_transmitted".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
 
         Returns:
             Sed
@@ -1026,7 +1099,11 @@ class Stars(Particles, StarsComponent):
 
         # Get the transmitted spectra
         lnu = (1.0 - fesc) * self.generate_particle_lnu(
-            grid, "transmitted", young=young, old=old
+            grid,
+            "transmitted",
+            young=young,
+            old=old,
+            **kwargs,
         )
 
         # Create the Sed object
@@ -1044,6 +1121,7 @@ class Stars(Particles, StarsComponent):
         young=False,
         old=False,
         label="",
+        **kwargs,
     ):
         """
         Generate nebular spectra from a grid object and star particles.
@@ -1064,6 +1142,9 @@ class Stars(Particles, StarsComponent):
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_nebular".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
 
         Returns:
             Sed
@@ -1071,7 +1152,9 @@ class Stars(Particles, StarsComponent):
         """
 
         # Get the nebular emission spectra
-        lnu = self.generate_particle_lnu(grid, "nebular", young=young, old=old)
+        lnu = self.generate_particle_lnu(
+            grid, "nebular", young=young, old=old, **kwargs
+        )
 
         # Apply the escape fraction
         lnu *= 1 - fesc
@@ -1092,6 +1175,7 @@ class Stars(Particles, StarsComponent):
         young=False,
         old=False,
         label="",
+        **kwargs,
     ):
         """
         Generates the intrinsic spectra, this is the sum of the escaping
@@ -1119,6 +1203,9 @@ class Stars(Particles, StarsComponent):
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_transmitted".
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
 
         Updates:
             incident:
@@ -1141,6 +1228,7 @@ class Stars(Particles, StarsComponent):
             young=young,
             old=old,
             label=label,
+            **kwargs,
         )
 
         # The emission which escapes the gas
@@ -1149,12 +1237,17 @@ class Stars(Particles, StarsComponent):
 
         # The stellar emission which **is** reprocessed by the gas
         transmitted = self.get_particle_spectra_transmitted(
-            grid, fesc, young=young, old=old, label=label
+            grid,
+            fesc,
+            young=young,
+            old=old,
+            label=label,
+            **kwargs,
         )
 
         # The nebular emission
         nebular = self.get_particle_spectra_nebular(
-            grid, fesc, young=young, old=old, label=label
+            grid, fesc, young=young, old=old, label=label, **kwargs
         )
 
         # If the Lyman-alpha escape fraction is <1.0 suppress it.
@@ -1164,11 +1257,16 @@ class Stars(Particles, StarsComponent):
                 grid,
                 fesc=fesc,
                 fesc_LyA=fesc_LyA,
+                **kwargs,
             )
 
             # Get the nebular continuum emission
             nebular_continuum = self.generate_particle_lnu(
-                grid, "nebular_continuum", young=young, old=old
+                grid,
+                "nebular_continuum",
+                young=young,
+                old=old,
+                **kwargs,
             )
             nebular_continuum *= 1 - fesc
 
@@ -1384,6 +1482,173 @@ class Stars(Particles, StarsComponent):
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve,
         )
+
+    def _prepare_sfzh_args(
+        self,
+        grid,
+        grid_assignment_method,
+    ):
+        """
+        A method to prepare the arguments for SFZH computation with the C
+        functions.
+
+        Args:
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(grid.log10age, dtype=np.float64),
+            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
+        ]
+        part_props = [
+            np.ascontiguousarray(self.log10ages, dtype=np.float64),
+            np.ascontiguousarray(self.metallicities, dtype=np.float64),
+        ]
+        part_mass = np.ascontiguousarray(self._initial_masses, dtype=np.float64)
+
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(len(part_mass))
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        return (
+            grid_props,
+            part_props,
+            part_mass,
+            grid_dims,
+            len(grid_props),
+            npart,
+            grid_assignment_method,
+        )
+
+    def get_sfzh(
+        self,
+        grid,
+        grid_assignment_method="cic",
+    ):
+        """
+        Generate the binned SFZH history of this collection of particles.
+
+        The binned SFZH produced by this method is equivalent to the weights
+        used to extract spectra from the grid.
+
+        Args:
+            grid (Grid)
+                The spectral grid object.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            Numpy array of containing the SFZH.
+        """
+
+        from synthesizer.extensions.sfzh import compute_sfzh
+
+        # Prepare the arguments for the C function.
+        args = self._prepare_sfzh_args(
+            grid,
+            grid_assignment_method=grid_assignment_method.lower(),
+        )
+
+        # Get the SFZH
+        self.sfzh = compute_sfzh(*args)
+
+        return self.sfzh
+
+    def plot_sfzh(self, grid, grid_assignment_method="cic", show=True):
+        """
+        Plot the binned SZFH.
+
+        Args:
+            show (bool)
+                Should we invoke plt.show()?
+
+        Returns:
+            fig
+                The Figure object contain the plot axes.
+            ax
+                The Axes object containing the plotted data.
+        """
+
+        # Ensure we have the SFZH
+        if self.sfzh is None:
+            self.get_sfzh(grid, grid_assignment_method)
+
+        # Get the grid axes
+        log10ages = grid.log10age
+        log10metallicities = np.log10(grid.metallicity)
+
+        # Create the figure and extra axes for histograms
+        fig, ax, haxx, haxy = single_histxy()
+
+        # Visulise the SFZH grid
+        ax.pcolormesh(
+            log10ages,
+            log10metallicities,
+            self.sfzh.T,
+            cmap=cmr.sunburst,
+        )
+
+        # Add binned Z to right of the plot
+        metal_dist = np.sum(self.sfzh, axis=0)
+        haxy.fill_betweenx(
+            log10metallicities,
+            metal_dist / np.max(metal_dist),
+            step="mid",
+            color="k",
+            alpha=0.3,
+        )
+
+        # Add binned SF_HIST to top of the plot
+        sf_hist = np.sum(self.sfzh, axis=1)
+        haxx.fill_between(
+            log10ages,
+            sf_hist / np.max(sf_hist),
+            step="mid",
+            color="k",
+            alpha=0.3,
+        )
+
+        # Set plot limits
+        haxy.set_xlim([0.0, 1.2])
+        haxy.set_ylim(log10metallicities[0], log10metallicities[-1])
+        haxx.set_ylim([0.0, 1.2])
+        haxx.set_xlim(log10ages[0], log10ages[-1])
+
+        # Set labels
+        ax.set_xlabel(mlabel("log_{10}(age/yr)"))
+        ax.set_ylabel(mlabel("log_{10}Z"))
+
+        # Set the limits so all axes line up
+        ax.set_ylim(log10metallicities[0], log10metallicities[-1])
+        ax.set_xlim(log10ages[0], log10ages[-1])
+
+        # Shall we show it?
+        if show:
+            plt.show()
+
+        return fig, ax
 
 
 def sample_sfhz(

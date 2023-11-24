@@ -1,6 +1,8 @@
 import h5py
 import numpy as np
 
+from unyt import Msun, kpc, yr
+
 from ..particle.galaxy import Galaxy
 from synthesizer.load_data.utils import get_len
 
@@ -46,12 +48,12 @@ def load_FLARES(f, region, tag):
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
         galaxies[i].load_stars(
-            mass[b:e],
-            ages[b:e],
+            mass[b:e] * Msun,
+            ages[b:e] * yr,
             metals[b:e],
             s_oxygen=s_oxygen[b:e],
             s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :],
+            coordinates=coods[b:e, :] * kpc,
         )
 
     return galaxies
