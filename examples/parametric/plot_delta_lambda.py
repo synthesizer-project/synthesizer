@@ -90,8 +90,6 @@ if __name__ == "__main__":
     ax.legend(fontsize=8, labelspacing=0.0)
     ax.set_xlabel(r"$\rm log_{10}(\lambda/\AA)$")
     ax.set_ylabel(r"$\rm Δ(\lambda/\AA)$")
-    
-    plt.savefig('delta_lambda')
 
     plt.show()
 
