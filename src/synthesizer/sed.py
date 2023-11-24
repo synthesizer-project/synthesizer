@@ -1008,7 +1008,7 @@ class Sed:
                     "Arrays of tau_v values are only applicable for Seds"
                     " containing multiple spectra"
                 )
-            if self._lnu.shape[0] != self.tau_v.size:
+            if self._lnu.shape[0] != tau_v.size:
                 raise exceptions.InconsistentArguments(
                     "tau_v and spectra are incompatible shapes "
                     f"({tau_v.shape}, {self._lnu.shape})"
