@@ -94,12 +94,6 @@ class Sersic2D(MorphologyBase):
                     "The units of r_eff must have length or angle dimensions"
                     )
             self.r_eff = r_eff
-        elif r_eff_mas:
-            self.r_eff_mas = r_eff_mas
-            self.r_eff = r_eff_mas * mas
-        elif r_eff_kpc:
-            self.r_eff_kpc = r_eff_kpc
-            self.r_eff = r_eff_kpc * kpc
         else:
             raise exceptions.MissingAttribute("""
             The effective radius must be provided""")
