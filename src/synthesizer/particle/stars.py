@@ -383,8 +383,8 @@ class Stars(Particles, StarsComponent):
             # Check the fraction of particles outside of the grid (these will be
             # pinned to the edge of the grid) by finding those inside
             age_inside_mask = np.logical_and(
-                self.log10ages < grid.log10age[-1],
-                self.log10ages > grid.log10age[0],
+                self.log10ages <= grid.log10age[-1],
+                self.log10ages >= grid.log10age[0],
             )
             met_inside_mask = np.logical_and(
                 self.metallicities < grid.metallicity[-1],
@@ -559,8 +559,8 @@ class Stars(Particles, StarsComponent):
             # Check the fraction of particles outside of the grid (these will be
             # pinned to the edge of the grid) by finding those inside
             age_inside_mask = np.logical_and(
-                self.log10ages < grid.log10age[-1],
-                self.log10ages > grid.log10age[0],
+                self.log10ages <= grid.log10age[-1],
+                self.log10ages >= grid.log10age[0],
             )
             met_inside_mask = np.logical_and(
                 self.metallicities < grid.metallicity[-1],
