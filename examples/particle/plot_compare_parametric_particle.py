@@ -31,10 +31,7 @@ sfh = SFH.Constant(**sfh_p)
 
 # Define the parametric stars
 sfzh = ParametricStars(
-    grid.log10age,
-    grid.metallicity,
-    sf_hist_func=sfh,
-    metal_dist_func=metal_dist,
+    grid.log10age, grid.metallicity, sf_hist=sfh, metal_dist=metal_dist
     initial_mass=1,
 )
 
@@ -58,7 +55,7 @@ for nstar in [1, 10, 100, 1000]:
         initial_mass=1 / nstar,
     )
 
-    # Create galaxy object
+    # Get the particle galaxy
     particle_galaxy = ParticleGalaxy(stars=stars)
 
     # Calculate the stars SEDs using nearest grid point

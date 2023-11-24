@@ -36,10 +36,10 @@ stellar_mass = 1e10
 stars = Stars(
     grid.log10age,
     grid.metallicity,
-    instant_sf=10.,
-    instant_metallicity=0.01,
+    sf_dist=10.0,
+    metal_dist=0.01,
     initial_mass=stellar_mass,
-    morphology=morph
+    morphology=morph,
 )
 
 # Get galaxy object

@@ -13,7 +13,7 @@ Example usage:
 """
 import numpy as np
 from scipy import integrate
-from unyt import yr, unyt_quantity
+from unyt import unyt_quantity, unyt_array
 
 
 import matplotlib.pyplot as plt
@@ -24,6 +24,8 @@ from synthesizer.components import StarsComponent
 from synthesizer.line import Line
 from synthesizer.stats import weighted_median, weighted_mean
 from synthesizer.plt import single_histxy, mlabel
+from synthesizer.parametric.sf_hist import Common as SFHCommon
+from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.units import Quantity
 
 
@@ -100,10 +102,6 @@ class Stars(StarsComponent):
         sfzh=None,
         sf_hist=None,
         metal_dist=None,
-        sf_hist_func=None,
-        metal_dist_func=None,
-        instant_sf=None,
-        instant_metallicity=None,
     ):
         """
         Initialise the parametric stellar population.
@@ -132,24 +130,21 @@ class Stars(StarsComponent):
             sfzh (array-like, float)
                 An array describing the binned SFZH. If provided all following
                 arguments are ignored.
-            sf_hist (array-like, float)
-                An array describing the star formation history.
-            metal_dist (array-like, float)
-                An array describing the metallity distribution.
-            sf_hist_func (SFH.*)
-                An instance of one of the child classes of SFH. This will be
-                used to calculate sf_hist and takes precendence over a passed
-                sf_hist if both are present.
-            metal_dist_func (ZH.*)
-                An instance of one of the child classes of ZH. This will be
-                used to calculate metal_dist and takes precendence over a
-                passed metal_dist if both are present.
-            instant_sf (float)
-                An age at which to compute an instantaneous SFH, i.e. all
-                stellar mass populating a single SFH bin.
-            instant_metallicity (float)
-                A metallicity at which to compute an instantaneous ZH, i.e. all
-                stellar populating a single ZH bin.
+            sf_hist (float/unyt_quantity/array-like, float/SFH.*)
+                Either:
+                    - An age at which to compute an instantaneous SFH, i.e. all
+                      stellar mass populating a single SFH bin.
+                    - An array describing the star formation history.
+                    - An instance of one of the child classes of SFH. This
+                      will be used to calculate an array describing the SFH.
+            metal_dist (float/unyt_quantity/array-like, float/ZDist.*)
+                Either:
+                    - A metallicity at which to compute an instantaneous
+                      ZH, i.e. all stellar mass populating a single Z bin.
+                    - An array describing the metallity distribution.
+                    - An instance of one of the child classes of ZH. This
+                      will be used to calculate an array describing the
+                      metallicity distribution.
         """
 
         # Instantiate the parent
@@ -167,17 +162,53 @@ class Stars(StarsComponent):
             self.log10metallicities[-1],
         ]
 
-        # Store the function used to make the star formation history if given
-        self.sf_hist_func = sf_hist_func
+        # Store the SFH we've been given, this is either...
+        if issubclass(type(sf_hist), SFHCommon):
+            self.sf_hist_func = sf_hist  # a SFH function
+            self.sf_hist = None
+            instant_sf = None
+        elif isinstance(sf_hist, (unyt_quantity, float)):
+            instant_sf = sf_hist  # an instantaneous SFH
+            self.sf_hist_func = None
+            self.sf_hist = None
+        elif isinstance(sf_hist, (unyt_array, np.ndarray)):
+            self.sf_hist = sf_hist  # a numpy array
+            self.sf_hist_func = None
+            instant_sf = None
+        elif sf_hist is None:
+            self.sf_hist = None  # we must have been passed a SFZH
+            self.sf_hist_func = None
+            instant_sf = None
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Unrecognised sf_hist type ({type(sf_hist)}! This should be"
+                " either a float, an instance of a SFH function from the "
+                "SFH module, or a single float."
+            )
 
-        # Store the function used to make the metallicity history if given
-        self.metal_dist_func = metal_dist_func
-
-        # Store the SFH array (if None recalculated below)
-        self.sf_hist = sf_hist
-
-        # Store the ZH array (if None recalculated below)
-        self.metal_dist = metal_dist
+        # Store the metallicity distribution we've been given, this is either...
+        if issubclass(type(metal_dist), ZDistCommon):
+            self.metal_dist_func = metal_dist  # a ZDist function
+            self.metal_dist = None
+            instant_metallicity = None
+        elif isinstance(metal_dist, (unyt_quantity, float)):
+            instant_metallicity = metal_dist  # an instantaneous SFH
+            self.metal_dist_func = None
+            self.metal_dist = None
+        elif isinstance(metal_dist, (unyt_array, np.ndarray)):
+            self.metal_dist = metal_dist  # a numpy array
+            self.metal_dist_func = None
+            instant_metallicity = None
+        elif metal_dist is None:
+            self.metal_dist = None  # we must have been passed a SFZH
+            self.metal_dist_func = None
+            instant_metallicity = None
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Unrecognised metal_dist type ({type(metal_dist)}! This "
+                "should be either a float, an instance of a ZDist function "
+                "from the ZDist module, or a single float."
+            )
 
         # Store the total initial stellar mass
         self.initial_mass = initial_mass
