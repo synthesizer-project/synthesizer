@@ -23,9 +23,11 @@ You can then clone the latest version of ``synthesizer`` from `github <https://g
 
     git clone https://github.com/flaresimulations/synthesizer.git
     cd synthesizer
-    pip install -e .
+    pip install .
 
-This installs it in *editable* mode, so any changes in the code base will be reflected in the installation. 
+If you want to install the code in *editable* mode, so any changes in the code base will be reflected in the installation::
+
+    pip install -e .
 
 Make sure you stay up to date with the latest versions through git::
 
