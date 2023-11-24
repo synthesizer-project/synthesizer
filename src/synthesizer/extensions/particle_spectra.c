@@ -2,162 +2,31 @@
  * C extension to calculate SEDs for star particles.
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
+/* C includes */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
+/* Python includes */
 #include <Python.h>
-
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-
 #include <numpy/ndarrayobject.h>
 #include <numpy/ndarraytypes.h>
 
-/* Define a macro to handle that bzero is non-standard. */
-#define bzero(b, len) (memset((b), '\0', (len)), (void)0)
+/* Local includes */
+#include "macros.h"
+#include "weights.h"
 
 /**
- * @brief Compute an ndimensional index from a flat index.
- *
- * @param flat_ind: The flattened index to unravel.
- * @param ndim: The number of dimensions for the unraveled index.
- * @param dims: The size of each dimension.
- * @param indices: The output N-dimensional indices.
- */
-void get_indices_from_flat(int flat_ind, int ndim, const int *dims,
-                           int *indices) {
-
-  /* Loop over indices calculating each one. */
-  for (int i = 0; i < ndim; i++) {
-    indices[i] = flat_ind % dims[i];
-    flat_ind /= dims[i];
-  }
-}
-
-/**
- * @brief Compute a flat grid index based on the grid dimensions.
- *
- * @param multi_index: An array of N-dimensional indices.
- * @param dims: The length of each dimension.
- * @param ndim: The number of dimensions.
- */
-int get_flat_index(const int *multi_index, const int *dims, const int ndims) {
-  int index = 0, stride = 1;
-  for (int i = ndims - 1; i >= 0; i--) {
-    index += stride * multi_index[i];
-    stride *= dims[i];
-  }
-
-  return index;
-}
-
-/**
- * @brief Performs a binary search for the index of an array corresponding to
- * a value.
- *
- * @param low: The initial low index (probably beginning of array).
- * @param high: The initial high index (probably size of array).
- * @param arr: The array to search in.
- * @param val: The value to search for.
- */
-int binary_search(int low, int high, const double *arr, const double val) {
-
-  /* While we don't have a pair of adjacent indices. */
-  int diff = high - low;
-  while (diff > 1) {
-
-    /* Define the midpoint. */
-    int mid = low + floor(diff / 2);
-
-    /* Where is the midpoint relative to the value? */
-    if (arr[mid] < val) {
-      low = mid;
-    } else {
-      high = mid;
-    }
-
-    /* Compute the new range. */
-    diff = high - low;
-  }
-  return low;
-}
-
-/**
- * @brief Calculates the mass fractions in each right most grid cell along
- *        each dimension.
+ * @brief This calculates the spectra of a particle using a cloud in cell
+ *        approach.
  *
  * @param grid_props: An array of the properties along each grid axis.
  * @param part_props: An array of the particle properties, in the same property
  *                    order as grid props.
- * @param p: Index of the current particle.
- * @param ndim: The number of grid dimensions.
- * @param dims: The length of each grid dimension.
- * @param npart: The number of particles in total.
- * @param frac_indices: The array for storing N-dimensional grid indicies.
- * @param fracs: The array for storing the mass fractions. NOTE: The left most
- *               grid cell's mass fraction is simply (1 - frac[dim])
- */
-void frac_loop(const double **grid_props, const double **part_props, int p,
-               const int ndim, const int *dims, const int npart,
-               int *frac_indices, double *fracs) {
-
-  /* Loop over dimensions. */
-  for (int dim = 0; dim < ndim; dim++) {
-
-    /* Get this array of grid properties */
-    const double *grid_prop = grid_props[dim];
-
-    /* Get this particle property. */
-    const double part_val = part_props[dim][p];
-
-    /**************************************************************************
-     * Get the cells corresponding to this particle and compute the fraction.
-     *************************************************************************/
-
-    /* Define the starting indices. */
-    int low = 0, high = dims[dim] - 1;
-
-    /* Here we need to handle if we are outside the range of values. If so
-     * there's no point in searching and we return the edge nearest to the
-     * value. */
-    if (part_val <= grid_prop[low]) {
-      low = 0;
-      fracs[dim] = 0;
-    } else if (part_val > grid_prop[high]) {
-      low = dims[dim];
-      fracs[dim] = 0;
-    } else {
-
-      /* Find the grid index corresponding to this particle property. */
-      low = binary_search(low, high, grid_prop, part_val);
-      high = low + 1;
-
-      /* Calculate the fraction. Note, this represents the mass fraction in
-       * the high cell. */
-      fracs[dim] =
-          (part_val - grid_prop[low]) / (grid_prop[high] - grid_prop[low]);
-    }
-
-    /* Set these indices. */
-    frac_indices[dim] = low;
-  }
-}
-
-/**
- * @brief This calculates the grid weights in each grid cell.
- *
- * To do this for an N-dimensional array this is done recursively one dimension
- * at a time.
- *
  * @param mass: The mass of the current particle.
- * @param sub_indices: The indices in the 2**ndim subset of grid points being
- *                     computed in the current recursion (entries are 0 or 1).
- * @param frac_indices: The array for storing N-dimensional grid indicies.
- * @param low_indices: The index of the bottom corner grid point.
  * @param grid_spectra: The grid of SPS spectra.
- * @param fracs: The array for storing the mass fractions. NOTE: The left most
- *               grid cell's mass fraction is simply (1 - frac[dim])
- * @param dim: The current dimension in the recursion.
  * @param dims: The length of each grid dimension.
  * @param ndim: The number of grid dimensions.
  * @param spectra: The array of particle spectra.
@@ -165,38 +34,101 @@ void frac_loop(const double **grid_props, const double **part_props, int p,
  * @param fesc: The escape fraction.
  * @param p: The index of the current particle.
  */
-void recursive_spectra_loop(const double mass, short int *sub_indices,
-                            int *frac_indices, int *low_indices,
-                            const double *grid_spectra, double *fracs, int dim,
-                            const int *dims, const int ndim, double *spectra,
-                            const int nlam, const double fesc, const int p) {
+void spectra_loop_cic(const double **grid_props, const double **part_props,
+                      const double mass, const double *grid_spectra,
+                      const int *dims, const int ndim, double *spectra,
+                      const int nlam, const double fesc, const int p) {
 
-  /* Are we done yet? */
-  if (dim >= ndim) {
+  /* Setup the index and mass fraction arrays. */
+  int part_indices[ndim];
+  double axis_fracs[ndim];
 
-    /* Get the flattened index into the grid array. */
-    const int grid_ind = get_flat_index(frac_indices, dims, ndim);
+  /* Loop over dimensions finding the mass weightings and indicies. */
+  for (int dim = 0; dim < ndim; dim++) {
 
-    /* Check whether we need a weight in this cell. */
-    for (int i = 0; i < ndim; i++) {
-      if ((sub_indices[i] == 1 && fracs[i] == 0 && frac_indices[i] == 0) ||
-          (sub_indices[i] == 1 && fracs[i] == 0 &&
-           frac_indices[i] == dims[i])) {
-        return;
-      }
+    /* Get this array of grid properties for this dimension */
+    const double *grid_prop = grid_props[dim];
+
+    /* Get this particle property. */
+    const double part_val = part_props[dim][p];
+
+    /* Here we need to handle if we are outside the range of values. If so
+     * there's no point in searching and we return the edge nearest to the
+     * value. */
+    int part_cell;
+    double frac;
+    if (part_val <= grid_prop[0]) {
+
+      /* Use the grid edge. */
+      part_cell = 0;
+      frac = 1;
+
+    } else if (part_val > grid_prop[dims[dim] - 1]) {
+
+      /* Use the grid edge. */
+      part_cell = dims[dim] - 1;
+      frac = 1;
+
+    } else {
+
+      /* Find the grid index corresponding to this particle property. */
+      part_cell =
+          binary_search(/*low*/ 0, /*high*/ dims[dim] - 1, grid_prop, part_val);
+
+      /* Calculate the fraction. Note, here we do the "low" cell, the cell
+       * above is calculated from this fraction. */
+      frac = (grid_prop[part_cell] - part_val) /
+             (grid_prop[part_cell] - grid_prop[part_cell - 1]);
     }
 
-    /* Compute the weight. */
-    double weight = mass;
-    for (int i = 0; i < ndim; i++) {
+    /* Set the fraction for this dimension. */
+    axis_fracs[dim] = (1 - frac);
 
-      /* Account for the fractional contribution in this grid cell. */
-      if (sub_indices[i]) {
-        weight *= fracs[i];
+    /* Set this index. */
+    part_indices[dim] = part_cell;
+  }
+
+  /* To combine fractions we will need an array of dimensions for the subset.
+   * These are always two in size, one for the low and one for high grid
+   * point. */
+  int sub_dims[ndim];
+  for (int idim = 0; idim < ndim; idim++) {
+    sub_dims[idim] = 2;
+  }
+
+  /* Now loop over this collection of cells collecting and setting their
+   * weights. */
+  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+
+    /* Set up some index arrays we'll need. */
+    int subset_ind[ndim];
+    int frac_ind[ndim];
+
+    /* Get the multi-dimensional version of icell. */
+    get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
+
+    /* Multiply all contributing fractions and get the fractions index
+     * in the grid. */
+    double frac = 1;
+    for (int idim = 0; idim < ndim; idim++) {
+      if (subset_ind[idim] == 0) {
+        frac *= (1 - axis_fracs[idim]);
+        frac_ind[idim] = part_indices[idim] - 1;
       } else {
-        weight *= (1 - fracs[i]);
+        frac *= axis_fracs[idim];
+        frac_ind[idim] = part_indices[idim];
       }
     }
+
+    /* Early skip for cells contributing a 0 fraction. */
+    if (frac <= 0)
+      continue;
+
+    /* We have a contribution, get the flattened index into the grid array. */
+    const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+
+    /* Define the weight. */
+    double weight = mass * frac;
 
     /* Get the spectra ind. */
     int unraveled_ind[ndim + 1];
@@ -211,24 +143,82 @@ void recursive_spectra_loop(const double mass, short int *sub_indices,
       spectra[p * nlam + ilam] +=
           grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight;
     }
+  }
+}
 
-    /* We're done! */
-    return;
+/**
+ * @brief This calculates the spectra of a particle using a nearest grid point
+ *        approach.
+ *
+ * @param grid_props: An array of the properties along each grid axis.
+ * @param part_props: An array of the particle properties, in the same property
+ *                    order as grid props.
+ * @param mass: The mass of the current particle.
+ * @param grid_spectra: The grid of SPS spectra.
+ * @param dims: The length of each grid dimension.
+ * @param ndim: The number of grid dimensions.
+ * @param spectra: The array of particle spectra.
+ * @param nlam: The number of wavelength elements.
+ * @param fesc: The escape fraction.
+ * @param p: The index of the current particle.
+ */
+void spectra_loop_ngp(const double **grid_props, const double **part_props,
+                      const double mass, const double *grid_spectra,
+                      const int *dims, const int ndim, double *spectra,
+                      const int nlam, const double fesc, const int p) {
+
+  /* Setup the index array. */
+  int part_indices[ndim];
+
+  /* Loop over dimensions finding the indicies. */
+  for (int dim = 0; dim < ndim; dim++) {
+
+    /* Get this array of grid properties for this dimension */
+    const double *grid_prop = grid_props[dim];
+
+    /* Get this particle property. */
+    const double part_val = part_props[dim][p];
+
+    /* Here we need to handle if we are outside the range of values. If so
+     * there's no point in searching and we return the edge nearest to the
+     * value. */
+    int part_cell;
+    if (part_val <= grid_prop[0]) {
+
+      /* Use the grid edge. */
+      part_cell = 0;
+
+    } else if (part_val > grid_prop[dims[dim] - 1]) {
+
+      /* Use the grid edge. */
+      part_cell = dims[dim] - 1;
+
+    } else {
+
+      /* Find the grid index corresponding to this particle property. */
+      part_cell =
+          binary_search(/*low*/ 1, /*high*/ dims[dim] - 1, grid_prop, part_val);
+    }
+
+    /* Set the index. */
+    part_indices[dim] = part_cell;
   }
 
-  /* Loop over this dimension */
-  for (int i = 0; i < ndim; i++) {
+  /* Get the weight's index. */
+  const int grid_ind = get_flat_index(part_indices, dims, ndim);
 
-    /* Where are we in the sub_array? */
-    sub_indices[dim] = i;
+  /* Get the spectra ind. */
+  int unraveled_ind[ndim + 1];
+  get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+  unraveled_ind[ndim] = 0;
+  int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
 
-    /* Where are we in the grid array? */
-    frac_indices[dim] = low_indices[dim] + i;
+  /* Add this grid cell's contribution to the spectra */
+  for (int ilam = 0; ilam < nlam; ilam++) {
 
-    /* Recurse... */
-    recursive_spectra_loop(mass, sub_indices, frac_indices, low_indices,
-                           grid_spectra, fracs, dim + 1, dims, ndim, spectra,
-                           nlam, fesc, p);
+    /* Add the contribution to this wavelength. */
+    spectra[p * nlam + ilam] +=
+        grid_spectra[spectra_ind + ilam] * (1 - fesc) * mass;
   }
 }
 
@@ -254,10 +244,11 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   const PyObject *grid_tuple, *part_tuple;
   const PyArrayObject *np_grid_spectra;
   const PyArrayObject *np_part_mass, *np_ndims;
+  const char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOdOiii", &np_grid_spectra, &grid_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOdOiiis", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &fesc, &np_ndims, &ndim,
-                        &npart, &nlam))
+                        &npart, &nlam, &method))
     return NULL;
 
   /* Quick check to make sure our inputs are valid. */
@@ -280,9 +271,6 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* Extract a pointer to the particle masses. */
   const double *part_mass = PyArray_DATA(np_part_mass);
-
-  /* Compute the number of weights we need. */
-  const int nweights = pow(2, ndim) + 0.1;
 
   /* Allocate a single array for grid properties*/
   int nprops = 0;
@@ -324,44 +312,29 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     part_props[idim] = part_arr;
   }
 
-  /* Set up arrays to store grid indices for the weights, mass fractions
-   * and indices.
-   * NOTE: the wavelength index on frac_indices is always 0. */
-  double fracs[ndim];
-  int frac_indices[ndim];
-  int low_indices[ndim];
-  short int sub_indices[ndim];
-
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
-
-    /* Reset arrays. */
-    for (int ind = 0; ind < ndim; ind++) {
-      fracs[ind] = 0;
-      sub_indices[ind] = 0;
-    }
-    for (int ind = 0; ind < ndim; ind++) {
-      frac_indices[ind] = 0;
-      low_indices[ind] = 0;
-    }
 
     /* Get this particle's mass. */
     const double mass = part_mass[p];
 
-    /* Compute grid indices and the mass faction in each grid cell. */
-    frac_loop(grid_props, part_props, p, ndim, dims, npart, frac_indices,
-              fracs);
-
-    /* Make a copy of the indices of the fraction to keep track of the initial
-     * indices during recursion. */
-    for (int ind = 0; ind < ndim; ind++) {
-      low_indices[ind] = frac_indices[ind];
+    /* Finally, compute the spectra for this particle using the
+     * requested method. */
+    if (strcmp(method, "cic") == 0) {
+      spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
+                       spectra, nlam, fesc, p);
+    } else if (strcmp(method, "ngp") == 0) {
+      spectra_loop_ngp(grid_props, part_props, mass, grid_spectra, dims, ndim,
+                       spectra, nlam, fesc, p);
+    } else {
+      /* Only print this warning once */
+      if (p == 0)
+        printf(
+            "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
+            method);
+      spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
+                       spectra, nlam, fesc, p);
     }
-
-    /* Finally, compute the weights for this particle. */
-    recursive_spectra_loop(mass, sub_indices, frac_indices, low_indices,
-                           grid_spectra, fracs, /*dim*/ 0, dims, ndim, spectra,
-                           nlam, fesc, p);
   }
 
   /* Clean up memory! */
