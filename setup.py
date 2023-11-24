@@ -121,6 +121,7 @@ class BuildExt(build_ext):
 src_files = {
     "synthesizer.extensions.integrated_spectra": "src/synthesizer/extensions/integrated_spectra.c",
     "synthesizer.extensions.particle_spectra": "src/synthesizer/extensions/particle_spectra.c",
+    "synthesizer.extensions.sfzh": "src/synthesizer/extensions/sfzh.c",
     "synthesizer.extensions.los": "src/synthesizer/extensions/los.c",
     "synthesizer.imaging.extensions.spectral_cube": "src/synthesizer/imaging/extensions/spectral_cube.c",
     "synthesizer.imaging.extensions.image": "src/synthesizer/imaging/extensions/image.c",

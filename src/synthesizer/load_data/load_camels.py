@@ -24,7 +24,7 @@ def _load_CAMELS(
     g_hsml,
     star_forming,
     redshift,
-    dtm=0.3
+    dtm=0.3,
 ):
     """
     Load CAMELS galaxies into a galaxy object
@@ -78,24 +78,24 @@ def _load_CAMELS(
         galaxies[i].redshift = redshift
 
         galaxies[i].load_stars(
-            imasses[b:e],
-            ages[b:e],
+            imasses[b:e] * Msun,
+            ages[b:e] * yr,
             metals[b:e],
             s_oxygen=s_oxygen[b:e],
             s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :],
-            current_masses=masses[b:e],
+            coordinates=coods[b:e, :] * kpc,
+            current_masses=masses[b:e] * Msun,
             smoothing_lengths=s_hsml[b:e] * kpc,
         )
 
     begin, end = get_len(lens[:, 0])
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i].load_gas(
-            coordinates=g_coods[b:e],
-            masses=g_masses[b:e],
+            coordinates=g_coods[b:e] * kpc,
+            masses=g_masses[b:e] * Msun,
             metals=g_metallicities[b:e],
             star_forming=star_forming[b:e],
-            smoothing_lengths=g_hsml[b:e],
+            smoothing_lengths=g_hsml[b:e] * kpc,
             dust_to_metal_ratio=dtm,
         )
 
@@ -109,7 +109,7 @@ def load_CAMELS_IllustrisTNG(
     fof_dir=None,
     verbose=False,
     dtm=0.3,
-    physical=True
+    physical=True,
 ):
     """
     Load CAMELS-IllustrisTNG galaxies
@@ -152,7 +152,7 @@ def load_CAMELS_IllustrisTNG(
         g_hsml = hf["PartType0/SubfindHsml"][:]
 
         scale_factor = hf["Header"].attrs["Time"]
-        redshift = 1. / scale_factor - 1
+        redshift = 1.0 / scale_factor - 1
         Om0 = hf["Header"].attrs["Omega0"]
         h = hf["Header"].attrs["HubbleParam"]
 
@@ -238,7 +238,7 @@ def load_CAMELS_Astrid(
     snap_name="snap_090.hdf5",
     fof_name="fof_subhalo_tab_090.hdf5",
     fof_dir=None,
-    dtm=0.3
+    dtm=0.3,
 ):
     """
     Load CAMELS-Astrid galaxies
@@ -316,7 +316,7 @@ def load_CAMELS_Astrid(
         g_metallicities=g_metals,
         g_hsml=g_hsml,
         star_forming=star_forming,
-        dtm=dtm
+        dtm=dtm,
     )
 
 
@@ -325,7 +325,7 @@ def load_CAMELS_Simba(
     snap_name="snap_033.hdf5",
     fof_name="fof_subhalo_tab_033.hdf5",
     fof_dir=None,
-    dtm=0.3
+    dtm=0.3,
 ):
     """
     Load CAMELS-SIMBA galaxies
