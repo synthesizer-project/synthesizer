@@ -246,7 +246,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   const PyArrayObject *np_part_mass, *np_ndims;
   const char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOdOiii", &np_grid_spectra, &grid_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOdOiiis", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &fesc, &np_ndims, &ndim,
                         &npart, &nlam, &method))
     return NULL;
