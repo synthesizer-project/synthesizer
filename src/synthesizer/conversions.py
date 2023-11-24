@@ -39,13 +39,13 @@ def flux_to_luminosity(flux, cosmo, redshift):
             The converted luminosity.
 
     Raises:
-        MissingUnits
+        IncorrectUnits
             If units are missing an error is raised.
     """
 
     # Ensure we have units
     if not has_units(flux):
-        raise exceptions.MissingUnits("Flux must be given with unyt units.")
+        raise exceptions.IncorrectUnits("Flux must be given with unyt units.")
 
     # Calculate the luminosity distance (need to convert from astropy to unyt)
     lum_dist = cosmo.luminosity_distance(redshift).to("cm").value * cm
@@ -72,13 +72,13 @@ def fnu_to_apparent_mag(fnu):
             The apparent magnitude.
 
     Raises:
-        MissingUnits
+        IncorrectUnits
             If units are missing an error is raised.
     """
 
     # Ensure we have units
     if not has_units(fnu):
-        raise exceptions.MissingUnits("fnu must be given with unyt units.")
+        raise exceptions.IncorrectUnits("fnu must be given with unyt units.")
 
     return -2.5 * np.log10(fnu / (10**9 * nJy)) + 8.9
 
@@ -117,15 +117,15 @@ def flam_to_fnu(lam, flam):
             The flux in terms of frequency.
 
     Raises:
-        MissingUnits
+        IncorrectUnits
             If units are missing an error is raised.
     """
 
     # Ensure we have units
     if not has_units(flam):
-        raise exceptions.MissingUnits("flam must be given with unyt units.")
+        raise exceptions.IncorrectUnits("flam must be given with unyt units.")
     if not has_units(lam):
-        raise exceptions.MissingUnits("lam must be given with unyt units.")
+        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
 
     # Delta lambda
     lam_m = lam * 10**-10
@@ -149,15 +149,15 @@ def fnu_to_flam(lam, fnu):
             The flux in terms of wavlength.
 
     Raises:
-        MissingUnits
+        IncorrectUnits
             If units are missing an error is raised.
     """
 
     # Ensure we have units
     if not has_units(fnu):
-        raise exceptions.MissingUnits("fnu must be given with unyt units.")
+        raise exceptions.IncorrectUnits("fnu must be given with unyt units.")
     if not has_units(lam):
-        raise exceptions.MissingUnits("lam must be given with unyt units.")
+        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
 
     # Delta lambda
     lam_m = lam * 1e-10
@@ -195,13 +195,13 @@ def lnu_to_absolute_mag(lnu):
             The absolute magnitude.
 
     Raises:
-        MissingUnits
+        IncorrectUnits
             If units are missing an error is raised.
     """
 
     # Enusre we have units
     if not has_units(lnu):
-        raise exceptions.MissingUnits("lnu must be given with unyt units.")
+        raise exceptions.IncorrectUnits("lnu must be given with unyt units.")
 
     # Define the distance modulus at 10 pcs
     dist_mod = 4 * np.pi * ((10 * pc).to("cm").value * cm) ** 2
