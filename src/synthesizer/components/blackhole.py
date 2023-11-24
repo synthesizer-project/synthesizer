@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from unyt import Myr, deg, c, erg, s, Msun, unyt_quantity
 import inflect
 from copy import deepcopy
+from synthesizer.art import Art, get_centred_art
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.line import Line, LineCollection
@@ -135,8 +136,49 @@ class BlackholesComponent:
         # If inclination, calculate the cosine of the inclination, required by 
         # some models (e.g. AGNSED).
         if (self.inclination is not None):
-            self.consine_inclination = np.cos(
+            self.cosine_inclination = np.cos(
                 self.inclination.to('radian').value)
+            
+
+    def __str__(self):
+        """Function to print a basic summary of the BlackHoles object.
+
+        Returns a string containing the total mass formed and lists of the
+        available SEDs, lines, and images.
+
+        Returns
+            str
+                Summary string containing the total mass formed and lists of the
+                available SEDs, lines, and images.
+        """
+
+        # Define the width to print within
+        width = 80
+        pstr = ""
+        pstr += "-" * width + "\n"
+        pstr += "SUMMARY OF BLACKHOLE".center(width + 4) + "\n"
+        # pstr += get_centred_art(Art.blackhole, width) + "\n"
+
+        pstr += f"Number of blackholes: {self.mass.size} \n"
+
+        for attribute_id in ['mass',
+                             'accretion_rate',
+                             'accretion_rate_eddington',
+                             'bolometric_luminosity',
+                             'eddington_ratio',
+                             'bb_temperature',
+                             'eddington_luminosity',
+                             'spin',
+                             'epsilon',
+                             'inclination',
+                             'cosine_inclination',
+                             ]:
+            attr = getattr(self, attribute_id, None)
+            if attr is not None:
+                attr = np.round(attr, 3)
+                pstr += f'{attribute_id}: {attr} \n'
+
+        return pstr
 
     def calculate_bolometric_luminosity(self):
         """
@@ -232,25 +274,30 @@ class BlackholesComponent:
             elif priv_attr is not None:
                 emission_model_parameters[parameter] = priv_attr
     
-        # Loop over the blackholes associated to the model
-        for i, values in enumerate(zip(*[x for x in emission_model_parameters.values()])):
+        if self.mass.size > 1:
+            # Loop over the blackholes associated to the model
+            for i, values in enumerate(zip(*[x for x in emission_model_parameters.values()])):
 
-            # Create a dictionary of the parameters to be passed to the
-            # emission model.
-            parameters = dict(zip(emission_model_parameters.keys(), values))
+                # Create a dictionary of the parameters to be passed to the
+                # emission model.
+                parameters = dict(zip(emission_model_parameters.keys(), values))
 
-            # Get the parameters and spectra 
-            parameter_dict, spectra = emission_model.get_spectra(
-                spectra_ids=spectra_ids, **parameters
-                )
-            
-            if self.spectra is None:
-                # Necessary so not a pointer
-                self.spectra = deepcopy(spectra)
-            else:       
-                for spectra_id, spectra_ in spectra.items():
-                    self.spectra[spectra_id] = self.spectra[spectra_id].concat(
-                        spectra_)
-                    
+                # Get the parameters and spectra 
+                parameter_dict, spectra = emission_model.get_spectra(
+                    spectra_ids=spectra_ids, **parameters
+                    )
+                
+                if self.spectra is None:
+                    # Necessary so not a pointer
+                    self.spectra = deepcopy(spectra)
+                else:       
+                    for spectra_id, spectra_ in spectra.items():
+                        self.spectra[spectra_id] = self.spectra[spectra_id].concat(
+                            spectra_)
+        else:
+            parameter_dict, self.spectra = emission_model.get_spectra(
+                    spectra_ids=spectra_ids, **emission_model_parameters
+                   )
+
         return self.spectra
         
