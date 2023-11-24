@@ -29,7 +29,7 @@ grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
 # Define an arbitrary morphology to feed the imaging
-morph = Sersic2D(r_eff_kpc=1.0 * kpc, n=1.0, ellip=0.5, theta=35.0)
+morph = Sersic2D(r_eff=1.0 * kpc, sersic_index=1.0, ellipticity=0.5, theta=35.0)
 
 # Define the parameters of the star formation and metal enrichment histories
 stellar_mass = 1e10
