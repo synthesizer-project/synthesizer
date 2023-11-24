@@ -8,6 +8,8 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator as RGI
 from scipy.interpolate import NearestNDInterpolator as NNI
 
+from unyt import Msun, kpc, yr
+
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 from synthesizer.particle.stars import Stars as ParticleStars
@@ -183,7 +185,11 @@ def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
         print("Generating SED...")
 
     # Create stars object
-    stars = ParticleStars(initial_masses=p_imass, ages=p_age, metallicities=p_Z)
+    stars = ParticleStars(
+        initial_masses=p_imass * Msun,
+        ages=p_age * yr,
+        metallicities=p_Z
+    )
 
     if verbose:
         print("Creating galaxy object...")
