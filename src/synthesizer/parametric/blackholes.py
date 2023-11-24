@@ -14,6 +14,7 @@ Example usages:
 """
 import numpy as np
 from unyt import c, deg
+from synthesizer.parametric.morphology import PointSource
 from synthesizer.components import BlackholesComponent
 from synthesizer.units import Quantity
 from synthesizer import exceptions
@@ -56,9 +57,10 @@ class BlackHoles(BlackholesComponent):
                 models.
             spin (float)
                 The spin of the blackhole. Necessary for some disc models.
-            offset (array, float)
-                The (x,y) offsets of the blackhole relative to the stellar 
-                component.
+            offset (unyt_array, float)
+                The (x,y) offsets of the blackhole relative to the centre of 
+                the image. Units can be length or angle but should be 
+                consistent with the scene.
 
         """
 
@@ -75,22 +77,8 @@ class BlackHoles(BlackholesComponent):
         )
 
         # Initialise morphology using the in-built point-source class
+        self.morphology = PointSource(offset=offset)
 
-        self.morphology = 
-
-
-    def calculate_random_inclination(self):
-        """
-        Add random inclinations to blackholes.
-        TODO: move to the component level?
-        """
-
-        self.inclination = np.random.uniform(
-            low=0.,
-            high=np.pi/2.,
-            size=self.nparticles)
-        
-        self.cosine_inclination = np.cos(self.inclination)
 
 
 
