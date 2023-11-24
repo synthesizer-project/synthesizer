@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 
 from astropy.cosmology import FlatLambdaCDM
+from unyt import Msun, kpc, yr
 
 from ..particle.galaxy import Galaxy
 
@@ -97,13 +98,13 @@ def load_Simba(
         galaxies[i] = Galaxy()
 
         galaxies[i].load_stars(
-            imasses[b:e],
-            ages[b:e],
+            imasses[b:e] * Msun,
+            ages[b:e] * yr,
             metallicity[b:e],
             s_oxygen=s_oxygen[b:e],
             s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :],
-            current_masses=masses[b:e],
+            coordinates=coods[b:e, :] * kpc,
+            current_masses=masses[b:e] * Msun,
         )
 
     # get the gas particle begin / end indices
@@ -113,12 +114,12 @@ def load_Simba(
 
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i].load_gas(
-            coordinates=g_coods[b:e],
-            masses=g_masses[b:e],
+            coordinates=g_coods[b:e] * kpc,
+            masses=g_masses[b:e] * Msun,
             metals=g_metals[b:e],
             star_forming=star_forming[b:e],
-            smoothing_lengths=g_hsml[b:e],
-            dust_masses=g_dustmass[b:e],
+            smoothing_lengths=g_hsml[b:e] * kpc,
+            dust_masses=g_dustmass[b:e] * Msun,
         )
 
     return galaxies
