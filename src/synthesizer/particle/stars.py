@@ -417,7 +417,7 @@ class Stars(Particles, StarsComponent):
             ].size
 
             # How many particles lie above the grid limits?
-            n_above_age = self.log10ages[self.log10ages < grid.log10age[-1]].size
+            n_above_age = self.log10ages[self.log10ages > grid.log10age[-1]].size
             n_above_metal = self.metallicities[
                 self.metallicities > grid.metallicity[-1]
             ].size
@@ -450,16 +450,16 @@ class Stars(Particles, StarsComponent):
                 )
                 print(f"Of these:")
                 print(
-                    f"{n_below_age / self.nparticles:.2f}% have log10(ages/yr) > {grid.log10age[0]}"
+                    f"  {n_below_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[0]}"
                 )
                 print(
-                    f"{n_below_metal / self.nparticles:.2f}% have metallicities  < {grid.metallicity[0]}"
+                    f"  {n_below_metal / self.nparticles * 100:.2f}% have metallicities < {grid.metallicity[0]}"
                 )
                 print(
-                    f"{n_above_age / self.nparticles:.2f}% have log10(ages/yr) > {grid.log10age[-1]}"
+                    f"  {n_above_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[-1]}"
                 )
                 print(
-                    f"{n_above_metal / self.nparticles:.2f}% have metallicities  > {grid.metallicity[-1]}"
+                    f"  {n_above_metal / self.nparticles * 100:.2f}% have metallicities > {grid.metallicity[-1]}"
                 )
 
         # Get particle age masks
@@ -631,7 +631,7 @@ class Stars(Particles, StarsComponent):
             ].size
 
             # How many particles lie above the grid limits?
-            n_above_age = self.log10ages[self.log10ages < grid.log10age[-1]].size
+            n_above_age = self.log10ages[self.log10ages > grid.log10age[-1]].size
             n_above_metal = self.metallicities[
                 self.metallicities > grid.metallicity[-1]
             ].size
@@ -664,16 +664,16 @@ class Stars(Particles, StarsComponent):
                 )
                 print(f"Of these:")
                 print(
-                    f"{n_below_age / self.nparticles:.2f}% have log10(ages/yr) < {grid.log10age[0]}"
+                    f"  {n_below_age / self.nparticles * 100:.2f}% have log10(ages/yr) < {grid.log10age[0]}"
                 )
                 print(
-                    f"{n_below_metal / self.nparticles:.2f}% have metallicities  < {grid.metallicity[0]}"
+                    f"  {n_below_metal / self.nparticles * 100:.2f}% have metallicities < {grid.metallicity[0]}"
                 )
                 print(
-                    f"{n_above_age / self.nparticles:.2f}% have log10(ages/yr) > {grid.log10age[-1]}"
+                    f"  {n_above_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[-1]}"
                 )
                 print(
-                    f"{n_above_metal / self.nparticles:.2f}% have metallicities  > {grid.metallicity[-1]}"
+                    f"  {n_above_metal / self.nparticles * 100:.2f}% have metallicities > {grid.metallicity[-1]}"
                 )
 
         # Get particle age masks
