@@ -360,7 +360,7 @@ class Stars(Particles, StarsComponent):
         young=False,
         old=False,
         verbose=False,
-        do_grid_check=True,
+        do_grid_check=False,
         grid_assignment_method="cic",
     ):
         """
@@ -574,7 +574,7 @@ class Stars(Particles, StarsComponent):
         young=False,
         old=False,
         verbose=False,
-        do_grid_check=True,
+        do_grid_check=False,
         grid_assignment_method="cic",
     ):
         """
