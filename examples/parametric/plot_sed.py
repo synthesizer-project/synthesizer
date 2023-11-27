@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
     # create a galaxy object
     galaxy = Galaxy(stars)
-
+    
     # generate pure stellar spectra alone
     galaxy.stars.get_spectra_incident(grid)
     print("Pure stellar spectra")
