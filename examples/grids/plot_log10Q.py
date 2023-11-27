@@ -5,14 +5,14 @@ Plot ionising luminosity
 Makes a plot of the specific ionising luminosity for a given choice of grid
 and ion. 
 """
-
 import argparse
 import matplotlib.pyplot as plt
+
 from synthesizer.grid import Grid
-from synthesizer.plots import plot_log10Q
+
 
 if __name__ == "__main__":
-    # Get the location of this script, __file__ is the absolute path of this 
+    # Get the location of this script, __file__ is the absolute path of this
     # script, however we just want to directory
     # script_path = os.path.abspath(os.path.dirname(__file__))
 
@@ -30,14 +30,12 @@ if __name__ == "__main__":
 
     # The name of the grid. Defaults to the test grid.
     parser.add_argument(
-        "-grid_name", "--grid_name", type=str, required=False, 
-        default="test_grid"
+        "-grid_name", "--grid_name", type=str, required=False, default="test_grid"
     )
 
     # The path to the grid directory. Defaults to the test grid directory.
     parser.add_argument(
-        "-grid_dir", "--grid_dir", type=str, required=False, 
-        default=test_grid_dir
+        "-grid_dir", "--grid_dir", type=str, required=False, default=test_grid_dir
     )
 
     # The desired ion.
@@ -50,5 +48,5 @@ if __name__ == "__main__":
     grid = Grid(args.grid_name, grid_dir=args.grid_dir)
 
     # plot grid of HI ionising luminosities
-    fig, ax = plot_log10Q(grid, ion=args.ion)
+    fig, ax = grid.plot_specific_ionising_lum(ion=args.ion)
     plt.show()
