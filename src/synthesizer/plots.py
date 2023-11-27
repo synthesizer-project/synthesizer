@@ -1,24 +1,10 @@
+""" A module containing miscellaneous plotting functions.
+"""
 import numpy as np
 import cmasher as cmr
 import matplotlib as mpl
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-
-from .plt import mlabel
-
-
-def plot_spectra(sed):
-    """
-    Plot a single spectra
-    """
-
-    plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8)
-    plt.xlim([2.0, 4.0])
-    plt.ylim([18.0, 23])
-    plt.legend(fontsize=8, labelspacing=0.0)
-    plt.xlabel(r"$\rm log_{10}(\lambda/\AA)$")
-    plt.ylabel(r"$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$")
-    plt.show()
 
 
 def plot_log10Q(
@@ -32,7 +18,8 @@ def plot_log10Q(
     max_log10age=9.0,
 ):
     """
-    Make a simple plot of the specific ionsing photon luminosity as a function of log10age and metallicity for a given grid and ion.
+    Make a simple plot of the specific ionsing photon luminosity as a function
+    of log10age and metallicity for a given grid and ion.
 
     Parameters
     ----------
