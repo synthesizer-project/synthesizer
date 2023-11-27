@@ -600,8 +600,8 @@ class Stars(StarsComponent):
         haxx.set_xlim(self.log10ages_lims)
 
         # Set labels
-        ax.set_xlabel("$\log_{10}(\mathrm{age}/\mathrm{yr})$")
-        ax.set_ylabel("$\log_{10}Z$")
+        ax.set_xlabel(r"$\log_{10}(\mathrm{age}/\mathrm{yr})$")
+        ax.set_ylabel(r"$\log_{10}Z$")
 
         # Set the limits so all axes line up
         ax.set_ylim(*self.log10metallicities_lims)
