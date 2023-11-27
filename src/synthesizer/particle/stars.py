@@ -28,7 +28,7 @@ from synthesizer.components import StarsComponent
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.line import Line, LineCollection
 from synthesizer.particle.particles import Particles
-from synthesizer.plt import single_histxy, mlabel
+from synthesizer.plt import single_histxy
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 from synthesizer import exceptions
