@@ -546,6 +546,7 @@ class Grid:
 
         return Line(line_id, wavelength, luminosity, continuum)
 
+
     def get_lines(self, grid_point, line_ids=None):
         """
         Function a LineCollection of multiple lines.
@@ -700,3 +701,22 @@ class Grid:
         ax.set_ylabel("$Z$")
 
         return fig, ax
+        
+    def get_delta_lambda(self, spectra_id="incident"):
+       """
+       Calculates the delta lambda for the given spectra.
+
+       Args:
+           spectra_id (str) 
+               Identifier for the spectra (default is "incident").
+
+       Returns:
+           tuple 
+               A tuple containing the list of wavelengths and delta lambda.
+       """
+
+       # Calculate delta lambda for each wavelength
+       delta_lambda = np.log10(self.lam[1:]) - np.log10(self.lam[:-1])
+        
+       # Return tuple of wavelengths and delta lambda
+       return self.lam, delta_lambda
