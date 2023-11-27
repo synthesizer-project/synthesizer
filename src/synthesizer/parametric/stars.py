@@ -23,7 +23,7 @@ from synthesizer import exceptions
 from synthesizer.components import StarsComponent
 from synthesizer.line import Line
 from synthesizer.stats import weighted_median, weighted_mean
-from synthesizer.plt import single_histxy, mlabel
+from synthesizer.plt import single_histxy
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.units import Quantity
