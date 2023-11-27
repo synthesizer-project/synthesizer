@@ -410,6 +410,18 @@ class Stars(Particles, StarsComponent):
 
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
+            # How many particles lie below the grid limits?
+            n_below_age = self.log10ages[self.log10ages < grid.log10age[0]].size
+            n_below_metal = self.metallicities[
+                self.metallicities < grid.metallicity[0]
+            ].size
+
+            # How many particles lie above the grid limits?
+            n_above_age = self.log10ages[self.log10ages < grid.log10age[-1]].size
+            n_above_metal = self.metallicities[
+                self.metallicities > grid.metallicity[-1]
+            ].size
+
             # Check the fraction of particles outside of the grid (these will be
             # pinned to the edge of the grid) by finding those inside
             age_inside_mask = np.logical_and(
@@ -432,7 +444,23 @@ class Stars(Particles, StarsComponent):
 
             # Tell the user if there are particles outside the grid
             if ratio_out > 0:
-                print(f"{ratio_out * 100:.2f}% of particles lie outside the grid!")
+                print(
+                    f"{ratio_out * 100:.2f}% of particles lie outside the grid! "
+                    "These will be pinned at the grid limits."
+                )
+                print(f"Of these:")
+                print(
+                    f"{n_below_age / self.nparticles:.2f}% have log10(ages/yr)  < {grid.log10age[0]}"
+                )
+                print(
+                    f"{n_below_metal / self.nparticles:.2f}% have metallicities < {grid.metallicity[0]}"
+                )
+                print(
+                    f"{n_above_age / self.nparticles:.2f}% have log10(ages/yr)  > {grid.log10age[-1]}"
+                )
+                print(
+                    f"{n_above_metal / self.nparticles:.2f}% have metallicities > {grid.metallicity[-1]}"
+                )
 
         # Get particle age masks
         mask = self._get_masks(young, old)
@@ -596,6 +624,18 @@ class Stars(Particles, StarsComponent):
 
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
+            # How many particles lie below the grid limits?
+            n_below_age = self.log10ages[self.log10ages < grid.log10age[0]].size
+            n_below_metal = self.metallicities[
+                self.metallicities < grid.metallicity[0]
+            ].size
+
+            # How many particles lie above the grid limits?
+            n_above_age = self.log10ages[self.log10ages < grid.log10age[-1]].size
+            n_above_metal = self.metallicities[
+                self.metallicities > grid.metallicity[-1]
+            ].size
+
             # Check the fraction of particles outside of the grid (these will be
             # pinned to the edge of the grid) by finding those inside
             age_inside_mask = np.logical_and(
@@ -618,7 +658,23 @@ class Stars(Particles, StarsComponent):
 
             # Tell the user if there are particles outside the grid
             if ratio_out > 0:
-                print(f"{ratio_out * 100:.2f}% of particles lie outside the grid!")
+                print(
+                    f"{ratio_out * 100:.2f}% of particles lie outside the grid! "
+                    "These will be pinned at the grid limits."
+                )
+                print(f"Of these:")
+                print(
+                    f"{n_below_age / self.nparticles:.2f}% have log10(ages/yr)  < {grid.log10age[0]}"
+                )
+                print(
+                    f"{n_below_metal / self.nparticles:.2f}% have metallicities < {grid.metallicity[0]}"
+                )
+                print(
+                    f"{n_above_age / self.nparticles:.2f}% have log10(ages/yr)  > {grid.log10age[-1]}"
+                )
+                print(
+                    f"{n_above_metal / self.nparticles:.2f}% have metallicities > {grid.metallicity[-1]}"
+                )
 
         # Get particle age masks
         mask = self._get_masks(young, old)
