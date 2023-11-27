@@ -1,7 +1,7 @@
 import h5py
 import numpy as np
 import unyt
-from unyt import c, h, nJy, erg, s, Hz, pc, kb
+from unyt import c, h, nJy, erg, s, Hz, pc, kb, unyt_array, unyt_quantity
 
 
 def write_data_h5py(filename, name, data, overwrite=False):
@@ -14,8 +14,7 @@ def write_data_h5py(filename, name, data, overwrite=False):
                 del h5file[name]
                 h5file[name] = data
             else:
-                raise ValueError("Dataset already exists, "
-                                 + "and `overwrite` not set")
+                raise ValueError("Dataset already exists, " + "and `overwrite` not set")
         else:
             h5file.create_dataset(name, data=data)
 
@@ -190,11 +189,11 @@ def Lnu_to_M(Lnu_):
 def planck(nu, T):
     """
     Planck's law.
-        
+
     Args:
         nu (unyt_array/array-like, float)
             The frequencies at which to calculate the distribution.
-        T  (float/array-like, float)     
+        T  (float/array-like, float)
             The dust temperature. Either a single value or the same size
             as nu.
 
@@ -207,14 +206,13 @@ def planck(nu, T):
 
 
 def rebin_1d(a, i, func=np.sum):
-
     """
     A simple function for rebinning a 1D array using a specificed
     function (e.g. sum or mean).
 
     TODO: add exeption to make sure a is an 1D array and that i is an integer.
-    
-    Args: 
+
+    Args:
         a (ndarray)
             the input 1D array
         i (int)
@@ -224,14 +222,35 @@ def rebin_1d(a, i, func=np.sum):
 
 
     """
-    
+
     n = len(a)
 
     # if array is not the right size truncate it
     if n % i != 0:
-        a = a[:int(i * np.floor(n/i))]
+        a = a[: int(i * np.floor(n / i))]
 
     x = len(a) // i
     b = a.reshape(x, i)
 
     return func(b, axis=1)
+
+
+def has_units(x):
+    """
+    Check whether the passed variable has units, i.e. is a unyt_quanity or
+    unyt_array.
+
+    Args:
+        x (generic variable)
+            The variables to check.
+
+    Returns:
+        bool
+            True if the variable has units, False otherwise.
+    """
+
+    # Do the check
+    if isinstance(x, (unyt_array, unyt_quantity)):
+        return True
+
+    return False
