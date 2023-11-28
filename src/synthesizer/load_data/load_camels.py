@@ -15,7 +15,6 @@ def _load_CAMELS(
     metals,
     s_oxygen,
     s_hydrogen,
-    s_hsml,
     coods,
     masses,
     g_coods,
@@ -24,6 +23,7 @@ def _load_CAMELS(
     g_hsml,
     star_forming,
     redshift,
+    s_hsml=None,
     dtm=0.3,
 ):
     """
@@ -77,6 +77,11 @@ def _load_CAMELS(
         galaxies[i] = Galaxy()
         galaxies[i].redshift = redshift
 
+        if s_hsml is None:
+            smoothing_lengths = s_hsml
+        else:
+            smoothing_lengths = s_hsml[b:e] * kpc
+
         galaxies[i].load_stars(
             imasses[b:e] * Msun,
             ages[b:e] * yr,
@@ -85,7 +90,7 @@ def _load_CAMELS(
             s_hydrogen=s_hydrogen[b:e],
             coordinates=coods[b:e, :] * kpc,
             current_masses=masses[b:e] * Msun,
-            smoothing_lengths=s_hsml[b:e] * kpc,
+            smoothing_lengths=smoothing_lengths,
         )
 
     begin, end = get_len(lens[:, 0])
@@ -278,6 +283,7 @@ def load_CAMELS_Astrid(
         g_coods = hf["PartType0/Coordinates"][:]
         g_hsml = hf["PartType0/SmoothingLength"][:]
 
+        redshift = hf["Header"].attrs["Redshift"]
         scale_factor = hf["Header"].attrs["Time"][0]
         Om0 = hf["Header"].attrs["Omega0"][0]
         h = hf["Header"].attrs["HubbleParam"][0]
@@ -303,6 +309,7 @@ def load_CAMELS_Astrid(
         lens = hf["Subhalo/SubhaloLenType"][:]
 
     return _load_CAMELS(
+        redshift=redshift,
         lens=lens,
         imasses=imasses,
         ages=ages,
@@ -361,6 +368,7 @@ def load_CAMELS_Simba(
         g_coods = hf["PartType0/Coordinates"][:]
         g_hsml = hf["PartType0/SmoothingLength"][:]
 
+        redshift = hf["Header"].attrs["Redshift"]
         scale_factor = hf["Header"].attrs["Time"]
         Om0 = hf["Header"].attrs["Omega0"]
         h = hf["Header"].attrs["HubbleParam"]
@@ -387,6 +395,7 @@ def load_CAMELS_Simba(
         lens = hf["Subhalo/SubhaloLenType"][:]
 
     return _load_CAMELS(
+        redshift=redshift,
         lens=lens,
         imasses=imasses,
         ages=ages,
