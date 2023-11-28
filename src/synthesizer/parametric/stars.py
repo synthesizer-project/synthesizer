@@ -23,7 +23,7 @@ from synthesizer import exceptions
 from synthesizer.components import StarsComponent
 from synthesizer.line import Line
 from synthesizer.stats import weighted_median, weighted_mean
-from synthesizer.plt import single_histxy, mlabel
+from synthesizer.plt import single_histxy
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.units import Quantity
@@ -716,8 +716,8 @@ class Stars(StarsComponent):
         haxx.set_xlim(self.log10ages_lims)
 
         # Set labels
-        ax.set_xlabel(mlabel("log_{10}(age/yr)"))
-        ax.set_ylabel(mlabel("log_{10}Z"))
+        ax.set_xlabel(r"$\log_{10}(\mathrm{age}/\mathrm{yr})$")
+        ax.set_ylabel(r"$\log_{10}Z$")
 
         # Set the limits so all axes line up
         ax.set_ylim(*self.log10metallicities_lims)

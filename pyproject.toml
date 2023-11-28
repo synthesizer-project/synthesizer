@@ -89,7 +89,6 @@ dependencies = [
   "scipy",
   "unyt",
   "cmasher",
-  "dust_attenuation@git+https://github.com/karllark/dust_attenuation.git@v0.5.dev",
   "dust_extinction",
   "nbsphinx",
   "matplotlib",
