@@ -3,7 +3,7 @@
 When a spectra is computed from a `Galaxy` or a Galaxy component the resulting
 calculated spectra are stored in `Sed` objects. These provide helper functions
 for quick manipulation of the spectra. Seds can contain a single spectra or
-arbitrarily many with all methods capable of acting on both consistently.
+arbitrarily many, with all methods capable of acting on both consistently.
 
 Example usage:
 
@@ -852,7 +852,7 @@ class Sed:
 
     def measure_index(self, feature, blue, red):
         """
-        Measure an asorption feature index.
+        Measure an absorption feature index.
 
         Args:
             absorption (tuple)
@@ -932,19 +932,19 @@ class Sed:
 
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
         """
-        Resameple the spectra by either a integer or onto a provide wavelength
-        array.
-
+        Resample the spectra onto a new set of wavelength points.
+        
         This resampling can either be done by an integer number of wavelength
-        elements per original wavelength element or by providing a new
-        wavelength array to resample on to.
+        elements per original wavelength element (i.e. up sampling),
+        or by providing a new wavelength grid to resample on to.
 
-        NOTE: This only resamples the rest frame spectra. For fluxes get_fnu
+        NOTE: This only resamples the rest frame spectra. For fluxes, `get_fnu`
         must be called again after resampling.
 
         Args:
             resample_factor (int)
-                The number of wavelength elements to resample to.
+                The number of additional wavelength elements to
+                resample to.
             new_lam (array-like, float)
                 The wavelength array to resample onto.
 
