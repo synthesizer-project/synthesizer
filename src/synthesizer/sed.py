@@ -91,7 +91,11 @@ class Sed:
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
         else:
-            self.lnu = lnu
+            if isinstance(lnu, (list, np.ndarray))
+                self.lnu = np.asarray(lnu)
+            else:
+                raise ValueError(('`lnu` must be a list, list of lists, '
+                                  'or N-d numpy array')
 
         # Calculate frequency
         self.nu = (c / (self.lam)).to("Hz").value  # Hz
