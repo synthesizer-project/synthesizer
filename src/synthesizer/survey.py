@@ -8,7 +8,7 @@ from astropy.cosmology import Planck18
 import synthesizer.exceptions as exceptions
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
-from synthesizer.utils import m_to_fnu, flux_to_luminosity
+from synthesizer.conversions import apparent_mag_to_fnu, flux_to_luminosity
 from synthesizer.sed import Sed
 from synthesizer.igm import Inoue14
 
@@ -285,12 +285,12 @@ class Survey:
         for inst in self.instruments:
             if isinstance(self.instruments[inst].depths, dict):
                 for key in self.instruments[inst].depths:
-                    flux = m_to_fnu(self.instruments[inst].depths[key])
+                    flux = apparent_mag_to_fnu(self.instruments[inst].depths[key])
                     self.instruments[inst].depths[key] = flux_to_luminosity(
                         flux, self.cosmo, redshift
                     )
             else:
-                flux = m_to_fnu(self.instruments[inst].depths)
+                flux = apparent_mag_to_fnu(self.instruments[inst].depths)
                 self.instruments[inst].depths = flux_to_luminosity(
                     flux, self.cosmo, redshift
                 )
@@ -305,11 +305,13 @@ class Survey:
         for inst in self.instruments:
             if isinstance(self.instruments[inst].depths, dict):
                 for key in self.instruments[inst].depths:
-                    self.instruments[inst].depths[key] = m_to_fnu(
+                    self.instruments[inst].depths[key] = apparent_mag_to_fnu(
                         self.instruments[inst].depths[key]
                     )
             else:
-                self.instruments[inst].depths = m_to_fnu(self.instruments[inst].depths)
+                self.instruments[inst].depths = apparent_mag_to_fnu(
+                    self.instruments[inst].depths
+                )
 
     def get_spectra(self, grid, spectra_type, redshift=None, igm=None, rest_frame=True):
         """
