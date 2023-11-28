@@ -28,7 +28,7 @@ from synthesizer.components import StarsComponent
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.line import Line, LineCollection
 from synthesizer.particle.particles import Particles
-from synthesizer.plt import single_histxy, mlabel
+from synthesizer.plt import single_histxy
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 from synthesizer import exceptions
@@ -1637,8 +1637,8 @@ class Stars(Particles, StarsComponent):
         haxx.set_xlim(log10ages[0], log10ages[-1])
 
         # Set labels
-        ax.set_xlabel(mlabel("log_{10}(age/yr)"))
-        ax.set_ylabel(mlabel("log_{10}Z"))
+        ax.set_xlabel(r"$\log_{10}(\mathrm{age}/\mathrm{yr})$")
+        ax.set_ylabel(r"$\log_{10}Z$")
 
         # Set the limits so all axes line up
         ax.set_ylim(log10metallicities[0], log10metallicities[-1])

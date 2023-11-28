@@ -20,7 +20,7 @@ from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
-from synthesizer.plt import single, single_histxy, mlabel
+from synthesizer.plt import single, single_histxy
 from unyt import yr, Myr, c, angstrom
 from synthesizer.igm import Madau96, Inoue14
 from astropy.cosmology import Planck18 as cosmo
