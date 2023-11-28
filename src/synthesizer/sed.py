@@ -84,7 +84,11 @@ class Sed:
         self.description = description
 
         # Set the wavelength
-        self.lam = lam  # \AA
+        if isinstance(lnu, (list, np.ndarray))
+            self.lam = np.asarray(lam)  # \AA
+        else:
+            raise ValueError(('`lam` must be a list, list of lists, '
+                              'or N-d numpy array')
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
