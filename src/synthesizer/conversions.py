@@ -1,14 +1,14 @@
 """ A module containing functions for conversions.
 
-This module contains helperful conversions for converting between different
-observables. This main covers conversions between flux, luminosity and
+This module contains helpful conversions for converting between different
+observables. This mainly covers conversions between flux, luminosity and
 magnitude systems.
 
 Example usage:
 
     lum = flux_to_luminosity(flux, cosmo, redshift)
     fnu = apparent_mag_to_fnu(m)
-    ab_mag = absolute_mag_to_lnu(M)
+    lnu = absolute_mag_to_lnu(M)
 
 """
 import numpy as np
@@ -23,7 +23,7 @@ def flux_to_luminosity(flux, cosmo, redshift):
     Converts flux to luminosity in erg / s / Hz.
 
     This can either be flux -> luminosity per wavelength/frequency (intensity)
-    or power since all units are handled automatically by unyt.
+    or power; all units are handled automatically.
 
     Args:
         flux (unyt_quantity/unyt_array)
@@ -61,7 +61,7 @@ def flux_to_luminosity(flux, cosmo, redshift):
 
 def fnu_to_apparent_mag(fnu):
     """
-    Converts flux to apparent magnitude.
+    Converts flux to apparent AB magnitude.
 
     Args:
         flux (unyt_quantity/unyt_array)
@@ -69,7 +69,7 @@ def fnu_to_apparent_mag(fnu):
 
     Returns:
         float
-            The apparent magnitude.
+            The apparent AB magnitude.
 
     Raises:
         IncorrectUnits
@@ -85,12 +85,12 @@ def fnu_to_apparent_mag(fnu):
 
 def apparent_mag_to_fnu(app_mag):
     """
-    Converts apparent magnitude to flux.
+    Converts apparent AB magnitude to flux.
 
     Args:
         app_mag (float)
-            The apparent magnitude to be converted, can either be a singular
-            value or array.
+            The apparent AB magnitude to be converted, can either be a 
+            singular value or array.
 
     Returns:
         unyt_quantity/unyt_array
@@ -103,18 +103,18 @@ def apparent_mag_to_fnu(app_mag):
 
 def flam_to_fnu(lam, flam):
     """
-    Converts flux in terms of wavelength (f_lam) to flux in terms of frequency
-    (f_nu).
+    Converts spectral flux in terms of wavelength (f_lam) to spectral flux
+    in terms of frequency (f_nu).
 
     Args:
         lam (unyt_quantity/unyt_array)
             The wavelength array the flux is defined at.
         flam (unyt_quantity/unyt_array)
-            The flux in terms of wavelength.
+            The spectral flux in terms of wavelength.
 
     Returns:
         unyt_quantity/unyt_array
-            The flux in terms of frequency.
+            The spectral flux in terms of frequency.
 
     Raises:
         IncorrectUnits
