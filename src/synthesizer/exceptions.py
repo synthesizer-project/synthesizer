@@ -3,9 +3,26 @@ The definitions for Synthesizer specific errors.
 """
 
 
+class MissingArgument(Exception):
+    """
+    Generic exception class for when an argument is missing.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Missing argument"
+
+
 class IncorrectUnits(Exception):
     """
-    Generic exception class for inconsistent parameters.
+    Generic exception class for when incorrect units are provided.
     """
 
     def __init__(self, *args):
@@ -18,6 +35,7 @@ class IncorrectUnits(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "Inconsistent or no units"
+
 
 class InconsistentParameter(Exception):
     """
