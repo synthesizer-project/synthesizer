@@ -1,6 +1,7 @@
-from ..observations import Image
 import numpy as np
 from numpy import histogram2d
+
+from synthesizer.imaging.images import Image
 
 
 class ImageGenerator:

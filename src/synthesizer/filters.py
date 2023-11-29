@@ -13,11 +13,14 @@ transmission curves:
     filt = Filter("generic/filter.1", transmission=trans, new_lam=lams)
     filt = Filter("top_hat/filter.1", lam_min=3000, lam_max=5500)
     filt = Filter("top_hat/filter.2", lam_eff=7000, lam_fwhm=2000)
-    filt = Filter("JWST/NIRCam.F200W", new_lam=lams)
-  
+    filt = Filter("JWST/NIRCam.F200W", new_lam=lams)  
     filters = FilterCollection(
-        filter_codes=fs, tophat_dict=tophats, generic_dict=generics, new_lam=lams
+        filter_codes=fs,
+        tophat_dict=tophats,
+        generic_dict=generics,
+        new_lam=lams
     )
+
 """
 import h5py
 import numpy as np
