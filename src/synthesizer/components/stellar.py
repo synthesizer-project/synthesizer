@@ -28,14 +28,6 @@ class StarsComponent:
 
     """
 
-    # Define slots
-    # __slots__ = [
-    #     "_ages",
-    #     "metallicities",
-    #     "spectra",
-    #     "lines",
-    # ]
-
     # Define quantities
     ages = Quantity()
 

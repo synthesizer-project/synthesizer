@@ -88,6 +88,7 @@ def galaxy(
         return ParametricGalaxy(
             stars=stars,
             redshift=redshift,
+            black_holes=black_holes,
             name=name,
         )
 
