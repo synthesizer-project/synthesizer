@@ -1,4 +1,6 @@
-""" An example showing how to scale a galaxies mass by luminosity/flux.
+""" 
+An example showing how to scale a galaxy's mass by luminosity/flux.
+===================================================================
 
 Parametric galaxies scale their brightness based on their initial stellar
 mass which is passed at instantiation. This example shows how a galaxy
