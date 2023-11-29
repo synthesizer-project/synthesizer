@@ -86,6 +86,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
     def __init__(self,
                  disc_model,
+                 photoionisation_model,
                  grid_dir,
                  bolometric_luminosity=None,
                  metallicity=None,
@@ -103,6 +104,16 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         """
         Arguments:
+
+            disc_model (str)
+                The disc_model to be used. The current test model is the AGNSED
+                model.
+            photoionisation_model (str)
+                The photoionisation model to be used. Normally this would be 
+                e.g. "cloudy_c17.03", for the test_grid this is "" (i.e. 
+                empty string).
+            grid_dir (str)
+                The path to the grid directory.
             bolometric_luminosity (float)
                 This is needed to rescale the spectra since the grid is likely
                 to be coarse. Defaults to None since it should be provided.
@@ -147,6 +158,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         
         # Save model and directory as attributes.
         self.disc_model = disc_model
+        self.photoionsation_model = photoionisation_model
         self.grid_dir = grid_dir
 
         # Save the torus model
@@ -182,7 +194,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         self.grid = {}
         for line_region in ['nlr', 'blr']:
             self.grid[line_region] = Grid(
-                grid_name=f'{disc_model}_cloudy-c17.03-{line_region}',
+                grid_name=f'{disc_model}{photoionisation_model}-{line_region}',
                 grid_dir=grid_dir,
                 read_lines=False)
         
