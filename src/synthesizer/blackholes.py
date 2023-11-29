@@ -66,7 +66,7 @@ class Template:
             # normalise
             # TODO: add a method to Sed that does this.
             self.normalisation = self.sed.measure_bolometric_luminosity()
-            self.sed.lnu /= normalisation
+            self.sed.lnu /= self.normalisation
 
     def get_spectra(self, bolometric_luminosity):
         """
