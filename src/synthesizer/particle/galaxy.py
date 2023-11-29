@@ -517,13 +517,13 @@ class Galaxy(BaseGalaxy):
             if self.sf_gas_mass is None:
                 raise ValueError("No sf_gas_mass provided")
             else:
-                sf_gas_mass = self.sf_gas_mass
+                sf_gas_mass = self.sf_gas_mass  # Msun
 
         if stellar_mass is None:
             if self.stellar_mass is None:
                 raise ValueError("No stellar_mass provided")
             else:
-                stellar_mass = self.stellar_mass.value  # Msun
+                stellar_mass = self.stellar_mass  # Msun
 
         if sf_gas_mass == 0.0:
             gamma = gamma_min
