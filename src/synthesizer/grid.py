@@ -18,9 +18,10 @@ from . import __file__ as filepath
 
 
 def check_lines_available(grid_name, grid_dir):
-    """Check that lines are available on this grid
+    """
+    Check that lines are available on this grid
 
-    Arguments:
+    Args:
         grid_name (str):
             The name of the grid file.
         grid_dir (str):
@@ -36,9 +37,10 @@ def check_lines_available(grid_name, grid_dir):
 
 
 def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
-    """Get a list of the lines available to a grid
+    """
+    Get a list of the lines available to a grid
 
-    Arguments:
+    Args:
         grid_name (str):
             The name of the grid file.
         grid_dir (str):
@@ -69,7 +71,7 @@ def flatten_linelist(list_to_flatten):
     Flatten a mixed list of lists and strings and remove duplicates. Used when
     converting a desired line list which may contain single lines and doublets.
 
-    Arguments:
+    Args:
         list_to_flatten (list)
             list containing lists and/or strings and integers
 
@@ -107,6 +109,10 @@ def parse_grid_id(grid_id):
     """
     This is used for parsing a grid ID to return the SPS model,
     version, and IMF
+
+    Args:
+        grid_id (str)
+            string grid identifier
     """
 
     if len(grid_id.split("_")) == 2:
