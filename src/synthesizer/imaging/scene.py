@@ -38,6 +38,8 @@ class Scene:
             The Astropy object containing the cosmological model.
         redshift (float)
             The redshift of the observation.
+        rest_frame (bool)
+            Is the scene in the rest or observer frame?
     """
 
     # Define slots to reduce memory overhead of this class and limit the
@@ -51,6 +53,7 @@ class Scene:
         "orig_npix",
         "cosmo",
         "redshift",
+        "rest_frame",
     ]
 
     # Define quantities

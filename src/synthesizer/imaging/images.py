@@ -91,25 +91,25 @@ class Image:
     # TODO: For some reason defining these slots cause a "TypeError: multiple
     # bases have instance lay-out conflict" error at import. I can't fathom
     # why! For now left commented out.
-    # __slots__ = [
-    #     "psfs",
-    #     "filters",
-    #     "img",
-    #     "img_psf",
-    #     "img_noise",
-    #     "imgs",
-    #     "imgs_psf",
-    #     "imgs_noise",
-    #     "rgb_image",
-    #     "combined_imgs",
-    #     "depths",
-    #     "snrs",
-    #     "apertures",
-    #     "weight_map",
-    #     "noise_arr",
-    #     "noise_arrs",
-    #     "weights_maps",
-    # ]
+    __slots__ = [
+        "psfs",
+        "filters",
+        "img",
+        "img_psf",
+        "img_noise",
+        "imgs",
+        "imgs_psf",
+        "imgs_noise",
+        "rgb_image",
+        "combined_imgs",
+        "depths",
+        "snrs",
+        "apertures",
+        "weight_map",
+        "noise_arr",
+        "noise_arrs",
+        "weights_maps",
+    ]
 
     def __init__(
         self,
