@@ -84,7 +84,7 @@ class Sed:
         self.description = description
 
         # Set the wavelength
-        if isinstance(lnu, (list, np.ndarray))
+        if isinstance(lnu, (list, np.ndarray)):
             self.lam = np.asarray(lam)  # \AA
         else:
             raise ValueError(('`lam` must be a list, list of lists, '
@@ -95,7 +95,7 @@ class Sed:
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
         else:
-            if isinstance(lnu, (list, np.ndarray))
+            if isinstance(lnu, (list, np.ndarray)):
                 self.lnu = np.asarray(lnu)
             else:
                 raise ValueError(('`lnu` must be a list, list of lists, '
