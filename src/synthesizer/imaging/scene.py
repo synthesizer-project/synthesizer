@@ -38,20 +38,9 @@ class Scene:
             The Astropy object containing the cosmological model.
         redshift (float)
             The redshift of the observation.
+        rest_frame (bool)
+            Is the scene in the rest or observer frame?
     """
-
-    # Define slots to reduce memory overhead of this class and limit the
-    # possible attributes.
-    __slots__ = [
-        "_resolution",
-        "_fov",
-        "npix",
-        "sed",
-        "_orig_resolution",
-        "orig_npix",
-        "cosmo",
-        "redshift",
-    ]
 
     # Define quantities
     resolution = Quantity()
@@ -313,18 +302,6 @@ class ParticleScene(Scene):
             If an incompatible combination of arguments is provided an error is
             raised.
     """
-
-    # Define slots to reduce memory overhead of this class
-    __slots__ = [
-        "_coordinates",
-        "_centre",
-        "pix_pos",
-        "npart",
-        "_smoothing_lengths",
-        "kernel",
-        "kernel_threshold",
-        "kernel_dim",
-    ]
 
     # Define quantities
     coordinates = Quantity()
