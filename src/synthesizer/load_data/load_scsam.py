@@ -18,13 +18,13 @@ from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 
 def load_SCSAM(fname, method, grid=None, verbose=False):
     """
-    Reads an SC-SAM sfhist_*-*.dat file.
-    Returns a list of galaxy objects, halo indices, and birth halo IDs
-    Adapted from code by Aaron Yung.
+    Reads an SC-SAM sfhist_\*-\*.dat file. Returns a list of galaxy
+    objects, halo indices, and birth halo IDs. Adapted from code
+    by Aaron Yung.
 
     Args:
         fname (str):
-            SC-SAM sfhist_*-*.dat file to be read
+            SC-SAM sfhist_\*-\*.dat file to be read
         method (str):
             'particle', 'parametric_NNI' or 'paremteric_RGI',
             depending on how you wish to model your SFZH.

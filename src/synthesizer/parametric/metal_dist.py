@@ -105,10 +105,10 @@ class DeltaConstant(Common):
     A single metallicity "distribution".
 
     Attributes:
-        metallicity_ (float)
+        metallicity (float)
             The single (linear) metallicity for all stellar mass in the
             distribution.
-        log10metallcity_ (float)
+        log10metallicity (float)
             The log base 10 of metallicity_.
     """
 

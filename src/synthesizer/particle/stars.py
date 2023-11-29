@@ -387,11 +387,11 @@ class Stars(Particles, StarsComponent):
                 Whether to check how many particles lie outside the grid. This
                 is True by default and provides a vital sanity check. There
                 are instances when you may want to turn this off:
-                    - You know particles will lie outside the grid and want
-                      this behaviour. In this case the check is redundant.
-                    - You know your particle lie within the grid but don't
-                      want to waste compute checking. This case is useful when
-                      working with large particle counts.
+                - You know particles will lie outside the grid and want
+                  this behaviour. In this case the check is redundant.
+                - You know your particle lie within the grid but don't
+                  want to waste compute checking. This case is useful when
+                  working with large particle counts.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest

@@ -1,15 +1,21 @@
+"""
+Utilities for data loading methods
+"""
+
 import numpy as np
+
 
 def get_len(Length):
     """
     Find the beginning and ending indices from a length array
+
     Args:
-        Length (array):
+        Length (array)
             array of number of particles
     Returns:
-        begin (array):
+        begin (array)
             beginning indices
-        end (array):
+        end (array)
             ending indices
     """
 
