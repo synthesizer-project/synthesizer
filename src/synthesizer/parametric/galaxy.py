@@ -16,8 +16,9 @@ class Galaxy(BaseGalaxy):
 
     def __init__(
         self,
-        stars,
+        stars=None,
         name="parametric galaxy",
+        black_holes=None,
         redshift=None,
     ):
         """__init__ method for ParametricGalaxy
@@ -51,7 +52,7 @@ class Galaxy(BaseGalaxy):
             self,
             stars=stars,
             gas=None,
-            black_holes=None,
+            black_holes=black_holes,
             redshift=redshift,
         )
 

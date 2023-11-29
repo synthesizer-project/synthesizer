@@ -35,6 +35,7 @@ from unyt import (
     km,
     Msun,
     K,
+    deg,
     unyt_quantity,
     unyt_array,
     dimensionless,
@@ -58,6 +59,9 @@ default_units = {
     "nuz": Hz,
     "original_nu": Hz,
     "luminosity": erg / s,
+    "luminosities": erg / s,
+    "bolometric_luminosity": erg / s,
+    "bolometric_luminosities": erg / s,
     "lnu": erg / s / Hz,
     "llam": erg / s / Angstrom,
     "continuum": erg / s / Hz,
@@ -68,6 +72,7 @@ default_units = {
     "smoothing_lengths": Mpc,
     "softening_length": Mpc,
     "velocities": km / s,
+    "mass": Msun.in_base("galactic"),
     "masses": Msun.in_base("galactic"),
     "initial_masses": Msun.in_base("galactic"),
     "initial_mass": Msun.in_base("galactic"),
@@ -75,8 +80,12 @@ default_units = {
     "dust_masses": Msun.in_base("galactic"),
     "ages": yr,
     "accretion_rate": Msun.in_base("galactic") / yr,
+    "accretion_rates": Msun.in_base("galactic") / yr,
     "bol_luminosity": erg / s,
     "bb_temperature": K,
+    "bb_temperatures": K,
+    "inclination": deg,
+    "inclinations": deg,
     "resolution": Mpc,
     "fov": Mpc,
     "orig_resolution": Mpc,
@@ -214,8 +223,18 @@ class Units(metaclass=UnitSingleton):
             Black hole accretion rate unit.
         bol_luminosity (unyt.unit_object.Unit)
             Bolometric luminositiy unit.
+        bolometric_luminosity (unyt.unit_object.Unit)
+            Bolometric luminositiy unit.
+        bolometric_luminosities (unyt.unit_object.Unit)
+            Bolometric luminositiy unit.
         bb_temperature (unyt.unit_object.Unit)
             Black hole big bump temperature unit.
+        bb_temperatures (unyt.unit_object.Unit)
+            Black hole big bump temperature unit.
+        inclination (unyt.unit_object.Unit)
+            Black hole inclination unit.
+        inclinations (unyt.unit_object.Unit)
+            Black hole inclination unit.
 
         resolution (unyt.unit_object.Unit)
             Image resolution unit.
@@ -265,6 +284,12 @@ class Units(metaclass=UnitSingleton):
 
         # Luminosities
         self.luminosity = erg / s  # luminosity
+        self.luminosities = erg / s
+        self.bol_luminosity = erg / s
+        self.bolometric_luminosity = erg / s
+        self.bolometric_luminosities = erg / s
+        self.eddington_luminosity = erg / s
+        self.eddington_luminosities = erg / s
         self.lnu = erg / s / Hz  # spectral luminosity density
         self.llam = erg / s / Angstrom  # spectral luminosity density
         self.continuum = erg / s / Hz  # continuum level of an emission line
@@ -285,6 +310,7 @@ class Units(metaclass=UnitSingleton):
         self.velocities = km / s
 
         # Masses
+        self.mass = Msun.in_base("galactic")
         self.masses = Msun.in_base("galactic")
         self.initial_masses = Msun.in_base(
             "galactic"
@@ -304,8 +330,11 @@ class Units(metaclass=UnitSingleton):
 
         # Black holes quantities
         self.accretion_rate = Msun.in_base("galactic") / yr
-        self.bol_luminosity = erg / s
+        self.accretion_rates = Msun.in_base("galactic") / yr
         self.bb_temperature = K
+        self.bb_temperatures = K
+        self.inclination = deg
+        self.inclinations = deg
 
         # Imaging quantities
         self.resolution = Mpc
