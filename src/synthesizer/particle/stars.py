@@ -80,7 +80,7 @@ class Stars(Particles, StarsComponent):
     """
 
     # Define the allowed attributes
-    __slots__ = [
+    attrs = [
         "nparticles",
         "tau_v",
         "alpha_enhancement",
@@ -238,7 +238,7 @@ class Stars(Particles, StarsComponent):
         """
 
         # Ensure all arrays are the expected length
-        for key in self.__slots__:
+        for key in self.attrs:
             attr = getattr(self, key)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
@@ -974,7 +974,7 @@ class Stars(Particles, StarsComponent):
             print("Duplicate existing attributes")
 
         # Handle the other propertys that need duplicating
-        for attr in Stars.__slots__:
+        for attr in Stars.attrs:
             # Skip unset attributes
             if getattr(self, attr) is None:
                 continue
@@ -991,7 +991,7 @@ class Stars(Particles, StarsComponent):
             print("Delete old particles")
 
         # Loop over attributes
-        for attr in Stars.__slots__:
+        for attr in Stars.attrs:
             # Skip unset attributes
             if getattr(self, attr) is None:
                 continue
