@@ -49,20 +49,19 @@ class BlackHoles(Particles, BlackholesComponent):
     """
 
     # Define the allowed attributes
-    # TODO: update this
-    # __slots__ = [
-    #     "_masses",
-    #     "_coordinates",
-    #     "_velocities",
-    #     "metallicities",
-    #     "nparticles",
-    #     "redshift",
-    #     "_accretion_rate",
-    #     "_bb_temperature",
-    #     "_bol_luminosity",
-    #     "_softening_lengths",
-    #     "nbh",
-    # ]
+    attrs = [
+        "_masses",
+        "_coordinates",
+        "_velocities",
+        "metallicities",
+        "nparticles",
+        "redshift",
+        "_accretion_rate",
+        "_bb_temperature",
+        "_bol_luminosity",
+        "_softening_lengths",
+        "nbh",
+    ]
 
     def __init__(
         self,
@@ -78,8 +77,8 @@ class BlackHoles(Particles, BlackholesComponent):
         softening_length=None,
     ):
         """
-        Intialise the Stars instance. The first two arguments are always 
-        required. All other arguments are optional attributes applicable 
+        Intialise the Stars instance. The first two arguments are always
+        required. All other arguments are optional attributes applicable
         in different situations.
 
         Args:
@@ -90,7 +89,7 @@ class BlackHoles(Particles, BlackholesComponent):
             epsilons (array-like, float)
                 The radiative efficiency. By default set to 0.1.
             inclination (array-like, float)
-                The inclination of the blackhole. Necessary for many emission 
+                The inclination of the blackhole. Necessary for many emission
                 models.
             redshift (float)
                 The redshift/s of the black hole particles.
@@ -119,7 +118,7 @@ class BlackHoles(Particles, BlackholesComponent):
             nparticles=len(masses),
         )
 
-        # for the time being this takes plural quantities but gives 
+        # for the time being this takes plural quantities but gives
         # BlackholesComponent sing
         BlackholesComponent.__init__(
             self,
@@ -142,17 +141,18 @@ class BlackHoles(Particles, BlackholesComponent):
         # both and not break the EmissionModel.
         # MOVE TO PARTICLE
         for singular, plural in [
-            ('mass', 'masses'),
-            ('accretion_rate', 'accretion_rates'),
-            ('metallicity', 'metallicities'),
-            ('spin', 'spins'),
-            ('inclination', 'inclinations'),
-            ('epsilon', 'epsilons'),
-            ('bb_temperature', 'bb_temperatures'),
-            ('bolometric_luminosity', 'bolometric_luminosities'),
-            ('accretion_rate_eddington', 'accretion_rates_eddington'),
-            ('epsilon', 'epsilons'),
-            ('eddington_ratio', 'eddington_ratios')]:    
+            ("mass", "masses"),
+            ("accretion_rate", "accretion_rates"),
+            ("metallicity", "metallicities"),
+            ("spin", "spins"),
+            ("inclination", "inclinations"),
+            ("epsilon", "epsilons"),
+            ("bb_temperature", "bb_temperatures"),
+            ("bolometric_luminosity", "bolometric_luminosities"),
+            ("accretion_rate_eddington", "accretion_rates_eddington"),
+            ("epsilon", "epsilons"),
+            ("eddington_ratio", "eddington_ratios"),
+        ]:
             setattr(self, plural, getattr(self, singular))
 
     def _check_bh_args(self):
@@ -166,7 +166,7 @@ class BlackHoles(Particles, BlackholesComponent):
         """
 
         # Ensure all arrays are the expected length
-        for key in self.__slots__:
+        for key in self.attrs:
             attr = getattr(self, key)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
@@ -181,12 +181,8 @@ class BlackHoles(Particles, BlackholesComponent):
         TODO: move to the component level?
         """
 
-        self.inclination = np.random.uniform(
-            low=0.,
-            high=np.pi/2.,
-            size=self.nparticles) * rad
-        
-        self.cosine_inclination = np.cos(self.inclination.to('rad').value)
+        self.inclination = (
+            np.random.uniform(low=0.0, high=np.pi / 2.0, size=self.nparticles) * rad
+        )
 
-
-
+        self.cosine_inclination = np.cos(self.inclination.to("rad").value)
