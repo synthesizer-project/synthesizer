@@ -200,7 +200,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # Create dictionary of fixed parameters based on what was handed
         self.fixed_parameters_dict = {}
         for parameter in self.unified_parameters:
-            if if args[parameter] is not None:
+            if args[parameter] is not None:
                 self.fixed_parameters_dict[parameter] = args[parameter]
 
         # Create a list of the fixed_parameters for convenience
