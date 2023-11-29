@@ -28,6 +28,12 @@ class Template:
 
     The template is simply scaled by bolometric luminosity.
 
+    Attributes:
+        sed (Sed)
+            The template spectra for the AGN.
+        normalisation (unyt_quantity)
+            The normalisation for the spectra. In reality this is the bolometric
+            luminosity.
     """
 
     def __init__(self, filename=None, lam=None, lnu=None):
@@ -55,12 +61,12 @@ class Template:
 
         if lam and lnu:
             # initialise a synthesizer Sed object
-            sed = Sed(lam=lam, lnu=lnu)
+            self.sed = Sed(lam=lam, lnu=lnu)
 
             # normalise
             # TODO: add a method to Sed that does this.
-            normalisation = sed.measure_bolometric_luminosity()
-            sed.lnu /= normalisation
+            self.normalisation = self.sed.measure_bolometric_luminosity()
+            self.sed.lnu /= normalisation
 
     def get_spectra(self, bolometric_luminosity):
         """
@@ -81,7 +87,37 @@ class UnifiedAGN:
 
     """
     The Unified AGN model.
-    The combines a disc model, along with modelling of the NLR, BLR, and torus.
+    This combines a disc model, along with modelling of the NLR, BLR, and torus.
+
+    Attributes:
+        disc_model (string)
+            The disc model being used.
+        photoionisation_model (string)
+            The photoionisation model being used.
+        grid_dir (string)
+            The filepath to the grid file.
+        torus_emission_model (synthesizer.dust.emission)
+            The dust emission object describing the emission of the torus.
+        unified_parameters (list)
+            A list of black hole parameters which are not specific to the NLR,
+            BLR, or torus.
+        fixed_parameters_dict (dict)
+            A dictionary containing the parameter values fixed by the user.
+        fixed_parameters (list)
+            A list of black hole parameters which have been fixed by the user.
+        grid (dict, Grid)
+            A dictionary containing the grid objects for the NLR and BLR.
+        grid_parameters (array-like)
+            The axes of the Grid.
+        disc_parameters (list)
+            A list of black hole parameters related to the disc.
+        parameters (list)
+            A list containing all the parameters of the black hole.
+        variable_parameters (list)
+            A list of parameters not fixed by the user. There will take the
+            default values for the model in use.
+        available_spectra (list)
+            A list of the spectra types computed for a black hole.
     """
 
     def __init__(
