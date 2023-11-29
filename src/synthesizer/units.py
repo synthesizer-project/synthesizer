@@ -61,7 +61,6 @@ default_units = {
     "luminosity": erg / s,
     "luminosities": erg / s,
     "bolometric_luminosity": erg / s,
-    "bol_luminosity": erg / s,
     "bolometric_luminosities": erg / s,
     "lnu": erg / s / Hz,
     "llam": erg / s / Angstrom,
@@ -232,6 +231,10 @@ class Units(metaclass=UnitSingleton):
             Black hole big bump temperature unit.
         bb_temperatures (unyt.unit_object.Unit)
             Black hole big bump temperature unit.
+        inclination (unyt.unit_object.Unit)
+            Black hole inclination unit.
+        inclinations (unyt.unit_object.Unit)
+            Black hole inclination unit.
 
         resolution (unyt.unit_object.Unit)
             Image resolution unit.
@@ -331,6 +334,7 @@ class Units(metaclass=UnitSingleton):
         self.bb_temperature = K
         self.bb_temperatures = K
         self.inclination = deg
+        self.inclinations = deg
 
         # Imaging quantities
         self.resolution = Mpc
