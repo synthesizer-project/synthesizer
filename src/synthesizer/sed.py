@@ -885,18 +885,19 @@ class Sed:
 
             # Set up output array
             index = np.zeros(len(self.lnu)) * self.lam.units
+                
+            continuum_fit = np.polyfit(
+                [np.mean(blue), np.mean(red)], [lnu_blue[i], lnu_red[i]], 1
+            )
+
+            # Use the continuum fit to define the continuum
+            continuum = (
+                (continuum_fit[0] * feature_lam.to(self.lam.units).value)
+                + continuum_fit[1]
+            ) * self.lnu.units
 
             # Note: I'm sure this could be done better.
             for i, _lnu in enumerate(self.lnu):
-                continuum_fit = np.polyfit(
-                    [np.mean(blue), np.mean(red)], [lnu_blue[i], lnu_red[i]], 1
-                )
-
-                # Use the continuum fit to define the continuum
-                continuum = (
-                    (continuum_fit[0] * feature_lam.to(self.lam.units).value)
-                    + continuum_fit[1]
-                ) * self.lnu.units
 
                 # Define the continuum subtracted spectrum
                 feature_lum = _lnu[transmission]
