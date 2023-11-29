@@ -87,30 +87,6 @@ class Image:
             FilterCollection is passed.
     """
 
-    # Define the slots to reduce the memory footprint
-    # TODO: For some reason defining these slots cause a "TypeError: multiple
-    # bases have instance lay-out conflict" error at import. I can't fathom
-    # why! For now left commented out.
-    __slots__ = [
-        "psfs",
-        "filters",
-        "img",
-        "img_psf",
-        "img_noise",
-        "imgs",
-        "imgs_psf",
-        "imgs_noise",
-        "rgb_image",
-        "combined_imgs",
-        "depths",
-        "snrs",
-        "apertures",
-        "weight_map",
-        "noise_arr",
-        "noise_arrs",
-        "weights_maps",
-    ]
-
     def __init__(
         self,
         filters=(),
@@ -327,7 +303,7 @@ class Image:
         else:
             self.psfs /= np.sum(self.psfs)
 
-    def _get_hist_img_single_filter(self):
+    def _get_hist_img_single_filter(self, *args):
         """
         A place holder to be overloaded on child classes for making histogram
         images.
@@ -337,7 +313,7 @@ class Image:
             "class. It is not designed to be called directly."
         )
 
-    def _get_img_single_filter(self):
+    def _get_img_single_filter(self, *args):
         """
         A place holder to be overloaded on child classes for making smoothed
         images.
@@ -1181,7 +1157,7 @@ class Image:
         print(ascii_img)
 
 
-class ParticleImage(ParticleScene, Image):
+class ParticleImage(Image, ParticleScene):
     """
     The Image object used when creating images from particle distributions.
     This can either be used by passing explict arrays of coordinates and values
@@ -1195,9 +1171,6 @@ class ParticleImage(ParticleScene, Image):
             The particles property array ot be softed into pixels. Only used
             if an Sed is not passed.
     """
-
-    # Define the slots to reduce the memory footprint
-    __slots__ = ["pixel_values"]
 
     def __init__(
         self,
@@ -1286,6 +1259,14 @@ class ParticleImage(ParticleScene, Image):
             filters = ()
 
         # Initilise the parent classes
+        Image.__init__(
+            self,
+            filters=filters,
+            psfs=psfs,
+            depths=depths,
+            apertures=apertures,
+            snrs=snrs,
+        )
         ParticleScene.__init__(
             self,
             resolution=resolution,
@@ -1300,14 +1281,6 @@ class ParticleImage(ParticleScene, Image):
             rest_frame=rest_frame,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
-        )
-        Image.__init__(
-            self,
-            filters=filters,
-            psfs=psfs,
-            depths=depths,
-            apertures=apertures,
-            snrs=snrs,
         )
 
         # Set up standalone arrays used when Synthesizer objects are not
@@ -1430,13 +1403,6 @@ class ParametricImage(Scene, Image):
             None and a FilterCollection must be provided with an Sed to
             calculate ans subsequently smooth photometry into an image.
     """
-
-    # Define slots to reduce memory footprint
-    # __slots__ = [
-    #     "morphology",
-    #     "density_grid",
-    #     "smooth_value",
-    # ]
 
     def __init__(
         self,

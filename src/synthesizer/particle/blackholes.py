@@ -49,7 +49,7 @@ class BlackHoles(Particles):
     """
 
     # Define the allowed attributes
-    __slots__ = [
+    attrs = [
         "_masses",
         "_coordinates",
         "_velocities",
@@ -148,7 +148,7 @@ class BlackHoles(Particles):
         """
 
         # Ensure all arrays are the expected length
-        for key in self.__slots__:
+        for key in self.attrs:
             attr = getattr(self, key)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
