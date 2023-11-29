@@ -61,6 +61,7 @@ default_units = {
     "luminosity": erg / s,
     "luminosities": erg / s,
     "bolometric_luminosity": erg / s,
+    "bol_luminosity": erg / s,
     "bolometric_luminosities": erg / s,
     "lnu": erg / s / Hz,
     "llam": erg / s / Angstrom,
@@ -223,6 +224,10 @@ class Units(metaclass=UnitSingleton):
             Black hole accretion rate unit.
         bol_luminosity (unyt.unit_object.Unit)
             Bolometric luminositiy unit.
+        bolometric_luminosity (unyt.unit_object.Unit)
+            Bolometric luminositiy unit.
+        bolometric_luminosities (unyt.unit_object.Unit)
+            Bolometric luminositiy unit.
         bb_temperature (unyt.unit_object.Unit)
             Black hole big bump temperature unit.
 
@@ -274,11 +279,12 @@ class Units(metaclass=UnitSingleton):
 
         # Luminosities
         self.luminosity = erg / s  # luminosity
-        self.luminosities = erg / s  
-        self.bolometric_luminosity = erg / s  
-        self.bolometric_luminosities = erg / s  
-        self.eddington_luminosity = erg / s  
-        self.eddington_luminosities = erg / s  
+        self.luminosities = erg / s
+        self.bol_luminosity = erg / s
+        self.bolometric_luminosity = erg / s
+        self.bolometric_luminosities = erg / s
+        self.eddington_luminosity = erg / s
+        self.eddington_luminosities = erg / s
         self.lnu = erg / s / Hz  # spectral luminosity density
         self.llam = erg / s / Angstrom  # spectral luminosity density
         self.continuum = erg / s / Hz  # continuum level of an emission line
