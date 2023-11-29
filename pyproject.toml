@@ -78,7 +78,7 @@ classifiers = [  # Optional
 # Dependancies
 dependencies = [
   "nbmake",
-  "astropy == 5.3.4",
+  "astropy",
   "h5py",
   "mpmath",
   "numpy >= 1.23",
