@@ -117,9 +117,6 @@ class BlackHoles(Particles, BlackholesComponent):
             softening_length=softening_length,
             nparticles=len(masses),
         )
-
-        # for the time being this takes plural quantities but gives
-        # BlackholesComponent sing
         BlackholesComponent.__init__(
             self,
             mass=masses,
@@ -139,7 +136,6 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # I will be hated for this. But left in for now to provide access to
         # both and not break the EmissionModel.
-        # MOVE TO PARTICLE
         for singular, plural in [
             ("mass", "masses"),
             ("accretion_rate", "accretion_rates"),
