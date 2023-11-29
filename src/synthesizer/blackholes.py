@@ -10,7 +10,9 @@ from unyt import deg, km, cm, s, K, rad
 from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
-from synthesizer.exceptions import MissingArgument
+from synthesizer.exceptions import (
+    MissingArgument,
+    UnimplementedFunctionality)
 
 
 class BlackHoleEmissionModel:
@@ -48,8 +50,7 @@ class Template(BlackHoleEmissionModel):
 
         if filename:
 
-            # to be implemented implement later
-            pass
+            raise UnimplementedFunctionality
 
         if lam and lnu:
             
