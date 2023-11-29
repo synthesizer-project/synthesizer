@@ -50,7 +50,12 @@ class Template(BlackHoleEmissionModel):
 
         if filename:
 
-            raise UnimplementedFunctionality
+            raise exceptions.UnimplementedFunctionality(
+                "Not yet implemented! Feel free to implement and raise a "
+                "pull request. Guidance for contributing can be found at "
+                "https://github.com/flaresimulations/synthesizer/blob/main/"
+                "docs/CONTRIBUTING.md"
+            )
 
         if lam and lnu:
             
