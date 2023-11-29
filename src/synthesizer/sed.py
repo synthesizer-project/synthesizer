@@ -88,7 +88,7 @@ class Sed:
             self.lam = np.asarray(lam)  # \AA
         else:
             raise ValueError(('`lam` must be a list, list of lists, '
-                              'or N-d numpy array')
+                              'or N-d numpy array'))
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
@@ -99,7 +99,7 @@ class Sed:
                 self.lnu = np.asarray(lnu)
             else:
                 raise ValueError(('`lnu` must be a list, list of lists, '
-                                  'or N-d numpy array')
+                                  'or N-d numpy array'))
 
         # Calculate frequency
         self.nu = (c / (self.lam)).to("Hz").value  # Hz
