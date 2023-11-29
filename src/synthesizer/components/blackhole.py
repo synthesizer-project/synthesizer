@@ -1,14 +1,13 @@
-""" A module for holding blackhole emission models. 
+""" A module for holding blackhole emission models.
+
+The class defined here should never be instantiated directly, there are only
+ever instantiated by the parametric/particle child classes.
 """
-import numpy as np
-import matplotlib.pyplot as plt
-from unyt import Myr, deg, c, erg, s, Msun, unyt_quantity
 from copy import deepcopy
-from synthesizer.art import Art, get_centred_art
+import numpy as np
+from unyt import c
+
 from synthesizer import exceptions
-from synthesizer.dust.attenuation import PowerLaw
-from synthesizer.line import Line, LineCollection
-from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 
 
@@ -19,8 +18,31 @@ class BlackholesComponent:
     This class contains the attributes and spectra creation methods which are
     common to both parametric and particle stellar components.
 
-    This should never be instantiated directly.
+    This should never be instantiated directly, instead it provides the common
+    functionality and attributes used by the child parametric and particle
+    BlackHole/s classes.
 
+    Attributes:
+        spectra (dict, Sed)
+            A dictionary containing black hole spectra.
+        mass (array-like, float)
+            The mass of each blackhole.
+        accretion_rate (array-like, float)
+            The accretion rate of each blackhole.
+        epsilon (array-like, float)
+            The radiative efficiency of the blackhole.
+        accretion_rate_eddington (array-like, float)
+            The accretion rate expressed as a fraction of the Eddington
+            accretion rate.
+        inclination (array-like, float)
+            The inclination of the blackhole disc.
+        spin (array-like, float)
+            The dimensionless spin of the blackhole.
+        bolometric_luminosity (array-like, float)
+            The bolometric luminosity of the blackhole.
+        metallicity (array-like, float)
+            The metallicity of the blackhole which is assumed for the line
+            emitting regions.
     """
 
     # Define class level Quantity attributes
@@ -66,8 +88,6 @@ class BlackholesComponent:
             metallicity (array-like, float)
                 The metallicity of the blackhole which is assumed for the line
                 emitting regions.
-
-
         """
 
         # Initialise spectra
