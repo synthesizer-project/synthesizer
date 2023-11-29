@@ -3,7 +3,7 @@
 When a spectra is computed from a `Galaxy` or a Galaxy component the resulting
 calculated spectra are stored in `Sed` objects. These provide helper functions
 for quick manipulation of the spectra. Seds can contain a single spectra or
-arbitrarily many with all methods capable of acting on both consistently.
+arbitrarily many, with all methods capable of acting on both consistently.
 
 Example usage:
 
@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from scipy import integrate
+from spectres import spectres
 from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
 
 from synthesizer import exceptions
@@ -851,7 +852,7 @@ class Sed:
 
     def measure_index(self, feature, blue, red):
         """
-        Measure an asorption feature index.
+        Measure an absorption feature index.
 
         Args:
             absorption (tuple)
@@ -929,37 +930,53 @@ class Sed:
 
         return index
 
-    def get_resampled_sed(self, n):
+    def get_resampled_sed(self, resample_factor=None, new_lam=None):
         """
-        Resameple the spectra and create a new Sed object.
+        Resample the spectra onto a new set of wavelength points.
+        
+        This resampling can either be done by an integer number of wavelength
+        elements per original wavelength element (i.e. up sampling),
+        or by providing a new wavelength grid to resample on to.
 
-        NOTE: This only resamples the rest frame spectra. For fluxes get_fnu
+        NOTE: This only resamples the rest frame spectra. For fluxes, `get_fnu`
         must be called again after resampling.
 
         Args:
-            n (int)
-                The number of wavelength elements to resample to.
+            resample_factor (int)
+                The number of additional wavelength elements to
+                resample to.
+            new_lam (array-like, float)
+                The wavelength array to resample onto.
 
         Returns:
-            (sed.Sed)
+            Sed
                 A new Sed with the rebinned rest frame spectra.
 
         Raises:
             InconsistentArgument
-                The sampling factor must be an integer.
+                Either resample factor or new_lam must be supplied. If neither
+                or both are passed an error is raised.
         """
 
-        # Resample the Sed
-        if isinstance(n, int):
-            sed = Sed(
-                rebin_1d(self.lam, n, func=np.mean), rebin_1d(self.lnu, n, func=np.mean)
+        # Ensure we have what we need
+        if resample_factor is None and new_lam is None:
+            raise exceptions.InconsistentArguments(
+                "Either resample_factor or new_lam must be specified"
             )
 
-        else:
-            # Handle improper resampling factors
-            raise exceptions.InconsistentArguments(
-                "Sampling factor must be integer or float."
-            )
+        # Both arguments are unecessary, tell the user what we will do
+        if resample_factor is not None and new_lam is not None:
+            print("Got resample_factor and new_lam, ignoring resample_factor")
+
+        # Resample the wavelength array
+        if new_lam is None:
+            new_lam = rebin_1d(self.lam, resample_factor, func=np.mean)
+
+        # Evaluate the function at the desired wavelengths
+        new_spectra = spectres(new_lam, self._lam, self.lnu)
+
+        # Instantiate the new Sed
+        sed = Sed(new_lam, new_spectra)
 
         return sed
 
@@ -1008,7 +1025,7 @@ class Sed:
                     "Arrays of tau_v values are only applicable for Seds"
                     " containing multiple spectra"
                 )
-            if self._lnu.shape[0] != self.tau_v.size:
+            if self._lnu.shape[0] != tau_v.size:
                 raise exceptions.InconsistentArguments(
                     "tau_v and spectra are incompatible shapes "
                     f"({tau_v.shape}, {self._lnu.shape})"
@@ -1183,7 +1200,7 @@ def plot_spectra(
             # Ensure we have fluxes
             if sed.fnu is None:
                 raise exceptions.MissingSpectraType(
-                    f"This Sed has no fluxes ({key})! " "Have you called Sed.get_fnu()?"
+                    f"This Sed has no fluxes ({key})! Have you called Sed.get_fnu()?"
                 )
 
             # Ok everything is fine
