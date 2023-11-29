@@ -3,7 +3,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from unyt import Myr, deg, c, erg, s, Msun, unyt_quantity
-import inflect
 from copy import deepcopy
 from synthesizer.art import Art, get_centred_art
 from synthesizer import exceptions
