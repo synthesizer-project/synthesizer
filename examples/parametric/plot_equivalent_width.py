@@ -8,12 +8,12 @@ Example for generating the equivalent width for a set of UV indices from a param
 """
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
-from synthesizer.parametric.galaxy import Galaxy as Galaxy
-from synthesizer.sed import Sed
-from unyt import yr, Myr
+from synthesizer.parametric.galaxy import Galaxy
+from unyt import Myr
 
 
 def set_index():
@@ -69,60 +69,6 @@ def set_index():
     return index, index_window, blue_window, red_window
 
 
-def get_ew(index, feature, blue, red, Z, smass, grid, EqW, mode):
-    """
-    Calculate equivalent width for a specified UV index.
-
-    Args:
-        index (int): The UV index for which the equivalent width is calculated.
-        Z (float): Metallicity.
-        smass (float): Stellar mass.
-        grid (Grid): The grid object.
-        EqW (float): Initial equivalent width.
-        mode (str): Calculation mode.
-
-    Returns:
-        float: The calculated equivalent width.
-
-    Raises:
-        ValueError: If mode is invalid.
-    """
-
-    sfh_p = {"duration": 100 * Myr}
-
-    Z_p = {"metallicity": Z}  # can also use linear metallicity e.g. {'Z': 0.01}
-    stellar_mass = smass
-
-    # --- define the functional form of the star formation and metal
-    # enrichment histories
-    sfh = SFH.Constant(**sfh_p)  # constant star formation
-    print(sfh)  # print sfh summary
-
-    metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
-
-    # --- get 2D star formation and metal enrichment history for the
-    # given SPS grid. This is (age, Z).
-    sfzh = Stars(
-        grid.log10age,
-        grid.metallicity,
-        sf_hist=sfh,
-        metal_dist=metal_dist,
-        initial_mass=stellar_mass,
-    )
-
-    # --- create a galaxy object
-    galaxy = Galaxy(sfzh)
-
-    # --- generate equivalent widths
-    if mode == 0:
-        galaxy.stars.get_spectra_incident(grid)
-    else:
-        galaxy.stars.get_spectra_intrinsic(grid, fesc=0.5)
-
-    EqW.append(galaxy.get_equivalent_width(feature, blue, red))
-    return EqW
-
-
 def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
     """
     Calculate equivalent widths for specified UV indices.
@@ -151,9 +97,9 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         feature, blue, red = index_window[i], blue_window[i], red_window[i]
 
         for k in range(0, len(Z)):
-            EqW = get_ew(index, feature, blue, red, Z[k], stellar_mass, grid, EqW, 0)
+            EqW = measure_equivalent_width(index, feature, blue, red, Z[k], stellar_mass, grid, EqW, 0)
 
-        print(EqW)
+        print('Mean Equivalent width [', index, ']:', np.mean(EqW))
 
         # Configure plot figure
         plt.rcParams["figure.dpi"] = 200
@@ -191,11 +137,70 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
 
         if i == len(uv_index) - 1:
             plt.show()
+            
+def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, EqW, mode):
+    """
+    Calculate equivalent width for a specified UV index.
 
+    Args:
+        index (int): The UV index for which the equivalent width is calculated.
+        Z (float): Metallicity.
+        smass (float): Stellar mass.
+        grid (Grid): The grid object.
+        EqW (float): Initial equivalent width.
+        mode (str): Calculation mode.
+
+    Returns:
+        float: The calculated equivalent width.
+
+    Raises:
+        ValueError: If mode is invalid.
+    """
+
+    sfh_p = {"duration": 100 * Myr}
+
+    Z_p = {"metallicity": Z}  # can also use linear metallicity e.g. {'Z': 0.01}
+    stellar_mass = smass
+
+    # --- define the functional form of the star formation and metal
+    # enrichment histories
+    sfh = SFH.Constant(**sfh_p)  # constant star formation
+
+    metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
+
+    # --- get 2D star formation and metal enrichment history for the
+    # given SPS grid. This is (age, Z).
+    sfzh = Stars(
+        grid.log10age,
+        grid.metallicity,
+        sf_hist=sfh,
+        metal_dist=metal_dist,
+        initial_mass=stellar_mass,
+    )
+
+    # --- create a galaxy object
+    galaxy = Galaxy(sfzh)
+
+    # --- generate spectra
+    if mode == 0:
+        sed = galaxy.stars.get_spectra_incident(grid)
+    else:
+        sed = galaxy.stars.get_spectra_intrinsic(grid, fesc=0.5)
+        
+    # --- measure equivalent widths
+    equivalent_width = None
+
+    EqW.append(sed.measure_index(
+    	feature, 
+    	blue, 
+    	red,
+    ))
+    
+    return EqW
 
 if __name__ == "__main__":
-    grid_dir = "../../tests/test_grid"  # Change this directory to your own.
-    grid_name = "test_grid"  # Change this to the appropriate .hdf5
+    grid_name = "test_grid"
+    grid_dir = "../../tests/test_grid/"
 
     index, index_window, blue_window, red_window = set_index()  # Retrieve UV indices
 
