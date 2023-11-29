@@ -154,9 +154,25 @@ class UnifiedAGN(BlackHoleEmissionModel):
 
         """
 
-        # Create a dictionary of all the arguments (and self)
-        args = locals()
-        
+        # Create a dictionary of all the arguments 
+        args = {
+            'disc_model': disc_model,
+            'photoionisation_model': photoionisation_model,
+            'grid_dir': grid_dir,
+            'bolometric_luminosity': bolometric_luminosity,
+            'metallicity': metallicity,
+            'ionisation_parameter_blr': ionisation_parameter_blr,
+            'hydrogen_density_blr': hydrogen_density_blr,
+            'covering_fraction_blr': covering_fraction_blr,
+            'velocity_dispersion_blr': velocity_dispersion_blr,
+            'ionisation_parameter_nlr': ionisation_parameter_nlr,
+            'hydrogen_density_nlr': hydrogen_density_nlr,
+            'covering_fraction_nlr': covering_fraction_nlr,
+            'velocity_dispersion_nlr': velocity_dispersion_nlr,
+            'theta_torus': theta_torus,
+            'torus_emission_model': torus_emission_model,
+        }
+
         # Save model and directory as attributes.
         self.disc_model = disc_model
         self.photoionsation_model = photoionisation_model
@@ -184,7 +200,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # Create dictionary of fixed parameters based on what was handed
         self.fixed_parameters_dict = {}
         for parameter in self.unified_parameters:
-            if args[parameter]:
+            if if args[parameter] is not None:
                 self.fixed_parameters_dict[parameter] = args[parameter]
 
         # Create a list of the fixed_parameters for convenience
