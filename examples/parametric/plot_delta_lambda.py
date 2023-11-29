@@ -6,28 +6,19 @@ This script demonstrates how to generate delta_lambda from a provided grid.
 It includes the following steps:
 - Builds a parametric galaxy using make_sfzh.
 - Retrieves delta_lambda for the galaxy using the grid.
-
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
-
-import synthesizer
-
-import importlib
-
-package_name = "synthesizer"
 
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
 
-if __name__ == "__main__":
-    # Get the location of this script, __file__ is the absolute path of this
-    # script, however we just want the directory
-    # script_path = os.path.abspath(os.path.dirname(__file__))
 
+if __name__ == "__main__":
+    
     # Define the grid
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
@@ -92,5 +83,3 @@ if __name__ == "__main__":
     ax.set_ylabel(r"$\rm Δ(\lambda/\AA)$")
 
     plt.show()
-
-    exit()

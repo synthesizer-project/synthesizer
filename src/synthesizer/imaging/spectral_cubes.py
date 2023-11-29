@@ -226,11 +226,11 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
     def get_hist_ifu(self):
         """
         A method to calculate an IFU with no smoothing.
-        Returns
-        -------
-        img : array_like (float)
-            A 3D array containing the pixel values sorted into individual
-            pixels. [npix, npix, spectral_resolution]
+        
+        Returns:
+            img (array_like, float)
+                A 3D array containing the pixel values sorted into individual
+                pixels. [npix, npix, spectral_resolution]
         """
 
         # Set up the IFU array
