@@ -230,6 +230,8 @@ class Units(metaclass=UnitSingleton):
             Bolometric luminositiy unit.
         bb_temperature (unyt.unit_object.Unit)
             Black hole big bump temperature unit.
+        bb_temperatures (unyt.unit_object.Unit)
+            Black hole big bump temperature unit.
 
         resolution (unyt.unit_object.Unit)
             Image resolution unit.
@@ -327,6 +329,7 @@ class Units(metaclass=UnitSingleton):
         self.accretion_rate = Msun.in_base("galactic") / yr
         self.accretion_rates = Msun.in_base("galactic") / yr
         self.bb_temperature = K
+        self.bb_temperatures = K
         self.inclination = deg
 
         # Imaging quantities
