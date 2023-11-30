@@ -1470,7 +1470,7 @@ def get_attenuation(intrinsic_sed, attenuated_sed):
     return -2.5 * np.log10(transmission)
 
 
-def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
+def get_attenuation_lam(lam, intrinsic_sed, attenuated_sed):
     """
     Calculate attenuation at a given wavelength
 
@@ -1502,7 +1502,7 @@ def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
     return np.interp(lam.value, intrinsic_sed._lam, attenuation)
 
 
-def get_5500_attenuation(intrinsic_sed, attenuated_sed):
+def get_attenuation_5500(intrinsic_sed, attenuated_sed):
     """
     Calculate rest-frame FUV attenuation at 5500 angstrom.
 
@@ -1524,7 +1524,7 @@ def get_5500_attenuation(intrinsic_sed, attenuated_sed):
     )
 
 
-def get_1500_attenuation(intrinsic_sed, attenuated_sed):
+def get_attenuation_1500(intrinsic_sed, attenuated_sed):
     """
     Calculate rest-frame FUV attenuation at 1500 angstrom.
 
