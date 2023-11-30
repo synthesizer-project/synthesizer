@@ -904,6 +904,7 @@ class Sed:
 
             # Measure index
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam, axis=1)
+            continuum_fit = []
 
         else:
             # Single spectra case
@@ -924,7 +925,8 @@ class Sed:
             # Measure index
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
            
-        feature_lam = []
+            continuum_fit = []
+            
         return index
 
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
