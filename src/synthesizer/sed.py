@@ -447,6 +447,7 @@ class Sed:
                 "Options are 'trapz' or 'quad'"
             )
 
+        self.bolometric_luminosity = bolometric_luminosity
         return bolometric_luminosity
 
     def measure_window_luminosity(self, window, method="trapz"):
@@ -1057,7 +1058,7 @@ class Sed:
         else:
             spectra[mask] *= transmission
 
-        return Sed(self.lam, spectra)
+        return Sed(self.lam, lnu=spectra)
 
 
 def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
