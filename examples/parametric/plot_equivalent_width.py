@@ -13,7 +13,7 @@ import numpy as np
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr
+from unyt import Myr, Angstrom
 
 
 def set_index():
@@ -190,11 +190,8 @@ def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, EqW, mod
     # --- measure equivalent widths
     equivalent_width = None
 
-    EqW.append(sed.measure_index(
-    	feature, 
-    	blue, 
-    	red,
-    ))
+    EqW.append(sed.measure_index((1500,1600)*Angstrom,(1400,1500)*Angstrom,(1600,1700)*Angstrom)
+    )
     
     return EqW
 

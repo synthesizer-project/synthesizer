@@ -892,15 +892,15 @@ class Sed:
 
             # Use the continuum fit to define the continuum
             continuum = (
-                (continuum_fit[0] * feature_lam.to(self.lam.units).value[:, np.newaxis])
+                (continuum_fit[0] * feature_lam.to(self.lam.units).value)
                 + continuum_fit[1]
             ) * self.lnu.units
 
             # Define the continuum subtracted spectrum
             feature_lum = self.lnu[:, transmission]
             feature_lum_continuum_subtracted = -(
-            (feature_lum - continuum[:, np.newaxis, :]) / continuum[:, np.newaxis, :])
-
+                (feature_lum - continuum[:, np.newaxis]) / continuum[:, np.newaxis]
+            )
 
             # Measure index
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam, axis=1)
