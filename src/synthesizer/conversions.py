@@ -127,7 +127,7 @@ def flam_to_fnu(lam, flam):
     if not has_units(lam):
         raise exceptions.IncorrectUnits("lam must be given with unyt units.")
 
-    return (flam * lam / (c / lam)).to("nJy")
+    return (flam * lam**2 / c).to("nJy")
 
 
 def fnu_to_flam(lam, fnu):
@@ -157,7 +157,7 @@ def fnu_to_flam(lam, fnu):
     if not has_units(lam):
         raise exceptions.IncorrectUnits("lam must be given with unyt units.")
 
-    return (fnu * (c / lam) / lam).to("erg / s / Hz / cm**2")
+    return ((fnu * c) / lam**2).to("erg / s / Hz / cm**2")
 
 
 def absolute_mag_to_lnu(ab_mag):
