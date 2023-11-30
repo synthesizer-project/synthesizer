@@ -68,9 +68,13 @@ class EmissionBase:
         else:
             lam = _lam * Angstrom
 
+        # lnu = (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
         lnu = (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
 
         sed = Sed(lam=lam, lnu=lnu)
+
+        # normalise the spectrum 
+        sed._lnu /= sed.measure_bolometric_luminosity().value
 
         return sed
 
