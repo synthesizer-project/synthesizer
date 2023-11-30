@@ -1517,7 +1517,7 @@ def get_attenuation_5500(intrinsic_sed, attenuated_sed):
             The attenuation at rest-frame 5500 angstrom.
     """
 
-    return get_attenuation_at_lam(
+    return get_attenuation_lam(
         5500.0 * angstrom,
         intrinsic_sed,
         attenuated_sed,
@@ -1539,7 +1539,7 @@ def get_attenuation_1500(intrinsic_sed, attenuated_sed):
             The attenuation at rest-frame 1500 angstrom.
     """
 
-    return get_attenuation_at_lam(
+    return get_attenuation_lam(
         1500.0 * angstrom,
         intrinsic_sed,
         attenuated_sed,
