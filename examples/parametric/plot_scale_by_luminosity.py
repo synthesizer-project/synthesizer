@@ -116,7 +116,7 @@ ax_flux.plot(
 )
 
 # And scale by flux
-scale_flux = apparent_mag_to_fnu(20 * nJy)
+scale_flux = apparent_mag_to_fnu(20)
 print(scale_flux)
 gal.stars.scale_mass_by_flux(
     flux=scale_flux,
