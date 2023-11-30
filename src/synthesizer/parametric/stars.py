@@ -27,6 +27,7 @@ from synthesizer.plt import single_histxy
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.units import Quantity
+from synthesizer.utils import has_units
 
 
 class Stars(StarsComponent):
@@ -542,6 +543,121 @@ class Stars(StarsComponent):
             raise exceptions.InconsistentAddition("SFZH must be the same shape")
 
         return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
+
+    def scale_mass_by_luminosity(self, lum, scale_filter, spectra_type):
+        """
+        Scale the mass of the stellar population to match a luminosity in a
+        specific filter.
+
+        NOTE: This will overwrite the initial mass attribute.
+
+        Args:
+            lum (unyt_quantity)
+                The desried luminosity in scale_filter.
+            scale_filter (Filter)
+                The filter in which lum is measured.
+            spectra_type (str)
+                The spectra key with which to do this scaling, e.g. "incident"
+                or "emergent".
+
+        Raises
+            MissingSpectraType
+                If the requested spectra doesn't exist an error is thrown.
+        """
+
+        # Check we have the spectra
+        if spectra_type not in self.spectra:
+            raise exceptions.MissingSpectraType(
+                f"The requested spectra type ({spectra_type}) does not exist"
+                " in this stellar population. Have you called the "
+                "corresponding spectra method?"
+            )
+
+        # Check we have units
+        if not has_units(lum):
+            raise exceptions.IncorrectUnits("lum must be given with unyt units")
+
+        # Calculate the current luminosity in scale_filter
+        sed = self.spectra[spectra_type]
+        current_lum = scale_filter.apply_filter(sed.lnu)
+
+        # Calculate the conversion ratio between the requested and current
+        # luminosity
+        conversion = lum / current_lum
+
+        # Apply conversion to the masses
+        self.initial_mass *= conversion
+
+        # Apply the conversion to all spectra
+        for key in self.spectra:
+            self.spectra[key]._lnu *= conversion
+            if self.spectra[key]._fnu is not None:
+                self.spectra[key]._fnu *= conversion
+
+        # Apply correction to the SFZH
+        self.sfzh *= conversion
+
+    def scale_mass_by_flux(self, flux, scale_filter, spectra_type):
+        """
+        Scale the mass of the stellar population to match a flux in a
+        specific filter.
+
+        NOTE: This will overwrite the initial mass attribute.
+
+        Args:
+            flux (unyt_quantity)
+                The desried flux in scale_filter.
+            scale_filter (Filter)
+                The filter in which flux is measured.
+            spectra_type (str)
+                The spectra key with which to do this scaling, e.g. "incident"
+                or "emergent".
+
+        Raises
+            MissingSpectraType
+                If the requested spectra doesn't exist an error is thrown.
+        """
+
+        # Check we have the spectra
+        if spectra_type not in self.spectra:
+            raise exceptions.MissingSpectraType(
+                f"The requested spectra type ({spectra_type}) does not exist"
+                " in this stellar population. Have you called the "
+                "corresponding spectra method?"
+            )
+
+        # Check we have units
+        if not has_units(flux):
+            raise exceptions.IncorrectUnits("lum must be given with unyt units")
+
+        # Get the sed object
+        sed = self.spectra[spectra_type]
+
+        # Ensure we have a flux
+        if sed.fnu is None:
+            raise exceptions.MissingSpectraType(
+                "{spectra_type} does not have a flux! Make sure to"
+                " run Sed.get_fnu or Galaxy.get_observed_spectra"
+            )
+
+        # Calculate the current flux in scale_filter
+        current_flux = scale_filter.apply_filter(sed.fnu, nu=sed.obsnu)
+
+        # Calculate the conversion ratio between the requested and current
+        # flux
+        conversion = flux / current_flux
+
+        # Apply conversion to the masses
+        self.initial_mass *= conversion
+
+        # Apply the conversion to all spectra
+        for key in self.spectra:
+            self.spectra[key]._lnu *= conversion
+            if self.spectra[key]._fnu is not None:
+                self.spectra[key]._fnu *= conversion
+
+        # Apply correction to the SFZH
+        self.sfzh *= conversion
 
     def plot_sfzh(self, show=True):
         """
