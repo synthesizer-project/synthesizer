@@ -40,8 +40,7 @@ class Galaxy(BaseGalaxy):
 
     """
 
-    __slots__ = [
-        "lam",
+    attrs = [
         "stars",
         "gas",
         "sf_gas_metallicity",
@@ -108,7 +107,7 @@ class Galaxy(BaseGalaxy):
             self.calculate_integrated_gas_properties()
 
         # Ensure all attributes are initialised to None
-        for attr in Galaxy.__slots__:
+        for attr in Galaxy.attrs:
             try:
                 getattr(self, attr)
             except AttributeError:
@@ -463,10 +462,10 @@ class Galaxy(BaseGalaxy):
         """
         Calculate the gamma parameter, controlling the optical depth
         due to dust dependent on the mass and metallicity of star forming
-        gas. 
+        gas.
 
         gamma = gamma_max - (gamma_max - gamma_min) / C
-       
+
         C = 1 + (Z_SF / Z_MW) * (M_SF / M_star) * (1 / beta)
 
         gamma_max and gamma_min set the upper and lower bounds to which gamma
@@ -517,23 +516,21 @@ class Galaxy(BaseGalaxy):
             if self.sf_gas_mass is None:
                 raise ValueError("No sf_gas_mass provided")
             else:
-                sf_gas_mass = self.sf_gas_mass
+                sf_gas_mass = self.sf_gas_mass  # Msun
 
         if stellar_mass is None:
             if self.stellar_mass is None:
                 raise ValueError("No stellar_mass provided")
             else:
-                stellar_mass = self.stellar_mass.value  # Msun
+                stellar_mass = self.stellar_mass  # Msun
 
         if sf_gas_mass == 0.0:
             gamma = gamma_min
         elif stellar_mass == 0.0:
             gamma = gamma_min
-        else: 
-            C = (
-                1 + (sf_gas_metallicity / Z_norm)
-                * (sf_gas_mass / stellar_mass)
-                * (1.0 / beta)
+        else:
+            C = 1 + (sf_gas_metallicity / Z_norm) * (sf_gas_mass / stellar_mass) * (
+                1.0 / beta
             )
             gamma = gamma_max - (gamma_max - gamma_min) / C
 

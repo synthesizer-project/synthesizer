@@ -46,7 +46,7 @@ class Gas(Particles):
     """
 
     # Define the allowed attributes
-    __slots__ = [
+    attrs = [
         "metallicities",
         "star_forming",
         "log10metallicities",
@@ -75,7 +75,7 @@ class Gas(Particles):
         softening_length=None,
         dust_to_metal_ratio=None,
         dust_masses=None,
-        verbose=False
+        verbose=False,
     ):
         """
         Initialise the gas object.
@@ -125,11 +125,15 @@ class Gas(Particles):
         # Set the smoothing lengths for these gas particles
         self.smoothing_lengths = smoothing_lengths
 
-        # 
+        #
         if (dust_to_metal_ratio is None) & (dust_masses is None):
             if verbose:
-                print(("Neither dust mass nor dust to metal ratio "
-                       "provided. Assuming dust to metal ratio = 0.3"))
+                print(
+                    (
+                        "Neither dust mass nor dust to metal ratio "
+                        "provided. Assuming dust to metal ratio = 0.3"
+                    )
+                )
             self.dust_to_metal_ratio = 0.3
             self.calculate_dust_mass()
         elif dust_to_metal_ratio is not None:
@@ -142,11 +146,12 @@ class Gas(Particles):
 
             # TODO: this should be removed when dust masses are
             # properly propagated to LOS calculation
-            self.dust_to_metal_ratio = self.dust_masses /\
-                (self.masses * self.metallicities)
+            self.dust_to_metal_ratio = self.dust_masses / (
+                self.masses * self.metallicities
+            )
 
-            self.dust_to_metal_ratio[self.dust_masses == 0.] = 0.
-            self.dust_to_metal_ratio[self.metallicities == 0.] = 0.
+            self.dust_to_metal_ratio[self.dust_masses == 0.0] = 0.0
+            self.dust_to_metal_ratio[self.metallicities == 0.0] = 0.0
 
         # Check the arguments we've been given
         self._check_gas_args()
@@ -162,7 +167,7 @@ class Gas(Particles):
         """
 
         # Ensure all arrays are the expected length
-        for key in self.__slots__:
+        for key in self.attrs:
             attr = getattr(self, key)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
@@ -176,5 +181,4 @@ class Gas(Particles):
         Calculate dust mass from a given dust-to-metals ratio
         and gas particle properties (mass and metallicity)
         """
-        self.dust_masses = self.masses *\
-            self.metallicities * self.dust_to_metal_ratio                    
+        self.dust_masses = self.masses * self.metallicities * self.dust_to_metal_ratio
