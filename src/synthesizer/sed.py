@@ -1054,7 +1054,7 @@ class Sed:
         limit=100,
     ):
         """
-        A function to calculate the ionising production rate.
+        A function to calculate the ionising photon production rate.
 
         Args:
             ionisation_energy (unyt_array)
@@ -1076,10 +1076,10 @@ class Sed:
 
         # Defintion integration arrays
         x = self._lam
-        y = (llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)).to(1 / s)
+        y = llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)
 
         return integrate.quad(
-            lambda x_: np.interp(x_, x, y.value),
+            lambda x_: np.interp(x_, x, y.to(1 / s / angstrom).value),
             0,
             ionisation_wavelength.to(angstrom).value,
             limit=limit,
