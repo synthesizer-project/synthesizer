@@ -892,11 +892,9 @@ class Sed:
 
             # Use the continuum fit to define the continuum
             continuum = (
-                (continuum_fit[0] * feature_lam.to(self.lam.units).value)
+                (continuum_fit[0] * feature_lam.to(self.lam.units).value[:, np.newaxis])
                 + continuum_fit[1]
             ) * self.lnu.units
-
-            # Note: I'm sure this could be done better.
 
             # Define the continuum subtracted spectrum
             feature_lum = self.lnu[:, transmission]
