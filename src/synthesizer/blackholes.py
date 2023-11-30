@@ -289,7 +289,7 @@ class UnifiedAGN:
             "nlr",
             "blr",
             "torus",
-            "total",
+            "intrinsic",
         ]
 
     def _get_grid_point(self, parameter_dict, line_region):
@@ -499,10 +499,11 @@ class UnifiedAGN:
             ]:
                 spectra[spectra_id] = Sed(lam=spectra["nlr"].lam)
 
-        # Calculate the total spectra as the sum of the components
-        spectra["total"] = (
-            spectra["disc"] + spectra["blr"] + spectra["nlr"] + spectra["torus"]
-        )
+        # Calculate the emergent spectra as the sum of the components.
+        # Note: the choice of "intrinsic" is to align with the Pacman model
+        # which reserves "total" and "emergent" to include dust.
+        spectra["intrinsic"] = (spectra["disc"] + spectra["blr"]
+                                + spectra["nlr"] + spectra["torus"])
 
         # Since we're using a coarse grid it might be necessary to rescale
         # the spectra to the bolometric luminosity. This is requested when
@@ -510,7 +511,7 @@ class UnifiedAGN:
         if "bolometric_luminosity" in parameter_dict.keys():
             scaling = (
                 parameter_dict["bolometric_luminosity"]
-                / spectra["total"].measure_bolometric_luminosity()
+                / spectra["intrinsic"].measure_bolometric_luminosity()
             )
             for spectra_id, spectra_ in spectra.items():
                 spectra[spectra_id] = spectra_ * scaling
