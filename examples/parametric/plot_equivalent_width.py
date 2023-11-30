@@ -190,8 +190,11 @@ def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, EqW, mod
     # --- measure equivalent widths
     equivalent_width = None
 
-    EqW.append(sed.measure_index((1500,1600)*Angstrom,(1400,1500)*Angstrom,(1600,1700)*Angstrom)
-    )
+    EqW.append(sed.measure_index(
+    	feature, 
+    	blue, 
+    	red,
+    ))
     
     return EqW
 
