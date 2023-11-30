@@ -39,6 +39,8 @@ class Sed:
             The rest frame frequency array.
         lnu (Quantity, array-like, float)
             The spectral luminosity density.
+        bolometric_luminosity (Quantity, float)
+            The bolometric luminosity.
         fnu (Quantity, array-like, float)
             The spectral flux density.
         obslam (Quantity, array-like, float)
@@ -66,6 +68,7 @@ class Sed:
     obslam = Quantity()
     luminosity = Quantity()
     llam = Quantity()
+    bolometric_luminosity = Quantity()
 
     def __init__(self, lam, lnu=None, description=None):
         """
@@ -86,15 +89,18 @@ class Sed:
         # Set the wavelength
         self.lam = lam  # \AA
 
+        # Calculate frequency
+        self.nu = (c / (self.lam)).to("Hz").value  # Hz
+
         # If no lnu is provided create an empty array with the same shape as
         # lam.
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
+            self.bolometric_luminosity = None
         else:
             self.lnu = lnu
-
-        # Calculate frequency
-        self.nu = (c / (self.lam)).to("Hz").value  # Hz
+            # automatically calculate bolometric luminosity
+            self.bolometric_luminosity = self.measure_bolometric_luminosity()
 
         # Redshift of the SED
         self.redshift = 0
@@ -255,9 +261,15 @@ class Sed:
             {np.max(self.lam):.2f}] \n"
         pstr += f"log10(Peak luminosity/{self.lnu.units}): \
             {np.log10(np.max(self.lnu)):.2f} \n"
-        bolometric_luminosity = self.measure_bolometric_luminosity()
-        pstr += f"log10(Bolometric luminosity/{bolometric_luminosity.units}): \
-            {np.log10(bolometric_luminosity):.2f} \n"
+        
+        # if bolometric luminosity attribute has not been calculated,
+        # calculate it.
+        if self.bolometric_luminosity is None:
+            self.bolometric_luminosity = self.measure_bolometric_luminosity()
+
+        pstr += f"log10(Bolometric luminosity/ \
+            {self.bolometric_luminosity.units}): \
+            {np.log10(self.bolometric_luminosity):.2f} \n"
         pstr += "-" * 10
 
         return pstr
