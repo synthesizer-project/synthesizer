@@ -899,8 +899,8 @@ class Sed:
             # Define the continuum subtracted spectrum
             feature_lum = self.lnu[:, transmission]
             feature_lum_continuum_subtracted = -(
-                (feature_lum - continuum[:, np.newaxis]) / continuum[:, np.newaxis]
-            )
+            (feature_lum - continuum[:, np.newaxis, :]) / continuum[:, np.newaxis, :])
+
 
             # Measure index
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam, axis=1)
