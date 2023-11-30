@@ -50,10 +50,49 @@ def flux_to_luminosity(flux, cosmo, redshift):
     # Calculate the luminosity in interim units
     lum = flux * 4 * np.pi * lum_dist**2
 
-    # And convert to erg / s / Hz
+    # And redshift
     lum /= 1 + redshift
 
     return lum.to(erg / s)
+
+
+def fnu_to_lnu(fnu, cosmo, redshift):
+    """
+    Converts spectral flux density to spectral luminosity density
+    in erg / s / Hz.
+
+    Args:
+        fnu (unyt_quantity/unyt_array)
+            The spectral flux dnesity to be converted to luminosity, can
+            either be a singular value or array.
+        cosmo (astropy.cosmology)
+            The cosmology object used to calculate luminosity distance.
+        redshift (float)
+            The redshift of the rest frame.
+
+    Returns:
+        unyt_quantity/unyt_array
+            The converted spectral luminosity density.
+
+    Raises:
+        IncorrectUnits
+            If units are missing an error is raised.
+    """
+
+    # Ensure we have units
+    if not has_units(fnu):
+        raise exceptions.IncorrectUnits("fnu must be given with unyt units.")
+
+    # Calculate the luminosity distance (need to convert from astropy to unyt)
+    lum_dist = cosmo.luminosity_distance(redshift).to("cm").value * cm
+
+    # Calculate the luminosity in interim units
+    lnu = fnu * 4 * np.pi * lum_dist**2
+
+    # And redshift
+    lnu /= 1 + redshift
+
+    return lnu.to(erg / s / Hz)
 
 
 def fnu_to_apparent_mag(fnu):
