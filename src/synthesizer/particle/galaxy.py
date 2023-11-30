@@ -40,8 +40,7 @@ class Galaxy(BaseGalaxy):
 
     """
 
-    __slots__ = [
-        "lam",
+    attrs = [
         "stars",
         "gas",
         "sf_gas_metallicity",
@@ -108,7 +107,7 @@ class Galaxy(BaseGalaxy):
             self.calculate_integrated_gas_properties()
 
         # Ensure all attributes are initialised to None
-        for attr in Galaxy.__slots__:
+        for attr in Galaxy.attrs:
             try:
                 getattr(self, attr)
             except AttributeError:
@@ -150,20 +149,21 @@ class Galaxy(BaseGalaxy):
         """
         Load arrays for star properties into a `Stars`  object,
         and attach to this galaxy object
+        
+        TODO: this should be able to take a pre-existing stars object!
 
         Args:
-        initial_masses : array_like (float)
-            initial stellar particle masses (mass at birth), Msol
-        ages : array_like (float)
-            star particle age, Myr
-        metals : array_like (float)
-            star particle metallicity (total metal fraction)
-        **kwargs
+            initial_masses (array_like, float)
+                Initial stellar particle masses (mass at birth), Msol
+            ages (array_like, float)
+                Star particle age, Myr
+            metals (array_like, float)
+                Star particle metallicity (total metal fraction)
+            **kwargs
+                Arbitrary keyword arguments.
 
         Returns:
-        None
-
-        # TODO: this should be able to take a pre-existing stars object!
+            None
         """
         self.stars = Stars(initial_masses, ages, metals, **kwargs)
         self.calculate_integrated_stellar_properties()
@@ -463,10 +463,10 @@ class Galaxy(BaseGalaxy):
         """
         Calculate the gamma parameter, controlling the optical depth
         due to dust dependent on the mass and metallicity of star forming
-        gas. 
+        gas.
 
         gamma = gamma_max - (gamma_max - gamma_min) / C
-       
+
         C = 1 + (Z_SF / Z_MW) * (M_SF / M_star) * (1 / beta)
 
         gamma_max and gamma_min set the upper and lower bounds to which gamma
@@ -529,11 +529,9 @@ class Galaxy(BaseGalaxy):
             gamma = gamma_min
         elif stellar_mass == 0.0:
             gamma = gamma_min
-        else: 
-            C = (
-                1 + (sf_gas_metallicity / Z_norm)
-                * (sf_gas_mass / stellar_mass)
-                * (1.0 / beta)
+        else:
+            C = 1 + (sf_gas_metallicity / Z_norm) * (sf_gas_mass / stellar_mass) * (
+                1.0 / beta
             )
             gamma = gamma_max - (gamma_max - gamma_min) / C
 

@@ -18,9 +18,10 @@ from . import __file__ as filepath
 
 
 def check_lines_available(grid_name, grid_dir):
-    """Check that lines are available on this grid
+    """
+    Check that lines are available on this grid
 
-    Arguments:
+    Args:
         grid_name (str):
             The name of the grid file.
         grid_dir (str):
@@ -36,9 +37,10 @@ def check_lines_available(grid_name, grid_dir):
 
 
 def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
-    """Get a list of the lines available to a grid
+    """
+    Get a list of the lines available to a grid
 
-    Arguments:
+    Args:
         grid_name (str):
             The name of the grid file.
         grid_dir (str):
@@ -69,7 +71,7 @@ def flatten_linelist(list_to_flatten):
     Flatten a mixed list of lists and strings and remove duplicates. Used when
     converting a desired line list which may contain single lines and doublets.
 
-    Arguments:
+    Args:
         list_to_flatten (list)
             list containing lists and/or strings and integers
 
@@ -107,6 +109,10 @@ def parse_grid_id(grid_id):
     """
     This is used for parsing a grid ID to return the SPS model,
     version, and IMF
+
+    Args:
+        grid_id (str)
+            string grid identifier
     """
 
     if len(grid_id.split("_")) == 2:
@@ -364,7 +370,7 @@ class Grid:
             # Interpolate the spectra grid
             self.interp_spectra(new_lam)
 
-    def interp_spectra(self, new_lam):
+    def interp_spectra(self, new_lam, loop_grid=False):
         """
         Interpolates the spectra grid onto the provided wavelength grid.
 
@@ -375,6 +381,10 @@ class Grid:
         Args:
             new_lam (unyt_array/array-like, float)
                 The new wavelength array to interpolate the spectra onto.
+            loop_grid (bool)
+                flag for whether to do the interpolation over the whole
+                grid, or loop over the first axes. The latter is less memory
+                intensive, but slower. Defaults to False.
         """
 
         # Handle and remove the units from the passed wavelengths if needed
@@ -385,8 +395,20 @@ class Grid:
 
         # Loop over spectra to interpolate
         for spectra_type in self.available_spectra:
-            # Evaluate the function at the desired wavelengths
-            new_spectra = spectres(new_lam, self._lam, self.spectra[spectra_type])
+
+            # Are we doing the look up in one go, or looping?
+            if loop_grid:
+                new_spectra = [None] * len(self.spectra[spectra_type])
+                
+                # Loop over first axis of spectra array
+                for i, _spec in enumerate(self.spectra[spectra_type]):
+                    new_spectra[i] = spectres(new_lam, self._lam, _spec)
+               
+                del self.spectra[spectra_type] 
+                new_spectra = np.asarray(new_spectra)
+            else:    
+                # Evaluate the function at the desired wavelengths
+                new_spectra = spectres(new_lam, self._lam, self.spectra[spectra_type])
 
             # Update this spectra
             self.spectra[spectra_type] = new_spectra
