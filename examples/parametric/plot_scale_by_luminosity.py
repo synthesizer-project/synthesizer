@@ -162,8 +162,8 @@ ax_flux.legend(loc="upper right")
 ax_lum.legend(handles=legend_handles, labels=legend_labels, loc="upper left")
 
 ax_lum.set_ylim(
-    flux_to_luminosity(10**-4, cosmo, redshift=redshift),
-    flux_to_luminosity(10**12.5, cosmo, redshift=redshift),
+    flux_to_luminosity(10**-4 * nJy, cosmo, redshift=redshift),
+    flux_to_luminosity(10**12.5 * nJy, cosmo, redshift=redshift),
 )
 ax_flux.set_ylim(10**-4, 10**12.5)
 ax_lum.set_xlim(10**2, None)
