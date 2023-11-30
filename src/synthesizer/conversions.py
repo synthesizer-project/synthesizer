@@ -114,7 +114,7 @@ def flam_to_fnu(lam, flam):
 
     Returns:
         unyt_quantity/unyt_array
-            The spectral flux in terms of frequency.
+            The spectral flux in terms of frequency, in units of nJy.
 
     Raises:
         IncorrectUnits
@@ -127,26 +127,24 @@ def flam_to_fnu(lam, flam):
     if not has_units(lam):
         raise exceptions.IncorrectUnits("lam must be given with unyt units.")
 
-    # Delta lambda
-    lam_m = lam * 10**-10
-
-    return flam * lam / (c / lam_m)
+    return (flam * lam / (c / lam_m)).to("nJy")
 
 
 def fnu_to_flam(lam, fnu):
     """
-    Converts flux in terms of frequency (f_nu) to flux in terms of wavelength
-    (flam).
+    Converts spectral flux density in terms of frequency (f_nu)
+    to flux in terms of wavelength (flam).
 
     Args:
         lam (unyt_quantity/unyt_array)
-            The wavelength array the flux is defined at.
+            The wavelength array the flux density is defined at.
         fnu (unyt_quantity/unyt_array)
-            The flux in terms of frequency.
+            The spectral flux density in terms of frequency.
 
     Returns:
         unyt_quantity/unyt_array
-            The flux in terms of wavlength.
+            The spectral flux density in terms of wavelength, in units
+            of erg / s / Hz / cm**2.
 
     Raises:
         IncorrectUnits
@@ -159,10 +157,7 @@ def fnu_to_flam(lam, fnu):
     if not has_units(lam):
         raise exceptions.IncorrectUnits("lam must be given with unyt units.")
 
-    # Delta lambda
-    lam_m = lam * 1e-10
-
-    return fnu * (c / lam_m) / lam
+    return (fnu * (c / lam_m) / lam).to("erg / s / Hz / cm**2")
 
 
 def absolute_mag_to_lnu(ab_mag):

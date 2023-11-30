@@ -67,6 +67,7 @@ default_units = {
     "continuum": erg / s / Hz,
     "flux": erg / s / cm**2,
     "fnu": nJy,
+    "flam": erg / s / Angstrom / cm**2,
     "ew": Angstrom,
     "coordinates": Mpc,
     "smoothing_lengths": Mpc,
