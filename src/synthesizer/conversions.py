@@ -20,10 +20,7 @@ from synthesizer.utils import has_units
 
 def flux_to_luminosity(flux, cosmo, redshift):
     """
-    Converts flux to luminosity in erg / s / Hz.
-
-    This can either be flux -> luminosity per wavelength/frequency (intensity)
-    or power; all units are handled automatically.
+    Converts flux to luminosity in erg / s.
 
     Args:
         flux (unyt_quantity/unyt_array)
@@ -56,7 +53,7 @@ def flux_to_luminosity(flux, cosmo, redshift):
     # And convert to erg / s / Hz
     lum /= 1 + redshift
 
-    return lum.to(erg / s / Hz)
+    return lum.to(erg / s)
 
 
 def fnu_to_apparent_mag(fnu):
@@ -89,7 +86,7 @@ def apparent_mag_to_fnu(app_mag):
 
     Args:
         app_mag (float)
-            The apparent AB magnitude to be converted, can either be a 
+            The apparent AB magnitude to be converted, can either be a
             singular value or array.
 
     Returns:
@@ -99,6 +96,65 @@ def apparent_mag_to_fnu(app_mag):
     """
 
     return 10**9 * 10 ** (-0.4 * (app_mag - 8.9)) * nJy
+
+
+def llam_to_lnu(lam, llam):
+    """
+    Converts spectral luminosity density in terms of wavelength (llam) to
+    spectral luminosity density in terms of frequency (lnu).
+
+    Args:
+        lam (unyt_quantity/unyt_array)
+            The wavelength array the flux is defined at.
+        llam (unyt_quantity/unyt_array)
+            The spectral luminoisty density in terms of wavelength.
+
+    Returns:
+        unyt_quantity/unyt_array
+            The spectral luminosity in terms of frequency, in units of nJy.
+
+    Raises:
+        IncorrectUnits
+            If units are missing an error is raised.
+    """
+
+    # Ensure we have units
+    if not has_units(llam):
+        raise exceptions.IncorrectUnits("llam must be given with unyt units.")
+    if not has_units(lam):
+        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
+
+    return (llam * lam**2 / c).to("erg / s / Hz")
+
+
+def lnu_to_llam(lam, lnu):
+    """
+    Converts spectral luminoisty density in terms of frequency (lnu)
+    to luminoisty in terms of wavelength (llam).
+
+    Args:
+        lam (unyt_quantity/unyt_array)
+            The wavelength array the luminoisty density is defined at.
+        lnu (unyt_quantity/unyt_array)
+            The spectral luminoisty density in terms of frequency.
+
+    Returns:
+        unyt_quantity/unyt_array
+            The spectral luminoisty density in terms of wavelength, in units
+            of erg / s / A.
+
+    Raises:
+        IncorrectUnits
+            If units are missing an error is raised.
+    """
+
+    # Ensure we have units
+    if not has_units(lnu):
+        raise exceptions.IncorrectUnits("lnu must be given with unyt units.")
+    if not has_units(lam):
+        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
+
+    return ((lnu * c) / lam**2).to("erg / s / angstrom")
 
 
 def flam_to_fnu(lam, flam):
@@ -157,7 +213,7 @@ def fnu_to_flam(lam, fnu):
     if not has_units(lam):
         raise exceptions.IncorrectUnits("lam must be given with unyt units.")
 
-    return ((fnu * c) / lam**2).to("erg / s / Hz / cm**2")
+    return ((fnu * c) / lam**2).to("erg / s / angstrom / cm**2")
 
 
 def absolute_mag_to_lnu(ab_mag):
