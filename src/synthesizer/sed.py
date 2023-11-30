@@ -101,7 +101,7 @@ class Sed:
         else:
             if isinstance(lnu, (unyt_array, np.ndarray)):
                 self.lnu = lnu
-            if isinstance(lnu, list)):
+            if isinstance(lnu, list):
                 self.lnu = np.asarray(lnu)
             else:
                 raise ValueError(('`lnu` must be a unyt_array, list, list '
