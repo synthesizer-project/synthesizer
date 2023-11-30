@@ -119,7 +119,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         _, y_max = plt.ylim()
 
         plt.title(label, fontsize=8, transform=plt.gca().transAxes, y=0.8)
-
+        
         plt.scatter(
             grid.metallicity,
             EqW,
