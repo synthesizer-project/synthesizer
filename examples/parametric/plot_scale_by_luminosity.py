@@ -17,7 +17,7 @@ from synthesizer.grid import Grid
 from synthesizer.filters import Filter
 from synthesizer.parametric import Stars, SFH, ZDist
 from synthesizer import galaxy
-from synthesizer.utils import m_to_fnu, flux_to_luminosity
+from synthesizer.conversions import apparent_mag_to_fnu, flux_to_luminosity
 
 
 # Set up a figure to plot on
