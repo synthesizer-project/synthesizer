@@ -274,7 +274,7 @@ def absolute_mag_to_lnu(ab_mag):
 
 
 def lnu_to_absolute_mag(lnu):
-    """Convert luminosity to absolute magnitude (M).
+    """Convert spectral luminosity density to absolute magnitude (M).
 
     Args:
         unyt_quantity/unyt_array
