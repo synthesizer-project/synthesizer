@@ -28,11 +28,11 @@ from synthesizer.parametric import Galaxy as ParametricGalaxy
 
 
 def galaxy(
-    name="galaxy",
     stars=None,
     gas=None,
     black_holes=None,
     redshift=None,
+    name="galaxy",
 ):
     """A factory fucntion to return the desired type of galaxy.
 
@@ -69,6 +69,8 @@ def galaxy(
 
     Raises:
         InconsistentArguments
+            If passed both particle and parametric arguments an error is
+            raised.
     """
 
     # Ensure the passed arguments make sense
@@ -81,11 +83,12 @@ def galaxy(
                 "object?"
             )
 
-    # Now we know we are ok instantiate the correct object
+    # Now we know we are ok, instantiate the correct object
     if isinstance(stars, ParametricStars):
         return ParametricGalaxy(
             stars=stars,
             redshift=redshift,
+            black_holes=black_holes,
             name=name,
         )
 

@@ -1,4 +1,6 @@
-""" Compare SPS grid assignment methods
+"""
+Compare SPS grid assignment methods
+===================================
 
 This example compares a the cloud in cell (CIC) and nearest grid point (NGP)
 grid assignment methods. These methods dictate how mass is assigned to

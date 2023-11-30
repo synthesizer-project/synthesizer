@@ -10,14 +10,17 @@ wavelength array, fs is a list of SVO database filter codes, tophats is a
 dictionary defining top hot filters and generics is a dictionary of
 transmission curves:
 
-  filt = Filter("generic/filter.1", transmission=trans, new_lam=lams)
-  filt = Filter("top_hat/filter.1", lam_min=3000, lam_max=5500)
-  filt = Filter("top_hat/filter.2", lam_eff=7000, lam_fwhm=2000)
-  filt = Filter("JWST/NIRCam.F200W", new_lam=lams)
+    filt = Filter("generic/filter.1", transmission=trans, new_lam=lams)
+    filt = Filter("top_hat/filter.1", lam_min=3000, lam_max=5500)
+    filt = Filter("top_hat/filter.2", lam_eff=7000, lam_fwhm=2000)
+    filt = Filter("JWST/NIRCam.F200W", new_lam=lams)  
+    filters = FilterCollection(
+        filter_codes=fs,
+        tophat_dict=tophats,
+        generic_dict=generics,
+        new_lam=lams
+    )
 
-  filters = FilterCollection(
-      filter_codes=fs, tophat_dict=tophats, generic_dict=generics, new_lam=lams
-  )
 """
 import h5py
 import numpy as np
@@ -889,13 +892,14 @@ class FilterCollection:
 class Filter:
     """
     A class holding a filter's transmission curve and wavelength array.
-    A filter can either be retrieved from the SVO database
-    (http://svo2.cab.inta-csic.es/svo/theory/fps3/), made from specific top hat
-    filter properties or made from a generic filter transmission curve and
-    wavelength array.
-    Also contains methods for calculating basic filter properties taken
-    from (page 42 (5.1)):
-        http://stsdas.stsci.edu/stsci_python_epydoc/SynphotManual.pdf
+    A filter can either be retrieved from the
+    `SVO database <http://svo2.cab.inta-csic.es/svo/theory/fps3/>`__,
+    made from specific top hat filter properties, or made from a generic
+    filter transmission curve and wavelength array.
+
+    Also contains methods for calculating basic filter properties taken from
+    `here <http://stsdas.stsci.edu/stsci_python_epydoc/SynphotManual.pdf>`__
+    (page 42 (5.1))
 
     Attributes:
         filter_code (string)

@@ -168,10 +168,10 @@ class BaseGalaxy:
 
         This will run Sed.get_fnu(...) and populate Sed.fnu (and sed.obslam
         and sed.obsnu) for all spectra in:
-            - Galaxy.spectra
-            - Galaxy.stars.spectra
-            - Galaxy.gas.spectra (WIP)
-            - Galaxy.black_holes.spectra (WIP)
+        - Galaxy.spectra
+        - Galaxy.stars.spectra
+        - Galaxy.gas.spectra (WIP)
+        - Galaxy.black_holes.spectra (WIP)
 
         Args:
             cosmo (astropy.cosmology.Cosmology)
