@@ -869,8 +869,8 @@ class Sed:
         Measure an absorption feature index.
 
         Args:
-            absorption (tuple)
-                Absoprtion feature window.
+            feature (tuple)
+                Absorption feature window.
             blue (tuple)
                 Blue continuum window for fitting.
             red (tuple)

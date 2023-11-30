@@ -149,20 +149,21 @@ class Galaxy(BaseGalaxy):
         """
         Load arrays for star properties into a `Stars`  object,
         and attach to this galaxy object
+        
+        TODO: this should be able to take a pre-existing stars object!
 
         Args:
-        initial_masses : array_like (float)
-            initial stellar particle masses (mass at birth), Msol
-        ages : array_like (float)
-            star particle age, Myr
-        metals : array_like (float)
-            star particle metallicity (total metal fraction)
-        **kwargs
+            initial_masses (array_like, float)
+                Initial stellar particle masses (mass at birth), Msol
+            ages (array_like, float)
+                Star particle age, Myr
+            metals (array_like, float)
+                Star particle metallicity (total metal fraction)
+            **kwargs
+                Arbitrary keyword arguments.
 
         Returns:
-        None
-
-        # TODO: this should be able to take a pre-existing stars object!
+            None
         """
         self.stars = Stars(initial_masses, ages, metals, **kwargs)
         self.calculate_integrated_stellar_properties()
