@@ -19,29 +19,23 @@ class ShapeCommands:
     def table_sed(model_name, lam, lnu, output_dir="./"):
         """
         A function for creating a cloudy input file using a tabulated SED.
-
-        Arguments
-        ----------
-        model_name: str
-            User defined name of the model used for cloudy inputs and outputs.
-        lam: array or unyt_array
-            Wavelength grid with or without units (via unyt)
-        lnu: array
-            Spectral luminosity density
-        output_dir: str
-            Output directory path
-
-        Returns
-        -------
-        list
-            a list of strings with the cloudy input commands
-
-
-        TODO
-        -------
-        - allow the user to instead specify nu and to automatically convert 
+        
+        TODO: allow the user to instead specify nu and to automatically convert 
         units if provided
 
+        Args:
+            model_name (str)
+                User defined name of the model used for cloudy inputs and outputs.
+            lam (array or unyt_array)
+                Wavelength grid with or without units (via unyt)
+            lnu (array)
+                Spectral luminosity density
+            output_dir (str)
+                Output directory path
+
+        Returns:
+            list
+                a list of strings with the cloudy input commands
         """
 
         # if lam is not a unyt_array assume it has units of angstrom and 
