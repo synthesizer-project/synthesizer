@@ -91,15 +91,15 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         # --- define the parameters of the star formation and metal enrichment histories
         Z = grid.metallicity
         stellar_mass = 1e8
-        EqW = []
+        eqw = []
 
         # Compute each index for each metallicity in the grid.
         feature, blue, red = index_window[i], blue_window[i], red_window[i]
 
         for k in range(0, len(Z)):
-            EqW = measure_equivalent_width(index, feature, blue, red, Z[k], stellar_mass, grid, EqW, 0)
+            eqw = measure_equivalent_width(index, feature, blue, red, Z[k], stellar_mass, grid, eqw, 0)
 
-        print('Mean Equivalent width [', index, ']:', np.mean(EqW))
+        print('Mean Equivalent width [', index, ']:', np.mean(eqw))
 
         # Configure plot figure
         plt.rcParams["figure.dpi"] = 200
@@ -122,7 +122,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         
         plt.scatter(
             grid.metallicity,
-            EqW,
+            eqw,
             color="white",
             edgecolors="grey",
             alpha=1.0,
@@ -130,15 +130,15 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
             linewidth=0.5,
             s=10,
         )
-        plt.semilogx(grid.metallicity, EqW, linewidth=0.75, color="grey")
-        EqW.clear()
+        plt.semilogx(grid.metallicity, eqw, linewidth=0.75, color="grey")
+        eqw.clear()
 
         plt.tight_layout()
 
         if i == len(uv_index) - 1:
             plt.show()
             
-def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, EqW, mode):
+def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, eqw, mode):
     """
     Calculate equivalent width for a specified UV index.
 
@@ -147,7 +147,7 @@ def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, EqW, mod
         Z (float): Metallicity.
         smass (float): Stellar mass.
         grid (Grid): The grid object.
-        EqW (float): Initial equivalent width.
+        eqw (float): Initial equivalent width.
         mode (str): Calculation mode.
 
     Returns:
@@ -157,16 +157,12 @@ def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, EqW, mod
         ValueError: If mode is invalid.
     """
 
-    sfh_p = {"duration": 100 * Myr}
-
-    Z_p = {"metallicity": Z}  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = smass
-
-    # --- define the functional form of the star formation and metal
-    # enrichment histories
+    
+    Z_p = {"metallicity": Z}
+    metal_dist = ZDist.DeltaConstant(**Z_p) # constant metallicity
+    sfh_p = {"duration": 100 * Myr}
     sfh = SFH.Constant(**sfh_p)  # constant star formation
-
-    metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
 
     # --- get 2D star formation and metal enrichment history for the
     # given SPS grid. This is (age, Z).
@@ -190,13 +186,13 @@ def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, EqW, mod
     # --- measure equivalent widths
     equivalent_width = None
 
-    EqW.append(sed.measure_index(
+    eqw.append(sed.measure_index(
     	feature, 
     	blue, 
     	red,
     ))
     
-    return EqW
+    return eqw
 
 if __name__ == "__main__":
     grid_name = "test_grid"
