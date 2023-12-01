@@ -104,7 +104,7 @@ class Sed:
             )
 
         # Calculate frequency
-        self.nu = (c / (self.lam)).to("Hz").value  # Hz
+        self.nu = c / self.lam
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
