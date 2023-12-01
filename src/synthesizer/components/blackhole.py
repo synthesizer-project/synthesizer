@@ -283,32 +283,17 @@ class BlackholesComponent:
 
         return self.accretion_rate_eddington
 
-    def get_spectra(self,
-                    emission_model,
-                    tau_v=None,
-                    dust_curve=None,
-                    dust_emission_model=None,
-                    spectra_ids=None,
-                    verbose=True
-                    ):
+    def get_spectra_intrinsic(self,
+                              emission_model,
+                              ):
         """
-        Generate blackhole spectra for a given emission_model.
+        Generate intrinsic blackhole spectra for a given emission_model.
 
         Args
             emission_model (synthesizer.blackholes.BlackHoleEmissionModel)
                 A synthesizer BlackHoleEmissionModel instance.
-            tau_v (float)
-                The v-band optical depth.
-            dust_curve (object)
-                A synthesizer dust.attenuation.AttenuationLaw instance.
-            dust_emission_model (object)
-                A synthesizer dust.emission.DustEmission instance.
-            spectra_ids (float)
-                A list of spectra to return. Otherwise return all the
-                available spectra. 
 
         """
-
 
         # Get the parameters that this particular emission model requires
         emission_model_parameters = {}
@@ -346,6 +331,36 @@ class BlackholesComponent:
             parameter_dict, self.spectra = emission_model.get_spectra(
                 spectra_ids=spectra_ids, **emission_model_parameters
             )
+        
+        return self.spectra
+
+    def get_spectra_attenuated(self,
+                               emission_model,
+                               tau_v=None,
+                               dust_curve=None,
+                               dust_emission_model=None,
+                               ):
+        """
+        Generate blackhole spectra for a given emission_model including 
+        dust attenuation and potentially emission.
+
+        Args
+            emission_model (synthesizer.blackholes.BlackHoleEmissionModel)
+                A synthesizer BlackHoleEmissionModel instance.
+            tau_v (float)
+                The v-band optical depth.
+            dust_curve (object)
+                A synthesizer dust.attenuation.AttenuationLaw instance.
+            dust_emission_model (object)
+                A synthesizer dust.emission.DustEmission instance.
+            spectra_ids (float)
+                A list of spectra to return. Otherwise return all the
+                available spectra. 
+
+        """
+
+        # Generate the intrinsic spectra
+        self.get_spectra_intrinsic(emission_model)
 
         # If dust attenuation is provided then calcualate additional spectra
         if (dust_curve is not None) and (tau_v is not None):
@@ -383,3 +398,20 @@ class BlackholesComponent:
                     to be provided.')
         
         return self.spectra
+
+    def get_spectra(self,
+                    emission_model,
+                    tau_v=None,
+                    dust_curve=None,
+                    dust_emission_model=None,
+                    ):
+        """
+        Alias for get_spectra_attenuated, left in for the time being.
+        """
+
+        return self.get_spectra_attenuated(
+            emission_model=emission_model,
+            tau_v=tau_v,
+            dust_curve=dust_curve,
+            dust_emission_model=dust_emission_model,
+            )
