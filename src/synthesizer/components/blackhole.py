@@ -283,12 +283,15 @@ class BlackholesComponent:
 
         return self.accretion_rate_eddington
 
-    def get_spectra(self, emission_model, spectra_ids=None, verbose=True):
+    def get_spectra_intrinsic(
+        self,
+        emission_model,
+    ):
         """
-        Generate blackhole spectra for a given emission_model.
+        Generate intrinsic blackhole spectra for a given emission_model.
 
         Args
-            synthesizer.blackholes.BlackHoleEmissionModel
+            emission_model (synthesizer.blackholes.BlackHoleEmissionModel)
                 A synthesizer BlackHoleEmissionModel instance.
 
         """
@@ -313,9 +316,7 @@ class BlackholesComponent:
                 parameters = dict(zip(emission_model_parameters.keys(), values))
 
                 # Get the parameters and spectra
-                parameter_dict, spectra = emission_model.get_spectra(
-                    spectra_ids=spectra_ids, **parameters
-                )
+                parameter_dict, spectra = emission_model.get_spectra(**parameters)
 
                 if self.spectra is None:
                     # Necessary so not a pointer
@@ -327,7 +328,88 @@ class BlackholesComponent:
                         )
         else:
             parameter_dict, self.spectra = emission_model.get_spectra(
-                spectra_ids=spectra_ids, **emission_model_parameters
+                **emission_model_parameters
             )
 
         return self.spectra
+
+    def get_spectra_attenuated(
+        self,
+        emission_model,
+        tau_v=None,
+        dust_curve=None,
+        dust_emission_model=None,
+    ):
+        """
+        Generate blackhole spectra for a given emission_model including
+        dust attenuation and potentially emission.
+
+        Args
+            emission_model (synthesizer.blackholes.BlackHoleEmissionModel)
+                A synthesizer BlackHoleEmissionModel instance.
+            tau_v (float)
+                The v-band optical depth.
+            dust_curve (object)
+                A synthesizer dust.attenuation.AttenuationLaw instance.
+            dust_emission_model (object)
+                A synthesizer dust.emission.DustEmission instance.
+            spectra_ids (float)
+                A list of spectra to return. Otherwise return all the
+                available spectra.
+
+        """
+
+        # Generate the intrinsic spectra
+        self.get_spectra_intrinsic(emission_model)
+
+        # If dust attenuation is provided then calcualate additional spectra
+        if (dust_curve is not None) and (tau_v is not None):
+            self.spectra["emergent"] = self.spectra["intrinsic"].apply_attenuation(
+                tau_v, dust_curve=dust_curve
+            )
+
+            # If a dust emission model is also provided then calculate the
+            # dust spectrum and total emission.
+            if dust_emission_model is not None:
+                # ISM dust heated by old stars.
+                dust_bolometric_luminosity = (
+                    self.spectra["intrinsic"].bolometric_luminosity
+                    - self.spectra["emergent"].bolometric_luminosity
+                )
+
+                # Calculate normalised dust emission spectrum
+                self.spectra["dust"] = dust_emission_model.get_spectra(
+                    self.spectra["emergent"].lam
+                )
+
+                # Scale the dust spectra by the dust_bolometric_luminosity.
+                self.spectra["dust"]._lnu *= dust_bolometric_luminosity.value
+
+                # Calculate total spectrum
+                self.spectra["total"] = self.spectra["emergent"] + self.spectra["dust"]
+
+        elif (dust_curve is not None) or (tau_v is not None):
+            raise exceptions.MissingArgument(
+                'To enable dust attenuation both "dust_curve" and "tau_v" need\
+                    to be provided.'
+            )
+
+        return self.spectra
+
+    def get_spectra(
+        self,
+        emission_model,
+        tau_v=None,
+        dust_curve=None,
+        dust_emission_model=None,
+    ):
+        """
+        Alias for get_spectra_attenuated, left in for the time being.
+        """
+
+        return self.get_spectra_attenuated(
+            emission_model=emission_model,
+            tau_v=tau_v,
+            dust_curve=dust_curve,
+            dust_emission_model=dust_emission_model,
+        )
