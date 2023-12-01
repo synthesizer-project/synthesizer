@@ -41,6 +41,8 @@ class Sed:
             The rest frame frequency array.
         lnu (Quantity, array-like, float)
             The spectral luminosity density.
+        bolometric_luminosity (Quantity, float)
+            The bolometric luminosity.
         fnu (Quantity, array-like, float)
             The spectral flux density.
         obslam (Quantity, array-like, float)
@@ -68,6 +70,7 @@ class Sed:
     obslam = Quantity()
     luminosity = Quantity()
     llam = Quantity()
+    bolometric_luminosity = Quantity()
 
     def __init__(self, lam, lnu=None, description=None):
         """
@@ -75,9 +78,11 @@ class Sed:
 
         Args:
             lam (array-like, float)
-                The rest frame wavelength array.
+                The rest frame wavelength array. Default units are defined
+                in `synthesizer.units`. If unmodified these will be Angstroms.
             lnu (array-like, float)
-                The spectral luminosity density.
+                The spectral luminosity density. Default units are defined in
+                `synthesizer.units`. If unmodified these will be erg/s/Hz
             description (string)
                 An optional descriptive string defining the Sed.
         """
@@ -86,17 +91,41 @@ class Sed:
         self.description = description
 
         # Set the wavelength
-        self.lam = lam  # \AA
+        if isinstance(lam, (unyt_array, np.ndarray)):
+            self.lam = lam
+        elif isinstance(lam, list):
+            self.lam = np.asarray(lam)  # \AA
+        else:
+            raise ValueError(
+                (
+                    "`lam` must be a unyt_array, list, list of "
+                    "lists, or N-d numpy array"
+                )
+            )
+
+        # Calculate frequency
+        self.nu = c / self.lam
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
+            self.bolometric_luminosity = None
         else:
-            self.lnu = lnu
+            if isinstance(lnu, (unyt_array, np.ndarray)):
+                self.lnu = lnu
+            elif isinstance(lnu, list):
+                self.lnu = np.asarray(lnu)
+            else:
+                raise ValueError(
+                    (
+                        "`lnu` must be a unyt_array, list, list "
+                        "of lists, or N-d numpy array"
+                    )
+                )
 
-        # Calculate frequency
-        self.nu = (c / (self.lam)).to("Hz").value  # Hz
+        # Measure the bolometric luminosity
+        self.bolometric_luminosity = self.measure_bolometric_luminosity()
 
         # Redshift of the SED
         self.redshift = 0
@@ -257,9 +286,15 @@ class Sed:
             {np.max(self.lam):.2f}] \n"
         pstr += f"log10(Peak luminosity/{self.lnu.units}): \
             {np.log10(np.max(self.lnu)):.2f} \n"
-        bolometric_luminosity = self.measure_bolometric_luminosity()
-        pstr += f"log10(Bolometric luminosity/{bolometric_luminosity.units}): \
-            {np.log10(bolometric_luminosity):.2f} \n"
+
+        # if bolometric luminosity attribute has not been calculated,
+        # calculate it.
+        if self.bolometric_luminosity is None:
+            self.bolometric_luminosity = self.measure_bolometric_luminosity()
+
+        pstr += f"log10(Bolometric luminosity/ \
+            {self.bolometric_luminosity.units}): \
+            {np.log10(self.bolometric_luminosity):.2f} \n"
         pstr += "-" * 10
 
         return pstr
@@ -448,6 +483,7 @@ class Sed:
                 "Options are 'trapz' or 'quad'"
             )
 
+        self.bolometric_luminosity = bolometric_luminosity
         return bolometric_luminosity
 
     def measure_window_luminosity(self, window, method="trapz"):
@@ -1058,7 +1094,7 @@ class Sed:
         else:
             spectra[mask] *= transmission
 
-        return Sed(self.lam, spectra)
+        return Sed(self.lam, lnu=spectra)
 
     def calculate_ionising_photon_production_rate(
         self,
