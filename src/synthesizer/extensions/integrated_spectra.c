@@ -158,7 +158,8 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     for (int ilam = 0; ilam < nlam; ilam++) {
 
       /* Add the contribution to this wavelength. */
-      spectra[ilam] += grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight;
+      /* fesc is already included in the weight. */
+      spectra[ilam] += grid_spectra[spectra_ind + ilam] * weight;
     }
   }
 
