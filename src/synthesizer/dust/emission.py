@@ -7,6 +7,7 @@ from unyt import Angstrom, unyt_quantity, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.utils import planck
+from synthesizer.sed import Sed
 
 
 class EmissionBase:
@@ -53,14 +54,13 @@ class EmissionBase:
             limit=100
         )[0]
 
-    def lnu(self, _lam):
+    def get_spectra(self, _lam):
         """
         Returns the normalised lnu for the provided wavelength grid
 
-        Parameters
-        ----------
-        _lam: (float/array-like, float)
-                An array of wavelengths (expected in AA, global unit)
+        Arguments:
+            _lam (float/array-like, float)
+                    An array of wavelengths (expected in AA, global unit)
 
         """
         if isinstance(_lam, (unyt_quantity, unyt_array)):
@@ -68,7 +68,15 @@ class EmissionBase:
         else:
             lam = _lam * Angstrom
 
-        return (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
+        # lnu = (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
+        lnu = (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
+
+        sed = Sed(lam=lam, lnu=lnu)
+
+        # normalise the spectrum 
+        sed._lnu /= sed.measure_bolometric_luminosity().value
+
+        return sed
 
 
 class Blackbody(EmissionBase):
