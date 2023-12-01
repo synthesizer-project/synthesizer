@@ -37,14 +37,14 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   const int ndim;
   const int npart, nlam;
-  const double fesc;
   const PyObject *grid_tuple, *part_tuple;
   const PyArrayObject *np_grid_spectra;
+  const PyArrayObject *np_fesc;
   const PyArrayObject *np_part_mass, *np_ndims;
   const char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOdOiiis", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &fesc, &np_ndims, &ndim,
+  if (!PyArg_ParseTuple(args, "OOOOOOiiis", &np_grid_spectra, &grid_tuple,
+                        &part_tuple, &np_part_mass, &np_fesc, &np_ndims, &ndim,
                         &npart, &nlam, &method))
     return NULL;
 
@@ -68,6 +68,9 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   /* Extract a pointer to the particle masses. */
   const double *part_mass = PyArray_DATA(np_part_mass);
+
+  /* Extract a pointer to the fesc array. */
+  const double *fesc = PyArray_DATA(np_fesc);
 
   /* Allocate a single array for grid properties*/
   int nprops = 0;
@@ -118,19 +121,19 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     /* Finally, compute the weights for this particle using the
      * requested method. */
     if (strcmp(method, "cic") == 0) {
-      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim,
-                      p);
+      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim, p,
+                      fesc[p]);
     } else if (strcmp(method, "ngp") == 0) {
-      weight_loop_ngp(grid_props, part_props, mass, grid_weights, dims, ndim,
-                      p);
+      weight_loop_ngp(grid_props, part_props, mass, grid_weights, dims, ndim, p,
+                      fesc[p]);
     } else {
       /* Only print this warning once! */
       if (p == 0)
         printf(
             "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
             method);
-      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim,
-                      p);
+      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim, p,
+                      fesc[p]);
     }
 
   } /* Loop over particles. */
@@ -155,7 +158,8 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     for (int ilam = 0; ilam < nlam; ilam++) {
 
       /* Add the contribution to this wavelength. */
-      spectra[ilam] += grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight;
+      /* fesc is already included in the weight */
+      spectra[ilam] += grid_spectra[spectra_ind + ilam] * weight;
     }
   }
 
