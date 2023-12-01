@@ -85,6 +85,7 @@ int binary_search(int low, int high, const double *arr, const double val) {
  * @param dims: The length of each grid dimension.
  * @param ndim: The number of grid dimensions.
  * @param p: Index of the current particle.
+ * @param fesc: The escape fraction.
  */
 void weight_loop_cic(const double **grid_props, const double **part_props,
                      const double mass, double *weights, const int *dims,
@@ -195,6 +196,7 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
  * @param dims: The length of each grid dimension.
  * @param ndim: The number of grid dimensions.
  * @param p: Index of the current particle.
+ * @param fesc: The escape fraction.
  */
 void weight_loop_ngp(const double **grid_props, const double **part_props,
                      const double mass, double *weights, const int *dims,
