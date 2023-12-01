@@ -67,6 +67,7 @@ default_units = {
     "continuum": erg / s / Hz,
     "flux": erg / s / cm**2,
     "fnu": nJy,
+    "flam": erg / s / Angstrom / cm**2,
     "ew": Angstrom,
     "coordinates": Mpc,
     "smoothing_lengths": Mpc,
@@ -189,6 +190,8 @@ class Units(metaclass=UnitSingleton):
 
         fnu (unyt.unit_object.Unit)
             Spectral flux density (in terms of frequency) unit.
+        flam (unyt.unit_object.Unit)
+            Spectral flux density (in terms of wavelength) unit.
         flux (unyt.unit_object.Unit)
             "Rest frame" Spectral flux density (at 10 pc) unit.
 
@@ -292,6 +295,7 @@ class Units(metaclass=UnitSingleton):
         self.eddington_luminosities = erg / s
         self.lnu = erg / s / Hz  # spectral luminosity density
         self.llam = erg / s / Angstrom  # spectral luminosity density
+        self.flam = erg / s / Angstrom / cm**2  # spectral flux density
         self.continuum = erg / s / Hz  # continuum level of an emission line
 
         # Fluxes

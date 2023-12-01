@@ -17,7 +17,7 @@ from synthesizer.grid import Grid
 from synthesizer.filters import Filter
 from synthesizer.parametric import Stars, SFH, ZDist
 from synthesizer import galaxy
-from synthesizer.utils import m_to_fnu, flux_to_luminosity
+from synthesizer.conversions import apparent_mag_to_fnu, fnu_to_lnu
 
 
 # Set up a figure to plot on
@@ -116,7 +116,7 @@ ax_flux.plot(
 )
 
 # And scale by flux
-scale_flux = m_to_fnu(20)
+scale_flux = apparent_mag_to_fnu(20)
 print(scale_flux)
 gal.stars.scale_mass_by_flux(
     flux=scale_flux,
@@ -162,8 +162,8 @@ ax_flux.legend(loc="upper right")
 ax_lum.legend(handles=legend_handles, labels=legend_labels, loc="upper left")
 
 ax_lum.set_ylim(
-    flux_to_luminosity(10**-4, cosmo, redshift=redshift),
-    flux_to_luminosity(10**12.5, cosmo, redshift=redshift),
+    fnu_to_lnu(10**-4 * nJy, cosmo, redshift=redshift),
+    fnu_to_lnu(10**12.5 * nJy, cosmo, redshift=redshift),
 )
 ax_flux.set_ylim(10**-4, 10**12.5)
 ax_lum.set_xlim(10**2, None)
