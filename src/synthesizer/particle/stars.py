@@ -343,7 +343,7 @@ class Stars(Particles, StarsComponent):
 
         # If fesc isn't an array make it one
         if not isinstance(fesc, np.ndarray):
-            fesc = np.ascontiguousarray(np.full(npart, fesc, dtype=np.float32))
+            fesc = np.ascontiguousarray(np.full(npart, fesc))
 
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
