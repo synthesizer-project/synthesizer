@@ -178,7 +178,7 @@ class Grid:
             otherwise, this is a list of the requested lines.
         read_spectra (bool/list)
             Flag for whether to read spectra.
-        spectra (array-like, float)
+        spectra (dict, array-like, float)
             The spectra array from the grid. This is an N-dimensional
             grid where N is the number of axes of the SPS grid. The final
             dimension is always wavelength.
@@ -395,18 +395,17 @@ class Grid:
 
         # Loop over spectra to interpolate
         for spectra_type in self.available_spectra:
-
             # Are we doing the look up in one go, or looping?
             if loop_grid:
                 new_spectra = [None] * len(self.spectra[spectra_type])
-                
+
                 # Loop over first axis of spectra array
                 for i, _spec in enumerate(self.spectra[spectra_type]):
                     new_spectra[i] = spectres(new_lam, self._lam, _spec)
-               
-                del self.spectra[spectra_type] 
+
+                del self.spectra[spectra_type]
                 new_spectra = np.asarray(new_spectra)
-            else:    
+            else:
                 # Evaluate the function at the desired wavelengths
                 new_spectra = spectres(new_lam, self._lam, self.spectra[spectra_type])
 
@@ -741,3 +740,19 @@ class Grid:
 
         # Return tuple of wavelengths and delta lambda
         return self.lam, delta_lambda
+
+    def get_sed(self, spectra_type):
+        """
+        Get the spectra grid as an Sed object enabling grid wide
+        use of Sed methods for flux, photometry, indices, ionising photons
+        etc.
+
+        Args:
+            spectra_type (string)
+                The key of the spectra grid to extract as an Sed object.
+
+        Returns:
+            Sed
+                The spectra grid as an Sed object.
+        """
+        return Sed(self.lam, self.spectra[spectra_type])
