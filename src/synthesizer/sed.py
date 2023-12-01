@@ -276,6 +276,17 @@ class Sed:
         return self.lnu * self.nu
 
     @property
+    def flux(self):
+        """
+        Get the spectra in terms fo flux
+
+        Returns:
+            flux (unyt_array)
+                The flux array.
+        """
+        return self.fnu * self.obsnu
+
+    @property
     def llam(self):
         """
         Get the spectral luminosity density per Angstrom.
@@ -1097,19 +1108,17 @@ def plot_spectra(
     figsize=(3.5, 5),
     label=None,
     draw_legend=True,
-    rest_frame=True,
     x_units=None,
     y_units=None,
-    plot_density=True,
+    spectra_to_plot="lnu",
 ):
     """
     Plots either a specific spectra or all spectra provided in a dictionary.
+    The plotted "type" of spectra is defined by the spectra_to_plot keyword
+    arrgument which defaults to "lnu".
 
     This is a generic plotting function to be used either directly or to be
     wrapped by helper methods through Synthesizer.
-
-    By default the spectral energy density will be plotted (lnu) but optionally
-    the luminosity can be plotted.
 
     Args:
         spectra (dict/Sed)
@@ -1139,9 +1148,6 @@ def plot_spectra(
             spectra.
         draw_legend (bool)
             Whether to draw the legend.
-        rest_frame (bool)
-            Whether to plot the rest frame spectra. If False the observed
-            spectra is plotted.
         x_units (unyt.unit_object.Unit)
             The units of the x axis. This will be converted to a string
             and included in the axis label. By default the internal unit system
@@ -1150,9 +1156,10 @@ def plot_spectra(
             The units of the y axis. This will be converted to a string
             and included in the axis label. By default the internal unit system
             is assumed unless this is passed.
-        plot_density (bool)
-            Plot the spectral energy density (lnu/fnu) when True and the
-            power when False.
+        spectra_to_plot (string)
+            The sed property to plot. Can be "lnu", "luminosity" or "llam"
+            for rest frame spectra or "fnu", "flam" or "flux" for observed
+            spectra. Defaults to "lnu".
 
     Returns:
         fig (matplotlib.pyplot.figure)
@@ -1160,6 +1167,23 @@ def plot_spectra(
         ax (matplotlib.axes)
             The matplotlib axes object containing the plotted data.
     """
+
+    # Check we have been given a valid spectra_to_plot
+    if spectra_to_plot not in (
+        "lnu",
+        "llam",
+        "luminosity",
+        "fnu",
+        "flam",
+        "flux",
+    ):
+        raise exceptions.InconsistentArguments(
+            f"{spectra_to_plot} is not a valid spectra_to_plot"
+            "(can be 'fnu' or 'flam')"
+        )
+
+    # Are we plotting in the rest_frame?
+    rest_frame = spectra_to_plot in ("fnu", "flam", "flux")
 
     # Make a singular Sed a dictionary for ease below
     if isinstance(spectra, Sed):
@@ -1193,9 +1217,7 @@ def plot_spectra(
     for key, sed in spectra.items():
         # Get the appropriate luminosity/flux and wavelengths
         if rest_frame:
-            plt_spectra = sed.lnu
             lam = sed.lam
-            nu = sed.nu
         else:
             # Ensure we have fluxes
             if sed.fnu is None:
@@ -1204,16 +1226,12 @@ def plot_spectra(
                 )
 
             # Ok everything is fine
-            plt_spectra = sed.fnu
             lam = sed.obslam
-            nu = sed.obsnu
+
+        plt_spectra = getattr(sed, spectra_to_plot)
 
         # Prettify the label
         key = key.replace("_", " ").title()
-
-        # If not plotting the density we need to multiply by nu
-        if not plot_density:
-            plt_spectra *= nu
 
         # Plot this spectra
         ax.plot(lam, plt_spectra, lw=1, alpha=0.8, label=key)
@@ -1226,14 +1244,7 @@ def plot_spectra(
         # Loop over spectra and get the total required limits
         for sed in spectra.values():
             # Get the maximum
-            if rest_frame and plot_density:
-                max_val = np.max(sed.lnu)
-            elif not rest_frame and plot_density:
-                max_val = np.max(sed.fnu)
-            elif rest_frame:
-                max_val = np.max(sed.lnu * sed.nu)
-            else:
-                max_val = np.max(sed.fnu * sed.obsnu)
+            max_val = np.nanmax(getattr(sed, spectra_to_plot))
 
             # Derive the x limits
             y_up = 10 ** (np.log10(max_val) * 1.05)
@@ -1253,14 +1264,12 @@ def plot_spectra(
         # Loop over spectra and get the total required limits
         for sed in spectra.values():
             # Derive the x limits from data above the ylimits
-            if rest_frame and plot_density:
-                lams_above = sed.lam[sed.lnu > ylimits[0]]
-            elif not rest_frame and plot_density:
-                lams_above = sed.obslam[sed.fnu > ylimits[0]]
-            elif rest_frame:
-                lams_above = sed.lam[sed.lnu * sed.nu > ylimits[0]]
+            plt_spectra = getattr(sed, spectra_to_plot)
+            lam_mask = plt_spectra > ylimits[0]
+            if rest_frame:
+                lams_above = sed.lam[lam_mask]
             else:
-                lams_above = sed.obslam[sed.fnu * sed.obsnu > ylimits[0]]
+                lams_above = sed.obslam[lam_mask]
 
             # Saftey skip if no values are above the limit
             if lams_above.size == 0:
@@ -1296,19 +1305,25 @@ def plot_spectra(
     x_units = x_units.replace("/", r"\ / \ ").replace("*", " ")
     y_units = y_units.replace("/", r"\ / \ ").replace("*", " ")
 
-    # Label the axes
+    # Label the x axis
     if rest_frame:
         ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
-        if plot_density:
-            ax.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
-        else:
-            ax.set_ylabel(r"$L/[\mathrm{" + y_units + r"}]$")
     else:
         ax.set_xlabel(r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$")
-        if plot_density:
-            ax.set_ylabel(r"$F_{\nu}/[\mathrm{" + y_units + r"}]$")
-        else:
-            ax.set_ylabel(r"$F/[\mathrm{" + y_units + r"}]$")
+
+    # Label the y axis handling all possibilities
+    if spectra_to_plot == "lnu":
+        ax.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
+    elif spectra_to_plot == "llam":
+        ax.set_ylabel(r"$L_{\lambda}/[\mathrm{" + y_units + r"}]$")
+    elif spectra_to_plot == "luminosity":
+        ax.set_ylabel(r"$L/[\mathrm{" + y_units + r"}]$")
+    elif spectra_to_plot == "fnu":
+        ax.set_ylabel(r"$F_{\nu}/[\mathrm{" + y_units + r"}]$")
+    elif spectra_to_plot == "flam":
+        ax.set_ylabel(r"$F_{\lambda}/[\mathrm{" + y_units + r"}]$")
+    else:
+        ax.set_ylabel(r"$F/[\mathrm{" + y_units + r"}]$")
 
     # Are we showing?
     if show:
@@ -1331,7 +1346,7 @@ def plot_observed_spectra(
     x_units=None,
     y_units=None,
     filters=None,
-    plot_density=True,
+    spectra_to_plot="fnu",
 ):
     """
     Plots either a specific observed spectra or all observed spectra
@@ -1383,9 +1398,9 @@ def plot_observed_spectra(
         filters (FilterCollection)
             If given then the photometry is computed and both the photometry
             and filter curves are plotted
-        plot_density (bool)
-            Plot the spectral energy density (lnu/fnu) when True and the
-            power when False.
+        spectra_to_plot (string)
+            The sed property to plot. Can be "fnu" or "flam".
+            Defaults to "fnu".
 
     Returns:
         fig (matplotlib.pyplot.figure)
@@ -1394,8 +1409,15 @@ def plot_observed_spectra(
             The matplotlib axes object containing the plotted data.
     """
 
+    # Check we have been given a valid spectra_to_plot
+    if spectra_to_plot not in ("fnu", "flam"):
+        raise exceptions.InconsistentArguments(
+            f"{spectra_to_plot} is not a valid spectra_to_plot"
+            "(can be 'fnu' or 'flam')"
+        )
+
     # Get the observed spectra plot
-    fig, ax = plot_spectra(
+    fig, ax = _plot_spectra_backend(
         spectra,
         fig=fig,
         ax=ax,
@@ -1408,7 +1430,7 @@ def plot_observed_spectra(
         rest_frame=False,
         x_units=x_units,
         y_units=y_units,
-        plot_density=plot_density,
+        spectra_to_plot=spectra_to_plot,
     )
 
     # Are we including photometry and filters?
