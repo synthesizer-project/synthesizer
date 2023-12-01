@@ -289,7 +289,7 @@ class UnifiedAGN:
             "nlr",
             "blr",
             "torus",
-            "total",
+            "intrinsic",
         ]
 
     def _get_grid_point(self, parameter_dict, line_region):
@@ -437,13 +437,15 @@ class UnifiedAGN:
             parameter_dict["theta_torus"] / (90 * deg)
         ) * disc_spectra.measure_bolometric_luminosity()
 
-        # get the spectrum and normalise it properly
-        lnu = torus_bolometric_luminosity.to(
-            "erg/s"
-        ).value * self.torus_emission_model.lnu(disc_spectra.lam)
+        # create torus spectra
+        sed = self.torus_emission_model.get_spectra(disc_spectra.lam)
 
-        # create new Sed object containing torus spectra and return it
-        return Sed(disc_spectra.lam, lnu=lnu)
+        # this is normalised to a bolometric luminosity of 1 so we need to 
+        # scale by the bolometric luminosity.
+
+        sed._lnu *= torus_bolometric_luminosity.value
+
+        return sed
 
     def get_spectra(self, spectra_ids=None, **kwargs):
         """
@@ -497,10 +499,11 @@ class UnifiedAGN:
             ]:
                 spectra[spectra_id] = Sed(lam=spectra["nlr"].lam)
 
-        # Calculate the total spectra as the sum of the components
-        spectra["total"] = (
-            spectra["disc"] + spectra["blr"] + spectra["nlr"] + spectra["torus"]
-        )
+        # Calculate the emergent spectra as the sum of the components.
+        # Note: the choice of "intrinsic" is to align with the Pacman model
+        # which reserves "total" and "emergent" to include dust.
+        spectra["intrinsic"] = (spectra["disc"] + spectra["blr"]
+                                + spectra["nlr"] + spectra["torus"])
 
         # Since we're using a coarse grid it might be necessary to rescale
         # the spectra to the bolometric luminosity. This is requested when
@@ -508,7 +511,7 @@ class UnifiedAGN:
         if "bolometric_luminosity" in parameter_dict.keys():
             scaling = (
                 parameter_dict["bolometric_luminosity"]
-                / spectra["total"].measure_bolometric_luminosity()
+                / spectra["intrinsic"].measure_bolometric_luminosity()
             )
             for spectra_id, spectra_ in spectra.items():
                 spectra[spectra_id] = spectra_ * scaling
