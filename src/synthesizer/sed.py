@@ -75,9 +75,11 @@ class Sed:
 
         Args:
             lam (array-like, float)
-                The rest frame wavelength array.
+                The rest frame wavelength array. Default units are defined
+                in `synthesizer.units`. If unmodified these will be Angstroms.
             lnu (array-like, float)
-                The spectral luminosity density.
+                The spectral luminosity density. Default units are defined in
+                `synthesizer.units`. If unmodified these will be erg/s/Hz
             description (string)
                 An optional descriptive string defining the Sed.
         """
@@ -86,14 +88,34 @@ class Sed:
         self.description = description
 
         # Set the wavelength
-        self.lam = lam  # \AA
+        if isinstance(lam, (unyt_array, np.ndarray)):
+            self.lam = lam
+        elif isinstance(lam, list):
+            self.lam = np.asarray(lam)  # \AA
+        else:
+            raise ValueError(
+                (
+                    "`lam` must be a unyt_array, list, list of "
+                    "lists, or N-d numpy array"
+                )
+            )
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
         else:
-            self.lnu = lnu
+            if isinstance(lnu, (unyt_array, np.ndarray)):
+                self.lnu = lnu
+            elif isinstance(lnu, list):
+                self.lnu = np.asarray(lnu)
+            else:
+                raise ValueError(
+                    (
+                        "`lnu` must be a unyt_array, list, list "
+                        "of lists, or N-d numpy array"
+                    )
+                )
 
         # Calculate frequency
         self.nu = (c / (self.lam)).to("Hz").value  # Hz
