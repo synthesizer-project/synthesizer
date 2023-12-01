@@ -1110,11 +1110,11 @@ def plot_spectra(
     draw_legend=True,
     x_units=None,
     y_units=None,
-    spectra_to_plot="lnu",
+    quantity_to_plot="lnu",
 ):
     """
     Plots either a specific spectra or all spectra provided in a dictionary.
-    The plotted "type" of spectra is defined by the spectra_to_plot keyword
+    The plotted "type" of spectra is defined by the quantity_to_plot keyword
     arrgument which defaults to "lnu".
 
     This is a generic plotting function to be used either directly or to be
@@ -1156,7 +1156,7 @@ def plot_spectra(
             The units of the y axis. This will be converted to a string
             and included in the axis label. By default the internal unit system
             is assumed unless this is passed.
-        spectra_to_plot (string)
+        quantity_to_plot (string)
             The sed property to plot. Can be "lnu", "luminosity" or "llam"
             for rest frame spectra or "fnu", "flam" or "flux" for observed
             spectra. Defaults to "lnu".
@@ -1168,8 +1168,8 @@ def plot_spectra(
             The matplotlib axes object containing the plotted data.
     """
 
-    # Check we have been given a valid spectra_to_plot
-    if spectra_to_plot not in (
+    # Check we have been given a valid quantity_to_plot
+    if quantity_to_plot not in (
         "lnu",
         "llam",
         "luminosity",
@@ -1178,12 +1178,12 @@ def plot_spectra(
         "flux",
     ):
         raise exceptions.InconsistentArguments(
-            f"{spectra_to_plot} is not a valid spectra_to_plot"
+            f"{quantity_to_plot} is not a valid quantity_to_plot"
             "(can be 'fnu' or 'flam')"
         )
 
     # Are we plotting in the rest_frame?
-    rest_frame = spectra_to_plot in ("fnu", "flam", "flux")
+    rest_frame = quantity_to_plot in ("lnu", "llam", "luminosity")
 
     # Make a singular Sed a dictionary for ease below
     if isinstance(spectra, Sed):
@@ -1228,7 +1228,7 @@ def plot_spectra(
             # Ok everything is fine
             lam = sed.obslam
 
-        plt_spectra = getattr(sed, spectra_to_plot)
+        plt_spectra = getattr(sed, quantity_to_plot)
 
         # Prettify the label
         key = key.replace("_", " ").title()
@@ -1244,7 +1244,7 @@ def plot_spectra(
         # Loop over spectra and get the total required limits
         for sed in spectra.values():
             # Get the maximum
-            max_val = np.nanmax(getattr(sed, spectra_to_plot))
+            max_val = np.nanmax(getattr(sed, quantity_to_plot))
 
             # Derive the x limits
             y_up = 10 ** (np.log10(max_val) * 1.05)
@@ -1264,7 +1264,7 @@ def plot_spectra(
         # Loop over spectra and get the total required limits
         for sed in spectra.values():
             # Derive the x limits from data above the ylimits
-            plt_spectra = getattr(sed, spectra_to_plot)
+            plt_spectra = getattr(sed, quantity_to_plot)
             lam_mask = plt_spectra > ylimits[0]
             if rest_frame:
                 lams_above = sed.lam[lam_mask]
@@ -1312,15 +1312,15 @@ def plot_spectra(
         ax.set_xlabel(r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$")
 
     # Label the y axis handling all possibilities
-    if spectra_to_plot == "lnu":
+    if quantity_to_plot == "lnu":
         ax.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
-    elif spectra_to_plot == "llam":
+    elif quantity_to_plot == "llam":
         ax.set_ylabel(r"$L_{\lambda}/[\mathrm{" + y_units + r"}]$")
-    elif spectra_to_plot == "luminosity":
+    elif quantity_to_plot == "luminosity":
         ax.set_ylabel(r"$L/[\mathrm{" + y_units + r"}]$")
-    elif spectra_to_plot == "fnu":
+    elif quantity_to_plot == "fnu":
         ax.set_ylabel(r"$F_{\nu}/[\mathrm{" + y_units + r"}]$")
-    elif spectra_to_plot == "flam":
+    elif quantity_to_plot == "flam":
         ax.set_ylabel(r"$F_{\lambda}/[\mathrm{" + y_units + r"}]$")
     else:
         ax.set_ylabel(r"$F/[\mathrm{" + y_units + r"}]$")
@@ -1346,7 +1346,7 @@ def plot_observed_spectra(
     x_units=None,
     y_units=None,
     filters=None,
-    spectra_to_plot="fnu",
+    quantity_to_plot="fnu",
 ):
     """
     Plots either a specific observed spectra or all observed spectra
@@ -1398,8 +1398,8 @@ def plot_observed_spectra(
         filters (FilterCollection)
             If given then the photometry is computed and both the photometry
             and filter curves are plotted
-        spectra_to_plot (string)
-            The sed property to plot. Can be "fnu" or "flam".
+        quantity_to_plot (string)
+            The sed property to plot. Can be "fnu", "flam", or "flux".
             Defaults to "fnu".
 
     Returns:
@@ -1409,15 +1409,15 @@ def plot_observed_spectra(
             The matplotlib axes object containing the plotted data.
     """
 
-    # Check we have been given a valid spectra_to_plot
-    if spectra_to_plot not in ("fnu", "flam"):
+    # Check we have been given a valid quantity_to_plot
+    if quantity_to_plot not in ("fnu", "flam"):
         raise exceptions.InconsistentArguments(
-            f"{spectra_to_plot} is not a valid spectra_to_plot"
+            f"{quantity_to_plot} is not a valid quantity_to_plot"
             "(can be 'fnu' or 'flam')"
         )
 
     # Get the observed spectra plot
-    fig, ax = _plot_spectra_backend(
+    fig, ax = plot_spectra(
         spectra,
         fig=fig,
         ax=ax,
@@ -1430,7 +1430,7 @@ def plot_observed_spectra(
         rest_frame=False,
         x_units=x_units,
         y_units=y_units,
-        spectra_to_plot=spectra_to_plot,
+        quantity_to_plot=quantity_to_plot,
     )
 
     # Are we including photometry and filters?
