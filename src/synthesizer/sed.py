@@ -1048,7 +1048,7 @@ class Sed:
 
         return Sed(self.lam, spectra)
 
-    def calculate_ionising_production(
+    def calculate_ionising_photon_production_rate(
         self,
         ionisation_energy=13.6 * eV,
         limit=100,
