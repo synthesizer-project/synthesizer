@@ -1427,7 +1427,6 @@ def plot_observed_spectra(
         figsize=figsize,
         label=label,
         draw_legend=draw_legend,
-        rest_frame=False,
         x_units=x_units,
         y_units=y_units,
         quantity_to_plot=quantity_to_plot,
