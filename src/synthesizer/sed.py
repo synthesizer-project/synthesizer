@@ -93,8 +93,12 @@ class Sed:
         elif isinstance(lam, list):
             self.lam = np.asarray(lam)  # \AA
         else:
-            raise ValueError(('`lam` must be a unyt_array, list, list of '
-                              'lists, or N-d numpy array'))
+            raise ValueError(
+                (
+                    "`lam` must be a unyt_array, list, list of "
+                    "lists, or N-d numpy array"
+                )
+            )
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
@@ -103,11 +107,15 @@ class Sed:
         else:
             if isinstance(lnu, (unyt_array, np.ndarray)):
                 self.lnu = lnu
-            if isinstance(lnu, list):
+            elif isinstance(lnu, list):
                 self.lnu = np.asarray(lnu)
             else:
-                raise ValueError(('`lnu` must be a unyt_array, list, list '
-                                  'of lists, or N-d numpy array'))
+                raise ValueError(
+                    (
+                        "`lnu` must be a unyt_array, list, list "
+                        "of lists, or N-d numpy array"
+                    )
+                )
 
         # Calculate frequency
         self.nu = (c / (self.lam)).to("Hz").value  # Hz
