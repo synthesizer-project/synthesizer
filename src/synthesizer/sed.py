@@ -1461,7 +1461,7 @@ def get_attenuation(intrinsic_sed, attenuated_sed):
 
     Returns:
         array-like, float
-            The attenuation array.
+            The attenuation array in magnitudes.
     """
 
     # Calculate the transmission array
@@ -1470,7 +1470,7 @@ def get_attenuation(intrinsic_sed, attenuated_sed):
     return -2.5 * np.log10(transmission)
 
 
-def get_attenuation_lam(lam, intrinsic_sed, attenuated_sed):
+def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
     """
     Calculate attenuation at a given wavelength
 
@@ -1485,7 +1485,7 @@ def get_attenuation_lam(lam, intrinsic_sed, attenuated_sed):
 
     Returns:
         float/array-like, float
-            The attenuation at the passed wavelength/s.
+            The attenuation at the passed wavelength/s in magnitudes.
     """
 
     # Enusre we have units
@@ -1502,7 +1502,7 @@ def get_attenuation_lam(lam, intrinsic_sed, attenuated_sed):
     return np.interp(lam.value, intrinsic_sed._lam, attenuation)
 
 
-def get_attenuation_5500(intrinsic_sed, attenuated_sed):
+def get_attenuation_at_5500(intrinsic_sed, attenuated_sed):
     """
     Calculate rest-frame FUV attenuation at 5500 angstrom.
 
@@ -1514,17 +1514,17 @@ def get_attenuation_5500(intrinsic_sed, attenuated_sed):
 
     Returns:
          float
-            The attenuation at rest-frame 5500 angstrom.
+            The attenuation at rest-frame 5500 angstrom in magnitudes.
     """
 
-    return get_attenuation_lam(
+    return get_attenuation_at_lam(
         5500.0 * angstrom,
         intrinsic_sed,
         attenuated_sed,
     )
 
 
-def get_attenuation_1500(intrinsic_sed, attenuated_sed):
+def get_attenuation_at_1500(intrinsic_sed, attenuated_sed):
     """
     Calculate rest-frame FUV attenuation at 1500 angstrom.
 
@@ -1536,10 +1536,10 @@ def get_attenuation_1500(intrinsic_sed, attenuated_sed):
 
     Returns:
          float
-            The attenuation at rest-frame 1500 angstrom.
+            The attenuation at rest-frame 1500 angstrom in magnitudes.
     """
 
-    return get_attenuation_lam(
+    return get_attenuation_at_lam(
         1500.0 * angstrom,
         intrinsic_sed,
         attenuated_sed,
