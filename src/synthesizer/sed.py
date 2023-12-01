@@ -21,6 +21,7 @@ from spectres import spectres
 from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
 
 from synthesizer import exceptions
+from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.utils import rebin_1d
 from synthesizer.units import Quantity
@@ -933,7 +934,7 @@ class Sed:
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
         """
         Resample the spectra onto a new set of wavelength points.
-        
+
         This resampling can either be done by an integer number of wavelength
         elements per original wavelength element (i.e. up sampling),
         or by providing a new wavelength grid to resample on to.
@@ -1047,52 +1048,42 @@ class Sed:
 
         return Sed(self.lam, spectra)
 
+    def calculate_ionising_photon_production_rate(
+        self,
+        ionisation_energy=13.6 * eV,
+        limit=100,
+    ):
+        """
+        A function to calculate the ionising photon production rate.
 
-def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
-    """
-    A function to calculate the ionising production rate directly from
-    spectra.
+        Args:
+            ionisation_energy (unyt_array)
+                The ionisation energy.
+            limit (float/int)
+                An upper bound on the number of subintervals
+                used in the integration adaptive algorithm.
 
-    Args:
-        lam (array-like, float)
-            The wavelength array.
-        lnu (array-like, float)
-            The luminosity grid (erg/s/Hz).
-        ionisation_energy (unyt_array)
-            The ionisation energy.
-        limit (float/int)
-            An upper bound on the number of subintervals
-            used in the integration adaptive algorithm.
+        Returns
+            float
+                Ionising photon luminosity (s^-1).
+        """
 
-    Returns
-        float
-            Ionising photon luminosity (s^-1).
-    """
+        # Convert lnu to llam
+        llam = lnu_to_llam(self.lam, self.lnu)
 
-    # Apply units if not present
-    if not isinstance(lam, unyt_array):
-        lam = lam * angstrom
-    if not isinstance(lnu, unyt_array):
-        lnu = lnu * erg / s / Hz
+        # Caculate ionisation wavelength
+        ionisation_wavelength = h * c / ionisation_energy
 
-    # Convert lnu to llam
-    llam = lnu * c / lam**2
+        # Defintion integration arrays
+        x = self._lam
+        y = llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)
 
-    # Caculate ionisation wavelength
-    ionisation_wavelength = h * c / ionisation_energy
-
-    # Defintion integration arrays
-    x = lam.to(angstrom).value
-    y = (llam * lam).to(erg / s).value / (
-        h.to(erg / Hz).value * c.to(angstrom / s).value
-    )
-
-    return integrate.quad(
-        lambda x_: np.interp(x_, x, y),
-        0,
-        ionisation_wavelength.to(angstrom).value,
-        limit=limit,
-    )[0]
+        return integrate.quad(
+            lambda x_: np.interp(x_, x, y.to(1 / s / angstrom).value),
+            0,
+            ionisation_wavelength.to(angstrom).value,
+            limit=limit,
+        )[0]
 
 
 def plot_spectra(
