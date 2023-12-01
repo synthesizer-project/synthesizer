@@ -21,10 +21,12 @@ from spectres import spectres
 from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
 
 from synthesizer import exceptions
+from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.utils import rebin_1d
 from synthesizer.units import Quantity
 from synthesizer.igm import Inoue14
+from synthesizer.utils import has_units
 
 
 class Sed:
@@ -1047,52 +1049,42 @@ class Sed:
 
         return Sed(self.lam, spectra)
 
+    def calculate_ionising_photon_production_rate(
+        self,
+        ionisation_energy=13.6 * eV,
+        limit=100,
+    ):
+        """
+        A function to calculate the ionising photon production rate.
 
-def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
-    """
-    A function to calculate the ionising production rate directly from
-    spectra.
+        Args:
+            ionisation_energy (unyt_array)
+                The ionisation energy.
+            limit (float/int)
+                An upper bound on the number of subintervals
+                used in the integration adaptive algorithm.
 
-    Args:
-        lam (array-like, float)
-            The wavelength array.
-        lnu (array-like, float)
-            The luminosity grid (erg/s/Hz).
-        ionisation_energy (unyt_array)
-            The ionisation energy.
-        limit (float/int)
-            An upper bound on the number of subintervals
-            used in the integration adaptive algorithm.
+        Returns
+            float
+                Ionising photon luminosity (s^-1).
+        """
 
-    Returns
-        float
-            Ionising photon luminosity (s^-1).
-    """
+        # Convert lnu to llam
+        llam = lnu_to_llam(self.lam, self.lnu)
 
-    # Apply units if not present
-    if not isinstance(lam, unyt_array):
-        lam = lam * angstrom
-    if not isinstance(lnu, unyt_array):
-        lnu = lnu * erg / s / Hz
+        # Caculate ionisation wavelength
+        ionisation_wavelength = h * c / ionisation_energy
 
-    # Convert lnu to llam
-    llam = lnu * c / lam**2
+        # Defintion integration arrays
+        x = self._lam
+        y = llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)
 
-    # Caculate ionisation wavelength
-    ionisation_wavelength = h * c / ionisation_energy
-
-    # Defintion integration arrays
-    x = lam.to(angstrom).value
-    y = (llam * lam).to(erg / s).value / (
-        h.to(erg / Hz).value * c.to(angstrom / s).value
-    )
-
-    return integrate.quad(
-        lambda x_: np.interp(x_, x, y),
-        0,
-        ionisation_wavelength.to(angstrom).value,
-        limit=limit,
-    )[0]
+        return integrate.quad(
+            lambda x_: np.interp(x_, x, y.to(1 / s / angstrom).value),
+            0,
+            ionisation_wavelength.to(angstrom).value,
+            limit=limit,
+        )[0]
 
 
 def plot_spectra(
@@ -1453,3 +1445,125 @@ def plot_observed_spectra(
         plt.show()
 
     return fig, ax
+
+
+def get_transmission(intrinsic_sed, attenuated_sed):
+    """
+    Calculate transmission as a function of wavelength from an attenuated and
+    an intrinsic sed.
+
+    Args:
+        intrinsic_sed (Sed)
+            The intrinsic spectra object.
+        attenuated_sed (Sed)
+            The attenuated spectra object.
+
+    Returns:
+        array-like, float
+            The transmission array.
+    """
+
+    # Ensure wavelength arrays are equal
+    if not np.array_equal(attenuated_sed._lam, intrinsic_sed._lam):
+        raise exceptions.InconsistentArguments(
+            "Wavelength arrays of input spectra must be the same!"
+        )
+
+    return attenuated_sed.lnu / intrinsic_sed.lnu
+
+
+def get_attenuation(intrinsic_sed, attenuated_sed):
+    """
+    Calculate attenuation as a function of wavelength
+
+    Args:
+        intrinsic_sed (Sed)
+            The intrinsic spectra object.
+        attenuated_sed (Sed)
+            The attenuated spectra object.
+
+    Returns:
+        array-like, float
+            The attenuation array in magnitudes.
+    """
+
+    # Calculate the transmission array
+    transmission = get_transmission(intrinsic_sed, attenuated_sed)
+
+    return -2.5 * np.log10(transmission)
+
+
+def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
+    """
+    Calculate attenuation at a given wavelength
+
+    Args:
+        lam (float/array-like, float)
+            The wavelength/s at which to evaluate the attenuation in
+            the same units as sed.lam (by default angstrom).
+        intrinsic_sed (Sed)
+            The intrinsic spectra object.
+        attenuated_sed (Sed)
+            The attenuated spectra object.
+
+    Returns:
+        float/array-like, float
+            The attenuation at the passed wavelength/s in magnitudes.
+    """
+
+    # Enusre we have units
+    if not has_units(lam):
+        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
+
+    # Ensure lam is in the same units as the sed
+    if lam.units != intrinsic_sed.lam.units:
+        lam = lam.to(intrinsic_sed.lam.units)
+
+    # Calcilate the transmission array
+    attenuation = get_attenuation(intrinsic_sed, attenuated_sed)
+
+    return np.interp(lam.value, intrinsic_sed._lam, attenuation)
+
+
+def get_attenuation_at_5500(intrinsic_sed, attenuated_sed):
+    """
+    Calculate rest-frame FUV attenuation at 5500 angstrom.
+
+    Args:
+        intrinsic_sed (Sed)
+            The intrinsic spectra object.
+        attenuated_sed (Sed)
+            The attenuated spectra object.
+
+    Returns:
+         float
+            The attenuation at rest-frame 5500 angstrom in magnitudes.
+    """
+
+    return get_attenuation_at_lam(
+        5500.0 * angstrom,
+        intrinsic_sed,
+        attenuated_sed,
+    )
+
+
+def get_attenuation_at_1500(intrinsic_sed, attenuated_sed):
+    """
+    Calculate rest-frame FUV attenuation at 1500 angstrom.
+
+    Args:
+        intrinsic_sed (Sed)
+            The intrinsic spectra object.
+        attenuated_sed (Sed)
+            The attenuated spectra object.
+
+    Returns:
+         float
+            The attenuation at rest-frame 1500 angstrom in magnitudes.
+    """
+
+    return get_attenuation_at_lam(
+        1500.0 * angstrom,
+        intrinsic_sed,
+        attenuated_sed,
+    )
