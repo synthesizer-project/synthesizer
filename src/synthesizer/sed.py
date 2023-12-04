@@ -1279,8 +1279,14 @@ def plot_spectra(
 
         # Loop over spectra and get the total required limits
         for sed in spectra.values():
-            # Get the maximum
-            max_val = np.nanmax(getattr(sed, quantity_to_plot))
+            # Get the maximum ignoring infinites
+            okinds = np.logical_and(
+                getattr(sed, quantity_to_plot) > 0,
+                getattr(sed, quantity_to_plot) < np.inf,
+            )
+            if True not in okinds:
+                continue
+            max_val = np.nanmax(getattr(sed, quantity_to_plot)[okinds])
 
             # Derive the x limits
             y_up = 10 ** (np.log10(max_val) * 1.05)
