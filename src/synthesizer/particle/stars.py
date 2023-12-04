@@ -318,7 +318,10 @@ class Stars(Particles, StarsComponent):
             np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
             np.ascontiguousarray(self.metallicities[mask], dtype=np.float64),
         ]
-        part_mass = np.ascontiguousarray(self._initial_masses[mask], dtype=np.float64)
+        part_mass = np.ascontiguousarray(
+            self._initial_masses[mask],
+            dtype=np.float64,
+        )
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
@@ -327,13 +330,20 @@ class Stars(Particles, StarsComponent):
         nlam = np.int32(grid.spectra[spectra_type].shape[-1])
 
         # Slice the spectral grids and pad them with copies of the edges.
-        grid_spectra = np.ascontiguousarray(grid.spectra[spectra_type], np.float64)
+        grid_spectra = np.ascontiguousarray(
+            grid.spectra[spectra_type],
+            np.float64,
+        )
 
         # Get the grid dimensions after slicing what we need
         grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
         for ind, g in enumerate(grid_props):
             grid_dims[ind] = len(g)
         grid_dims[ind + 1] = nlam
+
+        # If fesc isn't an array make it one
+        if not isinstance(fesc, np.ndarray):
+            fesc = np.ascontiguousarray(np.full(npart, fesc))
 
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
@@ -372,9 +382,10 @@ class Stars(Particles, StarsComponent):
                 The spectral grid object.
             spectra_name (string)
                 The name of the target spectra inside the grid file.
-            fesc (float)
+            fesc (float/array-like, float)
                 Fraction of stellar emission that escapes unattenuated from
-                the birth cloud (defaults to 0.0).
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
             young (bool/float)
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
@@ -503,9 +514,10 @@ class Stars(Particles, StarsComponent):
                 A list of line_ids or a str denoting a single line.
                 Doublets can be specified as a nested list or using a
                 comma (e.g. 'OIII4363,OIII4959').
-            fesc (float):
-                The Lyman continuum escaped fraction, the fraction of
-                ionising photons that entirely escaped.
+            fesc (float/array-like, float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
 
         Returns:
             Line
@@ -588,9 +600,10 @@ class Stars(Particles, StarsComponent):
                 The spectral grid object.
             spectra_name (string)
                 The name of the target spectra inside the grid file.
-            fesc (float)
+            fesc (float/array-like, float)
                 Fraction of stellar emission that escapes unattenuated from
-                the birth cloud (defaults to 0.0).
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
             young (bool/float)
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
@@ -720,9 +733,10 @@ class Stars(Particles, StarsComponent):
                 A list of line_ids or a str denoting a single line.
                 Doublets can be specified as a nested list or using a
                 comma (e.g. 'OIII4363,OIII4959').
-            fesc (float):
-                The Lyman continuum escaped fraction, the fraction of
-                ionising photons that entirely escaped.
+            fesc (float/array-like, float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
 
         Returns:
             Line
@@ -1026,9 +1040,10 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (obj):
                 Spectral grid object.
-            fesc (float):
-                Fraction of stellar emission that escapeds unattenuated from
-                the birth cloud (defaults to 0.0).
+            fesc (float/array-like, float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
@@ -1134,9 +1149,10 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (obj):
                 Spectral grid object.
-            fesc (float):
-                Fraction of stellar emission that escapeds unattenuated from
-                the birth cloud (defaults to 0.0).
+            fesc (float/array-like, float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
             young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
@@ -1188,9 +1204,10 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (obj):
                 Spectral grid object.
-            fesc (float):
-                Fraction of stellar emission that escapeds unattenuated from
-                the birth cloud (defaults to 0.0).
+            fesc (float/array-like, float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
             young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
@@ -1246,9 +1263,10 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (obj):
                 Spectral grid object.
-            fesc (float):
-                Fraction of stellar emission that escapeds unattenuated from
-                the birth cloud (defaults to 0.0).
+            fesc (float/array-like, float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
