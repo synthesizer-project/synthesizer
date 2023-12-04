@@ -38,8 +38,9 @@ class Template:
 
     def __init__(self, filename=None, lam=None, lnu=None):
         """
+        Initialise the Template.
 
-        Arguments:
+        Args:
             filename (str)
                 The filename (including full path) to a file containing the
                 template. The file should contain two columns with wavelength
@@ -74,7 +75,7 @@ class Template:
         Calculating the blackhole spectra. This is done by simply scaling the
         normalised template by the bolometric luminosity
 
-        Arguments:
+        Args:
             bolometric_luminosity (float)
                 The bolometric luminosity of the blackhole(s).
 
@@ -139,7 +140,7 @@ class UnifiedAGN:
         torus_emission_model=Greybody(1000 * K, 1.5),
     ):
         """
-        Arguments:
+        Args:
 
             disc_model (str)
                 The disc_model to be used. The current test model is the AGNSED
@@ -440,7 +441,7 @@ class UnifiedAGN:
         # create torus spectra
         sed = self.torus_emission_model.get_spectra(disc_spectra.lam)
 
-        # this is normalised to a bolometric luminosity of 1 so we need to 
+        # this is normalised to a bolometric luminosity of 1 so we need to
         # scale by the bolometric luminosity.
 
         sed._lnu *= torus_bolometric_luminosity.value
@@ -502,8 +503,9 @@ class UnifiedAGN:
         # Calculate the emergent spectra as the sum of the components.
         # Note: the choice of "intrinsic" is to align with the Pacman model
         # which reserves "total" and "emergent" to include dust.
-        spectra["intrinsic"] = (spectra["disc"] + spectra["blr"]
-                                + spectra["nlr"] + spectra["torus"])
+        spectra["intrinsic"] = (
+            spectra["disc"] + spectra["blr"] + spectra["nlr"] + spectra["torus"]
+        )
 
         # Since we're using a coarse grid it might be necessary to rescale
         # the spectra to the bolometric luminosity. This is requested when
