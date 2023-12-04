@@ -10,9 +10,9 @@ Example Usage:
         grid_dir=grid_dir
 )
 """
-
 import numpy as np
 from unyt import deg, km, cm, s, K, rad
+
 from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
@@ -301,7 +301,7 @@ class UnifiedAGN:
         Private method used to get the closest grid point for the specified
         parameters.
 
-        Arguments
+        Args
             parameter_dict (dict)
                 A dictionary of all the parameters.
             line_region (str)
@@ -323,11 +323,18 @@ class UnifiedAGN:
 
         return self.grid[line_region].get_grid_point(grid_parameter_values)
 
+    def _generate_lnu(
+        self,
+    ):
+        """
+        Get the spectra from the grid using either a CIC or NGP method.
+        """
+
     def _get_spectra_disc(self, parameter_dict):
         """
         Generate the disc spectra, updating the parameters if required.
 
-        Arguments
+        Args:
             parameter_dict (dict)
                 A dictionary of all the parameters.
 
@@ -379,7 +386,7 @@ class UnifiedAGN:
         """
         Generate the spectra of a generic line region.
 
-        Arguments
+        Args
             parameter_dict (dict)
                 A dictionary of all the parameters.
             line_region (str)
@@ -410,7 +417,7 @@ class UnifiedAGN:
         """
         Generate the torus emission Sed.
 
-        Arguments
+        Args
             parameter_dict (dict)
                 A dictionary of all the parameters.
 
