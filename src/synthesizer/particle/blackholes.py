@@ -193,3 +193,12 @@ class BlackHoles(Particles, BlackholesComponent):
         )
 
         self.cosine_inclination = np.cos(self.inclination.to("rad").value)
+
+    def _generate_particle_lnu(
+        self,
+    ):
+        """
+        Get the particle spectra from the grid using either a CIC or NGP
+        method.
+        """
+        pass

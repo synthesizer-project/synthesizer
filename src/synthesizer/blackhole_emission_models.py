@@ -323,13 +323,6 @@ class UnifiedAGN:
 
         return self.grid[line_region].get_grid_point(grid_parameter_values)
 
-    def _generate_lnu(
-        self,
-    ):
-        """
-        Get the spectra from the grid using either a CIC or NGP method.
-        """
-
     def _get_spectra_disc(self, parameter_dict):
         """
         Generate the disc spectra, updating the parameters if required.
