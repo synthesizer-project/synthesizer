@@ -105,7 +105,6 @@ class BlackHoles(Particles, BlackholesComponent):
             smoothing_lengths (array-like, float)
                 The smoothing length describing the black holes neighbour
                 kernel.
-
         """
 
         # Handle singular values being passed (arrays are just returned)
@@ -273,25 +272,35 @@ class BlackHoles(Particles, BlackholesComponent):
 
     def generate_lnu(
         self,
-        emission_model,
+        grid,
         spectra_name,
-        agn_region,
         fesc=0.0,
         verbose=False,
         grid_assignment_method="cic",
-        bolometric_luminosity=None,
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
         spectra.
-        """
-        # Handle the special Template case where a spectra is scaled
-        # and returned
-        if isinstance(emission_model, Template):
-            return emission_model.get_spectra(bolometric_luminosity)
 
+        Args:
+            grid (obj):
+                Spectral grid object.
+            fesc (float):
+                Fraction of emission that escapes unattenuated from
+                the birth cloud (defaults to 0.0).
+            spectra_name (string)
+                The name of the target spectra inside the grid file
+                (e.g. "incident", "transmitted", "nebular").
+            verbose (bool)
+                Are we talking?
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+        """
         # Ensure we have a key in the grid. If not error.
-        if spectra_name not in list(emission_model.grid[agn_region].spectra.keys()):
+        if spectra_name not in list(grid.spectra.keys()):
             raise exceptions.MissingSpectraType(
                 f"The Grid does not contain the key '{spectra_name}'"
             )
@@ -300,7 +309,7 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
-            emission_model.grid[agn_region],
+            grid,
             fesc=fesc,
             spectra_type=spectra_name,
             grid_assignment_method=grid_assignment_method.lower(),
