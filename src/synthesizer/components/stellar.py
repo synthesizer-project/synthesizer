@@ -6,7 +6,7 @@ and methods common between them.
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from unyt import Myr, unyt_quantity
+from unyt import Myr, Gyr, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
@@ -1246,6 +1246,14 @@ class StarsComponent:
                 old = old.to("Myr")
             else:
                 old *= Myr
+
+        # Ensure ages aren't larger than the age of the universe
+        if young is not None and young > 13.8 * Gyr:
+            raise exceptions.InconsistentArguments(
+                "The young threshold exceeds the age of the universe "
+                f"({young})! Either pass the threshold in Myrs or as a"
+                "unyt_quantity with units attached."
+            )
 
         return young, old
 
