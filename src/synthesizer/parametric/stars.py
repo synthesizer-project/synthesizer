@@ -342,7 +342,7 @@ class Stars(StarsComponent):
         # ... and multiply it by the initial mass of stars
         self.sfzh *= self._initial_mass
 
-    def generate_lnu(self, grid, spectra_name, old=False, young=False):
+    def generate_lnu(self, grid, spectra_name, old=False, young=None):
         """
         Calculate rest frame spectra from an SPS Grid.
 

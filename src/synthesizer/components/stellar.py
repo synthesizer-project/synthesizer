@@ -90,8 +90,8 @@ class StarsComponent:
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         **kwargs,
     ):
         """
@@ -147,8 +147,8 @@ class StarsComponent:
     def get_spectra_incident(
         self,
         grid,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -201,8 +201,8 @@ class StarsComponent:
         self,
         grid,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -259,8 +259,8 @@ class StarsComponent:
         self,
         grid,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -320,8 +320,8 @@ class StarsComponent:
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         verbose=False,
         **kwargs,
@@ -480,8 +480,8 @@ class StarsComponent:
         grid,
         tau_v,
         dust_curve=PowerLaw(slope=-1.0),
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -706,7 +706,7 @@ class StarsComponent:
                 fesc,
                 fesc_LyA=fesc_LyA,
                 young=young_old_thresh,
-                old=False,
+                old=None,
                 label="young_",
                 **kwargs,
             )
@@ -717,7 +717,7 @@ class StarsComponent:
                 grid,
                 fesc,
                 fesc_LyA=fesc_LyA,
-                young=False,
+                young=None,
                 old=young_old_thresh,
                 label="old_",
                 **kwargs,
@@ -758,8 +758,8 @@ class StarsComponent:
                 grid,
                 fesc,
                 fesc_LyA=fesc_LyA,
-                young=False,
-                old=False,
+                young=None,
+                old=None,
                 **kwargs,
             )
 
