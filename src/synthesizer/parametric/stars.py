@@ -371,7 +371,7 @@ class Stars(StarsComponent):
         """
 
         # Ensure arguments make sense
-        if old * young:
+        if old is not None and young is not None:
             raise ValueError("Cannot provide old and young stars together")
 
         # Get the indices of non-zero entries in the SFZH
