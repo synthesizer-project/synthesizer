@@ -1,11 +1,11 @@
 """A module for working with a parametric black holes.
 
-Contains the BlackHoles class for use with parametric systems. This houses
+Contains the BlackHole class for use with parametric systems. This houses
 all the attributes and functionality related to parametric black holes.
 
 Example usages:
 
-    bhs = BlackHoles(
+    bhs = BlackHole(
         bolometric_luminosity,
         mass,
         accretion_rate,
@@ -20,9 +20,9 @@ from synthesizer.parametric.morphology import PointSource
 from synthesizer.components import BlackholesComponent
 
 
-class BlackHoles(BlackholesComponent):
+class BlackHole(BlackholesComponent):
     """
-    The base parametric BlackHoles class.
+    The base parametric BlackHole class.
 
     Attributes:
         morphology (PointSource)
