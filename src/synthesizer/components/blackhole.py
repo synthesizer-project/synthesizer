@@ -5,7 +5,7 @@ ever instantiated by the parametric/particle child classes.
 """
 from copy import deepcopy
 import numpy as np
-from unyt import c
+from unyt import c, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity
@@ -168,10 +168,19 @@ class BlackholesComponent:
         if self.inclination is not None:
             self.cosine_inclination = np.cos(self.inclination.to("radian").value)
 
-    def _generate_lnu(
-        self,
-    ):
-        pass
+    def generate_lnu(self, *args, **kwargs):
+        """
+        This method is a prototype for generating spectra from AGN grids. It is
+        redefined on the child classes.
+        """
+        raise Warning(
+            (
+                "generate_lnu should be overloaded by child classes:\n"
+                "`particle.BlackHoles`\n"
+                "`parametric.BlackHole`\n"
+                "You should not be seeing this!!!"
+            )
+        )
 
     def __str__(self):
         """Function to print a basic summary of the BlackHoles object.
