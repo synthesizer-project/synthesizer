@@ -1032,10 +1032,10 @@ class Stars(Particles, StarsComponent):
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (bool, float):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             kwargs
@@ -1081,10 +1081,10 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (obj):
                 Spectral grid object.
-            young (bool, float):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
@@ -1137,10 +1137,10 @@ class Stars(Particles, StarsComponent):
             fesc (float):
                 Fraction of stellar emission that escapeds unattenuated from
                 the birth cloud (defaults to 0.0).
-            young (bool, float):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
@@ -1191,10 +1191,10 @@ class Stars(Particles, StarsComponent):
             fesc (float):
                 Fraction of stellar emission that escapeds unattenuated from
                 the birth cloud (defaults to 0.0).
-            young (bool, float):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
@@ -1252,10 +1252,10 @@ class Stars(Particles, StarsComponent):
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (bool, float):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
