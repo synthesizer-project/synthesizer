@@ -105,16 +105,16 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     /* Finally, compute the weights for this particle using the
      * requested method. */
     if (strcmp(method, "cic") == 0) {
-      weight_loop_cic(grid_props, part_props, mass, sfzh, dims, ndim, p);
+      weight_loop_cic(grid_props, part_props, mass, sfzh, dims, ndim, p, 0);
     } else if (strcmp(method, "ngp") == 0) {
-      weight_loop_ngp(grid_props, part_props, mass, sfzh, dims, ndim, p);
+      weight_loop_ngp(grid_props, part_props, mass, sfzh, dims, ndim, p, 0);
     } else {
       /* Only print this warning once! */
       if (p == 0)
         printf(
             "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
             method);
-      weight_loop_cic(grid_props, part_props, mass, sfzh, dims, ndim, p);
+      weight_loop_cic(grid_props, part_props, mass, sfzh, dims, ndim, p, 0);
     }
 
   } /* Loop over particles. */
