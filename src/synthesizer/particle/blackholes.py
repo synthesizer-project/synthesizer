@@ -13,11 +13,13 @@ Example usages:
                      redshift=redshift, accretion_rate=accretion_rate, ...)
 """
 import numpy as np
-from unyt import c, deg, rad
+from unyt import rad, unyt_quantity
+
 from synthesizer.particle.particles import Particles
 from synthesizer.components import BlackholesComponent
-from synthesizer.units import Quantity
 from synthesizer import exceptions
+from synthesizer.units import Quantity
+from synthesizer.utils import value_to_array
 
 
 class BlackHoles(Particles, BlackholesComponent):
@@ -31,21 +33,14 @@ class BlackHoles(Particles, BlackholesComponent):
     can be initialised with a BlackHoles object for use with any of the Galaxy
     helper methods.
 
-    Note that due to the many possible operations, this class has a large number
-    of optional attributes which are set to None if not provided.
+    Note that due to the many possible operations, this class has a large
+    number of optional attributes which are set to None if not provided.
 
     Attributes:
-        accretion_rate (array-like, float)
-            The accretion rate of the/each black hole in Msun/yr.
-        metallicities (array-like, float)
-            The metallicity of the region surrounding the/each black hole.
         nbh (int)
             The number of black hole particles in the object.
-        bol_luminosity (array_like, float)
-            The bolometric luminosity of the/each black hole in erg/s/Hz. Only
-            populated when calculate_bolometric_luminosity is called.
-        bb_temperature (array_like, float)
-            The "Big Bump" temperature of the/each black hole.
+        smoothing_lengths (array-like, float)
+            The smoothing length describing the black holes neighbour kernel.
     """
 
     # Define the allowed attributes
@@ -60,8 +55,12 @@ class BlackHoles(Particles, BlackholesComponent):
         "_bb_temperature",
         "_bol_luminosity",
         "_softening_lengths",
+        "_smoothing_lengths",
         "nbh",
     ]
+
+    # Define quantities
+    smoothing_lengths = Quantity()
 
     def __init__(
         self,
@@ -75,6 +74,7 @@ class BlackHoles(Particles, BlackholesComponent):
         coordinates=None,
         velocities=None,
         softening_length=None,
+        smoothing_lengths=None,
     ):
         """
         Intialise the Stars instance. The first two arguments are always
@@ -101,11 +101,20 @@ class BlackHoles(Particles, BlackholesComponent):
                 The 3D velocities of the particles.
             softening_length (float)
                 The physical gravitational softening length.
+            smoothing_lengths (array-like, float)
+                The smoothing length describing the black holes neighbour
+                kernel.
 
         """
 
-        #  TODO: handle when individual values are passed instead of arrays,
-        # i.e. when there is only a single black hole.
+        # Handle singular values being passed (arrays are just returned)
+        masses = value_to_array(masses)
+        accretion_rates = value_to_array(accretion_rates)
+        epsilons = value_to_array(epsilons)
+        inclinations = value_to_array(inclinations)
+        spins = value_to_array(spins)
+        metallicities = value_to_array(metallicities)
+        smoothing_lengths = value_to_array(smoothing_lengths)
 
         # Instantiate parents
         Particles.__init__(
@@ -132,10 +141,10 @@ class BlackHoles(Particles, BlackholesComponent):
         self.nbh = self.nparticles
 
         # Check the arguments we've been given
-        # self._check_bh_args()
+        self._check_bh_args()
 
-        # I will be hated for this. But left in for now to provide access to
-        # both and not break the EmissionModel.
+        # Make pointers to the singular black hole attributes for consistency
+        # in the backend
         for singular, plural in [
             ("mass", "masses"),
             ("accretion_rate", "accretion_rates"),
@@ -150,6 +159,9 @@ class BlackHoles(Particles, BlackholesComponent):
             ("eddington_ratio", "eddington_ratios"),
         ]:
             setattr(self, plural, getattr(self, singular))
+
+        # Set the smoothing lengths
+        self.smoothing_lengths = smoothing_lengths
 
     def _check_bh_args(self):
         """
@@ -173,12 +185,11 @@ class BlackHoles(Particles, BlackholesComponent):
 
     def calculate_random_inclination(self):
         """
-        Add random inclinations to blackholes.
-        TODO: move to the component level?
+        Calculate random inclinations to blackholes.
         """
 
         self.inclination = (
-            np.random.uniform(low=0.0, high=np.pi / 2.0, size=self.nparticles) * rad
+            np.random.uniform(low=0.0, high=np.pi / 2.0, size=self.nbh) * rad
         )
 
         self.cosine_inclination = np.cos(self.inclination.to("rad").value)
