@@ -120,8 +120,8 @@ def value_to_array(value):
             If the argument is not a float or unyt_quantity.
     """
 
-    # Just return it if we have been handed an array already
-    if isinstance(value, (np.ndarray, unyt_array)):
+    # Just return it if we have been handed an array already or None
+    if isinstance(value, (np.ndarray, unyt_array)) or value is None:
         return value
 
     if isinstance(value, float):
