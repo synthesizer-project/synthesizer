@@ -476,8 +476,6 @@ class Stars(Particles, StarsComponent):
         # Get particle age masks
         mask = self._get_masks(young, old)
 
-        print("Mask sum:", np.sum(mask), "young =", young, "Old =", old)
-
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
             if verbose:
