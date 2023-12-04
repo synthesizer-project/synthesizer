@@ -54,7 +54,7 @@ class BlackHoles(Particles, BlackholesComponent):
         "redshift",
         "_accretion_rate",
         "_bb_temperature",
-        "_bol_luminosity",
+        "_bolometric_luminosity",
         "_softening_lengths",
         "_smoothing_lengths",
         "nbh",
@@ -140,9 +140,6 @@ class BlackHoles(Particles, BlackholesComponent):
         # naming
         self.nbh = self.nparticles
 
-        # Check the arguments we've been given
-        self._check_bh_args()
-
         # Make pointers to the singular black hole attributes for consistency
         # in the backend
         for singular, plural in [
@@ -162,6 +159,9 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # Set the smoothing lengths
         self.smoothing_lengths = smoothing_lengths
+
+        # Check the arguments we've been given
+        self._check_bh_args()
 
     def _check_bh_args(self):
         """
@@ -320,9 +320,48 @@ class BlackHoles(Particles, BlackholesComponent):
 
     def _generate_particle_lnu(
         self,
+        grid,
+        spectra_name,
+        fesc=0.0,
+        verbose=False,
+        grid_assignment_method="cic",
     ):
         """
-        Get the particle spectra from the grid using either a CIC or NGP
-        method.
+        Generate the integrated rest frame spectra for a given grid key
+        spectra.
+
+        Args:
+            grid (obj):
+                Spectral grid object.
+            fesc (float):
+                Fraction of emission that escapes unattenuated from
+                the birth cloud (defaults to 0.0).
+            spectra_name (string)
+                The name of the target spectra inside the grid file
+                (e.g. "incident", "transmitted", "nebular").
+            verbose (bool)
+                Are we talking?
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
         """
-        pass
+        # Ensure we have a key in the grid. If not error.
+        if spectra_name not in list(grid.spectra.keys()):
+            raise exceptions.MissingSpectraType(
+                f"The Grid does not contain the key '{spectra_name}'"
+            )
+
+        from ..extensions.particle_spectra import compute_particle_seds
+
+        # Prepare the arguments for the C function.
+        args = self._prepare_sed_args(
+            grid,
+            fesc=fesc,
+            spectra_type=spectra_name,
+            grid_assignment_method=grid_assignment_method.lower(),
+        )
+
+        # Get the integrated spectra in grid units (erg / s / Hz)
+        return compute_particle_seds(*args)
