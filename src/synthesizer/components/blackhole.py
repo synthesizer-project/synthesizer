@@ -168,8 +168,10 @@ class BlackholesComponent:
         if self.inclination is not None:
             self.cosine_inclination = np.cos(self.inclination.to("radian").value)
 
-    def _generate_lnu(self,):
-
+    def _generate_lnu(
+        self,
+    ):
+        pass
 
     def __str__(self):
         """Function to print a basic summary of the BlackHoles object.
