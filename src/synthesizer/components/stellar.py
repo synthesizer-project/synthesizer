@@ -1247,16 +1247,16 @@ class StarsComponent:
             else:
                 old *= Myr
 
-        # Ensure ages aren't larger than the age of the universe
-        if young is not None and young > 13.8 * Gyr:
+        # Ensure ages aren't misinterpreted
+        if young is not None and young > 50 * Gyr:
             raise exceptions.InconsistentArguments(
-                "The young threshold exceeds the age of the universe "
+                "The young threshold is unphysically large "
                 f"({young})! Either pass the threshold in Myrs or as a "
                 "unyt_quantity with units attached."
             )
-        if old is not None and old > 13.8 * Gyr:
+        if old is not None and old > 50 * Gyr:
             raise exceptions.InconsistentArguments(
-                "The old threshold exceeds the age of the universe "
+                "The old threshold is unphysically large "
                 f"({old})! Either pass the threshold in Myrs or as a "
                 "unyt_quantity with units attached."
             )
