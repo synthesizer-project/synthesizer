@@ -16,7 +16,11 @@ Example usages:
         offset,
 )
 """
+import numpy as np
+
+from synthesizer import exceptions
 from synthesizer.parametric.morphology import PointSource
+from synthesizer.blackhole_emission_models import Template
 from synthesizer.components import BlackholesComponent
 
 
@@ -83,3 +87,117 @@ class BlackHole(BlackholesComponent):
 
         # Initialise morphology using the in-built point-source class
         self.morphology = PointSource(offset=offset)
+
+    def _prepare_sed_args(
+        self,
+        grid,
+        fesc,
+        spectra_type,
+        grid_assignment_method,
+    ):
+        """
+        A method to prepare the arguments for SED computation with the C
+        functions.
+
+        Args:
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            fesc (float)
+                The escape fraction.
+            spectra_type (str)
+                The type of spectra to extract from the Grid. This must match a
+                type of spectra stored in the Grid.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(getattr(grid, axis), dtype=np.float64)
+            for axis in grid.axes
+        ]
+        props = [
+            np.ascontiguousarray(getattr(self, axis), dtype=np.float64)
+            for axis in grid.axes
+        ]
+
+        # For black holes mass is a grid parameter but we still need to
+        # multiply by mass in the extensions so just multiply by 1
+        mass = np.ones(1, dtype=np.float64)
+
+        # Make sure we get the wavelength index of the grid array
+        nlam = np.int32(grid.spectra[spectra_type].shape[-1])
+
+        # Get the grid spctra
+        grid_spectra = np.ascontiguousarray(
+            grid.spectra[spectra_type],
+            dtype=np.float64,
+        )
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+        grid_dims[ind + 1] = nlam
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        props = tuple(props)
+
+        return (
+            grid_spectra,
+            grid_props,
+            props,
+            mass,
+            fesc,
+            grid_dims,
+            len(grid_props),
+            np.int32(1),
+            nlam,
+            grid_assignment_method,
+        )
+
+    def generate_lnu(
+        self,
+        emission_model,
+        spectra_name,
+        agn_region,
+        fesc=0.0,
+        verbose=False,
+        grid_assignment_method="cic",
+        bolometric_luminosity=None,
+    ):
+        """
+        Generate the integrated rest frame spectra for a given grid key
+        spectra.
+        """
+        # Handle the special Template case where a spectra is scaled
+        # and returned
+        if isinstance(emission_model, Template):
+            return emission_model.get_spectra(bolometric_luminosity)
+
+        # Ensure we have a key in the grid. If not error.
+        if spectra_name not in list(emission_model.grid[agn_region].spectra.keys()):
+            raise exceptions.MissingSpectraType(
+                f"The Grid does not contain the key '{spectra_name}'"
+            )
+
+        from ..extensions.integrated_spectra import compute_integrated_sed
+
+        # Prepare the arguments for the C function.
+        args = self._prepare_sed_args(
+            emission_model.grid[agn_region],
+            fesc=fesc,
+            spectra_type=spectra_name,
+            grid_assignment_method=grid_assignment_method.lower(),
+        )
+
+        # Get the integrated spectra in grid units (erg / s / Hz)
+        return compute_integrated_sed(*args)
