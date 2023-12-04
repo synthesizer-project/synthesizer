@@ -108,10 +108,10 @@ class StarsComponent:
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
             young (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
             old (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             kwargs
                 Any keyword arguments which can be passed to
@@ -160,10 +160,10 @@ class StarsComponent:
             grid (obj):
                 Spectral grid object.
             young (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
             old (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -218,10 +218,10 @@ class StarsComponent:
                 Fraction of stellar emission that escapeds unattenuated from
                 the birth cloud (defaults to 0.0).
             young (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
             old (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -275,10 +275,10 @@ class StarsComponent:
                 Fraction of stellar emission that escapeds unattenuated from
                 the birth cloud (defaults to 0.0).
             young (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
             old (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -347,10 +347,10 @@ class StarsComponent:
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
             young (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
             old (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string):
                 A modifier for the spectra dictionary key such that the
@@ -498,10 +498,10 @@ class StarsComponent:
             dust_curve (object)
                 Instance of a dust_curve from synthesizer.dust.attenuation.
             young (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
             old (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -1228,10 +1228,10 @@ class StarsComponent:
 
         Args:
             young (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
             old (float/unyt_quantity):
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
         """
 
