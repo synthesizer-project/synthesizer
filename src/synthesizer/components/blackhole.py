@@ -125,18 +125,18 @@ class BlackholesComponent:
         # If mass, accretion_rate, and epsilon provided calculate the
         # bolometric luminosity.
         if (
-            (self.mass is not None)
-            and (self.accretion_rate is not None)
-            and (self.epsilon is not None)
+            self.mass is not None
+            and self.accretion_rate is not None
+            and self.epsilon is not None
         ):
             self.calculate_bolometric_luminosity()
 
         # If mass, accretion_rate, and epsilon provided calculate the
         # big bump temperature.
         if (
-            (self.mass is not None)
-            and (self.accretion_rate is not None)
-            and (self.epsilon is not None)
+            self.mass is not None
+            and self.accretion_rate is not None
+            and self.epsilon is not None
         ):
             self.calculate_bb_temperature()
 
@@ -147,9 +147,9 @@ class BlackholesComponent:
         # If mass, accretion_rate, and epsilon provided calculate the
         # Eddington ratio.
         if (
-            (self.mass is not None)
-            and (self.accretion_rate is not None)
-            and (self.epsilon is not None)
+            self.mass is not None
+            and self.accretion_rate is not None
+            and self.epsilon is not None
         ):
             self.calculate_eddington_ratio()
 
@@ -157,9 +157,9 @@ class BlackholesComponent:
         # accretion rate in units of the Eddington accretion rate. This is the
         # bolometric_luminosity / eddington_luminosity.
         if (
-            (self.mass is not None)
-            and (self.accretion_rate is not None)
-            and (self.epsilon is not None)
+            self.mass is not None
+            and self.accretion_rate is not None
+            and self.epsilon is not None
         ):
             self.calculate_accretion_rate_eddington()
 
