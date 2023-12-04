@@ -357,8 +357,8 @@ class Stars(Particles, StarsComponent):
         grid,
         spectra_name,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -464,6 +464,8 @@ class Stars(Particles, StarsComponent):
 
         # Get particle age masks
         mask = self._get_masks(young, old)
+
+        print("Mask sum:", np.sum(mask), "young =", young, "Old =", old)
 
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
@@ -571,8 +573,8 @@ class Stars(Particles, StarsComponent):
         grid,
         spectra_name,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -1013,8 +1015,8 @@ class Stars(Particles, StarsComponent):
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         **kwargs,
     ):
         """
@@ -1067,8 +1069,8 @@ class Stars(Particles, StarsComponent):
     def get_particle_spectra_incident(
         self,
         grid,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -1119,8 +1121,8 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -1174,8 +1176,8 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -1228,8 +1230,8 @@ class Stars(Particles, StarsComponent):
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
