@@ -107,10 +107,10 @@ class StarsComponent:
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (bool/float/unyt_quantity):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool/float/unyt_quantity):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             kwargs
@@ -159,10 +159,10 @@ class StarsComponent:
         Args:
             grid (obj):
                 Spectral grid object.
-            young (bool/float/unyt_quantity):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool/float/unyt_quantity):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
@@ -217,10 +217,10 @@ class StarsComponent:
             fesc (float):
                 Fraction of stellar emission that escapeds unattenuated from
                 the birth cloud (defaults to 0.0).
-            young (bool/float/unyt_quantity):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool/float/unyt_quantity):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
@@ -274,10 +274,10 @@ class StarsComponent:
             fesc (float):
                 Fraction of stellar emission that escapeds unattenuated from
                 the birth cloud (defaults to 0.0).
-            young (bool/float/unyt_quantity):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool/float/unyt_quantity):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
@@ -346,10 +346,10 @@ class StarsComponent:
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (bool/float/unyt_quantity):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool/float/unyt_quantity):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             label (string):
@@ -497,10 +497,10 @@ class StarsComponent:
                 The V-band optical depth.
             dust_curve (object)
                 Instance of a dust_curve from synthesizer.dust.attenuation.
-            young (bool/float/unyt_quantity):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool/float/unyt_quantity):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
@@ -1227,10 +1227,10 @@ class StarsComponent:
         spectra generation methods are in the right units (Myr)
 
         Args:
-            young (bool/float/unyt_quantity):
+            young (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool/float/unyt_quantity):
+            old (float/unyt_quantity):
                 If not False, specifies age in Myr at which to filter
                 for old star particles.
         """
