@@ -2,8 +2,6 @@
 A generic blackholes class currently holding (ultimately) various blackhole 
 emission models.
 
-TODO: probably a better home for this.
-
 Example Usage:
 
     UnifiedAGN(
@@ -32,8 +30,8 @@ class Template:
         sed (Sed)
             The template spectra for the AGN.
         normalisation (unyt_quantity)
-            The normalisation for the spectra. In reality this is the bolometric
-            luminosity.
+            The normalisation for the spectra. In reality this is the
+            bolometric luminosity.
     """
 
     def __init__(self, filename=None, lam=None, lnu=None):
@@ -77,11 +75,11 @@ class Template:
 
         Args:
             bolometric_luminosity (float)
-                The bolometric luminosity of the blackhole(s).
+                The bolometric luminosity of the blackhole(s) for scaling.
 
         """
 
-        return {"total": self.normalisation * self.sed}
+        return {"total": bolometric_luminosity * self.sed}
 
 
 class UnifiedAGN:
@@ -140,8 +138,13 @@ class UnifiedAGN:
         torus_emission_model=Greybody(1000 * K, 1.5),
     ):
         """
-        Args:
+        Intialise the UnifiedAGN emission model.
 
+        Not all agruments must be speicied. Any not specified by the user will
+        be assumed based on the models being employed or the default arguments
+        defined above, depending in which is appropriate.
+
+        Args:
             disc_model (str)
                 The disc_model to be used. The current test model is the AGNSED
                 model.
@@ -489,7 +492,8 @@ class UnifiedAGN:
         spectra["nlr"] = self._get_spectra_lr(parameter_dict, "nlr")
         spectra["torus"] = self._get_spectra_torus(parameter_dict)
 
-        # If we don't see the BLR and disc still generate spectra but set them to zero
+        # If we don't see the BLR and disc still generate spectra but set them
+        # to zero
         if inclination >= ((90 * deg) - parameter_dict["theta_torus"]):
             for spectra_id in [
                 "blr",
@@ -521,7 +525,6 @@ class UnifiedAGN:
         # If spectra_ids are not provided use the full list
         if spectra_ids is None:
             return parameter_dict, spectra
-        else:
-            return parameter_dict, {
-                spectra_id: spectra[spectra_ids] for spectra_id in spectra_ids
-            }
+        return parameter_dict, {
+            spectra_id: spectra[spectra_ids] for spectra_id in spectra_ids
+        }
