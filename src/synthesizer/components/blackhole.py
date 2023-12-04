@@ -8,7 +8,7 @@ import numpy as np
 from unyt import c, rad, deg, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.blackhole_emission_model import Template
+from synthesizer.blackhole_emission_models import Template
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 

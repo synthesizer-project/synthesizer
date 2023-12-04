@@ -17,7 +17,7 @@ from unyt import rad
 
 from synthesizer.particle.particles import Particles
 from synthesizer.components import BlackholesComponent
-from synthesizer.blackhole_emission_model import Template
+from synthesizer.blackhole_emission_models import Template
 from synthesizer import exceptions
 from synthesizer.units import Quantity
 from synthesizer.utils import value_to_array
