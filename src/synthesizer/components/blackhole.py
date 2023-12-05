@@ -9,7 +9,7 @@ from unyt import c, rad, deg, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.blackhole_emission_models import Template
-from synthesizer.sed import Sed
+from synthesizer.sed import Sed, plot_spectra
 from synthesizer.units import Quantity
 
 
@@ -830,4 +830,63 @@ class BlackholesComponent:
             tau_v=tau_v,
             dust_curve=dust_curve,
             dust_emission_model=dust_emission_model,
+        )
+
+    def plot_spectra(
+        self,
+        spectra_to_plot=None,
+        show=False,
+        ylimits=(),
+        xlimits=(),
+        figsize=(3.5, 5),
+        **kwargs,
+    ):
+        """
+        Plots either specific spectra (specified via spectra_to_plot) or all
+        spectra on the child Stars object.
+
+        Args:
+            spectra_to_plot (string/list, string)
+                The specific spectra to plot.
+                    - If None all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            show (bool)
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            ylimits (tuple)
+                The limits to apply to the y axis. If not provided the limits
+                will be calculated with the lower limit set to 1000 (100) times less
+                than the peak of the spectrum for rest_frame (observed) spectra.
+            xlimits (tuple)
+                The limits to apply to the x axis. If not provided the optimal
+                limits are found based on the ylimits.
+            figsize (tuple)
+                Tuple with size 2 defining the figure size.
+            kwargs (dict)
+                arguments to the `sed.plot_spectra` method called from this wrapper
+
+        Returns:
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
+        """
+        # Handling whether we are plotting all spectra, specific spectra, or
+        # a single spectra
+        if spectra_to_plot is None:
+            spectra = self.spectra
+        elif isinstance(spectra_to_plot, list):
+            spectra = {key: self.spectra[key] for key in spectra_to_plot}
+        else:
+            spectra = self.spectra[spectra_to_plot]
+
+        return plot_spectra(
+            spectra,
+            show=show,
+            ylimits=ylimits,
+            xlimits=xlimits,
+            figsize=figsize,
+            draw_legend=isinstance(spectra, dict),
+            **kwargs,
         )
