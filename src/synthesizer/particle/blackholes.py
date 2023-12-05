@@ -253,9 +253,9 @@ class BlackHoles(Particles, BlackholesComponent):
             for axis in grid.axes
         ]
         props = [
-            getattr(self, axis)[mask]
+            getattr(self, axis)
             if getattr(self, axis, None) is not None
-            else getattr(self, axis + "_" + line_region)[mask]
+            else getattr(self, axis + "_" + line_region)
             for axis in grid.axes
         ]  # here we have to handle which line region we are calculating
 
@@ -272,6 +272,9 @@ class BlackHoles(Particles, BlackholesComponent):
                 props[ind] = np.full(npart, prop)
             elif prop.size == 1:
                 props[ind] = np.full(npart, prop)
+
+        # Apply the mask to each property and make contiguous
+        props = [np.ascontiguousarray(prop[mask], dtype=np.float64) for prop in props]
 
         # For black holes mass is a grid parameter but we still need to
         # multiply by mass in the extensions so just multiply by 1
