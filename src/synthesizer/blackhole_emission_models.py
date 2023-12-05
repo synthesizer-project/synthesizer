@@ -140,9 +140,9 @@ class UnifiedAGN:
         """
         Intialise the UnifiedAGN emission model.
 
-        Not all agruments must be speicied. Any not specified by the user will
+        Not all agruments must be specfied. Any not specified by the user will
         be assumed based on the models being employed or the default arguments
-        defined above, depending in which is appropriate.
+        defined above, depending on which is appropriate.
 
         Args:
             disc_model (str)
@@ -235,6 +235,19 @@ class UnifiedAGN:
             "velocity_dispersion_nlr",
             "theta_torus",
         ]
+
+        # Set attributes
+        self.bolometric_luminosity = bolometric_luminosity
+        self.metallicity = metallicity
+        self.ionisation_parameter_blr = ionisation_parameter_blr
+        self.hydrogen_density_blr = hydrogen_density_blr
+        self.covering_fraction_blr = covering_fraction_blr
+        self.velocity_dispersion_blr = velocity_dispersion_blr
+        self.ionisation_parameter_nlr = ionisation_parameter_nlr
+        self.hydrogen_density_nlr = hydrogen_density_nlr
+        self.covering_fraction_nlr = covering_fraction_nlr
+        self.velocity_dispersion_nlr = velocity_dispersion_nlr
+        self.theta_torus = theta_torus
 
         # Create dictionary of fixed parameters based on what was handed
         self.fixed_parameters_dict = {}
