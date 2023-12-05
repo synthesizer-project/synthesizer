@@ -119,6 +119,21 @@ class UnifiedAGN:
             A list of the spectra types computed for a black hole.
     """
 
+    # Store default values at the class level (this is so we can consider
+    # values set by the user in the arguments as truly "fixed" parameters)
+    default_params = {
+        "ionisation_parameter_blr": 0.1,
+        "hydrogen_density_blr": 1e9 / cm**3,
+        "covering_fraction_blr": 0.1,
+        "velocity_dispersion_blr": 2000 * km / s,
+        "ionisation_parameter_nlr": 0.01,
+        "hydrogen_density_nlr": 1e4 / cm**3,
+        "covering_fraction_nlr": 0.1,
+        "velocity_dispersion_nlr": 500 * km / s,
+        "theta_torus": 10 * deg,
+        "torus_emission_model": Greybody(1000 * K, 1.5),
+    }
+
     def __init__(
         self,
         disc_model,
@@ -126,16 +141,16 @@ class UnifiedAGN:
         grid_dir,
         bolometric_luminosity=None,
         metallicity=None,
-        ionisation_parameter_blr=0.1,
-        hydrogen_density_blr=1e9 / cm**3,
-        covering_fraction_blr=0.1,
-        velocity_dispersion_blr=2000 * km / s,
-        ionisation_parameter_nlr=0.01,
-        hydrogen_density_nlr=1e4 / cm**3,
-        covering_fraction_nlr=0.1,
-        velocity_dispersion_nlr=500 * km / s,
-        theta_torus=10 * deg,
-        torus_emission_model=Greybody(1000 * K, 1.5),
+        ionisation_parameter_blr=None,
+        hydrogen_density_blr=None,
+        covering_fraction_blr=None,
+        velocity_dispersion_blr=None,
+        ionisation_parameter_nlr=None,
+        hydrogen_density_nlr=None,
+        covering_fraction_nlr=None,
+        velocity_dispersion_nlr=None,
+        theta_torus=None,
+        torus_emission_model=None,
     ):
         """
         Intialise the UnifiedAGN emission model.
@@ -236,7 +251,7 @@ class UnifiedAGN:
             "theta_torus",
         ]
 
-        # Set attributes
+        # Set attributes for what is stored in dictionaries
         self.bolometric_luminosity = bolometric_luminosity
         self.metallicity = metallicity
         self.ionisation_parameter_blr = ionisation_parameter_blr
@@ -254,6 +269,8 @@ class UnifiedAGN:
         for parameter in self.unified_parameters:
             if args[parameter] is not None:
                 self.fixed_parameters_dict[parameter] = args[parameter]
+            else:
+                setattr(self, parameter, self.default_params[parameter])
 
         # Create a list of the fixed_parameters for convenience
         self.fixed_parameters = list(self.fixed_parameters_dict.keys())
@@ -475,7 +492,7 @@ class UnifiedAGN:
 
         # Create a parameter dict by combining the fixed and provided
         # parameters
-        parameter_dict = self.fixed_parameters_dict | kwargs
+        parameter_dict = self.default_params | self.fixed_parameters_dict | kwargs
 
         # Check if we have all the required parameters, if not raise an
         # exception and tell the user which are missing. Bolometric luminosity
