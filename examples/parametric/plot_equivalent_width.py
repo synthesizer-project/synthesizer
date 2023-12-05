@@ -13,7 +13,7 @@ import numpy as np
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr, Angstrom
+from unyt import Myr, Angstrom, unyt_array
 
 
 def set_index():
@@ -97,7 +97,9 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         feature, blue, red = index_window[i], blue_window[i], red_window[i]
 
         for k in range(0, len(Z)):
-            eqw = measure_equivalent_width(index, feature, blue, red, Z[k], stellar_mass, grid, eqw, 0)
+            eqw.append(
+            measure_equivalent_width(index, feature, blue, red, Z[k], stellar_mass, grid, eqw, 0)
+            )
 
         print('Mean Equivalent width [', index, ']:', np.mean(eqw))
 
@@ -120,6 +122,9 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
 
         plt.title(label, fontsize=8, transform=plt.gca().transAxes, y=0.8)
         
+        if len(np.array(eqw).shape) != 1:
+            grid.metallicity = [[x, x] for x in grid.metallicity]
+        
         plt.scatter(
             grid.metallicity,
             eqw,
@@ -132,6 +137,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         )
         plt.semilogx(grid.metallicity, eqw, linewidth=0.75, color="grey")
         eqw.clear()
+        grid.metallicity = Z
 
         plt.tight_layout()
 
@@ -182,17 +188,12 @@ def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, eqw, mod
         sed = galaxy.stars.get_spectra_incident(grid)
     else:
         sed = galaxy.stars.get_spectra_intrinsic(grid, fesc=0.5)
-        
-    # --- measure equivalent widths
-    equivalent_width = None
 
-    eqw.append(sed.measure_index(
+    return sed.measure_index(
     	feature, 
     	blue, 
     	red,
-    ))
-    
-    return eqw
+    )
 
 if __name__ == "__main__":
     grid_name = "test_grid"
