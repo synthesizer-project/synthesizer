@@ -13,12 +13,13 @@ Example usages:
                      redshift=redshift, accretion_rate=accretion_rate, ...)
 """
 import numpy as np
-from unyt import rad
+from unyt import rad, unyt_array
 
 from synthesizer.particle.particles import Particles
 from synthesizer.components import BlackholesComponent
 from synthesizer.blackhole_emission_models import Template
 from synthesizer import exceptions
+from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 from synthesizer.utils import value_to_array
 
@@ -210,6 +211,8 @@ class BlackHoles(Particles, BlackholesComponent):
         grid,
         fesc,
         spectra_type,
+        line_region,
+        mask,
         grid_assignment_method,
     ):
         """
@@ -224,6 +227,11 @@ class BlackHoles(Particles, BlackholesComponent):
             spectra_type (str)
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
+            line_region (str)
+                The specific line region, i.e. 'nlr' or 'blr'.
+            mask (array-like, bool)
+                If not None this mask will be applied to the inputs to the
+                spectra creation.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -235,19 +243,39 @@ class BlackHoles(Particles, BlackholesComponent):
                 A tuple of all the arguments required by the C extension.
         """
 
+        # Handle the case where mask is None
+        if mask is None:
+            mask = np.ones(self.nbh, dtype=bool)
+
         # Set up the inputs to the C function.
         grid_props = [
             np.ascontiguousarray(getattr(grid, axis), dtype=np.float64)
             for axis in grid.axes
         ]
         props = [
-            np.ascontiguousarray(getattr(self, axis), dtype=np.float64)
+            getattr(self, axis)[mask]
+            if getattr(self, axis, None) is not None
+            else getattr(self, axis + "_" + line_region)[mask]
             for axis in grid.axes
-        ]
+        ]  # here we have to handle which line region we are calculating
+
+        # Calculate npart from the mask
+        npart = np.sum(mask)
+
+        # Remove units from any unyt_arrays
+        props = [prop.value if isinstance(prop, unyt_array) else prop for prop in props]
+
+        # Ensure any parameters inherited from the emission model have
+        # as many values as particles
+        for ind, prop in enumerate(props):
+            if isinstance(prop, float):
+                props[ind] = np.full(npart, prop)
+            elif prop.size == 1:
+                props[ind] = np.full(npart, prop)
 
         # For black holes mass is a grid parameter but we still need to
         # multiply by mass in the extensions so just multiply by 1
-        mass = np.ones(self.nbh, dtype=np.float64)
+        mass = np.ones(npart, dtype=np.float64)
 
         # Make sure we get the wavelength index of the grid array
         nlam = np.int32(grid.spectra[spectra_type].shape[-1])
@@ -276,7 +304,7 @@ class BlackHoles(Particles, BlackholesComponent):
             fesc,
             grid_dims,
             len(grid_props),
-            np.int32(self.nbh),
+            np.int32(npart),
             nlam,
             grid_assignment_method,
         )
@@ -285,6 +313,7 @@ class BlackHoles(Particles, BlackholesComponent):
         self,
         grid,
         spectra_name,
+        line_region,
         fesc=0.0,
         verbose=False,
         grid_assignment_method="cic",
@@ -302,6 +331,8 @@ class BlackHoles(Particles, BlackholesComponent):
             spectra_name (string)
                 The name of the target spectra inside the grid file
                 (e.g. "incident", "transmitted", "nebular").
+            line_region (str)
+                The specific line region, i.e. 'nlr' or 'blr'.
             verbose (bool)
                 Are we talking?
             grid_assignment_method (string)
@@ -323,6 +354,7 @@ class BlackHoles(Particles, BlackholesComponent):
             grid,
             fesc=fesc,
             spectra_type=spectra_name,
+            line_region=line_region,
             grid_assignment_method=grid_assignment_method.lower(),
         )
 

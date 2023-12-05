@@ -95,7 +95,9 @@ class BlackHole(BlackholesComponent):
         grid,
         fesc,
         spectra_type,
+        line_region,
         grid_assignment_method,
+        **kwargs,
     ):
         """
         A method to prepare the arguments for SED computation with the C
@@ -109,11 +111,17 @@ class BlackHole(BlackholesComponent):
             spectra_type (str)
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
+            line_region (str)
+                The specific line region, i.e. 'nlr' or 'blr'.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            kwargs (dict)
+                Any other arguments. Mainly unused and here for consistency
+                with particle version of this method which does have extra
+                arguments.
 
         Returns:
             tuple
@@ -126,7 +134,9 @@ class BlackHole(BlackholesComponent):
             for axis in grid.axes
         ]
         props = [
-            np.ascontiguousarray(getattr(self, axis), dtype=np.float64)
+            getattr(self, axis)
+            if getattr(self, axis, None) is not None
+            else getattr(self, axis + "_" + line_region)
             for axis in grid.axes
         ]
 
