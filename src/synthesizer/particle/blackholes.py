@@ -261,7 +261,7 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # Calculate npart from the mask
         npart = np.sum(mask)
-        print(npart)
+
         # Remove units from any unyt_arrays
         props = [prop.value if isinstance(prop, unyt_array) else prop for prop in props]
 
@@ -312,7 +312,7 @@ class BlackHoles(Particles, BlackholesComponent):
             grid_assignment_method,
         )
 
-    def _generate_particle_lnu(
+    def generate_particle_lnu(
         self,
         grid,
         spectra_name,
@@ -409,7 +409,7 @@ class BlackHoles(Particles, BlackholesComponent):
         # NLR and BLR are not overlapping.
         self.particle_spectra["disc_incident"] = Sed(
             lam,
-            self.generate_lnu(
+            self.generate_particle_lnu(
                 emission_model.grid["nlr"],
                 spectra_name="incident",
                 line_region="nlr",
@@ -421,7 +421,7 @@ class BlackHoles(Particles, BlackholesComponent):
         )
 
         # calculate the transmitted spectra
-        nlr_spectra = self.generate_lnu(
+        nlr_spectra = self.generate_particle_lnu(
             emission_model.grid["nlr"],
             spectra_name="transmitted",
             line_region="nlr",
@@ -430,7 +430,7 @@ class BlackHoles(Particles, BlackholesComponent):
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
         )
-        blr_spectra = self.generate_lnu(
+        blr_spectra = self.generate_particle_lnu(
             emission_model.grid["blr"],
             spectra_name="transmitted",
             line_region="blr",
@@ -501,7 +501,7 @@ class BlackHoles(Particles, BlackholesComponent):
         self.cosine_inclination = 0.5
 
         # Get the nebular spectra of the line region
-        spec = self.generate_lnu(
+        spec = self.generate_particle_lnu(
             emission_model.grid[line_region],
             spectra_name="nebular",
             line_region=line_region,
@@ -546,24 +546,26 @@ class BlackHoles(Particles, BlackholesComponent):
         # Get the disc emission
         disc_spectra = self.particle_spectra["disc_incident"]
 
-        # calculate the bolometric dust lunminosity as the difference between
+        # Calculate the bolometric dust lunminosity as the difference between
         # the intrinsic and attenuated
         torus_bolometric_luminosity = (
             emission_model.theta_torus / (90 * deg)
         ) * disc_spectra.measure_bolometric_luminosity()
 
-        # create torus spectra
-        sed = emission_model.torus_emission_model.get_spectra(disc_spectra.lam)
+        # Create torus spectra
+        torus_sed = emission_model.torus_emission_model.get_spectra(disc_spectra.lam)
 
-        # this is normalised to a bolometric luminosity of 1 so we need to
-        # scale by the bolometric luminosity.
-
-        sed._lnu *= torus_bolometric_luminosity.value
+        # This is normalised to a bolometric luminosity of 1 so we need to
+        # scale by the bolometric luminosity and create a spectra per particle.
+        spec = np.zeros((self.nbh, torus_sed.lam.size))
+        for i in range(self.nbh):
+            spec[i, :] = torus_sed._lnu * torus_bolometric_luminosity[i].value
+        torus_sed.lnu = spec
 
         # Reset the previously held inclination
         self.cosine_inclination = prev_cosine_inclincation
 
-        return sed
+        return torus_sed
 
     def get_particle_spectra_intrinsic(
         self,
@@ -707,7 +709,10 @@ class BlackHoles(Particles, BlackholesComponent):
                 / self.particle_spectra["intrinsic"].measure_bolometric_luminosity()
             )
             for spectra_id, spectra in self.particle_spectra.items():
-                self.particle_spectra[spectra_id] = spectra * scaling
+                for i in range(self.nbh):
+                    self.particle_spectra[spectra_id]._lnu[i] = (
+                        scaling[i] * spectra._lnu[i, :]
+                    )
 
         # Unset any of the fixed parameters we had to inherit
         for param in used_defaults:
