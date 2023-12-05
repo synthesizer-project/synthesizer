@@ -396,14 +396,14 @@ class BlackholesComponent:
         nlr_spectra = self.generate_lnu(
             emission_model.grid["nlr"],
             spectra_name="transmitted",
-            fesc=self.covering_fraction_nlr,
+            fesc=emission_model.covering_fraction_nlr,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
         )
         blr_spectra = self.generate_lnu(
             emission_model.grid["blr"],
             spectra_name="transmitted",
-            fesc=self.covering_fraction_blr,
+            fesc=emission_model.covering_fraction_blr,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
         )
@@ -412,7 +412,11 @@ class BlackholesComponent:
         # calculate the escaping spectra.
         self.spectra["disc_escaped"] = Sed(
             lam,
-            (1 - self.covering_fraction_blr - self.covering_fraction_nlr)
+            (
+                1
+                - emission_model.covering_fraction_blr
+                - emission_model.covering_fraction_nlr
+            )
             * self.spectra["disc_incident"],
         )
 
@@ -523,7 +527,7 @@ class BlackholesComponent:
         # calculate the bolometric dust lunminosity as the difference between
         # the intrinsic and attenuated
         torus_bolometric_luminosity = (
-            self.theta_torus / (90 * deg)
+            emission_model.theta_torus / (90 * deg)
         ) * disc_spectra.measure_bolometric_luminosity()
 
         # create torus spectra
@@ -609,9 +613,10 @@ class BlackholesComponent:
             # Get the parameter value from this object
             attr = getattr(self, param, None)
             priv_attr = getattr(self, "_" + param, None)
+            model_attr = getattr(emission_model, param, None)
 
             # Is it set?
-            if attr is None and priv_attr is None:
+            if attr is None and priv_attr is None and model_attr is None:
                 missing_params.append(param)
 
         if len(missing_params) > 0:
@@ -625,7 +630,7 @@ class BlackholesComponent:
 
         # If the inclination is too high (edge) on we don't see the disc, only
         # the NLR and the torus.
-        if inclination < ((90 * deg) - self.theta_torus):
+        if inclination < ((90 * deg) - emission_model.theta_torus):
             self._get_spectra_disc(
                 emission_model=emission_model,
                 verbose=verbose,
@@ -652,7 +657,7 @@ class BlackholesComponent:
 
         # If we don't see the BLR and disc still generate spectra but set them
         # to zero
-        if inclination >= ((90 * deg) - self.theta_torus):
+        if inclination >= ((90 * deg) - emission_model.theta_torus):
             for spectra_id in [
                 "blr",
                 "disc_transmitted",
