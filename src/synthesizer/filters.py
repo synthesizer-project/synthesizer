@@ -1107,7 +1107,8 @@ class Filter:
                 df = np.loadtxt(f)
         except URLError:
             raise exceptions.SVOInaccessible(
-                "The SVO Database is not responding. Is it down?"
+                (f"The SVO Database at {self.svo_url} "
+                 "is not responding. Is it down?")
             )
 
         # Throw an error if we didn't find the filter.
