@@ -552,17 +552,8 @@ class BlackholesComponent:
         prev_cosine_inclincation = self.cosine_inclination
         self.cosine_inclination = 0.5
 
-        # Calcualte the disc emission, since this is incident it doesn't matter
-        # if we use the NLR or BLR grid as long as we use the correct grid
-        # point.
-        disc_spectra = self.generate_lnu(
-            emission_model.grid["nlr"],
-            spectra_name="incident",
-            line_region="nlr",
-            fesc=0.0,
-            verbose=verbose,
-            grid_assignment_method=grid_assignment_method,
-        )
+        # Get the disc emission
+        disc_spectra = self.spectra["disc_incident"]
 
         # calculate the bolometric dust lunminosity as the difference between
         # the intrinsic and attenuated
