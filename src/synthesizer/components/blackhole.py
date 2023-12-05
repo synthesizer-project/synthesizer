@@ -197,7 +197,9 @@ class BlackholesComponent:
         self,
         grid,
         spectra_name,
+        line_region,
         fesc=0.0,
+        mask=None,
         verbose=False,
         grid_assignment_method="cic",
     ):
@@ -214,6 +216,11 @@ class BlackholesComponent:
             spectra_name (string)
                 The name of the target spectra inside the grid file
                 (e.g. "incident", "transmitted", "nebular").
+            line_region (str)
+                The specific line region, i.e. 'nlr' or 'blr'.
+            mask (array-like, bool)
+                If not None this mask will be applied to the inputs to the
+                spectra creation.
             verbose (bool)
                 Are we talking?
             grid_assignment_method (string)
@@ -228,6 +235,13 @@ class BlackholesComponent:
                 f"The Grid does not contain the key '{spectra_name}'"
             )
 
+        # If the mask is False (parametric case) or contains only
+        # 0 (particle case) just return an array of zeros
+        if isinstance(mask, bool) and not mask:
+            return np.zeros(grid.lam)
+        if mask is not None and np.sum(mask) == 0:
+            return np.zeros(grid.lam)
+
         from ..extensions.integrated_spectra import compute_integrated_sed
 
         # Prepare the arguments for the C function.
@@ -235,6 +249,8 @@ class BlackholesComponent:
             grid,
             fesc=fesc,
             spectra_type=spectra_name,
+            line_region=line_region,
+            mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
         )
 
@@ -359,6 +375,7 @@ class BlackholesComponent:
     def _get_spectra_disc(
         self,
         emission_model,
+        mask,
         verbose,
         grid_assignment_method,
     ):
@@ -368,7 +385,10 @@ class BlackholesComponent:
         Args:
             emission_model (blackhole_emission_models.*)
                 Any instance of a blackhole emission model (e.g. Template
-                or UnifiedAGN)
+                or UnifiedAGN).
+            mask (array-like, bool)
+                If not None this mask will be applied to the inputs to the
+                spectra creation.
             verbose (bool)
                 Are we talking?
             grid_assignment_method (string)
@@ -394,6 +414,7 @@ class BlackholesComponent:
             self.generate_lnu(
                 emission_model.grid["nlr"],
                 spectra_name="incident",
+                line_region="nlr",
                 fesc=0.0,
                 verbose=verbose,
                 grid_assignment_method=grid_assignment_method,
@@ -404,6 +425,7 @@ class BlackholesComponent:
         nlr_spectra = self.generate_lnu(
             emission_model.grid["nlr"],
             spectra_name="transmitted",
+            line_region="nlr",
             fesc=emission_model.covering_fraction_nlr,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
@@ -411,6 +433,7 @@ class BlackholesComponent:
         blr_spectra = self.generate_lnu(
             emission_model.grid["blr"],
             spectra_name="transmitted",
+            line_region="blr",
             fesc=emission_model.covering_fraction_blr,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
@@ -425,7 +448,7 @@ class BlackholesComponent:
                 - emission_model.covering_fraction_blr
                 - emission_model.covering_fraction_nlr
             )
-            * self.spectra["disc_incident"],
+            * self.spectra["disc_incident"].lnu,
         )
 
         # calculate the total spectra, the sum of escaping and transmitted
@@ -439,6 +462,7 @@ class BlackholesComponent:
     def _get_spectra_lr(
         self,
         emission_model,
+        mask,
         line_region,
         verbose,
         grid_assignment_method,
@@ -449,7 +473,10 @@ class BlackholesComponent:
         Args
             emission_model (blackhole_emission_models.*)
                 Any instance of a blackhole emission model (e.g. Template
-                or UnifiedAGN)
+                or UnifiedAGN).
+            mask (array-like, bool)
+                If not None this mask will be applied to the inputs to the
+                spectra creation.
             line_region (str)
                 The specific line region, i.e. 'nlr' or 'blr'.
             verbose (bool)
@@ -475,13 +502,14 @@ class BlackholesComponent:
         spec = self.generate_lnu(
             emission_model.grid[line_region],
             spectra_name="nebular",
+            line_region=line_region,
             fesc=0.0,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
         )
         sed = Sed(
             emission_model.grid[line_region]._lam,
-            getattr(self, "covering_fraction_{line_region}") * spec,
+            getattr(self, f"covering_fraction_{line_region}") * spec,
         )
 
         # Reset the previously held inclination
@@ -501,7 +529,10 @@ class BlackholesComponent:
         Args:
             emission_model (blackhole_emission_models.*)
                 Any instance of a blackhole emission model (e.g. Template
-                or UnifiedAGN)
+                or UnifiedAGN).
+            mask (array-like, bool)
+                If not None this mask will be applied to the inputs to the
+                spectra creation.
             verbose (bool)
                 Are we talking?
             grid_assignment_method (string)
@@ -527,6 +558,7 @@ class BlackholesComponent:
         disc_spectra = self.generate_lnu(
             emission_model.grid["nlr"],
             spectra_name="incident",
+            line_region="nlr",
             fesc=0.0,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
@@ -620,8 +652,8 @@ class BlackholesComponent:
         # is not strictly required.
         missing_params = []
         for param in emission_model.parameters:
-            # Skip bolometric luminosity
-            if param == "bolometric_luminosity":
+            # Skip bolometric luminosity and torus_emission_model
+            if param == "bolometric_luminosity" or param == "torus_emission_model":
                 continue
 
             # Get the parameter value from this object
@@ -641,34 +673,30 @@ class BlackholesComponent:
         # Determine the inclination from the cosine_inclination
         inclination = np.arccos(self.cosine_inclination) * rad
 
+        # If the inclination is too high (edge) on we don't see the disc, only
+        # the NLR and the torus. Create a mask to pass to the generation
+        # method
+        mask = inclination < ((90 * deg) - emission_model.theta_torus)
+
         # Get the disc and BLR spectra
         self._get_spectra_disc(
             emission_model=emission_model,
+            mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
         )
         self.spectra["blr"] = self._get_spectra_lr(
             emission_model=emission_model,
+            mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
             line_region="blr",
         )
 
-        # If the inclination is too high (edge) on we don't see the disc, only
-        # the NLR and the torus.
-        mask = inclination < ((90 * deg) - emission_model.theta_torus)
-        for spectra_id in [
-            "blr",
-            "disc_transmitted",
-            "disc_incident",
-            "disc_escape",
-            "disc",
-        ]:
-            self.spectra[spectra_id] *= mask
-
         self.spectra["nlr"] = self._get_spectra_lr(
             emission_model=emission_model,
             verbose=verbose,
+            mask=None,
             grid_assignment_method=grid_assignment_method,
             line_region="nlr",
         )
