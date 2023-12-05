@@ -416,6 +416,7 @@ class BlackholesComponent:
                 spectra_name="incident",
                 line_region="nlr",
                 fesc=0.0,
+                mask=mask,
                 verbose=verbose,
                 grid_assignment_method=grid_assignment_method,
             ),
@@ -427,6 +428,7 @@ class BlackholesComponent:
             spectra_name="transmitted",
             line_region="nlr",
             fesc=emission_model.covering_fraction_nlr,
+            mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
         )
@@ -435,6 +437,7 @@ class BlackholesComponent:
             spectra_name="transmitted",
             line_region="blr",
             fesc=emission_model.covering_fraction_blr,
+            mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
         )
@@ -504,6 +507,7 @@ class BlackholesComponent:
             spectra_name="nebular",
             line_region=line_region,
             fesc=0.0,
+            mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
         )
@@ -520,8 +524,6 @@ class BlackholesComponent:
     def _get_spectra_torus(
         self,
         emission_model,
-        verbose,
-        grid_assignment_method,
     ):
         """
         Generate the torus emission Sed.
@@ -530,16 +532,6 @@ class BlackholesComponent:
             emission_model (blackhole_emission_models.*)
                 Any instance of a blackhole emission model (e.g. Template
                 or UnifiedAGN).
-            mask (array-like, bool)
-                If not None this mask will be applied to the inputs to the
-                spectra creation.
-            verbose (bool)
-                Are we talking?
-            grid_assignment_method (string)
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
 
         Returns:
             Sed
@@ -693,8 +685,6 @@ class BlackholesComponent:
         )
         self.spectra["torus"] = self._get_spectra_torus(
             emission_model=emission_model,
-            verbose=verbose,
-            grid_assignment_method=grid_assignment_method,
         )
 
         # Calculate the emergent spectra as the sum of the components.
