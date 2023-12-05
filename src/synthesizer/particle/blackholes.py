@@ -13,7 +13,7 @@ Example usages:
                      redshift=redshift, accretion_rate=accretion_rate, ...)
 """
 import numpy as np
-from unyt import rad, unyt_array
+from unyt import rad, deg, unyt_array
 
 from synthesizer.particle.particles import Particles
 from synthesizer.components import BlackholesComponent
@@ -261,7 +261,7 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # Calculate npart from the mask
         npart = np.sum(mask)
-
+        print(npart)
         # Remove units from any unyt_arrays
         props = [prop.value if isinstance(prop, unyt_array) else prop for prop in props]
 
@@ -318,7 +318,7 @@ class BlackHoles(Particles, BlackholesComponent):
         spectra_name,
         line_region,
         fesc=0.0,
-        mask=mask,
+        mask=None,
         verbose=False,
         grid_assignment_method="cic",
     ):
