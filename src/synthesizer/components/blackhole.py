@@ -710,9 +710,16 @@ class BlackholesComponent:
         # Since we're using a coarse grid it might be necessary to rescale
         # the spectra to the bolometric luminosity. This is requested when
         # the emission model is called from a parametric or particle blackhole.
-        if self.bolometric_luminosity is not None:
+        if isinstance(self.bolometric_luminosity, float):
             scaling = (
                 self.bolometric_luminosity
+                / self.spectra["intrinsic"].measure_bolometric_luminosity()
+            )
+            for spectra_id, spectra in self.spectra.items():
+                self.spectra[spectra_id] = spectra * scaling
+        elif self.bolometric_luminosity is not None:
+            scaling = (
+                np.sum(self.bolometric_luminosity)
                 / self.spectra["intrinsic"].measure_bolometric_luminosity()
             )
             for spectra_id, spectra in self.spectra.items():
