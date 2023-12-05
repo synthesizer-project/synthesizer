@@ -866,6 +866,7 @@ class Sed:
             index (float)
                Absorption feature index in units of wavelength
         """
+        
         # Measure the red and blue windows
         lnu_blue = self.measure_window_lnu(blue)
         lnu_red = self.measure_window_lnu(red)
@@ -873,50 +874,49 @@ class Sed:
         # Define the wavelength grid over the feature
         transmission = (self.lam > feature[0]) & (self.lam < feature[1])
         feature_lam = self.lam[transmission]
+        
+        # Extract mean values
+        mean_blue = np.mean(blue)
+        mean_red = np.mean(red)
 
-        # Using the red and blue windows fit the continuum
-        # note, this does not conserve units so we need to add them back in
-        # later.
-
-         # Handle different spectra shapes
+        # Handle different spectra shapes
         if self._spec_dims == 2:
             # Multiple spectra case
 
             # Set up output array
             index = np.zeros(len(self.lnu)) * self.lam.units
-
-            # Note: I'm sure this could be done better.
-            for i, _lnu in enumerate(self.lnu):
-                continuum_fit = np.polyfit(
-                    [np.mean(blue), np.mean(red)], [lnu_blue[i], lnu_red[i]], 1
-                )
-
-                # Use the continuum fit to define the continuum
-                continuum = (
-                    (continuum_fit[0] * feature_lam.to(self.lam.units).value)
-                    + continuum_fit[1]
-                ) * self.lnu.units
-
-                # Define the continuum subtracted spectrum
-                feature_lum = _lnu[transmission]
-                feature_lum_continuum_subtracted = (
-                    -(feature_lum - continuum) / continuum
-                )
-
-                # Measure index
-                index[i] = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
-
-        else:
-            # Single spectra case
+            
             continuum_fit = np.polyfit(
                 [np.mean(blue), np.mean(red)], [lnu_blue, lnu_red], 1
             )
 
-            # Use the continuum fit to define the continuum
+            # Use the continuum fit to define the continuum for all spectra
             continuum = (
-                (continuum_fit[0] * feature_lam.to(self.lam.units).value)
-                + continuum_fit[1]
+                (continuum_fit[0] * feature_lam.to(self.lam.units).value) +
+                continuum_fit[1]
             ) * self.lnu.units
+
+            # Reshape feature_lam to make it compatible for broadcasting
+            feature_lam_reshaped = feature_lam[:, np.newaxis]
+
+            # Define the continuum subtracted spectrum for all SEDs
+            feature_lum = self.lnu[:, transmission, :]
+            feature_lum_continuum_subtracted = (
+                -(feature_lum - continuum[:, np.newaxis, :]) / continuum[:, np.newaxis, :]
+            )
+
+            # Measure index for all SEDs
+            index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam, axis=-1)
+
+        else:
+            # Single spectra case
+
+            # Perform polyfit for the continuum fit
+            continuum_fit = np.polyfit([mean_blue, mean_red], [lnu_blue, lnu_red], 1)
+
+            # Use the continuum fit to define the continuum
+            continuum = ((continuum_fit[0] * feature_lam.to(self.lam.units).value) +
+                         continuum_fit[1]) * self.lnu.units
 
             # Define the continuum subtracted spectrum
             feature_lum = self.lnu[transmission]
@@ -924,7 +924,7 @@ class Sed:
 
             # Measure index
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
-
+            
         return index
 
 
