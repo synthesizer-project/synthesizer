@@ -132,7 +132,7 @@ class UnifiedAGN:
         "velocity_dispersion_nlr": 500 * km / s,
         "theta_torus": 10 * deg,
         "torus_emission_model": Greybody(1000 * K, 1.5),
-        "bolometric_luminosity": 1 * erg / s,
+        "bolometric_luminosity": None,  # this is only used for scaling
     }
 
     def __init__(
