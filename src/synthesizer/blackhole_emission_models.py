@@ -11,7 +11,7 @@ Example Usage:
 )
 """
 import numpy as np
-from unyt import deg, km, cm, s, K, rad
+from unyt import deg, km, cm, s, K, rad, erg
 
 from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
@@ -132,6 +132,7 @@ class UnifiedAGN:
         "velocity_dispersion_nlr": 500 * km / s,
         "theta_torus": 10 * deg,
         "torus_emission_model": Greybody(1000 * K, 1.5),
+        "bolometric_luminosity": 1 * erg / s,
     }
 
     def __init__(
@@ -269,7 +270,7 @@ class UnifiedAGN:
         for parameter in self.unified_parameters:
             if args[parameter] is not None:
                 self.fixed_parameters_dict[parameter] = args[parameter]
-            else:
+            elif parameter in self.default_params:
                 setattr(self, parameter, self.default_params[parameter])
 
         # Create a list of the fixed_parameters for convenience
@@ -304,7 +305,13 @@ class UnifiedAGN:
 
         # Get a list of all parameters.
         # TODO: need to add torus parameters
-        self.parameters = list(set(self.disc_parameters + self.unified_parameters))
+        self.parameters = list(
+            set(
+                self.disc_parameters
+                + self.unified_parameters
+                + list(self.default_params.keys())
+            )
+        )
 
         # Get a list of the parameters which are not fixed and need to be
         # provided. This is used by the components.blackholes to know what
