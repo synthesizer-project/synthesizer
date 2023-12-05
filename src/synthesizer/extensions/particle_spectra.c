@@ -240,14 +240,14 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   const int ndim;
   const int npart, nlam;
-  const double fesc;
   const PyObject *grid_tuple, *part_tuple;
   const PyArrayObject *np_grid_spectra;
+  const PyArrayObject *np_fesc;
   const PyArrayObject *np_part_mass, *np_ndims;
   const char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOdOiiis", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &fesc, &np_ndims, &ndim,
+  if (!PyArg_ParseTuple(args, "OOOOOOiiis", &np_grid_spectra, &grid_tuple,
+                        &part_tuple, &np_part_mass, &np_fesc, &np_ndims, &ndim,
                         &npart, &nlam, &method))
     return NULL;
 
@@ -271,6 +271,9 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* Extract a pointer to the particle masses. */
   const double *part_mass = PyArray_DATA(np_part_mass);
+
+  /* Extract a pointer to the fesc array. */
+  const double *fesc = PyArray_DATA(np_fesc);
 
   /* Allocate a single array for grid properties*/
   int nprops = 0;
@@ -322,10 +325,10 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
      * requested method. */
     if (strcmp(method, "cic") == 0) {
       spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
-                       spectra, nlam, fesc, p);
+                       spectra, nlam, fesc[p], p);
     } else if (strcmp(method, "ngp") == 0) {
       spectra_loop_ngp(grid_props, part_props, mass, grid_spectra, dims, ndim,
-                       spectra, nlam, fesc, p);
+                       spectra, nlam, fesc[p], p);
     } else {
       /* Only print this warning once */
       if (p == 0)
@@ -333,7 +336,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
             "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
             method);
       spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
-                       spectra, nlam, fesc, p);
+                       spectra, nlam, fesc[p], p);
     }
   }
 
