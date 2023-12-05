@@ -18,9 +18,7 @@ Example usages:
 """
 import numpy as np
 
-from synthesizer import exceptions
 from synthesizer.parametric.morphology import PointSource
-from synthesizer.blackhole_emission_models import Template
 from synthesizer.components import BlackholesComponent
 
 
@@ -44,6 +42,7 @@ class BlackHole(BlackholesComponent):
         spin=None,
         metallicity=None,
         offset=None,
+        **kwargs,
     ):
         """
         Intialise the Stars instance. The first two arguments are always
@@ -70,7 +69,9 @@ class BlackHole(BlackholesComponent):
                 The (x,y) offsets of the blackhole relative to the centre of
                 the image. Units can be length or angle but should be
                 consistent with the scene.
-
+            kwargs (dict)
+                Any parameter for the emission models can be provided as kwargs
+                here to override the defaults of the emission models.
         """
 
         # Initialise base class
@@ -83,6 +84,7 @@ class BlackHole(BlackholesComponent):
             inclination=inclination,
             spin=spin,
             metallicity=metallicity,
+            **kwargs,
         )
 
         # Initialise morphology using the in-built point-source class
