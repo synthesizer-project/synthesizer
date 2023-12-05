@@ -79,6 +79,7 @@ class BlackHoles(Particles, BlackholesComponent):
         velocities=None,
         softening_length=None,
         smoothing_lengths=None,
+        **kwargs,
     ):
         """
         Intialise the Stars instance. The first two arguments are always
@@ -108,6 +109,9 @@ class BlackHoles(Particles, BlackholesComponent):
             smoothing_lengths (array-like, float)
                 The smoothing length describing the black holes neighbour
                 kernel.
+            kwargs (dict)
+                Any parameter for the emission models can be provided as kwargs
+                here to override the defaults of the emission models.
         """
 
         # Handle singular values being passed (arrays are just returned)
@@ -137,6 +141,7 @@ class BlackHoles(Particles, BlackholesComponent):
             inclination=inclinations,
             spin=spins,
             metallicity=metallicities,
+            **kwargs,
         )
 
         # Set a frontfacing clone of the number of particles with clearer

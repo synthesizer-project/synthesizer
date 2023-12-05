@@ -65,6 +65,7 @@ class BlackholesComponent:
         spin=None,
         bolometric_luminosity=None,
         metallicity=None,
+        **kwargs,
     ):
         """
         Initialise the BlackholeComponent. Where they're not provided missing
@@ -90,6 +91,9 @@ class BlackholesComponent:
             metallicity (array-like, float)
                 The metallicity of the blackhole which is assumed for the line
                 emitting regions.
+            kwargs (dict)
+                Any parameter for the emission models can be provided as kwargs
+                here to override the defaults of the emission models.
         """
 
         # Initialise spectra
@@ -104,6 +108,10 @@ class BlackholesComponent:
         self.spin = spin
         self.bolometric_luminosity = bolometric_luminosity
         self.metallicity = metallicity
+
+        # Set any of the extra attribute provided as kwargs
+        for key, val in kwargs.items():
+            setattr(self, key, val)
 
         # Check to make sure that both accretion rate and bolometric luminosity
         # haven't been provided because that could be confusing.
@@ -577,25 +585,31 @@ class BlackholesComponent:
             )
             return self.spectra
 
+        # If the user has fixed parameters in the model we need to
+        # temporarily inherit those
+        used_fixed = []
+        for param in emission_model.fixed_parameters:
+            # Store the current value to reinherit later
+            used_fixed.append((param, getattr(self, param, None)))
+
+            # Overwrite with the fixed version
+            setattr(self, param, getattr(emission_model, param))
+
         # Set any parameter this particular emission model requires which
         # are not set on the object. These are unset at the end of the method!
         used_defaults = []
         for param in emission_model.variable_parameters:
-            # Get the parameter value from this object
-            attr = getattr(self, param, None)
-            priv_attr = getattr(self, "_" + param, None)
-
             # Is it set?
             if (
-                attr is None
-                and priv_attr is None
-                and param in emission_model.fixed_parameters_dict
+                getattr(self, param, None) is None
+                and getattr(self, "_" + param, None) is None
+                and getattr(emission_model, param, None) is not None
             ):
                 # Ok, this one needs setting based on the model
-                default = emission_model.fixed_parameters_dict[param]
+                default = getattr(emission_model, param)
                 setattr(self, param, default)
 
-                # Record that we used a fixed parameter for removal later
+                # Record that we used a default parameter for removal later
                 used_defaults.append(param)
 
                 if verbose:
@@ -613,10 +627,9 @@ class BlackholesComponent:
             # Get the parameter value from this object
             attr = getattr(self, param, None)
             priv_attr = getattr(self, "_" + param, None)
-            model_attr = getattr(emission_model, param, None)
 
             # Is it set?
-            if attr is None and priv_attr is None and model_attr is None:
+            if attr is None and priv_attr is None:
                 missing_params.append(param)
 
         if len(missing_params) > 0:
@@ -628,20 +641,30 @@ class BlackholesComponent:
         # Determine the inclination from the cosine_inclination
         inclination = np.arccos(self.cosine_inclination) * rad
 
+        # Get the disc and BLR spectra
+        self._get_spectra_disc(
+            emission_model=emission_model,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+        )
+        self.spectra["blr"] = self._get_spectra_lr(
+            emission_model=emission_model,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+            line_region="blr",
+        )
+
         # If the inclination is too high (edge) on we don't see the disc, only
         # the NLR and the torus.
-        if inclination < ((90 * deg) - emission_model.theta_torus):
-            self._get_spectra_disc(
-                emission_model=emission_model,
-                verbose=verbose,
-                grid_assignment_method=grid_assignment_method,
-            )
-            self.spectra["blr"] = self._get_spectra_lr(
-                emission_model=emission_model,
-                verbose=verbose,
-                grid_assignment_method=grid_assignment_method,
-                line_region="blr",
-            )
+        mask = inclination < ((90 * deg) - emission_model.theta_torus)
+        for spectra_id in [
+            "blr",
+            "disc_transmitted",
+            "disc_incident",
+            "disc_escape",
+            "disc",
+        ]:
+            self.spectra[spectra_id] *= mask
 
         self.spectra["nlr"] = self._get_spectra_lr(
             emission_model=emission_model,
@@ -654,18 +677,6 @@ class BlackholesComponent:
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
         )
-
-        # If we don't see the BLR and disc still generate spectra but set them
-        # to zero
-        if inclination >= ((90 * deg) - emission_model.theta_torus):
-            for spectra_id in [
-                "blr",
-                "disc_transmitted",
-                "disc_incident",
-                "disc_escape",
-                "disc",
-            ]:
-                self.spectra[spectra_id] = Sed(lam=self.spectra["nlr"].lam)
 
         # Calculate the emergent spectra as the sum of the components.
         # Note: the choice of "intrinsic" is to align with the Pacman model
