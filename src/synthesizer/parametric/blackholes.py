@@ -17,6 +17,7 @@ Example usages:
 )
 """
 import numpy as np
+from unyt import unyt_array
 
 from synthesizer.parametric.morphology import PointSource
 from synthesizer.components import BlackholesComponent
@@ -139,6 +140,10 @@ class BlackHole(BlackholesComponent):
             else getattr(self, axis + "_" + line_region)
             for axis in grid.axes
         ]
+
+        # Remove units from any unyt_arrays and make contiguous
+        props = [prop.value if isinstance(prop, unyt_array) else prop for prop in props]
+        props = [np.ascontiguousarray(prop, dtype=np.float64) for prop in props]
 
         # For black holes mass is a grid parameter but we still need to
         # multiply by mass in the extensions so just multiply by 1
