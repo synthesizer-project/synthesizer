@@ -234,7 +234,11 @@ class UnifiedAGN:
         self.grid_dir = grid_dir
 
         # Save the torus model
-        self.torus_emission_model = torus_emission_model
+        self.torus_emission_model = (
+            torus_emission_model
+            if torus_emission_model is not None
+            else self.default_params["torus_emission_model"]
+        )
 
         # These are the unified model parameters, i.e. all the non-disc and
         # non-torus parameters that are needed.
