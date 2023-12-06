@@ -132,7 +132,6 @@ class UnifiedAGN:
         "velocity_dispersion_nlr": 500 * km / s,
         "theta_torus": 10 * deg,
         "torus_emission_model": Greybody(1000 * K, 1.5),
-        "cosine_inclination": 0.5,
         "bolometric_luminosity": None,  # this is only used for scaling
     }
 
@@ -153,7 +152,6 @@ class UnifiedAGN:
         velocity_dispersion_nlr=None,
         theta_torus=None,
         torus_emission_model=None,
-        cosine_inclination=None,
         verbose=True,
     ):
         """
@@ -225,7 +223,6 @@ class UnifiedAGN:
             "velocity_dispersion_nlr": velocity_dispersion_nlr,
             "theta_torus": theta_torus,
             "torus_emission_model": torus_emission_model,
-            "cosine_inclination": cosine_inclination,
         }
 
         # Save model and directory as attributes.
@@ -253,7 +250,6 @@ class UnifiedAGN:
         # Set "unified" attributes
         self.bolometric_luminosity = bolometric_luminosity
         self.metallicity = metallicity
-        self.cosine_inclination = cosine_inclination
 
         # Set BLR attributes
         self.ionisation_parameter_blr = ionisation_parameter_blr
