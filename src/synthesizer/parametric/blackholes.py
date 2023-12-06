@@ -141,17 +141,35 @@ class BlackHole(BlackholesComponent):
         props = []
         for axis in grid.axes:
             # Source parameters from the appropriate place
-            if axis in emission_model.fixed_parameters:
-                # Fixed parameters
+            if axis in emission_model.required_parameters:
+                # Parameters that need to be provided from the black hole
+                # (these already exclude any parameters fixed on the
+                # emission model)
+                props.append(getattr(self, axis))
+
+            elif (
+                axis in emission_model.variable_parameters
+                and getattr(self, axis, None) is not None
+            ):
+                # Variable parameters defined on the black hole (not including
+                # line region parameters)
+                props.append(getattr(self, axis))
+
+            elif (
+                axis + "_" + line_region in emission_model.variable_parameters
+                and getattr(self, axis + "_" + line_region, None) is not None
+            ):
+                # Variable line region parameters defined on the black hole
+                props.append(getattr(self, axis + "_" + line_region))
+
+            elif getattr(emission_model, axis, None) is not None:
+                # Parameters required from the emission_model (not including
+                # line region parameters)
                 props.append(getattr(emission_model, axis))
 
-            elif axis + "_" + line_region in emission_model.fixed_parameters:
-                # Fixed line region parameters
+            elif getattr(emission_model, axis + "_" + line_region, None) is not None:
+                # Line region parameters required from the emission_model
                 props.append(getattr(emission_model, axis + "_" + line_region))
-
-            elif axis in emission_model.required_parameters:
-                # Parameters that need to be provided from the black hole
-                props.append(getattr(self, axis))
 
             else:
                 raise exceptions.MissingArgument(
