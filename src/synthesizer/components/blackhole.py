@@ -569,7 +569,7 @@ class BlackholesComponent:
     def get_spectra_intrinsic(
         self,
         emission_model,
-        verbose=True,
+        verbose=False,
         grid_assignment_method="cic",
     ):
         """
@@ -724,7 +724,7 @@ class BlackholesComponent:
     def get_spectra_attenuated(
         self,
         emission_model,
-        verbose=True,
+        verbose=False,
         grid_assignment_method="cic",
         tau_v=None,
         dust_curve=None,
