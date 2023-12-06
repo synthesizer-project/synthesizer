@@ -105,63 +105,6 @@ class BaseGalaxy:
 
         return sed
 
-    def transmission(self):
-        """
-        Calculate transmission as a function of wavelength
-
-        Returns:
-            transmission (array)
-        """
-
-        return (
-            self.spectra["attenuated"].lam,
-            self.spectra["attenuated"].lnu / self.spectra["intrinsic"].lnu,
-        )
-
-    def Al(self):
-        """
-        Calculate attenuation as a function of wavelength
-
-        Returns:
-            attenuation (array)
-        """
-
-        lam, transmission = self.transmission()
-
-        return lam, -2.5 * np.log10(transmission)
-
-    def A(self, l):
-        """
-        Calculate attenuation at a given wavelength
-
-        Returns:
-            attenuation (float)
-        """
-
-        lam, Al = self.Al()
-
-        return np.interp(l, lam, Al)
-
-    def AV(self):
-        """
-        Calculate rest-frame FUV attenuation
-
-        Returns:
-            attenuation at rest-frame 1500 angstrom (float)
-        """
-
-        return self.A(5500.0)
-
-    def A1500(self):
-        """
-        Calculate rest-frame FUV attenuation
-
-        Returns:
-            attenuation at rest-frame 1500 angstrom (float)
-        """
-
-        return self.A(1500.0)
-
     def get_equivalent_width(self, feature, blue, red, spectra_to_plot=None):
         """
         Gets all equivalent widths associated with a sed object
