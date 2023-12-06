@@ -85,10 +85,11 @@ int binary_search(int low, int high, const double *arr, const double val) {
  * @param dims: The length of each grid dimension.
  * @param ndim: The number of grid dimensions.
  * @param p: Index of the current particle.
+ * @param fesc: The escape fraction.
  */
 void weight_loop_cic(const double **grid_props, const double **part_props,
                      const double mass, double *weights, const int *dims,
-                     const int ndim, const int p) {
+                     const int ndim, const int p, const double fesc) {
 
   /* Setup the index and mass fraction arrays. */
   int part_indices[ndim];
@@ -112,7 +113,7 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
 
       /* Use the grid edge. */
       part_cell = 0;
-      frac = 1;
+      frac = 0;
 
     } else if (part_val > grid_prop[dims[dim] - 1]) {
 
@@ -179,7 +180,7 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
     const int weight_ind = get_flat_index(frac_ind, dims, ndim);
 
     /* Add the weight. */
-    weights[weight_ind] += (mass * frac);
+    weights[weight_ind] += (mass * frac * (1 - fesc));
   }
 }
 
@@ -195,10 +196,11 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
  * @param dims: The length of each grid dimension.
  * @param ndim: The number of grid dimensions.
  * @param p: Index of the current particle.
+ * @param fesc: The escape fraction.
  */
 void weight_loop_ngp(const double **grid_props, const double **part_props,
                      const double mass, double *weights, const int *dims,
-                     const int ndim, const int p) {
+                     const int ndim, const int p, const double fesc) {
 
   /* Setup the index array. */
   int part_indices[ndim];
@@ -246,5 +248,5 @@ void weight_loop_ngp(const double **grid_props, const double **part_props,
   const int weight_ind = get_flat_index(part_indices, dims, ndim);
 
   /* Add the weight. */
-  weights[weight_ind] += mass;
+  weights[weight_ind] += (mass * (1 - fesc));
 }

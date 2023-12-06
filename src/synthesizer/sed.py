@@ -21,10 +21,12 @@ from spectres import spectres
 from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
 
 from synthesizer import exceptions
+from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.utils import rebin_1d
 from synthesizer.units import Quantity
 from synthesizer.igm import Inoue14
+from synthesizer.utils import has_units
 
 
 class Sed:
@@ -39,6 +41,8 @@ class Sed:
             The rest frame frequency array.
         lnu (Quantity, array-like, float)
             The spectral luminosity density.
+        bolometric_luminosity (Quantity, float)
+            The bolometric luminosity.
         fnu (Quantity, array-like, float)
             The spectral flux density.
         obslam (Quantity, array-like, float)
@@ -66,6 +70,7 @@ class Sed:
     obslam = Quantity()
     luminosity = Quantity()
     llam = Quantity()
+    bolometric_luminosity = Quantity()
 
     def __init__(self, lam, lnu=None, description=None):
         """
@@ -73,9 +78,11 @@ class Sed:
 
         Args:
             lam (array-like, float)
-                The rest frame wavelength array.
+                The rest frame wavelength array. Default units are defined
+                in `synthesizer.units`. If unmodified these will be Angstroms.
             lnu (array-like, float)
-                The spectral luminosity density.
+                The spectral luminosity density. Default units are defined in
+                `synthesizer.units`. If unmodified these will be erg/s/Hz
             description (string)
                 An optional descriptive string defining the Sed.
         """
@@ -84,17 +91,41 @@ class Sed:
         self.description = description
 
         # Set the wavelength
-        self.lam = lam  # \AA
+        if isinstance(lam, (unyt_array, np.ndarray)):
+            self.lam = lam
+        elif isinstance(lam, list):
+            self.lam = np.asarray(lam)  # \AA
+        else:
+            raise ValueError(
+                (
+                    "`lam` must be a unyt_array, list, list of "
+                    "lists, or N-d numpy array"
+                )
+            )
+
+        # Calculate frequency
+        self.nu = c / self.lam
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
+            self.bolometric_luminosity = None
         else:
-            self.lnu = lnu
+            if isinstance(lnu, (unyt_array, np.ndarray)):
+                self.lnu = lnu
+            elif isinstance(lnu, list):
+                self.lnu = np.asarray(lnu)
+            else:
+                raise ValueError(
+                    (
+                        "`lnu` must be a unyt_array, list, list "
+                        "of lists, or N-d numpy array"
+                    )
+                )
 
-        # Calculate frequency
-        self.nu = (c / (self.lam)).to("Hz").value  # Hz
+        # Measure the bolometric luminosity
+        self.bolometric_luminosity = self.measure_bolometric_luminosity()
 
         # Redshift of the SED
         self.redshift = 0
@@ -255,9 +286,15 @@ class Sed:
             {np.max(self.lam):.2f}] \n"
         pstr += f"log10(Peak luminosity/{self.lnu.units}): \
             {np.log10(np.max(self.lnu)):.2f} \n"
-        bolometric_luminosity = self.measure_bolometric_luminosity()
-        pstr += f"log10(Bolometric luminosity/{bolometric_luminosity.units}): \
-            {np.log10(bolometric_luminosity):.2f} \n"
+
+        # if bolometric luminosity attribute has not been calculated,
+        # calculate it.
+        if self.bolometric_luminosity is None:
+            self.bolometric_luminosity = self.measure_bolometric_luminosity()
+
+        pstr += f"log10(Bolometric luminosity/ \
+            {self.bolometric_luminosity.units}): \
+            {np.log10(self.bolometric_luminosity):.2f} \n"
         pstr += "-" * 10
 
         return pstr
@@ -272,6 +309,17 @@ class Sed:
                 The luminosity array.
         """
         return self.lnu * self.nu
+
+    @property
+    def flux(self):
+        """
+        Get the spectra in terms fo flux
+
+        Returns:
+            flux (unyt_array)
+                The flux array.
+        """
+        return self.fnu * self.obsnu
 
     @property
     def llam(self):
@@ -435,6 +483,7 @@ class Sed:
                 "Options are 'trapz' or 'quad'"
             )
 
+        self.bolometric_luminosity = bolometric_luminosity
         return bolometric_luminosity
 
     def measure_window_luminosity(self, window, method="trapz"):
@@ -930,7 +979,7 @@ class Sed:
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
         """
         Resample the spectra onto a new set of wavelength points.
-        
+
         This resampling can either be done by an integer number of wavelength
         elements per original wavelength element (i.e. up sampling),
         or by providing a new wavelength grid to resample on to.
@@ -1042,54 +1091,44 @@ class Sed:
         else:
             spectra[mask] *= transmission
 
-        return Sed(self.lam, spectra)
+        return Sed(self.lam, lnu=spectra)
 
+    def calculate_ionising_photon_production_rate(
+        self,
+        ionisation_energy=13.6 * eV,
+        limit=100,
+    ):
+        """
+        A function to calculate the ionising photon production rate.
 
-def calculate_Q(lam, lnu, ionisation_energy=13.6 * eV, limit=100):
-    """
-    A function to calculate the ionising production rate directly from
-    spectra.
+        Args:
+            ionisation_energy (unyt_array)
+                The ionisation energy.
+            limit (float/int)
+                An upper bound on the number of subintervals
+                used in the integration adaptive algorithm.
 
-    Args:
-        lam (array-like, float)
-            The wavelength array.
-        lnu (array-like, float)
-            The luminosity grid (erg/s/Hz).
-        ionisation_energy (unyt_array)
-            The ionisation energy.
-        limit (float/int)
-            An upper bound on the number of subintervals
-            used in the integration adaptive algorithm.
+        Returns
+            float
+                Ionising photon luminosity (s^-1).
+        """
 
-    Returns
-        float
-            Ionising photon luminosity (s^-1).
-    """
+        # Convert lnu to llam
+        llam = lnu_to_llam(self.lam, self.lnu)
 
-    # Apply units if not present
-    if not isinstance(lam, unyt_array):
-        lam = lam * angstrom
-    if not isinstance(lnu, unyt_array):
-        lnu = lnu * erg / s / Hz
+        # Caculate ionisation wavelength
+        ionisation_wavelength = h * c / ionisation_energy
 
-    # Convert lnu to llam
-    llam = lnu * c / lam**2
+        # Defintion integration arrays
+        x = self._lam
+        y = llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)
 
-    # Caculate ionisation wavelength
-    ionisation_wavelength = h * c / ionisation_energy
-
-    # Defintion integration arrays
-    x = lam.to(angstrom).value
-    y = (llam * lam).to(erg / s).value / (
-        h.to(erg / Hz).value * c.to(angstrom / s).value
-    )
-
-    return integrate.quad(
-        lambda x_: np.interp(x_, x, y),
-        0,
-        ionisation_wavelength.to(angstrom).value,
-        limit=limit,
-    )[0]
+        return integrate.quad(
+            lambda x_: np.interp(x_, x, y.to(1 / s / angstrom).value),
+            0,
+            ionisation_wavelength.to(angstrom).value,
+            limit=limit,
+        )[0]
 
 
 def plot_spectra(
@@ -1102,12 +1141,14 @@ def plot_spectra(
     figsize=(3.5, 5),
     label=None,
     draw_legend=True,
-    rest_frame=True,
     x_units=None,
     y_units=None,
+    quantity_to_plot="lnu",
 ):
     """
     Plots either a specific spectra or all spectra provided in a dictionary.
+    The plotted "type" of spectra is defined by the quantity_to_plot keyword
+    arrgument which defaults to "lnu".
 
     This is a generic plotting function to be used either directly or to be
     wrapped by helper methods through Synthesizer.
@@ -1140,9 +1181,6 @@ def plot_spectra(
             spectra.
         draw_legend (bool)
             Whether to draw the legend.
-        rest_frame (bool)
-            Whether to plot the rest frame spectra. If False the observed
-            spectra is plotted.
         x_units (unyt.unit_object.Unit)
             The units of the x axis. This will be converted to a string
             and included in the axis label. By default the internal unit system
@@ -1151,6 +1189,10 @@ def plot_spectra(
             The units of the y axis. This will be converted to a string
             and included in the axis label. By default the internal unit system
             is assumed unless this is passed.
+        quantity_to_plot (string)
+            The sed property to plot. Can be "lnu", "luminosity" or "llam"
+            for rest frame spectra or "fnu", "flam" or "flux" for observed
+            spectra. Defaults to "lnu".
 
     Returns:
         fig (matplotlib.pyplot.figure)
@@ -1158,6 +1200,23 @@ def plot_spectra(
         ax (matplotlib.axes)
             The matplotlib axes object containing the plotted data.
     """
+
+    # Check we have been given a valid quantity_to_plot
+    if quantity_to_plot not in (
+        "lnu",
+        "llam",
+        "luminosity",
+        "fnu",
+        "flam",
+        "flux",
+    ):
+        raise exceptions.InconsistentArguments(
+            f"{quantity_to_plot} is not a valid quantity_to_plot"
+            "(can be 'fnu' or 'flam')"
+        )
+
+    # Are we plotting in the rest_frame?
+    rest_frame = quantity_to_plot in ("lnu", "llam", "luminosity")
 
     # Make a singular Sed a dictionary for ease below
     if isinstance(spectra, Sed):
@@ -1191,7 +1250,6 @@ def plot_spectra(
     for key, sed in spectra.items():
         # Get the appropriate luminosity/flux and wavelengths
         if rest_frame:
-            plt_spectra = sed.lnu
             lam = sed.lam
         else:
             # Ensure we have fluxes
@@ -1201,8 +1259,9 @@ def plot_spectra(
                 )
 
             # Ok everything is fine
-            plt_spectra = sed.fnu
             lam = sed.obslam
+
+        plt_spectra = getattr(sed, quantity_to_plot)
 
         # Prettify the label
         key = key.replace("_", " ").title()
@@ -1217,11 +1276,14 @@ def plot_spectra(
 
         # Loop over spectra and get the total required limits
         for sed in spectra.values():
-            # Get the maximum
-            if rest_frame:
-                max_val = np.max(sed.lnu)
-            else:
-                max_val = np.max(sed.fnu)
+            # Get the maximum ignoring infinites
+            okinds = np.logical_and(
+                getattr(sed, quantity_to_plot) > 0,
+                getattr(sed, quantity_to_plot) < np.inf,
+            )
+            if True not in okinds:
+                continue
+            max_val = np.nanmax(getattr(sed, quantity_to_plot)[okinds])
 
             # Derive the x limits
             y_up = 10 ** (np.log10(max_val) * 1.05)
@@ -1241,10 +1303,12 @@ def plot_spectra(
         # Loop over spectra and get the total required limits
         for sed in spectra.values():
             # Derive the x limits from data above the ylimits
+            plt_spectra = getattr(sed, quantity_to_plot)
+            lam_mask = plt_spectra > ylimits[0]
             if rest_frame:
-                lams_above = sed.lam[sed.lnu > ylimits[0]]
+                lams_above = sed.lam[lam_mask]
             else:
-                lams_above = sed.obslam[sed.fnu > ylimits[0]]
+                lams_above = sed.obslam[lam_mask]
 
             # Saftey skip if no values are above the limit
             if lams_above.size == 0:
@@ -1277,16 +1341,28 @@ def plot_spectra(
         y_units = str(plt_spectra.units)
     else:
         y_units = str(y_units)
-    x_units = x_units.replace("/", r"\ / \ ").replace("*", " \ ")
-    y_units = y_units.replace("/", r"\ / \ ").replace("*", " \ ")
+    x_units = x_units.replace("/", r"\ / \ ").replace("*", " ")
+    y_units = y_units.replace("/", r"\ / \ ").replace("*", " ")
 
-    # Label the axes
+    # Label the x axis
     if rest_frame:
         ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
-        ax.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
     else:
         ax.set_xlabel(r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$")
+
+    # Label the y axis handling all possibilities
+    if quantity_to_plot == "lnu":
+        ax.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
+    elif quantity_to_plot == "llam":
+        ax.set_ylabel(r"$L_{\lambda}/[\mathrm{" + y_units + r"}]$")
+    elif quantity_to_plot == "luminosity":
+        ax.set_ylabel(r"$L/[\mathrm{" + y_units + r"}]$")
+    elif quantity_to_plot == "fnu":
         ax.set_ylabel(r"$F_{\nu}/[\mathrm{" + y_units + r"}]$")
+    elif quantity_to_plot == "flam":
+        ax.set_ylabel(r"$F_{\lambda}/[\mathrm{" + y_units + r"}]$")
+    else:
+        ax.set_ylabel(r"$F/[\mathrm{" + y_units + r"}]$")
 
     # Are we showing?
     if show:
@@ -1309,6 +1385,7 @@ def plot_observed_spectra(
     x_units=None,
     y_units=None,
     filters=None,
+    quantity_to_plot="fnu",
 ):
     """
     Plots either a specific observed spectra or all observed spectra
@@ -1360,6 +1437,9 @@ def plot_observed_spectra(
         filters (FilterCollection)
             If given then the photometry is computed and both the photometry
             and filter curves are plotted
+        quantity_to_plot (string)
+            The sed property to plot. Can be "fnu", "flam", or "flux".
+            Defaults to "fnu".
 
     Returns:
         fig (matplotlib.pyplot.figure)
@@ -1367,6 +1447,13 @@ def plot_observed_spectra(
         ax (matplotlib.axes)
             The matplotlib axes object containing the plotted data.
     """
+
+    # Check we have been given a valid quantity_to_plot
+    if quantity_to_plot not in ("fnu", "flam"):
+        raise exceptions.InconsistentArguments(
+            f"{quantity_to_plot} is not a valid quantity_to_plot"
+            "(can be 'fnu' or 'flam')"
+        )
 
     # Get the observed spectra plot
     fig, ax = plot_spectra(
@@ -1379,9 +1466,9 @@ def plot_observed_spectra(
         figsize=figsize,
         label=label,
         draw_legend=draw_legend,
-        rest_frame=False,
         x_units=x_units,
         y_units=y_units,
+        quantity_to_plot=quantity_to_plot,
     )
 
     # Are we including photometry and filters?
@@ -1418,3 +1505,125 @@ def plot_observed_spectra(
         plt.show()
 
     return fig, ax
+
+
+def get_transmission(intrinsic_sed, attenuated_sed):
+    """
+    Calculate transmission as a function of wavelength from an attenuated and
+    an intrinsic sed.
+
+    Args:
+        intrinsic_sed (Sed)
+            The intrinsic spectra object.
+        attenuated_sed (Sed)
+            The attenuated spectra object.
+
+    Returns:
+        array-like, float
+            The transmission array.
+    """
+
+    # Ensure wavelength arrays are equal
+    if not np.array_equal(attenuated_sed._lam, intrinsic_sed._lam):
+        raise exceptions.InconsistentArguments(
+            "Wavelength arrays of input spectra must be the same!"
+        )
+
+    return attenuated_sed.lnu / intrinsic_sed.lnu
+
+
+def get_attenuation(intrinsic_sed, attenuated_sed):
+    """
+    Calculate attenuation as a function of wavelength
+
+    Args:
+        intrinsic_sed (Sed)
+            The intrinsic spectra object.
+        attenuated_sed (Sed)
+            The attenuated spectra object.
+
+    Returns:
+        array-like, float
+            The attenuation array in magnitudes.
+    """
+
+    # Calculate the transmission array
+    transmission = get_transmission(intrinsic_sed, attenuated_sed)
+
+    return -2.5 * np.log10(transmission)
+
+
+def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
+    """
+    Calculate attenuation at a given wavelength
+
+    Args:
+        lam (float/array-like, float)
+            The wavelength/s at which to evaluate the attenuation in
+            the same units as sed.lam (by default angstrom).
+        intrinsic_sed (Sed)
+            The intrinsic spectra object.
+        attenuated_sed (Sed)
+            The attenuated spectra object.
+
+    Returns:
+        float/array-like, float
+            The attenuation at the passed wavelength/s in magnitudes.
+    """
+
+    # Enusre we have units
+    if not has_units(lam):
+        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
+
+    # Ensure lam is in the same units as the sed
+    if lam.units != intrinsic_sed.lam.units:
+        lam = lam.to(intrinsic_sed.lam.units)
+
+    # Calcilate the transmission array
+    attenuation = get_attenuation(intrinsic_sed, attenuated_sed)
+
+    return np.interp(lam.value, intrinsic_sed._lam, attenuation)
+
+
+def get_attenuation_at_5500(intrinsic_sed, attenuated_sed):
+    """
+    Calculate rest-frame FUV attenuation at 5500 angstrom.
+
+    Args:
+        intrinsic_sed (Sed)
+            The intrinsic spectra object.
+        attenuated_sed (Sed)
+            The attenuated spectra object.
+
+    Returns:
+         float
+            The attenuation at rest-frame 5500 angstrom in magnitudes.
+    """
+
+    return get_attenuation_at_lam(
+        5500.0 * angstrom,
+        intrinsic_sed,
+        attenuated_sed,
+    )
+
+
+def get_attenuation_at_1500(intrinsic_sed, attenuated_sed):
+    """
+    Calculate rest-frame FUV attenuation at 1500 angstrom.
+
+    Args:
+        intrinsic_sed (Sed)
+            The intrinsic spectra object.
+        attenuated_sed (Sed)
+            The attenuated spectra object.
+
+    Returns:
+         float
+            The attenuation at rest-frame 1500 angstrom in magnitudes.
+    """
+
+    return get_attenuation_at_lam(
+        1500.0 * angstrom,
+        intrinsic_sed,
+        attenuated_sed,
+    )

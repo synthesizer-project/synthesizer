@@ -555,6 +555,7 @@ class StarsComponent:
         young_old_thresh=None,
         fesc=0.0,
         fesc_LyA=1.0,
+        dust_emission_model=None,
         label="",
         **kwargs,
     ):
@@ -590,6 +591,9 @@ class StarsComponent:
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_transmitted".
+            dust_emisison_model (object)
+                Instance of a dust_emission_model from
+                synthesizer.dust.emission.
             kwargs
                 Any keyword arguments which can be passed to
                 generate_lnu.
@@ -611,6 +615,10 @@ class StarsComponent:
             attenuated
             emergent
 
+            if dust_emission_model provided:
+                dust
+                total
+
             if CF00:
                 young_incident
                 young_escaped
@@ -629,9 +637,16 @@ class StarsComponent:
                 old_attenuated
                 old_emergent
 
+                if dust_emission_model provided:
+                    young_dust
+                    young_total
+                    old_dust
+                    old_total
+
         Returns:
             Sed
-                A Sed object containing the emergent spectra.
+                A Sed object containing the emergent or total spectra depending
+                on whether a dust_emission_model is provided.
         """
 
         # Ensure we have a compatible set of parameters
@@ -750,6 +765,14 @@ class StarsComponent:
 
         if np.isscalar(tau_v):
             # Single screen dust, no separate birth cloud attenuation
+            # Generates:
+            #   - attenuated
+            #   - emergent
+
+            # if dust_emission_model:
+            #   - dust
+            #   - total
+  
             dust_curve.slope = alpha
 
             # Calculate the attenuated emission
@@ -758,11 +781,65 @@ class StarsComponent:
             )
             self.spectra["attenuated"] = attenuated
 
+            self.spectra["attenuated"].measure_bolometric_luminosity()
+
+            # Set emergent spectra based on fesc (for all particles)
+            self.spectra["emergent"] = Sed(grid.lam)
+            if fesc <= 0:
+                self.spectra["emergent"]._lnu = self.spectra["attenuated"]._lnu
+            else:
+                self.spectra["emergent"]._lnu = (
+                    self.spectra["escaped"]._lnu +
+                    self.spectra["attenuated"]._lnu
+                )
+
+            # Force updating of the bolometric luminosity attribute. I don't 
+            # know why this is necessary.
+            self.spectra["emergent"].measure_bolometric_luminosity()
+
+            if dust_emission_model is not None:
+
+                # Calculate the dust bolometric luminosity as the difference
+                # between the emergent and incident bolometric luminosities.
+
+                dust_bolometric_luminosity = (
+                    self.spectra["incident"].bolometric_luminosity -
+                    self.spectra["emergent"].bolometric_luminosity)
+
+                # Get normalised dust spectrum, this is an synthesizer.sed.Sed
+                # object.
+                self.spectra['dust'] = dust_emission_model.get_spectra(
+                    grid.lam)
+
+                # scale the dust spectra by the dust_bolometric_luminosity
+                self.spectra['dust']._lnu *= dust_bolometric_luminosity.value
+
+                # define total as the sum of emergent and dust
+                self.spectra['total'] = (self.spectra['dust'] +
+                                         self.spectra['emergent'])
+            
         elif np.isscalar(tau_v) is False:
             # Apply separate attenuation to both the young and old components.
 
             # Two screen dust, one for diffuse ISM, the other for birth cloud
             # dust.
+
+            # Generates:
+            #   - young_attenuated_BC 
+            #   - young_attenuated
+            #   - young_emergent
+            #   - old_attenuated
+            #   - old_emergent
+            #   - attenuated
+            #   - emergent
+
+            # if dust_emission_model:
+            #   - young_dust
+            #   - old_dust
+            #   - young_total
+            #   - old_total
+            #   - total
+
             if np.isscalar(alpha):
                 print(
                     (
@@ -781,12 +858,13 @@ class StarsComponent:
 
             # Calculate attenuated spectra of young stars
             dust_curve.slope = alpha[1]  # use the BC slope
-            young_attenuated = self.spectra[
+            young_attenuated_BC = self.spectra[
                 f"young_{reprocessed_name}"
             ].apply_attenuation(tau_v[1], dust_curve=dust_curve)
+            self.spectra["young_attenuated_BC"] = young_attenuated_BC
 
             dust_curve.slope = alpha[0]  # use the ISM slope
-            young_attenuated = young_attenuated.apply_attenuation(
+            young_attenuated = young_attenuated_BC.apply_attenuation(
                 tau_v[0], dust_curve=dust_curve
             )
             self.spectra["young_attenuated"] = young_attenuated
@@ -798,6 +876,9 @@ class StarsComponent:
             self.spectra["old_attenuated"] = old_attenuated
 
             # Get the combined attenuated spectra
+            self.spectra["attenuated"] = young_attenuated + old_attenuated
+
+            # Get the combined escaping spectra
             self.spectra["attenuated"] = young_attenuated + old_attenuated
 
             # Set emergent spectra based on fesc (for young and old particles)
@@ -818,16 +899,88 @@ class StarsComponent:
                     + self.spectra["old_attenuated"]._lnu
                 )
 
-        # Set emergent spectra based on fesc (for all particles)
-        self.spectra["emergent"] = Sed(grid.lam)
-        if fesc <= 0:
-            self.spectra["emergent"]._lnu = self.spectra["attenuated"]._lnu
-        else:
-            self.spectra["emergent"]._lnu = (
-                self.spectra["escaped"]._lnu + self.spectra["attenuated"]._lnu
-            )
+            # Force updating of the bolometric luminosity attribute. I don't 
+            # know why this is necessary.
+            self.spectra["young_emergent"].measure_bolometric_luminosity()
+            self.spectra["old_emergent"].measure_bolometric_luminosity()
 
-        return self.spectra["emergent"]
+            if dust_emission_model is not None:
+
+                if not isinstance(dust_emission_model, list):
+                    print(
+                        (
+                            "Separate dust emission model for diffuse and "
+                            "birth cloud dust not given"
+                        )
+                    )
+                
+                    dust_emission_model = [dust_emission_model,
+                                            dust_emission_model]
+     
+                # Start with the birth cloud dust.
+                dust_bolometric_luminosity = (
+                    self.spectra["young_transmitted"].bolometric_luminosity -
+                    self.spectra["young_attenuated_BC"].bolometric_luminosity)
+
+                self.spectra['young_dust_BC'] = (
+                    dust_emission_model[1].get_spectra(grid.lam))
+
+                # Scale the dust spectra by the dust_bolometric_luminosity.
+                self.spectra['young_dust_BC']._lnu *= (
+                    dust_bolometric_luminosity.value)
+
+                # ISM dust heated by young stars. This is the difference 
+                # between the birth cloud and ISM attenuated spectra.
+                dust_bolometric_luminosity = (
+                    self.spectra["young_attenuated_BC"].bolometric_luminosity -
+                    self.spectra["young_attenuated"].bolometric_luminosity)
+
+                self.spectra['young_dust_ISM'] = (
+                    dust_emission_model[0].get_spectra(grid.lam))
+
+                # Scale the dust spectra by the dust_bolometric_luminosity.
+                self.spectra['young_dust_ISM']._lnu *= (
+                    dust_bolometric_luminosity.value)
+                
+                # Combine both dust components for young stars
+                self.spectra['young_dust'] = (
+                    self.spectra["young_dust_BC"] +
+                    self.spectra["young_dust_ISM"])
+
+                # Combine both dust components for young stars
+                self.spectra['young_total'] = (
+                   self.spectra['young_emergent'] +
+                   self.spectra['young_dust'])
+                
+                # ISM dust heated by old stars. 
+                dust_bolometric_luminosity = (
+                    self.spectra["old_transmitted"].bolometric_luminosity -
+                    self.spectra["old_attenuated"].bolometric_luminosity)
+
+                self.spectra['old_dust'] = (
+                    dust_emission_model[0].get_spectra(grid.lam))
+
+                # Scale the dust spectra by the dust_bolometric_luminosity.
+                self.spectra['old_dust']._lnu *= (
+                    dust_bolometric_luminosity.value)
+                
+                # Combine both dust components for young stars
+                self.spectra['old_total'] = (
+                   self.spectra['old_emergent'] +
+                   self.spectra['old_dust'])
+                
+                self.spectra['dust'] = (self.spectra['young_dust']
+                                        + self.spectra['old_dust'])
+                
+                self.spectra['total'] = (self.spectra['young_total']
+                                         + self.spectra['old_total'])
+                    
+        # Return total spectra if a dust_emission_model is provided, otherwise
+        # return the emergent spectra.      
+        if dust_emission_model is not None:
+            return self.spectra["total"]
+        else:
+            return self.spectra["emergent"]
 
     def get_spectra_CharlotFall(
         self,
@@ -1122,15 +1275,17 @@ class StarsComponent:
                 figure and axes.
             ylimits (tuple)
                 The limits to apply to the y axis. If not provided the limits
-                will be calculated with the lower limit set to 1000 (100) times less
-                than the peak of the spectrum for rest_frame (observed) spectra.
+                will be calculated with the lower limit set to 1000 (100) times
+                less than the peak of the spectrum for rest_frame (observed)
+                spectra.
             xlimits (tuple)
                 The limits to apply to the x axis. If not provided the optimal
                 limits are found based on the ylimits.
             figsize (tuple)
                 Tuple with size 2 defining the figure size.
             kwargs (dict)
-                arguments to the `sed.plot_spectra` method called from this wrapper
+                Arguments to the `sed.plot_spectra` method called from this
+                wrapper.
 
         Returns:
             fig (matplotlib.pyplot.figure)
