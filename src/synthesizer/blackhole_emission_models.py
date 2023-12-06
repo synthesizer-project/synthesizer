@@ -331,6 +331,12 @@ class UnifiedAGN:
             )
         )
 
+        # Define a list of parameters that must be passed or inherited
+        self.required_parameters = []
+        for param in self.parameters:
+            if getattr(self, param, None) is None:
+                self.required_parameters.append(param)
+
         # Get a list of the parameters which are not fixed and need to be
         # provided. This is used by the components.blackholes to know what
         # needs to be provided
@@ -546,7 +552,6 @@ class UnifiedAGN:
             if param == "bolometric_luminosity":
                 continue
             if getattr(self, param, None) is None:
-                print(param, getattr(self, param, None))
                 missing_params.append(param)
         if len(missing_params) > 0:
             raise MissingArgument(
