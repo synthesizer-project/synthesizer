@@ -705,7 +705,7 @@ class BlackholesComponent:
             for spectra_id, spectra in self.spectra.items():
                 self.spectra[spectra_id] = spectra * scaling
 
-        # Unset any of the fixed parameters we had to inherit
+        # Reset any values the emission model inherited
         for param, val in used_varaibles:
             setattr(emission_model, param, val)
 
