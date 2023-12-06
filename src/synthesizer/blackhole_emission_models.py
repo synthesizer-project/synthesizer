@@ -555,9 +555,9 @@ class UnifiedAGN:
         # Since we're using a coarse grid it might be necessary to rescale
         # the spectra to the bolometric luminosity. This is requested when
         # the emission model is called from a parametric or particle blackhole.
-        if "bolometric_luminosity" in parameter_dict.keys():
+        if self.bolometric_luminosity is not None:
             scaling = (
-                parameter_dict["bolometric_luminosity"]
+                self.bolometric_luminosity
                 / spectra["intrinsic"].measure_bolometric_luminosity()
             )
             for spectra_id, spectra_ in spectra.items():
