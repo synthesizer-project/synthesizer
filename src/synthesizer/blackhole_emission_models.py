@@ -228,6 +228,10 @@ class UnifiedAGN:
             "torus_emission_model": torus_emission_model,
         }
 
+        # Add any kwargs and dust specific attributes to the args
+        for key, val in kwargs:
+            args[key] = val
+
         # Save model and directory as attributes.
         self.disc_model = disc_model
         self.photoionsation_model = photoionisation_model
