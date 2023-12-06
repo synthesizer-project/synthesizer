@@ -119,6 +119,32 @@ class Galaxy(BaseGalaxy):
         else:
             pstr += "    Stellar:  []" + "\n"
 
+        # Define the connecting character for list wrapping
+        conn_char = "\n" + (19 * " ")
+
+        # Print stellar spectra keys
+        if len(self.black_holes.spectra) > 0:
+            # Print keys nicely so they don't spill over
+            spectra_keys = [""]
+            iline = 0
+            for key in self.black_holes.spectra.keys():
+                if len(spectra_keys[iline]) + len(key) + 2 < width - 19:
+                    spectra_keys[iline] += key + ", "
+                else:
+                    iline += 1
+                    spectra_keys.append("")
+
+            # Slice off the last two entries, we don't need then
+            spectra_keys[iline] = spectra_keys[iline][:-2]
+
+            pstr += "    Black Holes:  [" + conn_char.join(spectra_keys) + "]" + "\n"
+
+        else:
+            pstr += "    Black Holes:  []" + "\n"
+
+        # Define the connecting character for list wrapping
+        conn_char = "\n" + (15 * " ")
+
         # Print combined spectra keys
         if len(self.spectra) > 0:
             # Print keys nicely so they don't spill over
