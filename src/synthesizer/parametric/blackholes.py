@@ -208,7 +208,7 @@ class BlackHole(BlackholesComponent):
             grid_props,
             props,
             mass,
-            fesc,
+            np.array([fesc]),
             grid_dims,
             len(grid_props),
             np.int32(1),

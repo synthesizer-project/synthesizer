@@ -330,6 +330,10 @@ class BlackHoles(Particles, BlackholesComponent):
             grid_dims[ind] = len(g)
         grid_dims[ind + 1] = nlam
 
+        # If fesc isn't an array make it one
+        if not isinstance(fesc, np.ndarray):
+            fesc = np.ascontiguousarray(np.full(npart, fesc))
+
         # Convert inputs to tuples
         grid_props = tuple(grid_props)
         props = tuple(props)
@@ -540,7 +544,7 @@ class BlackHoles(Particles, BlackholesComponent):
         # disc emisison hence the need to replace this parameter if it exists.
         # Not all models require an inclination though.
         prev_cosine_inclincation = self.cosine_inclination
-        self.cosine_inclination = 0.5
+        self.cosine_inclination = np.full(self.nbh, 0.5)
 
         # Get the nebular spectra of the line region
         spec = self.generate_particle_lnu(
@@ -580,12 +584,6 @@ class BlackHoles(Particles, BlackholesComponent):
                 The torus spectra of each particle.
         """
 
-        # In the Unified AGN model the torus is illuminated by the isotropic
-        # disc emisison hence the need to replace this parameter if it exists.
-        # Not all models require an inclination though.
-        prev_cosine_inclincation = self.cosine_inclination
-        self.cosine_inclination = 0.5
-
         # Get the disc emission
         disc_spectra = self.particle_spectra["disc_incident"]
 
@@ -604,9 +602,6 @@ class BlackHoles(Particles, BlackholesComponent):
         for i in range(self.nbh):
             spec[i, :] = torus_sed._lnu * torus_bolometric_luminosity[i].value
         torus_sed.lnu = spec
-
-        # Reset the previously held inclination
-        self.cosine_inclination = prev_cosine_inclincation
 
         return torus_sed
 
@@ -745,7 +740,7 @@ class BlackHoles(Particles, BlackholesComponent):
     def get_particle_spectra_attenuated(
         self,
         emission_model,
-        verbose=True,
+        verbose=False,
         grid_assignment_method="cic",
         tau_v=None,
         dust_curve=None,
