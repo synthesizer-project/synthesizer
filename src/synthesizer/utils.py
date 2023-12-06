@@ -121,7 +121,9 @@ def value_to_array(value):
     """
 
     # Just return it if we have been handed an array already or None
-    if isinstance(value, (np.ndarray, unyt_array)) or value is None:
+    # NOTE: unyt_arrays and quantities are by definition arrays and thus
+    # return True for the isinstance below.
+    if (isinstance(value, np.ndarray) and value.size > 1) or value is None:
         return value
 
     if isinstance(value, float):
@@ -130,6 +132,7 @@ def value_to_array(value):
                 value,
             ]
         )
+
     elif isinstance(value, unyt_quantity):
         arr = (
             np.array(
