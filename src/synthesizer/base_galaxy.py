@@ -162,6 +162,36 @@ class BaseGalaxy:
 
         return self.A(1500.0)
 
+    def get_equivalent_width(self, feature, blue, red, spectra_to_plot=None):
+        """
+        Gets all equivalent widths associated with a sed object
+
+        Parameters
+        ----------
+        index: float
+            the index to be used in the computation of equivalent width.
+        spectra_to_plot: float array
+            An empty list of spectra to be populated.
+
+        Returns
+        -------
+        equivalent_width : float
+            The calculated equivalent width at the current index.
+        """
+
+        equivalent_width = None
+
+        if not isinstance(spectra_to_plot, list):
+            spectra_to_plot = list(self.spectra.keys())
+
+        for sed_name in spectra_to_plot:
+            sed = self.spectra[sed_name]
+
+            # Compute equivalent width
+            equivalent_width = sed.measure_index(feature, blue, red)
+
+        return equivalent_width
+
     def get_observed_spectra(self, cosmo, igm=Inoue14):
         """
         Calculate the observed spectra for all Sed objects within this galaxy.
