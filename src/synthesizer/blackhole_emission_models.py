@@ -288,6 +288,7 @@ class UnifiedAGN:
         # Set "unified" attributes
         self.bolometric_luminosity = bolometric_luminosity
         self.metallicity = metallicity
+        self.cosine_inclination = None
 
         # Set BLR attributes
         self.ionisation_parameter_blr = ionisation_parameter_blr
