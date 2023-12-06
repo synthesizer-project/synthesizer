@@ -113,7 +113,7 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
 
       /* Use the grid edge. */
       part_cell = 0;
-      frac = 1;
+      frac = 0;
 
     } else if (part_val > grid_prop[dims[dim] - 1]) {
 
