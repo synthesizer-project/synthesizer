@@ -195,6 +195,7 @@ class BaseGalaxy:
         ylimits=(),
         xlimits=(),
         figsize=(3.5, 5),
+        quantity_to_plot="lnu",
     ):
         """
         Plots either specific observed spectra (specified via combined_spectra,
@@ -236,6 +237,10 @@ class BaseGalaxy:
                 limits are found based on the ylimits.
             figsize (tuple)
                 Tuple with size 2 defining the figure size.
+            quantity_to_plot (string)
+                The sed property to plot. Can be "lnu", "luminosity" or "llam"
+                for rest frame spectra or "fnu", "flam" or "flux" for observed
+                spectra. Defaults to "lnu".
 
         Returns:
             fig (matplotlib.pyplot.figure)
@@ -250,32 +255,78 @@ class BaseGalaxy:
         # Get the combined spectra
         if combined_spectra:
             if isinstance(combined_spectra, list):
-                spectra.update({self.spectra[key] for key in combined_spectra})
+                spectra.update({key: self.spectra[key] for key in combined_spectra})
+            elif isinstance(combined_spectra, Sed):
+                spectra.update(
+                    {
+                        "combined_spectra": combined_spectra,
+                    }
+                )
             else:
                 spectra.update(self.spectra)
 
         # Get the stellar spectra
         if stellar_spectra:
             if isinstance(stellar_spectra, list):
-                spectra.update({self.stars.spectra[key] for key in stellar_spectra})
+                spectra.update(
+                    {
+                        "Stellar " + key: self.stars.spectra[key]
+                        for key in stellar_spectra
+                    }
+                )
+            elif isinstance(stellar_spectra, Sed):
+                spectra.update(
+                    {
+                        "stellar_spectra": stellar_spectra,
+                    }
+                )
             else:
-                spectra.update(self.stars.spectra)
+                spectra.update(
+                    {
+                        "Stellar " + key: self.stars.spectra[key]
+                        for key in self.stars.spectra
+                    }
+                )
 
         # Get the gas spectra
         if gas_spectra:
             if isinstance(gas_spectra, list):
-                spectra.update({self.gas.spectra[key] for key in gas_spectra})
+                spectra.update(
+                    {"Gas " + key: self.gas.spectra[key] for key in gas_spectra}
+                )
+            elif isinstance(gas_spectra, Sed):
+                spectra.update(
+                    {
+                        "gas_spectra": gas_spectra,
+                    }
+                )
             else:
-                spectra.update(self.gas.spectra)
+                spectra.update(
+                    {"Gas " + key: self.gas.spectra[key] for key in self.gas.spectra}
+                )
 
         # Get the black hole spectra
         if black_hole_spectra:
             if isinstance(black_hole_spectra, list):
                 spectra.update(
-                    {self.black_holes.spectra[key] for key in black_hole_spectra}
+                    {
+                        "Black Hole " + key: self.black_holes.spectra[key]
+                        for key in black_hole_spectra
+                    }
+                )
+            elif isinstance(black_hole_spectra, Sed):
+                spectra.update(
+                    {
+                        "black_hole_spectra": black_hole_spectra,
+                    }
                 )
             else:
-                spectra.update(self.black_holes.spectra)
+                spectra.update(
+                    {
+                        "Black Hole " + key: self.black_holes.spectra[key]
+                        for key in self.black_holes.spectra
+                    }
+                )
 
         return plot_spectra(
             spectra,
@@ -284,6 +335,7 @@ class BaseGalaxy:
             xlimits=xlimits,
             figsize=figsize,
             draw_legend=isinstance(spectra, dict),
+            quantity_to_plot=quantity_to_plot,
         )
 
     def plot_observed_spectra(
@@ -297,6 +349,7 @@ class BaseGalaxy:
         xlimits=(),
         figsize=(3.5, 5),
         filters=None,
+        quantity_to_plot="lnu",
     ):
         """
         Plots either specific observed spectra (specified via combined_spectra,
@@ -341,6 +394,10 @@ class BaseGalaxy:
             filters (FilterCollection)
                 If given then the photometry is computed and both the photometry
                 and filter curves are plotted
+            quantity_to_plot (string)
+                The sed property to plot. Can be "lnu", "luminosity" or "llam"
+                for rest frame spectra or "fnu", "flam" or "flux" for observed
+                spectra. Defaults to "lnu".
 
         Returns:
             fig (matplotlib.pyplot.figure)
@@ -381,7 +438,12 @@ class BaseGalaxy:
                     }
                 )
             else:
-                spectra.update(self.stars.spectra)
+                spectra.update(
+                    {
+                        "Stellar " + key: self.stars.spectra[key]
+                        for key in self.stars.spectra
+                    }
+                )
 
         # Get the gas spectra
         if gas_spectra:
@@ -396,14 +458,16 @@ class BaseGalaxy:
                     }
                 )
             else:
-                spectra.update(self.gas.spectra)
+                spectra.update(
+                    {"Gas " + key: self.gas.spectra[key] for key in self.gas.spectra}
+                )
 
         # Get the black hole spectra
         if black_hole_spectra:
             if isinstance(black_hole_spectra, list):
                 spectra.update(
                     {
-                        "Black Hole" + key: self.black_holes.spectra[key]
+                        "Black Hole " + key: self.black_holes.spectra[key]
                         for key in black_hole_spectra
                     }
                 )
@@ -414,7 +478,12 @@ class BaseGalaxy:
                     }
                 )
             else:
-                spectra.update(self.black_holes.spectra)
+                spectra.update(
+                    {
+                        "Black Hole " + key: self.black_holes.spectra[key]
+                        for key in self.black_holes.spectra
+                    }
+                )
 
         return plot_observed_spectra(
             spectra,
@@ -425,4 +494,5 @@ class BaseGalaxy:
             figsize=figsize,
             draw_legend=isinstance(spectra, dict),
             filters=filters,
+            quantity_to_plot=quantity_to_plot,
         )
