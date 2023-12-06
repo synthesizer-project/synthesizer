@@ -89,19 +89,52 @@ class UnifiedAGN:
     This combines a disc model, along with modelling of the NLR, BLR, and torus.
 
     Attributes:
-        disc_model (string)
-            The disc model being used.
-        photoionisation_model (string)
-            The photoionisation model being used.
-        grid_dir (string)
-            The filepath to the grid file.
+        disc_model (str)
+            The disc_model to be used. The current test model is the AGNSED
+            model.
+        photoionisation_model (str)
+            The photoionisation model to be used. Normally this would be
+            e.g. "cloudy_c17.03", for the test_grid this is "" (i.e.
+            empty string).
+        grid_dir (str)
+            The path to the grid directory.
+        bolometric_luminosity (float)
+            This is needed to rescale the spectra since the grid is likely
+            to be coarse. Defaults to None since it should be provided.
+        metallicity (float)
+            The metallicity of the NLR and BLR gas. Defaults to None since
+            it should be provided.
+        ionisation_parameter_blr (float)
+            The  ionisation parameter in the BLR. Default value
+            is 0.1.
+        hydrogen_density_blr (unyt.unit_object.Unit)
+            The  hydrogen density in the BLR. Default value
+            is 1E9/cm**3.
+        covering_fraction_blr (float)
+            The covering fraction of the BLR. Default value is 0.1.
+        velocity_dispersion_blr (unyt.unit_object.Unit)
+            The velocity disperson of the BLR. Default value is
+            2000*km/s.
+        ionisation_parameter_nlr (float)
+            The ionisation parameter in the BLR. Default value
+            is 0.01.
+        hydrogen_density_nlr (unyt.unit_object.Unit)
+            The hydrogen density in the NLR. Default value
+            is 1E4/cm**3.
+        covering_fraction_nlr (float)
+            The covering fraction of the NLR. Default value is 0.1.
+        velocity_dispersion_nlr (unyt.unit_object.Unit)
+            The velocity disperson of the NLR. Default value is
+            500*km/s.
+        theta_torus (float)
+            The opening angle of the torus component. Default value is
+            10*deg.
         torus_emission_model (synthesizer.dust.emission)
-            The dust emission object describing the emission of the torus.
+            The torus emission model. A synthesizer dust emission model.
+            Default is a Greybody with T=1000*K and emissivity=1.6.
         unified_parameters (list)
             A list of black hole parameters which are not specific to the NLR,
             BLR, or torus.
-        fixed_parameters_dict (dict)
-            A dictionary containing the parameter values fixed by the user.
         fixed_parameters (list)
             A list of black hole parameters which have been fixed by the user.
         grid (dict, Grid)
@@ -110,11 +143,16 @@ class UnifiedAGN:
             The axes of the Grid.
         disc_parameters (list)
             A list of black hole parameters related to the disc.
+        torus_parameters (list)
+            A list of black hole parameters related to the torus.
         parameters (list)
             A list containing all the parameters of the black hole.
         variable_parameters (list)
             A list of parameters not fixed by the user. There will take the
             default values for the model in use.
+        required_parameters (list)
+            A list of parameters that must be passed the spectra methods or
+            inherited from black hole objects.
         available_spectra (list)
             A list of the spectra types computed for a black hole.
     """
