@@ -581,9 +581,8 @@ class StarsComponent:
                 Instance of a dust_curve from synthesizer.dust.attenuation.
             alpha (float):
                 The dust curve slope.
-            young_old_thresh (float):
-                The threshold in log10(age/yr) for young/old stellar
-                populations.
+            young_old_thresh (unyt_quantity):
+                The threshold for young/old stellar populations with units.
             fesc :(float):
                 Lyman continuum escaped fraction.
             fesc_LyA (float):
@@ -987,7 +986,7 @@ class StarsComponent:
         tau_v_BC=1.0,
         alpha_ISM=None,
         alpha_BC=None,
-        young_old_thresh=7.0,
+        young_old_thresh=10 * Myr,
         **kwargs,
     ):
         """
@@ -1009,9 +1008,8 @@ class StarsComponent:
             alpha_BC (float)
                 The slope of the birth cloud dust curve, (defaults to
                 dust_curve.slope=-1, Recommended: -1.3 from MAGPHYS)
-            young_old_thresh (float)
-                The threshold in log10(age/yr) for young/old stellar
-                populations.
+            young_old_thresh (unyt_quantity)
+                The threshold for young/old stellar populations with units.
             kwargs
                 Any keyword arguments which can be passed to
                 generate_lnu.
