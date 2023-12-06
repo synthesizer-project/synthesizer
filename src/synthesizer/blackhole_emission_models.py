@@ -132,6 +132,7 @@ class UnifiedAGN:
         "velocity_dispersion_nlr": 500 * km / s,
         "theta_torus": 10 * deg,
         "torus_emission_model": Greybody(1000 * K, 1.5),
+        "cosine_inclination": 0.5,
         "bolometric_luminosity": None,  # this is only used for scaling
     }
 
@@ -152,7 +153,8 @@ class UnifiedAGN:
         velocity_dispersion_nlr=None,
         theta_torus=None,
         torus_emission_model=None,
-        **kwargs,
+        cosine_inclination=None,
+        verbose=True,
     ):
         """
         Intialise the UnifiedAGN emission model.
@@ -205,16 +207,12 @@ class UnifiedAGN:
             torus_emission_model (synthesizer.dust.emission)
                 The torus emission model. A synthesizer dust emission model.
                 Default is a Greybody with T=1000*K and emissivity=1.6.
-            **kwargs
-                Addition parameters for the specific disc model.
-
+            verbose (bool)
+                Are we talking?
         """
 
         # Create a dictionary of all the arguments
         args = {
-            "disc_model": disc_model,
-            "photoionisation_model": photoionisation_model,
-            "grid_dir": grid_dir,
             "bolometric_luminosity": bolometric_luminosity,
             "metallicity": metallicity,
             "ionisation_parameter_blr": ionisation_parameter_blr,
@@ -227,23 +225,13 @@ class UnifiedAGN:
             "velocity_dispersion_nlr": velocity_dispersion_nlr,
             "theta_torus": theta_torus,
             "torus_emission_model": torus_emission_model,
+            "cosine_inclination": cosine_inclination,
         }
-
-        # Add any kwargs and dust specific attributes to the args
-        for key, val in kwargs:
-            args[key] = val
 
         # Save model and directory as attributes.
         self.disc_model = disc_model
         self.photoionsation_model = photoionisation_model
         self.grid_dir = grid_dir
-
-        # Save the torus model
-        self.torus_emission_model = (
-            torus_emission_model
-            if torus_emission_model is not None
-            else self.default_params["torus_emission_model"]
-        )
 
         # These are the unified model parameters, i.e. all the non-disc and
         # non-torus parameters that are needed.
@@ -259,34 +247,54 @@ class UnifiedAGN:
             "covering_fraction_nlr",
             "velocity_dispersion_nlr",
             "theta_torus",
+            "cosine_inclination",
         ]
 
-        # Set attributes for what is stored in dictionaries
+        # Set "unified" attributes
         self.bolometric_luminosity = bolometric_luminosity
         self.metallicity = metallicity
+        self.cosine_inclination = cosine_inclination
+
+        # Set BLR attributes
         self.ionisation_parameter_blr = ionisation_parameter_blr
         self.hydrogen_density_blr = hydrogen_density_blr
         self.covering_fraction_blr = covering_fraction_blr
         self.velocity_dispersion_blr = velocity_dispersion_blr
+
+        # Set NLR attributes
         self.ionisation_parameter_nlr = ionisation_parameter_nlr
         self.hydrogen_density_nlr = hydrogen_density_nlr
         self.covering_fraction_nlr = covering_fraction_nlr
         self.velocity_dispersion_nlr = velocity_dispersion_nlr
+
+        # Set torus attribues
         self.theta_torus = theta_torus
+        self.torus_emission_model = torus_emission_model
 
-        # Create dictionary of fixed parameters based on what was handed
-        self.fixed_parameters_dict = {}
-        for parameter in self.unified_parameters:
-            if args[parameter] is not None:
-                self.fixed_parameters_dict[parameter] = args[parameter]
-            elif parameter in self.default_params:
-                setattr(self, parameter, self.default_params[parameter])
+        # Create list of fixed parameters to ensure they are honoured when
+        # using this model to generate spectra
+        self.fixed_parameters = []
+        for param, val in args.items():
+            if val is not None:
+                self.fixed_parameters.append(param)
 
-        # Create a list of the fixed_parameters for convenience
-        self.fixed_parameters = list(self.fixed_parameters_dict.keys())
+        # Adopt default values for attributes that have not been fixed
+        header_printed = False
+        for param, val in args.items():
+            if val is None and param in self.default_params:
+                setattr(self, param, self.default_params[param])
+                if verbose and param != "bolometric_luminosity":
+                    if not header_printed:
+                        print("Defaults Used:")
+                        header_printed = True
+                    print(f"    {param} = {self.default_params[param]}")
 
-        # Open NLR and BLR grids
-        # TODO: replace this by a single file.
+        # We can have a default for bolometric luminosity but it should never
+        # be considered fixed
+        if "bolometric_luminosity" in self.fixed_parameters:
+            self.fixed_parameters.remove("bolometric_luminosity")
+
+        # Open NLR and BLR grids and store them in a dict
         self.grid = {}
         for line_region in ["nlr", "blr"]:
             self.grid[line_region] = Grid(
@@ -309,16 +317,17 @@ class UnifiedAGN:
             ]:
                 self.disc_parameters.append(parameter)
 
+        # Define the torus parameters
         # TODO: need to extract a list of torus model parameters.
-        # self.torus_parameters = []
+        self.torus_parameters = ["theta_torus", "torus_emission_model"]
 
         # Get a list of all parameters.
-        # TODO: need to add torus parameters
         self.parameters = list(
             set(
                 self.disc_parameters
                 + self.unified_parameters
                 + list(self.default_params.keys())
+                + self.torus_parameters
             )
         )
 
@@ -342,7 +351,7 @@ class UnifiedAGN:
             "intrinsic",
         ]
 
-    def _get_grid_point(self, parameter_dict, line_region):
+    def _get_grid_point(self, line_region):
         """
         Private method used to get the closest grid point for the specified
         parameters.
@@ -365,17 +374,13 @@ class UnifiedAGN:
             # labelled e.g. 'hydrogen_density_nlr'.
             if parameter in ["hydrogen_density", "ionisation_parameter"]:
                 parameter = parameter + "_" + line_region
-            grid_parameter_values.append(parameter_dict[parameter])
+            grid_parameter_values.append(getattr(self, parameter))
 
         return self.grid[line_region].get_grid_point(grid_parameter_values)
 
-    def _get_spectra_disc(self, parameter_dict):
+    def _get_spectra_disc(self):
         """
         Generate the disc spectra, updating the parameters if required.
-
-        Args:
-            parameter_dict (dict)
-                A dictionary of all the parameters.
 
         Returns
             (dict, synthesizer.sed.Sed)
@@ -383,21 +388,21 @@ class UnifiedAGN:
                 transmitted disc emission.
         """
 
-        # output dictionary
+        # Output dictionary
         spectra = {}
 
-        # get grid points
-        nlr_grid_point = self._get_grid_point(parameter_dict, "nlr")
-        blr_grid_point = self._get_grid_point(parameter_dict, "blr")
+        # Get grid points
+        nlr_grid_point = self._get_grid_point("nlr")
+        blr_grid_point = self._get_grid_point("blr")
 
-        # calculate the incident spectra. It doesn't matter which spectra we
+        # Calculate the incident spectra. It doesn't matter which spectra we
         # use here since we're just using the incident. Note: this assumes the
         # NLR and BLR are not overlapping.
         spectra["disc_incident"] = self.grid["nlr"].get_spectra(
             nlr_grid_point, spectra_id="incident"
         )
 
-        # calculate the transmitted spectra
+        # Calculate the transmitted spectra
         nlr_spectra = self.grid["nlr"].get_spectra(
             nlr_grid_point, spectra_id="transmitted"
         )
@@ -405,74 +410,69 @@ class UnifiedAGN:
             blr_grid_point, spectra_id="transmitted"
         )
         spectra["disc_transmitted"] = (
-            parameter_dict["covering_fraction_nlr"] * nlr_spectra
-            + parameter_dict["covering_fraction_blr"] * blr_spectra
+            self.covering_fraction_nlr * nlr_spectra
+            + self.covering_fraction_blr * blr_spectra
         )
 
-        # calculate the escaping spectra.
+        # Calculate the escaping spectra.
         spectra["disc_escaped"] = (
-            1
-            - parameter_dict["covering_fraction_blr"]
-            - parameter_dict["covering_fraction_nlr"]
+            1 - self.covering_fraction_blr - self.covering_fraction_nlr
         ) * spectra["disc_incident"]
 
-        # calculate the total spectra, the sum of escaping and transmitted
+        # Calculate the total spectra, the sum of escaping and transmitted
         spectra["disc"] = spectra["disc_transmitted"] + spectra["disc_escaped"]
 
         return spectra
 
-    def _get_spectra_lr(self, parameter_dict, line_region):
+    def _get_spectra_lr(self, line_region):
         """
         Generate the spectra of a generic line region.
 
         Args
-            parameter_dict (dict)
-                A dictionary of all the parameters.
             line_region (str)
                 The specific line region, i.e. 'nlr' or 'blr'.
 
         Returns:
             synthesizer.sed.Sed
-                The NLR spectra
+                The NLR spectra.
         """
 
         # In the Unified AGN model the NLR/BLR is illuminated by the isotropic
         # disc emisison hence the need to replace this parameter if it exists.
         # Not all models require an inclination though.
-        if "cosine_inclination" in parameter_dict.keys():
-            parameter_dict["cosine_inclination"] = 0.5
+        prev_cosine_inclincation = self.cosine_inclination
+        self.cosine_inclination = 0.5
 
-        # get the grid point
-        grid_point = self._get_grid_point(parameter_dict, line_region)
+        # Get the grid point
+        grid_point = self._get_grid_point(line_region)
 
-        # get the nebular spectra of the line region
-        sed = parameter_dict[f"covering_fraction_{line_region}"] * self.grid[
+        # Get the nebular spectra of the line region
+        sed = getattr(self, f"covering_fraction_{line_region}") * self.grid[
             line_region
         ].get_spectra(grid_point, spectra_id="nebular")
 
+        # Reset the previously held inclination
+        self.cosine_inclination = prev_cosine_inclincation
+
         return sed
 
-    def _get_spectra_torus(self, parameter_dict):
+    def _get_spectra_torus(self):
         """
         Generate the torus emission Sed.
-
-        Args
-            parameter_dict (dict)
-                A dictionary of all the parameters.
 
         Returns
             spectra (dict, synthesizer.sed.Sed)
                 Dictionary of synthesizer Sed instances.
         """
 
-        # In the Unified AGN model the torus is illuminated by the isotropic
+        # In the Unified AGN model the NLR/BLR is illuminated by the isotropic
         # disc emisison hence the need to replace this parameter if it exists.
         # Not all models require an inclination though.
-        if "cosine_inclination" in parameter_dict.keys():
-            parameter_dict["cosine_inclination"] = 0.5
+        prev_cosine_inclincation = self.cosine_inclination
+        self.cosine_inclination = 0.5
 
         # Get NLR grid points
-        nlr_grid_point = self._get_grid_point(parameter_dict, "nlr")
+        nlr_grid_point = self._get_grid_point("nlr")
 
         # Calcualte the disc emission, since this is incident it doesn't matter
         # if we use the NLR or BLR grid as long as we use the correct grid
@@ -484,7 +484,7 @@ class UnifiedAGN:
         # calculate the bolometric dust lunminosity as the difference between
         # the intrinsic and attenuated
         torus_bolometric_luminosity = (
-            parameter_dict["theta_torus"] / (90 * deg)
+            self.theta_torus / (90 * deg)
         ) * disc_spectra.measure_bolometric_luminosity()
 
         # create torus spectra
@@ -495,52 +495,78 @@ class UnifiedAGN:
 
         sed._lnu *= torus_bolometric_luminosity.value
 
+        # Reset the previously held inclination
+        self.cosine_inclination = prev_cosine_inclincation
+
         return sed
 
-    def get_spectra(self, spectra_ids=None, **kwargs):
+    def get_spectra(self, spectra_ids=None, verbose=True, **kwargs):
         """
         Generate the spectra, updating the parameters if required.
+
+        Args:
+            spectra_ids (string/list)
+                The spectra keys to return. By default this is None and will
+                return all created spectra.
+            verbose (bool)
+                Are we talking?
+            kwargs (dict)
+                Any values for varibale parameters. These will take default
+                value if not provided.
 
         Returns
             spectra (dict, synthesizer.sed.Sed)
                 Dictionary of synthesizer Sed instances.
         """
 
-        # Create a parameter dict by combining the fixed and provided
-        # parameters
-        parameter_dict = self.default_params | self.fixed_parameters_dict | kwargs
+        # Output dictionary
+        spectra = {}
+
+        # Adopt any variable parameter values passed to this function
+        used_varaibles = []
+        for key, val in kwargs.items():
+            # Ignore any fixed parameters
+            if key in self.fixed_parameters:
+                if verbose:
+                    print(f"Ignoring {key}, it was fixed at instantiation.")
+                continue
+
+            # Remember the previous values to be returned after getting the
+            # spectra
+            used_varaibles.append((key, getattr(self, key, None)))
+
+            # Set the passed value
+            setattr(self, key, val)
 
         # Check if we have all the required parameters, if not raise an
         # exception and tell the user which are missing. Bolometric luminosity
         # is not strictly required.
-        if set(list(parameter_dict.keys()) + ["bolometric_luminosity"]) != set(
-            self.parameters
-        ):
-            missing_parameters = set(self.parameters) - set(parameter_dict.keys())
+        missing_params = []
+        for param in self.parameters:
+            if param == "bolometric_luminosity":
+                continue
+            if getattr(self, param, None) is None:
+                print(param, getattr(self, param, None))
+                missing_params.append(param)
+        if len(missing_params) > 0:
             raise MissingArgument(
-                f"These parameters: {missing_parameters} \
-                                  are missing!"
+                f"Values not set for these parameters: {missing_params}"
             )
 
-        # Generate the spectra of the disc
+        # Generate the spectra of the nlr and torus
+        spectra["nlr"] = self._get_spectra_lr("nlr")
+        spectra["torus"] = self._get_spectra_torus()
 
         # Determine the inclination from the cosine_inclination
-        inclination = np.arccos(parameter_dict["cosine_inclination"]) * rad
+        inclination = np.arccos(self.cosine_inclination) * rad
 
         # If the inclination is too high (edge) on we don't see the disc, only
         # the NLR and the torus.
-        if inclination < ((90 * deg) - parameter_dict["theta_torus"]):
-            spectra = self._get_spectra_disc(parameter_dict)
-            spectra["blr"] = self._get_spectra_lr(parameter_dict, "blr")
+        if inclination < ((90 * deg) - self.theta_torus):
+            spectra.update(self._get_spectra_disc())
+            spectra["blr"] = self._get_spectra_lr("blr")
         else:
-            spectra = {}
-
-        spectra["nlr"] = self._get_spectra_lr(parameter_dict, "nlr")
-        spectra["torus"] = self._get_spectra_torus(parameter_dict)
-
-        # If we don't see the BLR and disc still generate spectra but set them
-        # to zero
-        if inclination >= ((90 * deg) - parameter_dict["theta_torus"]):
+            # Still generate zeroed Seds for the unseen spectra
             for spectra_id in [
                 "blr",
                 "disc_transmitted",
@@ -568,9 +594,11 @@ class UnifiedAGN:
             for spectra_id, spectra_ in spectra.items():
                 spectra[spectra_id] = spectra_ * scaling
 
+        # Restore original values to passed variable parameters
+        for key, val in used_varaibles:
+            setattr(self, key, val)
+
         # If spectra_ids are not provided use the full list
         if spectra_ids is None:
-            return parameter_dict, spectra
-        return parameter_dict, {
-            spectra_id: spectra[spectra_ids] for spectra_id in spectra_ids
-        }
+            return spectra
+        return {spectra_id: spectra[spectra_ids] for spectra_id in spectra_ids}
