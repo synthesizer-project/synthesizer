@@ -19,6 +19,7 @@ Example usages:
 import numpy as np
 from unyt import unyt_array
 
+from synthesizer import exceptions
 from synthesizer.parametric.morphology import PointSource
 from synthesizer.components import BlackholesComponent
 
@@ -93,6 +94,7 @@ class BlackHole(BlackholesComponent):
 
     def _prepare_sed_args(
         self,
+        emission_model,
         grid,
         fesc,
         spectra_type,
@@ -105,6 +107,8 @@ class BlackHole(BlackholesComponent):
         functions.
 
         Args:
+            emission_model (synthesizer.blackhole_emission_models.*)
+                An instance of a blackhole emission model.
             grid (Grid)
                 The SPS grid object to extract spectra from.
             fesc (float)
@@ -134,12 +138,25 @@ class BlackHole(BlackholesComponent):
             np.ascontiguousarray(getattr(grid, axis), dtype=np.float64)
             for axis in grid.axes
         ]
-        props = [
-            getattr(self, axis)
-            if getattr(self, axis, None) is not None
-            else getattr(self, axis + "_" + line_region)
-            for axis in grid.axes
-        ]
+        props = []
+        for axis in grid.axes:
+            # Source parameters from the appropriate place
+            if axis in emission_model.fixed_parameters:
+                # Fixed parameters
+                props.append(getattr(emission_model, axis))
+
+            elif axis + "_" + line_region in emission_model.fixed_parameters:
+                # Fixed line region parameters
+                props.append(getattr(emission_model, axis + "_" + line_region))
+
+            elif axis in emission_model.required_parameters:
+                # Parameters that need to be provided from the black hole
+                props.append(getattr(self, axis))
+
+            else:
+                raise exceptions.MissingArgument(
+                    f"{axis} can't be sourced from emission_model or self."
+                )
 
         # Remove units from any unyt_arrays and make contiguous
         props = [prop.value if isinstance(prop, unyt_array) else prop for prop in props]

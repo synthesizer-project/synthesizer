@@ -195,6 +195,7 @@ class BlackholesComponent:
 
     def generate_lnu(
         self,
+        emission_model,
         grid,
         spectra_name,
         line_region,
@@ -208,6 +209,8 @@ class BlackholesComponent:
         spectra.
 
         Args:
+            emission_model (synthesizer.blackhole_emission_models.*)
+                An instance of a blackhole emission model.
             grid (obj):
                 Spectral grid object.
             fesc (float):
@@ -246,6 +249,7 @@ class BlackholesComponent:
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
+            emission_model,
             grid,
             fesc=fesc,
             spectra_type=spectra_name,
@@ -412,6 +416,7 @@ class BlackholesComponent:
         self.spectra["disc_incident"] = Sed(
             lam,
             self.generate_lnu(
+                emission_model,
                 emission_model.grid["nlr"],
                 spectra_name="incident",
                 line_region="nlr",
@@ -424,6 +429,7 @@ class BlackholesComponent:
 
         # calculate the transmitted spectra
         nlr_spectra = self.generate_lnu(
+            emission_model,
             emission_model.grid["nlr"],
             spectra_name="transmitted",
             line_region="nlr",
@@ -433,6 +439,7 @@ class BlackholesComponent:
             grid_assignment_method=grid_assignment_method,
         )
         blr_spectra = self.generate_lnu(
+            emission_model,
             emission_model.grid["blr"],
             spectra_name="transmitted",
             line_region="blr",
@@ -503,6 +510,7 @@ class BlackholesComponent:
 
         # Get the nebular spectra of the line region
         spec = self.generate_lnu(
+            emission_model,
             emission_model.grid[line_region],
             spectra_name="nebular",
             line_region=line_region,
@@ -512,8 +520,8 @@ class BlackholesComponent:
             grid_assignment_method=grid_assignment_method,
         )
         sed = Sed(
-            emission_model.grid[line_region]._lam,
-            getattr(self, f"covering_fraction_{line_region}") * spec,
+            emission_model.grid[line_region].lam,
+            getattr(emission_model, f"covering_fraction_{line_region}") * spec,
         )
 
         # Reset the previously held inclination
@@ -575,6 +583,10 @@ class BlackholesComponent:
         """
         Generate intrinsic blackhole spectra for a given emission_model.
 
+        NOTE: any emission model parameters (excluding those fixed on
+              the emission model) will be temporaily inherited from this
+              from the object and reset after spectra creation.
+
         Args:
             emission_model (blackhole_emission_models.*)
                 Any instance of a blackhole emission model (e.g. Template
@@ -600,59 +612,37 @@ class BlackholesComponent:
             )
             return self.spectra
 
-        # If the user has fixed parameters in the model we need to
-        # temporarily inherit those
-        used_fixed = []
-        for param in emission_model.fixed_parameters:
-            # Store the current value to reinherit later
-            used_fixed.append((param, getattr(self, param, None)))
-
-            # Overwrite with the fixed version
-            setattr(self, param, getattr(emission_model, param))
-
-        # Set any parameter this particular emission model requires which
-        # are not set on the object. These are unset at the end of the method!
-        used_defaults = []
+        # Temporarily have the emission model adopt any vairable parameters
+        # from this BlackHole/BlackHoles
+        used_varaibles = []
         for param in emission_model.variable_parameters:
-            # Is it set?
-            if (
-                getattr(self, param, None) is None
-                and getattr(self, "_" + param, None) is None
-                and getattr(emission_model, param, None) is not None
-            ):
-                # Ok, this one needs setting based on the model
-                default = getattr(emission_model, param)
-                setattr(self, param, default)
+            # Skip any parameters that don't exist on the black hole component
+            if getattr(self, param, None) is None:
+                continue
 
-                # Record that we used a default parameter for removal later
-                used_defaults.append(param)
+            # Remember the previous values to be returned after getting the
+            # spectra
+            used_varaibles.append((param, getattr(emission_model, param, None)))
 
-                if verbose:
-                    print(f"{param} wasn't set, fixing it to {default}")
+            # Set the passed value
+            setattr(emission_model, param, getattr(self, param, None))
 
         # Check if we have all the required parameters, if not raise an
         # exception and tell the user which are missing. Bolometric luminosity
         # is not strictly required.
         missing_params = []
         for param in emission_model.parameters:
-            # Skip bolometric luminosity and torus_emission_model
-            if param == "bolometric_luminosity" or param == "torus_emission_model":
+            if (
+                param == "bolometric_luminosity"
+                or param in emission_model.required_parameters
+            ):
                 continue
-
-            # Get the parameter value from this object
-            attr = getattr(self, param, None)
-            priv_attr = getattr(self, "_" + param, None)
-
-            # Is it set?
-            if attr is None and priv_attr is None:
+            if getattr(emission_model, param, None) is None:
                 missing_params.append(param)
-
         if len(missing_params) > 0:
             raise exceptions.MissingArgument(
-                "Parameters are missing and can't be fixed by"
-                f" the model: {missing_params}"
+                f"Values not set for these parameters: {missing_params}"
             )
-
         # Determine the inclination from the cosine_inclination
         inclination = np.arccos(self.cosine_inclination) * rad
 
@@ -716,8 +706,8 @@ class BlackholesComponent:
                 self.spectra[spectra_id] = spectra * scaling
 
         # Unset any of the fixed parameters we had to inherit
-        for param in used_defaults:
-            setattr(self, param, None)
+        for param, val in used_varaibles:
+            setattr(emission_model, param, val)
 
         return self.spectra
 
@@ -799,28 +789,6 @@ class BlackholesComponent:
             )
 
         return self.spectra
-
-    def get_spectra(
-        self,
-        emission_model,
-        verbose=True,
-        grid_assignment_method="cic",
-        tau_v=None,
-        dust_curve=None,
-        dust_emission_model=None,
-    ):
-        """
-        Alias for get_spectra_attenuated, left in for the time being.
-        """
-
-        return self.get_spectra_attenuated(
-            emission_model=emission_model,
-            verbose=verbose,
-            grid_assignment_method=grid_assignment_method,
-            tau_v=tau_v,
-            dust_curve=dust_curve,
-            dust_emission_model=dust_emission_model,
-        )
 
     def plot_spectra(
         self,
