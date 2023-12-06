@@ -208,6 +208,7 @@ class BlackHoles(Particles, BlackholesComponent):
 
     def _prepare_sed_args(
         self,
+        emission_model,
         grid,
         fesc,
         spectra_type,
@@ -220,6 +221,9 @@ class BlackHoles(Particles, BlackholesComponent):
         functions.
 
         Args:
+            emission_model (blackhole_emission_models.*)
+                Any instance of a blackhole emission model (e.g. Template
+                or UnifiedAGN).
             grid (Grid)
                 The SPS grid object to extract spectra from.
             fesc (float)
@@ -252,12 +256,28 @@ class BlackHoles(Particles, BlackholesComponent):
             np.ascontiguousarray(getattr(grid, axis), dtype=np.float64)
             for axis in grid.axes
         ]
-        props = [
-            getattr(self, axis)
-            if getattr(self, axis, None) is not None
-            else getattr(self, axis + "_" + line_region)
-            for axis in grid.axes
-        ]  # here we have to handle which line region we are calculating
+        props = []
+        for axis in grid.axes:
+            # Source parameters from the appropriate place
+            if axis in emission_model.required_parameters:
+                # Parameters that need to be provided from the black hole
+                # (these already exclude any parameters fixed on the
+                # emission model)
+                props.append(getattr(self, axis))
+
+            elif getattr(emission_model, axis, None) is not None:
+                # Parameters required from the emission_model (not including
+                # line region parameters)
+                props.append(getattr(emission_model, axis))
+
+            elif getattr(emission_model, axis + "_" + line_region, None) is not None:
+                # Line region parameters required from the emission_model
+                props.append(getattr(emission_model, axis + "_" + line_region))
+
+            else:
+                raise exceptions.MissingArgument(
+                    f"{axis} can't be sourced from emission_model or self."
+                )
 
         # Calculate npart from the mask
         npart = np.sum(mask)
