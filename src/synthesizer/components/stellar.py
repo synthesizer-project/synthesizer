@@ -107,10 +107,10 @@ class StarsComponent:
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (float/unyt_quantity):
+            young (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (float/unyt_quantity):
+            old (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for old star particles.
             kwargs
@@ -159,10 +159,10 @@ class StarsComponent:
         Args:
             grid (obj):
                 Spectral grid object.
-            young (float/unyt_quantity):
+            young (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (float/unyt_quantity):
+            old (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
@@ -217,10 +217,10 @@ class StarsComponent:
             fesc (float):
                 Fraction of stellar emission that escapeds unattenuated from
                 the birth cloud (defaults to 0.0).
-            young (float/unyt_quantity):
+            young (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (float/unyt_quantity):
+            old (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
@@ -274,10 +274,10 @@ class StarsComponent:
             fesc (float):
                 Fraction of stellar emission that escapeds unattenuated from
                 the birth cloud (defaults to 0.0).
-            young (float/unyt_quantity):
+            young (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (float/unyt_quantity):
+            old (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
@@ -346,10 +346,10 @@ class StarsComponent:
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (float/unyt_quantity):
+            young (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (float/unyt_quantity):
+            old (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string):
@@ -497,10 +497,10 @@ class StarsComponent:
                 The V-band optical depth.
             dust_curve (object)
                 Instance of a dust_curve from synthesizer.dust.attenuation.
-            young (float/unyt_quantity):
+            young (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (float/unyt_quantity):
+            old (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
@@ -1227,10 +1227,10 @@ class StarsComponent:
         spectra generation methods are in the right units (Myr)
 
         Args:
-            young (float/unyt_quantity):
+            young (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (float/unyt_quantity):
+            old (unyt_quantity):
                 If not None, specifies age in Myr at which to filter
                 for old star particles.
         """
@@ -1239,27 +1239,16 @@ class StarsComponent:
             if isinstance(young, (unyt_quantity)):
                 young = young.to("Myr")
             else:
-                young *= Myr
-
+                raise exceptions.InconsistentArguments(
+                    "young must be a unyt_quantity (i.e. a value with units)"
+                )
         if old is not None:
             if isinstance(old, (unyt_quantity)):
                 old = old.to("Myr")
             else:
-                old *= Myr
-
-        # Ensure ages aren't misinterpreted
-        if young is not None and young > 50 * Gyr:
-            raise exceptions.InconsistentArguments(
-                "The young threshold is unphysically large "
-                f"({young})! Either pass the threshold in Myrs or as a "
-                "unyt_quantity with units attached."
-            )
-        if old is not None and old > 50 * Gyr:
-            raise exceptions.InconsistentArguments(
-                "The old threshold is unphysically large "
-                f"({old})! Either pass the threshold in Myrs or as a "
-                "unyt_quantity with units attached."
-            )
+                raise exceptions.InconsistentArguments(
+                    "young must be a unyt_quantity (i.e. a value with units)"
+                )
 
         return young, old
 
