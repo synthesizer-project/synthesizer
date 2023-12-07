@@ -410,7 +410,16 @@ class BlackHoles(Particles, BlackholesComponent):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        return compute_particle_seds(*args)
+        masked_spec = compute_particle_seds(*args)
+
+        # If there's no mask we're done
+        if mask is None:
+            return masked_spec
+
+        # If we have a mask we need to account for the zeroed spectra
+        spec = np.zeros((self.nbh, masked_spec.shape[-1]))
+        spec[mask] = masked_spec
+        return spec
 
     def _get_particle_spectra_disc(
         self,
