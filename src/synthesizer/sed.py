@@ -482,7 +482,7 @@ class Sed:
         # If the method is trapz we can do any number of dimensions
         if method == "trapz":
             bolometric_luminosity = np.trapz(
-                self._lnu[::-1],
+                np.flip(self._lnu, axis=-1),
                 x=self._nu[::-1],
                 axis=-1,
             )
