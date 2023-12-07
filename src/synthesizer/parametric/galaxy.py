@@ -453,10 +453,10 @@ class Galaxy(BaseGalaxy):
                 blackhole_img.get_noisy_imgs(noises)
 
         # Combine images
-        if stellar_spectra_type is not None:
+        if stellar_spectra_type is not None and blackhole_spectra_type is None:
             img = stellar_img
-        if stellar_spectra_type is not None and blackhole_spectra_type is not None:
-            img += blackhole_img
+        elif stellar_spectra_type is not None and blackhole_spectra_type is not None:
+            img = stellar_img + blackhole_img
         else:
             img = blackhole_img
 
