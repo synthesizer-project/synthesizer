@@ -17,6 +17,7 @@ from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
 from synthesizer.exceptions import MissingArgument, UnimplementedFunctionality
+from synthesizer.units import Quantity
 
 
 class Template:
@@ -172,6 +173,11 @@ class UnifiedAGN:
         "torus_emission_model": Greybody(1000 * K, 1.5),
         "bolometric_luminosity": None,  # this is only used for scaling
     }
+
+    # Define Quantities (these are temporarily used when making spectra and
+    # guarantee the unit system is respected)
+    mass = Quantity()
+    bolometric_luminosity = Quantity()
 
     def __init__(
         self,
