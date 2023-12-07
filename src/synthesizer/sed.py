@@ -479,15 +479,17 @@ class Sed:
                 If method is an incompatible option an error is raised.
         """
 
-        # Handle multiple dimensions explicitly
-        if self._lnu.ndim == 1:
-            # Integrate using the requested method
-            if method == "trapz":
-                bolometric_luminosity = np.trapz(
-                    self._lnu[::-1],
-                    x=self._nu[::-1],
-                )
-            elif method == "quad":
+        # If the method is trapz we can do any number of dimensions
+        if method == "trapz":
+            bolometric_luminosity = np.trapz(
+                self._lnu[::-1],
+                x=self._nu[::-1],
+                axis=-1,
+            )
+        elif method == "quad":
+            # Handle multiple dimensions explicitly
+            if self._lnu.ndim == 1:
+                # Integrate using quad
                 bolometric_luminosity = (
                     integrate.quad(
                         self._get_lnu_at_nu,
@@ -498,22 +500,13 @@ class Sed:
                     * self.lnu.units
                     * Hz
                 )
-            else:
-                raise exceptions.UnrecognisedOption(
-                    f"Unrecognised integration method ({method}). "
-                    "Options are 'trapz' or 'quad'"
-                )
-        elif self._lnu.ndim == 2:
-            # Set up bolometric luminosity array
-            bolometric_luminosity = np.zeros(self._lnu.shape[0])
 
-            for ind in range(self._lnu.shape[0]):
-                # Integrate using the requested method
-                if method == "trapz":
-                    bolometric_luminosity[ind] = np.trapz(
-                        self._lnu[ind, ::-1], x=self._nu[::-1]
-                    )
-                elif method == "quad":
+            elif self._lnu.ndim == 2:
+                # Set up bolometric luminosity array
+                bolometric_luminosity = np.zeros(self._lnu.shape[0])
+
+                # Loop over spectra
+                for ind in range(self._lnu.shape[0]):
                     bolometric_luminosity[ind] = (
                         integrate.quad(
                             self._get_lnu_at_nu,
@@ -524,18 +517,18 @@ class Sed:
                         * self.lnu.units
                         * Hz
                     )
-                else:
-                    raise exceptions.UnrecognisedOption(
-                        f"Unrecognised integration method ({method}). "
-                        "Options are 'trapz' or 'quad'"
-                    )
+            else:
+                raise exceptions.UnimplementedFunctionality(
+                    "Measuring bolometric luminosities for Sed.lnu.ndim > 2 not"
+                    " yet implemented! Feel free to implement and raise a "
+                    "pull request. Guidance for contributing can be found at "
+                    "https://github.com/flaresimulations/synthesizer/blob/main/"
+                    "docs/CONTRIBUTING.md"
+                )
         else:
-            raise exceptions.UnimplementedFunctionality(
-                "Measuring bolometric luminosities for Sed.lnu.ndim > 2 not"
-                " yet implemented! Feel free to implement and raise a "
-                "pull request. Guidance for contributing can be found at "
-                "https://github.com/flaresimulations/synthesizer/blob/main/"
-                "docs/CONTRIBUTING.md"
+            raise exceptions.UnrecognisedOption(
+                f"Unrecognised integration method ({method}). "
+                "Options are 'trapz' or 'quad'"
             )
 
         self.bolometric_luminosity = bolometric_luminosity
