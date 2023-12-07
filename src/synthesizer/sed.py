@@ -539,7 +539,7 @@ class Sed:
             )
 
         self.bolometric_luminosity = bolometric_luminosity
-        return bolometric_luminosity
+        return self.bolometric_luminosity
 
     def measure_window_luminosity(self, window, method="trapz"):
         """
