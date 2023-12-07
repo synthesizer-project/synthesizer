@@ -377,7 +377,7 @@ class Sed:
         """
         return np.ndim(self.lnu)
 
-    def _get_lnu_at_nu(self, nu, kind=False):
+    def _get_lnu_at_nu(self, nu, kind=False, ind=None):
         """
         A simple internal function for getting lnu at nu assuming the default
         unit system.
@@ -387,13 +387,17 @@ class Sed:
                 The frequency(s) of interest.
             kind (str)
                 Interpolation kind, see scipy.interp1d docs.
+            ind (int)
+                Row index of the spectra. Only applicable for muiti-dimensional
+                spectra.
 
         Returns:
             luminosity (float/array-like, float)
                 The luminosity (lnu) at the provided wavelength.
         """
-
-        return interp1d(self._nu, self._lnu, kind=kind)(nu)
+        if ind is None:
+            return interp1d(self._nu, self._lnu, kind=kind)(nu)
+        return interp1d(self._nu, self._lnu[ind, :], kind=kind)(nu)
 
     def get_lnu_at_nu(self, nu, kind=False):
         """
@@ -414,7 +418,7 @@ class Sed:
             self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind) * self.lnu.units
         )
 
-    def _get_lnu_at_lam(self, lam, kind=False):
+    def _get_lnu_at_lam(self, lam, kind=False, ind=None):
         """
         Return lnu without units at a provided wavelength using 1d
         interpolation.
@@ -424,13 +428,17 @@ class Sed:
                 The wavelength(s) of interest.
             kind (str)
                 Interpolation kind, see scipy.interp1d docs.
+            ind (int)
+                Row index of the spectra. Only applicable for muiti-dimensional
+                spectra.
 
         Returns:
             luminosity (float/array-like, float)
                 The luminosity (lnu) at the provided wavelength.
         """
-
-        return interp1d(self._lam, self._lnu, kind=kind)(lam)
+        if ind is None:
+            return interp1d(self._lam, self._lnu, kind=kind)(lam)
+        return interp1d(self._lam, self._lnu[ind, :], kind=kind)(lam)
 
     def get_lnu_at_lam(self, lam, kind=False):
         """
@@ -471,17 +479,63 @@ class Sed:
                 If method is an incompatible option an error is raised.
         """
 
-        # Integrate using the requested method
-        if method == "trapz":
-            bolometric_luminosity = np.trapz(self.lnu[::-1], x=self.nu[::-1])
-        elif method == "quad":
-            bolometric_luminosity = (
-                integrate.quad(self._get_lnu_at_nu, 1e12, 1e16)[0] * self.lnu.units * Hz
-            )
+        # Handle multiple dimensions explicitly
+        if self._lnu.ndim == 1:
+            # Integrate using the requested method
+            if method == "trapz":
+                bolometric_luminosity = np.trapz(
+                    self._lnu[::-1],
+                    x=self._nu[::-1],
+                )
+            elif method == "quad":
+                bolometric_luminosity = (
+                    integrate.quad(
+                        self._get_lnu_at_nu,
+                        1e12,
+                        1e16,
+                        args=("cubic"),
+                    )[0]
+                    * self.lnu.units
+                    * Hz
+                )
+            else:
+                raise exceptions.UnrecognisedOption(
+                    f"Unrecognised integration method ({method}). "
+                    "Options are 'trapz' or 'quad'"
+                )
+        elif self._lnu.ndim == 2:
+            # Set up bolometric luminosity array
+            bolometric_luminosity = np.zeros(self._lnu.shape[0])
+
+            for ind in range(self._lnu.shape[0]):
+                # Integrate using the requested method
+                if method == "trapz":
+                    bolometric_luminosity[ind] = np.trapz(
+                        self._lnu[ind, ::-1], x=self._nu[::-1]
+                    )
+                elif method == "quad":
+                    bolometric_luminosity[ind] = (
+                        integrate.quad(
+                            self._get_lnu_at_nu,
+                            1e12,
+                            1e16,
+                            args=("cubic", ind),
+                        )[0]
+                        * self.lnu.units
+                        * Hz
+                    )
+                else:
+                    raise exceptions.UnrecognisedOption(
+                        f"Unrecognised integration method ({method}). "
+                        "Options are 'trapz' or 'quad'"
+                    )
         else:
-            raise exceptions.UnrecognisedOption(
-                f"Unrecognised integration method ({method}). "
-                "Options are 'trapz' or 'quad'"
+            raise exceptions.UnimplementedFunctionality(
+                "Measuring bolometric luminosities for Sed.lnu.ndim > 2 not"
+                " yet implemented! Feel free to implement and raise a "
+                "pull request. Guidance for contributing can be found at "
+                "https://github.com/flaresimulations/synthesizer/blob/main/"
+                "docs/CONTRIBUTING.md"
             )
 
         self.bolometric_luminosity = bolometric_luminosity
@@ -916,9 +970,9 @@ class Sed:
             index (float)
                Absorption feature index in units of wavelength
         """
-        
+
         # self.lnu = np.array([self.lnu, self.lnu*2])
-        
+
         # Measure the red and blue windows
         lnu_blue = self.measure_window_lnu(blue)
         lnu_red = self.measure_window_lnu(red)
@@ -926,7 +980,7 @@ class Sed:
         # Define the wavelength grid over the feature
         transmission = (self.lam > feature[0]) & (self.lam < feature[1])
         feature_lam = self.lam[transmission]
-        
+
         # Extract mean values
         mean_blue = np.mean(blue)
         mean_red = np.mean(red)
@@ -934,24 +988,23 @@ class Sed:
         # Handle different spectra shapes
         if self._spec_dims == 2:
             # Multiple spectra case
-            
+
             # Perform polyfit for the continuum fit for all spectra
-            continuum_fits = np.polyfit(
-                [mean_blue, mean_red],
-                [lnu_blue, lnu_red],
-                1
-            )
+            continuum_fits = np.polyfit([mean_blue, mean_red], [lnu_blue, lnu_red], 1)
             # Use the continuum fit to define the continuum for all spectra
             continuum = (
-                (np.column_stack(continuum_fits[0] * feature_lam.to(self.lam.units).value
-                [:, np.newaxis]) + continuum_fits[1][:, np.newaxis])
+                (
+                    np.column_stack(
+                        continuum_fits[0]
+                        * feature_lam.to(self.lam.units).value[:, np.newaxis]
+                    )
+                    + continuum_fits[1][:, np.newaxis]
+                )
             ) * self.lnu.units
 
             # Define the continuum subtracted spectrum for all SEDs
             feature_lum = self.lnu[:, transmission]
-            feature_lum_continuum_subtracted = (
-               -(feature_lum - continuum) / continuum
-            )
+            feature_lum_continuum_subtracted = -(feature_lum - continuum) / continuum
 
             # Measure index for all SEDs
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam, axis=1)
@@ -959,13 +1012,14 @@ class Sed:
         else:
             # Single spectra case
 
-
             # Perform polyfit for the continuum fit
             continuum_fit = np.polyfit([mean_blue, mean_red], [lnu_blue, lnu_red], 1)
-            
+
             # Use the continuum fit to define the continuum
-            continuum = ((continuum_fit[0] * feature_lam.to(self.lam.units).value) +
-                         continuum_fit[1]) * self.lnu.units   
+            continuum = (
+                (continuum_fit[0] * feature_lam.to(self.lam.units).value)
+                + continuum_fit[1]
+            ) * self.lnu.units
 
             # Define the continuum subtracted spectrum
             feature_lum = self.lnu[transmission]
@@ -973,9 +1027,8 @@ class Sed:
 
             # Measure index
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
-            
-        return index
 
+        return index
 
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
         """
