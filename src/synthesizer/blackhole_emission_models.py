@@ -196,7 +196,7 @@ class UnifiedAGN:
         velocity_dispersion_nlr=None,
         theta_torus=None,
         torus_emission_model=None,
-        verbose=True,
+        verbose=False,
     ):
         """
         Intialise the UnifiedAGN emission model.
