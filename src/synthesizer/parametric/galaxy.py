@@ -100,7 +100,7 @@ class Galaxy(BaseGalaxy):
         conn_char = "\n" + (15 * " ")
 
         # Print stellar spectra keys
-        if len(self.stars.spectra) > 0:
+        if self.stars is not None and len(self.stars.spectra) > 0:
             # Print keys nicely so they don't spill over
             spectra_keys = [""]
             iline = 0
@@ -123,7 +123,7 @@ class Galaxy(BaseGalaxy):
         conn_char = "\n" + (19 * " ")
 
         # Print stellar spectra keys
-        if len(self.black_holes.spectra) > 0:
+        if self.black_holes is not None and len(self.black_holes.spectra) > 0:
             # Print keys nicely so they don't spill over
             spectra_keys = [""]
             iline = 0
