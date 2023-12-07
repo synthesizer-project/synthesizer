@@ -626,7 +626,11 @@ class Galaxy(BaseGalaxy):
                 resolution /= psf_resample_factor
 
         # Make sure we have an image to make
-        if stellar_spectra_type is None and blackhole_spectra_type is None:
+        if (
+            stellar_spectra_type is None
+            and blackhole_spectra_type is None
+            and pixel_values is None
+        ):
             raise exceptions.InconsistentArguments(
                 "At least one spectra type must be provided "
                 "(stellar_spectra_type or blackhole_spectra_type)!"
@@ -634,12 +638,14 @@ class Galaxy(BaseGalaxy):
             )
 
         # Make stellar image if requested
-        if stellar_spectra_type is not None:
+        if stellar_spectra_type is not None or pixel_values is not None:
             # Instantiate the Image object.
             stellar_img = ParticleImage(
                 resolution=resolution,
                 fov=fov,
-                sed=self.stars.particle_spectra[stellar_spectra_type],
+                sed=self.stars.particle_spectra[stellar_spectra_type]
+                if stellar_spectra_type is not None
+                else None,
                 filters=filters,
                 coordinates=self.stars._coordinates,
                 smoothing_lengths=self.stars._smoothing_lengths,
@@ -735,9 +741,10 @@ class Galaxy(BaseGalaxy):
             img = stellar_img
         elif stellar_spectra_type is not None and blackhole_spectra_type is not None:
             img = stellar_img + blackhole_img
-        else:
+        elif stellar_spectra_type is None and blackhole_spectra_type is not None:
             img = blackhole_img
-
+        else:
+            img = stellar_img  # pixel_value case
         return img
 
     def make_stellar_mass_map(
