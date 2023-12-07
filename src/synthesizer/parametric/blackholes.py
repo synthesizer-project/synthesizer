@@ -17,11 +17,12 @@ Example usages:
 )
 """
 import numpy as np
-from unyt import unyt_array
+from unyt import unyt_array, kpc
 
 from synthesizer import exceptions
 from synthesizer.parametric.morphology import PointSource
 from synthesizer.components import BlackholesComponent
+from synthesizer.utils import has_units
 
 
 class BlackHole(BlackholesComponent):
@@ -43,7 +44,7 @@ class BlackHole(BlackholesComponent):
         inclination=None,
         spin=None,
         metallicity=None,
-        offset=None,
+        offset=np.array([0.0, 0.0]) * kpc,
         **kwargs,
     ):
         """
@@ -67,7 +68,7 @@ class BlackHole(BlackholesComponent):
                 models.
             spin (float)
                 The spin of the blackhole. Necessary for some disc models.
-            offset (unyt_array, float)
+            offset (unyt_array)
                 The (x,y) offsets of the blackhole relative to the centre of
                 the image. Units can be length or angle but should be
                 consistent with the scene.
@@ -88,6 +89,10 @@ class BlackHole(BlackholesComponent):
             metallicity=metallicity,
             **kwargs,
         )
+
+        # Ensure the offset has units
+        if not has_units(offset):
+            raise exceptions.MissingUnits("The offset must be provided with units")
 
         # Initialise morphology using the in-built point-source class
         self.morphology = PointSource(offset=offset)
