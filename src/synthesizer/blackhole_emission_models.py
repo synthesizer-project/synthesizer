@@ -11,7 +11,7 @@ Example Usage:
 )
 """
 import numpy as np
-from unyt import deg, km, cm, s, K, rad, erg, unyt_array
+from unyt import deg, km, cm, s, K, rad, erg, Hz, unyt_array
 
 from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
@@ -72,7 +72,7 @@ class Template:
             # normalise
             # TODO: add a method to Sed that does this.
             self.normalisation = self.sed.measure_bolometric_luminosity()
-            self.sed.lnu /= self.normalisation
+            self.sed.lnu /= self.normalisation.value
 
         else:
             raise exceptions.MissingArgument(
@@ -91,7 +91,18 @@ class Template:
 
         """
 
-        return {"total": bolometric_luminosity * self.sed}
+        # Ensure we have units for safety
+        if bolometric_luminosity is not None and not isinstance(
+            bolometric_luminosity, unyt_array
+        ):
+            raise exceptions.MissingUnits(
+                "bolometric luminosity must be provided with units"
+            )
+
+        return {
+            "intrinsic": bolometric_luminosity.to(self.sed.lnu.units * Hz).value
+            * self.sed,
+        }
 
 
 class UnifiedAGN:
