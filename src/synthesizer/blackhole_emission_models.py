@@ -11,12 +11,12 @@ Example Usage:
 )
 """
 import numpy as np
-from unyt import deg, km, cm, s, K, rad, erg
+from unyt import deg, km, cm, s, K, rad, erg, unyt_array
 
 from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
-from synthesizer.exceptions import MissingArgument, UnimplementedFunctionality
+from synthesizer import exceptions
 from synthesizer.units import Quantity
 
 
@@ -51,15 +51,21 @@ class Template:
 
         """
 
+        # Ensure we have been given units
+        if lam is not None and not isinstance(lam, unyt_array):
+            raise exceptions.MissingUnits("lam must be provided with units")
+        if lnu is not None and not isinstance(lnu, unyt_array):
+            raise exceptions.MissingUnits("lam must be provided with units")
+
         if filename:
-            raise UnimplementedFunctionality(
+            raise exceptions.UnimplementedFunctionality(
                 "Not yet implemented! Feel free to implement and raise a "
                 "pull request. Guidance for contributing can be found at "
                 "https://github.com/flaresimulations/synthesizer/blob/main/"
                 "docs/CONTRIBUTING.md"
             )
 
-        if lam and lnu:
+        if lam is not None and lnu is not None:
             # initialise a synthesizer Sed object
             self.sed = Sed(lam=lam, lnu=lnu)
 
@@ -67,6 +73,11 @@ class Template:
             # TODO: add a method to Sed that does this.
             self.normalisation = self.sed.measure_bolometric_luminosity()
             self.sed.lnu /= self.normalisation
+
+        else:
+            raise exceptions.MissingArgument(
+                "Either a filename or both lam and lnu must be provided!"
+            )
 
     def get_spectra(self, bolometric_luminosity):
         """
@@ -595,7 +606,7 @@ class UnifiedAGN:
             if getattr(self, param, None) is None:
                 missing_params.append(param)
         if len(missing_params) > 0:
-            raise MissingArgument(
+            raise exceptions.MissingArgument(
                 f"Values not set for these parameters: {missing_params}"
             )
 
