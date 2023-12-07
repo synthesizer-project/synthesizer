@@ -455,7 +455,6 @@ class Galaxy(BaseGalaxy):
         # Combine images
         if stellar_spectra_type is not None:
             img = stellar_img
-            print(np.sum(img.img), np.sum(blackhole_img.img))
         if stellar_spectra_type is not None and blackhole_spectra_type is not None:
             img += blackhole_img
         else:
