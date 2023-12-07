@@ -433,7 +433,7 @@ class BlackholesComponent:
             emission_model.grid["nlr"],
             spectra_name="transmitted",
             line_region="nlr",
-            fesc=emission_model.covering_fraction_nlr,
+            fesc=(1 - emission_model.covering_fraction_nlr),
             mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
@@ -443,7 +443,7 @@ class BlackholesComponent:
             emission_model.grid["blr"],
             spectra_name="transmitted",
             line_region="blr",
-            fesc=emission_model.covering_fraction_blr,
+            fesc=(1 - emission_model.covering_fraction_blr),
             mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
@@ -451,20 +451,15 @@ class BlackholesComponent:
         self.spectra["disc_transmitted"] = Sed(lam, nlr_spectra + blr_spectra)
 
         # calculate the escaping spectra.
-        self.spectra["disc_escaped"] = Sed(
-            lam,
-            (
-                1
-                - emission_model.covering_fraction_blr
-                - emission_model.covering_fraction_nlr
-            )
-            * self.spectra["disc_incident"].lnu,
-        )
+        self.spectra["disc_escaped"] = (
+            1
+            - emission_model.covering_fraction_blr
+            - emission_model.covering_fraction_nlr
+        ) * self.spectra["disc_incident"]
 
         # calculate the total spectra, the sum of escaping and transmitted
-        self.spectra["disc"] = Sed(
-            lam,
-            self.spectra["disc_transmitted"]._lnu + self.spectra["disc_escaped"]._lnu,
+        self.spectra["disc"] = (
+            self.spectra["disc_transmitted"] + self.spectra["disc_escaped"]
         )
 
         return self.spectra["disc"]
@@ -585,7 +580,7 @@ class BlackholesComponent:
 
         NOTE: any emission model parameters (excluding those fixed on
               the emission model) will be temporaily inherited from this
-              from the object and reset after spectra creation.
+              object and reset after spectra creation.
 
         Args:
             emission_model (blackhole_emission_models.*)
@@ -643,6 +638,7 @@ class BlackholesComponent:
             raise exceptions.MissingArgument(
                 f"Values not set for these parameters: {missing_params}"
             )
+
         # Determine the inclination from the cosine_inclination
         inclination = np.arccos(self.cosine_inclination) * rad
 
@@ -666,6 +662,7 @@ class BlackholesComponent:
             line_region="blr",
         )
 
+        # Generate the spectra of the nlr and torus
         self.spectra["nlr"] = self._get_spectra_lr(
             emission_model=emission_model,
             verbose=verbose,

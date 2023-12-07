@@ -470,7 +470,7 @@ class BlackHoles(Particles, BlackholesComponent):
             emission_model.grid["nlr"],
             spectra_name="transmitted",
             line_region="nlr",
-            fesc=emission_model.covering_fraction_nlr,
+            fesc=(1 - emission_model.covering_fraction_nlr),
             mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
@@ -480,7 +480,7 @@ class BlackHoles(Particles, BlackholesComponent):
             emission_model.grid["blr"],
             spectra_name="transmitted",
             line_region="blr",
-            fesc=emission_model.covering_fraction_blr,
+            fesc=(1 - emission_model.covering_fraction_blr),
             mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
@@ -488,21 +488,16 @@ class BlackHoles(Particles, BlackholesComponent):
         self.particle_spectra["disc_transmitted"] = Sed(lam, nlr_spectra + blr_spectra)
 
         # calculate the escaping spectra.
-        self.particle_spectra["disc_escaped"] = Sed(
-            lam,
-            (
-                1
-                - emission_model.covering_fraction_blr
-                - emission_model.covering_fraction_nlr
-            )
-            * self.particle_spectra["disc_incident"].lnu,
-        )
+        self.particle_spectra["disc_escaped"] = (
+            1
+            - emission_model.covering_fraction_blr
+            - emission_model.covering_fraction_nlr
+        ) * self.particle_spectra["disc_incident"]
 
         # calculate the total spectra, the sum of escaping and transmitted
-        self.particle_spectra["disc"] = Sed(
-            lam,
-            self.particle_spectra["disc_transmitted"]._lnu
-            + self.particle_spectra["disc_escaped"]._lnu,
+        self.particle_spectra["disc"] = (
+            self.particle_spectra["disc_transmitted"]
+            + self.particle_spectra["disc_escaped"]
         )
 
         return self.particle_spectra["disc"]
@@ -722,7 +717,7 @@ class BlackHoles(Particles, BlackholesComponent):
         # the emission model is called from a parametric or particle blackhole.
         if self.bolometric_luminosity is not None:
             scaling = (
-                np.sum(self.bolometric_luminosity)
+                self.bolometric_luminosity
                 / self.particle_spectra["intrinsic"].measure_bolometric_luminosity()
             )
             for spectra_id, spectra in self.particle_spectra.items():
