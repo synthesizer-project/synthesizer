@@ -718,7 +718,7 @@ class Stars(Particles, StarsComponent):
             return masked_spec
 
         # If we have a mask we need to account for the zeroed spectra
-        spec = np.zeros((self.nbh, masked_spec.shape[-1]))
+        spec = np.zeros((self.nstars, masked_spec.shape[-1]))
         spec[mask] = masked_spec
         return spec
 
