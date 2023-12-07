@@ -3,7 +3,6 @@
 The class defined here should never be instantiated directly, there are only
 ever instantiated by the parametric/particle child classes.
 """
-from copy import deepcopy
 import numpy as np
 from unyt import c, rad, deg, unyt_quantity
 
