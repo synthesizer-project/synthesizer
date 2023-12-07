@@ -349,7 +349,7 @@ class BaseGalaxy:
         xlimits=(),
         figsize=(3.5, 5),
         filters=None,
-        quantity_to_plot="lnu",
+        quantity_to_plot="fnu",
     ):
         """
         Plots either specific observed spectra (specified via combined_spectra,
