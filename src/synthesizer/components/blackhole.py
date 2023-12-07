@@ -340,7 +340,7 @@ class BlackholesComponent:
                 The black hole eddington ratio
         """
 
-        self.eddington_ratio = self.bolometric_luminosity / self.eddington_luminosity
+        self.eddington_ratio = self._bolometric_luminosity / self._eddington_luminosity
 
         return self.eddington_ratio
 
