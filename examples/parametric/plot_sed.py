@@ -13,7 +13,7 @@ from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr
+from unyt import Myr, yr
 
 
 if __name__ == "__main__":
@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
     # create a galaxy object
     galaxy = Galaxy(stars)
-    
+
     # generate pure stellar spectra alone
     galaxy.stars.get_spectra_incident(grid)
     print("Pure stellar spectra")
@@ -96,7 +96,7 @@ if __name__ == "__main__":
         fesc_LyA=0.1,
         tau_v=[1.0, 1.0],
         alpha=[-1, -1],
-        young_old_thresh=1e7,
+        young_old_thresh=1e7 * yr,
     )
     print("CF00 implemented within the Pacman model")
     galaxy.plot_spectra(show=True, combined_spectra=False, stellar_spectra=True)
