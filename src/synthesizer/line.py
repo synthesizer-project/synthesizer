@@ -78,43 +78,41 @@ def get_fancy_line_id(id):
     return f"{element}{get_roman_numeral(int(ion))}{wavelength: .4g}"
 
 
-def get_BPT_Kewley0(logNII_Ha):
-    """
-    BPT-NII demarcations from Kewley+2001
-    https://arxiv.org/abs/astro-ph/0106324
-    log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19  
+def get_bpt_kewley01(logNII_Ha):
+    """BPT-NII demarcations from Kewley+2001
     
-    Arguments
-    -------
-        logNII_Ha (array)
-            log([NII]/Halpha) values to give the SF-AGN 
-            demarcation line
+    Kewley+03: https://arxiv.org/abs/astro-ph/0106324
+    Demarcation defined by:
+        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19
+    
+    Args:
+        logNII_Ha (array) 
+            Array of log([NII]/Halpha) values to give the
+            SF-AGN demarcation line
 
-    Returns
-    ---------
-        log([OIII]/Hb) (array)
-            corresponding log([OIII]/Hb) ratio
+    Returns:
+        array
+            Corresponding log([OIII]/Hb) ratio array
     """
 
     return 0.61/(logNII_Ha-0.47) + 1.19
 
 
-def get_BPT_Kauffman03(logNII_Ha):
-    """
-    BPT-NII demarcations from Kauffman+2003
-    https://arxiv.org/abs/astro-ph/0304239
-    log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3  
-    
-    Arguments
-    -------
-        logNII_Ha (array)
-            log([NII]/Halpha) values to give the SF-AGN 
-            demarcation line
+def get_bpt_kauffman03(logNII_Ha):
+    """BPT-NII demarcations from Kauffman+2003
 
-    Returns
-    ---------
-        log([OIII]/Hb) (array)
-            corresponding log([OIII]/Hb) ratio
+    Kauffman+03: https://arxiv.org/abs/astro-ph/0304239
+    Demarcation defined by:
+        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3 
+    
+     Args:
+        logNII_Ha (array)
+            Array of log([NII]/Halpha) values to give the
+            SF-AGN demarcation line
+
+    Returns:
+        array
+            Corresponding log([OIII]/Hb) ratio array
     """
 
     return 0.61/(logNII_Ha-0.05) + 1.3
