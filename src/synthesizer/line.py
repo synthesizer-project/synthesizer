@@ -78,6 +78,48 @@ def get_fancy_line_id(id):
     return f"{element}{get_roman_numeral(int(ion))}{wavelength: .4g}"
 
 
+def get_BPT_Kewley0(logNII_Ha):
+    """
+    BPT-NII demarcations from Kewley+2001
+    https://arxiv.org/abs/astro-ph/0106324
+    log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19  
+    
+    Arguments
+    -------
+        logNII_Ha (array)
+            log([NII]/Halpha) values to give the SF-AGN 
+            demarcation line
+
+    Returns
+    ---------
+        log([OIII]/Hb) (array)
+            corresponding log([OIII]/Hb) ratio
+    """
+
+    return 0.61/(logNII_Ha-0.47) + 1.19
+
+
+def get_BPT_Kauffman03(logNII_Ha):
+    """
+    BPT-NII demarcations from Kauffman+2003
+    https://arxiv.org/abs/astro-ph/0304239
+    log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3  
+    
+    Arguments
+    -------
+        logNII_Ha (array)
+            log([NII]/Halpha) values to give the SF-AGN 
+            demarcation line
+
+    Returns
+    ---------
+        log([OIII]/Hb) (array)
+            corresponding log([OIII]/Hb) ratio
+    """
+
+    return 0.61/(logNII_Ha-0.05) + 1.3
+
+
 class LineRatios:
 
     """
@@ -98,11 +140,12 @@ class LineRatios:
 
         self.ratios = {}
 
-        # Balmer decrement, should be ~2.86 for dust free
+        # Balmer decrement, should be [2.79--2.86] (Te, ne, dependent)
+        # for dust free
         self.ratios["BalmerDecrement"] = [[Ha], [Hb]]
         self.ratios["N2"] = [["N 2 6583.45A"], [Ha]]  #  add reference
-        self.ratios["S2"] = [["S 2 6730.82A", "S 2 6716.44A"], [Ha]]  #  add reference
-        self.ratios["O1"] = [["O 1 6300.30A"], [Ha]]  #  add reference
+        self.ratios["S2"] =S2 = [["S 2 6730.82A", "S 2 6716.44A"], [Ha]]  #  add reference
+        self.ratios["O1"] = O1 = [["O 1 6300.30A"], [Ha]]  #  add reference
         self.ratios["R2"] = [[O2b], [Hb]]  #  add reference
         self.ratios["R3"] = R3 = [[O3r], [Hb]]  #  add reference
         self.ratios["R23"] = [O3 + O2, [Hb]]  #  add reference
@@ -114,8 +157,8 @@ class LineRatios:
         self.diagrams = {}
         self.diagrams["OHNO"] = [R3, [["NE 3 3868.76A"], O2]]  #  add reference
         self.diagrams["BPT-NII"] = [[["N 2 6583.45A"], [Ha]], R3]  #  add reference
-        # diagrams['VO78'] = [[], []]
-        # diagrams['unVO78'] = [[], []]
+        self.diagrams['VO78-SII'] = [[S2, [Ha]], R3]
+        self.diagrams['VO78-OI'] = [[O1, [Ha]], R3]
 
         self.available_diagrams = tuple(self.diagrams.keys())
 
@@ -162,7 +205,7 @@ class LineRatios:
         ab = self.ratios[ratio_id]
 
         return f"{ratio_id}={self.get_ratio_label_(ab, fancy = fancy)}"
-
+    
 
 class LineCollection:
 
