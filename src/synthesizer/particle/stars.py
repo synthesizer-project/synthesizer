@@ -367,8 +367,8 @@ class Stars(Particles, StarsComponent):
         grid,
         spectra_name,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -387,10 +387,10 @@ class Stars(Particles, StarsComponent):
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
             young (bool/float)
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
             old (bool/float)
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             verbose (bool)
                 Flag for verbose output.
@@ -583,8 +583,8 @@ class Stars(Particles, StarsComponent):
         grid,
         spectra_name,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -603,10 +603,10 @@ class Stars(Particles, StarsComponent):
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
             young (bool/float)
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
             old (bool/float)
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             verbose (bool)
                 Flag for verbose output. By default False.
@@ -1027,8 +1027,8 @@ class Stars(Particles, StarsComponent):
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         **kwargs,
     ):
         """
@@ -1042,11 +1042,14 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            fesc_LyA (float)
+                Fraction of Lyman-alpha emission that can escape unimpeded
+                by the ISM/IGM.
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             kwargs
                 Any keyword arguments which can be passed to
@@ -1079,8 +1082,8 @@ class Stars(Particles, StarsComponent):
     def get_particle_spectra_incident(
         self,
         grid,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -1091,11 +1094,11 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (obj):
                 Spectral grid object.
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -1131,8 +1134,8 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -1148,11 +1151,11 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -1187,8 +1190,8 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -1203,11 +1206,11 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -1242,8 +1245,8 @@ class Stars(Particles, StarsComponent):
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -1265,11 +1268,11 @@ class Stars(Particles, StarsComponent):
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
