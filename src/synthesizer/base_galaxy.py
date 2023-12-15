@@ -185,6 +185,41 @@ class BaseGalaxy:
 
         # TODO: Once implemented do this for gas and black holes too
 
+    def get_spectra_combined(self):
+        """
+        Combine all common component spectra from components onto the galaxy,
+        e.g.:
+            intrinsc = stellar_intrinsic + black_hole_intrinsic.
+
+        For any combined spectra all components with a valid spectra will be
+        combined and stored in Galaxy.spectra under the same key, but only if
+        there are instances of that spectra key on more than 1 component.
+
+        Possible combined spectra are:
+            - "total"
+            - "intrinsic"
+            - "emergent"
+
+        Note that this process is only applicable to integrated spectra.
+        """
+
+        # Get the spectra we have on the components to combine
+        spectra = {"total": [], "intrinsic": [], "emergent": []}
+        for key in spectra:
+            if self.stars is not None:
+                spectra[key].append(self.stars.spectra[key])
+            if self.black_holes is not None:
+                spectra[key].append(self.black_holes.spectra[key])
+
+        # Now combine all spectra that have more than one contributing
+        # component.
+        # Note that sum when applied to a list of spectra
+        # with overloaded __add__ methods will produce an Sed object
+        # containing the combined spectra.
+        for key, lst in spectra.items():
+            if len(lst) > 1:
+                self.spectra[key] = sum(lst)
+
     def plot_spectra(
         self,
         combined_spectra=True,
