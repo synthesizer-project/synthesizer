@@ -206,10 +206,12 @@ class BaseGalaxy:
         # Get the spectra we have on the components to combine
         spectra = {"total": [], "intrinsic": [], "emergent": []}
         for key in spectra:
-            if self.stars is not None:
+            if self.stars is not None and key in self.stars.spectra:
                 spectra[key].append(self.stars.spectra[key])
-            if self.black_holes is not None:
+            if self.black_holes is not None and key in self.black_holes.spectra:
                 spectra[key].append(self.black_holes.spectra[key])
+            if self.gas is not None and key in self.gas.spectra:
+                spectra[key].append(self.gas.spectra[key])
 
         # Now combine all spectra that have more than one contributing
         # component.
