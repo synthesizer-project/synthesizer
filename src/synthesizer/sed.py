@@ -249,6 +249,9 @@ class Sed:
                 If wavelength arrays or lnu arrays are incompatible an error
                 is raised.
         """
+        # Handle the int case explictly which is triggered by the use of sum
+        if isinstance(second_sed, int) and second_sed == 0:
+            return self
         return self.__add__(second_sed)
 
     def __mul__(self, scaling):
