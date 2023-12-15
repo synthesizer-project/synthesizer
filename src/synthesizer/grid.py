@@ -445,7 +445,7 @@ class Grid:
 
         TODO: This could be moved to utils?
 
-        Arguments:
+        Args:
             value (float/unyt_quantity)
                 The target value.
 
@@ -475,7 +475,7 @@ class Grid:
         """
         Function to identify the nearest grid point for a tuple of values.
 
-        Arguments:
+        Args:
             values (tuple)
                 The values for which we want the grid point. These have to be
                 in the same order as the axes.
@@ -496,7 +496,7 @@ class Grid:
         """
         Function for creating an Sed object for a specific grid point.
 
-        Arguments:
+        Args:
             grid_point (tuple)
                 A tuple of integers specifying the closest grid point.
             spectra_id (str)
@@ -528,7 +528,7 @@ class Grid:
         """
         Function for creating a Line object for a given line_id and grid_point.
 
-        Arguments:
+        Args:
             grid_point (tuple)
                 A tuple of integers specifying the closest grid point.
             line_id (str)
@@ -571,7 +571,7 @@ class Grid:
         """
         Function a LineCollection of multiple lines.
 
-        Arguments:
+        Args:
             grid_point (tuple)
                 A tuple of the grid point indices.
             line_ids (list)

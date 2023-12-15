@@ -34,7 +34,24 @@ class IncorrectUnits(Exception):
     def __str__(self):
         if self.message:
             return "{0} ".format(self.message)
-        return "Inconsistent or no units"
+        return "Inconsistent units"
+
+
+class MissingUnits(Exception):
+    """
+    Generic exception class for when expected units aren't provided.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Units are missing"
 
 
 class InconsistentParameter(Exception):
