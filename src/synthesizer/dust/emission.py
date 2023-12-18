@@ -3,6 +3,7 @@ from scipy import integrate
 from unyt import h, c, kb, um, erg, s, Hz
 from unyt import accepts
 from unyt.dimensions import temperature as temperature_dim
+from unyt.dimensions import mass as mass_dim
 from unyt import Angstrom, unyt_quantity, unyt_array
 
 from synthesizer import exceptions
@@ -291,3 +292,76 @@ class Casey12(EmissionBase):
             )
 
         return _power_law(c / nu) + _blackbody(c / nu)
+
+
+class Astrodust(EmissionBase):
+    """
+    A class to generate a dust emission spectrum using either:
+    (i) Draine and Li model (2007) --
+    https://ui.adsabs.harvard.edu/abs/2007ApJ...657..810D/abstract
+    (ii) Astrodust + PAH model (2023) -- 
+    https://ui.adsabs.harvard.edu/abs/2023ApJ...948...55H/abstract
+
+    Attributes:
+        Mdust (float)
+            The mass of dust in the galaxy (Msun).
+
+        Ldust (float)
+            The dust luminosity of the galaxy (integrated from 0 to inf),
+            obtained using energy balance here.
+
+        gamma (float)
+            Fraction of the dust mass that is associated with the
+            power-law part of the starlight intensity distribution.
+
+        qpah (float)
+            Fraction of dust mass in the form of PAHs [good value=2.5%]
+
+        Umin (float)
+            Radiation field heating majority of the dust.
+
+        Umax (float)
+            Maximum radiation field heating the dust.
+            Has less effect where the maximum is on the spectrum.
+            [chosen default value=50.]
+
+        alpha (float)
+            The power law normalisation [good value = 2.].
+
+        P0 (float)
+            Power absorbed per unit dust mass in a radiation field
+            with U = 1
+
+    """
+
+    @accepts(Mdust=mass_dim)
+    def __init__(self, Mdust, Ldust=None, gamma=None, qpah=0.025, 
+                 Umin=None, Umax=50., alpha=2., P0=1/125.):
+
+        self.Mdust = Mdust
+        self.Ldust = Ldust
+        self.gamma = gamma
+        self.qpah = qpah
+        self.Umin = Umin
+        self.Umax = Umax
+        self.alpha = alpha
+        self.P0 = P0
+
+
+    def u_average_magdis12(self):
+        """
+        P0 value obtained from stacking analysis in Magdis+12
+        For alpha=2.0
+        https://ui.adsabs.harvard.edu/abs/2012ApJ...760....6M/abstract
+        """
+
+        return self.Ldust / (self.P0 * self.Mdust)
+    
+    def u_average(self):
+        """
+        For fixed alpha=2.0
+        """
+
+        return ((1-self.gamma) * self.Umin 
+                + self.gamma * np.log(self.Umax/self.Umin)
+                / (self.Umin**(-1) - self.Umax**(-1)))
