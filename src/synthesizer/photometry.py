@@ -81,6 +81,84 @@ class PhotometryCollection:
         # Perform the look up
         return self._look_up[filter_code]
 
+    def __str__(self):
+        """
+        Allow for a summary to be printed.
+        """
+
+        # Determine the width of each column
+        column_widths = [
+            max(len(str(header)), len(str(phot))) + 2
+            for header, phot in self._look_up.items()
+        ]
+
+        # How many characters make up the table?
+        tot_width = sum(column_widths) + len(column_widths)
+
+        # Create the table header
+        header_row = "|".join(
+            f"{header.center(width)}"
+            for header, width in zip(self.filter_codes, column_widths)
+        )
+        separator_row = "|".join("-" * width for width in column_widths)
+
+        # Create the photometry row
+        data_row = "|".join(
+            f"{str(self[key]).center(width)}"
+            for key, width in zip(self.filter_codes, column_widths)
+        )
+
+        # Combine everything into the final table
+        if self.rest_frame:
+            table = "REST FRAME PHOTOMETRY".center(tot_width) + "\n"
+        else:
+            table = "OBSERVED PHOTOMETRY".center(tot_width) + "\n"
+        table += f"{header_row}\n{separator_row}\n"
+        table += data_row
+
+    def __str__(self):
+        """
+        Allow for a summary to be printed.
+        """
+
+        # Determine the width of each column
+        column_widths = [
+            max(
+                len(str(header)),
+                len(str(format(phot.value, ".2e")) + " " + str(phot.units)),
+            )
+            + 2
+            for header, phot in self._look_up.items()
+        ]
+
+        # How many characters make up the table?
+        tot_width = sum(column_widths) + len(column_widths)
+
+        # Create the table header
+        header_row = "|".join(
+            f"{header.center(width)}"
+            for header, width in zip(self.filter_codes, column_widths)
+        )
+        separator_row = "|".join("-" * width for width in column_widths)
+
+        # Create the photometry row
+        data_row = "|".join(
+            f"{(str(format(self[key].value, '.2e')) + ' ' + str(self[key].units)).center(width)}"
+            for key, width in zip(self.filter_codes, column_widths)
+        )
+
+        # Create the centered title with "=" on either side
+        if self.rest_frame:
+            title = f"{'= REST FRAME PHOTOMETRY ='.center(tot_width, '=')}"
+        else:
+            title = f"{'= OBSERVED PHOTOMETRY ='.center(tot_width, '=')}"
+
+        # Combine everything into the final table
+        table = f"{title}\n{header_row}\n{separator_row}\n"
+        table += data_row
+
+        return table
+
     def plot_photometry(
         self,
         fig=None,
