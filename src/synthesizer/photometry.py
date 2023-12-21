@@ -1,4 +1,9 @@
-"""
+""" A module for working with photometry derived from an Sed.
+
+This module contains a single class definition which acts as a container
+for photometry data. It should never be directly instantiated, instead
+internal methods that calculate photometry (e.g. Sed.get_broadband_luminosities)
+return an instance of this class.
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,7 +12,30 @@ from synthesizer.units import Quantity
 
 
 class PhotometryCollection:
-    """ """
+    """
+    Represents a collection of photometry values and provides unit
+    association and plotting functionality.
+
+    This is a utility class returned by functions else where. Although not
+    an issue if it is this should never really be directly instantiated.
+
+    Attributes:
+        rest_photometry (Quantity):
+            Quantity instance representing photometry data in the rest frame.
+        obs_photometry (Quantity):
+            Quantity instance representing photometry data in the
+            observer frame.
+        filters (FilterCollection):
+            The FilterCollection used to produce the photometry.
+        filter_codes (list):
+            List of filter codes.
+        _look_up (dict):
+            A dictionary for easy access to photometry values using
+            filter codes.
+        rest_frame (bool):
+            A flag indicating whether the photometry is in the rest frame
+            (True) or observer frame (False).
+    """
 
     # Define quantities (there has to be one for rest and observer frame)
     rest_photometry = Quantity()
@@ -65,7 +93,7 @@ class PhotometryCollection:
     def __getitem__(self, filter_code):
         """
         Enable dictionary key look up syntax to extract specific photometry,
-        e.g. Galaxy.broadband_luminosities["JWST/NIRCam.F150W"].
+        e.g. Sed.broadband_luminosities["JWST/NIRCam.F150W"].
 
         NOTE: this will always return photometry with units. Unitless
         photometry is accessible in array form via self._rest_photometry
@@ -84,41 +112,9 @@ class PhotometryCollection:
     def __str__(self):
         """
         Allow for a summary to be printed.
-        """
 
-        # Determine the width of each column
-        column_widths = [
-            max(len(str(header)), len(str(phot))) + 2
-            for header, phot in self._look_up.items()
-        ]
-
-        # How many characters make up the table?
-        tot_width = sum(column_widths) + len(column_widths)
-
-        # Create the table header
-        header_row = "|".join(
-            f"{header.center(width)}"
-            for header, width in zip(self.filter_codes, column_widths)
-        )
-        separator_row = "|".join("-" * width for width in column_widths)
-
-        # Create the photometry row
-        data_row = "|".join(
-            f"{str(self[key]).center(width)}"
-            for key, width in zip(self.filter_codes, column_widths)
-        )
-
-        # Combine everything into the final table
-        if self.rest_frame:
-            table = "REST FRAME PHOTOMETRY".center(tot_width) + "\n"
-        else:
-            table = "OBSERVED PHOTOMETRY".center(tot_width) + "\n"
-        table += f"{header_row}\n{separator_row}\n"
-        table += data_row
-
-    def __str__(self):
-        """
-        Allow for a summary to be printed.
+        Returns:
+            str: A formatted string representation of the PhotometryCollection.
         """
 
         # Define the headers
@@ -179,6 +175,28 @@ class PhotometryCollection:
     ):
         """
         Plot the photometry alongside the filter curves.
+
+        Args:
+            fig (matplotlib.figure.Figure, optional):
+                A pre-existing Matplotlib figure. If None, a new figure will
+                be created.
+            ax (matplotlib.axes._axes.Axes, optional):
+                A pre-existing Matplotlib axes. If None, new axes will be
+                created.
+            show (bool, optional):
+                If True, the plot will be displayed.
+            ylimits (tuple, optional):
+                Tuple specifying the y-axis limits for the plot.
+            xlimits (tuple, optional):
+                Tuple specifying the x-axis limits for the plot.
+            marker (str, optional):
+                Marker style for the photometry data points.
+            figsize (tuple, optional):
+                Tuple specifying the size of the figure.
+
+        Returns:
+            tuple:
+                The Matplotlib figure and axes used for the plot.
         """
         # If we don't already have a figure, make one
         if fig is None:
