@@ -73,9 +73,11 @@ class PhotometryCollection:
         if rest_frame:
             self.rest_photometry = photometry
             self.obs_photometry = None
+            self.photometry = self.rest_photometry
         else:
             self.obs_photometry = photometry
             self.rest_photometry = None
+            self.photometry = self.obs_photometry
 
         # Construct a dict for the look up, importantly we here store
         # the values in photometry not _photometry meaning they have units.
@@ -83,7 +85,7 @@ class PhotometryCollection:
             f: val
             for f, val in zip(
                 self.filter_codes,
-                self.rest_photometry if rest_frame else self.obs_photometry,
+                self.photometry,
             )
         }
 
