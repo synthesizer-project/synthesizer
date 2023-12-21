@@ -121,31 +121,36 @@ class PhotometryCollection:
         Allow for a summary to be printed.
         """
 
+        # Define the headers
+        headers = [
+            f"{f.filter_code} (\u03BB = {f.pivwv().value:.2e} {str(f.lam.units)})"
+            for f in self.filters
+        ]
+
         # Determine the width of each column
-        column_widths = [
+        widths = [
             max(
-                len(str(header)),
+                len(header),
                 len(str(format(phot.value, ".2e")) + " " + str(phot.units)),
             )
             + 2
-            for header, phot in self._look_up.items()
+            for header, phot in zip(headers, self._look_up.values())
         ]
 
         # How many characters make up the table?
-        tot_width = sum(column_widths) + len(column_widths)
+        tot_width = sum(widths) + len(widths) + 1
 
         # Create the table header
-        header_row = "|".join(
-            f"{header.center(width)}"
-            for header, width in zip(self.filter_codes, column_widths)
+        head = "|".join(
+            f"{header.center(width)}" for header, width in zip(headers, widths)
         )
-        separator_row = "|".join("-" * width for width in column_widths)
+        sep = "|".join("-" * width for width in widths)
 
         # Create the photometry row
-        data_row = "|".join(
+        phot = "|".join(
             f"{str(format(self[key].value, '.2e'))} "
             f"{str(self[key].units)}".center(width)
-            for key, width in zip(self.filter_codes, column_widths)
+            for key, width in zip(self.filter_codes, widths)
         )
 
         # Create the centered title with "=" on either side
@@ -155,7 +160,10 @@ class PhotometryCollection:
             title = f"{'= OBSERVED PHOTOMETRY ='.center(tot_width, '=')}"
 
         # Combine everything into the final table
-        table = f"{title}\n{header_row}\n{separator_row}\n{data_row}"
+        table = (
+            f"{title}\n-{sep.replace('|', '-')}-\n|{head}|"
+            f"\n|{sep}|\n|{phot}|\n-{sep.replace('|', '-')}-"
+        )
 
         return table
 
