@@ -121,9 +121,9 @@ kernel_data = sph_kernel.get_kernel()
 tau_v = galaxy.calculate_los_tau_v(kappa=0.07, kernel=kernel_data)
 
 # Get the attenuated spectra
-galaxy.stars.particle_spectra[
-    "attenuated"
-] = galaxy.stars.particle_spectra.apply_attenutation(tau_v)
+galaxy.stars.particle_spectra["attenuated"] = galaxy.stars.particle_spectra[
+    "incident"
+].apply_attenutation(tau_v)
 
 # Integrate the particle spectra
 galaxy.integrate_particle_spectra()
