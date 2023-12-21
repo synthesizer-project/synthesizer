@@ -836,7 +836,7 @@ class Sed:
 
             # Apply the filter transmission curve and store the resulting
             # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu) * self.lnu.units
+            bb_lum = f.apply_filter(self._lnu, nu=self._nu)
             broadband_luminosities[f.filter_code] = bb_lum
 
         # Create the photometry collection and store it in the object
@@ -888,7 +888,7 @@ class Sed:
                     )
 
             # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(self._fnu, nu=self._obsnu) * nJy
+            bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
             broadband_fluxes[f.filter_code] = bb_flux
 
         # Create the photometry collection and store it in the object
