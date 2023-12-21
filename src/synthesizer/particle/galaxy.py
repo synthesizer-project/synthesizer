@@ -356,7 +356,7 @@ class Galaxy(BaseGalaxy):
         # Handle stellar spectra
         if self.stars is not None:
             # Loop over stellar particle spectra
-            for key, sed in self.stars.particle_spectra:
+            for key, sed in self.stars.particle_spectra.items():
                 self.stars.spectra[key] = Sed(
                     sed.lam,
                     np.sum(sed._lnu, axis=0),
@@ -365,7 +365,7 @@ class Galaxy(BaseGalaxy):
         # Handle black hole spectra
         if self.black_holes is not None:
             # Loop over stellar particle spectra
-            for key, sed in self.black_holes.particle_spectra:
+            for key, sed in self.black_holes.particle_spectra.items():
                 self.black_holes.spectra[key] = Sed(
                     sed.lam,
                     np.sum(sed._lnu, axis=0),
