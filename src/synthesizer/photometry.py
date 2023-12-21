@@ -109,26 +109,93 @@ class PhotometryCollection:
             ax = fig.add_axes((left, bottom, width, height))
 
             # Set the scale to log log
-            ax.loglog()
+            ax.semilogy()
 
         # Add a filter axis
         filter_ax = ax.twinx()
         filter_ax.set_ylim(0, None)
 
         # PLot each filter curve
+        max_t = 0
         for f in self.filters:
             filter_ax.plot(f.lam, f.t)
+            if np.max(f.t) > max_t:
+                max_t = np.max(f.t)
+
+        # Get the photometry
+        photometry = self.rest_photometry if self.rest_frame else self.obs_photometry
 
         # Plot the photometry
-        for f, phot in zip(self.filters, self._photometry):
+        for f, phot in zip(self.filters, photometry.value):
             pivwv = f.pivwv()
             fwhm = f.fwhm()
-            ax.errorbar(pivwv, phot, marker=marker, xerr=fwhm, linestyle=None)
+            ax.errorbar(
+                pivwv,
+                phot,
+                marker=marker,
+                xerr=fwhm,
+                linestyle=None,
+                capsize=3,
+            )
+
+        # Do we not have y limtis?
+        if len(ylimits) == 0:
+            max_phot = np.max(photometry)
+            ylimits = (
+                10 ** (np.log10(max_phot) - 5),
+                10 ** (np.log10(max_phot) * 1.1),
+            )
+
+        # Do we not have x limits?
+        if len(xlimits) == 0:
+            # Define initial xlimits
+            xlimits = [np.inf, -np.inf]
+
+            # Loop over spectra and get the total required limits
+            for f in self.filters:
+                # Derive the x limits from data above the ylimits
+                trans_mask = f.t > 0
+                lams_above = f.lam[trans_mask]
+
+                # Saftey skip if no values are above the limit
+                if lams_above.size == 0:
+                    continue
+
+                # Derive the x limits
+                x_low = 10 ** (np.log10(np.min(lams_above)) * 0.95)
+                x_up = 10 ** (np.log10(np.max(lams_above)) * 1.05)
+
+                # Update limits
+                if x_low < xlimits[0]:
+                    xlimits[0] = x_low
+                if x_up > xlimits[1]:
+                    xlimits[1] = x_up
 
         # Set the x and y lims
-        if len(xlimits) > 0:
-            ax.set_xlim(*xlimits)
-        if len(ylimits) > 0:
-            ax.set_ylim(*ylimits)
+        ax.set_xlim(*xlimits)
+        ax.set_ylim(*ylimits)
+        filter_ax.set_ylim(0, 2 * max_t)
+        filter_ax.set_xlim(*ax.get_xlim())
+
+        # Parse the units for the labels and make them pretty
+        x_units = str(self.filters[self.filter_codes[0]].lam.units)
+        y_units = str(photometry.units)
+        x_units = x_units.replace("/", r"\ / \ ").replace("*", " ")
+        y_units = y_units.replace("/", r"\ / \ ").replace("*", " ")
+
+        # Label the x axis
+        if self.rest_frame:
+            ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
+        else:
+            ax.set_xlabel(r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$")
+
+        # Label the y axis handling all possibilities
+        if self.rest_frame:
+            ax.set_ylabel(r"$L/[\mathrm{" + y_units + r"}]$")
+        else:
+            ax.set_ylabel(r"$F/[\mathrm{" + y_units + r"}]$")
+
+        # Filter axis label
+        filter_ax.set_ylabel("$T$")
 
         return fig, ax
