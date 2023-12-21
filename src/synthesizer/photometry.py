@@ -111,6 +111,30 @@ class PhotometryCollection:
         # Perform the look up
         return self._look_up[filter_code]
 
+    def keys(self):
+        """
+        Enable dict.keys() behaviour.
+        """
+        return self._look_up.keys()
+
+    def values(self):
+        """
+        Enable dict.values() behaviour.
+        """
+        return self._look_up.values()
+
+    def items(self):
+        """
+        Enables dict.items() behaviour.
+        """
+        return self._look_up.items()
+
+    def __iter__(self):
+        """
+        Enable dict iter behaviour.
+        """
+        return iter(self._look_up.items())
+
     def __str__(self):
         """
         Allow for a summary to be printed.
