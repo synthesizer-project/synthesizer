@@ -60,7 +60,7 @@ nstars = 1000
 ngas = 1000
 
 # Generate some random coordinates
-coords = CoordinateGenerator.generate_3D_gaussian(n)
+coords = CoordinateGenerator.generate_3D_gaussian(nstars)
 
 # Calculate the smoothing lengths from radii
 cent = np.mean(coords, axis=0)
@@ -80,7 +80,7 @@ stars = sample_sfhz(
     param_stars.log10metallicities,
     nstars,
     coordinates=coords,
-    current_masses=np.full(n, 10**8.7 / n),
+    current_masses=np.full(nstars, 10**8.7 / nstars),
     smoothing_lengths=rs / 2,
     redshift=1,
 )
