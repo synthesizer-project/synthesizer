@@ -23,6 +23,7 @@ from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.photometry import PhotometryCollection
 from synthesizer.utils import rebin_1d
 from synthesizer.units import Quantity
 from synthesizer.igm import Inoue14
@@ -743,31 +744,6 @@ class Sed:
 
         return beta
 
-    def get_broadband_luminosities(self, filters):
-        """
-        Calculate broadband luminosities using a FilterCollection object
-
-        Args:
-            filters (filters.FilterCollection)
-                A FilterCollection object.
-
-        Returns:
-            broadband_luminosities (dict)
-                A dictionary of rest frame broadband luminosities.
-        """
-
-        # Intialise result dictionary
-        self.broadband_luminosities = {}
-
-        # Loop over filters
-        for f in filters:
-            # Apply the filter transmission curve and store the resulting
-            # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu) * self.lnu.units
-            self.broadband_luminosities[f.filter_code] = bb_lum
-
-        return self.broadband_luminosities
-
     def get_fnu0(self):
         """
         Calculate a dummy observed frame spectral energy distribution.
@@ -827,17 +803,62 @@ class Sed:
 
         return self.fnu
 
-    def get_broadband_fluxes(self, fc, verbose=True):  # broad band flux/nJy
+    def get_broadband_luminosities(self, filters, verbose=True):
         """
         Calculate broadband luminosities using a FilterCollection object
 
         Args:
-            fc (object)
+            filters (filters.FilterCollection)
                 A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            broadband_luminosities (dict)
+                A dictionary of rest frame broadband luminosities.
+        """
+
+        # Intialise result dictionary
+        broadband_luminosities = {}
+
+        # Loop over filters
+        for f in filters:
+            # Check whether the filter transmission curve wavelength grid
+            # and the spectral grid are the same array
+            if not np.array_equal(f.lam, self.lam):
+                if verbose:
+                    print(
+                        (
+                            "WARNING: filter wavelength grid is not "
+                            "the same as the SED wavelength grid."
+                        )
+                    )
+
+            # Apply the filter transmission curve and store the resulting
+            # luminosity
+            bb_lum = f.apply_filter(self._lnu, nu=self._nu) * self.lnu.units
+            broadband_luminosities[f.filter_code] = bb_lum
+
+        # Create the photometry collection and store it in the object
+        self.broadband_luminosities = PhotometryCollection(
+            filters, rest_frame=True, **broadband_luminosities
+        )
+
+        return self.broadband_luminosities
+
+    def get_broadband_fluxes(self, filters, verbose=True):
+        """
+        Calculate broadband luminosities using a FilterCollection object
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
 
         Returns:
             (dict)
-                A dictionary of fluxes in each filter in fc.
+                A dictionary of fluxes in each filter in filters.
         """
 
         # Ensure fluxes actually exist
@@ -851,10 +872,10 @@ class Sed:
             )
 
         # Set up flux dictionary
-        self.broadband_fluxes = {}
+        broadband_fluxes = {}
 
         # Loop over filters in filter collection
-        for f in fc:
+        for f in filters:
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
             if not np.array_equal(f.lam, self.lam):
@@ -868,7 +889,12 @@ class Sed:
 
             # Calculate and store the broadband flux in this filter
             bb_flux = f.apply_filter(self._fnu, nu=self._obsnu) * nJy
-            self.broadband_fluxes[f.filter_code] = bb_flux
+            broadband_fluxes[f.filter_code] = bb_flux
+
+        # Create the photometry collection and store it in the object
+        self.broadband_fluxes = PhotometryCollection(
+            filters, rest_frame=True, **broadband_fluxes
+        )
 
         return self.broadband_fluxes
 
@@ -915,9 +941,9 @@ class Sed:
             index (float)
                Absorption feature index in units of wavelength
         """
-        
+
         # self.lnu = np.array([self.lnu, self.lnu*2])
-        
+
         # Measure the red and blue windows
         lnu_blue = self.measure_window_lnu(blue)
         lnu_red = self.measure_window_lnu(red)
@@ -925,7 +951,7 @@ class Sed:
         # Define the wavelength grid over the feature
         transmission = (self.lam > feature[0]) & (self.lam < feature[1])
         feature_lam = self.lam[transmission]
-        
+
         # Extract mean values
         mean_blue = np.mean(blue)
         mean_red = np.mean(red)
@@ -933,24 +959,23 @@ class Sed:
         # Handle different spectra shapes
         if self._spec_dims == 2:
             # Multiple spectra case
-            
+
             # Perform polyfit for the continuum fit for all spectra
-            continuum_fits = np.polyfit(
-                [mean_blue, mean_red],
-                [lnu_blue, lnu_red],
-                1
-            )
+            continuum_fits = np.polyfit([mean_blue, mean_red], [lnu_blue, lnu_red], 1)
             # Use the continuum fit to define the continuum for all spectra
             continuum = (
-                (np.column_stack(continuum_fits[0] * feature_lam.to(self.lam.units).value
-                [:, np.newaxis]) + continuum_fits[1][:, np.newaxis])
+                (
+                    np.column_stack(
+                        continuum_fits[0]
+                        * feature_lam.to(self.lam.units).value[:, np.newaxis]
+                    )
+                    + continuum_fits[1][:, np.newaxis]
+                )
             ) * self.lnu.units
 
             # Define the continuum subtracted spectrum for all SEDs
             feature_lum = self.lnu[:, transmission]
-            feature_lum_continuum_subtracted = (
-               -(feature_lum - continuum) / continuum
-            )
+            feature_lum_continuum_subtracted = -(feature_lum - continuum) / continuum
 
             # Measure index for all SEDs
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam, axis=1)
@@ -958,13 +983,14 @@ class Sed:
         else:
             # Single spectra case
 
-
             # Perform polyfit for the continuum fit
             continuum_fit = np.polyfit([mean_blue, mean_red], [lnu_blue, lnu_red], 1)
-            
+
             # Use the continuum fit to define the continuum
-            continuum = ((continuum_fit[0] * feature_lam.to(self.lam.units).value) +
-                         continuum_fit[1]) * self.lnu.units   
+            continuum = (
+                (continuum_fit[0] * feature_lam.to(self.lam.units).value)
+                + continuum_fit[1]
+            ) * self.lnu.units
 
             # Define the continuum subtracted spectrum
             feature_lum = self.lnu[transmission]
@@ -972,9 +998,8 @@ class Sed:
 
             # Measure index
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
-            
-        return index
 
+        return index
 
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
         """
