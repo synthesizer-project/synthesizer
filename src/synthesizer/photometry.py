@@ -143,7 +143,8 @@ class PhotometryCollection:
 
         # Create the photometry row
         data_row = "|".join(
-            f"{(str(format(self[key].value, '.2e')) + ' ' + str(self[key].units)).center(width)}"
+            f"{str(format(self[key].value, '.2e'))} "
+            f"{str(self[key].units)}".center(width)
             for key, width in zip(self.filter_codes, column_widths)
         )
 
@@ -154,8 +155,7 @@ class PhotometryCollection:
             title = f"{'= OBSERVED PHOTOMETRY ='.center(tot_width, '=')}"
 
         # Combine everything into the final table
-        table = f"{title}\n{header_row}\n{separator_row}\n"
-        table += data_row
+        table = f"{title}\n{header_row}\n{separator_row}\n{data_row}"
 
         return table
 
@@ -188,6 +188,9 @@ class PhotometryCollection:
 
             # Set the scale to log log
             ax.semilogy()
+
+            # Grid it... as all things should be
+            ax.grid(True)
 
         # Add a filter axis
         filter_ax = ax.twinx()
