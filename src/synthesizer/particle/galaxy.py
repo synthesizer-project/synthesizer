@@ -149,7 +149,7 @@ class Galaxy(BaseGalaxy):
         """
         Load arrays for star properties into a `Stars`  object,
         and attach to this galaxy object
-        
+
         TODO: this should be able to take a pre-existing stars object!
 
         Args:
@@ -347,6 +347,34 @@ class Galaxy(BaseGalaxy):
             np.max(gas_sml),
             force_loop,
         )
+
+    def integrate_particle_spectra(self):
+        """
+        Integrates all particle spectra on any attached components.
+        """
+
+        # Handle stellar spectra
+        if self.stars is not None:
+            # Loop over stellar particle spectra
+            for key, sed in self.stars.particle_spectra:
+                self.stars.spectra[key] = Sed(
+                    sed.lam,
+                    np.sum(sed._lnu, axis=0),
+                )
+
+        # Handle black hole spectra
+        if self.black_holes is not None:
+            # Loop over stellar particle spectra
+            for key, sed in self.black_holes.particle_spectra:
+                self.black_holes.spectra[key] = Sed(
+                    sed.lam,
+                    np.sum(sed._lnu, axis=0),
+                )
+
+        # Handle gas spectra
+        if self.gas is not None:
+            # Nothing to do here... YET
+            pass
 
     def get_line_los():
         """
