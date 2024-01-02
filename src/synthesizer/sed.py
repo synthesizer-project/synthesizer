@@ -848,7 +848,7 @@ class Sed:
 
     def get_broadband_fluxes(self, filters, verbose=True):
         """
-        Calculate broadband luminosities using a FilterCollection object
+        Calculate broadband fluxes using a FilterCollection object
 
         Args:
             filters (object)
