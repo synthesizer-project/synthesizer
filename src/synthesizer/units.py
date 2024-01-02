@@ -82,7 +82,6 @@ default_units = {
     "ages": yr,
     "accretion_rate": Msun.in_base("galactic") / yr,
     "accretion_rates": Msun.in_base("galactic") / yr,
-    "bol_luminosity": erg / s,
     "bb_temperature": K,
     "bb_temperatures": K,
     "inclination": deg,
@@ -224,8 +223,6 @@ class Units(metaclass=UnitSingleton):
 
         accretion_rate (unyt.unit_object.Unit)
             Black hole accretion rate unit.
-        bol_luminosity (unyt.unit_object.Unit)
-            Bolometric luminositiy unit.
         bolometric_luminosity (unyt.unit_object.Unit)
             Bolometric luminositiy unit.
         bolometric_luminosities (unyt.unit_object.Unit)
@@ -288,7 +285,6 @@ class Units(metaclass=UnitSingleton):
         # Luminosities
         self.luminosity = erg / s  # luminosity
         self.luminosities = erg / s
-        self.bol_luminosity = erg / s
         self.bolometric_luminosity = erg / s
         self.bolometric_luminosities = erg / s
         self.eddington_luminosity = erg / s
