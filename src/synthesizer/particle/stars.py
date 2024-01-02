@@ -711,8 +711,15 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        spec = compute_particle_seds(*args)
+        masked_spec = compute_particle_seds(*args)
 
+        # If there's no mask we're done
+        if mask is None:
+            return masked_spec
+
+        # If we have a mask we need to account for the zeroed spectra
+        spec = np.zeros((self.nstars, masked_spec.shape[-1]))
+        spec[mask] = masked_spec
         return spec
 
     def generate_particle_line(self, grid, line_id, fesc):

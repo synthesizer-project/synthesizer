@@ -100,3 +100,52 @@ def rebin_1d(arr, resample_factor, func=np.sum):
     brr = arr.reshape(rows, resample_factor)
 
     return func(brr, axis=1)
+
+
+def value_to_array(value):
+    """
+    A helper functions for converting a single value to an array holding
+    a single value.
+
+    Args:
+        value (float/unyt_quantity)
+            The value to wrapped into an array.
+
+    Returns:
+        array-like/unyt_array
+            An array containing the single value
+
+    Raises:
+        InconsistentArguments
+            If the argument is not a float or unyt_quantity.
+    """
+
+    # Just return it if we have been handed an array already or None
+    # NOTE: unyt_arrays and quantities are by definition arrays and thus
+    # return True for the isinstance below.
+    if (isinstance(value, np.ndarray) and value.size > 1) or value is None:
+        return value
+
+    if isinstance(value, float):
+        arr = np.array(
+            [
+                value,
+            ]
+        )
+
+    elif isinstance(value, unyt_quantity):
+        arr = (
+            np.array(
+                [
+                    value.value,
+                ]
+            )
+            * value.units
+        )
+    else:
+        raise exceptions.InconsistentArguments(
+            "Value to convert to an array wasn't a float or a unyt_quantity:"
+            f"type(value) = {type(value)}"
+        )
+
+    return arr
