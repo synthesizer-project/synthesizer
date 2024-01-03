@@ -143,49 +143,48 @@ class PhotometryCollection:
             str: A formatted string representation of the PhotometryCollection.
         """
 
-        # Define the headers
-        headers = [
+        # Define the filter code column
+        filters_col = [
             f"{f.filter_code} (\u03BB = {f.pivwv().value:.2e} {str(f.lam.units)})"
             for f in self.filters
         ]
 
-        # Determine the width of each column
-        widths = [
-            max(
-                len(header),
-                len(str(format(phot.value, ".2e")) + " " + str(phot.units)),
-            )
-            + 2
-            for header, phot in zip(headers, self._look_up.values())
+        # Define the photometry value column
+        value_col = [
+            f"{str(format(self[key].value, '.2e'))} {str(self[key].units)}"
+            for key in self.filter_codes
         ]
 
-        # How many characters make up the table?
-        tot_width = sum(widths) + len(widths) + 1
+        # Determine the width of each column
+        filter_width = max([len(s) for s in filters_col]) + 2
+        phot_width = max([len(s) for s in value_col]) + 2
+        widths = [filter_width, phot_width]
 
-        # Create the table header
-        head = "|".join(
-            f"{header.center(width)}" for header, width in zip(headers, widths)
-        )
+        # How many characters across is the table?
+        tot_width = filter_width + phot_width + 1
+
+        # Create the separator row
         sep = "|".join("-" * width for width in widths)
 
-        # Create the photometry row
-        phot = "|".join(
-            f"{str(format(self[key].value, '.2e'))} "
-            f"{str(self[key].units)}".center(width)
-            for key, width in zip(self.filter_codes, widths)
-        )
+        # Initialise the table
+        table = f"-{sep.replace('|', '-')}-\n"
 
-        # Create the centered title with "=" on either side
+        # Create the centered title
         if self.rest_frame:
-            title = f"{'= REST FRAME PHOTOMETRY ='.center(tot_width, '=')}"
+            title = f"|{'REST FRAME PHOTOMETRY'.center(tot_width)}|"
         else:
-            title = f"{'= OBSERVED PHOTOMETRY ='.center(tot_width, '=')}"
+            title = f"|{'OBSERVED PHOTOMETRY'.center(tot_width)}|"
+        table += f"{title}\n|{sep}|\n"
 
         # Combine everything into the final table
-        table = (
-            f"{title}\n-{sep.replace('|', '-')}-\n|{head}|"
-            f"\n|{sep}|\n|{phot}|\n-{sep.replace('|', '-')}-"
-        )
+        for filt, phot in zip(filters_col, value_col):
+            table += (
+                f"|{filt.center(filter_width)}|{phot.center(phot_width)}|\n|{sep}|\n"
+            )
+
+        # Clean up the final separator
+        table = table[: -tot_width - 3]
+        table += f"-{sep.replace('|', '-')}-\n"
 
         return table
 
