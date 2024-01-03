@@ -292,10 +292,11 @@ class Sed:
         # calculate it.
         if self.bolometric_luminosity is None:
             self.bolometric_luminosity = self.measure_bolometric_luminosity()
-
-        pstr += f"log10(Bolometric luminosity/ \
-            {self.bolometric_luminosity.units}): \
-            {np.log10(self.bolometric_luminosity):.2f} \n"
+        pstr += (
+            "log10(Bolometric luminosity/"
+            f"{str(self.bolometric_luminosity.units)}):"
+            f"{np.log10(self.bolometric_luminosity)}"
+        )
         pstr += "-" * 10
 
         return pstr
@@ -377,7 +378,7 @@ class Sed:
         """
         return np.ndim(self.lnu)
 
-    def _get_lnu_at_nu(self, nu, kind=False):
+    def _get_lnu_at_nu(self, nu, kind=False, ind=None):
         """
         A simple internal function for getting lnu at nu assuming the default
         unit system.
@@ -387,13 +388,17 @@ class Sed:
                 The frequency(s) of interest.
             kind (str)
                 Interpolation kind, see scipy.interp1d docs.
+            ind (int)
+                Row index of the spectra. Only applicable for muiti-dimensional
+                spectra.
 
         Returns:
             luminosity (float/array-like, float)
                 The luminosity (lnu) at the provided wavelength.
         """
-
-        return interp1d(self._nu, self._lnu, kind=kind)(nu)
+        if ind is None:
+            return interp1d(self._nu, self._lnu, kind=kind)(nu)
+        return interp1d(self._nu, self._lnu[ind, :], kind=kind)(nu)
 
     def get_lnu_at_nu(self, nu, kind=False):
         """
@@ -414,7 +419,7 @@ class Sed:
             self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind) * self.lnu.units
         )
 
-    def _get_lnu_at_lam(self, lam, kind=False):
+    def _get_lnu_at_lam(self, lam, kind=False, ind=None):
         """
         Return lnu without units at a provided wavelength using 1d
         interpolation.
@@ -424,13 +429,17 @@ class Sed:
                 The wavelength(s) of interest.
             kind (str)
                 Interpolation kind, see scipy.interp1d docs.
+            ind (int)
+                Row index of the spectra. Only applicable for muiti-dimensional
+                spectra.
 
         Returns:
             luminosity (float/array-like, float)
                 The luminosity (lnu) at the provided wavelength.
         """
-
-        return interp1d(self._lam, self._lnu, kind=kind)(lam)
+        if ind is None:
+            return interp1d(self._lam, self._lnu, kind=kind)(lam)
+        return interp1d(self._lam, self._lnu[ind, :], kind=kind)(lam)
 
     def get_lnu_at_lam(self, lam, kind=False):
         """
@@ -471,13 +480,52 @@ class Sed:
                 If method is an incompatible option an error is raised.
         """
 
-        # Integrate using the requested method
+        # If the method is trapz we can do any number of dimensions
         if method == "trapz":
-            bolometric_luminosity = np.trapz(self.lnu[::-1], x=self.nu[::-1])
-        elif method == "quad":
-            bolometric_luminosity = (
-                integrate.quad(self._get_lnu_at_nu, 1e12, 1e16)[0] * self.lnu.units * Hz
+            bolometric_luminosity = np.trapz(
+                np.flip(self._lnu, axis=-1),
+                x=self._nu[::-1],
+                axis=-1,
             )
+        elif method == "quad":
+            # Handle multiple dimensions explicitly
+            if self._lnu.ndim == 1:
+                # Integrate using quad
+                bolometric_luminosity = (
+                    integrate.quad(
+                        self._get_lnu_at_nu,
+                        1e12,
+                        1e16,
+                        args=("cubic"),
+                    )[0]
+                    * self.lnu.units
+                    * Hz
+                )
+
+            elif self._lnu.ndim == 2:
+                # Set up bolometric luminosity array
+                bolometric_luminosity = np.zeros(self._lnu.shape[0])
+
+                # Loop over spectra
+                for ind in range(self._lnu.shape[0]):
+                    bolometric_luminosity[ind] = (
+                        integrate.quad(
+                            self._get_lnu_at_nu,
+                            1e12,
+                            1e16,
+                            args=("cubic", ind),
+                        )[0]
+                        * self.lnu.units
+                        * Hz
+                    )
+            else:
+                raise exceptions.UnimplementedFunctionality(
+                    "Measuring bolometric luminosities for Sed.lnu.ndim > 2 not"
+                    " yet implemented! Feel free to implement and raise a "
+                    "pull request. Guidance for contributing can be found at "
+                    "https://github.com/flaresimulations/synthesizer/blob/main/"
+                    "docs/CONTRIBUTING.md"
+                )
         else:
             raise exceptions.UnrecognisedOption(
                 f"Unrecognised integration method ({method}). "
@@ -485,7 +533,7 @@ class Sed:
             )
 
         self.bolometric_luminosity = bolometric_luminosity
-        return bolometric_luminosity
+        return self.bolometric_luminosity
 
     def measure_window_luminosity(self, window, method="trapz"):
         """

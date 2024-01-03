@@ -61,7 +61,7 @@ void spectra_loop_cic(const double **grid_props, const double **part_props,
 
       /* Use the grid edge. */
       part_cell = 0;
-      frac = 1;
+      frac = 0;
 
     } else if (part_val > grid_prop[dims[dim] - 1]) {
 
@@ -200,8 +200,16 @@ void spectra_loop_ngp(const double **grid_props, const double **part_props,
           binary_search(/*low*/ 1, /*high*/ dims[dim] - 1, grid_prop, part_val);
     }
 
-    /* Set the index. */
-    part_indices[dim] = part_cell;
+    /* Set the index to the closest grid point either side of part_val. */
+    if (part_cell == 0) {
+      /* Handle the case where part_cell - 1 doesn't exist. */
+      part_indices[dim] = part_cell;
+    } else if ((part_val - grid_prop[part_cell - 1]) <
+               (grid_prop[part_cell] - part_val)) {
+      part_indices[dim] = part_cell - 1;
+    } else {
+      part_indices[dim] = part_cell;
+    }
   }
 
   /* Get the weight's index. */
