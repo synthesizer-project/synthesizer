@@ -598,7 +598,7 @@ class StarsComponent:
                 generate_lnu.
 
         Raises:
-            InconsistentArgs:
+            InconsistentArguments:
                 Errors when more than two values for tau_v and alpha is
                 passed for CF00 dust screen. In case of single dust
                 screen, raises error for multiple optical depths or dust
