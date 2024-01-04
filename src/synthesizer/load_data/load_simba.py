@@ -1,6 +1,7 @@
 """Load Simba galaxy data from a caesar file and snapshot
 
-Method for loading galaxy and particle data for the [Simba](http://simba.roe.ac.uk/) simulation
+Method for loading galaxy and particle data for
+the [Simba](http://simba.roe.ac.uk/) simulation
 """
 import h5py
 import numpy as np
@@ -50,7 +51,7 @@ def load_Simba(
 
         _metals = hf["PartType4/Metallicity"][:]
 
-        g_sfr = hf["PartType0/StarFormationRate"][:]
+        # g_sfr = hf["PartType0/StarFormationRate"][:]
         g_h2fraction = hf["PartType0/FractionH2"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/Metallicity"][:][:, 0]
