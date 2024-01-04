@@ -2,7 +2,7 @@
 Generate lines from parametric galaxy
 =====================================
 
-Example for generating a emission lines for a parametric galaxy. This example 
+Example for generating a emission lines for a parametric galaxy. This example
 will:
 - show the available lines to a grid
 - build a parametric galaxy (see make_stars and make_sed)

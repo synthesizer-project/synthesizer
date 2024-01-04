@@ -5,8 +5,7 @@ particle.Stars and parametric.Stars and contains attributes
 and methods common between them.
 """
 import numpy as np
-import matplotlib.pyplot as plt
-from unyt import Myr, Gyr, unyt_quantity
+from unyt import Myr, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
@@ -666,8 +665,8 @@ class StarsComponent:
                 alpha, (list, tuple, np.ndarray)
             ):
                 raise exceptions.InconsistentArguments(
-                    "Only singular values are supported for tau_v and alpha in "
-                    "a single dust screen situation."
+                    "Only singular values are supported for tau_v and alpha "
+                    "in a single dust screen situation."
                 )
 
         # If grid has photoinoisation outputs, use the reprocessed outputs
@@ -1027,8 +1026,8 @@ class StarsComponent:
             tau_v_BC (float)
                 The birth cloud optical depth in the V-band.
             alpha_ISM (float)
-                The slope of the ISM dust curve, (defaults to dust_curve.slope=-1,
-                Recommended: -0.7 from MAGPHYS)
+                The slope of the ISM dust curve, (defaults to
+                dust_curve.slope=-1, Recommended: -0.7 from MAGPHYS)
             alpha_BC (float)
                 The slope of the birth cloud dust curve, (defaults to
                 dust_curve.slope=-1, Recommended: -1.3 from MAGPHYS)
@@ -1126,8 +1125,8 @@ class StarsComponent:
             grid (Grid)
                 The Grid object.
             line_ids (list/str)
-                A list of line_ids or a str denoting a single line. Doublets can be
-                specified as a nested list or using a comma
+                A list of line_ids or a str denoting a single line. Doublets
+                can be specified as a nested list or using a comma
                 (e.g. 'OIII4363,OIII4959').
             fesc (float)
                 The Lyman continuum escaped fraction, the fraction of
@@ -1219,8 +1218,8 @@ class StarsComponent:
             grid (Grid)
                 The Grid object.
             line_ids (list/str)
-                A list of line_ids or a str denoting a single line. Doublets can be
-                specified as a nested list or using a comma
+                A list of line_ids or a str denoting a single line. Doublets
+                can be specified as a nested list or using a comma
                 (e.g. 'OIII4363,OIII4959').
             fesc (float)
                 The Lyman continuum escaped fraction, the fraction of

@@ -2,7 +2,8 @@
 Plot equivalent width for UV indices
 ====================================
 
-Example for generating the equivalent width for a set of UV indices from a parametric galaxy
+Example for generating the equivalent width for a set of UV indices
+from a parametric galaxy
 - build a parametric galaxy (see make_sfzh)
 - calculate equivalent width (see sed.py)
 """
@@ -13,7 +14,7 @@ import numpy as np
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr, Angstrom, unyt_array
+from unyt import Myr
 
 
 def set_index():
@@ -88,7 +89,8 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
     for i, index in enumerate(uv_index):
         grid = Grid(grids, grid_dir=grid_dir)
 
-        # --- define the parameters of the star formation and metal enrichment histories
+        # define the parameters of the star formation and metal
+        # enrichment histories
         Z = grid.metallicity
         stellar_mass = 1e8
         eqw = []

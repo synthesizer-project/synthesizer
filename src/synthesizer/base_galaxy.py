@@ -3,8 +3,6 @@
 The class described in this module should never be directly instatiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
-import numpy as np
-import matplotlib.pyplot as plt
 
 from synthesizer import exceptions
 from synthesizer.igm import Inoue14
@@ -442,8 +440,8 @@ class BaseGalaxy:
             figsize (tuple)
                 Tuple with size 2 defining the figure size.
             filters (FilterCollection)
-                If given then the photometry is computed and both the photometry
-                and filter curves are plotted
+                If given then the photometry is computed and both the
+                photometry and filter curves are plotted
             quantity_to_plot (string)
                 The sed property to plot. Can be "lnu", "luminosity" or "llam"
                 for rest frame spectra or "fnu", "flam" or "flux" for observed

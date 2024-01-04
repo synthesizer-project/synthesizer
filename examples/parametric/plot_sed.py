@@ -2,7 +2,7 @@
 Generate parametric galaxy SED
 ===============================
 
-Example for generating the rest-frame spectrum for a parametric galaxy 
+Example for generating the rest-frame spectrum for a parametric galaxy
 including photometry. This example will:
 - build a parametric galaxy (see make_sfzh)
 - calculate spectral luminosity density

@@ -1,3 +1,5 @@
+"""Module containing dust emission functionality
+"""
 import numpy as np
 from scipy import integrate
 from unyt import h, c, kb, um, erg, s, Hz
@@ -68,7 +70,6 @@ class EmissionBase:
         else:
             lam = _lam * Angstrom
 
-        # lnu = (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
         lnu = (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
 
         sed = Sed(lam=lam, lnu=lnu)

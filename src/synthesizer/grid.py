@@ -315,8 +315,8 @@ class Grid:
                     self.lam = hf["spectra/wavelength"][:]
                     self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
 
-            # If a full cloudy grid is available calculate some other spectra for
-            # convenience.
+            # If a full cloudy grid is available calculate some
+            # other spectra for convenience.
             if "linecont" in self.spectra.keys():
                 self.spectra["total"] = (
                     self.spectra["transmitted"] + self.spectra["nebular"]
@@ -373,7 +373,8 @@ class Grid:
             # Save list of available lines
             self.available_lines = list(self.lines.keys())
 
-        # Has a new wavelength grid been passed to interpolate the spectra onto?
+        # Has a new wavelength grid been passed to interpolate
+        # the spectra onto?
         if new_lam is not None:
             # Double check we aren't being asked to do something impossible.
             if not read_spectra:
@@ -727,7 +728,7 @@ class Grid:
         cax.xaxis.tick_top()
         cax.xaxis.set_label_position("top")
         cax.set_xlabel(
-            r"$\rm log_{10}(\dot{n}_{" + ion + "}/s^{-1}\ M_{\odot}^{-1})$"
+            r"$\rm log_{10}(\dot{n}_{" + ion + "}/s^{-1}\\ M_{\\odot}^{-1})$"
         )
         cax.set_yticks([])
 
@@ -736,7 +737,7 @@ class Grid:
         ax.minorticks_off()
 
         # Set labels
-        ax.set_xlabel("$\log_{10}(\mathrm{age}/\mathrm{yr})$")
+        ax.set_xlabel("$\\log_{10}(\\mathrm{age}/\\mathrm{yr})$")
         ax.set_ylabel("$Z$")
 
         return fig, ax
