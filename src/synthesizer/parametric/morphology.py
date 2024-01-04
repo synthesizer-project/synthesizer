@@ -37,7 +37,11 @@ class MorphologyBase:
 
         plt.figure()
         plt.imshow(
-            np.log10(img), origin="lower", interpolation="nearest", vmin=-1, vmax=2
+            np.log10(img),
+            origin="lower",
+            interpolation="nearest",
+            vmin=-1,
+            vmax=2,
         )
         plt.show()
 
@@ -249,7 +253,9 @@ class PointSource(MorphologyBase):
                     "The units of offset must have length or angle dimensions"
                 )
         else:
-            raise exceptions.MissingUnits("The offset must be provided with units")
+            raise exceptions.MissingUnits(
+                "The offset must be provided with units"
+            )
 
         # Associate the cosmology and redshift to this object
         self.cosmo = cosmo

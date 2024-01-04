@@ -127,7 +127,9 @@ for n in [10, 100]:  # , 1000, 10000]:
 
         # Calculate the tau_vs
         start = time.time()
-        tau_v = galaxy.calculate_los_tau_v(kappa=0.07, kernel=kernel, force_loop=1)
+        tau_v = galaxy.calculate_los_tau_v(
+            kappa=0.07, kernel=kernel, force_loop=1
+        )
         loop_time = time.time() - start
         loop_sum = np.sum(tau_v)
 
@@ -150,10 +152,17 @@ for n in [10, 100]:  # , 1000, 10000]:
             "LOS calculation with loop took %.4f seconds for nstar=%d and ngas=%d"
             % (loop_time, n, ngas)
         )
-        print("Ratio in wallclock: Time_loop/Time_tree=%.4f" % (loop_time / tree_time))
+        print(
+            "Ratio in wallclock: Time_loop/Time_tree=%.4f"
+            % (loop_time / tree_time)
+        )
         print(
             "Tree gave=%.2f Loop gave=%.2f Normalised residual=%.4f%%"
-            % (tree_sum, loop_sum, np.abs(tree_sum - loop_sum) / loop_sum * 100)
+            % (
+                tree_sum,
+                loop_sum,
+                np.abs(tree_sum - loop_sum) / loop_sum * 100,
+            )
         )
 
     xs = np.array(xs)

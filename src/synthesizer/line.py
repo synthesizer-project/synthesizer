@@ -46,7 +46,21 @@ def get_roman_numeral(number):
     """
 
     num = [1, 4, 5, 9, 10, 40, 50, 90, 100, 400, 500, 900, 1000]
-    sym = ["I", "IV", "V", "IX", "X", "XL", "L", "XC", "C", "CD", "D", "CM", "M"]
+    sym = [
+        "I",
+        "IV",
+        "V",
+        "IX",
+        "X",
+        "XL",
+        "L",
+        "XC",
+        "C",
+        "CD",
+        "D",
+        "CM",
+        "M",
+    ]
     i = 12
 
     roman = ""
@@ -80,13 +94,13 @@ def get_fancy_line_id(id):
 
 def get_bpt_kewley01(logNII_Ha):
     """BPT-NII demarcations from Kewley+2001
-    
+
     Kewley+03: https://arxiv.org/abs/astro-ph/0106324
     Demarcation defined by:
         log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19
-    
+
     Args:
-        logNII_Ha (array) 
+        logNII_Ha (array)
             Array of log([NII]/Halpha) values to give the
             SF-AGN demarcation line
 
@@ -95,7 +109,7 @@ def get_bpt_kewley01(logNII_Ha):
             Corresponding log([OIII]/Hb) ratio array
     """
 
-    return 0.61/(logNII_Ha-0.47) + 1.19
+    return 0.61 / (logNII_Ha - 0.47) + 1.19
 
 
 def get_bpt_kauffman03(logNII_Ha):
@@ -103,8 +117,8 @@ def get_bpt_kauffman03(logNII_Ha):
 
     Kauffman+03: https://arxiv.org/abs/astro-ph/0304239
     Demarcation defined by:
-        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3 
-    
+        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3
+
      Args:
         logNII_Ha (array)
             Array of log([NII]/Halpha) values to give the
@@ -115,7 +129,7 @@ def get_bpt_kauffman03(logNII_Ha):
             Corresponding log([OIII]/Hb) ratio array
     """
 
-    return 0.61/(logNII_Ha-0.05) + 1.3
+    return 0.61 / (logNII_Ha - 0.05) + 1.3
 
 
 class LineRatios:
@@ -142,7 +156,10 @@ class LineRatios:
         # for dust free
         self.ratios["BalmerDecrement"] = [[Ha], [Hb]]
         self.ratios["N2"] = [["N 2 6583.45A"], [Ha]]  #  add reference
-        self.ratios["S2"] =S2 = [["S 2 6730.82A", "S 2 6716.44A"], [Ha]]  #  add reference
+        self.ratios["S2"] = S2 = [
+            ["S 2 6730.82A", "S 2 6716.44A"],
+            [Ha],
+        ]  #  add reference
         self.ratios["O1"] = O1 = [["O 1 6300.30A"], [Ha]]  #  add reference
         self.ratios["R2"] = [[O2b], [Hb]]  #  add reference
         self.ratios["R3"] = R3 = [[O3r], [Hb]]  #  add reference
@@ -154,9 +171,12 @@ class LineRatios:
 
         self.diagrams = {}
         self.diagrams["OHNO"] = [R3, [["NE 3 3868.76A"], O2]]  #  add reference
-        self.diagrams["BPT-NII"] = [[["N 2 6583.45A"], [Ha]], R3]  #  add reference
-        self.diagrams['VO78-SII'] = [[S2, [Ha]], R3]
-        self.diagrams['VO78-OI'] = [[O1, [Ha]], R3]
+        self.diagrams["BPT-NII"] = [
+            [["N 2 6583.45A"], [Ha]],
+            R3,
+        ]  #  add reference
+        self.diagrams["VO78-SII"] = [[S2, [Ha]], R3]
+        self.diagrams["VO78-OI"] = [[O1, [Ha]], R3]
 
         self.available_diagrams = tuple(self.diagrams.keys())
 
@@ -203,7 +223,7 @@ class LineRatios:
         ab = self.ratios[ratio_id]
 
         return f"{ratio_id}={self.get_ratio_label_(ab, fancy = fancy)}"
-    
+
 
 class LineCollection:
 
@@ -499,7 +519,9 @@ class Line:
             )
 
         else:
-            raise exceptions.InconsistentAddition("Wavelength grids must be identical")
+            raise exceptions.InconsistentAddition(
+                "Wavelength grids must be identical"
+            )
 
     def get_flux(self, cosmo, z):
         """Calculate the line flux in units of erg/s/cm2

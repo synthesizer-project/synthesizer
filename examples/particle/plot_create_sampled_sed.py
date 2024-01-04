@@ -32,7 +32,9 @@ metal_dist = ZDist.DeltaConstant(**Z_p)
 
 sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation
-sfzh = ParametricStars(log10ages, metallicities, sf_hist=sfh, metal_dist=metal_dist)
+sfzh = ParametricStars(
+    log10ages, metallicities, sf_hist=sfh, metal_dist=metal_dist
+)
 print(sfzh)
 # sfzh.plot()
 

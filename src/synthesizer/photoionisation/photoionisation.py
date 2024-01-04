@@ -39,7 +39,7 @@ def calculate_Q_from_U(U_avg, n_h):
     Calcualte Q for a given U assuming a n_h
 
     Args:
-        U (float) 
+        U (float)
             Ionisation parameter
         n_h (float)
             Hyodrogen density (units: cm^-3)
@@ -62,7 +62,7 @@ def calculate_U_from_Q(Q_avg, n_h=100):
     Calcualte the ionisation parameter for given Q assuming a n_h
 
     Args:
-        Q (float) 
+        Q (float)
             Ionising photon luminosity (units: s^-1)
         n_h (float)
             Hyodrogen density (units: cm^-3)
