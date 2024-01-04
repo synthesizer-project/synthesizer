@@ -1371,6 +1371,45 @@ class Stars(Particles, StarsComponent):
 
         return reprocessed
 
+    def get_particle_spectra_dust(self, emissionmodel):
+        """
+        Calculate the dust emission spectra for each particle.
+
+        This uses the attenuated and intrinsic spectra (which must already have
+        been generated) and an emission model defined in the dust module.
+
+        Args:
+            emissionmodel (synthesizer.dust.emission.*)
+                The emission model to use for spectra generation.
+
+        Returns:
+            Sed
+                A Sed object containing the dust attenuated spectra
+        """
+        # Use wavelength grid from attenuated spectra
+        lam = self.particle_spectra["emergent"].lam
+
+        # Calculate the bolometric dust lunminosity as the difference between
+        # the intrinsic and attenuated
+        dust_bolometric_luminosity = (
+            self.particle_spectra["intrinsic"].measure_bolometric_luminosity()
+            - self.particle_spectra["emergent"].measure_bolometric_luminosity()
+        )
+
+        # Get the spectrum and normalise it properly
+        lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(lam)
+
+        # Create new Sed object containing dust spectra
+        sed = Sed(lam, lnu=lnu)
+
+        # Associate that with the component's spectra dictionary
+        self.particle_spectra["dust"] = sed
+        self.particle_spectra["total"] = (
+            self.particle_spectra["dust"] + self.particle_spectra["emergent"]
+        )
+
+        return sed
+
     def get_particle_line_intrinsic(self, grid, line_ids, fesc=0.0):
         """
         Calculates the intrinsic properties (luminosity, continuum, EW)
