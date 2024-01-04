@@ -45,41 +45,37 @@ with h5py.File("camels_snap.hdf5", "w") as hf:
 
     hf.create_dataset(
         "PartType4/GFM_StellarFormationTime",
-        data=form_time[lens4[0]:lens4[-1]]
+        data=form_time[lens4[0] : lens4[-1]],
     )
     hf.create_dataset(
-        "PartType4/Coordinates", data=coods[lens4[0]:lens4[-1], :]
+        "PartType4/Coordinates", data=coods[lens4[0] : lens4[-1], :]
+    )
+    hf.create_dataset("PartType4/Masses", data=masses[lens4[0] : lens4[-1]])
+    hf.create_dataset(
+        "PartType4/GFM_InitialMass", data=imasses[lens4[0] : lens4[-1]]
     )
     hf.create_dataset(
-        "PartType4/Masses", data=masses[lens4[0]:lens4[-1]]
+        "PartType4/GFM_Metals", data=_metals[lens4[0] : lens4[-1]]
     )
     hf.create_dataset(
-        "PartType4/GFM_InitialMass", data=imasses[lens4[0]:lens4[-1]]
+        "PartType4/GFM_Metallicity", data=metallicity[lens4[0] : lens4[-1]]
     )
     hf.create_dataset(
-        "PartType4/GFM_Metals", data=_metals[lens4[0]:lens4[-1]]
-    )
-    hf.create_dataset(
-        "PartType4/GFM_Metallicity", data=metallicity[lens4[0]:lens4[-1]]
-    )
-    hf.create_dataset(
-        "PartType4/SubfindHsml", data=hsmls[lens4[0]:lens4[-1]]
+        "PartType4/SubfindHsml", data=hsmls[lens4[0] : lens4[-1]]
     )
 
     hf.create_dataset(
-        "PartType0/StarFormationRate", data=g_sfr[lens0[0]:lens0[-1]]
+        "PartType0/StarFormationRate", data=g_sfr[lens0[0] : lens0[-1]]
+    )
+    hf.create_dataset("PartType0/Masses", data=g_masses[lens0[0] : lens0[-1]])
+    hf.create_dataset(
+        "PartType0/GFM_Metallicity", data=g_metals[lens0[0] : lens0[-1]]
     )
     hf.create_dataset(
-        "PartType0/Masses", data=g_masses[lens0[0]:lens0[-1]]
+        "PartType0/Coordinates", data=g_coods[lens0[0] : lens0[-1], :]
     )
     hf.create_dataset(
-        "PartType0/GFM_Metallicity", data=g_metals[lens0[0]:lens0[-1]]
-    )
-    hf.create_dataset(
-        "PartType0/Coordinates", data=g_coods[lens0[0]:lens0[-1], :]
-    )
-    hf.create_dataset(
-        "PartType0/SubfindHsml", data=g_hsml[lens0[0]:lens0[-1]]
+        "PartType0/SubfindHsml", data=g_hsml[lens0[0] : lens0[-1]]
     )
 
     hf["Header"].attrs["Time"] = scale_factor
@@ -88,5 +84,6 @@ with h5py.File("camels_snap.hdf5", "w") as hf:
 
 with h5py.File("camels_subhalo.hdf5", "w") as hf:
     hf.require_group("Subhalo")
-    hf.create_dataset("Subhalo/SubhaloLenType",
-                      data=lens[ignore_N:(ignore_N + N), :])
+    hf.create_dataset(
+        "Subhalo/SubhaloLenType", data=lens[ignore_N : (ignore_N + N), :]
+    )

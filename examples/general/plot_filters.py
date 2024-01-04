@@ -15,7 +15,7 @@ filt = Filter("JWST/NIRCam.F200W", new_lam=lams)
 
 # And define a fake transmission curve.
 trans = np.zeros(lams.size)
-trans[int(lams.size / 4):int(lams.size / 2)] = 1
+trans[int(lams.size / 4) : int(lams.size / 2)] = 1
 
 # You can either define a FilterCollection from a single filter type
 fs = [f"JWST/NIRCam.{f}" for f in ["F070W", "F444W"]]

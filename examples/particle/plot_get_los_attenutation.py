@@ -70,9 +70,9 @@ for n in [10, 100]:  # , 1000, 10000]:
         # Calculate the smoothing lengths from radii
         cent = np.mean(coords, axis=0)
         rs = np.sqrt(
-            (coords[:, 0] - cent[0]) ** 2 +
-            (coords[:, 1] - cent[1]) ** 2 +
-            (coords[:, 2] - cent[2]) ** 2
+            (coords[:, 0] - cent[0]) ** 2
+            + (coords[:, 1] - cent[1]) ** 2
+            + (coords[:, 2] - cent[2]) ** 2
         )
         rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
 
@@ -98,9 +98,9 @@ for n in [10, 100]:  # , 1000, 10000]:
         # Calculate the smoothing lengths from radii
         cent = np.mean(coords, axis=0)
         rs = np.sqrt(
-            (coords[:, 0] - cent[0]) ** 2 +
-            (coords[:, 1] - cent[1]) ** 2 +
-            (coords[:, 2] - cent[2]) ** 2
+            (coords[:, 0] - cent[0]) ** 2
+            + (coords[:, 1] - cent[1]) ** 2
+            + (coords[:, 2] - cent[2]) ** 2
         )
         rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
 
@@ -189,8 +189,7 @@ for n in [10, 100]:  # , 1000, 10000]:
     ax.plot(xs, precision, label="Loop / Tree")
 
     ax.set_ylabel(
-        r"$|\tau_{V, tree} - \tau_{V, loop}|"
-        r" / \tau_{V, loop}$ (%)"
+        r"$|\tau_{V, tree} - \tau_{V, loop}|" r" / \tau_{V, loop}$ (%)"
     )
     ax.set_xlabel("$N_\\star N_\\mathrm{gas}$")
 

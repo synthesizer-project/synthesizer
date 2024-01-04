@@ -61,8 +61,8 @@ class ScalingFunctions:
             scaled_metallicity = metallicity / dopita_solar_metallicity
 
             abundance = np.log10(
-                1.1e-5 * scaled_metallicity +
-                4.9e-5 * (scaled_metallicity) ** 2
+                1.1e-5 * scaled_metallicity
+                + 4.9e-5 * (scaled_metallicity) ** 2
             )
 
             return abundance
@@ -380,8 +380,9 @@ class Abundances(Elements):
         # hydrogen is by definition 0.0
         total["H"] = 0.0
         total["He"] = np.log10(
-            self.helium_mass_fraction / self.hydrogen_mass_fraction /
-            self.A["He"]
+            self.helium_mass_fraction
+            / self.hydrogen_mass_fraction
+            / self.A["He"]
         )
 
         # Scale elemental abundances from solar abundances based on given
@@ -438,8 +439,9 @@ class Abundances(Elements):
         # mass_in_unscaled_metals)
         # and so (by rearranging) the scaling factor is:
         scaling = (
-            mass_in_unscaled_metals - metallicity *
-            mass_in_unscaled_metals - metallicity * mass_in_non_metals
+            mass_in_unscaled_metals
+            - metallicity * mass_in_unscaled_metals
+            - metallicity * mass_in_non_metals
         ) / (mass_in_scaled_metals * (metallicity - 1))
 
         # now apply this scaling
@@ -649,8 +651,9 @@ class Abundances(Elements):
         dust = 0.0  # mass fraction in dust
         for element in self.metals:
             dust += (
-                10 ** self.total[element] * self.A[element] *
-                (1.0 - self.default_depletion[element])
+                10 ** self.total[element]
+                * self.A[element]
+                * (1.0 - self.default_depletion[element])
             )
 
         return dust / self.metallicity
@@ -673,12 +676,7 @@ class Abundances(Elements):
 # eventually move these to dedicated plotting module
 
 
-def plot_abundance_pattern(
-    a,
-    show=False,
-    ylim=None,
-    lines=["total"]
-):
+def plot_abundance_pattern(a, show=False, ylim=None, lines=["total"]):
     """
     Plot single abundance patterns, but possibly
     including total, gas and dust

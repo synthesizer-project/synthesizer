@@ -171,9 +171,9 @@ class Image:
         # Make sure the images are compatible dimensions
 
         if (
-            self.resolution != other_img.resolution or
-            self.fov != other_img.fov or
-            self.npix != other_img.npix
+            self.resolution != other_img.resolution
+            or self.fov != other_img.fov
+            or self.npix != other_img.npix
         ):
             raise exceptions.InconsistentAddition(
                 f"Cannot add Images: resolution=({str(self.resolution)} + "
@@ -187,14 +187,14 @@ class Image:
         if len(self.filters) > 0 and len(other_img.filters) > 0:
             if self.filters != other_img.filters:
                 raise exceptions.InconsistentAddition(
-                    "Cannot add Images with incompatible filter sets!" +
-                    "\nFilter set 1: [ " +
-                    ", ".join([fstr for fstr in self.filters.filter_codes]) +
-                    " ]\nFilter set 2:[ " +
-                    ", ".join(
+                    "Cannot add Images with incompatible filter sets!"
+                    + "\nFilter set 1: [ "
+                    + ", ".join([fstr for fstr in self.filters.filter_codes])
+                    + " ]\nFilter set 2:[ "
+                    + ", ".join(
                         [fstr for fstr in other_img.filters.filter_codes]
-                    ) +
-                    " ]"
+                    )
+                    + " ]"
                 )
 
         # Initialise the composite image with the right type
@@ -587,10 +587,10 @@ class Image:
 
         # Check we have a valid set of noise attributes
         if len(self.filters) == 0 and (
-            isinstance(self.depths, dict) or
-            isinstance(self.snrs, dict) or
-            isinstance(self.apertures, dict) or
-            isinstance(noises, dict)
+            isinstance(self.depths, dict)
+            or isinstance(self.snrs, dict)
+            or isinstance(self.apertures, dict)
+            or isinstance(noises, dict)
         ):
             raise exceptions.InconsistentArguments(
                 "If there is a single image then noise arguments should be "
@@ -785,6 +785,7 @@ class Image:
 
         # Handle the scaling function for less branches
         if scaling_func is None:
+
             def scaling_func(x):
                 return x
 
@@ -1009,6 +1010,7 @@ class Image:
 
         # Handle the scaling function for less branches
         if scaling_func is None:
+
             def scaling_func(x):
                 return x
 

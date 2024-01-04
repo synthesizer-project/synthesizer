@@ -576,8 +576,8 @@ class Stars(Particles, StarsComponent):
 
                 # Line luminosity erg/s
                 luminosity.append(
-                    (1 - fesc) *
-                    np.sum(grid_line["luminosity"] * self.initial_masses)
+                    (1 - fesc)
+                    * np.sum(grid_line["luminosity"] * self.initial_masses)
                 )
 
                 # Continuum at line wavelength, erg/s/Hz

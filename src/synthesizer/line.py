@@ -500,8 +500,8 @@ class Line:
         pstr += f"SUMMARY OF {self.id}" + "\n"
         pstr += f"wavelength: {self.wavelength:.1f}" + "\n"
         pstr += (
-            (f"log10(luminosity/{self.luminosity.units}): "
-             f"{np.log10(self.luminosity):.2f}\n")
+            f"log10(luminosity/{self.luminosity.units}): "
+            f"{np.log10(self.luminosity):.2f}\n"
         )
         pstr += f"equivalent width: {self.ew:.0f}" + "\n"
         if self._flux:

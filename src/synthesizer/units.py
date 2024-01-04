@@ -373,9 +373,9 @@ class Units(metaclass=UnitSingleton):
         out_str = "Unit System: \n"
         for key in default_units:
             out_str += (
-                "%s: ".ljust(22 - len(key)) % key +
-                getattr(self, key).__str__() +
-                "\n"
+                "%s: ".ljust(22 - len(key)) % key
+                + getattr(self, key).__str__()
+                + "\n"
             )
 
         return out_str
@@ -458,8 +458,8 @@ class Quantity:
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
             if (
-                value.units != getattr(self.units, self.public_name) and
-                value.units != dimensionless
+                value.units != getattr(self.units, self.public_name)
+                and value.units != dimensionless
             ):
                 value = value.to(getattr(self.units, self.public_name)).value
             else:
