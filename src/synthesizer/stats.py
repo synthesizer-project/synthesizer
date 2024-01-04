@@ -30,7 +30,7 @@ def weighted_median(data, weights):
         cs_weights = np.cumsum(s_weights)
         idx = np.where(cs_weights <= midpoint)[0][-1]
         if cs_weights[idx] == midpoint:
-            w_median = np.mean(s_data[idx : idx + 2])
+            w_median = np.mean(s_data[idx:idx + 2])
         else:
             w_median = s_data[idx + 1]
     return w_median

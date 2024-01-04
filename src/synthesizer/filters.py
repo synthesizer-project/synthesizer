@@ -13,7 +13,7 @@ transmission curves:
     filt = Filter("generic/filter.1", transmission=trans, new_lam=lams)
     filt = Filter("top_hat/filter.1", lam_min=3000, lam_max=5500)
     filt = Filter("top_hat/filter.2", lam_eff=7000, lam_fwhm=2000)
-    filt = Filter("JWST/NIRCam.F200W", new_lam=lams)  
+    filt = Filter("JWST/NIRCam.F200W", new_lam=lams)
     filters = FilterCollection(
         filter_codes=fs,
         tophat_dict=tophats,
@@ -37,7 +37,8 @@ from synthesizer._version import __version__
 
 def UVJ(new_lam=None):
     """
-    Helper function to produce a FilterCollection containing UVJ tophat filters.
+    Helper function to produce a FilterCollection containing
+    UVJ tophat filters.
 
     Args:
         new_lam (array-like, float)
@@ -61,9 +62,9 @@ def UVJ(new_lam=None):
 
 class FilterCollection:
     """
-    Holds a collection of filters (`Filter` objects) and enables various quality
-    of life operations such as plotting, adding, looping, len, and comparisons
-    as if the collection was a simple list.
+    Holds a collection of filters (`Filter` objects) and enables various
+    quality of life operations such as plotting, adding, looping, len,
+    and comparisons as if the collection was a simple list.
 
     Filters can be derived from the
     `SVO database <http://svo2.cab.inta-csic.es/svo/theory/fps3/>`__
@@ -73,9 +74,9 @@ class FilterCollection:
     All filters in the `FilterCollection` are defined in terms of the
     same wavelength array.
 
-    In addition to creating `Filter`s from user defined arguments, a HDF5 file of
-    a `FilterCollection` can be created and later loaded at instantiation to
-    load a saved `FilterCollection`.
+    In addition to creating `Filter`s from user defined arguments, a HDF5
+    file of a `FilterCollection` can be created and later loaded at
+    instantiation to load a saved `FilterCollection`.
 
     Attributes:
         filters (dict, Filter)
@@ -117,9 +118,9 @@ class FilterCollection:
                 A list of SVO filter codes, used to retrieve filter data from
                 the database.
             tophat_dict (dict, Filter)
-                A dictionary containing the data to make a collection of top hat
-                filters from user defined properties. The dictionary must have
-                the form:
+                A dictionary containing the data to make a collection of top
+                hat filters from user defined properties. The dictionary must
+                have the form:
                     {<filter_code> : {"lam_eff": <effective_wavelength>,
                                       "lam_fwhm": <FWHM_of_filter>}, ...},
                 or:
@@ -127,9 +128,9 @@ class FilterCollection:
                                       "lam_max": <maximum_nonzero_wavelength>},
                                       ...}.
             generic_dict (dict, float)
-                A dictionary containing the data to make a collection of filters
-                from user defined transmission curves. The dictionary must have
-                the form:
+                A dictionary containing the data to make a collection of
+                filters from user defined transmission curves. The dictionary
+                must have the form:
                     {<filter_code1> : {"transmission": <transmission_array>}}.
                 For generic filters new_lam must be provided.
             path (string)
@@ -325,9 +326,9 @@ class FilterCollection:
 
         Args:
             tophat_dict (dict)
-                A dictionary containing the data to make a collection of top hat
-                filters from user defined properties. The dictionary must have
-                the form:
+                A dictionary containing the data to make a collection of top
+                hat filters from user defined properties. The dictionary must
+                have the form:
                     {<filter_code> : {"lam_eff": <effective_wavelength>,
                                       "lam_fwhm": <FWHM_of_filter>}, ...},
                 or:
@@ -376,9 +377,9 @@ class FilterCollection:
 
         Args:
             generic_dict (dict)
-                A dictionary containing the data to make a collection of filters
-                from user defined transmission curves. The dictionary must have
-                the form:
+                A dictionary containing the data to make a collection of
+                filters from user defined transmission curves. The dictionary
+                must have the form:
                     {<filter_code1> : {"transmission": <transmission_array>}}.
                 For generic filters new_lam must be provided.
         """
@@ -543,8 +544,8 @@ class FilterCollection:
     def resample_filters(self, new_lam=None, lam_resolution=1, verbose=True):
         """
         Resamples all filters onto a single wavelength array. If no wavelength
-        grid is provided an array encompassing all filter transmission curves is
-        derived with resolution stated by lam_resolution.
+        grid is provided an array encompassing all filter transmission curves
+        is derived with resolution stated by lam_resolution.
 
         Warning:
             If working with a Grid without passing the Grid wavelength
@@ -587,10 +588,10 @@ class FilterCollection:
 
             if verbose:
                 print(
-                    "Calcualted wavelength array: \n"
-                    + "min = %.2e Angstrom\n" % min_lam
-                    + "max = %.2e Angstrom\n" % max_lam
-                    + "FilterCollection.lam.size = %d" % new_lam.size
+                    "Calculated wavelength array: \n" +
+                    "min = %.2e Angstrom\n" % min_lam +
+                    "max = %.2e Angstrom\n" % max_lam +
+                    "FilterCollection.lam.size = %d" % new_lam.size
                 )
 
         # Set the wavelength array
@@ -791,28 +792,29 @@ class FilterCollection:
             if method == "pivot" or method == "mean":
                 if redshift is None:
                     raise exceptions.WavelengthOutOfRange(
-                        "The wavelength (rest_frame_lam=%.2e " % rest_frame_lam
-                        + "Angstrom) has 0 transmission in the closest "
-                        "Filter (%s). Try method='transmission'." % fcode
+                        "The wavelength "
+                        f"(rest_frame_lam={rest_frame_lam:.2e} "
+                        "Angstrom) has 0 transmission in the closest "
+                        f"Filter ({fcode}). Try method='transmission'."
                     )
                 else:
                     raise exceptions.WavelengthOutOfRange(
-                        "The wavelength (rest_frame_lam=%.2e " % rest_frame_lam
-                        + "Angstrom, observed_lam=%.2e Angstrom)" % lam
-                        + " has 0 transmission in the closest "
-                        + "Filter (%s). Try method='transmission'." % fcode
+                        f"The wavelength (rest_frame_lam={rest_frame_lam:.2e} "
+                        f"Angstrom, observed_lam={lam:.2e} Angstrom)"
+                        " has 0 transmission in the closest "
+                        f"Filter ({fcode}). Try method='transmission'."
                     )
             else:
                 if redshift is None:
                     raise exceptions.WavelengthOutOfRange(
-                        "The wavelength (rest_frame_lam=%.2e " % rest_frame_lam
-                        + "Angstrom) does not fall in any Filters."
+                        f"The wavelength (rest_frame_lam={rest_frame_lam:.2e} "
+                        "Angstrom) does not fall in any Filters."
                     )
                 else:
                     raise exceptions.WavelengthOutOfRange(
-                        "The wavelength (rest_frame_lam=%.2e " % rest_frame_lam
-                        + "Angstrom, observed_lam=%.2e Angstrom)" % lam
-                        + " does not fall in any Filters."
+                        f"The wavelength (rest_frame_lam={rest_frame_lam:.2e} "
+                        f"Angstrom, observed_lam={lam:.2e} Angstrom)"
+                        " does not fall in any Filters."
                     )
 
         if redshift is None:
@@ -1127,9 +1129,10 @@ class Filter:
         # Throw an error if we didn't find the filter.
         if df.size == 0:
             raise exceptions.SVOFilterNotFound(
-                "Filter (" + self.filter_code + ") not in the database. "
+                f"Filter ({self.filter_code}) not in the database. "
                 "Double check the database: http://svo2.cab.inta-csic.es/"
-                "svo/theory/fps3/. This could also mean you have no connection."
+                "svo/theory/fps3/. This could also mean you have no"
+                " connection."
             )
 
         # Extract the wavelength and transmission given by SVO
@@ -1195,13 +1198,13 @@ class Filter:
 
         Returns:
             float
-                The array (arr) convolved with the transmission curve and summed
-                along the wavelength axis.
+                The array (arr) convolved with the transmission curve
+                and summed along the wavelength axis.
 
         Raises:
             ValueError
-                If the shape of the transmission and wavelength array differ the
-                convolution cannot be done.
+                If the shape of the transmission and wavelength array differ
+                the convolution cannot be done.
         """
 
         # Warn the user that frequencies take precedence over wavelengths
@@ -1312,12 +1315,10 @@ class Filter:
             np.sqrt(
                 np.trapz(
                     self._original_lam * self.original_t, x=self._original_lam
-                )
-                / np.trapz(
+                ) / np.trapz(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
-            )
-            * self.original_lam.units
+            ) * self.original_lam.units
         )
 
     def pivT(self):
@@ -1349,16 +1350,14 @@ class Filter:
         return (
             np.exp(
                 np.trapz(
-                    np.log(self._original_lam)
-                    * self.original_t
-                    / self._original_lam,
+                    np.log(self._original_lam) * self.original_t /
+                    self._original_lam,
                     x=self._original_lam,
-                )
-                / np.trapz(
+                ) /
+                np.trapz(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
-            )
-            * self.original_lam.units
+            ) * self.original_lam.units
         )
 
     def bandw(self):
@@ -1375,9 +1374,8 @@ class Filter:
         # Calculate the left and right hand side.
         A = np.sqrt(
             np.trapz(
-                (np.log(self._original_lam / self.meanwv().value) ** 2)
-                * self.original_t
-                / self._original_lam,
+                (np.log(self._original_lam / self.meanwv().value) ** 2) *
+                self.original_t / self._original_lam,
                 x=self._original_lam,
             )
         )

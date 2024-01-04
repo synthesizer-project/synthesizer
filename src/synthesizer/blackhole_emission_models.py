@@ -1,5 +1,5 @@
 """
-A generic blackholes class currently holding (ultimately) various blackhole 
+A generic blackholes class currently holding (ultimately) various blackhole
 emission models.
 
 Example Usage:
@@ -11,7 +11,7 @@ Example Usage:
 )
 """
 import numpy as np
-from unyt import deg, km, cm, s, K, rad, erg, Hz, unyt_array
+from unyt import deg, km, cm, s, K, rad, Hz, unyt_array
 
 from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
@@ -102,8 +102,7 @@ class Template:
         return {
             "intrinsic": bolometric_luminosity.to(
                 self.sed.lnu.units * Hz
-            ).value
-            * self.sed,
+            ).value * self.sed,
         }
 
 
@@ -111,7 +110,8 @@ class UnifiedAGN:
 
     """
     The Unified AGN model.
-    This combines a disc model, along with modelling of the NLR, BLR, and torus.
+    This combines a disc model, along with modelling of the NLR, BLR,
+    and torus.
 
     Attributes:
         disc_model (str)
@@ -389,10 +389,8 @@ class UnifiedAGN:
         # Get a list of all parameters.
         self.parameters = list(
             set(
-                self.disc_parameters
-                + self.unified_parameters
-                + list(self.default_params.keys())
-                + self.torus_parameters
+                self.disc_parameters + self.unified_parameters +
+                list(self.default_params.keys()) + self.torus_parameters
             )
         )
 
@@ -481,8 +479,8 @@ class UnifiedAGN:
             blr_grid_point, spectra_id="transmitted"
         )
         spectra["disc_transmitted"] = (
-            self.covering_fraction_nlr * nlr_spectra
-            + self.covering_fraction_blr * blr_spectra
+            self.covering_fraction_nlr * nlr_spectra +
+            self.covering_fraction_blr * blr_spectra
         )
 
         # Calculate the escaping spectra.
@@ -650,10 +648,8 @@ class UnifiedAGN:
         # Note: the choice of "intrinsic" is to align with the Pacman model
         # which reserves "total" and "emergent" to include dust.
         spectra["intrinsic"] = (
-            spectra["disc"]
-            + spectra["blr"]
-            + spectra["nlr"]
-            + spectra["torus"]
+            spectra["disc"] + spectra["blr"] + spectra["nlr"] +
+            spectra["torus"]
         )
 
         # Since we're using a coarse grid it might be necessary to rescale
@@ -661,8 +657,8 @@ class UnifiedAGN:
         # the emission model is called from a parametric or particle blackhole.
         if self.bolometric_luminosity is not None:
             scaling = (
-                self.bolometric_luminosity
-                / spectra["intrinsic"].measure_bolometric_luminosity()
+                self.bolometric_luminosity /
+                spectra["intrinsic"].measure_bolometric_luminosity()
             )
             for spectra_id, spectra_ in spectra.items():
                 spectra[spectra_id] = spectra_ * scaling
