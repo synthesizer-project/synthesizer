@@ -65,9 +65,9 @@ coords = CoordinateGenerator.generate_3D_gaussian(nstars)
 # Calculate the smoothing lengths from radii
 cent = np.mean(coords, axis=0)
 rs = np.sqrt(
-    (coords[:, 0] - cent[0]) ** 2 +
-    (coords[:, 1] - cent[1]) ** 2 +
-    (coords[:, 2] - cent[2]) ** 2
+    (coords[:, 0] - cent[0]) ** 2
+    + (coords[:, 1] - cent[1]) ** 2
+    + (coords[:, 2] - cent[2]) ** 2
 )
 rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
 
@@ -93,9 +93,9 @@ coords = CoordinateGenerator.generate_3D_gaussian(ngas)
 # Calculate the smoothing lengths from radii
 cent = np.mean(coords, axis=0)
 rs = np.sqrt(
-    (coords[:, 0] - cent[0]) ** 2 +
-    (coords[:, 1] - cent[1]) ** 2 +
-    (coords[:, 2] - cent[2]) ** 2
+    (coords[:, 0] - cent[0]) ** 2
+    + (coords[:, 1] - cent[1]) ** 2
+    + (coords[:, 2] - cent[2]) ** 2
 )
 rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
 

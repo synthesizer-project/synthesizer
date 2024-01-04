@@ -588,10 +588,10 @@ class FilterCollection:
 
             if verbose:
                 print(
-                    "Calculated wavelength array: \n" +
-                    "min = %.2e Angstrom\n" % min_lam +
-                    "max = %.2e Angstrom\n" % max_lam +
-                    "FilterCollection.lam.size = %d" % new_lam.size
+                    "Calculated wavelength array: \n"
+                    + "min = %.2e Angstrom\n" % min_lam
+                    + "max = %.2e Angstrom\n" % max_lam
+                    + "FilterCollection.lam.size = %d" % new_lam.size
                 )
 
         # Set the wavelength array
@@ -1315,10 +1315,12 @@ class Filter:
             np.sqrt(
                 np.trapz(
                     self._original_lam * self.original_t, x=self._original_lam
-                ) / np.trapz(
+                )
+                / np.trapz(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
-            ) * self.original_lam.units
+            )
+            * self.original_lam.units
         )
 
     def pivT(self):
@@ -1350,14 +1352,16 @@ class Filter:
         return (
             np.exp(
                 np.trapz(
-                    np.log(self._original_lam) * self.original_t /
-                    self._original_lam,
+                    np.log(self._original_lam)
+                    * self.original_t
+                    / self._original_lam,
                     x=self._original_lam,
-                ) /
-                np.trapz(
+                )
+                / np.trapz(
                     self.original_t / self._original_lam, x=self._original_lam
                 )
-            ) * self.original_lam.units
+            )
+            * self.original_lam.units
         )
 
     def bandw(self):
@@ -1374,8 +1378,9 @@ class Filter:
         # Calculate the left and right hand side.
         A = np.sqrt(
             np.trapz(
-                (np.log(self._original_lam / self.meanwv().value) ** 2) *
-                self.original_t / self._original_lam,
+                (np.log(self._original_lam / self.meanwv().value) ** 2)
+                * self.original_t
+                / self._original_lam,
                 x=self._original_lam,
             )
         )

@@ -224,8 +224,8 @@ class Casey12(EmissionBase):
         b3 = 0.0001905
         b4 = 0.00007243
         lum = (
-            (b1 + b2 * alpha) ** -2 +
-            (b3 + b4 * alpha) * temperature.to("K").value
+            (b1 + b2 * alpha) ** -2
+            + (b3 + b4 * alpha) * temperature.to("K").value
         ) ** -1
 
         self.lam_c = (3.0 / 4.0) * lum * um
@@ -236,10 +236,10 @@ class Casey12(EmissionBase):
         # Missing factors of lam_c and c in some places
 
         self.n_pl = (
-            self.N_bb *
-            (1 - np.exp(-((self.lam_0 / self.lam_c) ** emissivity))) *
-            (c / self.lam_c) ** 3 /
-            (np.exp(h * c / (self.lam_c * kb * temperature)) - 1)
+            self.N_bb
+            * (1 - np.exp(-((self.lam_0 / self.lam_c) ** emissivity)))
+            * (c / self.lam_c) ** 3
+            / (np.exp(h * c / (self.lam_c * kb * temperature)) - 1)
         )
 
     # @accepts(nu=1/time)
@@ -273,8 +273,9 @@ class Casey12(EmissionBase):
                     The wavelengths at which to calculate lnu.
             """
             return (
-                self.n_pl * ((lam / self.lam_c) ** (self.alpha)) *
-                np.exp(-((lam / self.lam_c) ** 2))
+                self.n_pl
+                * ((lam / self.lam_c) ** (self.alpha))
+                * np.exp(-((lam / self.lam_c) ** 2))
             )
 
         def _blackbody(lam):
@@ -286,10 +287,10 @@ class Casey12(EmissionBase):
                     The wavelengths at which to calculate lnu.
             """
             return (
-                self.N_bb *
-                (1 - np.exp(-((self.lam_0 / lam) ** self.emissivity))) *
-                (c / lam) ** 3 /
-                (np.exp((h * c) / (lam * kb * self.temperature)) - 1.0)
+                self.N_bb
+                * (1 - np.exp(-((self.lam_0 / lam) ** self.emissivity)))
+                * (c / lam) ** 3
+                / (np.exp((h * c) / (lam * kb * self.temperature)) - 1.0)
             )
 
         return _power_law(c / nu) + _blackbody(c / nu)
