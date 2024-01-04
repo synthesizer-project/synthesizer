@@ -23,6 +23,7 @@ from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.photometry import PhotometryCollection
 from synthesizer.utils import rebin_1d
 from synthesizer.units import Quantity
 from synthesizer.igm import Inoue14
@@ -813,31 +814,6 @@ class Sed:
 
         return beta
 
-    def get_broadband_luminosities(self, filters):
-        """
-        Calculate broadband luminosities using a FilterCollection object
-
-        Args:
-            filters (filters.FilterCollection)
-                A FilterCollection object.
-
-        Returns:
-            broadband_luminosities (dict)
-                A dictionary of rest frame broadband luminosities.
-        """
-
-        # Intialise result dictionary
-        self.broadband_luminosities = {}
-
-        # Loop over filters
-        for f in filters:
-            # Apply the filter transmission curve and store the resulting
-            # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu) * self.lnu.units
-            self.broadband_luminosities[f.filter_code] = bb_lum
-
-        return self.broadband_luminosities
-
     def get_fnu0(self):
         """
         Calculate a dummy observed frame spectral energy distribution.
@@ -897,17 +873,62 @@ class Sed:
 
         return self.fnu
 
-    def get_broadband_fluxes(self, fc, verbose=True):  # broad band flux/nJy
+    def get_broadband_luminosities(self, filters, verbose=True):
         """
         Calculate broadband luminosities using a FilterCollection object
 
         Args:
-            fc (object)
+            filters (filters.FilterCollection)
                 A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            broadband_luminosities (dict)
+                A dictionary of rest frame broadband luminosities.
+        """
+
+        # Intialise result dictionary
+        broadband_luminosities = {}
+
+        # Loop over filters
+        for f in filters:
+            # Check whether the filter transmission curve wavelength grid
+            # and the spectral grid are the same array
+            if not np.array_equal(f.lam, self.lam):
+                if verbose:
+                    print(
+                        (
+                            "WARNING: filter wavelength grid is not "
+                            "the same as the SED wavelength grid."
+                        )
+                    )
+
+            # Apply the filter transmission curve and store the resulting
+            # luminosity
+            bb_lum = f.apply_filter(self._lnu, nu=self._nu)
+            broadband_luminosities[f.filter_code] = bb_lum
+
+        # Create the photometry collection and store it in the object
+        self.broadband_luminosities = PhotometryCollection(
+            filters, rest_frame=True, **broadband_luminosities
+        )
+
+        return self.broadband_luminosities
+
+    def get_broadband_fluxes(self, filters, verbose=True):
+        """
+        Calculate broadband fluxes using a FilterCollection object
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
 
         Returns:
             (dict)
-                A dictionary of fluxes in each filter in fc.
+                A dictionary of fluxes in each filter in filters.
         """
 
         # Ensure fluxes actually exist
@@ -921,10 +942,10 @@ class Sed:
             )
 
         # Set up flux dictionary
-        self.broadband_fluxes = {}
+        broadband_fluxes = {}
 
         # Loop over filters in filter collection
-        for f in fc:
+        for f in filters:
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
             if not np.array_equal(f.lam, self.lam):
@@ -937,8 +958,13 @@ class Sed:
                     )
 
             # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(self._fnu, nu=self._obsnu) * nJy
-            self.broadband_fluxes[f.filter_code] = bb_flux
+            bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
+            broadband_fluxes[f.filter_code] = bb_flux
+
+        # Create the photometry collection and store it in the object
+        self.broadband_fluxes = PhotometryCollection(
+            filters, rest_frame=True, **broadband_fluxes
+        )
 
         return self.broadband_fluxes
 
