@@ -144,7 +144,8 @@ class Galaxy(BaseGalaxy):
                 self.sf_gas_metallicity = (
                     np.sum(
                         self.gas.masses[mask] * self.gas.metallicities[mask]
-                    ) / self.sf_gas_mass
+                    )
+                    / self.sf_gas_mass
                 )
 
     def load_stars(self, initial_masses, ages, metals, **kwargs):
@@ -237,8 +238,8 @@ class Galaxy(BaseGalaxy):
 
             # Calculate the separation between the black hole and gas particles
             sep = (
-                self.gas._coordinates[gas_in_range, :] -
-                self.black_holes._coordinates[ind, :]
+                self.gas._coordinates[gas_in_range, :]
+                - self.black_holes._coordinates[ind, :]
             )
 
             dists = np.sqrt(sep[:, 0] ** 2 + sep[:, 1] ** 2 + sep[:, 2] ** 2)
@@ -669,8 +670,9 @@ class Galaxy(BaseGalaxy):
 
         # Make sure we have an image to make
         if (
-            stellar_spectra_type is None and
-            blackhole_spectra_type is None and pixel_values is None
+            stellar_spectra_type is None
+            and blackhole_spectra_type is None
+            and pixel_values is None
         ):
             raise exceptions.InconsistentArguments(
                 "At least one spectra type must be provided "
@@ -781,8 +783,8 @@ class Galaxy(BaseGalaxy):
         if stellar_spectra_type is not None and blackhole_spectra_type is None:
             img = stellar_img
         elif (
-            stellar_spectra_type is not None and
-            blackhole_spectra_type is not None
+            stellar_spectra_type is not None
+            and blackhole_spectra_type is not None
         ):
             img = stellar_img + blackhole_img
         elif (

@@ -79,8 +79,8 @@ ax_flux.plot(
     gal.stars.spectra["attenuated"]._fnu,
     color="m",
     label=(
-        r"Original ($\log_{10}(M_\star / M_\odot)" +
-        f"={np.log10(gal.stars.initial_mass):.2f})$"
+        r"Original ($\log_{10}(M_\star / M_\odot)"
+        + f"={np.log10(gal.stars.initial_mass):.2f})$"
     ),
     alpha=0.7,
 )
@@ -109,8 +109,8 @@ ax_flux.plot(
     gal.stars.spectra["attenuated"]._fnu,
     color="c",
     label=(
-        r"Luminosity scaled ($\log_{10}(M_\star / M_\odot)" +
-        f"={np.log10(gal.stars.initial_mass):.2f})$"
+        r"Luminosity scaled ($\log_{10}(M_\star / M_\odot)"
+        + f"={np.log10(gal.stars.initial_mass):.2f})$"
     ),
     alpha=0.7,
 )
@@ -137,8 +137,8 @@ ax_flux.plot(
     gal.stars.spectra["attenuated"]._fnu,
     color="orange",
     label=(
-        r"Flux scaled ($\log_{10}(M_\star / M_\odot)" +
-        f"={np.log10(gal.stars.initial_mass):.2f})$"
+        r"Flux scaled ($\log_{10}(M_\star / M_\odot)"
+        + f"={np.log10(gal.stars.initial_mass):.2f})$"
     ),
     alpha=0.7,
 )

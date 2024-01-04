@@ -87,8 +87,8 @@ class BaseGalaxy:
         # the intrinsic and attenuated
 
         dust_bolometric_luminosity = (
-            self.spectra["intrinsic"].measure_bolometric_luminosity() -
-            self.spectra["emergent"].measure_bolometric_luminosity()
+            self.spectra["intrinsic"].measure_bolometric_luminosity()
+            - self.spectra["emergent"].measure_bolometric_luminosity()
         )
 
         # get the spectrum and normalise it properly
@@ -209,8 +209,8 @@ class BaseGalaxy:
             if self.stars is not None and key in self.stars.spectra:
                 spectra[key].append(self.stars.spectra[key])
             if (
-                self.black_holes is not None and
-                key in self.black_holes.spectra
+                self.black_holes is not None
+                and key in self.black_holes.spectra
             ):
                 spectra[key].append(self.black_holes.spectra[key])
             if self.gas is not None and key in self.gas.spectra:
