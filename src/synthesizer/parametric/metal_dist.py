@@ -239,7 +239,7 @@ class Normal(Common):
         Args:
             metal (float)
                 The (linear) metallicity at which to evaluate the distribution.
-        
+
         Returns:
             float
                 The weight of the metallicity distribution at metal.

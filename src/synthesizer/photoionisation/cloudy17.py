@@ -19,8 +19,8 @@ class ShapeCommands:
     def table_sed(model_name, lam, lnu, output_dir="./"):
         """
         A function for creating a cloudy input file using a tabulated SED.
-        
-        TODO: allow the user to instead specify nu and to automatically convert 
+
+        TODO: allow the user to instead specify nu and to automatically convert
         units if provided
 
         Args:
@@ -38,7 +38,7 @@ class ShapeCommands:
                 a list of strings with the cloudy input commands
         """
 
-        # if lam is not a unyt_array assume it has units of angstrom and 
+        # if lam is not a unyt_array assume it has units of angstrom and
         # convert to a unyt_array
         if not isinstance(lam, unyt_array):
             lam *= angstrom
@@ -59,7 +59,7 @@ class ShapeCommands:
         # save tabulated spectrum
         np.savetxt(
             f"{output_dir}/{model_name}.sed",
-            np.array([E_Ryd[::-1], lnu[::-1]]).T
+            np.array([E_Ryd[::-1], lnu[::-1]]).T,
         )
 
         # collect cloudy shape commands
@@ -69,7 +69,6 @@ class ShapeCommands:
         return shape_commands
 
     def cloudy_agn(TBB, aox=-1.4, auv=-0.5, ax=-1.35):
-        
         """
         A function for specifying the cloudy AGN model. See 6.2 Hazy1.pdf.
 
@@ -85,28 +84,30 @@ class ShapeCommands:
                 The uv-slope (default value from Calabro CEERS AGN model)
             ax (float)
                 Slope normalisation
-            
-        Returns:   
+
+        Returns:
             list
                 a list of strings with the cloudy input commands
         """
 
         # collect cloudy shape commands
         shape_commands = []
-        shape_commands.append(f'AGN T = {TBB} k, a(ox) = {aox}, a(uv)= {auv} \
-                              a(x)={ax} \n')
+        shape_commands.append(
+            f"AGN T = {TBB} k, a(ox) = {aox}, a(uv)= {auv} \
+                              a(x)={ax} \n"
+        )
 
         return shape_commands
 
 
-def create_cloudy_input(model_name, shape_commands, abundances,
-                        output_dir='./', **kwargs):
-
+def create_cloudy_input(
+    model_name, shape_commands, abundances, output_dir="./", **kwargs
+):
     """
     A generic function for creating a cloudy input file
 
     Args:
-   
+
         model_name (str)
             The model name. Used in the naming of the outputs
         shape_commands (list)
@@ -137,7 +138,7 @@ def create_cloudy_input(model_name, shape_commands, abundances,
         # K, if not provided the command is not used
         "T_floor": False,
         # Hydrogen density
-        "hydrogen_density": 10**(2.5),
+        "hydrogen_density": 10 ** (2.5),
         # redshift, only necessary if CMB heating included
         "z": 0.0,
         # include CMB heating
@@ -257,10 +258,10 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     # plane parallel geometry
     if params["geometry"] == "planeparallel":
         cinput.append(f"ionization parameter = {log10U:.3f}\n")
-        
+
         # NOTE: I don't think the below is needed.
-        # inner radius = 10^30 cm and thickness = 10^21.5 cm (==1 kpc) this is 
-        # essentially plane parallel geometry 
+        # inner radius = 10^30 cm and thickness = 10^21.5 cm (==1 kpc) this is
+        # essentially plane parallel geometry
 
         # cinput.append(f"radius 30.0 21.5\n")
 
@@ -281,7 +282,9 @@ def create_cloudy_input(model_name, shape_commands, abundances,
 
     # define hydrogend density
     if params["hydrogen_density"]:
-        cinput.append(f'hden {np.log10(params["hydrogen_density"])} log constant density\n')
+        cinput.append(
+            f'hden {np.log10(params["hydrogen_density"])} log constant density\n'
+        )
 
     # covering factor
     if params["covering_factor"]:
@@ -291,7 +294,7 @@ def create_cloudy_input(model_name, shape_commands, abundances,
     cinput.append("iterate to convergence\n")
     if params["T_floor"]:
         cinput.append(f'set temperature floor {params["T_floor"]} linear\n')
-    
+
     if params["stop_T"]:
         cinput.append(f'stop temperature {params["stop_T"]}K\n')
 
@@ -335,8 +338,9 @@ def create_cloudy_input(model_name, shape_commands, abundances,
         )
 
         # make copy of linelist
-        shutil.copyfile(params["output_linelist"],
-                        f"{output_dir}/linelist.dat")
+        shutil.copyfile(
+            params["output_linelist"], f"{output_dir}/linelist.dat"
+        )
 
     # --- save input file
     open(f"{output_dir}/{model_name}.in", "w").writelines(cinput)
@@ -353,17 +357,17 @@ def read_lines(filename, extension="lines"):
             The cloudy filename
         extension (str)
             The extension of the file
-    
+
     Returns:
-        line_ids (list) 
+        line_ids (list)
             A list of line identificaitons
-        blends (list) 
+        blends (list)
             A list containing flags whether the line is a blend
-        wavelengths (list) 
+        wavelengths (list)
             A list of the line wavelengths
-        intrinsic (list) 
+        intrinsic (list)
             A list of the intrinsic luminosities
-        emergent (list) 
+        emergent (list)
             A list of emergent luminosities
 
     """
@@ -371,8 +375,10 @@ def read_lines(filename, extension="lines"):
     # open file and read columns
     wavelengths, cloudy_ids, intrinsic, emergent = np.loadtxt(
         f"{filename}.{extension}",
-        dtype=str, delimiter="\t",
-        usecols=(0, 1, 2, 3)).T
+        dtype=str,
+        delimiter="\t",
+        usecols=(0, 1, 2, 3),
+    ).T
 
     wavelengths = wavelengths.astype(float)
     intrinsic = intrinsic.astype(float) - 7.0  # erg s^{-1}
@@ -384,8 +390,9 @@ def read_lines(filename, extension="lines"):
     )
 
     # find out the length of the line id when split
-    lenid = np.array([len(list(filter(None, id.split(" "))))
-                      for id in cloudy_ids])
+    lenid = np.array(
+        [len(list(filter(None, id.split(" ")))) for id in cloudy_ids]
+    )
 
     # define a blend as a line with only two entries
     blends = np.ones(len(wavelengths), dtype=bool)
@@ -396,7 +403,7 @@ def read_lines(filename, extension="lines"):
 
 def convert_cloudy_wavelength(x):
     """
-    Convert a cloudy wavelength string (e.g. 6562.81A, 1.008m) to a wavelength 
+    Convert a cloudy wavelength string (e.g. 6562.81A, 1.008m) to a wavelength
     float in units of angstroms.
 
     Args:
@@ -427,13 +434,13 @@ def read_linelist(filename, extension="elin"):
             The cloudy filename
         extension (str)
             The extension of the file
-    
+
     Returns:
-        line_ids (list) 
+        line_ids (list)
             A list of line identificaitons
-        wavelengths (list) 
+        wavelengths (list)
             A list of the line wavelengths
-        luminosities (list) 
+        luminosities (list)
             A list of the luminosities
     """
 
@@ -490,11 +497,11 @@ def read_wavelength(filename):
 def read_continuum(filename, return_dict=False):
     """
     Extract just the spectra from a cloudy.cont file
-    
+
     Args:
         filename (str)
             The cloudy filename
-    
+
     Returns:
         lam (array-like, float)
             The wavelength grid
@@ -512,7 +519,7 @@ def read_continuum(filename, return_dict=False):
             The total spectrum
         linecont (array-like, float)
             The line contribution spectrum
-    
+
         alternatively returns a dictionary
 
     """

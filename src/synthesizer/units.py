@@ -126,7 +126,9 @@ class UnitSingleton(type):
 
         # Are we forcing an update?... I hope not
         if force:
-            cls._instances[cls] = super(UnitSingleton, cls).__call__(new_units, force)
+            cls._instances[cls] = super(UnitSingleton, cls).__call__(
+                new_units, force
+            )
 
         # Print a warning if an instance exists and arguments have been passed
         elif cls in cls._instances and new_units is not None:
@@ -139,7 +141,9 @@ class UnitSingleton(type):
 
         # If we don't already have an instance the dictionary will be empty
         if cls not in cls._instances:
-            cls._instances[cls] = super(UnitSingleton, cls).__call__(new_units, force)
+            cls._instances[cls] = super(UnitSingleton, cls).__call__(
+                new_units, force
+            )
 
         return cls._instances[cls]
 
@@ -367,7 +371,9 @@ class Units(metaclass=UnitSingleton):
         out_str = "Unit System: \n"
         for key in default_units:
             out_str += (
-                "%s: ".ljust(22 - len(key)) % key + getattr(self, key).__str__() + "\n"
+                "%s: ".ljust(22 - len(key)) % key
+                + getattr(self, key).__str__()
+                + "\n"
             )
 
         return out_str

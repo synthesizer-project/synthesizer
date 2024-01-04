@@ -114,5 +114,7 @@ def n_weighted_moment(values, weights, n):
         return w_var
     else:
         w_std = np.sqrt(w_var)
-        return np.sum(weights * ((values - w_avg) / w_std) ** n) / np.sum(weights)
+        return np.sum(weights * ((values - w_avg) / w_std) ** n) / np.sum(
+            weights
+        )
         # Same as np.average(((values - w_avg)/w_std)**n, weights=weights)

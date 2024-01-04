@@ -92,7 +92,9 @@ pcm1 = ax.pcolormesh(
     plt_para_sfzh.T,
     cmap="Greys_r",
     alpha=0.8,
-    norm=Normalize(vmin=np.min(stars.sfzh[stars.sfzh > 0]), vmax=1.0, clip=True),
+    norm=Normalize(
+        vmin=np.min(stars.sfzh[stars.sfzh > 0]), vmax=1.0, clip=True
+    ),
 )
 
 
@@ -117,7 +119,9 @@ ax.set_ylabel(r"$\log_{10}(Z)$")
 
 plt.show()
 
-part_sed = part_stars.get_spectra_transmitted(grid, grid_assignment_method="cic")
+part_sed = part_stars.get_spectra_transmitted(
+    grid, grid_assignment_method="cic"
+)
 plt.figure(2)
 plt.plot(np.log10(sed.lam), np.log10(sed.lnu), label="parametric")
 plt.plot(

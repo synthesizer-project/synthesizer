@@ -226,7 +226,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
     def get_hist_ifu(self):
         """
         A method to calculate an IFU with no smoothing.
-        
+
         Returns:
             img (array_like, float)
                 A 3D array containing the pixel values sorted into individual
@@ -249,9 +249,9 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             ):
                 continue
 
-            self.ifu[self.pix_pos[ind, 0], self.pix_pos[ind, 1], :] += self.sed_values[
-                ind, :
-            ]
+            self.ifu[
+                self.pix_pos[ind, 0], self.pix_pos[ind, 1], :
+            ] += self.sed_values[ind, :]
 
         return self.ifu
 
@@ -386,10 +386,14 @@ class ParametricSpectralCube(Scene, SpectralCube):
         # Define 1D bin centres of each pixel
         if self.spatial_unit.dimensions == angle:
             res = (self.resolution * self.spatial_unit).to("mas").value
-            bin_centres = res * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
+            bin_centres = res * np.linspace(
+                -self.npix / 2, self.npix / 2, self.npix
+            )
         else:
             res = (self.resolution * self.spatial_unit).to("kpc").value
-            bin_centres = res * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
+            bin_centres = res * np.linspace(
+                -self.npix / 2, self.npix / 2, self.npix
+            )
 
         # Convert the 1D grid into 2D grids coordinate grids
         self._xx, self._yy = np.meshgrid(bin_centres, bin_centres)

@@ -47,7 +47,11 @@ class EmissionBase:
         um.
         """
         return integrate.quad(
-            self._lnu, c / (1000 * um), c / (8 * um), full_output=False, limit=100
+            self._lnu,
+            c / (1000 * um),
+            c / (8 * um),
+            full_output=False,
+            limit=100,
         )[0]
 
     def get_spectra(self, _lam):
@@ -183,7 +187,9 @@ class Casey12(EmissionBase):
     """
 
     @accepts(temperature=temperature_dim)
-    def __init__(self, temperature, emissivity, alpha, N_bb=1.0, lam_0=200.0 * um):
+    def __init__(
+        self, temperature, emissivity, alpha, N_bb=1.0, lam_0=200.0 * um
+    ):
         """
         Args:
             lam (unyt_array)
@@ -217,7 +223,8 @@ class Casey12(EmissionBase):
         b3 = 0.0001905
         b4 = 0.00007243
         lum = (
-            (b1 + b2 * alpha) ** -2 + (b3 + b4 * alpha) * temperature.to("K").value
+            (b1 + b2 * alpha) ** -2
+            + (b3 + b4 * alpha) * temperature.to("K").value
         ) ** -1
 
         self.lam_c = (3.0 / 4.0) * lum * um

@@ -61,16 +61,16 @@ def UVJ(new_lam=None):
 
 class FilterCollection:
     """
-    Holds a collection of filters (`Filter` objects) and enables various quality 
-    of life operations such as plotting, adding, looping, len, and comparisons 
+    Holds a collection of filters (`Filter` objects) and enables various quality
+    of life operations such as plotting, adding, looping, len, and comparisons
     as if the collection was a simple list.
 
-    Filters can be derived from the 
+    Filters can be derived from the
     `SVO database <http://svo2.cab.inta-csic.es/svo/theory/fps3/>`__
     , specific top hat filter
     properties or generic filter transmission curves and a wavelength array.
 
-    All filters in the `FilterCollection` are defined in terms of the 
+    All filters in the `FilterCollection` are defined in terms of the
     same wavelength array.
 
     In addition to creating `Filter`s from user defined arguments, a HDF5 file of
@@ -413,7 +413,9 @@ class FilterCollection:
             for key in other_filters.filters:
                 # Store the filter and its code
                 self.filters[key] = other_filters.filters[key]
-                self.filter_codes.append(other_filters.filters[key].filter_code)
+                self.filter_codes.append(
+                    other_filters.filters[key].filter_code
+                )
 
         elif isinstance(other_filters, Filter):
             # Store the filter and its code
@@ -579,7 +581,9 @@ class FilterCollection:
                     max_lam = this_max
 
             # Create wavelength array
-            new_lam = np.arange(min_lam, max_lam + lam_resolution, lam_resolution)
+            new_lam = np.arange(
+                min_lam, max_lam + lam_resolution, lam_resolution
+            )
 
             if verbose:
                 print(
@@ -812,7 +816,10 @@ class FilterCollection:
                     )
 
         if redshift is None:
-            print("Filter containing rest_frame_lam=%.2e Angstrom: %s" % (lam, fcode))
+            print(
+                "Filter containing rest_frame_lam=%.2e Angstrom: %s"
+                % (lam, fcode)
+            )
         else:
             print(
                 "Filter containing rest_frame_lam=%.2e Angstrom "
@@ -883,8 +890,12 @@ class FilterCollection:
             # For an SVO filter we need the original wavelength and
             # transmission curves
             if filt.filter_type == "SVO":
-                f_grp.create_dataset("Original_Wavelength", data=filt._original_lam)
-                f_grp.create_dataset("Original_Transmission", data=filt.original_t)
+                f_grp.create_dataset(
+                    "Original_Wavelength", data=filt._original_lam
+                )
+                f_grp.create_dataset(
+                    "Original_Transmission", data=filt.original_t
+                )
 
         hdf.close()
 
@@ -1107,8 +1118,10 @@ class Filter:
                 df = np.loadtxt(f)
         except URLError:
             raise exceptions.SVOInaccessible(
-                (f"The SVO Database at {self.svo_url} "
-                 "is not responding. Is it down?")
+                (
+                    f"The SVO Database at {self.svo_url} "
+                    "is not responding. Is it down?"
+                )
             )
 
         # Throw an error if we didn't find the filter.
@@ -1243,7 +1256,9 @@ class Filter:
         if need_shift:
             # Ok, shift the tranmission curve by interpolating onto the
             # provided wavelengths
-            t = np.interp(lam, self._original_lam, self.original_t, left=0.0, right=0.0)
+            t = np.interp(
+                lam, self._original_lam, self.original_t, left=0.0, right=0.0
+            )
 
         else:
             # We can use the standard transmission array
@@ -1272,8 +1287,12 @@ class Filter:
         transmission = arr_in_band * t_in_band
 
         # Sum over the final axis to "collect" transmission in this filer
-        sum_per_x = integrate.trapezoid(transmission / xs_in_band, xs_in_band, axis=-1)
-        sum_den = integrate.trapezoid(t_in_band / xs_in_band, xs_in_band, axis=-1)
+        sum_per_x = integrate.trapezoid(
+            transmission / xs_in_band, xs_in_band, axis=-1
+        )
+        sum_den = integrate.trapezoid(
+            t_in_band / xs_in_band, xs_in_band, axis=-1
+        )
         sum_in_band = sum_per_x / sum_den
 
         return sum_in_band
@@ -1291,8 +1310,12 @@ class Filter:
 
         return (
             np.sqrt(
-                np.trapz(self._original_lam * self.original_t, x=self._original_lam)
-                / np.trapz(self.original_t / self._original_lam, x=self._original_lam)
+                np.trapz(
+                    self._original_lam * self.original_t, x=self._original_lam
+                )
+                / np.trapz(
+                    self.original_t / self._original_lam, x=self._original_lam
+                )
             )
             * self.original_lam.units
         )
@@ -1308,7 +1331,9 @@ class Filter:
                 Transmission at pivot wavelength.
         """
 
-        return np.interp(self.pivwv().value, self._original_lam, self.original_t)
+        return np.interp(
+            self.pivwv().value, self._original_lam, self.original_t
+        )
 
     def meanwv(self):
         """
@@ -1324,10 +1349,14 @@ class Filter:
         return (
             np.exp(
                 np.trapz(
-                    np.log(self._original_lam) * self.original_t / self._original_lam,
+                    np.log(self._original_lam)
+                    * self.original_t
+                    / self._original_lam,
                     x=self._original_lam,
                 )
-                / np.trapz(self.original_t / self._original_lam, x=self._original_lam)
+                / np.trapz(
+                    self.original_t / self._original_lam, x=self._original_lam
+                )
             )
             * self.original_lam.units
         )
@@ -1354,7 +1383,9 @@ class Filter:
         )
 
         B = np.sqrt(
-            np.trapz(self.original_t / self._original_lam, x=self._original_lam)
+            np.trapz(
+                self.original_t / self._original_lam, x=self._original_lam
+            )
         )
 
         return self.meanwv() * (A / B)

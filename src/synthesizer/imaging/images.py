@@ -206,7 +206,9 @@ class Image:
                     + " ]"
                     + "\nFilter set 2:"
                     + "[ "
-                    + ", ".join([fstr for fstr in other_img.filters.filter_codes])
+                    + ", ".join(
+                        [fstr for fstr in other_img.filters.filter_codes]
+                    )
                     + " ]"
                 )
 
@@ -393,7 +395,9 @@ class Image:
                 phot = f.apply_filter(self.sed._fnu, nu=self.sed._obsnu)
 
             # Get and store the image for this filter
-            self.imgs[f.filter_code] = self._get_img_single_filter(pixel_values=phot)
+            self.imgs[f.filter_code] = self._get_img_single_filter(
+                pixel_values=phot
+            )
 
         return self.imgs
 
@@ -808,7 +812,8 @@ class Image:
             imgs = self.imgs_noise
         else:
             raise exceptions.UnknownImageType(
-                "img_type can be 'standard', 'psf', or 'noise' " "not '%s'" % img_type
+                "img_type can be 'standard', 'psf', or 'noise' "
+                "not '%s'" % img_type
             )
 
         # Are we only plotting a single image from a set?
@@ -878,7 +883,9 @@ class Image:
                 img = scaling_func(img)
 
                 # Plot the image and remove the surrounding axis
-                ax.imshow(img, origin="lower", interpolation="nearest", cmap=cmap)
+                ax.imshow(
+                    img, origin="lower", interpolation="nearest", cmap=cmap
+                )
                 ax.axis("off")
 
                 # Place a label for which filter this ised_ASCII
@@ -887,7 +894,11 @@ class Image:
                     0.9,
                     f.filter_code,
                     bbox=dict(
-                        boxstyle="round,pad=0.3", fc="w", ec="k", lw=1, alpha=0.8
+                        boxstyle="round,pad=0.3",
+                        fc="w",
+                        ec="k",
+                        lw=1,
+                        alpha=0.8,
                     ),
                     transform=ax.transAxes,
                     horizontalalignment="right",
@@ -1032,7 +1043,9 @@ class Image:
         for rgb_ind, rgb in enumerate(rgb_filters):
             for f in rgb_filters[rgb]:
                 if img_type == "standard":
-                    rgb_img[:, :, rgb_ind] += scaling_func(weights[f] * self.imgs[f])
+                    rgb_img[:, :, rgb_ind] += scaling_func(
+                        weights[f] * self.imgs[f]
+                    )
                 elif img_type == "psf":
                     rgb_img[:, :, rgb_ind] += scaling_func(
                         weights[f] * self.imgs_psf[f]
@@ -1547,13 +1560,17 @@ class ParametricImage(Scene, Image):
             res = self.resolution.to("mas")
         else:
             res = self.resolution.to("kpc")
-        bin_centres = res.value * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
+        bin_centres = res.value * np.linspace(
+            -self.npix / 2, self.npix / 2, self.npix
+        )
 
         # Convert the 1D grid into 2D grids coordinate grids
         xx, yy = np.meshgrid(bin_centres, bin_centres)
 
         # Extract the density grid from the morphology function
-        density_grid = self.morphology.compute_density_grid(xx, yy, units=res.units)
+        density_grid = self.morphology.compute_density_grid(
+            xx, yy, units=res.units
+        )
 
         # And normalise it...
         return density_grid / np.sum(density_grid)
