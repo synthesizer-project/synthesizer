@@ -232,6 +232,28 @@ class Sed:
         # They're compatible, add them
         return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
 
+    def __radd__(self, second_sed):
+        """
+        Overloads "reflected" addition to allow sed objects to be added
+        together when in reverse order, i.e. second_sed + self.
+
+        This may seem superfluous, but it is needed to enable the use of sum()
+        on lists of Seds.
+
+        Returns:
+            Sed
+                A new instance of Sed with added lnu arrays.
+
+        Raises:
+            InconsistentAddition
+                If wavelength arrays or lnu arrays are incompatible an error
+                is raised.
+        """
+        # Handle the int case explictly which is triggered by the use of sum
+        if isinstance(second_sed, int) and second_sed == 0:
+            return self
+        return self.__add__(second_sed)
+
     def __mul__(self, scaling):
         """
         Overide multiplication operator to allow lnu to be scaled.
