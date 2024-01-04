@@ -1,31 +1,25 @@
-
-
-# Create a model SED
-
-
-import flare.plt as fplt
-from synthesizer.grid import Grid
-import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import cmasher as cmr
-
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import numpy as np
+import matplotlib.pyplot as plt
+
+from synthesizer.grid import Grid
+
+
+sys.path.insert(0,
+                os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                '..')))
 
 
 def plot_spectra(grid, log10Z=-2.0, log10age=6.0, spec_names=None):
-
     return fig, ax
 
 
 if __name__ == '__main__':
 
-    # -------------------------------------------------
-    # --- define choise of SPS model and initial mass function (IMF)
-
+    """
+    Define choise of SPS model and initial mass function (IMF)
+    """
     sps_names = ['bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2',
                  'bpass-v2.2.1-bin_chab-100_cloudy-v17.00_log10Uref-2']
 
@@ -57,7 +51,13 @@ if __name__ == '__main__':
         Lnu1 = grid1.spectra[spec_name][ia, iZ, :]
         Lnu2 = grid2.spectra[spec_name][ia, iZ, :]
 
-        ax.plot(np.log10(grid1.lam), np.log10(Lnu2/Lnu1), lw=1, alpha=0.8, label=spec_name)
+        ax.plot(
+            np.log10(grid1.lam),
+            np.log10(Lnu2 / Lnu1),
+            lw=1,
+            alpha=0.8,
+            label=spec_name
+        )
 
     ax.set_xlim([3., 4.])
     ax.set_ylim([-0.75, 0.75])
@@ -65,4 +65,4 @@ if __name__ == '__main__':
     ax.set_xlabel(r'$\rm log_{10}(\lambda/\AA)$')
     ax.set_ylabel(r'$\rm log_{10}(L_{\nu}^2/L_{\nu}^1)$')
 
-    fig.savefig(f'figs/comparison.pdf')
+    fig.savefig('figs/comparison.pdf')

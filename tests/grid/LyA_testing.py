@@ -1,19 +1,15 @@
-
-
-# Create a model SED
-
-
-import flare.plt as fplt
-from synthesizer.grid import Grid
-import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import cmasher as cmr
-
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import numpy as np
+import matplotlib.pyplot as plt
+
+from synthesizer.grid import Grid
+
+
+sys.path.insert(
+    0,
+    os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+)
 
 
 log10Z = -2.
