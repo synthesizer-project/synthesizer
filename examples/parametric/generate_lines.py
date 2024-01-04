@@ -27,7 +27,9 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid/"
 
     # open the grid
-    grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=True)
+    grid = Grid(
+        grid_name, grid_dir=grid_dir, read_spectra=False, read_lines=True
+    )
 
     # define the functional form of the star formation and metal enrichment
     # histories
@@ -36,7 +38,9 @@ if __name__ == "__main__":
 
     # get the 2D star formation and metal enrichment history for the given SPS
     # grid and print summary.
-    stars = Stars(grid.log10age, grid.metallicity, sf_hist=sfh, metal_dist=metal_dist)
+    stars = Stars(
+        grid.log10age, grid.metallicity, sf_hist=sfh, metal_dist=metal_dist
+    )
     print(stars)
 
     # create the Galaxy object and print a summary
