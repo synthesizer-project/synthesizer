@@ -1,5 +1,5 @@
 """
-A generic blackholes class currently holding (ultimately) various blackhole 
+A generic blackholes class currently holding (ultimately) various blackhole
 emission models.
 
 Example Usage:
@@ -11,7 +11,7 @@ Example Usage:
 )
 """
 import numpy as np
-from unyt import deg, km, cm, s, K, rad, erg, Hz, unyt_array
+from unyt import deg, km, cm, s, K, rad, Hz, unyt_array
 
 from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
@@ -111,7 +111,8 @@ class UnifiedAGN:
 
     """
     The Unified AGN model.
-    This combines a disc model, along with modelling of the NLR, BLR, and torus.
+    This combines a disc model, along with modelling of the NLR, BLR,
+    and torus.
 
     Attributes:
         disc_model (str)

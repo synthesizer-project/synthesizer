@@ -2,7 +2,7 @@
 Photometry example
 ==================
 
-An example demonstrating the observed spectrum for a parametric galaxy 
+An example demonstrating the observed spectrum for a parametric galaxy
 including photometry. This example will:
 - build a parametric galaxy (see make_stars and make_sed).
 - calculate spectral luminosity density (see make_sed).
@@ -11,8 +11,6 @@ including photometry. This example will:
 - calculate photometry.
 - plot the redshift evolution of photometry.
 """
-import os
-import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
@@ -20,9 +18,8 @@ from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
-from synthesizer.plt import single, single_histxy
-from unyt import yr, Myr, c, angstrom
-from synthesizer.igm import Madau96, Inoue14
+from unyt import Myr
+from synthesizer.igm import Madau96
 from astropy.cosmology import Planck18 as cosmo
 
 
@@ -36,7 +33,8 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
-    # define the parameters of the star formation and metal enrichment histories
+    # define the parameters of the star formation and metal
+    # enrichment histories
     sfh_p = {"duration": 10 * Myr}
     Z_p = {
         "log10metallicity": -2.0
@@ -111,7 +109,7 @@ if __name__ == "__main__":
         ax.text(
             0.05,
             0.1,
-            f"$z=%.1f$" % z,
+            f"$z={z:.1f}$",
             bbox=dict(
                 boxstyle="round,pad=0.3", fc="w", ec="k", lw=1, alpha=0.8
             ),

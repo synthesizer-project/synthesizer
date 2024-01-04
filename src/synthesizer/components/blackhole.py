@@ -4,7 +4,7 @@ The class defined here should never be instantiated directly, there are only
 ever instantiated by the parametric/particle child classes.
 """
 import numpy as np
-from unyt import c, rad, deg, unyt_quantity
+from unyt import c, rad, deg
 
 from synthesizer import exceptions
 from synthesizer.blackhole_emission_models import Template
@@ -270,8 +270,8 @@ class BlackholesComponent:
 
         Returns
             str
-                Summary string containing the total mass formed and lists of the
-                available SEDs, lines, and images.
+                Summary string containing the total mass formed and lists
+                of the available SEDs, lines, and images.
         """
 
         # Define the width to print within
@@ -820,15 +820,17 @@ class BlackholesComponent:
                 figure and axes.
             ylimits (tuple)
                 The limits to apply to the y axis. If not provided the limits
-                will be calculated with the lower limit set to 1000 (100) times less
-                than the peak of the spectrum for rest_frame (observed) spectra.
+                will be calculated with the lower limit set to 1000 (100)
+                times less than the peak of the spectrum for rest_frame
+                (observed) spectra.
             xlimits (tuple)
                 The limits to apply to the x axis. If not provided the optimal
                 limits are found based on the ylimits.
             figsize (tuple)
                 Tuple with size 2 defining the figure size.
             kwargs (dict)
-                arguments to the `sed.plot_spectra` method called from this wrapper
+                arguments to the `sed.plot_spectra` method called from this
+                wrapper
 
         Returns:
             fig (matplotlib.pyplot.figure)

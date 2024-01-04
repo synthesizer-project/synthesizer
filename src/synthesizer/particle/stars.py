@@ -14,7 +14,7 @@ Example usages:
 
     stars = Stars(initial_masses, ages, metallicities,
                   redshift=redshift, current_masses=current_masses, ...)
-    stars = sample_sfhz(sfzh, n, total_initial_mass, 
+    stars = sample_sfhz(sfzh, n, total_initial_mass,
                         smoothing_lengths=smoothing_lengths,
                         tau_v=tau_vs, coordinates=coordinates, ...)
 """
@@ -44,8 +44,8 @@ class Stars(Particles, StarsComponent):
     about the stars needed in other computations. For example a Galaxy object
     can be passed a stars object for use with any of the Galaxy helper methods.
 
-    Note that due to the many possible operations, this class has a large number
-    of optional attributes which are set to None if not provided.
+    Note that due to the many possible operations, this class has a large
+    number of optional attributes which are set to None if not provided.
 
     Attributes:
         initial_masses (array-like, float)
@@ -123,9 +123,9 @@ class Stars(Particles, StarsComponent):
         softening_length=None,
     ):
         """
-        Intialise the Stars instance. The first 3 arguments are always required.
-        All other arguments are optional attributes applicable in different
-        situations.
+        Intialise the Stars instance. The first 3 arguments are always
+        required. All other arguments are optional attributes applicable
+        in different situations.
 
         Args:
             initial_masses (array-like, float)
@@ -217,7 +217,8 @@ class Stars(Particles, StarsComponent):
         # Intialise the flag for resampling
         self.resampled = False
 
-        # Set a frontfacing clone of the number of particles with clearer naming
+        # Set a frontfacing clone of the number of particles
+        # with clearer naming
         self.nstars = self.nparticles
 
         # Check the arguments we've been given
@@ -250,7 +251,8 @@ class Stars(Particles, StarsComponent):
     def __str__(self):
         """
         Overloads the __str__ operator, enabling the printing of a summary of
-        the Stars with print(stars) syntax, where stars is an instance of Stars.
+        the Stars with print(stars) syntax, where stars is an instance of
+        Stars.
 
         Returns:
             pstr (str)
@@ -292,8 +294,8 @@ class Stars(Particles, StarsComponent):
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
             mask (bool)
-                A mask to be applied to the stars. Spectra will only be computed
-                and returned for stars with True in the mask.
+                A mask to be applied to the stars. Spectra will only be
+                computed and returned for stars with True in the mask.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -437,8 +439,9 @@ class Stars(Particles, StarsComponent):
                 self.metallicities > grid.metallicity[-1]
             ].size
 
-            # Check the fraction of particles outside of the grid (these will be
-            # pinned to the edge of the grid) by finding those inside
+            # Check the fraction of particles outside of the grid (these
+            # will be pinned to the edge of the grid) by finding
+            # those inside
             age_inside_mask = np.logical_and(
                 self.log10ages <= grid.log10age[-1],
                 self.log10ages >= grid.log10age[0],
@@ -460,21 +463,26 @@ class Stars(Particles, StarsComponent):
             # Tell the user if there are particles outside the grid
             if ratio_out > 0:
                 print(
-                    f"{ratio_out * 100:.2f}% of particles lie outside the grid! "
+                    f"{ratio_out * 100:.2f}% of particles lie "
+                    "outside the grid! "
                     "These will be pinned at the grid limits."
                 )
-                print(f"Of these:")
+                print("Of these:")
                 print(
-                    f"  {n_below_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[0]}"
+                    f"  {n_below_age / self.nparticles * 100:.2f}%"
+                    f" have log10(ages/yr) > {grid.log10age[0]}"
                 )
                 print(
-                    f"  {n_below_metal / self.nparticles * 100:.2f}% have metallicities < {grid.metallicity[0]}"
+                    f"  {n_below_metal / self.nparticles * 100:.2f}%"
+                    f" have metallicities < {grid.metallicity[0]}"
                 )
                 print(
-                    f"  {n_above_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[-1]}"
+                    f"  {n_above_age / self.nparticles * 100:.2f}%"
+                    f" have log10(ages/yr) > {grid.log10age[-1]}"
                 )
                 print(
-                    f"  {n_above_metal / self.nparticles * 100:.2f}% have metallicities > {grid.metallicity[-1]}"
+                    f"  {n_above_metal / self.nparticles * 100:.2f}%"
+                    f" have metallicities > {grid.metallicity[-1]}"
                 )
 
         # Get particle age masks
@@ -660,8 +668,8 @@ class Stars(Particles, StarsComponent):
                 self.metallicities > grid.metallicity[-1]
             ].size
 
-            # Check the fraction of particles outside of the grid (these will be
-            # pinned to the edge of the grid) by finding those inside
+            # Check the fraction of particles outside of the grid (these will
+            # be pinned to the edge of the grid) by finding those inside
             age_inside_mask = np.logical_and(
                 self.log10ages <= grid.log10age[-1],
                 self.log10ages >= grid.log10age[0],
@@ -683,21 +691,26 @@ class Stars(Particles, StarsComponent):
             # Tell the user if there are particles outside the grid
             if ratio_out > 0:
                 print(
-                    f"{ratio_out * 100:.2f}% of particles lie outside the grid! "
+                    f"{ratio_out * 100:.2f}% of particles "
+                    "lie outside the grid! "
                     "These will be pinned at the grid limits."
                 )
-                print(f"Of these:")
+                print("Of these:")
                 print(
-                    f"  {n_below_age / self.nparticles * 100:.2f}% have log10(ages/yr) < {grid.log10age[0]}"
+                    f"  {n_below_age / self.nparticles * 100:.2f}%"
+                    f" have log10(ages/yr) < {grid.log10age[0]}"
                 )
                 print(
-                    f"  {n_below_metal / self.nparticles * 100:.2f}% have metallicities < {grid.metallicity[0]}"
+                    f"  {n_below_metal / self.nparticles * 100:.2f}% "
+                    f"have metallicities < {grid.metallicity[0]}"
                 )
                 print(
-                    f"  {n_above_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[-1]}"
+                    f"  {n_above_age / self.nparticles * 100:.2f}% "
+                    f"have log10(ages/yr) > {grid.log10age[-1]}"
                 )
                 print(
-                    f"  {n_above_metal / self.nparticles * 100:.2f}% have metallicities > {grid.metallicity[-1]}"
+                    f"  {n_above_metal / self.nparticles * 100:.2f}% "
+                    f"have metallicities > {grid.metallicity[-1]}"
                 )
 
         # Get particle age masks
@@ -756,8 +769,8 @@ class Stars(Particles, StarsComponent):
 
         Returns:
             Line
-                An instance of Line containing this lines wavelenth, luminosity,
-                and continuum for each star particle.
+                An instance of Line containing this lines wavelenth,
+                luminosity, and continuum for each star particle.
         """
 
         # If the line_id is a str denoting a single line
@@ -1765,7 +1778,8 @@ def sample_sfhz(
 
     Args:
         sfhz (array-like, float)
-            The Star Formation Metallicity History grid (from parametric.Stars).
+            The Star Formation Metallicity History grid
+            (from parametric.Stars).
         log10ages (array-like, float)
             The log of the SFZH age axis.
         log10metallicities (array-like, float)

@@ -2,7 +2,7 @@
 Plot delta_lambda for a grid.
 ===============================
 
-This script demonstrates how to generate delta_lambda from a provided grid. 
+This script demonstrates how to generate delta_lambda from a provided grid.
 It includes the following steps:
 - Builds a parametric galaxy using make_sfzh.
 - Retrieves delta_lambda for the galaxy using the grid.

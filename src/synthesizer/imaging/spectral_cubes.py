@@ -1,12 +1,12 @@
 """ Definitions for image objects
 """
-import synthesizer.exceptions as exceptions
 import numpy as np
-import math
 import warnings
 from unyt import kpc, mas
-from unyt.dimensions import length, angle
+from unyt.dimensions import angle
+
 from synthesizer.imaging.scene import Scene, ParticleScene
+import synthesizer.exceptions as exceptions
 
 
 class SpectralCube:
@@ -155,8 +155,8 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             A cosmology object from astropy, used for cosmological calculations
             when converting rest frame luminosity to flux.
         kernel (array-like, float)
-            The values from one of the kernels from the kernel_functions module.
-            Only used for smoothed images.
+            The values from one of the kernels from the kernel_functions
+            module. Only used for smoothed images.
         kernel_threshold (float)
             The kernel's impact parameter threshold (by default 1).
         Raises
@@ -211,7 +211,8 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
            Errors when an incorrect combination of arguments is passed.
         """
 
-        # Warn that specifying redshift does nothing for rest frame observations
+        # Warn that specifying redshift does nothing
+        # for rest frame observations
         if rest_frame and redshift is not None:
             warnings.warn(
                 "Warning, redshift not used when computing rest " "frame SEDs!"

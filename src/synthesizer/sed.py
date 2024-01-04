@@ -18,7 +18,7 @@ from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from scipy import integrate
 from spectres import spectres
-from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
+from unyt import c, h, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
@@ -264,8 +264,9 @@ class Sed:
         Overide multiplication operator to allow lnu to be scaled.
         This only works scaling * x.
 
-        Note: only acts on the rest frame spectra. To get the scaled fnu get_fnu
-        must be called on the newly scaled Sed object.
+        Note: only acts on the rest frame spectra. To get the
+        scaled fnu get_fnu must be called on the newly scaled
+        Sed object.
 
         Args:
             scaling (float)
@@ -282,8 +283,9 @@ class Sed:
         """
         As above but for x * scaling.
 
-        Note: only acts on the rest frame spectra. To get the scaled fnu get_fnu
-        must be called on the newly scaled Sed object.
+        Note: only acts on the rest frame spectra. To get the
+        scaled fnu get_fnu must be called on the newly
+        scaled Sed object.
 
         Args:
             scaling (float)
@@ -547,10 +549,11 @@ class Sed:
                     )
             else:
                 raise exceptions.UnimplementedFunctionality(
-                    "Measuring bolometric luminosities for Sed.lnu.ndim > 2 not"
-                    " yet implemented! Feel free to implement and raise a "
-                    "pull request. Guidance for contributing can be found at "
-                    "https://github.com/flaresimulations/synthesizer/blob/main/"
+                    "Measuring bolometric luminosities for Sed.lnu.ndim > 2"
+                    " not yet implemented! Feel free to implement and raise "
+                    "a pull request. Guidance for contributing can be found "
+                    "at https://github.com/flaresimulations/"
+                    "synthesizer/blob/main/"
                     "docs/CONTRIBUTING.md"
                 )
         else:
@@ -1184,7 +1187,8 @@ class Sed:
         if mask is not None:
             if self._lnu.ndim < 2:
                 raise exceptions.InconsistentArguments(
-                    "Masks are only applicable for Seds containing multiple spectra"
+                    "Masks are only applicable for Seds containing "
+                    "multiple spectra"
                 )
             if self._lnu.shape[0] != mask.size:
                 raise exceptions.InconsistentArguments(
@@ -1297,8 +1301,9 @@ def plot_spectra(
             figure and axes.
         ylimits (tuple)
             The limits to apply to the y axis. If not provided the limits
-            will be calculated with the lower limit set to 1000 (100) times less
-            than the peak of the spectrum for rest_frame (observed) spectra.
+            will be calculated with the lower limit set to 1000 (100) times
+            less than the peak of the spectrum for rest_frame (observed)
+            spectra.
         xlimits (tuple)
             The limits to apply to the x axis. If not provided the optimal
             limits are found based on the ylimits.
@@ -1383,7 +1388,8 @@ def plot_spectra(
             # Ensure we have fluxes
             if sed.fnu is None:
                 raise exceptions.MissingSpectraType(
-                    f"This Sed has no fluxes ({key})! Have you called Sed.get_fnu()?"
+                    f"This Sed has no fluxes ({key})! Have you called "
+                    "Sed.get_fnu()?"
                 )
 
             # Ok everything is fine
@@ -1542,8 +1548,9 @@ def plot_observed_spectra(
             figure and axes.
         ylimits (tuple)
             The limits to apply to the y axis. If not provided the limits
-            will be calculated with the lower limit set to 1000 (100) times less
-            than the peak of the spectrum for rest_frame (observed) spectra.
+            will be calculated with the lower limit set to 1000 (100) times
+            less than the peak of the spectrum for rest_frame (observed)
+            spectra.
         xlimits (tuple)
             The limits to apply to the x axis. If not provided the optimal
             limits are found based on the ylimits.

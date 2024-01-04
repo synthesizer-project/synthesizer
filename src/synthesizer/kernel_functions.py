@@ -1,20 +1,20 @@
 import numpy as np
-import sys
 from scipy import integrate
 
 
 class kernel:
 
     """
-    Line of sight distance along a particle, l = 2*sqrt(h^2 + b^2), where h and b
-    are the smoothing length and the impact parameter respectively. This needs
-    to be weighted along with the kernel density function W(r), to calculate the
-    los density. Integrated los density, D = 2 * integral(W(r)dz) from 0 to
-    sqrt(h^2-b^2), where r = sqrt(z^2 + b^2), W(r) is in units of h^-3
-    and is a function of r and h.
-    The parameters are normalized in terms of the smoothing length, helping us to
-    create a look-up table for every impact parameter along the line-of-sight.
-    Hence we substitute x = x/h and b = b/h.
+    Line of sight distance along a particle, l = 2*sqrt(h^2 + b^2),
+    where h and b are the smoothing length and the impact parameter
+    respectively. This needs to be weighted along with the kernel
+    density function W(r), to calculate the los density. Integrated
+    los density, D = 2 * integral(W(r)dz) from 0 to sqrt(h^2-b^2),
+    where r = sqrt(z^2 + b^2), W(r) is in units of h^-3 and is a
+    function of r and h. The parameters are normalized in terms of
+    the smoothing length, helping us to create a look-up table for
+    every impact parameter along the line-of-sight. Hence we
+    substitute x = x/h and b = b/h.
 
     This implies
     D = h^-2 * 2 * integral(W(r) dz) for x = 0 to sqrt(1.-b^2).
@@ -51,7 +51,8 @@ class kernel:
 
     def get_kernel(self):
         """
-        h^-2 * 2 * integral(W(r) dz) from x = 0 to sqrt(1.-b^2) for various values of `b`
+        h^-2 * 2 * integral(W(r) dz) from x = 0 to sqrt(1.-b^2) for
+        various values of `b`
         """
 
         kernel = np.zeros(self.binsize + 1)

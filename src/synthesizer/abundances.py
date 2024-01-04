@@ -12,11 +12,9 @@ A note on notation:
 from copy import deepcopy
 import numpy as np
 import cmasher as cmr
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 
-from synthesizer.exceptions import InconsistentParameter, UnrecognisedOption
+from synthesizer.exceptions import InconsistentParameter
 
 
 class ScalingFunctions:
@@ -235,11 +233,13 @@ class Elements:
     A["Cu"] = 63.546
     A["Zn"] = 65.38
 
-    # Elemental abundances
-    # Asplund (2009) Solar, same as GASS (Grevesse et al. (2010)) in cloudy
-    # https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/abstract
+    """Elemental abundances
+    Asplund (2009) Solar, same as GASS (Grevesse et al. (2010)) in cloudy
+    https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/abstract
 
-    # Asplund (2009) Solar - HOWEVER, running metallicity() on the solar abundances below yields 0.0135
+    Asplund (2009) Solar - HOWEVER, running metallicity() on the
+    solar abundances below yields 0.0135
+    """
     solar_metallicity = 0.0134
 
     sol = {}
@@ -275,16 +275,24 @@ class Elements:
     sol["Cu"] = -7.81
     sol["Zn"] = -7.44
 
-    # ---------------- default Depletion
-    # --- ADOPTED VALUES
-    # Gutkin+2016: https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract
-    # Dopita+2013: https://ui.adsabs.harvard.edu/abs/2013ApJS..208...10D/abstract
-    # Dopita+2006: https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract
+    """ default Depletion
+    ADOPTED VALUES
+    Gutkin+2016:
+        https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract
+    Dopita+2013:
+        https://ui.adsabs.harvard.edu/abs/2013ApJS..208...10D/abstract
+    Dopita+2006:
+        https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract
+    """
 
     default_depletion = {}
-    # Depletion of 1 -> no depletion, while 0 -> fully depleted
-    # Noble gases aren't depleted (eventhough there is some eveidence
-    # for Argon depletion -> https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.2310G/abstract)
+    """
+    Depletion of 1 -> no depletion, while 0 -> fully depleted
+
+    Noble gases aren't depleted (even though there is some
+    evidence for Argon depletion
+    (see https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.2310G/abstract)
+    """
     default_depletion["H"] = 1.0
     default_depletion["He"] = 1.0
     default_depletion["Li"] = 0.16
@@ -329,7 +337,8 @@ class Abundances(Elements):
         dust_to_metal_ratio=False,
     ):
         """
-        A class for calcualting elemental abundances including various scaling and depletion on to dust
+        A class for calculating elemental abundances including various
+        scaling and depletion on to dust
 
         Args:
             metallicity (float)
@@ -524,7 +533,7 @@ class Abundances(Elements):
 
         # Add the content of the summary to the string to be printed
         pstr += "-" * 20 + "\n"
-        pstr += f"ABUNDANCE PATTERN SUMMARY\n"
+        pstr += "ABUNDANCE PATTERN SUMMARY\n"
         pstr += f"X: {self.hydrogen_mass_fraction:.3f}\n"
         pstr += f"Y: {self.helium_mass_fraction:.3f}\n"
         pstr += f"Z: {self.metallicity:.3f}\n"
@@ -538,9 +547,19 @@ class Abundances(Elements):
         )
 
         pstr += "-" * 10 + "\n"
-        pstr += "element log10(X/H)_total (log10(X/H)+12) [[X/H]] |depletion| log10(X/H)_gas log10(X/H)_dust \n"
+        pstr += (
+            "element log10(X/H)_total (log10(X/H)+12) [[X/H]]"
+            " |depletion| log10(X/H)_gas log10(X/H)_dust \n"
+        )
         for ele in self.all_elements:
-            pstr += f"{self.name[ele]}: {self.total[ele]:.2f} ({self.total[ele]+12:.2f}) [{self.total[ele]-self.sol[ele]:.2f}] |{self.depletion[ele]:.2f}| {self.gas[ele]:.2f} {self.dust[ele]:.2f}\n"
+            pstr += (
+                f"{self.name[ele]}: {self.total[ele]:.2f} "
+                f"({self.total[ele]+12:.2f}) "
+                f"[{self.total[ele]-self.sol[ele]:.2f}] "
+                f"|{self.depletion[ele]:.2f}| "
+                f"{self.gas[ele]:.2f} "
+                f"{self.dust[ele]:.2f}\n"
+            )
         pstr += "-" * 20
 
         return pstr
@@ -569,11 +588,10 @@ class Abundances(Elements):
 
     def get_metallicity(self, a=None, elements=None):
         """
-        This function determines the mass fraction of the metals, or the metallicity
-
+        This function determines the mass fraction of the metals,
+        or the metallicity
 
         TODO: rewrite this for improved clarity
-
 
         :param elements: a dictionary with the absolute elemental abundances
 
@@ -601,7 +619,10 @@ class Abundances(Elements):
 
     def get_depletions(self):
         """
-        This function returns the depletion after scaling using the solar abundances and depletion patterns from the dust-to-metal ratio. This is the fraction of each element that is depleted on to dust.
+        This function returns the depletion after scaling using
+        the solar abundances and depletion patterns from the dust-to-metal
+        ratio. This is the fraction of each element that is
+        depleted on to dust.
         """
         for element in self.all_elements:
             self.depletion[element] = (
@@ -612,7 +633,8 @@ class Abundances(Elements):
 
     def solar_relative_abundance(self, e, ref_element="H"):
         """
-        This function returns an element's abundance relative to that in the Sun, i.e. [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
+        This function returns an element's abundance relative to that
+        in the Sun, i.e. [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
         :param a: the element of interest
         :param a: a dictionary with the absolute elemental abundances
         """
@@ -638,7 +660,8 @@ class Abundances(Elements):
 
     def get_dust_to_metal_ratio(self):
         """
-        This function measures the dust-to-metal ratio for the calculated depletion
+        This function measures the dust-to-metal ratio for the
+        calculated depletion
         """
 
         dust = 0.0  # mass fraction in dust
@@ -654,7 +677,10 @@ class Abundances(Elements):
 
 
 def plot_abundance_pattern(a, show=False, ylim=None, lines=["total"]):
-    """Plot single abundance patterns, but possibly including total, gas and dust"""
+    """
+    Plot single abundance patterns, but possibly
+    including total, gas and dust
+    """
 
     fig = plt.figure(figsize=(7.0, 4.0))
 

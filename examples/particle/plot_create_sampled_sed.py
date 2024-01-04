@@ -2,7 +2,9 @@
 Create sampled SED
 ==================
 
-this example generates a sample of star particles from a 2D SFZH. In this case it is generated from a parametric star formation history with constant star formation.
+this example generates a sample of star particles from a 2D SFZH.
+In this case it is generated from a parametric star formation history
+with constant star formation.
 """
 
 import numpy as np
@@ -21,11 +23,11 @@ grid_name = "test_grid"
 grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
-# --- define the grid (normally this would be defined by an SPS grid)
+# define the grid (normally this would be defined by an SPS grid)
 log10ages = np.arange(6.0, 10.5, 0.1)
 metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
 
-# --- define the parameters of the star formation and metal enrichment histories
+# define the parameters of the star formation and metal enrichment histories
 
 Z_p = {"metallicity": 0.01}
 metal_dist = ZDist.DeltaConstant(**Z_p)
@@ -48,9 +50,9 @@ stars = sample_sfhz(sfzh.sfzh, sfzh.log10ages, sfzh.log10metallicities, N)
 
 galaxy = Galaxy(stars=stars)
 
-# --- this generates stellar and intrinsic spectra
-# galaxy.generate_intrinsic_spectra(grid, fesc=0.0) # calculate only integrated SEDs
-# calculates for every star particle, slow but necessary for LOS.
+""" this generates stellar and intrinsic spectra
+galaxy.generate_intrinsic_spectra(grid, fesc=0.0)
+calculate only integrated SEDs """
 galaxy.stars.get_spectra_incident(grid)
 
 # --- generate dust screen
