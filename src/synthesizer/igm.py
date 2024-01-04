@@ -101,7 +101,9 @@ class Inoue14:
         if zS < z1DLA:
             tLCDLA_value[x0] = (
                 0.2113 * _pow(1.0 + zS, 2)
-                - 0.07661 * _pow(1.0 + zS, 2.3) * _pow(lobs[x0] / lamL, (-3e-1))
+                - 0.07661
+                * _pow(1.0 + zS, 2.3)
+                * _pow(lobs[x0] / lamL, (-3e-1))
                 - 0.1347 * _pow(lobs[x0] / lamL, 2)
             )
         else:
@@ -109,13 +111,17 @@ class Inoue14:
 
             tLCDLA_value[x0 & x1] = (
                 0.04696 * _pow(1.0 + zS, 3)
-                - 0.01779 * _pow(1.0 + zS, 3.3) * _pow(lobs[x0 & x1] / lamL, (-3e-1))
+                - 0.01779
+                * _pow(1.0 + zS, 3.3)
+                * _pow(lobs[x0 & x1] / lamL, (-3e-1))
                 - 0.02916 * _pow(lobs[x0 & x1] / lamL, 3)
             )
             tLCDLA_value[x0 & ~x1] = (
                 0.6340
                 + 0.04696 * _pow(1.0 + zS, 3)
-                - 0.01779 * _pow(1.0 + zS, 3.3) * _pow(lobs[x0 & ~x1] / lamL, (-3e-1))
+                - 0.01779
+                * _pow(1.0 + zS, 3.3)
+                * _pow(lobs[x0 & ~x1] / lamL, (-3e-1))
                 - 0.1347 * _pow(lobs[x0 & ~x1] / lamL, 2)
                 - 0.2905 * _pow(lobs[x0 & ~x1] / lamL, (-3e-1))
             )
@@ -146,7 +152,9 @@ class Inoue14:
                 - _pow(lobs[x0 & x1] / lamL, 3.7)
             )
             tLCLAF_value[x0 & ~x1] = (
-                2.545e-2 * _pow(1.0 + zS, 1.6) * _pow(lobs[x0 & ~x1] / lamL, 2.1)
+                2.545e-2
+                * _pow(1.0 + zS, 1.6)
+                * _pow(lobs[x0 & ~x1] / lamL, 2.1)
                 + 0.3248 * _pow(lobs[x0 & ~x1] / lamL, 1.2)
                 - 0.2496 * _pow(lobs[x0 & ~x1] / lamL, 2.1)
             )
@@ -160,12 +168,16 @@ class Inoue14:
                 - _pow(lobs[x0 & x1] / lamL, 5.5)
             )
             tLCLAF_value[x0 & x2] = (
-                5.221e-4 * _pow(1.0 + zS, 3.4) * _pow(lobs[x0 & x2] / lamL, 2.1)
+                5.221e-4
+                * _pow(1.0 + zS, 3.4)
+                * _pow(lobs[x0 & x2] / lamL, 2.1)
                 + 0.2182 * _pow(lobs[x0 & x2] / lamL, 2.1)
                 - 2.545e-2 * _pow(lobs[x0 & x2] / lamL, 3.7)
             )
             tLCLAF_value[x0 & x3] = (
-                5.221e-4 * _pow(1.0 + zS, 3.4) * _pow(lobs[x0 & x3] / lamL, 2.1)
+                5.221e-4
+                * _pow(1.0 + zS, 3.4)
+                * _pow(lobs[x0 & x3] / lamL, 2.1)
                 + 0.3248 * _pow(lobs[x0 & x3] / lamL, 1.2)
                 - 3.140e-2 * _pow(lobs[x0 & x3] / lamL, 2.1)
             )
@@ -249,8 +261,12 @@ class Madau96:
                             * ((1 + z) ** 0.18 - (l / self.wvs[-1]) ** 0.18)
                             - 0.7
                             * (l / self.wvs[-1]) ** 3
-                            * ((l / self.wvs[-1]) ** (-1.32) - (1 + z) ** (-1.32))
-                            + 0.023 * ((l / self.wvs[-1]) ** 1.68 - (1 + z) ** 1.68)
+                            * (
+                                (l / self.wvs[-1]) ** (-1.32)
+                                - (1 + z) ** (-1.32)
+                            )
+                            + 0.023
+                            * ((l / self.wvs[-1]) ** 1.68 - (1 + z) ** 1.68)
                         )
                     ),
                 )

@@ -100,7 +100,9 @@ class Template:
             )
 
         return {
-            "intrinsic": bolometric_luminosity.to(self.sed.lnu.units * Hz).value
+            "intrinsic": bolometric_luminosity.to(
+                self.sed.lnu.units * Hz
+            ).value
             * self.sed,
         }
 
@@ -648,7 +650,10 @@ class UnifiedAGN:
         # Note: the choice of "intrinsic" is to align with the Pacman model
         # which reserves "total" and "emergent" to include dust.
         spectra["intrinsic"] = (
-            spectra["disc"] + spectra["blr"] + spectra["nlr"] + spectra["torus"]
+            spectra["disc"]
+            + spectra["blr"]
+            + spectra["nlr"]
+            + spectra["torus"]
         )
 
         # Since we're using a coarse grid it might be necessary to rescale

@@ -366,7 +366,13 @@ class ParticleScene(Scene):
 
         # Check what we've been given
         self._check_part_args(
-            resolution, coordinates, centre, cosmo, sed, kernel, smoothing_lengths
+            resolution,
+            coordinates,
+            centre,
+            cosmo,
+            sed,
+            kernel,
+            smoothing_lengths,
         )
 
         # Initilise the parent class
@@ -416,7 +422,14 @@ class ParticleScene(Scene):
             self.kernel_threshold = None
 
     def _check_part_args(
-        self, resolution, coordinates, centre, cosmo, sed, kernel, smoothing_lengths
+        self,
+        resolution,
+        coordinates,
+        centre,
+        cosmo,
+        sed,
+        kernel,
+        smoothing_lengths,
     ):
         """
         Ensures we have a valid combination of inputs.

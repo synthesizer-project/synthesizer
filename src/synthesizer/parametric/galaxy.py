@@ -114,7 +114,9 @@ class Galaxy(BaseGalaxy):
             # Slice off the last two entries, we don't need then
             spectra_keys[iline] = spectra_keys[iline][:-2]
 
-            pstr += "    Stellar:  [" + conn_char.join(spectra_keys) + "]" + "\n"
+            pstr += (
+                "    Stellar:  [" + conn_char.join(spectra_keys) + "]" + "\n"
+            )
 
         else:
             pstr += "    Stellar:  []" + "\n"
@@ -137,7 +139,12 @@ class Galaxy(BaseGalaxy):
             # Slice off the last two entries, we don't need then
             spectra_keys[iline] = spectra_keys[iline][:-2]
 
-            pstr += "    Black Holes:  [" + conn_char.join(spectra_keys) + "]" + "\n"
+            pstr += (
+                "    Black Holes:  ["
+                + conn_char.join(spectra_keys)
+                + "]"
+                + "\n"
+            )
 
         else:
             pstr += "    Black Holes:  []" + "\n"
@@ -160,7 +167,9 @@ class Galaxy(BaseGalaxy):
             # Slice off the last two entries, we don't need then
             spectra_keys[iline] = spectra_keys[iline][:-2]
 
-            pstr += "    Combined: [" + conn_char.join(spectra_keys) + "]" + "\n"
+            pstr += (
+                "    Combined: [" + conn_char.join(spectra_keys) + "]" + "\n"
+            )
 
         else:
             pstr += "    Combined: []" + "\n"
@@ -183,7 +192,9 @@ class Galaxy(BaseGalaxy):
             # Slice off the last two entries, we don't need then
             line_keys[iline] = line_keys[iline][:-2]
 
-            pstr += "available lines: [" + conn_char.join(line_keys) + "]" + "\n"
+            pstr += (
+                "available lines: [" + conn_char.join(line_keys) + "]" + "\n"
+            )
 
         else:
             pstr += "available lines: []" + "\n"
@@ -206,7 +217,9 @@ class Galaxy(BaseGalaxy):
             # Slice off the last two entries, we don't need then
             img_keys[iline] = img_keys[iline][:-2]
 
-            pstr += "available images: [" + conn_char.join(img_keys) + "]" + "\n"
+            pstr += (
+                "available images: [" + conn_char.join(img_keys) + "]" + "\n"
+            )
 
         else:
             pstr += "available images: []" + "\n"
@@ -260,9 +273,13 @@ class Galaxy(BaseGalaxy):
                 )
             else:
                 for line_name, line in self.stars.lines[line_type].items():
-                    if line_name in second_galaxy.stars.lines[line_type].keys():
+                    if (
+                        line_name
+                        in second_galaxy.stars.lines[line_type].keys()
+                    ):
                         new_galaxy.stars.lines[line_type][line_name] = (
-                            line + second_galaxy.stars.lines[line_type][line_name]
+                            line
+                            + second_galaxy.stars.lines[line_type][line_name]
                         )
                     else:
                         raise exceptions.InconsistentAddition(
@@ -273,7 +290,9 @@ class Galaxy(BaseGalaxy):
         # add together images
         for img_name, image in self.images.items():
             if img_name in second_galaxy.images.keys():
-                new_galaxy.images[img_name] = image + second_galaxy.images[img_name]
+                new_galaxy.images[img_name] = (
+                    image + second_galaxy.images[img_name]
+                )
             else:
                 raise exceptions.InconsistentAddition(
                     (
@@ -455,7 +474,10 @@ class Galaxy(BaseGalaxy):
         # Combine images
         if stellar_spectra_type is not None and blackhole_spectra_type is None:
             img = stellar_img
-        elif stellar_spectra_type is not None and blackhole_spectra_type is not None:
+        elif (
+            stellar_spectra_type is not None
+            and blackhole_spectra_type is not None
+        ):
             img = stellar_img + blackhole_img
         else:
             img = blackhole_img

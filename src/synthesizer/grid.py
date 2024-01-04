@@ -240,7 +240,10 @@ class Grid:
         self.grid_dir = grid_dir
 
         # Have we been passed an extension?
-        if grid_name.split(".")[-1] == "hdf5" or grid_name.split(".")[-1] == "h5":
+        if (
+            grid_name.split(".")[-1] == "hdf5"
+            or grid_name.split(".")[-1] == "h5"
+        ):
             self.grid_ext = grid_name.split(".")[-1]
         else:
             self.grid_ext = "hdf5"
@@ -249,7 +252,9 @@ class Grid:
         self.grid_name = grid_name.replace(".hdf5", "").replace(".h5", "")
 
         # Construct the full path
-        self.grid_filename = f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
+        self.grid_filename = (
+            f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
+        )
 
         # Flags for reading behaviour
         self.read_lines = read_lines
@@ -271,7 +276,9 @@ class Grid:
             self.axes = list(hf.attrs["axes"])
 
             # Put the values of each axis in a dictionary
-            self.axes_values = {axis: hf["axes"][axis][:] for axis in self.axes}
+            self.axes_values = {
+                axis: hf["axes"][axis][:] for axis in self.axes
+            }
 
             # Set the values of each axis as an attribute
             # e.g. self.log10age == self.axes_values['log10age']
@@ -291,7 +298,9 @@ class Grid:
         if read_spectra:
             self.spectra = {}
 
-            with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
+            with h5py.File(
+                f"{self.grid_dir}/{self.grid_name}.hdf5", "r"
+            ) as hf:
                 # Get list of available spectra
                 spectra_ids = list(hf["spectra"].keys())
 
@@ -346,14 +355,20 @@ class Grid:
             else:
                 read_lines = get_available_lines(self.grid_name, self.grid_dir)
 
-            with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
+            with h5py.File(
+                f"{self.grid_dir}/{self.grid_name}.hdf5", "r"
+            ) as hf:
                 for line in read_lines:
                     self.lines[line] = {}
                     self.lines[line]["wavelength"] = hf["lines"][line].attrs[
                         "wavelength"
                     ]
-                    self.lines[line]["luminosity"] = hf["lines"][line]["luminosity"][:]
-                    self.lines[line]["continuum"] = hf["lines"][line]["continuum"][:]
+                    self.lines[line]["luminosity"] = hf["lines"][line][
+                        "luminosity"
+                    ][:]
+                    self.lines[line]["continuum"] = hf["lines"][line][
+                        "continuum"
+                    ][:]
 
             # Save list of available lines
             self.available_lines = list(self.lines.keys())
@@ -407,7 +422,9 @@ class Grid:
                 new_spectra = np.asarray(new_spectra)
             else:
                 # Evaluate the function at the desired wavelengths
-                new_spectra = spectres(new_lam, self._lam, self.spectra[spectra_type])
+                new_spectra = spectres(
+                    new_lam, self._lam, self.spectra[spectra_type]
+                )
 
             # Update this spectra
             self.spectra[spectra_type] = new_spectra
@@ -709,7 +726,9 @@ class Grid:
         fig.colorbar(cmapper, cax=cax, orientation="horizontal")
         cax.xaxis.tick_top()
         cax.xaxis.set_label_position("top")
-        cax.set_xlabel(r"$\rm log_{10}(\dot{n}_{" + ion + "}/s^{-1}\ M_{\odot}^{-1})$")
+        cax.set_xlabel(
+            r"$\rm log_{10}(\dot{n}_{" + ion + "}/s^{-1}\ M_{\odot}^{-1})$"
+        )
         cax.set_yticks([])
 
         # Set custom tick marks

@@ -94,7 +94,9 @@ class BaseGalaxy:
         )
 
         # get the spectrum and normalise it properly
-        lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(lam)
+        lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(
+            lam
+        )
 
         # create new Sed object containing dust spectra
         sed = Sed(lam, lnu=lnu)
@@ -208,7 +210,10 @@ class BaseGalaxy:
         for key in spectra:
             if self.stars is not None and key in self.stars.spectra:
                 spectra[key].append(self.stars.spectra[key])
-            if self.black_holes is not None and key in self.black_holes.spectra:
+            if (
+                self.black_holes is not None
+                and key in self.black_holes.spectra
+            ):
                 spectra[key].append(self.black_holes.spectra[key])
             if self.gas is not None and key in self.gas.spectra:
                 spectra[key].append(self.gas.spectra[key])
@@ -292,7 +297,9 @@ class BaseGalaxy:
         # Get the combined spectra
         if combined_spectra:
             if isinstance(combined_spectra, list):
-                spectra.update({key: self.spectra[key] for key in combined_spectra})
+                spectra.update(
+                    {key: self.spectra[key] for key in combined_spectra}
+                )
             elif isinstance(combined_spectra, Sed):
                 spectra.update(
                     {
@@ -329,7 +336,10 @@ class BaseGalaxy:
         if gas_spectra:
             if isinstance(gas_spectra, list):
                 spectra.update(
-                    {"Gas " + key: self.gas.spectra[key] for key in gas_spectra}
+                    {
+                        "Gas " + key: self.gas.spectra[key]
+                        for key in gas_spectra
+                    }
                 )
             elif isinstance(gas_spectra, Sed):
                 spectra.update(
@@ -339,7 +349,10 @@ class BaseGalaxy:
                 )
             else:
                 spectra.update(
-                    {"Gas " + key: self.gas.spectra[key] for key in self.gas.spectra}
+                    {
+                        "Gas " + key: self.gas.spectra[key]
+                        for key in self.gas.spectra
+                    }
                 )
 
         # Get the black hole spectra
@@ -449,7 +462,9 @@ class BaseGalaxy:
         # Get the combined spectra
         if combined_spectra:
             if isinstance(combined_spectra, list):
-                spectra.update({key: self.spectra[key] for key in combined_spectra})
+                spectra.update(
+                    {key: self.spectra[key] for key in combined_spectra}
+                )
             elif isinstance(combined_spectra, Sed):
                 spectra.update(
                     {
@@ -486,7 +501,10 @@ class BaseGalaxy:
         if gas_spectra:
             if isinstance(gas_spectra, list):
                 spectra.update(
-                    {"Gas " + key: self.gas.spectra[key] for key in gas_spectra}
+                    {
+                        "Gas " + key: self.gas.spectra[key]
+                        for key in gas_spectra
+                    }
                 )
             elif isinstance(gas_spectra, Sed):
                 spectra.update(
@@ -496,7 +514,10 @@ class BaseGalaxy:
                 )
             else:
                 spectra.update(
-                    {"Gas " + key: self.gas.spectra[key] for key in self.gas.spectra}
+                    {
+                        "Gas " + key: self.gas.spectra[key]
+                        for key in self.gas.spectra
+                    }
                 )
 
         # Get the black hole spectra

@@ -141,7 +141,9 @@ class Galaxy(BaseGalaxy):
 
                 # mass weighted gas phase metallicity
                 self.sf_gas_metallicity = (
-                    np.sum(self.gas.masses[mask] * self.gas.metallicities[mask])
+                    np.sum(
+                        self.gas.masses[mask] * self.gas.metallicities[mask]
+                    )
                     / self.sf_gas_mass
                 )
 
@@ -291,7 +293,9 @@ class Galaxy(BaseGalaxy):
                 "Star object is missing coordinates!"
             )
         if self.gas.coordinates is None:
-            raise exceptions.InconsistentArguments("Gas object is missing coordinates!")
+            raise exceptions.InconsistentArguments(
+                "Gas object is missing coordinates!"
+            )
         if self.gas.smoothing_lengths is None:
             raise exceptions.InconsistentArguments(
                 "Gas object is missing smoothing lengths!"
@@ -301,7 +305,9 @@ class Galaxy(BaseGalaxy):
                 "Gas object is missing metallicities!"
             )
         if self.gas.masses is None:
-            raise exceptions.InconsistentArguments("Gas object is missing masses!")
+            raise exceptions.InconsistentArguments(
+                "Gas object is missing masses!"
+            )
         if self.gas.dust_to_metal_ratio is None:
             raise exceptions.InconsistentArguments(
                 "Gas object is missing DTMs (dust_to_metal_ratio)!"
@@ -319,12 +325,17 @@ class Galaxy(BaseGalaxy):
 
         # Set up the gas inputs to the C function.
         gas_pos = np.ascontiguousarray(self.gas._coordinates, dtype=np.float64)
-        gas_sml = np.ascontiguousarray(self.gas._smoothing_lengths, dtype=np.float64)
-        gas_met = np.ascontiguousarray(self.gas.metallicities, dtype=np.float64)
+        gas_sml = np.ascontiguousarray(
+            self.gas._smoothing_lengths, dtype=np.float64
+        )
+        gas_met = np.ascontiguousarray(
+            self.gas.metallicities, dtype=np.float64
+        )
         gas_mass = np.ascontiguousarray(self.gas._masses, dtype=np.float64)
         if isinstance(self.gas.dust_to_metal_ratio, float):
             gas_dtm = np.ascontiguousarray(
-                np.full_like(gas_mass, self.gas.dust_to_metal_ratio), dtype=np.float64
+                np.full_like(gas_mass, self.gas.dust_to_metal_ratio),
+                dtype=np.float64,
             )
         else:
             gas_dtm = np.ascontiguousarray(
@@ -558,9 +569,9 @@ class Galaxy(BaseGalaxy):
         elif stellar_mass == 0.0:
             gamma = gamma_min
         else:
-            C = 1 + (sf_gas_metallicity / Z_norm) * (sf_gas_mass / stellar_mass) * (
-                1.0 / beta
-            )
+            C = 1 + (sf_gas_metallicity / Z_norm) * (
+                sf_gas_mass / stellar_mass
+            ) * (1.0 / beta)
             gamma = gamma_max - (gamma_max - gamma_min) / C
 
         return gamma
@@ -767,9 +778,14 @@ class Galaxy(BaseGalaxy):
         # Combine images
         if stellar_spectra_type is not None and blackhole_spectra_type is None:
             img = stellar_img
-        elif stellar_spectra_type is not None and blackhole_spectra_type is not None:
+        elif (
+            stellar_spectra_type is not None
+            and blackhole_spectra_type is not None
+        ):
             img = stellar_img + blackhole_img
-        elif stellar_spectra_type is None and blackhole_spectra_type is not None:
+        elif (
+            stellar_spectra_type is None and blackhole_spectra_type is not None
+        ):
             img = blackhole_img
         else:
             img = stellar_img  # pixel_value case
@@ -832,7 +848,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
             )
 
         return img
@@ -894,7 +911,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
             )
 
         return img
@@ -958,7 +976,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
             )
 
         # Set up the initial mass image
@@ -1338,7 +1357,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
             )
 
         # Convert the initial mass map to SFR
