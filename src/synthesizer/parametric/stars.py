@@ -190,7 +190,7 @@ class Stars(StarsComponent):
                 "SFH module, or a single float."
             )
 
-        # Store the metallicity distribution we've been given, this is either...
+        # Store the metallicity distribution we've been given, either...
         if issubclass(type(metal_dist), ZDistCommon):
             self.metal_dist_func = metal_dist  # a ZDist function
             self.metal_dist = None
@@ -248,8 +248,7 @@ class Stars(StarsComponent):
         elif (
             len(
                 set(self.log10metallicities[:-1] - self.log10metallicities[1:])
-            )
-            == 1
+            ) == 1
         ):
             # Regular in logspace
             self.metallicity_grid_type = "log10Z"
@@ -416,8 +415,8 @@ class Stars(StarsComponent):
 
         # Compute the spectra
         spectra = np.sum(
-            grid.spectra[spectra_name][non_zero_inds[0], non_zero_inds[1], :]
-            * sfzh[non_zero_inds[0], non_zero_inds[1], :],
+            grid.spectra[spectra_name][non_zero_inds[0], non_zero_inds[1], :] *
+            sfzh[non_zero_inds[0], non_zero_inds[1], :],
             axis=0,
         )
 
@@ -489,8 +488,8 @@ class Stars(StarsComponent):
 
                 # Line luminosity erg/s
                 luminosity.append(
-                    (1 - fesc)
-                    * np.sum(grid_line["luminosity"] * self.sfzh, axis=(0, 1))
+                    (1 - fesc) *
+                    np.sum(grid_line["luminosity"] * self.sfzh, axis=(0, 1))
                 )
 
                 # Continuum at line wavelength, erg/s/Hz
