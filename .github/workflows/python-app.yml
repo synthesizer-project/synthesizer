@@ -38,8 +38,9 @@ jobs:
         # ignores: 
         # - E402 "module level import not at top of file" (isolate C imports in case python alternatives exist)
         # - W503 "line break before binary operator" (we enforce line breaks before operators, to follow black style, and penalise line breaks after)
-        # - F811 ""redefinition of unused name from line N" (breaks quantity objects)
-        flake8 . --count --ignore=E402,W503,F811 --max-line-length=79 --show-source --statistics --per-file-ignores="src/synthesizer/__init__.py:F401 src/synthesizer/components/__init__.py:F401 src/synthesizer/parametric/__init__.py:F401 src/synthesizer/particle/__init__.py:F401 src/synthesizer/photoionisation/__init__.py:F401 docs/source/conf.py:E501"
+        # - F811 "redefinition of unused name from line N" (breaks quantity objects)
+        # - E203 "whitespace before ‘,’, ‘;’, or ‘:’" (conflicts with black formatting of array indexing, `:`)
+        flake8 . --count --ignore=E402,W503,F811,E203 --max-line-length=79 --show-source --statistics --per-file-ignores="src/synthesizer/__init__.py:F401 src/synthesizer/components/__init__.py:F401 src/synthesizer/parametric/__init__.py:F401 src/synthesizer/particle/__init__.py:F401 src/synthesizer/photoionisation/__init__.py:F401 docs/source/conf.py:E501"
     - name: Download test data
       env:
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
