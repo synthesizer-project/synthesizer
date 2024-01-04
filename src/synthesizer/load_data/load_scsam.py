@@ -67,7 +67,9 @@ def load_SCSAM(fname, method, grid=None, verbose=False):
         if count == 0:
             Z_len, age_len = [int(i) for i in line.split()]
             if verbose:
-                print(f"There are {Z_len} metallicity bins and {age_len} age bins.")
+                print(
+                    f"There are {Z_len} metallicity bins and {age_len} age bins."
+                )
 
         # Get metallicity bins
         if count == 1:
@@ -186,9 +188,7 @@ def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
 
     # Create stars object
     stars = ParticleStars(
-        initial_masses=p_imass * Msun,
-        ages=p_age * yr,
-        metallicities=p_Z
+        initial_masses=p_imass * Msun, ages=p_age * yr, metallicities=p_Z
     )
 
     if verbose:
@@ -199,7 +199,9 @@ def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
     return particle_galaxy
 
 
-def _load_SCSAM_parametric_galaxy(SFH, age_lst, Z_lst, method, grid, verbose=False):
+def _load_SCSAM_parametric_galaxy(
+    SFH, age_lst, Z_lst, method, grid, verbose=False
+):
     """
     Obtain galaxy SED using the parametric method.
     This is done by interpolating the grid.
@@ -232,7 +234,9 @@ def _load_SCSAM_parametric_galaxy(SFH, age_lst, Z_lst, method, grid, verbose=Fal
         # Get coords for new grid
         new_X, new_Y = np.meshgrid(new_age, new_Z, indexing="ij")
         # Set up the old grid for interpolation
-        interp_obj = RGI(points=(old_age, old_Z), values=SFH, bounds_error=False)
+        interp_obj = RGI(
+            points=(old_age, old_Z), values=SFH, bounds_error=False
+        )
         # Interpolate to new grid coordinates and reshape
         new_SFH = interp_obj((new_X.ravel(), new_Y.ravel()))
         new_SFH = new_SFH.reshape(len(new_age), len(new_Z))

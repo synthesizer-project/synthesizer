@@ -98,10 +98,12 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
 
         for k in range(0, len(Z)):
             eqw.append(
-            measure_equivalent_width(index, feature, blue, red, Z[k], stellar_mass, grid, eqw, 0)
+                measure_equivalent_width(
+                    index, feature, blue, red, Z[k], stellar_mass, grid, eqw, 0
+                )
             )
 
-        print('Mean Equivalent width [', index, ']:', np.mean(eqw))
+        print("Mean Equivalent width [", index, "]:", np.mean(eqw))
 
         # Configure plot figure
         plt.rcParams["figure.dpi"] = 200
@@ -121,10 +123,10 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         _, y_max = plt.ylim()
 
         plt.title(label, fontsize=8, transform=plt.gca().transAxes, y=0.8)
-        
+
         if len(np.array(eqw).shape) != 1:
             grid.metallicity = [[x, x] for x in grid.metallicity]
-        
+
         plt.scatter(
             grid.metallicity,
             eqw,
@@ -143,8 +145,11 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
 
         if i == len(uv_index) - 1:
             plt.show()
-            
-def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, eqw, mode):
+
+
+def measure_equivalent_width(
+    index, feature, blue, red, Z, smass, grid, eqw, mode
+):
     """
     Calculate equivalent width for a specified UV index.
 
@@ -164,9 +169,9 @@ def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, eqw, mod
     """
 
     stellar_mass = smass
-    
+
     Z_p = {"metallicity": Z}
-    metal_dist = ZDist.DeltaConstant(**Z_p) # constant metallicity
+    metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
     sfh_p = {"duration": 100 * Myr}
     sfh = SFH.Constant(**sfh_p)  # constant star formation
 
@@ -190,15 +195,21 @@ def measure_equivalent_width(index, feature, blue, red, Z, smass, grid, eqw, mod
         sed = galaxy.stars.get_spectra_intrinsic(grid, fesc=0.5)
 
     return sed.measure_index(
-    	feature, 
-    	blue, 
-    	red,
+        feature,
+        blue,
+        red,
     )
+
 
 if __name__ == "__main__":
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
 
-    index, index_window, blue_window, red_window = set_index()  # Retrieve UV indices
+    (
+        index,
+        index_window,
+        blue_window,
+        red_window,
+    ) = set_index()  # Retrieve UV indices
 
     equivalent_width(grid_name, index, index_window, blue_window, red_window)

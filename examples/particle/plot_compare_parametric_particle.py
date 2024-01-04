@@ -43,7 +43,12 @@ parametric_galaxy = ParametricGalaxy(sfzh)
 parametric_galaxy.stars.get_spectra_incident(grid)
 sed = parametric_galaxy.stars.spectra["incident"]
 plt.plot(
-    np.log10(sed.lam), np.log10(sed.lnu), label="parametric", lw=4, c="k", alpha=0.3
+    np.log10(sed.lam),
+    np.log10(sed.lnu),
+    label="parametric",
+    lw=4,
+    c="k",
+    alpha=0.3,
 )
 
 

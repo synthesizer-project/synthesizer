@@ -422,13 +422,17 @@ class Stars(Particles, StarsComponent):
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
             # How many particles lie below the grid limits?
-            n_below_age = self.log10ages[self.log10ages < grid.log10age[0]].size
+            n_below_age = self.log10ages[
+                self.log10ages < grid.log10age[0]
+            ].size
             n_below_metal = self.metallicities[
                 self.metallicities < grid.metallicity[0]
             ].size
 
             # How many particles lie above the grid limits?
-            n_above_age = self.log10ages[self.log10ages > grid.log10age[-1]].size
+            n_above_age = self.log10ages[
+                self.log10ages > grid.log10age[-1]
+            ].size
             n_above_metal = self.metallicities[
                 self.metallicities > grid.metallicity[-1]
             ].size
@@ -564,11 +568,14 @@ class Stars(Particles, StarsComponent):
 
                 # Line luminosity erg/s
                 luminosity.append(
-                    (1 - fesc) * np.sum(grid_line["luminosity"] * self.initial_masses)
+                    (1 - fesc)
+                    * np.sum(grid_line["luminosity"] * self.initial_masses)
                 )
 
                 # Continuum at line wavelength, erg/s/Hz
-                continuum.append(np.sum(grid_line["continuum"] * self.initial_masses))
+                continuum.append(
+                    np.sum(grid_line["continuum"] * self.initial_masses)
+                )
 
         else:
             raise exceptions.InconsistentArguments(
@@ -638,13 +645,17 @@ class Stars(Particles, StarsComponent):
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
             # How many particles lie below the grid limits?
-            n_below_age = self.log10ages[self.log10ages < grid.log10age[0]].size
+            n_below_age = self.log10ages[
+                self.log10ages < grid.log10age[0]
+            ].size
             n_below_metal = self.metallicities[
                 self.metallicities < grid.metallicity[0]
             ].size
 
             # How many particles lie above the grid limits?
-            n_above_age = self.log10ages[self.log10ages > grid.log10age[-1]].size
+            n_above_age = self.log10ages[
+                self.log10ages > grid.log10age[-1]
+            ].size
             n_above_metal = self.metallicities[
                 self.metallicities > grid.metallicity[-1]
             ].size
@@ -756,7 +767,9 @@ class Stars(Particles, StarsComponent):
             wavelength = grid_line["wavelength"]
 
             # Line luminosity erg/s
-            luminosity = (1 - fesc) * (grid_line["luminosity"] * self.initial_masses)
+            luminosity = (1 - fesc) * (
+                grid_line["luminosity"] * self.initial_masses
+            )
 
             # Continuum at line wavelength, erg/s/Hz
             continuum = grid_line["continuum"] * self.initial_masses
@@ -1005,7 +1018,10 @@ class Stars(Particles, StarsComponent):
             setattr(
                 self,
                 attr,
-                np.append(getattr(self, attr), np.repeat(attr_array, new_lens, axis=0)),
+                np.append(
+                    getattr(self, attr),
+                    np.repeat(attr_array, new_lens, axis=0),
+                ),
             )
 
         if verbose:
@@ -1486,7 +1502,9 @@ class Stars(Particles, StarsComponent):
         # Loop over the intrinsic lines
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # Calculate attenuation
-            T_BC = dust_curve_BC.get_transmission(tau_v_BC, intrinsic_line._wavelength)
+            T_BC = dust_curve_BC.get_transmission(
+                tau_v_BC, intrinsic_line._wavelength
+            )
             T_ISM = dust_curve_ISM.get_transmission(
                 tau_v_ISM, intrinsic_line._wavelength
             )
@@ -1596,7 +1614,9 @@ class Stars(Particles, StarsComponent):
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
             np.ascontiguousarray(self.metallicities, dtype=np.float64),
         ]
-        part_mass = np.ascontiguousarray(self._initial_masses, dtype=np.float64)
+        part_mass = np.ascontiguousarray(
+            self._initial_masses, dtype=np.float64
+        )
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))
@@ -1778,7 +1798,9 @@ def sample_sfhz(
     )
 
     # Extract the sampled ages and metallicites and create an array
-    random_from_cdf = np.column_stack((log10ages[x_idx], log10metallicities[y_idx]))
+    random_from_cdf = np.column_stack(
+        (log10ages[x_idx], log10metallicities[y_idx])
+    )
 
     # Extract the individual logged quantities
     log10ages, log10metallicities = random_from_cdf.T

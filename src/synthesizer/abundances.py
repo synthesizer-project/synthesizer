@@ -63,7 +63,8 @@ class ScalingFunctions:
             scaled_metallicity = metallicity / dopita_solar_metallicity
 
             abundance = np.log10(
-                1.1e-5 * scaled_metallicity + 4.9e-5 * (scaled_metallicity) ** 2
+                1.1e-5 * scaled_metallicity
+                + 4.9e-5 * (scaled_metallicity) ** 2
             )
 
             return abundance
@@ -360,7 +361,9 @@ class Abundances(Elements):
         self.helium_mass_fraction = 0.2485 + 1.7756 * self.metallicity
 
         # Define mass fraction in hydrogen
-        self.hydrogen_mass_fraction = 1.0 - self.helium_mass_fraction - self.metallicity
+        self.hydrogen_mass_fraction = (
+            1.0 - self.helium_mass_fraction - self.metallicity
+        )
 
         # logathrimic total abundance of element relative to H
         total = {}
@@ -368,13 +371,17 @@ class Abundances(Elements):
         # hydrogen is by definition 0.0
         total["H"] = 0.0
         total["He"] = np.log10(
-            self.helium_mass_fraction / self.hydrogen_mass_fraction / self.A["He"]
+            self.helium_mass_fraction
+            / self.hydrogen_mass_fraction
+            / self.A["He"]
         )
 
         # Scale elemental abundances from solar abundances based on given
         # metallicity
         for e in self.metals:
-            total[e] = self.sol[e] + np.log10(self.metallicity / self.solar_metallicity)
+            total[e] = self.sol[e] + np.log10(
+                self.metallicity / self.solar_metallicity
+            )
 
         # Scale alpha-element abundances from solar abundances
         for e in self.alpha_elements:
@@ -497,7 +504,9 @@ class Abundances(Elements):
         # return solar relative abundance [X/Y]
         elif k[0] == "[":
             element, ref_element = k[1:-1].split("/")
-            return self.solar_relative_abundance(element, ref_element=ref_element)
+            return self.solar_relative_abundance(
+                element, ref_element=ref_element
+            )
 
     def __str__(self):
         """Function to print a basic summary of the Abundances object.
@@ -524,7 +533,9 @@ class Abundances(Elements):
         pstr += f"carbon_abundance: {self.carbon_abundance} \n"
         pstr += f"nitrogen_abundance: {self.nitrogen_abundance} \n"
         pstr += f"dust-to-metal ratio: {self.dust_to_metal_ratio}\n"
-        pstr += f"MAX dust-to-metal ratio: {self.max_dust_to_metal_ratio:.3f}\n"
+        pstr += (
+            f"MAX dust-to-metal ratio: {self.max_dust_to_metal_ratio:.3f}\n"
+        )
 
         pstr += "-" * 10 + "\n"
         pstr += "element log10(X/H)_total (log10(X/H)+12) [[X/H]] |depletion| log10(X/H)_gas log10(X/H)_dust \n"
@@ -582,7 +593,9 @@ class Abundances(Elements):
         mass_metals = np.sum([self.A[i] * 10 ** (a[i]) for i in elements])
 
         # the total mass
-        mass_total = np.sum([self.A[i] * 10 ** (a[i]) for i in self.all_elements])
+        mass_total = np.sum(
+            [self.A[i] * 10 ** (a[i]) for i in self.all_elements]
+        )
 
         return mass_metals / mass_total
 
@@ -630,9 +643,9 @@ class Abundances(Elements):
 
         dust = 0.0  # mass fraction in dust
         for element in self.metals:
-            dust += (10 ** (self.total[element]) - 10 ** (self.gas[element])) * self.A[
-                element
-            ]
+            dust += (
+                10 ** (self.total[element]) - 10 ** (self.gas[element])
+            ) * self.A[element]
 
         return dust / self.metallicity
 
@@ -654,7 +667,9 @@ def plot_abundance_pattern(a, show=False, ylim=None, lines=["total"]):
 
     colors = cmr.take_cmap_colors("cmr.bubblegum", len(a.all_elements))
 
-    for line, ls, ms in zip(lines, ["-", "--", "-.", ":"], ["o", "s", "D", "d", "^"]):
+    for line, ls, ms in zip(
+        lines, ["-", "--", "-.", ":"], ["o", "s", "D", "d", "^"]
+    ):
         i_ = range(len(a.all_elements))
         a_ = []
 
@@ -674,7 +689,9 @@ def plot_abundance_pattern(a, show=False, ylim=None, lines=["total"]):
         ax.set_ylim([-12.0, 0.1])
 
     ax.legend()
-    ax.set_xticks(range(len(a.all_elements)), a.name, rotation=90, fontsize=6.0)
+    ax.set_xticks(
+        range(len(a.all_elements)), a.name, rotation=90, fontsize=6.0
+    )
 
     ax.set_ylabel(r"$\rm log_{10}(X/H)$")
 
@@ -706,7 +723,10 @@ def plot_multiple_abundance_patterns(
         labels = range(len(abundance_patterns))
 
     for a, label, ls, ms in zip(
-        abundance_patterns, labels, ["-", "--", "-.", ":"], ["o", "s", "D", "d", "^"]
+        abundance_patterns,
+        labels,
+        ["-", "--", "-.", ":"],
+        ["o", "s", "D", "d", "^"],
     ):
         i_ = range(len(a.all_elements))
         a_ = []
@@ -715,7 +735,9 @@ def plot_multiple_abundance_patterns(
             ax.scatter(i, a.total[e], color=c, s=40, zorder=2, marker=ms)
             a_.append(a.total[e])
 
-        ax.plot(i_, a_, lw=2, ls=ls, c="0.5", label=rf"$\rm {label}$", zorder=1)
+        ax.plot(
+            i_, a_, lw=2, ls=ls, c="0.5", label=rf"$\rm {label}$", zorder=1
+        )
 
     for i, (e, c) in enumerate(zip(a.all_elements, colors)):
         ax.axvline(i, alpha=0.05, lw=1, c="k", zorder=0)
@@ -726,7 +748,9 @@ def plot_multiple_abundance_patterns(
         ax.set_ylim([-12.0, 0.1])
 
     ax.legend()
-    ax.set_xticks(range(len(a.all_elements)), a.name, rotation=90, fontsize=6.0)
+    ax.set_xticks(
+        range(len(a.all_elements)), a.name, rotation=90, fontsize=6.0
+    )
 
     ax.set_ylabel(r"$\rm log_{10}(X/H)$")
 
