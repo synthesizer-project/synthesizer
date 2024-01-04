@@ -88,10 +88,8 @@ class Galaxy(BaseGalaxy):
         pstr += "SUMMARY OF PARAMETRIC GALAXY".center(width + 4) + "\n"
         pstr += get_centred_art(Art.galaxy, width) + "\n"
         pstr += str(self.__class__) + "\n"
-        pstr += (
-            f"log10(stellar mass formed/Msol): \
+        pstr += f"log10(stellar mass formed/Msol): \
             {np.log10(np.sum(self.sfzh))}\n"
-        )
         pstr += "available SEDs: \n"
 
         # Define the connecting character for list wrapping
@@ -112,9 +110,7 @@ class Galaxy(BaseGalaxy):
             # Slice off the last two entries, we don't need then
             spectra_keys[iline] = spectra_keys[iline][:-2]
 
-            pstr += (
-                "    Stellar:  [" + conn_char.join(spectra_keys) + "]\n"
-            )
+            pstr += "    Stellar:  [" + conn_char.join(spectra_keys) + "]\n"
 
         else:
             pstr += "    Stellar:  []\n"
@@ -273,8 +269,8 @@ class Galaxy(BaseGalaxy):
                         in second_galaxy.stars.lines[line_type].keys()
                     ):
                         new_galaxy.stars.lines[line_type][line_name] = (
-                            line +
-                            second_galaxy.stars.lines[line_type][line_name]
+                            line
+                            + second_galaxy.stars.lines[line_type][line_name]
                         )
                     else:
                         raise exceptions.InconsistentAddition(
@@ -470,8 +466,8 @@ class Galaxy(BaseGalaxy):
         if stellar_spectra_type is not None and blackhole_spectra_type is None:
             img = stellar_img
         elif (
-            stellar_spectra_type is not None and
-            blackhole_spectra_type is not None
+            stellar_spectra_type is not None
+            and blackhole_spectra_type is not None
         ):
             img = stellar_img + blackhole_img
         else:

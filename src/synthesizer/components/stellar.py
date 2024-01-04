@@ -726,30 +726,27 @@ class StarsComponent:
             # Combine young and old spectra
             if grid.read_lines:
                 self.spectra["incident"] = (
-                    self.spectra["young_incident"] +
-                    self.spectra["old_incident"]
+                    self.spectra["young_incident"]
+                    + self.spectra["old_incident"]
                 )
                 self.spectra["transmitted"] = (
-                    self.spectra["young_transmitted"] +
-                    self.spectra["old_transmitted"]
+                    self.spectra["young_transmitted"]
+                    + self.spectra["old_transmitted"]
                 )
                 self.spectra["nebular"] = (
-                    self.spectra["young_nebular"] +
-                    self.spectra["old_nebular"]
+                    self.spectra["young_nebular"] + self.spectra["old_nebular"]
                 )
                 self.spectra["reprocessed"] = (
-                    self.spectra["young_reprocessed"] +
-                    self.spectra["old_reprocessed"]
+                    self.spectra["young_reprocessed"]
+                    + self.spectra["old_reprocessed"]
                 )
 
             self.spectra["intrinsic"] = (
-                self.spectra["young_intrinsic"] +
-                self.spectra["old_intrinsic"]
+                self.spectra["young_intrinsic"] + self.spectra["old_intrinsic"]
             )
             if fesc > 0:
                 self.spectra["escaped"] = (
-                    self.spectra["young_escaped"] +
-                    self.spectra["old_escaped"]
+                    self.spectra["young_escaped"] + self.spectra["old_escaped"]
                 )
         else:
             # Generate intrinsic spectra for all particles
@@ -795,8 +792,8 @@ class StarsComponent:
                 self.spectra["emergent"]._lnu = self.spectra["attenuated"]._lnu
             else:
                 self.spectra["emergent"]._lnu = (
-                    self.spectra["escaped"]._lnu +
-                    self.spectra["attenuated"]._lnu
+                    self.spectra["escaped"]._lnu
+                    + self.spectra["attenuated"]._lnu
                 )
 
             # Force updating of the bolometric luminosity attribute. I don't
@@ -808,8 +805,8 @@ class StarsComponent:
                 # between the emergent and incident bolometric luminosities.
 
                 dust_bolometric_luminosity = (
-                    self.spectra["incident"].bolometric_luminosity -
-                    self.spectra["emergent"].bolometric_luminosity
+                    self.spectra["incident"].bolometric_luminosity
+                    - self.spectra["emergent"].bolometric_luminosity
                 )
 
                 # Get normalised dust spectrum, this is an synthesizer.sed.Sed
@@ -901,12 +898,12 @@ class StarsComponent:
                 ]._lnu
             else:
                 self.spectra["young_emergent"]._lnu = (
-                    self.spectra["young_escaped"]._lnu +
-                    self.spectra["young_attenuated"]._lnu
+                    self.spectra["young_escaped"]._lnu
+                    + self.spectra["young_attenuated"]._lnu
                 )
                 self.spectra["old_emergent"]._lnu = (
-                    self.spectra["old_escaped"]._lnu +
-                    self.spectra["old_attenuated"]._lnu
+                    self.spectra["old_escaped"]._lnu
+                    + self.spectra["old_attenuated"]._lnu
                 )
 
             # Force updating of the bolometric luminosity attribute. I don't
@@ -930,8 +927,8 @@ class StarsComponent:
 
                 # Start with the birth cloud dust.
                 dust_bolometric_luminosity = (
-                    self.spectra["young_transmitted"].bolometric_luminosity -
-                    self.spectra["young_attenuated_BC"].bolometric_luminosity
+                    self.spectra["young_transmitted"].bolometric_luminosity
+                    - self.spectra["young_attenuated_BC"].bolometric_luminosity
                 )
 
                 self.spectra["young_dust_BC"] = dust_emission_model[
@@ -946,8 +943,8 @@ class StarsComponent:
                 # ISM dust heated by young stars. This is the difference
                 # between the birth cloud and ISM attenuated spectra.
                 dust_bolometric_luminosity = (
-                    self.spectra["young_attenuated_BC"].bolometric_luminosity -
-                    self.spectra["young_attenuated"].bolometric_luminosity
+                    self.spectra["young_attenuated_BC"].bolometric_luminosity
+                    - self.spectra["young_attenuated"].bolometric_luminosity
                 )
 
                 self.spectra["young_dust_ISM"] = dust_emission_model[
@@ -961,8 +958,8 @@ class StarsComponent:
 
                 # Combine both dust components for young stars
                 self.spectra["young_dust"] = (
-                    self.spectra["young_dust_BC"] +
-                    self.spectra["young_dust_ISM"]
+                    self.spectra["young_dust_BC"]
+                    + self.spectra["young_dust_ISM"]
                 )
 
                 # Combine both dust components for young stars
@@ -972,8 +969,8 @@ class StarsComponent:
 
                 # ISM dust heated by old stars.
                 dust_bolometric_luminosity = (
-                    self.spectra["old_transmitted"].bolometric_luminosity -
-                    self.spectra["old_attenuated"].bolometric_luminosity
+                    self.spectra["old_transmitted"].bolometric_luminosity
+                    - self.spectra["old_attenuated"].bolometric_luminosity
                 )
 
                 self.spectra["old_dust"] = dust_emission_model[0].get_spectra(

@@ -155,17 +155,16 @@ class BlackHole(BlackholesComponent):
                 props.append(getattr(self, axis))
 
             elif (
-                axis in emission_model.variable_parameters and
-                getattr(self, axis, None) is not None
+                axis in emission_model.variable_parameters
+                and getattr(self, axis, None) is not None
             ):
                 # Variable parameters defined on the black hole (not including
                 # line region parameters)
                 props.append(getattr(self, axis))
 
             elif (
-                f"{axis} {line_region}" in
-                emission_model.variable_parameters and
-                getattr(self, axis + "_" + line_region, None) is not None
+                f"{axis} {line_region}" in emission_model.variable_parameters
+                and getattr(self, axis + "_" + line_region, None) is not None
             ):
                 # Variable line region parameters defined on the black hole
                 props.append(getattr(self, axis + "_" + line_region))

@@ -444,8 +444,8 @@ class Sed:
         """
 
         return (
-            self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind) *
-            self.lnu.units
+            self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind)
+            * self.lnu.units
         )
 
     def _get_lnu_at_lam(self, lam, kind=False, ind=None):
@@ -486,8 +486,8 @@ class Sed:
         """
 
         return (
-            self._get_lnu_at_lam(lam.to(self.lam.units).value, kind=kind) *
-            self.lnu.units
+            self._get_lnu_at_lam(lam.to(self.lam.units).value, kind=kind)
+            * self.lnu.units
         )
 
     def measure_bolometric_luminosity(self, method="trapz"):
@@ -526,7 +526,9 @@ class Sed:
                         1e12,
                         1e16,
                         args=("cubic"),
-                    )[0] * self.lnu.units * Hz
+                    )[0]
+                    * self.lnu.units
+                    * Hz
                 )
 
             elif self._lnu.ndim == 2:
@@ -541,7 +543,9 @@ class Sed:
                             1e12,
                             1e16,
                             args=("cubic", ind),
-                        )[0] * self.lnu.units * Hz
+                        )[0]
+                        * self.lnu.units
+                        * Hz
                     )
             else:
                 raise exceptions.UnimplementedFunctionality(
@@ -587,8 +591,9 @@ class Sed:
             # base units.
             lims = (c / np.array(window)).to(self.nu.units).value
             luminosity = (
-                integrate.quad(self._get_lnu_at_nu, *lims)[0] *
-                self.lnu.units * Hz
+                integrate.quad(self._get_lnu_at_nu, *lims)[0]
+                * self.lnu.units
+                * Hz
             )
 
         elif method == "trapz":
@@ -640,7 +645,8 @@ class Sed:
                             np.sum(_lnu * transmission) / np.sum(transmission)
                             for _lnu in self._lnu
                         ]
-                    ) * self.lnu.units
+                    )
+                    * self.lnu.units
                 )
 
             else:
@@ -661,10 +667,12 @@ class Sed:
                         [
                             np.trapz(
                                 _lnu[::-1] * transmission[::-1] / nu, x=nu
-                            ) / np.trapz(transmission[::-1] / nu, x=nu)
+                            )
+                            / np.trapz(transmission[::-1] / nu, x=nu)
                             for _lnu in self._lnu
                         ]
-                    ) * self.lnu.units
+                    )
+                    * self.lnu.units
                 )
 
             else:
@@ -790,7 +798,8 @@ class Sed:
                     [
                         linregress(
                             np.log10(self._lam[s]), np.log10(_lnu[..., s])
-                        )[0] - 2.0
+                        )[0]
+                        - 2.0
                         for _lnu in self.lnu
                     ]
                 )
@@ -799,7 +808,8 @@ class Sed:
                 beta = (
                     linregress(np.log10(self._lam[s]), np.log10(self._lnu[s]))[
                         0
-                    ] - 2.0
+                    ]
+                    - 2.0
                 )
 
         # If two windows are provided
@@ -814,8 +824,9 @@ class Sed:
 
             # Measure beta
             beta = (
-                np.log10(lnu_blue / lnu_red) /
-                np.log10(np.mean(blue) / np.mean(red)) - 2.0
+                np.log10(lnu_blue / lnu_red)
+                / np.log10(np.mean(blue) / np.mean(red))
+                - 2.0
             )
 
         else:
@@ -1053,9 +1064,10 @@ class Sed:
             continuum = (
                 (
                     np.column_stack(
-                        continuum_fits[0] *
-                        feature_lam.to(self.lam.units).value[:, np.newaxis]
-                    ) + continuum_fits[1][:, np.newaxis]
+                        continuum_fits[0]
+                        * feature_lam.to(self.lam.units).value[:, np.newaxis]
+                    )
+                    + continuum_fits[1][:, np.newaxis]
                 )
             ) * self.lnu.units
 
@@ -1080,8 +1092,8 @@ class Sed:
 
             # Use the continuum fit to define the continuum
             continuum = (
-                (continuum_fit[0] * feature_lam.to(self.lam.units).value) +
-                continuum_fit[1]
+                (continuum_fit[0] * feature_lam.to(self.lam.units).value)
+                + continuum_fit[1]
             ) * self.lnu.units
 
             # Define the continuum subtracted spectrum

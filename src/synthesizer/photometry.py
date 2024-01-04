@@ -146,8 +146,10 @@ class PhotometryCollection:
 
         # Define the filter code column
         filters_col = [
-            (f"{f.filter_code} (\u03BB = {f.pivwv().value:.2e} "
-             f"{str(f.lam.units)})")
+            (
+                f"{f.filter_code} (\u03BB = {f.pivwv().value:.2e} "
+                f"{str(f.lam.units)})"
+            )
             for f in self.filters
         ]
 
@@ -180,8 +182,10 @@ class PhotometryCollection:
 
         # Combine everything into the final table
         for filt, phot in zip(filters_col, value_col):
-            table += (f"|{filt.center(filter_width)}|"
-                      f"{phot.center(phot_width)}|\n|{sep}|\n")
+            table += (
+                f"|{filt.center(filter_width)}|"
+                f"{phot.center(phot_width)}|\n|{sep}|\n"
+            )
 
         # Clean up the final separator
         table = table[: -tot_width - 3]

@@ -243,10 +243,10 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
         for ind in range(self.npart):
             # Skip particles outside the FOV
             if (
-                self.pix_pos[ind, 0] < 0 or
-                self.pix_pos[ind, 1] < 0 or
-                self.pix_pos[ind, 0] >= self.npix or
-                self.pix_pos[ind, 1] >= self.npix
+                self.pix_pos[ind, 0] < 0
+                or self.pix_pos[ind, 1] < 0
+                or self.pix_pos[ind, 0] >= self.npix
+                or self.pix_pos[ind, 1] >= self.npix
             ):
                 continue
 

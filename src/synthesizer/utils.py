@@ -139,7 +139,8 @@ def value_to_array(value):
                 [
                     value.value,
                 ]
-            ) * value.units
+            )
+            * value.units
         )
     else:
         raise exceptions.InconsistentArguments(

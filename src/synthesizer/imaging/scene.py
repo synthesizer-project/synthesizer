@@ -503,12 +503,12 @@ class ParticleScene(Scene):
         # The passed centre does not lie within the range of coordinates
         if centre is not None:
             if (
-                centre[0] < np.min(coordinates[:, 0]) or
-                centre[0] > np.max(coordinates[:, 0]) or
-                centre[1] < np.min(coordinates[:, 1]) or
-                centre[1] > np.max(coordinates[:, 1]) or
-                centre[2] < np.min(coordinates[:, 2]) or
-                centre[2] > np.max(coordinates[:, 2])
+                centre[0] < np.min(coordinates[:, 0])
+                or centre[0] > np.max(coordinates[:, 0])
+                or centre[1] < np.min(coordinates[:, 1])
+                or centre[1] > np.max(coordinates[:, 1])
+                or centre[2] < np.min(coordinates[:, 2])
+                or centre[2] > np.max(coordinates[:, 2])
             ):
                 raise exceptions.InconsistentCoordinates(
                     "The centre lies outside of the coordinate range. "

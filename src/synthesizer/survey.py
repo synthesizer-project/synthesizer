@@ -245,8 +245,8 @@ class Survey:
         # Otherwise, we have to add them on to what we have, handling whether
         # we are adding 1 galaxy...
         elif len(self.galaxies) > 0 and (
-            isinstance(galaxies, ParticleGalaxy) or
-                isinstance(galaxies, ParametricGalaxy)
+            isinstance(galaxies, ParticleGalaxy)
+            or isinstance(galaxies, ParametricGalaxy)
         ):
             # Double check galaxies is a list
             self.galaxies = list(self.galaxies)
