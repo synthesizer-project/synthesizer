@@ -37,11 +37,7 @@ class MorphologyBase:
 
         plt.figure()
         plt.imshow(
-            np.log10(img),
-            origin="lower",
-            interpolation="nearest",
-            vmin=-1,
-            vmax=2
+            np.log10(img), origin="lower", interpolation="nearest", vmin=-1, vmax=2
         )
         plt.show()
 
@@ -64,7 +60,7 @@ class Sersic2D(MorphologyBase):
     ):
         """
         Initialise the morphology.
-        
+
         Arguments
             r_eff (unyt)
                 Effective radius. This is converted as required.
@@ -83,20 +79,22 @@ class Sersic2D(MorphologyBase):
         self.r_eff_mas = None
         self.r_eff_kpc = None
 
-        # Check units of r_eff and convert if necessary.
+        # Check units of r_eff and convert if necessary.
         if isinstance(r_eff, unyt_array):
             if r_eff.units.dimensions == length:
-                self.r_eff_kpc = r_eff.to('kpc').value
+                self.r_eff_kpc = r_eff.to("kpc").value
             elif r_eff.units.dimensions == angle:
-                self.r_eff_mas = r_eff.to('mas').value
+                self.r_eff_mas = r_eff.to("mas").value
             else:
                 raise exceptions.IncorrectUnits(
                     "The units of r_eff must have length or angle dimensions"
-                    )
+                )
             self.r_eff = r_eff
         else:
-            raise exceptions.MissingAttribute("""
-            The effective radius must be provided""")
+            raise exceptions.MissingAttribute(
+                """
+            The effective radius must be provided"""
+            )
 
         # Define the parameter set
         self.sersic_index = sersic_index
@@ -222,35 +220,37 @@ class PointSource(MorphologyBase):
 
     def __init__(
         self,
-        offset=np.array([0., 0.])*kpc,
+        offset=np.array([0.0, 0.0]) * kpc,
         cosmo=None,
         redshift=None,
     ):
         """
         Initialise the morphology.
-        
+
         Arguments
             offset (unyt_array/float)
-                The [x,y] offset in angular or physical units from the centre 
+                The [x,y] offset in angular or physical units from the centre
                 of the image. The default (0,0) places the source in the centre
-                of the image. 
+                of the image.
             cosmo (astropy.cosmology)
                 astropy cosmology object.
             redshift (float)
                 Redshift.
 
         """
-        # check units of r_eff and convert if necessary
+        # Check units of r_eff and convert if necessary
         if isinstance(offset, unyt_array):
             if offset.units.dimensions == length:
-                self.offset_kpc = offset.to('kpc').value
+                self.offset_kpc = offset.to("kpc").value
             elif offset.units.dimensions == angle:
-                self.offset_mas = offset.to('mas').value
+                self.offset_mas = offset.to("mas").value
             else:
-                raise exceptions.IncorrectUnits("""
-                The units of offset must have length or angle dimensions""")
-            self.offset = offset
-        
+                raise exceptions.IncorrectUnits(
+                    "The units of offset must have length or angle dimensions"
+                )
+        else:
+            raise exceptions.MissingUnits("The offset must be provided with units")
+
         # Associate the cosmology and redshift to this object
         self.cosmo = cosmo
         self.redshift = redshift
@@ -296,16 +296,16 @@ class PointSource(MorphologyBase):
 
         if units == kpc:
             # find the pixel corresponding to the supplied offset
-            i = np.argmin(np.fabs(xx[0]-self.offset_kpc[0]))
-            j = np.argmin(np.fabs(yy[:, 0]-self.offset_kpc[1]))
+            i = np.argmin(np.fabs(xx[0] - self.offset_kpc[0]))
+            j = np.argmin(np.fabs(yy[:, 0] - self.offset_kpc[1]))
             # set the pixel value to 1.0
             image[i, j] = 1.0
             return image
 
         elif units == mas:
             # find the pixel corresponding to the supplied offset
-            i = np.argmin(np.fabs(xx[0]-self.offset_mas[0]))
-            j = np.argmin(np.fabs(yy[:, 0]-self.offset_mas[1]))
+            i = np.argmin(np.fabs(xx[0] - self.offset_mas[0]))
+            j = np.argmin(np.fabs(yy[:, 0] - self.offset_mas[1]))
             # set the pixel value to 1.0
             image[i, j] = 1.0
             return image

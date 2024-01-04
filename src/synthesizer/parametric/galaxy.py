@@ -5,7 +5,7 @@ import numpy as np
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
-from synthesizer.imaging.images import ParametricImage
+from synthesizer.imaging.images import ParametricImage, Image
 from synthesizer.art import Art, get_centred_art
 from synthesizer.particle import Stars as ParticleStars
 
@@ -100,7 +100,7 @@ class Galaxy(BaseGalaxy):
         conn_char = "\n" + (15 * " ")
 
         # Print stellar spectra keys
-        if len(self.stars.spectra) > 0:
+        if self.stars is not None and len(self.stars.spectra) > 0:
             # Print keys nicely so they don't spill over
             spectra_keys = [""]
             iline = 0
@@ -118,6 +118,32 @@ class Galaxy(BaseGalaxy):
 
         else:
             pstr += "    Stellar:  []" + "\n"
+
+        # Define the connecting character for list wrapping
+        conn_char = "\n" + (19 * " ")
+
+        # Print stellar spectra keys
+        if self.black_holes is not None and len(self.black_holes.spectra) > 0:
+            # Print keys nicely so they don't spill over
+            spectra_keys = [""]
+            iline = 0
+            for key in self.black_holes.spectra.keys():
+                if len(spectra_keys[iline]) + len(key) + 2 < width - 19:
+                    spectra_keys[iline] += key + ", "
+                else:
+                    iline += 1
+                    spectra_keys.append("")
+
+            # Slice off the last two entries, we don't need then
+            spectra_keys[iline] = spectra_keys[iline][:-2]
+
+            pstr += "    Black Holes:  [" + conn_char.join(spectra_keys) + "]" + "\n"
+
+        else:
+            pstr += "    Black Holes:  []" + "\n"
+
+        # Define the connecting character for list wrapping
+        conn_char = "\n" + (15 * " ")
 
         # Print combined spectra keys
         if len(self.spectra) > 0:
@@ -277,7 +303,8 @@ class Galaxy(BaseGalaxy):
         resolution,
         fov=None,
         npix=None,
-        sed=None,
+        stellar_spectra_type=None,
+        blackhole_spectra_type=None,
         filters=(),
         psfs=None,
         depths=None,
@@ -290,51 +317,58 @@ class Galaxy(BaseGalaxy):
         psf_resample_factor=1,
     ):
         """
-        Makes images in each filter provided in filters. Additionally an image
-        can be made with or without a PSF and noise.
+        Makes images in each filter provided in filters for either specific
+        components of the galaxy or any combination.
+
+        Additionally an image can be made with or without a PSF and noise.
+
+        If multiple components are requested they will be combined into a
+        single output image.
+
         NOTE: Either npix or fov must be defined.
 
-        Parameters
-        ----------
-        resolution : float
-           The size of a pixel.
-           (Ignoring any supersampling defined by psf_resample_factor)
-        npix : int
-            The number of pixels along an axis.
-        fov : float
-            The width of the image in image coordinates.
-        sed : obj (SED)
-            An sed object containing the spectra for this image.
-        filters : obj (FilterCollection)
-            An imutable collection of Filter objects. If provided images are
-            made for each filter.
-        psfs : dict
-            A dictionary containing the psf in each filter where the key is
-            each filter code and the value is the psf in that filter.
-        depths : dict
-            A dictionary containing the depth of an observation in each filter
-            where the key is each filter code and the value is the depth in
-            that filter.
-        aperture : float/dict
-            Either a float describing the size of the aperture in which the
-            depth is defined or a dictionary containing the size of the depth
-            aperture in each filter.
-        rest_frame : bool
-            Are we making an observation in the rest frame?
-        cosmo : obj (astropy.cosmology)
-            A cosmology object from astropy, used for cosmological calculations
-            when converting rest frame luminosity to flux.
-        redshift : float
-            The redshift of the observation. Used when converting between
-            physical cartesian coordinates and angular coordinates.
-        psf_resample_factor : float
-            The factor by which the image should be resampled for robust PSF
-            convolution. Note the images after PSF application will be
-            downsampled to the native pixel scale.
-        Returns
-        -------
-        Image : array-like
-            A 2D array containing the image.
+        Args:
+            resolution (float)
+               The size of a pixel.
+               (Ignoring any supersampling defined by psf_resample_factor)
+            npix (int)
+                The number of pixels along an axis.
+            fov : float
+                The width of the image in image coordinates.
+            stellar_spectra_type (string)
+                The stellar spectra key to use for the image.
+            blackhole_spectra_type (string)
+                The black hole spectra key to use for the image.
+            filters (FilterCollection)
+                An imutable collection of Filter objects. If provided images are
+                made for each filter.
+            psfs (dict)
+                A dictionary containing the psf in each filter where the key is
+                each filter code and the value is the psf in that filter.
+            depths (dict)
+                A dictionary containing the depth of an observation in each filter
+                where the key is each filter code and the value is the depth in
+                that filter.
+            aperture (float/dict)
+                Either a float describing the size of the aperture in which the
+                depth is defined or a dictionary containing the size of the depth
+                aperture in each filter.
+            rest_frame (bool)
+                Are we making an observation in the rest frame?
+            cosmo : obj (astropy.cosmology)
+                A cosmology object from astropy, used for cosmological calculations
+                when converting rest frame luminosity to flux.
+            redshift (float)
+                The redshift of the observation. Used when converting between
+                physical cartesian coordinates and angular coordinates.
+            psf_resample_factor (float)
+                The factor by which the image should be resampled for robust PSF
+                convolution. Note the images after PSF application will be
+                downsampled to the native pixel scale.
+
+        Returns:
+            Image
+                An instance of an Image object contain the created images.
         """
 
         # Handle a super resolution image
@@ -342,36 +376,88 @@ class Galaxy(BaseGalaxy):
             if psf_resample_factor != 1:
                 resolution /= psf_resample_factor
 
-        # Instantiate the Image object.
-        img = ParametricImage(
-            morphology=self.stars.morphology,
-            resolution=resolution,
-            fov=fov,
-            npix=npix,
-            sed=sed,
-            filters=filters,
-            rest_frame=rest_frame,
-            redshift=redshift,
-            cosmo=cosmo,
-            psfs=psfs,
-            depths=depths,
-            apertures=aperture,
-            snrs=snrs,
-        )
+        # Make sure we have an image to make
+        if stellar_spectra_type is None and blackhole_spectra_type is None:
+            raise exceptions.InconsistentArguments(
+                "At least one spectra type must be provided "
+                "(stellar_spectra_type or blackhole_spectra_type)!"
+                " What component do you want images of?"
+            )
 
-        # Compute image
-        img.get_imgs()
+        # Make stellar image if requested
+        if stellar_spectra_type is not None:
+            # Instantiate the Image object.
+            stellar_img = ParametricImage(
+                morphology=self.stars.morphology,
+                resolution=resolution,
+                fov=fov,
+                npix=npix,
+                sed=self.stars.spectra[stellar_spectra_type],
+                filters=filters,
+                rest_frame=rest_frame,
+                redshift=redshift,
+                cosmo=cosmo,
+                psfs=psfs,
+                depths=depths,
+                apertures=aperture,
+                snrs=snrs,
+            )
 
-        if psfs is not None:
-            # Convolve the image/images
-            img.get_psfed_imgs()
+            # Compute image
+            stellar_img.get_imgs()
 
-            # Downsample to the native resolution if we need to.
-            if psf_resample_factor is not None:
-                if psf_resample_factor != 1:
-                    img.downsample(1 / psf_resample_factor)
+            if psfs is not None:
+                # Convolve the image/images
+                stellar_img.get_psfed_imgs()
 
-        if depths is not None or noises is not None:
-            img.get_noisy_imgs(noises)
+                # Downsample to the native resolution if we need to.
+                if psf_resample_factor is not None:
+                    if psf_resample_factor != 1:
+                        stellar_img.downsample(1 / psf_resample_factor)
+
+            if depths is not None or noises is not None:
+                stellar_img.get_noisy_imgs(noises)
+
+        # Make black hole image if requested
+        if blackhole_spectra_type is not None:
+            # Instantiate the Image object.
+            blackhole_img = ParametricImage(
+                morphology=self.black_holes.morphology,
+                resolution=resolution,
+                fov=fov,
+                npix=npix,
+                sed=self.black_holes.spectra[blackhole_spectra_type],
+                filters=filters,
+                rest_frame=rest_frame,
+                redshift=redshift,
+                cosmo=cosmo,
+                psfs=psfs,
+                depths=depths,
+                apertures=aperture,
+                snrs=snrs,
+            )
+
+            # Compute image
+            blackhole_img.get_imgs()
+
+            if psfs is not None:
+                # Convolve the image/images
+                blackhole_img.get_psfed_imgs()
+
+                # Downsample to the native resolution if we need to.
+                if psf_resample_factor is not None:
+                    if psf_resample_factor != 1:
+                        blackhole_img.downsample(1 / psf_resample_factor)
+
+            if depths is not None or noises is not None:
+                blackhole_img.get_noisy_imgs(noises)
+
+        # Combine images
+        if stellar_spectra_type is not None and blackhole_spectra_type is None:
+            img = stellar_img
+        elif stellar_spectra_type is not None and blackhole_spectra_type is not None:
+            img = stellar_img + blackhole_img
+        else:
+            img = blackhole_img
 
         return img
