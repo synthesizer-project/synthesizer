@@ -152,7 +152,7 @@ for n in [10, 100]:  # , 1000, 10000]:
             f"Time_loop/Time_tree={loop_time / tree_time:.4f}"
         )
         print(
-            f"Tree gave={tree_sum:.2f} Loop gave={loop_sum:%.2f} "
+            f"Tree gave={tree_sum:.2f} Loop gave={loop_sum:.2f} "
             "Normalised residual="
             f"{np.abs(tree_sum - loop_sum) / loop_sum * 100:.4f}"
         )
