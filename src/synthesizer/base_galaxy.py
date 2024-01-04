@@ -67,41 +67,39 @@ class BaseGalaxy:
         Calculates dust emission spectra using the attenuated and intrinsic
         spectra that have already been generated and an emission model.
 
-        Parameters
-        ----------
-        emissionmodel : obj
-            The spectral frid
+        Args:
+            emissionmodel (synthesizer.dust.emission.*)
+                The emission model from the dust module used to create dust
+                emission.
 
-        Returns
-        -------
-        obj (Sed)
-             A Sed object containing the dust attenuated spectra
+        Returns:
+            Sed
+                A Sed object containing the dust attenuated spectra
         """
 
-        # use wavelength grid from attenuated spectra
-        # NOTE: in future it might be good to allow a custom wavelength grid
+        # Use wavelength grid from attenuated spectra
+        lam = self.stars.spectra["emergent"].lam
 
-        lam = self.spectra["emergent"].lam
-
-        # calculate the bolometric dust lunminosity as the difference between
+        # Calculate the bolometric dust lunminosity as the difference between
         # the intrinsic and attenuated
-
         dust_bolometric_luminosity = (
-            self.spectra["intrinsic"].measure_bolometric_luminosity()
-            - self.spectra["emergent"].measure_bolometric_luminosity()
+            self.stars.spectra["intrinsic"].measure_bolometric_luminosity()
+            - self.stars.spectra["emergent"].measure_bolometric_luminosity()
         )
 
-        # get the spectrum and normalise it properly
+        # Get the spectrum and normalise it properly
         lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(
             lam
         )
 
-        # create new Sed object containing dust spectra
+        # Create new Sed object containing dust spectra
         sed = Sed(lam, lnu=lnu)
 
-        # associate that with the component's spectra dictionarity
-        self.spectra["dust"] = sed
-        self.spectra["total"] = self.spectra["dust"] + self.spectra["emergent"]
+        # Associate that with the component's spectra dictionarity
+        self.stars.spectra["dust"] = sed
+        self.stars.spectra["total"] = (
+            self.stars.spectra["dust"] + self.stars.spectra["emergent"]
+        )
 
         return sed
 
