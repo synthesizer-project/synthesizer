@@ -368,7 +368,8 @@ class Survey:
     # def get_integrated_spectra_screen(self, tau_v, redshift=None,
     #                                   igm=None, name='attenuated'):
     #     """
-    #     Compute the attenuated spectra of each galaxy using a dust screen model
+    #     Compute the attenuated spectra of each galaxy using a
+    #     dust screen model
 
     #     Args:
     #     -----
@@ -401,11 +402,18 @@ class Survey:
     #     else:
     #         self.seds[name].get_fnu(self.cosmo, redshift, igm)
 
-    # def get_integrated_spectra_charlot_fall_00(self, grid, tau_v_ISM, tau_v_BC,
-    #                                            redshift=None, igm=None,
-    #                                            name='attenuated'):
+    # def get_integrated_spectra_charlot_fall_00(
+    #     self,
+    #     grid,
+    #     tau_v_ISM,
+    #     tau_v_BC,
+    #     redshift=None,
+    #     igm=None,
+    #     name='attenuated'
+    # ):
     #     """
-    #     Compute the attenuated spectra of each galaxy using a dust screen model
+    #     Compute the attenuated spectra of each galaxy using a
+    #     dust screen model
 
     #     Args:
     #     -----
@@ -426,7 +434,8 @@ class Survey:
     #     for ind, gal in enumerate(self.galaxies):
 
     #         # Are we getting a flux or rest frame?
-    #         _specs[ind, :] = gal.apply_charlot_fall_00(grid, tau_v_ISM, tau_v_BC,
+    #         _specs[ind, :] = gal.apply_charlot_fall_00(grid,
+    #                                                    tau_v_ISM, tau_v_BC,
     #                                                    sed_object=False)
 
     #     # Create and store an SED object for these SEDs

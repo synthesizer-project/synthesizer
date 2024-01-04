@@ -25,7 +25,8 @@ class ShapeCommands:
 
         Args:
             model_name (str)
-                User defined name of the model used for cloudy inputs and outputs.
+                User defined name of the model used for cloudy inputs
+                and outputs.
             lam (array or unyt_array)
                 Wavelength grid with or without units (via unyt)
             lnu (array)
@@ -283,7 +284,11 @@ def create_cloudy_input(
     # define hydrogend density
     if params["hydrogen_density"]:
         cinput.append(
-            f'hden {np.log10(params["hydrogen_density"])} log constant density\n'
+            (
+                f"hden {np.log10(params['hydrogen_density'])}"
+                " log constant "
+                "density\n"
+            )
         )
 
     # covering factor

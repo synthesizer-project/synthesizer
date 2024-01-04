@@ -1,3 +1,5 @@
+"""Module containing dust attenuation functionality
+"""
 import os
 import numpy as np
 from scipy import interpolate
@@ -129,13 +131,14 @@ class AttenuationLaw:
                 array.
 
             lam (array-like, float)
-                The wavelengths (with units) at which to calculate transmission.
+                The wavelengths (with units) at which to calculate
+                transmission.
 
         Returns:
             array-like
-                The transmission at each wavelength. Either (lam.size,) in shape
-                for singular tau_v values or (tau_v.size, lam.size) tau_v
-                is an array.
+                The transmission at each wavelength. Either (lam.size,) in
+                shape for singular tau_v values or (tau_v.size, lam.size)
+                tau_v is an array.
         """
 
         # Get the optical depth at each wavelength
@@ -259,9 +262,9 @@ class MW_N18(AttenuationLaw):
         )
 
         if isinstance(lam, (unyt_quantity, unyt_array)):
-            _lam = lam.to("Angstrom").v
+            lam = lam.to("Angstrom").v
         else:
-            _lam = lam
+            lam = lam
 
         return func(lam) / self.tau_lam_v
 
@@ -410,13 +413,14 @@ class GrainsWD01:
                 array.
 
             lam (array-like, float)
-                The wavelengths (with units) at which to calculate transmission.
+                The wavelengths (with units) at which to calculate
+                transmission.
 
         Returns:
             array-like
-                The transmission at each wavelength. Either (lam.size,) in shape
-                for singular tau_v values or (tau_v.size, lam.size) tau_v
-                is an array.
+                The transmission at each wavelength. Either (lam.size,) in
+                shape for singular tau_v values or (tau_v.size, lam.size)
+                tau_v is an array.
         """
         if isinstance(lam, (unyt_quantity, unyt_array)):
             _lam = lam.to("Angstrom").v

@@ -26,8 +26,9 @@ class Gas(Particles):
     attributes and methods common to all particle types.
 
     The Gas class can be handed to methods elsewhere to pass information
-    about the gas particles needed in other computations. A galaxy object should
-    have a link to the Gas object containing its gas particles, for example.
+    about the gas particles needed in other computations. A galaxy object
+    should have a link to the Gas object containing its gas particles,
+    for example.
 
     Note that due to the wide range of possible properties and operations,
     this class has a large number of optional attributes which are set to

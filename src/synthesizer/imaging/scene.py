@@ -1,15 +1,13 @@
 """ Definitions for image scene objects
 
-These should not be explictly used by the user. Instead the user interfaces with
-Images and Galaxys
+These should not be explictly used by the user. Instead the user
+interfaces with Images and Galaxys
 """
 import math
 import numpy as np
-import unyt
-from unyt import arcsec, kpc
+from unyt import arcsec
 from scipy.ndimage import zoom
 
-from synthesizer.particle import Stars
 import synthesizer.exceptions as exceptions
 from synthesizer.units import Quantity
 
@@ -23,11 +21,11 @@ class Scene:
         resolution (Quantity, float)
             The size a pixel.
         npix (int)
-            The number of pixels along an axis of the image or number of spaxels
-            in the image plane of the IFU.
+            The number of pixels along an axis of the image or number of
+            spaxels in the image plane of the IFU.
         fov (Quantity, float)
-            The width of the image/ifu. If coordinates are being used to make the
-            image this should have the same units as those coordinates.
+            The width of the image/ifu. If coordinates are being used to make
+            the image this should have the same units as those coordinates.
         sed (Sed)
             An sed object containing the spectra for this observation.
         orig_resolution (Quantity, float)
@@ -67,8 +65,9 @@ class Scene:
                 The number of pixels along an axis of the image or number of
                 spaxels in the image plane of the IFU.
             fov (unyt_quantity)
-                The width of the image/ifu. If coordinates are being used to make
-                the image this should have the same units as those coordinates.
+                The width of the image/ifu. If coordinates are being used to
+                make the image this should have the same units as those
+                coordinates.
             sed (Sed)
                 An sed object containing the spectra for this observation.
             rest_frame (bool)
@@ -290,8 +289,8 @@ class ParticleScene(Scene):
         smoothing_lengths (Quantity, array-like, float)
             The smoothing lengths describing each particles SPH kernel.
         kernel (array-like, float)
-            The values from one of the kernels from the kernel_functions module.
-            Only used for smoothed images.
+            The values from one of the kernels from the kernel_functions
+            module. Only used for smoothed images.
         kernel_dim (int)
             The number of elements in the kernel.
         kernel_threshold (float)
@@ -333,8 +332,9 @@ class ParticleScene(Scene):
                 The number of pixels along an axis of the image or number of
                 spaxels in the image plane of the IFU.
             fov (float)
-                The width of the image/ifu. If coordinates are being used to make
-                the image this should have the same units as those coordinates.
+                The width of the image/ifu. If coordinates are being used to
+                make the image this should have the same units as those
+                coordinates.
             sed (Sed)
                 An sed object containing the spectra for this observation.
             coordinates (array-like, float)
@@ -343,8 +343,9 @@ class ParticleScene(Scene):
                 The values describing the size of the smooth kernel for each
                 particle. Only needed if star objects are not passed.
             centre (array-like, float)
-                The coordinates around which the image will be centered. The if one
-                is not provided then the geometric centre is calculated and used.
+                The coordinates around which the image will be centered. The
+                if one is not provided then the geometric centre is calculated
+                and used.
             rest_frame (bool)
                 Is the observation in the rest frame or observer frame. Default
                 is rest frame (True).
@@ -353,15 +354,15 @@ class ParticleScene(Scene):
             redshift (float)
                 The redshift of the observation.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
 
         Raises:
             InconsistentArguments
-                If an incompatible combination of arguments is provided an error is
-                raised.
+                If an incompatible combination of arguments is provided an
+                error is raised.
         """
 
         # Check what we've been given
@@ -387,8 +388,8 @@ class ParticleScene(Scene):
             redshift=redshift,
         )
 
-        # Handle the particle coordinates, here we make a copy to avoid changing
-        # the original values
+        # Handle the particle coordinates, here we make a copy to
+        # avoid changing the original values
         self.coordinates = np.copy(coordinates)
 
         # If the coordinates are not already centred centre them
@@ -440,15 +441,16 @@ class ParticleScene(Scene):
             coordinates (array-like, float)
                 The position of particles to be sorted into the image.
             centre (array-like, float)
-                The coordinates around which the image will be centered. The if one
-                is not provided then the geometric centre is calculated and used.
+                The coordinates around which the image will be centered. If
+                one is not provided then the geometric centre is
+                calculated and used.
             cosmo (astropy.cosmology)
                 The Astropy object containing the cosmological model.
             sed (Sed)
                 An sed object containing the spectra for this observation.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             smoothing_lengths (array-like, float)
                 The values describing the size of the smooth kernel for each
                 particle. Only needed if star objects are not passed.
@@ -457,8 +459,8 @@ class ParticleScene(Scene):
             InconsistentArguments
                Errors when an incorrect combination of arguments is passed.
             InconsistentCoordinates
-               If the centre does not lie within the range of coordinates an error
-               is raised.
+               If the centre does not lie within the range of coordinates an
+               error is raised.
         """
 
         # Get the spatial units
@@ -477,9 +479,9 @@ class ParticleScene(Scene):
         if spatial_unit.same_dimensions_as(arcsec) and self.redshift is None:
             raise exceptions.InconsistentArguments(
                 "When working in an angular unit system the provided "
-                "particles need a redshift associated to them. Particles.redshift"
-                " can either be a single redshift for all particles or an "
-                "array of redshifts for each star."
+                "particles need a redshift associated to them. "
+                "Particles.redshift can either be a single redshift "
+                "for all particles or an array of redshifts for each star."
             )
 
         # Need to ensure we have a per particle SED
@@ -526,7 +528,8 @@ class ParticleScene(Scene):
         # Ensure we aren't trying to smooth particles without smoothing lengths
         if kernel is not None and smoothing_lengths is None:
             raise exceptions.InconsistentArguments(
-                "Trying to smooth particles which don't have smoothing lengths!"
+                "Trying to smooth particles which "
+                "don't have smoothing lengths!"
             )
 
     def _centre_coordinates(self):

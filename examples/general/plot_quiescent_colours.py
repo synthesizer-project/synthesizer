@@ -44,7 +44,10 @@ def simple_UVJ(grid, target_metallicity=0.01):
 
 
 def UVJ_metallicity(grid):
-    """Calculate UVJ as a function of metallicity and save as a .ecsv file and make a figure"""
+    """
+    Calculate UVJ as a function of metallicity and save as a .ecsv file
+    and make a figure
+    """
 
     fc = UVJ(new_lam=grid.lam)
 

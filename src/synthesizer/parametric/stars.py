@@ -190,7 +190,7 @@ class Stars(StarsComponent):
                 "SFH module, or a single float."
             )
 
-        # Store the metallicity distribution we've been given, this is either...
+        # Store the metallicity distribution we've been given, either...
         if issubclass(type(metal_dist), ZDistCommon):
             self.metal_dist_func = metal_dist  # a ZDist function
             self.metal_dist = None

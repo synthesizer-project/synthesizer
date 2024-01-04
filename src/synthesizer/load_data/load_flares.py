@@ -1,5 +1,4 @@
 import h5py
-import numpy as np
 
 from unyt import Msun, kpc, yr
 

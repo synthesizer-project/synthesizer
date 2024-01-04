@@ -2,7 +2,7 @@
 Plot spectra example
 ====================
 
-This example demonstrates how to extract a spectra directly from a grid and 
+This example demonstrates how to extract a spectra directly from a grid and
 plots all the available spectra.
 
 NOTE: this only works on 2D grids at the moment

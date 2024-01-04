@@ -4,8 +4,7 @@ import numpy as np
 
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
-from synthesizer.dust.attenuation import PowerLaw
-from synthesizer.imaging.images import ParametricImage, Image
+from synthesizer.imaging.images import ParametricImage
 from synthesizer.art import Art, get_centred_art
 from synthesizer.particle import Stars as ParticleStars
 
@@ -28,8 +27,8 @@ class Galaxy(BaseGalaxy):
                 An instance of parametric.Stars containing the combined star
                 formation and metallicity history of this galaxy.
             name (str)
-                A name to identify the galaxy. Only used for external labelling,
-                has no internal use.
+                A name to identify the galaxy. Only used for external
+                labelling, has no internal use.
             redshift (float)
                 The redshift of the galaxy.
 
@@ -89,11 +88,8 @@ class Galaxy(BaseGalaxy):
         pstr += "SUMMARY OF PARAMETRIC GALAXY".center(width + 4) + "\n"
         pstr += get_centred_art(Art.galaxy, width) + "\n"
         pstr += str(self.__class__) + "\n"
-        pstr += (
-            f"log10(stellar mass formed/Msol): \
-            {np.log10(np.sum(self.sfzh))}"
-            + "\n"
-        )
+        pstr += f"log10(stellar mass formed/Msol): \
+            {np.log10(np.sum(self.sfzh))}\n"
         pstr += "available SEDs: \n"
 
         # Define the connecting character for list wrapping
@@ -114,12 +110,10 @@ class Galaxy(BaseGalaxy):
             # Slice off the last two entries, we don't need then
             spectra_keys[iline] = spectra_keys[iline][:-2]
 
-            pstr += (
-                "    Stellar:  [" + conn_char.join(spectra_keys) + "]" + "\n"
-            )
+            pstr += "    Stellar:  [" + conn_char.join(spectra_keys) + "]\n"
 
         else:
-            pstr += "    Stellar:  []" + "\n"
+            pstr += "    Stellar:  []\n"
 
         # Define the connecting character for list wrapping
         conn_char = "\n" + (19 * " ")
@@ -140,10 +134,7 @@ class Galaxy(BaseGalaxy):
             spectra_keys[iline] = spectra_keys[iline][:-2]
 
             pstr += (
-                "    Black Holes:  ["
-                + conn_char.join(spectra_keys)
-                + "]"
-                + "\n"
+                "    Black Holes:  [" + conn_char.join(spectra_keys) + "]\n"
             )
 
         else:
@@ -359,31 +350,31 @@ class Galaxy(BaseGalaxy):
             blackhole_spectra_type (string)
                 The black hole spectra key to use for the image.
             filters (FilterCollection)
-                An imutable collection of Filter objects. If provided images are
-                made for each filter.
+                An imutable collection of Filter objects. If provided images
+                are made for each filter.
             psfs (dict)
                 A dictionary containing the psf in each filter where the key is
                 each filter code and the value is the psf in that filter.
             depths (dict)
-                A dictionary containing the depth of an observation in each filter
-                where the key is each filter code and the value is the depth in
-                that filter.
+                A dictionary containing the depth of an observation in each
+                filter where the key is each filter code and the value is
+                the depth in that filter.
             aperture (float/dict)
                 Either a float describing the size of the aperture in which the
-                depth is defined or a dictionary containing the size of the depth
-                aperture in each filter.
+                depth is defined or a dictionary containing the size of the
+                depth aperture in each filter.
             rest_frame (bool)
                 Are we making an observation in the rest frame?
             cosmo : obj (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological calculations
-                when converting rest frame luminosity to flux.
+                A cosmology object from astropy, used for cosmological
+                calculations when converting rest frame luminosity to flux.
             redshift (float)
                 The redshift of the observation. Used when converting between
                 physical cartesian coordinates and angular coordinates.
             psf_resample_factor (float)
-                The factor by which the image should be resampled for robust PSF
-                convolution. Note the images after PSF application will be
-                downsampled to the native pixel scale.
+                The factor by which the image should be resampled for robust
+                PSF convolution. Note the images after PSF application will
+                be downsampled to the native pixel scale.
 
         Returns:
             Image

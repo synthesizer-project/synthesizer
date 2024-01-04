@@ -62,9 +62,9 @@ class BuildExt(build_ext):
 
     def build_extensions(self):
         """
-        A method to set up the build extensions with the correct compiler flags.
+        A method to set up the build extensions with the correct compiler
+        flags.
         """
-
         # Get local useful variables
         ct = self.compiler.compiler_type
 
@@ -82,31 +82,45 @@ class BuildExt(build_ext):
         #     opts += ["-fopenmp"]
         #     links += ["-lgomp"]
 
-        # elif has_flags(self.compiler, ["-Xpreprocessor", "-fopenmp", "-lomp"]):
+        # elif has_flags(
+        #     self.compiler,
+        #     ["-Xpreprocessor", "-fopenmp", "-lomp"],
+        # ):
         #     # Hope that clang accepts this
         #     opts += ["-Xpreprocessor", "-fopenmp", "-lomp"]
         #     links += ["-lomp"]
 
-        # elif has_flags(self.compiler, ["-Xpreprocessor",
-        #                                "-fopenmp",
-        #                                "-lomp",
-        #                                '-I"$(brew --prefix libomp)/include"',
-        #                                '-L"$(brew --prefix libomp)/lib"']):
-        #     # Case on MacOS where somebody has installed libomp using homebrew
-        #     opts += ["-Xpreprocessor",
-        #              "-fopenmp",
-        #              "-lomp",
-        #              '-I"$(brew --prefix libomp)/include"',
-        #              '-L"$(brew --prefix libomp)/lib"']
+        # elif has_flags(
+        #     self.compiler,
+        #     [
+        #         "-Xpreprocessor",
+        #         "-fopenmp",
+        #         "-lomp",
+        #         '-I"$(brew --prefix libomp)/include"',
+        #         '-L"$(brew --prefix libomp)/lib"',
+        #     ],
+        # ):
+        #     # Case on MacOS where somebody has installed libomp using
+        #     # homebrew
+        #     opts += [
+        #         "-Xpreprocessor",
+        #         "-fopenmp",
+        #         "-lomp",
+        #         '-I"$(brew --prefix libomp)/include"',
+        #         '-L"$(brew --prefix libomp)/lib"',
+        #     ]
 
         #     links += ["-lomp"]
 
         # else:
-
-        #     raise CompileError("Unable to compile C extensions on your machine, as we can't find OpenMP. "
-        #                        "If you are on MacOS, try `brew install libomp` and try again. "
-        #                        "If you are on Windows, please reach out on the GitHub and we can try "
-        #                        "to find a solution.")
+        #     raise CompileError(
+        #         "Unable to compile C extensions on your machine, "
+        #         "as we can't find OpenMP. "
+        #         "If you are on MacOS, try `brew install libomp` "
+        #         "and try again. "
+        #         "If you are on Windows, please reach out on the GitHub and "
+        #         "we can try to find a solution."
+        #     )
 
         # Apply the flags and links
         for ext in self.extensions:
@@ -119,12 +133,20 @@ class BuildExt(build_ext):
 
 # Define the extension source files
 src_files = {
-    "synthesizer.extensions.integrated_spectra": "src/synthesizer/extensions/integrated_spectra.c",
-    "synthesizer.extensions.particle_spectra": "src/synthesizer/extensions/particle_spectra.c",
+    "synthesizer.extensions.integrated_spectra": (
+        "src/synthesizer/extensions/integrated_spectra.c"
+    ),
+    "synthesizer.extensions.particle_spectra": (
+        "src/synthesizer/extensions/particle_spectra.c"
+    ),
+    "synthesizer.imaging.extensions.spectral_cube": (
+        "src/synthesizer/imaging/extensions/spectral_cube.c"
+    ),
+    "synthesizer.imaging.extensions.image": (
+        "src/synthesizer/imaging/extensions/image.c"
+    ),
     "synthesizer.extensions.sfzh": "src/synthesizer/extensions/sfzh.c",
     "synthesizer.extensions.los": "src/synthesizer/extensions/los.c",
-    "synthesizer.imaging.extensions.spectral_cube": "src/synthesizer/imaging/extensions/spectral_cube.c",
-    "synthesizer.imaging.extensions.image": "src/synthesizer/imaging/extensions/image.c",
 }
 
 # Create the extension objects
