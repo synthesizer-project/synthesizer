@@ -74,13 +74,13 @@ class BaseGalaxy:
 
         Returns:
             Sed
-                A Sed object containing the dust attenuated spectra
+                A Sed object containing the dust emission spectra
         """
 
         # Use wavelength grid from attenuated spectra
         lam = self.stars.spectra["emergent"].lam
 
-        # Calculate the bolometric dust lunminosity as the difference between
+        # Calculate the bolometric dust luminosity as the difference between
         # the intrinsic and attenuated
         dust_bolometric_luminosity = (
             self.stars.spectra["intrinsic"].measure_bolometric_luminosity()
@@ -92,10 +92,10 @@ class BaseGalaxy:
             lam
         )
 
-        # Create new Sed object containing dust spectra
+        # Create new Sed object containing dust emission spectra
         sed = Sed(lam, lnu=lnu)
 
-        # Associate that with the component's spectra dictionarity
+        # Associate that with the component's spectra dictionary
         self.stars.spectra["dust"] = sed
         self.stars.spectra["total"] = (
             self.stars.spectra["dust"] + self.stars.spectra["emergent"]
