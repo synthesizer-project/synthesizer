@@ -90,6 +90,8 @@ default_units = {
     "fov": Mpc,
     "orig_resolution": Mpc,
     "centre": Mpc,
+    "rest_photometry": erg / s,
+    "obs_photometry": erg / s / cm**2,
 }
 
 
@@ -194,6 +196,11 @@ class Units(metaclass=UnitSingleton):
         flux (unyt.unit_object.Unit)
             "Rest frame" Spectral flux density (at 10 pc) unit.
 
+        rest_photometry (unyt.unit_object.Unit)
+            Rest frame photometry unit.
+        obs_photometry (unyt.unit_object.Unit)
+            Observer frame photometry unit.
+
         ew (unyt.unit_object.Unit)
             Equivalent width unit.
 
@@ -297,6 +304,10 @@ class Units(metaclass=UnitSingleton):
         # Fluxes
         self.fnu = nJy  # rest frame flux
         self.flux = erg / s / cm**2  # rest frame "flux" at 10 pc
+
+        # Photometry
+        self.rest_photometry = erg / s  # rest frame photometry
+        self.obs_photometry = erg / s / cm**2  # observer frame photometry
 
         # Equivalent width
         self.ew = Angstrom
