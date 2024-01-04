@@ -376,9 +376,8 @@ class LogNormal(Common):
         if age < self.max_age:
             norm = 1.0 / (self.max_age - age)
             exponent = (
-                (np.log(self.max_age - age) - self.t_0) ** 2
-                / 2
-                / self.tau**2
+                (np.log(self.max_age - age) - self.t_0) ** 2 /
+                2 / self.tau**2
             )
             return norm * np.exp(-exponent)
 
