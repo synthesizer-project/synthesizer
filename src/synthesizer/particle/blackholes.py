@@ -266,16 +266,17 @@ class BlackHoles(Particles, BlackholesComponent):
                 props.append(getattr(self, axis))
 
             elif (
-                axis in emission_model.variable_parameters
-                and getattr(self, axis, None) is not None
+                axis in emission_model.variable_parameters and
+                getattr(self, axis, None) is not None
             ):
                 # Variable parameters defined on the black hole (not including
                 # line region parameters)
                 props.append(getattr(self, axis))
 
             elif (
-                axis + "_" + line_region in emission_model.variable_parameters
-                and getattr(self, axis + "_" + line_region, None) is not None
+                f"{axis} {line_region}" in
+                emission_model.variable_parameters and
+                getattr(self, axis + "_" + line_region, None) is not None
             ):
                 # Variable line region parameters defined on the black hole
                 props.append(getattr(self, axis + "_" + line_region))
@@ -509,15 +510,14 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # calculate the escaping spectra.
         self.particle_spectra["disc_escaped"] = (
-            1
-            - emission_model.covering_fraction_blr
-            - emission_model.covering_fraction_nlr
+            1 - emission_model.covering_fraction_blr -
+            emission_model.covering_fraction_nlr
         ) * self.particle_spectra["disc_incident"]
 
         # calculate the total spectra, the sum of escaping and transmitted
         self.particle_spectra["disc"] = (
-            self.particle_spectra["disc_transmitted"]
-            + self.particle_spectra["disc_escaped"]
+            self.particle_spectra["disc_transmitted"] +
+            self.particle_spectra["disc_escaped"]
         )
 
         return self.particle_spectra["disc"]
@@ -682,8 +682,8 @@ class BlackHoles(Particles, BlackholesComponent):
         missing_params = []
         for param in emission_model.parameters:
             if (
-                param == "bolometric_luminosity"
-                or param in emission_model.required_parameters
+                param == "bolometric_luminosity" or
+                param in emission_model.required_parameters
             ):
                 continue
             if getattr(emission_model, param, None) is None:
@@ -731,10 +731,8 @@ class BlackHoles(Particles, BlackholesComponent):
         # Note: the choice of "intrinsic" is to align with the Pacman model
         # which reserves "total" and "emergent" to include dust.
         self.particle_spectra["intrinsic"] = (
-            self.particle_spectra["disc"]
-            + self.particle_spectra["blr"]
-            + self.particle_spectra["nlr"]
-            + self.particle_spectra["torus"]
+            self.particle_spectra["disc"] + self.particle_spectra["blr"] +
+            self.particle_spectra["nlr"] + self.particle_spectra["torus"]
         )
 
         # Since we're using a coarse grid it might be necessary to rescale
@@ -742,8 +740,7 @@ class BlackHoles(Particles, BlackholesComponent):
         # the emission model is called from a parametric or particle blackhole.
         if self.bolometric_luminosity is not None:
             scaling = (
-                self.bolometric_luminosity
-                / self.particle_spectra[
+                self.bolometric_luminosity / self.particle_spectra[
                     "intrinsic"
                 ].measure_bolometric_luminosity()
             )
@@ -815,8 +812,8 @@ class BlackHoles(Particles, BlackholesComponent):
             if dust_emission_model is not None:
                 # ISM dust heated by old stars.
                 dust_bolometric_luminosity = (
-                    self.particle_spectra["intrinsic"].bolometric_luminosity
-                    - self.particle_spectra["emergent"].bolometric_luminosity
+                    self.particle_spectra["intrinsic"].bolometric_luminosity -
+                    self.particle_spectra["emergent"].bolometric_luminosity
                 )
 
                 # Calculate normalised dust emission spectrum
@@ -833,8 +830,8 @@ class BlackHoles(Particles, BlackholesComponent):
 
                 # Calculate total spectrum
                 self.particle_spectra["total"] = (
-                    self.particle_spectra["emergent"]
-                    + self.particle_spectra["dust"]
+                    self.particle_spectra["emergent"] +
+                    self.particle_spectra["dust"]
                 )
 
         elif (dust_curve is not None) or (tau_v is not None):
