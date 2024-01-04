@@ -1413,7 +1413,9 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the spectrum and normalise it properly
-        lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(lam)
+        lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(
+            lam
+        )
 
         # Create new Sed object containing dust spectra
         sed = Sed(lam, lnu=lnu)
