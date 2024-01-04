@@ -8,8 +8,6 @@ This example demonstrates how to:
 - get line quantities for a single grid point
 - ad hoc load an additional line
 """
-
-
 import matplotlib.pyplot as plt
 from synthesizer.grid import Grid
 

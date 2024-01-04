@@ -5,24 +5,19 @@ Plot line of sight diagnostics
 This example shows how to compute line of sight dust surface densities,
 and plots some diagnostics.
 """
-import os
 import time
 import numpy as np
-from scipy import signal
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from unyt import yr, Myr, kpc, arcsec, Mpc
+from unyt import Myr
 
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfhz
-from synthesizer.particle.stars import Stars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
-from astropy.cosmology import Planck18 as cosmo
+
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -75,9 +70,9 @@ for n in [10, 100]:  # , 1000, 10000]:
         # Calculate the smoothing lengths from radii
         cent = np.mean(coords, axis=0)
         rs = np.sqrt(
-            (coords[:, 0] - cent[0]) ** 2
-            + (coords[:, 1] - cent[1]) ** 2
-            + (coords[:, 2] - cent[2]) ** 2
+            (coords[:, 0] - cent[0]) ** 2 +
+            (coords[:, 1] - cent[1]) ** 2 +
+            (coords[:, 2] - cent[2]) ** 2
         )
         rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
 
@@ -103,9 +98,9 @@ for n in [10, 100]:  # , 1000, 10000]:
         # Calculate the smoothing lengths from radii
         cent = np.mean(coords, axis=0)
         rs = np.sqrt(
-            (coords[:, 0] - cent[0]) ** 2
-            + (coords[:, 1] - cent[1]) ** 2
-            + (coords[:, 2] - cent[2]) ** 2
+            (coords[:, 0] - cent[0]) ** 2 +
+            (coords[:, 1] - cent[1]) ** 2 +
+            (coords[:, 2] - cent[2]) ** 2
         )
         rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
 
@@ -145,24 +140,21 @@ for n in [10, 100]:  # , 1000, 10000]:
         precision.append(np.abs(tree_sum - loop_sum) / loop_sum * 100)
 
         print(
-            "LOS calculation with tree took %.4f seconds for nstar=%d and ngas=%d"
-            % (tree_time, n, ngas)
+            f"LOS calculation with tree took {tree_time:.4f} "
+            f"seconds for nstar={n} and ngas={ngas}"
         )
         print(
-            "LOS calculation with loop took %.4f seconds for nstar=%d and ngas=%d"
-            % (loop_time, n, ngas)
+            f"LOS calculation with loop took {loop_time:.4f} "
+            f"seconds for nstar={n} and ngas={ngas}"
         )
         print(
-            "Ratio in wallclock: Time_loop/Time_tree=%.4f"
-            % (loop_time / tree_time)
+            "Ratio in wallclock: "
+            f"Time_loop/Time_tree={loop_time / tree_time:.4f}"
         )
         print(
-            "Tree gave=%.2f Loop gave=%.2f Normalised residual=%.4f%%"
-            % (
-                tree_sum,
-                loop_sum,
-                np.abs(tree_sum - loop_sum) / loop_sum * 100,
-            )
+            f"Tree gave={tree_sum:.2f} Loop gave={loop_sum:%.2f} "
+            "Normalised residual="
+            f"{np.abs(tree_sum - loop_sum) / loop_sum * 100:.4f}"
         )
 
     xs = np.array(xs)
@@ -181,24 +173,29 @@ for n in [10, 100]:  # , 1000, 10000]:
     ax.plot(xs, tree_ys, label="Tree")
 
     ax.set_ylabel("Wallclock (s)")
-    ax.set_xlabel("$N_\star N_\mathrm{gas}$")
+    ax.set_xlabel(r"$N_\star N_\mathrm{gas}$")
 
     ax.legend()
 
     plt.show()
-    # fig.savefig("../los_timing_nstar%d.png" % n, dpi=100, bbox_inches="tight")
+    # fig.savefig("../los_timing_nstar%d.png" % n,
+    #     dpi=100, bbox_inches="tight")
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.semilogx()
     ax.grid()
 
-    ax.plot(xs, precision, label="Loop/Tree")
+    ax.plot(xs, precision, label="Loop / Tree")
 
-    ax.set_ylabel(r"$|\tau_{V, tree} - \tau_{V, loop}| / \tau_{V, loop}$ (%)")
-    ax.set_xlabel("$N_\star N_\mathrm{gas}$")
+    ax.set_ylabel(
+        r"$|\tau_{V, tree} - \tau_{V, loop}|"
+        r" / \tau_{V, loop}$ (%)"
+    )
+    ax.set_xlabel("$N_\\star N_\\mathrm{gas}$")
 
     ax.legend()
 
-    # fig.savefig("../los_precision_nstar%d.png" % n, dpi=100, bbox_inches="tight")
+    # fig.savefig("../los_precision_nstar%d.png" % n,
+    #     dpi=100, bbox_inches="tight")
     plt.show()

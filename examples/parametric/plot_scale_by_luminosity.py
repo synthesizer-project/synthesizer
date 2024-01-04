@@ -1,4 +1,4 @@
-""" 
+"""
 An example showing how to scale a galaxy's mass by luminosity/flux.
 ===================================================================
 
@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from astropy.cosmology import Planck18 as cosmo
-from unyt import Myr, Msun, erg, s, Hz, nJy
+from unyt import Myr, Msun, erg, nJy
 
 from synthesizer.grid import Grid
 from synthesizer.filters import Filter
@@ -79,8 +79,8 @@ ax_flux.plot(
     gal.stars.spectra["attenuated"]._fnu,
     color="m",
     label=(
-        "Original ($\log_{10}(M_\star / M_\odot)"
-        + f"={np.log10(gal.stars.initial_mass):.2f})$"
+        r"Original ($\log_{10}(M_\star / M_\odot)" +
+        f"={np.log10(gal.stars.initial_mass):.2f})$"
     ),
     alpha=0.7,
 )
@@ -109,8 +109,8 @@ ax_flux.plot(
     gal.stars.spectra["attenuated"]._fnu,
     color="c",
     label=(
-        "Luminosity scaled ($\log_{10}(M_\star / M_\odot)"
-        + f"={np.log10(gal.stars.initial_mass):.2f})$"
+        r"Luminosity scaled ($\log_{10}(M_\star / M_\odot)" +
+        f"={np.log10(gal.stars.initial_mass):.2f})$"
     ),
     alpha=0.7,
 )
@@ -137,8 +137,8 @@ ax_flux.plot(
     gal.stars.spectra["attenuated"]._fnu,
     color="orange",
     label=(
-        "Flux scaled ($\log_{10}(M_\star / M_\odot)"
-        + f"={np.log10(gal.stars.initial_mass):.2f})$"
+        r"Flux scaled ($\log_{10}(M_\star / M_\odot)" +
+        f"={np.log10(gal.stars.initial_mass):.2f})$"
     ),
     alpha=0.7,
 )

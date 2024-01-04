@@ -2,13 +2,13 @@
 Compare parametric and particle SEDs
 =====================================
 
-This example compares a sampled and binned (parametric) SED for different numbers of particles
+This example compares a sampled and binned (parametric) SED for different
+numbers of particles
 """
 
-import os
 import numpy as np
 import matplotlib.pyplot as plt
-from unyt import yr, Myr
+from unyt import Myr
 
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
