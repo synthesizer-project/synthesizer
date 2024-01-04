@@ -1,3 +1,5 @@
+"""Module containing dust attenuation functionality
+"""
 import os
 import numpy as np
 from scipy import interpolate
@@ -55,10 +57,8 @@ def N09_tau(lam, slope, cent_lam, ampl, gamma):
     ok3 = lam_micron < 0.12  # lam<0.12um
     if np.sum(ok1) > 0:  # equation 1
         k_lam[ok1] = (
-            -2.156
-            + (1.509 / lam_micron[ok1])
-            - (0.198 / lam_micron[ok1] ** 2)
-            + (0.011 / lam_micron[ok1] ** 3)
+            -2.156 + (1.509 / lam_micron[ok1]) -
+            (0.198 / lam_micron[ok1] ** 2) + (0.011 / lam_micron[ok1] ** 3)
         )
         func = interpolate.interp1d(
             lam_micron[ok1], k_lam[ok1], fill_value="extrapolate"
@@ -78,9 +78,8 @@ def N09_tau(lam, slope, cent_lam, ampl, gamma):
 
     # UV bump feature expression from Noll+2009
     D_lam = (
-        ampl
-        * ((lam_micron * gamma) ** 2)
-        / ((lam_micron**2 - cent_lam**2) ** 2 + (lam_micron * gamma) ** 2)
+        ampl * ((lam_micron * gamma) ** 2) /
+        ((lam_micron**2 - cent_lam**2) ** 2 + (lam_micron * gamma) ** 2)
     )
 
     # Normalising with the value at 0.55um, to obtain
@@ -129,13 +128,14 @@ class AttenuationLaw:
                 array.
 
             lam (array-like, float)
-                The wavelengths (with units) at which to calculate transmission.
+                The wavelengths (with units) at which to calculate
+                transmission.
 
         Returns:
             array-like
-                The transmission at each wavelength. Either (lam.size,) in shape
-                for singular tau_v values or (tau_v.size, lam.size) tau_v
-                is an array.
+                The transmission at each wavelength. Either (lam.size,) in
+                shape for singular tau_v values or (tau_v.size, lam.size)
+                tau_v is an array.
         """
 
         # Get the optical depth at each wavelength
@@ -259,9 +259,9 @@ class MW_N18(AttenuationLaw):
         )
 
         if isinstance(lam, (unyt_quantity, unyt_array)):
-            _lam = lam.to("Angstrom").v
+            lam = lam.to("Angstrom").v
         else:
-            _lam = lam
+            lam = lam
 
         return func(lam) / self.tau_lam_v
 
@@ -410,13 +410,14 @@ class GrainsWD01:
                 array.
 
             lam (array-like, float)
-                The wavelengths (with units) at which to calculate transmission.
+                The wavelengths (with units) at which to calculate
+                transmission.
 
         Returns:
             array-like
-                The transmission at each wavelength. Either (lam.size,) in shape
-                for singular tau_v values or (tau_v.size, lam.size) tau_v
-                is an array.
+                The transmission at each wavelength. Either (lam.size,) in
+                shape for singular tau_v values or (tau_v.size, lam.size)
+                tau_v is an array.
         """
         if isinstance(lam, (unyt_quantity, unyt_array)):
             _lam = lam.to("Angstrom").v
