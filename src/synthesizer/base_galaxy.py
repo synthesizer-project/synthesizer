@@ -64,47 +64,6 @@ class BaseGalaxy:
                 "`parametric.galaxy.Galaxy`"
             )
 
-    def get_spectra_dust(self, emissionmodel):
-        """
-        Calculates dust emission spectra using the attenuated and intrinsic
-        spectra that have already been generated and an emission model.
-
-        Parameters
-        ----------
-        emissionmodel : obj
-            The spectral frid
-
-        Returns
-        -------
-        obj (Sed)
-             A Sed object containing the dust attenuated spectra
-        """
-
-        # use wavelength grid from attenuated spectra
-        # NOTE: in future it might be good to allow a custom wavelength grid
-
-        lam = self.spectra["emergent"].lam
-
-        # calculate the bolometric dust lunminosity as the difference between
-        # the intrinsic and attenuated
-
-        dust_bolometric_luminosity = (
-            self.spectra["intrinsic"].measure_bolometric_luminosity()
-            - self.spectra["emergent"].measure_bolometric_luminosity()
-        )
-
-        # get the spectrum and normalise it properly
-        lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(lam)
-
-        # create new Sed object containing dust spectra
-        sed = Sed(lam, lnu=lnu)
-
-        # associate that with the component's spectra dictionarity
-        self.spectra["dust"] = sed
-        self.spectra["total"] = self.spectra["dust"] + self.spectra["emergent"]
-
-        return sed
-
     def get_equivalent_width(self, feature, blue, red, spectra_to_plot=None):
         """
         Gets all equivalent widths associated with a sed object
