@@ -38,7 +38,9 @@ if __name__ == "__main__":
 
     # define the parameters of the star formation and metal enrichment histories
     sfh_p = {"duration": 10 * Myr}
-    Z_p = {"log10metallicity": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    Z_p = {
+        "log10metallicity": -2.0
+    }  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = 1e9
 
     # define the functional form of the star formation and metal
@@ -62,7 +64,15 @@ if __name__ == "__main__":
     # Define Filters
     filter_codes = [
         f"JWST/NIRCam.{f}"
-        for f in ["F090W", "F115W", "F150W", "F200W", "F277W", "F356W", "F444W"]
+        for f in [
+            "F090W",
+            "F115W",
+            "F150W",
+            "F200W",
+            "F277W",
+            "F356W",
+            "F444W",
+        ]
     ]
     filter_codes += [f"JWST/MIRI.{f}" for f in ["F770W"]]
     filters = FilterCollection(filter_codes=filter_codes, new_lam=grid.lam)
@@ -102,7 +112,9 @@ if __name__ == "__main__":
             0.05,
             0.1,
             f"$z=%.1f$" % z,
-            bbox=dict(boxstyle="round,pad=0.3", fc="w", ec="k", lw=1, alpha=0.8),
+            bbox=dict(
+                boxstyle="round,pad=0.3", fc="w", ec="k", lw=1, alpha=0.8
+            ),
             transform=ax.transAxes,
             horizontalalignment="left",
         )
@@ -118,7 +130,13 @@ if __name__ == "__main__":
                 zorder=0,
             )
         else:
-            ax.plot(seds[z].obslam, seds[z]._fnu, color="k", linestyle="--", zorder=0)
+            ax.plot(
+                seds[z].obslam,
+                seds[z]._fnu,
+                color="k",
+                linestyle="--",
+                zorder=0,
+            )
 
         # Make the first legend
         if ind == 0:
@@ -158,7 +176,12 @@ if __name__ == "__main__":
 
             # Plot the photometry
             ax.scatter(
-                f.pivwv(), phot, s=50, color=colors[f.filter_code], marker="D", zorder=2
+                f.pivwv(),
+                phot,
+                s=50,
+                color=colors[f.filter_code],
+                marker="D",
+                zorder=2,
             )
 
         # Make the second legened
