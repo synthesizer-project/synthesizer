@@ -4,7 +4,7 @@ The class defined here should never be instantiated directly, there are only
 ever instantiated by the parametric/particle child classes.
 """
 import numpy as np
-from unyt import c, rad, deg, unyt_quantity
+from unyt import c, rad, deg
 
 from synthesizer import exceptions
 from synthesizer.blackhole_emission_models import Template
@@ -134,18 +134,18 @@ class BlackholesComponent:
         # If mass, accretion_rate, and epsilon provided calculate the
         # bolometric luminosity.
         if (
-            self.mass is not None
-            and self.accretion_rate is not None
-            and self.epsilon is not None
+            self.mass is not None and
+            self.accretion_rate is not None and
+            self.epsilon is not None
         ):
             self.calculate_bolometric_luminosity()
 
         # If mass, accretion_rate, and epsilon provided calculate the
         # big bump temperature.
         if (
-            self.mass is not None
-            and self.accretion_rate is not None
-            and self.epsilon is not None
+            self.mass is not None and
+            self.accretion_rate is not None and
+            self.epsilon is not None
         ):
             self.calculate_bb_temperature()
 
@@ -156,9 +156,9 @@ class BlackholesComponent:
         # If mass, accretion_rate, and epsilon provided calculate the
         # Eddington ratio.
         if (
-            self.mass is not None
-            and self.accretion_rate is not None
-            and self.epsilon is not None
+            self.mass is not None and
+            self.accretion_rate is not None and
+            self.epsilon is not None
         ):
             self.calculate_eddington_ratio()
 
@@ -166,9 +166,9 @@ class BlackholesComponent:
         # accretion rate in units of the Eddington accretion rate. This is the
         # bolometric_luminosity / eddington_luminosity.
         if (
-            self.mass is not None
-            and self.accretion_rate is not None
-            and self.epsilon is not None
+            self.mass is not None and
+            self.accretion_rate is not None and
+            self.epsilon is not None
         ):
             self.calculate_accretion_rate_eddington()
 
@@ -270,8 +270,8 @@ class BlackholesComponent:
 
         Returns
             str
-                Summary string containing the total mass formed and lists of the
-                available SEDs, lines, and images.
+                Summary string containing the total mass formed and lists
+                of the available SEDs, lines, and images.
         """
 
         # Define the width to print within
@@ -457,9 +457,8 @@ class BlackholesComponent:
 
         # calculate the escaping spectra.
         self.spectra["disc_escaped"] = (
-            1
-            - emission_model.covering_fraction_blr
-            - emission_model.covering_fraction_nlr
+            1 - emission_model.covering_fraction_blr -
+            emission_model.covering_fraction_nlr
         ) * self.spectra["disc_incident"]
 
         # calculate the total spectra, the sum of escaping and transmitted
@@ -635,8 +634,8 @@ class BlackholesComponent:
         missing_params = []
         for param in emission_model.parameters:
             if (
-                param == "bolometric_luminosity"
-                or param in emission_model.required_parameters
+                param == "bolometric_luminosity" or
+                param in emission_model.required_parameters
             ):
                 continue
             if getattr(emission_model, param, None) is None:
@@ -685,10 +684,8 @@ class BlackholesComponent:
         # Note: the choice of "intrinsic" is to align with the Pacman model
         # which reserves "total" and "emergent" to include dust.
         self.spectra["intrinsic"] = (
-            self.spectra["disc"]
-            + self.spectra["blr"]
-            + self.spectra["nlr"]
-            + self.spectra["torus"]
+            self.spectra["disc"] + self.spectra["blr"] +
+            self.spectra["nlr"] + self.spectra["torus"]
         )
 
         # Since we're using a coarse grid it might be necessary to rescale
@@ -696,15 +693,15 @@ class BlackholesComponent:
         # the emission model is called from a parametric or particle blackhole.
         if isinstance(self.bolometric_luminosity, float):
             scaling = (
-                self.bolometric_luminosity
-                / self.spectra["intrinsic"].measure_bolometric_luminosity()
+                self.bolometric_luminosity /
+                self.spectra["intrinsic"].measure_bolometric_luminosity()
             )
             for spectra_id, spectra in self.spectra.items():
                 self.spectra[spectra_id] = spectra * scaling
         elif self.bolometric_luminosity is not None:
             scaling = (
-                np.sum(self.bolometric_luminosity)
-                / self.spectra["intrinsic"].measure_bolometric_luminosity()
+                np.sum(self.bolometric_luminosity) /
+                self.spectra["intrinsic"].measure_bolometric_luminosity()
             )
             for spectra_id, spectra in self.spectra.items():
                 self.spectra[spectra_id] = spectra * scaling
@@ -771,8 +768,8 @@ class BlackholesComponent:
             if dust_emission_model is not None:
                 # ISM dust heated by old stars.
                 dust_bolometric_luminosity = (
-                    self.spectra["intrinsic"].bolometric_luminosity
-                    - self.spectra["emergent"].bolometric_luminosity
+                    self.spectra["intrinsic"].bolometric_luminosity -
+                    self.spectra["emergent"].bolometric_luminosity
                 )
 
                 # Calculate normalised dust emission spectrum
@@ -820,15 +817,17 @@ class BlackholesComponent:
                 figure and axes.
             ylimits (tuple)
                 The limits to apply to the y axis. If not provided the limits
-                will be calculated with the lower limit set to 1000 (100) times less
-                than the peak of the spectrum for rest_frame (observed) spectra.
+                will be calculated with the lower limit set to 1000 (100)
+                times less than the peak of the spectrum for rest_frame
+                (observed) spectra.
             xlimits (tuple)
                 The limits to apply to the x axis. If not provided the optimal
                 limits are found based on the ylimits.
             figsize (tuple)
                 Tuple with size 2 defining the figure size.
             kwargs (dict)
-                arguments to the `sed.plot_spectra` method called from this wrapper
+                arguments to the `sed.plot_spectra` method called from this
+                wrapper
 
         Returns:
             fig (matplotlib.pyplot.figure)
