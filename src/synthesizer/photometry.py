@@ -178,9 +178,7 @@ class PhotometryCollection:
 
         # Combine everything into the final table
         for filt, phot in zip(filters_col, value_col):
-            table += (
-                f"|{filt.center(filter_width)}|{phot.center(phot_width)}|\n|{sep}|\n"
-            )
+            table += f"|{filt.center(filter_width)}|{phot.center(phot_width)}|\n|{sep}|\n"
 
         # Clean up the final separator
         table = table[: -tot_width - 3]
@@ -255,7 +253,9 @@ class PhotometryCollection:
                 max_t = np.max(f.t)
 
         # Get the photometry
-        photometry = self.rest_photometry if self.rest_frame else self.obs_photometry
+        photometry = (
+            self.rest_photometry if self.rest_frame else self.obs_photometry
+        )
 
         # Plot the photometry
         for f, phot in zip(self.filters, photometry.value):
@@ -319,7 +319,9 @@ class PhotometryCollection:
         if self.rest_frame:
             ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
         else:
-            ax.set_xlabel(r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$")
+            ax.set_xlabel(
+                r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$"
+            )
 
         # Label the y axis handling all possibilities
         if self.rest_frame:

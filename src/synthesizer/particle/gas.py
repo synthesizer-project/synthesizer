@@ -181,4 +181,6 @@ class Gas(Particles):
         Calculate dust mass from a given dust-to-metals ratio
         and gas particle properties (mass and metallicity)
         """
-        self.dust_masses = self.masses * self.metallicities * self.dust_to_metal_ratio
+        self.dust_masses = (
+            self.masses * self.metallicities * self.dust_to_metal_ratio
+        )

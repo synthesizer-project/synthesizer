@@ -175,7 +175,9 @@ class BlackholesComponent:
         # If inclination, calculate the cosine of the inclination, required by
         # some models (e.g. AGNSED).
         if self.inclination is not None:
-            self.cosine_inclination = np.cos(self.inclination.to("radian").value)
+            self.cosine_inclination = np.cos(
+                self.inclination.to("radian").value
+            )
 
     def _prepare_sed_args(self, *args, **kwargs):
         """
@@ -311,7 +313,9 @@ class BlackholesComponent:
                 The black hole bolometric luminosity
         """
 
-        self.bolometric_luminosity = self.epsilon * self.accretion_rate * c**2
+        self.bolometric_luminosity = (
+            self.epsilon * self.accretion_rate * c**2
+        )
 
         return self.bolometric_luminosity
 
@@ -339,7 +343,9 @@ class BlackholesComponent:
                 The black hole eddington ratio
         """
 
-        self.eddington_ratio = self._bolometric_luminosity / self._eddington_luminosity
+        self.eddington_ratio = (
+            self._bolometric_luminosity / self._eddington_luminosity
+        )
 
         return self.eddington_ratio
 
@@ -616,7 +622,9 @@ class BlackholesComponent:
 
             # Remember the previous values to be returned after getting the
             # spectra
-            used_varaibles.append((param, getattr(emission_model, param, None)))
+            used_varaibles.append(
+                (param, getattr(emission_model, param, None))
+            )
 
             # Set the passed value
             setattr(emission_model, param, getattr(self, param, None))
@@ -776,7 +784,9 @@ class BlackholesComponent:
                 self.spectra["dust"]._lnu *= dust_bolometric_luminosity.value
 
                 # Calculate total spectrum
-                self.spectra["total"] = self.spectra["emergent"] + self.spectra["dust"]
+                self.spectra["total"] = (
+                    self.spectra["emergent"] + self.spectra["dust"]
+                )
 
         elif (dust_curve is not None) or (tau_v is not None):
             raise exceptions.MissingArgument(
