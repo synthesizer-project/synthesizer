@@ -21,7 +21,7 @@ Example usage:
 
     bar_with_units = foo.bar
     bar_no_units = foo._bar
-    
+
 """
 from unyt import (
     nJy,
@@ -113,7 +113,8 @@ class UnitSingleton(type):
         When a new instance is made (calling class), this method is called.
 
         Unless forced to redefine Units (highly inadvisable), the original
-        instance is returned giving it a new reference to the original instance.
+        instance is returned giving it a new reference to the original
+        instance.
 
         If a new unit system is passed and one already exists and warning is
         printed and the original is returned.
@@ -133,10 +134,10 @@ class UnitSingleton(type):
         # Print a warning if an instance exists and arguments have been passed
         elif cls in cls._instances and new_units is not None:
             print(
-                "WARNING! Units are already set. \nAny modified units will not "
-                "take effect. \nUnits should be configured before running "
-                "anything else... \nbut you could (and shouldn't) force it: "
-                "Units(new_units_dict, force=True)."
+                "WARNING! Units are already set. \nAny modified units will "
+                "not take effect. \nUnits should be configured before "
+                "running anything else... \nbut you could (and "
+                "shouldn't) force it: Units(new_units_dict, force=True)."
             )
 
         # If we don't already have an instance the dictionary will be empty
@@ -161,11 +162,12 @@ class Units(metaclass=UnitSingleton):
     instantiating the original Units instance with a dictionary of units of
     the form {"variable": unyt.unit}. This must be done before any calculations
     have been performed, changing the unit system will not retroactively
-    convert computed quantities! In fact, if any quantities have been calculated
-    the original default Units object will have already been instantiated, thus
-    the default Units will be returned regardless of the modifications
-    dictionary due to the rules of a Singleton metaclass. The user can force an
-    update but BE WARNED this is dangerous and should be avoided.
+    convert computed quantities! In fact, if any quantities have been
+    calculated the original default Units object will have already been
+    instantiated, thus the default Units will be returned regardless
+    of the modifications dictionary due to the rules of a Singleton
+    metaclass. The user can force an update but BE WARNED this is
+    dangerous and should be avoided.
 
     Attributes:
         lam (unyt.unit_object.Unit)
@@ -371,9 +373,9 @@ class Units(metaclass=UnitSingleton):
         out_str = "Unit System: \n"
         for key in default_units:
             out_str += (
-                "%s: ".ljust(22 - len(key)) % key
-                + getattr(self, key).__str__()
-                + "\n"
+                "%s: ".ljust(22 - len(key)) % key +
+                getattr(self, key).__str__() +
+                "\n"
             )
 
         return out_str
@@ -456,8 +458,8 @@ class Quantity:
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
             if (
-                value.units != getattr(self.units, self.public_name)
-                and value.units != dimensionless
+                value.units != getattr(self.units, self.public_name) and
+                value.units != dimensionless
             ):
                 value = value.to(getattr(self.units, self.public_name)).value
             else:

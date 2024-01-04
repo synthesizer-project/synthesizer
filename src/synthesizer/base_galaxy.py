@@ -3,8 +3,6 @@
 The class described in this module should never be directly instatiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
-import numpy as np
-import matplotlib.pyplot as plt
 
 from synthesizer import exceptions
 from synthesizer.igm import Inoue14
@@ -89,8 +87,8 @@ class BaseGalaxy:
         # the intrinsic and attenuated
 
         dust_bolometric_luminosity = (
-            self.spectra["intrinsic"].measure_bolometric_luminosity()
-            - self.spectra["emergent"].measure_bolometric_luminosity()
+            self.spectra["intrinsic"].measure_bolometric_luminosity() -
+            self.spectra["emergent"].measure_bolometric_luminosity()
         )
 
         # get the spectrum and normalise it properly
@@ -211,8 +209,8 @@ class BaseGalaxy:
             if self.stars is not None and key in self.stars.spectra:
                 spectra[key].append(self.stars.spectra[key])
             if (
-                self.black_holes is not None
-                and key in self.black_holes.spectra
+                self.black_holes is not None and
+                key in self.black_holes.spectra
             ):
                 spectra[key].append(self.black_holes.spectra[key])
             if self.gas is not None and key in self.gas.spectra:
@@ -442,8 +440,8 @@ class BaseGalaxy:
             figsize (tuple)
                 Tuple with size 2 defining the figure size.
             filters (FilterCollection)
-                If given then the photometry is computed and both the photometry
-                and filter curves are plotted
+                If given then the photometry is computed and both the
+                photometry and filter curves are plotted
             quantity_to_plot (string)
                 The sed property to plot. Can be "lnu", "luminosity" or "llam"
                 for rest frame spectra or "fnu", "flam" or "flux" for observed
