@@ -39,7 +39,7 @@ jobs:
         # - E402 "module level import not at top of file" (isolate C imports in case python alternatives exist)
         # - W504 "line break after binary operator" (we enforce line breaks after operators, and penalise line breaks before)
         # - F811 ""redefinition of unused name from line N" (breaks quantity objects)
-        flake8 . --count --ignore=E402,W504,F811 --max-line-length=79 --show-source --statistics --per-file-ignores="src/synthesizer/__init__.py:F401 src/synthesizer/components/__init__.py:F401 src/synthesizer/parametric/__init__.py:F401 src/synthesizer/particle/__init__.py:F401 src/synthesizer/photoionisation/__init__.py:F401"
+        flake8 . --count --ignore=E402,W504,F811 --max-line-length=79 --show-source --statistics --per-file-ignores="src/synthesizer/__init__.py:F401 src/synthesizer/components/__init__.py:F401 src/synthesizer/parametric/__init__.py:F401 src/synthesizer/particle/__init__.py:F401 src/synthesizer/photoionisation/__init__.py:F401 docs/source/conf.py:E501"
     - name: Download test data
       env:
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
