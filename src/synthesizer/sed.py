@@ -1,4 +1,4 @@
-""" Functionality related to spectra storage and manipulation.
+"""Functionality related to spectra storage and manipulation.
 
 When a spectra is computed from a `Galaxy` or a Galaxy component the resulting
 calculated spectra are stored in `Sed` objects. These provide helper functions
@@ -31,7 +31,6 @@ from synthesizer.utils import has_units
 
 
 class Sed:
-
     """
     A class representing a spectral energy distribution (SED).
 
@@ -222,13 +221,17 @@ class Sed:
         # could instead check the first and last entry and the shape.
         # In rare instances this could fail though.
         if not np.array_equal(self._lam, second_sed._lam):
-            raise exceptions.InconsistentAddition("Wavelength grids must be identical")
+            raise exceptions.InconsistentAddition(
+                "Wavelength grids must be identical"
+            )
 
         # Ensure the lnu arrays are compatible
         # This check is redudant for Sed.lnu.shape = (nlam, ) spectra but will
         # not erroneously error. Nor is it expensive.
         if self._lnu.shape[0] != second_sed._lnu.shape[0]:
-            raise exceptions.InconsistentAddition("SEDs must have same dimensions")
+            raise exceptions.InconsistentAddition(
+                "SEDs must have same dimensions"
+            )
 
         # They're compatible, add them
         return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
@@ -440,7 +443,8 @@ class Sed:
         """
 
         return (
-            self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind) * self.lnu.units
+            self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind)
+            * self.lnu.units
         )
 
     def _get_lnu_at_lam(self, lam, kind=False, ind=None):
@@ -586,14 +590,18 @@ class Sed:
             # base units.
             lims = (c / np.array(window)).to(self.nu.units).value
             luminosity = (
-                integrate.quad(self._get_lnu_at_nu, *lims)[0] * self.lnu.units * Hz
+                integrate.quad(self._get_lnu_at_nu, *lims)[0]
+                * self.lnu.units
+                * Hz
             )
 
         elif method == "trapz":
             # Define a pseudo transmission function
             transmission = (self.lam > window[0]) & (self.lam < window[1])
             transmission = transmission.astype(float)
-            luminosity = np.trapz(self.lnu[::-1] * transmission[::-1], x=self.nu[::-1])
+            luminosity = np.trapz(
+                self.lnu[::-1] * transmission[::-1], x=self.nu[::-1]
+            )
         else:
             raise exceptions.UnrecognisedOption(
                 f"Unrecognised integration method ({method}). "
@@ -656,7 +664,9 @@ class Sed:
                 Lnu = (
                     np.array(
                         [
-                            np.trapz(_lnu[::-1] * transmission[::-1] / nu, x=nu)
+                            np.trapz(
+                                _lnu[::-1] * transmission[::-1] / nu, x=nu
+                            )
                             / np.trapz(transmission[::-1] / nu, x=nu)
                             for _lnu in self._lnu
                         ]
@@ -681,7 +691,9 @@ class Sed:
             def inv(x):
                 return 1 / x
 
-            Lnu = integrate.quad(func, *lims)[0] / integrate.quad(inv, *lims)[0]
+            Lnu = (
+                integrate.quad(func, *lims)[0] / integrate.quad(inv, *lims)[0]
+            )
 
             Lnu = Lnu * self.lnu.units
 
@@ -783,7 +795,9 @@ class Sed:
             if self._spec_dims == 2:
                 beta = np.array(
                     [
-                        linregress(np.log10(self._lam[s]), np.log10(_lnu[..., s]))[0]
+                        linregress(
+                            np.log10(self._lam[s]), np.log10(_lnu[..., s])
+                        )[0]
                         - 2.0
                         for _lnu in self.lnu
                     ]
@@ -791,7 +805,10 @@ class Sed:
 
             else:
                 beta = (
-                    linregress(np.log10(self._lam[s]), np.log10(self._lnu[s]))[0] - 2.0
+                    linregress(np.log10(self._lam[s]), np.log10(self._lnu[s]))[
+                        0
+                    ]
+                    - 2.0
                 )
 
         # If two windows are provided
@@ -806,7 +823,8 @@ class Sed:
 
             # Measure beta
             beta = (
-                np.log10(lnu_blue / lnu_red) / np.log10(np.mean(blue) / np.mean(red))
+                np.log10(lnu_blue / lnu_red)
+                / np.log10(np.mean(blue) / np.mean(red))
                 - 2.0
             )
 
@@ -868,7 +886,9 @@ class Sed:
 
         # Finally, compute the flux SED and apply unit conversions to get
         # to nJy
-        self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
+        self.fnu = (
+            self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
+        )
 
         # If we are applying an IGM model apply it
         if igm:
@@ -996,9 +1016,7 @@ class Sed:
                 )
             )
 
-        return 2.5 * np.log10(
-            self.photo_fluxes[f2] / self.photo_fluxes[f1]
-        )
+        return 2.5 * np.log10(self.photo_fluxes[f2] / self.photo_fluxes[f1])
 
     def measure_index(self, feature, blue, red):
         """
@@ -1034,7 +1052,9 @@ class Sed:
         # Handle different spectra shapes
         if self._spec_dims == 2:
             # Multiple spectra case
-            continuum_fits = np.polyfit([mean_blue, mean_red], [lnu_blue, lnu_red], 1)
+
+            # Perform polyfit for the continuum fit for all spectra
+            continuum_fits = np.polyfit(
                 [mean_blue, mean_red], [lnu_blue, lnu_red], 1
             )
             # Use the continuum fit to define the continuum for all spectra
@@ -1048,16 +1068,22 @@ class Sed:
                 )
             ) * self.lnu.units
 
-            feature_lum_continuum_subtracted = -(feature_lum - continuum) / continuum
+            # Define the continuum subtracted spectrum for all SEDs
+            feature_lum = self.lnu[:, transmission]
+            feature_lum_continuum_subtracted = (
                 -(feature_lum - continuum) / continuum
             )
-            index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam, axis=1)
+
+            # Measure index for all SEDs
+            index = np.trapz(
                 feature_lum_continuum_subtracted, x=feature_lam, axis=1
             )
 
         else:
             # Single spectra case
-            continuum_fit = np.polyfit([mean_blue, mean_red], [lnu_blue, lnu_red], 1)
+
+            # Perform polyfit for the continuum fit
+            continuum_fit = np.polyfit(
                 [mean_blue, mean_red], [lnu_blue, lnu_red], 1
             )
 
@@ -1067,7 +1093,9 @@ class Sed:
                 + continuum_fit[1]
             ) * self.lnu.units
 
-            feature_lum_continuum_subtracted = -(feature_lum - continuum) / continuum
+            # Define the continuum subtracted spectrum
+            feature_lum = self.lnu[transmission]
+            feature_lum_continuum_subtracted = (
                 -(feature_lum - continuum) / continuum
             )
 
@@ -1154,7 +1182,8 @@ class Sed:
 
         # Ensure the mask is compatible with the spectra
         if mask is not None:
-                    "Masks are only applicable for Seds containing " "multiple spectra"
+            if self._lnu.ndim < 2:
+                raise exceptions.InconsistentArguments(
                     "Masks are only applicable for Seds containing "
                     "multiple spectra"
                 )
@@ -1354,7 +1383,8 @@ def plot_spectra(
             lam = sed.lam
         else:
             # Ensure we have fluxes
-                    f"This Sed has no fluxes ({key})! Have you called " "Sed.get_fnu()?"
+            if sed.fnu is None:
+                raise exceptions.MissingSpectraType(
                     f"This Sed has no fluxes ({key})! Have you called "
                     "Sed.get_fnu()?"
                 )
