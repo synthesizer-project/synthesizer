@@ -3,7 +3,7 @@
 This module contains a single class definition which acts as a container
 for photometry data. It should never be directly instantiated, instead
 internal methods that calculate photometry
-(e.g. Sed.get_broadband_luminosities)
+(e.g. Sed.get_photo_luminosities)
 return an instance of this class.
 """
 import numpy as np
@@ -21,9 +21,9 @@ class PhotometryCollection:
     an issue if it is this should never really be directly instantiated.
 
     Attributes:
-        rest_photometry (Quantity):
+        photo_luminosities (Quantity):
             Quantity instance representing photometry data in the rest frame.
-        obs_photometry (Quantity):
+        photo_fluxes (Quantity):
             Quantity instance representing photometry data in the
             observer frame.
         filters (FilterCollection):
@@ -39,8 +39,8 @@ class PhotometryCollection:
     """
 
     # Define quantities (there has to be one for rest and observer frame)
-    rest_photometry = Quantity()
-    obs_photometry = Quantity()
+    photo_luminosities = Quantity()
+    photo_fluxes = Quantity()
 
     def __init__(self, filters, rest_frame, **kwargs):
         """
@@ -72,13 +72,13 @@ class PhotometryCollection:
         # Put the photometry in the right place (we need to draw a distinction
         # between rest and observer frame for units)
         if rest_frame:
-            self.rest_photometry = photometry
-            self.obs_photometry = None
-            self.photometry = self.rest_photometry
+            self.photo_luminosities = photometry
+            self.photo_fluxes = None
+            self.photometry = self.photo_luminosities
         else:
-            self.obs_photometry = photometry
-            self.rest_photometry = None
-            self.photometry = self.obs_photometry
+            self.photo_fluxes = photometry
+            self.photo_luminosities = None
+            self.photometry = self.photo_fluxes
 
         # Construct a dict for the look up, importantly we here store
         # the values in photometry not _photometry meaning they have units.
@@ -96,11 +96,11 @@ class PhotometryCollection:
     def __getitem__(self, filter_code):
         """
         Enable dictionary key look up syntax to extract specific photometry,
-        e.g. Sed.broadband_luminosities["JWST/NIRCam.F150W"].
+        e.g. Sed.photo_luminosities["JWST/NIRCam.F150W"].
 
         NOTE: this will always return photometry with units. Unitless
-        photometry is accessible in array form via self._rest_photometry
-        or self._obs_photometry based on what frame is desired. For
+        photometry is accessible in array form via self._photo_luminosities
+        or self._photo_fluxes based on what frame is desired. For
         internal use this should be fine and the UI (where this method
         would be used) should always return with units.
 
@@ -261,7 +261,7 @@ class PhotometryCollection:
 
         # Get the photometry
         photometry = (
-            self.rest_photometry if self.rest_frame else self.obs_photometry
+            self.photo_luminosities if self.rest_frame else self.obs_photometry
         )
 
         # Plot the photometry
