@@ -507,7 +507,7 @@ class Survey:
 
         # Loop over each instrument
         for key in self.instruments:
-            _photometry = self.seds[spectra_type].get_obs_photometry(
+            _photometry = self.seds[spectra_type].get_photo_fluxes(
                 self.instruments[key].filters
             )
 

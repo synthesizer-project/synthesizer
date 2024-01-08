@@ -91,7 +91,7 @@ if __name__ == "__main__":
     )  # generate observed frame spectra, assume Madau96 IGM model
 
     # measure broadband fluxes
-    fluxes = sed.get_obs_photometry(fc)
+    fluxes = sed.get_photo_fluxes(fc)
 
     # print broadband fluxes
     for filter, flux in fluxes.items():
