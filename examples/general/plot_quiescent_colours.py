@@ -32,7 +32,7 @@ def simple_UVJ(grid, target_metallicity=0.01):
         sed.get_fnu0()  # generate dummy observed frame spectra.
 
         # --- measure broadband fluxes
-        sed.get_broadband_fluxes(fc)
+        sed.get_obs_photometry(fc)
 
         print(
             (
@@ -69,16 +69,14 @@ def UVJ_metallicity(grid):
             sed.get_fnu0()  # generate dummy observed frame spectra.
 
             # --- measure broadband fluxes
-            sed.get_broadband_fluxes(fc)
+            sed.get_obs_photometry(fc)
 
             for f in "UVJ":
-                table[f"{Z}_{f}"][ia] = sed.broadband_fluxes[f]
+                table[f"{Z}_{f}"][ia] = sed.obs_photometry[f]
 
     # --- make plot
 
-    fig, axes = plt.subplots(
-        2, 1, figsize=(3.5, 4.5), sharex=True, sharey=True
-    )
+    fig, axes = plt.subplots(2, 1, figsize=(3.5, 4.5), sharex=True, sharey=True)
     plt.subplots_adjust(
         left=0.15, top=0.975, bottom=0.1, right=0.95, wspace=0.0, hspace=0.0
     )

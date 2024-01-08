@@ -10,7 +10,7 @@ Example usage:
     sed = Sed(lams, lnu)
     sed.get_fnu(redshift)
     sed.apply_attenutation(tau_v=0.7)
-    sed.get_broadband_fluxes(filters)
+    sed.get_obs_photometry(filters)
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -54,10 +54,10 @@ class Sed:
             An optional descriptive string defining the Sed.
         redshift (float)
             The redshift of the Sed.
-        broadband_luminosities (dict, float)
+        rest_photometry (dict, float)
             The rest frame broadband photometry in arbitrary filters
             (filter_code: photometry).
-        broadband_fluxes (dict, float)
+        obs_photometry (dict, float)
             The observed broadband photometry in arbitrary filters
             (filter_code: photometry).
     """
@@ -137,8 +137,8 @@ class Sed:
         self.fnu = None
 
         # Broadband photometry
-        self.broadband_luminosities = None
-        self.broadband_fluxes = None
+        self.rest_photometry = None
+        self.obs_photometry = None
 
     def concat(self, *other_seds):
         """
@@ -222,17 +222,13 @@ class Sed:
         # could instead check the first and last entry and the shape.
         # In rare instances this could fail though.
         if not np.array_equal(self._lam, second_sed._lam):
-            raise exceptions.InconsistentAddition(
-                "Wavelength grids must be identical"
-            )
+            raise exceptions.InconsistentAddition("Wavelength grids must be identical")
 
         # Ensure the lnu arrays are compatible
         # This check is redudant for Sed.lnu.shape = (nlam, ) spectra but will
         # not erroneously error. Nor is it expensive.
         if self._lnu.shape[0] != second_sed._lnu.shape[0]:
-            raise exceptions.InconsistentAddition(
-                "SEDs must have same dimensions"
-            )
+            raise exceptions.InconsistentAddition("SEDs must have same dimensions")
 
         # They're compatible, add them
         return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
@@ -444,8 +440,7 @@ class Sed:
         """
 
         return (
-            self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind)
-            * self.lnu.units
+            self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind) * self.lnu.units
         )
 
     def _get_lnu_at_lam(self, lam, kind=False, ind=None):
@@ -591,18 +586,14 @@ class Sed:
             # base units.
             lims = (c / np.array(window)).to(self.nu.units).value
             luminosity = (
-                integrate.quad(self._get_lnu_at_nu, *lims)[0]
-                * self.lnu.units
-                * Hz
+                integrate.quad(self._get_lnu_at_nu, *lims)[0] * self.lnu.units * Hz
             )
 
         elif method == "trapz":
             # Define a pseudo transmission function
             transmission = (self.lam > window[0]) & (self.lam < window[1])
             transmission = transmission.astype(float)
-            luminosity = np.trapz(
-                self.lnu[::-1] * transmission[::-1], x=self.nu[::-1]
-            )
+            luminosity = np.trapz(self.lnu[::-1] * transmission[::-1], x=self.nu[::-1])
         else:
             raise exceptions.UnrecognisedOption(
                 f"Unrecognised integration method ({method}). "
@@ -665,9 +656,7 @@ class Sed:
                 Lnu = (
                     np.array(
                         [
-                            np.trapz(
-                                _lnu[::-1] * transmission[::-1] / nu, x=nu
-                            )
+                            np.trapz(_lnu[::-1] * transmission[::-1] / nu, x=nu)
                             / np.trapz(transmission[::-1] / nu, x=nu)
                             for _lnu in self._lnu
                         ]
@@ -692,9 +681,7 @@ class Sed:
             def inv(x):
                 return 1 / x
 
-            Lnu = (
-                integrate.quad(func, *lims)[0] / integrate.quad(inv, *lims)[0]
-            )
+            Lnu = integrate.quad(func, *lims)[0] / integrate.quad(inv, *lims)[0]
 
             Lnu = Lnu * self.lnu.units
 
@@ -796,9 +783,7 @@ class Sed:
             if self._spec_dims == 2:
                 beta = np.array(
                     [
-                        linregress(
-                            np.log10(self._lam[s]), np.log10(_lnu[..., s])
-                        )[0]
+                        linregress(np.log10(self._lam[s]), np.log10(_lnu[..., s]))[0]
                         - 2.0
                         for _lnu in self.lnu
                     ]
@@ -806,10 +791,7 @@ class Sed:
 
             else:
                 beta = (
-                    linregress(np.log10(self._lam[s]), np.log10(self._lnu[s]))[
-                        0
-                    ]
-                    - 2.0
+                    linregress(np.log10(self._lam[s]), np.log10(self._lnu[s]))[0] - 2.0
                 )
 
         # If two windows are provided
@@ -824,8 +806,7 @@ class Sed:
 
             # Measure beta
             beta = (
-                np.log10(lnu_blue / lnu_red)
-                / np.log10(np.mean(blue) / np.mean(red))
+                np.log10(lnu_blue / lnu_red) / np.log10(np.mean(blue) / np.mean(red))
                 - 2.0
             )
 
@@ -887,9 +868,7 @@ class Sed:
 
         # Finally, compute the flux SED and apply unit conversions to get
         # to nJy
-        self.fnu = (
-            self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
-        )
+        self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
 
         # If we are applying an IGM model apply it
         if igm:
@@ -897,7 +876,7 @@ class Sed:
 
         return self.fnu
 
-    def get_broadband_luminosities(self, filters, verbose=True):
+    def get_rest_photometry(self, filters, verbose=True):
         """
         Calculate broadband luminosities using a FilterCollection object
 
@@ -908,12 +887,12 @@ class Sed:
                 Are we talking?
 
         Returns:
-            broadband_luminosities (dict)
+            rest_photometry (dict)
                 A dictionary of rest frame broadband luminosities.
         """
 
         # Intialise result dictionary
-        broadband_luminosities = {}
+        rest_photometry = {}
 
         # Loop over filters
         for f in filters:
@@ -931,16 +910,16 @@ class Sed:
             # Apply the filter transmission curve and store the resulting
             # luminosity
             bb_lum = f.apply_filter(self._lnu, nu=self._nu)
-            broadband_luminosities[f.filter_code] = bb_lum
+            rest_photometry[f.filter_code] = bb_lum
 
         # Create the photometry collection and store it in the object
-        self.broadband_luminosities = PhotometryCollection(
-            filters, rest_frame=True, **broadband_luminosities
+        self.rest_photometry = PhotometryCollection(
+            filters, rest_frame=True, **rest_photometry
         )
 
-        return self.broadband_luminosities
+        return self.rest_photometry
 
-    def get_broadband_fluxes(self, filters, verbose=True):
+    def get_obs_photometry(self, filters, verbose=True):
         """
         Calculate broadband fluxes using a FilterCollection object
 
@@ -966,7 +945,7 @@ class Sed:
             )
 
         # Set up flux dictionary
-        broadband_fluxes = {}
+        obs_photometry = {}
 
         # Loop over filters in filter collection
         for f in filters:
@@ -983,14 +962,14 @@ class Sed:
 
             # Calculate and store the broadband flux in this filter
             bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
-            broadband_fluxes[f.filter_code] = bb_flux
+            obs_photometry[f.filter_code] = bb_flux
 
         # Create the photometry collection and store it in the object
-        self.broadband_fluxes = PhotometryCollection(
-            filters, rest_frame=True, **broadband_fluxes
+        self.obs_photometry = PhotometryCollection(
+            filters, rest_frame=True, **obs_photometry
         )
 
-        return self.broadband_fluxes
+        return self.obs_photometry
 
     def measure_colour(self, f1, f2):
         """
@@ -1008,18 +987,16 @@ class Sed:
         """
 
         # Ensure fluxes exist
-        if not bool(self.broadband_fluxes):
+        if not bool(self.obs_photometry):
             raise ValueError(
                 (
                     "Broadband fluxes not yet calculated, "
-                    "run `get_broadband_fluxes` with a "
+                    "run `get_obs_photometry` with a "
                     "FilterCollection"
                 )
             )
 
-        return 2.5 * np.log10(
-            self.broadband_fluxes[f2] / self.broadband_fluxes[f1]
-        )
+        return 2.5 * np.log10(self.obs_photometry[f2] / self.obs_photometry[f1])
 
     def measure_index(self, feature, blue, red):
         """
@@ -1057,9 +1034,7 @@ class Sed:
             # Multiple spectra case
 
             # Perform polyfit for the continuum fit for all spectra
-            continuum_fits = np.polyfit(
-                [mean_blue, mean_red], [lnu_blue, lnu_red], 1
-            )
+            continuum_fits = np.polyfit([mean_blue, mean_red], [lnu_blue, lnu_red], 1)
             # Use the continuum fit to define the continuum for all spectra
             continuum = (
                 (
@@ -1073,22 +1048,16 @@ class Sed:
 
             # Define the continuum subtracted spectrum for all SEDs
             feature_lum = self.lnu[:, transmission]
-            feature_lum_continuum_subtracted = (
-                -(feature_lum - continuum) / continuum
-            )
+            feature_lum_continuum_subtracted = -(feature_lum - continuum) / continuum
 
             # Measure index for all SEDs
-            index = np.trapz(
-                feature_lum_continuum_subtracted, x=feature_lam, axis=1
-            )
+            index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam, axis=1)
 
         else:
             # Single spectra case
 
             # Perform polyfit for the continuum fit
-            continuum_fit = np.polyfit(
-                [mean_blue, mean_red], [lnu_blue, lnu_red], 1
-            )
+            continuum_fit = np.polyfit([mean_blue, mean_red], [lnu_blue, lnu_red], 1)
 
             # Use the continuum fit to define the continuum
             continuum = (
@@ -1098,9 +1067,7 @@ class Sed:
 
             # Define the continuum subtracted spectrum
             feature_lum = self.lnu[transmission]
-            feature_lum_continuum_subtracted = (
-                -(feature_lum - continuum) / continuum
-            )
+            feature_lum_continuum_subtracted = -(feature_lum - continuum) / continuum
 
             # Measure index
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
@@ -1187,8 +1154,7 @@ class Sed:
         if mask is not None:
             if self._lnu.ndim < 2:
                 raise exceptions.InconsistentArguments(
-                    "Masks are only applicable for Seds containing "
-                    "multiple spectra"
+                    "Masks are only applicable for Seds containing " "multiple spectra"
                 )
             if self._lnu.shape[0] != mask.size:
                 raise exceptions.InconsistentArguments(
@@ -1388,8 +1354,7 @@ def plot_spectra(
             # Ensure we have fluxes
             if sed.fnu is None:
                 raise exceptions.MissingSpectraType(
-                    f"This Sed has no fluxes ({key})! Have you called "
-                    "Sed.get_fnu()?"
+                    f"This Sed has no fluxes ({key})! Have you called " "Sed.get_fnu()?"
                 )
 
             # Ok everything is fine
@@ -1625,14 +1590,14 @@ def plot_observed_spectra(
         # Loop over spectra plotting photometry and filter curves
         for sed in spectra.values():
             # Get the photometry
-            sed.get_broadband_fluxes(filters)
+            sed.get_obs_photometry(filters)
 
             # Plot the photometry for each filter
             for f in filters:
                 piv_lam = f.pivwv()
                 ax.scatter(
                     piv_lam * (1 + redshift),
-                    sed.broadband_fluxes[f.filter_code],
+                    sed.obs_photometry[f.filter_code],
                     zorder=4,
                 )
 
