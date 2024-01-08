@@ -146,7 +146,10 @@ class PhotometryCollection:
 
         # Define the filter code column
         filters_col = [
-            (f"{f.filter_code} (\u03BB = {f.pivwv().value:.2e} " f"{str(f.lam.units)})")
+            (
+                f"{f.filter_code} (\u03BB = {f.pivwv().value:.2e} "
+                f"{str(f.lam.units)})"
+            )
             for f in self.filters
         ]
 
@@ -257,7 +260,9 @@ class PhotometryCollection:
                 max_t = np.max(f.t)
 
         # Get the photometry
-        photometry = self.rest_photometry if self.rest_frame else self.obs_photometry
+        photometry = (
+            self.rest_photometry if self.rest_frame else self.obs_photometry
+        )
 
         # Plot the photometry
         for f, phot in zip(self.filters, photometry.value):
@@ -321,7 +326,9 @@ class PhotometryCollection:
         if self.rest_frame:
             ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
         else:
-            ax.set_xlabel(r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$")
+            ax.set_xlabel(
+                r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$"
+            )
 
         # Label the y axis handling all possibilities
         if self.rest_frame:

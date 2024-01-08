@@ -76,7 +76,9 @@ def UVJ_metallicity(grid):
 
     # --- make plot
 
-    fig, axes = plt.subplots(2, 1, figsize=(3.5, 4.5), sharex=True, sharey=True)
+    fig, axes = plt.subplots(
+        2, 1, figsize=(3.5, 4.5), sharex=True, sharey=True
+    )
     plt.subplots_adjust(
         left=0.15, top=0.975, bottom=0.1, right=0.95, wspace=0.0, hspace=0.0
     )
