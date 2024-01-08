@@ -49,7 +49,9 @@ if __name__ == "__main__":
     # define the parameters of the star formation and metal enrichment
     # histories
     sfh_p = {"duration": 10 * Myr}
-    Z_p = {"log10metallicity": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    Z_p = {
+        "log10metallicity": -2.0
+    }  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = 1e8
 
     # define the functional form of the star formation and metal enrichment
