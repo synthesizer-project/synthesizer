@@ -185,15 +185,13 @@ class Survey:
             if nfilters != len(depths):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(depths)=%d)"
-                    % (nfilters, len(depths))
+                    " len(filters)=%d, len(depths)=%d)" % (nfilters, len(depths))
                 )
         if isinstance(apertures, dict):
             if nfilters != len(apertures):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(apertures)=%d)"
-                    % (nfilters, len(apertures))
+                    " len(filters)=%d, len(apertures)=%d)" % (nfilters, len(apertures))
                 )
         if isinstance(snrs, dict):
             if nfilters != len(snrs):
@@ -205,8 +203,7 @@ class Survey:
             if nfilters != len(noises):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(noises)=%d)"
-                    % (nfilters, len(noises))
+                    " len(filters)=%d, len(noises)=%d)" % (nfilters, len(noises))
                 )
 
         # Create this observation configurations
@@ -292,9 +289,7 @@ class Survey:
         for inst in self.instruments:
             if isinstance(self.instruments[inst].depths, dict):
                 for key in self.instruments[inst].depths:
-                    flux = apparent_mag_to_fnu(
-                        self.instruments[inst].depths[key]
-                    )
+                    flux = apparent_mag_to_fnu(self.instruments[inst].depths[key])
                     self.instruments[inst].depths[key] = flux_to_luminosity(
                         flux, self.cosmo, redshift
                     )
@@ -322,9 +317,7 @@ class Survey:
                     self.instruments[inst].depths
                 )
 
-    def get_spectra(
-        self, grid, spectra_type, redshift=None, igm=None, rest_frame=True
-    ):
+    def get_spectra(self, grid, spectra_type, redshift=None, igm=None, rest_frame=True):
         """
         Compute the integrated stellar spectra of each galaxy.
 
@@ -474,9 +467,7 @@ class Survey:
             if rest_frame:
                 gal.spectra_array[spectra_type].get_fnu0()
             else:
-                gal.spectra_array[spectra_type].get_fnu(
-                    self.cosmo, redshift, igm
-                )
+                gal.spectra_array[spectra_type].get_fnu(self.cosmo, redshift, igm)
             # do we want to use redshift defined on the galaxy object?
             # need to update a lot of things to check this (and alow override)
             #         self.cosmo, gal.redshift, igm)
@@ -501,13 +492,11 @@ class Survey:
             # )
         else:
             # TODO: make a UnknownSpectralType error
-            raise exceptions.InconsistentArguments(
-                "Unrecognised spectra_type!"
-            )
+            raise exceptions.InconsistentArguments("Unrecognised spectra_type!")
 
         # Loop over each instrument
         for key in self.instruments:
-            _photometry = self.seds[spectra_type].get_broadband_fluxes(
+            _photometry = self.seds[spectra_type].get_obs_photometry(
                 self.instruments[key].filters
             )
 

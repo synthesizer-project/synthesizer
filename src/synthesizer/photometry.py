@@ -3,7 +3,7 @@
 This module contains a single class definition which acts as a container
 for photometry data. It should never be directly instantiated, instead
 internal methods that calculate photometry
-(e.g. Sed.get_broadband_luminosities)
+(e.g. Sed.get_rest_photometry)
 return an instance of this class.
 """
 import numpy as np
@@ -96,7 +96,7 @@ class PhotometryCollection:
     def __getitem__(self, filter_code):
         """
         Enable dictionary key look up syntax to extract specific photometry,
-        e.g. Sed.broadband_luminosities["JWST/NIRCam.F150W"].
+        e.g. Sed.rest_photometry["JWST/NIRCam.F150W"].
 
         NOTE: this will always return photometry with units. Unitless
         photometry is accessible in array form via self._rest_photometry
@@ -146,10 +146,7 @@ class PhotometryCollection:
 
         # Define the filter code column
         filters_col = [
-            (
-                f"{f.filter_code} (\u03BB = {f.pivwv().value:.2e} "
-                f"{str(f.lam.units)})"
-            )
+            (f"{f.filter_code} (\u03BB = {f.pivwv().value:.2e} " f"{str(f.lam.units)})")
             for f in self.filters
         ]
 
@@ -260,9 +257,7 @@ class PhotometryCollection:
                 max_t = np.max(f.t)
 
         # Get the photometry
-        photometry = (
-            self.rest_photometry if self.rest_frame else self.obs_photometry
-        )
+        photometry = self.rest_photometry if self.rest_frame else self.obs_photometry
 
         # Plot the photometry
         for f, phot in zip(self.filters, photometry.value):
@@ -326,9 +321,7 @@ class PhotometryCollection:
         if self.rest_frame:
             ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
         else:
-            ax.set_xlabel(
-                r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$"
-            )
+            ax.set_xlabel(r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$")
 
         # Label the y axis handling all possibilities
         if self.rest_frame:
