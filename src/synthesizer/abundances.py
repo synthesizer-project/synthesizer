@@ -5,7 +5,7 @@ component of a galaxy (e.g. stars, gas, dust). This code is used to define
 abundance patterns as a function of metallicity, alpha enhancement, etc.
 
 The main current use of this code is in the creation cloudy input models when
-processing SPS incident grids to model nebular emission. 
+processing SPS incident grids to model nebular emission.
 
 This script is a modified version of
 https://github.com/stephenmwilkins/SPS_tools/blob/master/SPS_tools/cloudy/abundances.py
@@ -238,7 +238,7 @@ class ElementDefinitions:
 
 class SolarAbundances:
 
-    """ 
+    """
     A class containing various Solar abundance patterns.
     """
 
@@ -247,7 +247,8 @@ class SolarAbundances:
     class Asplund2009:
 
         # meta information
-        ads = 'https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/abstract'
+        ads = """https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/
+            abstract"""
         doi = '10.1146/annurev.astro.46.060407.145222'
         arxiv = 'arXiv:0909.0948'
         bibcode = '2009ARA&A..47..481A'
@@ -292,7 +293,7 @@ class SolarAbundances:
 
 class DepletionPatterns:
 
-    """ 
+    """
     Class containing various depletion patterns.
 
     Depletion of 1 -> no depletion, while 0 -> fully depleted.
@@ -308,7 +309,7 @@ class DepletionPatterns:
     # Need a more meaningful name
     class Synthesizer2024:
 
-        """ 
+        """
         Depletion pattern created for Synthesizer 2024.
 
         Gutkin+2016:
@@ -329,7 +330,7 @@ class DepletionPatterns:
             "Be": 0.6,
             "B": 0.13,
             "C": 0.5,
-            "N": 0.89, 
+            "N": 0.89,
             "O": 0.7,
             "F": 0.3,
             "Ne": 1.0,
@@ -379,7 +380,7 @@ class Abundances(ElementDefinitions):
             metallicity (float)
                 Mass fraction in metals, default is Solar metallicity.
             alpha (float)
-                Enhancement of the alpha elements relative to the solar 
+                Enhancement of the alpha elements relative to the solar
                 abundance pattern.
             abundances (dict, float/str)
                 A dictionary containing the abundances for specific elements or
@@ -544,19 +545,19 @@ class Abundances(ElementDefinitions):
 
         Arguments:
             arg (str)
-                The element (e.g. "O") or an element, reference element pair 
+                The element (e.g. "O") or an element, reference element pair
                 (e.g. "[O/Fe]").
-        
+
         Returns:
             (float)
-                The abundance relevant to H or relative to Solar when a 
+                The abundance relevant to H or relative to Solar when a
                 reference element is also provided.
         """
 
         # default case, just return log10(k/H)
         if arg in self.all_elements:
             return self.total[arg]
-        
+
         # alternative case, return solar relative abundance [X/Y]
         elif arg[0] == "[":
             element, ref_element = arg[1:-1].split("/")
@@ -631,7 +632,7 @@ class Abundances(ElementDefinitions):
 
     def get_depletions(self):
         """
-        A method to calculate the depletion after scaling using the solar 
+        A method to calculate the depletion after scaling using the solar
         abundances and depletion patterns from the dust-to-metal ratio. This is
         the fraction of each element that is depleted on to dust.
 
@@ -659,7 +660,8 @@ class Abundances(ElementDefinitions):
 
         Returns:
             abundance (float)
-                The logarithmic relative abundance of an element, relative to the sun
+                The logarithmic relative abundance of an element, relative to
+                the sun.
 
         """
         return (self.total[element] - self.total[ref_element]) - (
@@ -702,13 +704,20 @@ class Abundances(ElementDefinitions):
         return dust / self.metallicity
 
 
-
-
-
-def plot_abundance_pattern(a, show=False, ylim=None, lines=["total"]):
+def plot_abundance_pattern(a, show=False, ylim=None, components=["total"]):
     """
-    Plot single abundance patterns, but possibly
-    including total, gas and dust
+    Funtion to plot a single abundance pattern, but possibly including all
+    components.
+
+    Args:
+        a (abundances.Abundance)
+            Abundance pattern object.
+        components (list, str)
+            List of components to plot. By default only plot "total".
+        show (Bool)
+            Toggle whether to show the plot.
+        ylim (list/tuple, float)
+            Limits of y-axis.
     """
 
     fig = plt.figure(figsize=(7.0, 4.0))
@@ -723,7 +732,7 @@ def plot_abundance_pattern(a, show=False, ylim=None, lines=["total"]):
     colors = cmr.take_cmap_colors("cmr.bubblegum", len(a.all_elements))
 
     for line, ls, ms in zip(
-        lines, ["-", "--", "-.", ":"], ["o", "s", "D", "d", "^"]
+        components, ["-", "--", "-.", ":"], ["o", "s", "D", "d", "^"]
     ):
         i_ = range(len(a.all_elements))
         a_ = []
@@ -757,9 +766,24 @@ def plot_abundance_pattern(a, show=False, ylim=None, lines=["total"]):
 
 
 def plot_multiple_abundance_patterns(
-    abundance_patterns, labels=None, show=False, ylim=None
+    abundance_patterns,
+    labels=None,
+    show=False,
+    ylim=None,
 ):
-    """Plot multiple abundance patterns"""
+    """
+    Function to plot multiple abundance patterns.
+
+    Args:
+        a (abundances.Abundance)
+            Abundance pattern object.
+        components (list, str)
+            List of components to plot. By default only plot "total".
+        show (Bool)
+            Toggle whether to show the plot.
+        ylim (list/tuple, float)
+            Limits of y-axis.
+    """
 
     fig = plt.figure(figsize=(7.0, 4.0))
 
