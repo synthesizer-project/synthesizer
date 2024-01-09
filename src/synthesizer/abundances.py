@@ -1,12 +1,17 @@
-"""
+"""A module for creating and manipulating abundance patterns
+
+Abundance patterns describe the relative abundances of elements in a particular
+component of a galaxy (e.g. stars, gas, dust). This code is used to define
+abundance patterns as a function of metallicity, alpha enhancement, etc.
+
+The main current use of this code is in the creation cloudy input models when
+processing SPS incident grids to model nebular emission. 
+
 This script is a modified version of
 https://github.com/stephenmwilkins/SPS_tools/blob/master/SPS_tools/cloudy/abundances.py
 
-A note on notation:
-
-[X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
-
-[alpha/Fe] = sum()
+Some notes on (standard) notation:
+- [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
 """
 
 from copy import deepcopy
@@ -93,6 +98,38 @@ class ScalingFunctions:
 
 
 class Elements:
+
+    """This is simple class containing various useful lists and dictionaries.
+
+    Attributes:
+        non_metals (list, string)
+            A list of elements classified as non-metals.
+        metals (list, string)
+            A list of elements classified as metals.
+        all_elements (list, string)
+            A list of all elements, functionally the concatenation of metals
+            and non-metals.
+        alpha_elements (list, string)
+            A list of the elements classified as alpha-elements.
+        name (dict, string)
+            A dictionary holding the full name of each element.
+        A (dict, float)
+            Atomic mass of each element (in amus).
+        solar_metallicity (float)
+            Solar metallicity (mass faction) from Asplund (2009).
+        sol (dict, float)
+            Solar abundance pattern from from Asplund (2009).
+        default_depletion (dict, float)
+            Default depletion pattern.
+        
+    
+    """
+
+    non_metals = [
+        "H",
+        "He",
+    ]
+
     metals = [
         "Li",
         "Be",
@@ -124,38 +161,7 @@ class Elements:
         "Zn",
     ]
 
-    all_elements = [
-        "H",
-        "He",
-        "Li",
-        "Be",
-        "B",
-        "C",
-        "N",
-        "O",
-        "F",
-        "Ne",
-        "Na",
-        "Mg",
-        "Al",
-        "Si",
-        "P",
-        "S",
-        "Cl",
-        "Ar",
-        "K",
-        "Ca",
-        "Sc",
-        "Ti",
-        "V",
-        "Cr",
-        "Mn",
-        "Fe",
-        "Co",
-        "Ni",
-        "Cu",
-        "Zn",
-    ]
+    all_elements = metals + non_metals
 
     alpha_elements = [
         "O",
