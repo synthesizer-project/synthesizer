@@ -41,12 +41,15 @@ class ScalingFunctions:
 
     """
 
+    available_scalings = ['Dopita2006']
+
     class Dopita2006:
 
         """Scaling functions for Nitrogen."""
 
         ads = "https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract"
         doi = "10.1086/508261"
+        available_elements = ['N', 'C']
 
         def N(metallicity):
             """
@@ -97,9 +100,10 @@ class ScalingFunctions:
             return abundance
 
 
-class Elements:
+class ElementDefinitions:
 
-    """This is simple class containing various useful lists and dictionaries.
+    """
+    A simple class containing various useful lists and dictionaries.
 
     Attributes:
         non_metals (list, string)
@@ -115,14 +119,6 @@ class Elements:
             A dictionary holding the full name of each element.
         A (dict, float)
             Atomic mass of each element (in amus).
-        solar_metallicity (float)
-            Solar metallicity (mass faction) from Asplund (2009).
-        sol (dict, float)
-            Solar abundance pattern from from Asplund (2009).
-        default_depletion (dict, float)
-            Default depletion pattern.
-        
-    
     """
 
     non_metals = [
@@ -239,100 +235,128 @@ class Elements:
     A["Cu"] = 63.546
     A["Zn"] = 65.38
 
-    """Elemental abundances
-    Asplund (2009) Solar, same as GASS (Grevesse et al. (2010)) in cloudy
-    https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/abstract
 
-    Asplund (2009) Solar - HOWEVER, running metallicity() on the
-    solar abundances below yields 0.0135
-    """
-    solar_metallicity = 0.0134
+class SolarAbundances:
 
-    sol = {}
-    # These are log10(N_element/N_H) ratios
-    sol["H"] = 0.0
-    sol["He"] = -1.07
-    sol["Li"] = -10.95
-    sol["Be"] = -10.62
-    sol["B"] = -9.3
-    sol["C"] = -3.57
-    sol["N"] = -4.17
-    sol["O"] = -3.31
-    sol["F"] = -7.44
-    sol["Ne"] = -4.07
-    sol["Na"] = -5.07
-    sol["Mg"] = -4.40
-    sol["Al"] = -5.55
-    sol["Si"] = -4.49
-    sol["P"] = -6.59
-    sol["S"] = -4.88
-    sol["Cl"] = -6.5
-    sol["Ar"] = -5.60
-    sol["K"] = -6.97
-    sol["Ca"] = -5.66
-    sol["Sc"] = -8.85
-    sol["Ti"] = -7.05
-    sol["V"] = -8.07
-    sol["Cr"] = -6.36
-    sol["Mn"] = -6.57
-    sol["Fe"] = -4.50
-    sol["Co"] = -7.01
-    sol["Ni"] = -5.78
-    sol["Cu"] = -7.81
-    sol["Zn"] = -7.44
-
-    """ default Depletion
-    ADOPTED VALUES
-    Gutkin+2016:
-        https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract
-    Dopita+2013:
-        https://ui.adsabs.harvard.edu/abs/2013ApJS..208...10D/abstract
-    Dopita+2006:
-        https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract
+    """ 
+    A class containing various Solar abundance patterns.
     """
 
-    default_depletion = {}
-    """
-    Depletion of 1 -> no depletion, while 0 -> fully depleted
+    available_patterns = ['Asplund2009']
+
+    class Asplund2009:
+
+        # meta information
+        ads = 'https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/abstract'
+        doi = '10.1146/annurev.astro.46.060407.145222'
+        arxiv = 'arXiv:0909.0948'
+        bibcode = '2009ARA&A..47..481A'
+
+        # total metallicity
+        metallicity = 0.0134
+
+        # logarthmic abundances, i.e. log10(N_element/N_H)
+        abundance = {
+            "H": 0.0,
+            "He": -1.07,
+            "Li": -10.95,
+            "Be": -10.62,
+            "B": -9.3,
+            "C": -3.57,
+            "N": -4.17,
+            "O": -3.31,
+            "F": -7.44,
+            "Ne": -4.07,
+            "Na": -5.07,
+            "Mg": -4.40,
+            "Al": -5.55,
+            "Si": -4.49,
+            "P": -6.59,
+            "S": -4.88,
+            "Cl": -6.5,
+            "Ar": -5.60,
+            "K": -6.97,
+            "Ca": -5.66,
+            "Sc": -8.85,
+            "Ti": -7.05,
+            "V": -8.07,
+            "Cr": -6.36,
+            "Mn": -6.57,
+            "Fe": -4.50,
+            "Co": -7.01,
+            "Ni": -5.78,
+            "Cu": -7.81,
+            "Zn": -7.44,
+        }
+
+
+class DepletionPatterns:
+
+    """ 
+    Class containing various depletion patterns.
+
+    Depletion of 1 -> no depletion, while 0 -> fully depleted.
 
     Noble gases aren't depleted (even though there is some
     evidence for Argon depletion
     (see https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.2310G/abstract)
+
     """
-    default_depletion["H"] = 1.0
-    default_depletion["He"] = 1.0
-    default_depletion["Li"] = 0.16
-    default_depletion["Be"] = 0.6
-    default_depletion["B"] = 0.13
-    default_depletion["C"] = 0.5
-    # <----- replaced by Dopita+2013 value, Gutkin+2016 assumes no depletion
-    default_depletion["N"] = 0.89
-    default_depletion["O"] = 0.7
-    default_depletion["F"] = 0.3
-    default_depletion["Ne"] = 1.0
-    default_depletion["Na"] = 0.25
-    default_depletion["Mg"] = 0.2
-    default_depletion["Al"] = 0.02
-    default_depletion["Si"] = 0.1
-    default_depletion["P"] = 0.25
-    default_depletion["S"] = 1.0
-    default_depletion["Cl"] = 0.5
-    default_depletion["Ar"] = 1.0
-    default_depletion["K"] = 0.3
-    default_depletion["Ca"] = 0.003
-    default_depletion["Sc"] = 0.005
-    default_depletion["Ti"] = 0.008
-    default_depletion["V"] = 0.006
-    default_depletion["Cr"] = 0.006
-    default_depletion["Mn"] = 0.05
-    default_depletion["Fe"] = 0.01
-    default_depletion["Co"] = 0.01
-    default_depletion["Ni"] = 0.04
-    default_depletion["Cu"] = 0.1
-    default_depletion["Zn"] = 0.25
+
+    available_patterns = ['Synthesizer2024']
+
+    # Need a more meaningful name
+    class Synthesizer2024:
+
+        """ 
+        Depletion pattern created for Synthesizer 2024.
+
+        Gutkin+2016:
+            https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract
+        Dopita+2013:
+            https://ui.adsabs.harvard.edu/abs/2013ApJS..208...10D/abstract
+        Dopita+2006:
+            https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract
+
+        Note: N is replaced by Dopita+2013 value as Gutkin+2016 assumes no
+        depletion of N.
+        """
+
+        depletion = {
+            "H": 1.0,
+            "He": 1.0,
+            "Li": 0.16,
+            "Be": 0.6,
+            "B": 0.13,
+            "C": 0.5,
+            "N": 0.89, 
+            "O": 0.7,
+            "F": 0.3,
+            "Ne": 1.0,
+            "Na": 0.25,
+            "Mg": 0.2,
+            "Al": 0.02,
+            "Si": 0.1,
+            "P": 0.25,
+            "S": 1.0,
+            "Cl": 0.5,
+            "Ar": 1.0,
+            "K": 0.3,
+            "Ca": 0.003,
+            "Sc": 0.005,
+            "Ti": 0.008,
+            "V": 0.006,
+            "Cr": 0.006,
+            "Mn": 0.05,
+            "Fe": 0.01,
+            "Co": 0.01,
+            "Ni": 0.04,
+            "Cu": 0.1,
+            "Zn": 0.25,
+        }
 
 
-class Abundances(Elements):
+class Abundances(ElementDefinitions):
 
     """ A class for calculating elemental abundances including various
     scaling and depletion on to dust
@@ -341,10 +365,12 @@ class Abundances(Elements):
 
     def __init__(
         self,
-        metallicity=Elements.solar_metallicity,
+        metallicity=SolarAbundances.Asplund2009.metallicity,
         alpha=0.0,
         abundances=False,
         dust_to_metal_ratio=False,
+        solar=SolarAbundances.Asplund2009,
+        depletion_pattern=DepletionPatterns.Synthesizer2024,
     ):
         """
         Initialise an abundance pattern
@@ -360,6 +386,10 @@ class Abundances(Elements):
                 functions to calculate them for the specified metallicity.
             dust_to_metal_ratio (float)
                 the fraction of metals in dust.
+            solar (object)
+                Solar abundance pattern object.
+            depletion_pattern (object)
+                Depletion pattern object.
 
 
         """
@@ -368,8 +398,10 @@ class Abundances(Elements):
         self.metallicity = metallicity  # mass fraction in metals
         self.alpha = alpha
         self.dust_to_metal_ratio = dust_to_metal_ratio
+        self.solar = solar
+        self.depletion_pattern = depletion_pattern
 
-        # set depletions to be zero
+        # set depletions to be zero initially
         self.depletion = {element: 0.0 for element in self.all_elements}
 
         # Set helium mass fraction following Bressan et al. (2012)
@@ -396,8 +428,8 @@ class Abundances(Elements):
         # Scale elemental abundances from solar abundances based on given
         # metallicity
         for e in self.metals:
-            total[e] = self.sol[e] + np.log10(
-                self.metallicity / self.solar_metallicity
+            total[e] = self.solar.abundance[e] + np.log10(
+                self.metallicity / self.solar.metallicity
             )
 
         # Scale alpha-element abundances from solar abundances
@@ -550,7 +582,7 @@ class Abundances(Elements):
         summary += f"X: {self.hydrogen_mass_fraction:.3f}\n"
         summary += f"Y: {self.helium_mass_fraction:.3f}\n"
         summary += f"Z: {self.metallicity:.3f}\n"
-        summary += f"Z/Z_sol: {self.metallicity/self.solar_metallicity:.2g}\n"
+        summary += f"Z/Z_sol: {self.metallicity/self.solar.metallicity:.2g}\n"
         summary += f"alpha: {self.alpha:.3f}\n"
         summary += f"dust-to-metal ratio: {self.dust_to_metal_ratio}\n"
         summary += (
@@ -566,7 +598,7 @@ class Abundances(Elements):
             summary += (
                 f"{self.name[ele]}: {self.total[ele]:.2f} "
                 f"({self.total[ele]+12:.2f}) "
-                f"[{self.total[ele]-self.sol[ele]:.2f}] "
+                f"[{self.total[ele]-self.solar.abundance[ele]:.2f}] "
                 f"|{self.depletion[ele]:.2f}| "
                 f"{self.gas[ele]:.2f} "
                 f"{self.dust[ele]:.2f}\n"
@@ -610,7 +642,7 @@ class Abundances(Elements):
         for element in self.all_elements:
             self.depletion[element] = (
                 self.dust_to_metal_ratio / self.max_dust_to_metal_ratio
-            ) * (1.0 - self.default_depletion[element])
+            ) * (1.0 - self.depletion_pattern.depletion[element])
 
         return self.depletion
 
@@ -631,7 +663,7 @@ class Abundances(Elements):
 
         """
         return (self.total[element] - self.total[ref_element]) - (
-            self.sol[element] - self.sol[ref_element]
+            self.solar.abundance[element] - self.solar.abundance[ref_element]
         )
 
     def get_max_dust_to_metal_ratio(self):
@@ -650,7 +682,7 @@ class Abundances(Elements):
             dust += (
                 10 ** self.total[element]
                 * self.A[element]
-                * (1.0 - self.default_depletion[element])
+                * (1.0 - self.depletion_pattern.depletion[element])
             )
 
         return dust / self.metallicity
@@ -670,7 +702,7 @@ class Abundances(Elements):
         return dust / self.metallicity
 
 
-# eventually move these to dedicated plotting module
+
 
 
 def plot_abundance_pattern(a, show=False, ylim=None, lines=["total"]):
