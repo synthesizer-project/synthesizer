@@ -333,25 +333,29 @@ class Elements:
 
 
 class Abundances(Elements):
+
+    """ A class for calculating elemental abundances including various
+    scaling and depletion on to dust
+
+    """
+
     def __init__(
         self,
         metallicity=Elements.solar_metallicity,
         alpha=0.0,
         abundances=False,
-        carbon_abundance=False,
-        nitrogen_abundance=False,
         dust_to_metal_ratio=False,
     ):
         """
-        A class for calculating elemental abundances including various
-        scaling and depletion on to dust
+        Initialise an abundance pattern
 
         Args:
             metallicity (float)
-                ass fraction in metals, default is Solar metallicity.
+                Mass fraction in metals, default is Solar metallicity.
             alpha (float)
-                Enhancement of the alpha elements.
-            abundances (dict)
+                Enhancement of the alpha elements relative to the solar 
+                abundance pattern.
+            abundances (dict, float/str)
                 A dictionary containing the abundances for specific elements or
                 functions to calculate them for the specified metallicity.
             dust_to_metal_ratio (float)
@@ -363,8 +367,6 @@ class Abundances(Elements):
         # save all parameters to object
         self.metallicity = metallicity  # mass fraction in metals
         self.alpha = alpha
-        self.carbon_abundance = carbon_abundance
-        self.nitrogen_abundance = nitrogen_abundance
         self.dust_to_metal_ratio = dust_to_metal_ratio
 
         # set depletions to be zero
@@ -415,7 +417,7 @@ class Abundances(Elements):
                 # correct metallicity. However, we don't want to rescale the
                 # things we've changed. For this reason, here we record the
                 # elements which have changed. See below for the rescaling.
-                unscaled_metals.add("N")
+                unscaled_metals.add(element)
 
                 # if value is a float simply set the abundance to this value.
                 if isinstance(value, float):
@@ -503,62 +505,65 @@ class Abundances(Elements):
             self.dust = {element: -99 for element in self.all_elements}
             self.depletion = {element: 0.0 for element in self.all_elements}
 
-    def __getitem__(self, k):
+    def __getitem__(self, arg):
         """
-        Function to return the logarithmic abundance relative to H
+        A method to return the logarithmic abundance for a particular element
+        relative to H or relative solar.
 
-        Returns
-        -------
-        float
-            logarthmic abundance.
+        Arguments:
+            arg (str)
+                The element (e.g. "O") or an element, reference element pair 
+                (e.g. "[O/Fe]").
+        
+        Returns:
+            (float)
+                The abundance relevant to H or relative to Solar when a 
+                reference element is also provided.
         """
 
         # default case, just return log10(k/H)
-        if k in self.all_elements:
-            return self.total[k]
-        # return solar relative abundance [X/Y]
-        elif k[0] == "[":
-            element, ref_element = k[1:-1].split("/")
+        if arg in self.all_elements:
+            return self.total[arg]
+        
+        # alternative case, return solar relative abundance [X/Y]
+        elif arg[0] == "[":
+            element, ref_element = arg[1:-1].split("/")
             return self.solar_relative_abundance(
                 element, ref_element=ref_element
             )
 
     def __str__(self):
-        """Function to print a basic summary of the Abundances object.
+        """
+        Method to print a basic summary of the Abundances object.
 
-        Returns a string containing
-
-        Returns
-        -------
-        str
-            Summary string containing summary information.
+        Returns:
+            summary (str)
+                String containing summary information.
         """
 
         # Set up string for printing
-        pstr = ""
+        summary = ""
 
         # Add the content of the summary to the string to be printed
-        pstr += "-" * 20 + "\n"
-        pstr += "ABUNDANCE PATTERN SUMMARY\n"
-        pstr += f"X: {self.hydrogen_mass_fraction:.3f}\n"
-        pstr += f"Y: {self.helium_mass_fraction:.3f}\n"
-        pstr += f"Z: {self.metallicity:.3f}\n"
-        pstr += f"Z/Z_sol: {self.metallicity/self.solar_metallicity:.2g}\n"
-        pstr += f"alpha: {self.alpha:.3f}\n"
-        pstr += f"carbon_abundance: {self.carbon_abundance} \n"
-        pstr += f"nitrogen_abundance: {self.nitrogen_abundance} \n"
-        pstr += f"dust-to-metal ratio: {self.dust_to_metal_ratio}\n"
-        pstr += (
+        summary += "-" * 20 + "\n"
+        summary += "ABUNDANCE PATTERN SUMMARY\n"
+        summary += f"X: {self.hydrogen_mass_fraction:.3f}\n"
+        summary += f"Y: {self.helium_mass_fraction:.3f}\n"
+        summary += f"Z: {self.metallicity:.3f}\n"
+        summary += f"Z/Z_sol: {self.metallicity/self.solar_metallicity:.2g}\n"
+        summary += f"alpha: {self.alpha:.3f}\n"
+        summary += f"dust-to-metal ratio: {self.dust_to_metal_ratio}\n"
+        summary += (
             f"MAX dust-to-metal ratio: {self.max_dust_to_metal_ratio:.3f}\n"
         )
 
-        pstr += "-" * 10 + "\n"
-        pstr += (
+        summary += "-" * 10 + "\n"
+        summary += (
             "element log10(X/H)_total (log10(X/H)+12) [[X/H]]"
             " |depletion| log10(X/H)_gas log10(X/H)_dust \n"
         )
         for ele in self.all_elements:
-            pstr += (
+            summary += (
                 f"{self.name[ele]}: {self.total[ele]:.2f} "
                 f"({self.total[ele]+12:.2f}) "
                 f"[{self.total[ele]-self.sol[ele]:.2f}] "
@@ -566,13 +571,13 @@ class Abundances(Elements):
                 f"{self.gas[ele]:.2f} "
                 f"{self.dust[ele]:.2f}\n"
             )
-        pstr += "-" * 20
+        summary += "-" * 20
 
-        return pstr
+        return summary
 
     def get_mass(self, elements, a=None):
         """
-        Get the mass for a collection of elements.
+        Method to get the mass for a collection of elements.
 
         Args:
             elements (list, str)
@@ -592,43 +597,15 @@ class Abundances(Elements):
 
         return np.sum([self.A[i] * 10 ** (a[i]) for i in elements])
 
-    def get_metallicity(self, a=None, elements=None):
-        """
-        This function determines the mass fraction of the metals,
-        or the metallicity
-
-        TODO: rewrite this for improved clarity
-
-        :param elements: a dictionary with the absolute elemental abundances
-
-        :return: A single number
-        :rtype: float
-        """
-
-        # if the component is not provided, assume it's the total
-        if not a:
-            a = self.total
-
-        # if a list of elements is not provided, assume it's all metals
-        if not elements:
-            elements = self.metals
-
-        # the mass in metals
-        mass_metals = np.sum([self.A[i] * 10 ** (a[i]) for i in elements])
-
-        # the total mass
-        mass_total = np.sum(
-            [self.A[i] * 10 ** (a[i]) for i in self.all_elements]
-        )
-
-        return mass_metals / mass_total
-
     def get_depletions(self):
         """
-        This function returns the depletion after scaling using
-        the solar abundances and depletion patterns from the dust-to-metal
-        ratio. This is the fraction of each element that is
-        depleted on to dust.
+        A method to calculate the depletion after scaling using the solar 
+        abundances and depletion patterns from the dust-to-metal ratio. This is
+        the fraction of each element that is depleted on to dust.
+
+        Returns:
+            depletion (dict, float)
+                The depletion pattern.
         """
         for element in self.all_elements:
             self.depletion[element] = (
@@ -637,21 +614,35 @@ class Abundances(Elements):
 
         return self.depletion
 
-    def solar_relative_abundance(self, e, ref_element="H"):
+    def solar_relative_abundance(self, element, ref_element="H"):
         """
-        This function returns an element's abundance relative to that
-        in the Sun, i.e. [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
-        :param a: the element of interest
-        :param a: a dictionary with the absolute elemental abundances
-        """
+        A method to return an element's abundance relative to that in the Sun,
+        i.e. [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
 
-        return (self.total[e] - self.total[ref_element]) - (
-            self.sol[e] - self.sol[ref_element]
+        Arguments:
+            element (str)
+                The element of interest.
+            ref_element (str)
+                The reference element.
+
+        Returns:
+            abundance (float)
+                The logarithmic relative abundance of an element, relative to the sun
+
+        """
+        return (self.total[element] - self.total[ref_element]) - (
+            self.sol[element] - self.sol[ref_element]
         )
 
     def get_max_dust_to_metal_ratio(self):
         """
-        This function determine the maximum dust-to-metal ratio
+        Method to calculate the maximum dust to metal ratio possible.
+
+        Returns
+            (float)
+                The maximum dust to metal ratio possible for this depletion and
+                abundance pattern.
+
         """
 
         dust = 0.0  # mass fraction in dust
