@@ -355,15 +355,15 @@ class DepletionPatterns:
         parameters = {
             # "H": 1.0,
             # "He": 1.0,
-            # "Li": 0.16,
+            "Li": (-1.136, -0.246, 0.000),
             # "Be": 0.6,
-            # "B": 0.13,
+            "B": (-0.101,  -0.193,  0.803),
             "C": (-0.10, -0.19, 0.80),
             "N": (0.00, -0.11, 0.55),
             "O": (-0.23, -0.15, 0.60),
             # "F": 0.3,
             # "Ne": 1.0,
-            # "Na": 0.25,
+            "Na": (2.071,  -3.059,  0.000),
             "Mg": (-1.00, -0.80, 0.53),
             # "Al": 0.02,
             "Si": (-1.14, -0.57, 0.31),
@@ -698,6 +698,12 @@ class Abundances(ElementDefinitions):
             # calculate dust-to-metal ratio and save as an attribute
             self.dust_to_metal_ratio = (self.dust_mass_fraction /
                                         self.metal_mass_fraction)
+
+            # calculate integrated dust abundance
+            # this is used by cloudy23 
+            self.dust_abundance = self.calculate_integrated_abundance(
+                self.metals,
+                a=self.dust)
 
             # Associate parameters with object
             self.depletion = depletion
