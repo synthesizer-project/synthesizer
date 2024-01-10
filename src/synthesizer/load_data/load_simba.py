@@ -121,7 +121,7 @@ def load_Simba(
         # Alternative to setting star_forming property on
         # each gas particle
         h2_masses = g_masses[b:e] * g_h2fraction[b:e]
-        galaxies[i].sf_gas_mass = np.sum(h2_masses)
+        galaxies[i].sf_gas_mass = np.sum(h2_masses) * Msun
         galaxies[i].sf_gas_metallicity = (
             np.sum(h2_masses * g_metals[b:e]) / galaxies[i].sf_gas_mass
         )
