@@ -84,28 +84,22 @@ void low_mass_los_loop(const double *star_pos, const double *gas_pos, const doub
       double x = gas_x - star_x;
       double y = gas_y - star_y;
 
-      /* Early skip if the star doesn't fall in the gas particles kernel. */
-      if (abs(x) > (threshold * sml) || abs(y) > (threshold * sml))
-        continue;
-
-      /* Convert separation to distance. */
-      double rsqu = x * x + y * y;
-
       /* Calculate the impact parameter. */
-      double sml_squ = gas_sml[igas] * gas_sml[igas];
-      double q = rsqu / sml_squ;
+      double b = sqrt(x * x + y * y);
 
-      /* Skip gas particles outside the kernel. */
-      if (q > threshold) continue;
+      /* Early skip if the star's line of sight doesn't fall in the gas particles kernel. */
+      if (b > (threshold * sml))
+        continue;
+      
+      /* Find fraction of smoothing length. */
+      double q = b / sml;
 
       /* Get the value of the kernel at q. */
       int index = kdim * q;
       double kvalue = kernel[index];
 
       /* Finally, compute the metal surface density itself. */
-      los_dustsds[istar] += dtm * mass * met / sml_squ * kvalue;
-      
-      
+      los_dustsds[istar] += dtm * mass * met / (sml * sml) * kvalue;
     }
   }
   
