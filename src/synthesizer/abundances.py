@@ -291,12 +291,49 @@ class SolarAbundances:
         }
 
 
+    class Gutkin2016:
+
+        # total metallicity
+        metallicity = 0.01524
+
+        # logarthmic abundances, i.e. log10(N_element/N_H)
+        abundance = {
+            "H": 0.0,
+            "He": -1.01,
+            "Li": -10.99,
+            "Be": -10.63,
+            "B": -9.47,
+            "C": -3.53,
+            "N": -4.32,
+            "O": -3.17,
+            "F": -7.44,
+            "Ne": -4.01,
+            "Na": -5.70,
+            "Mg": -4.45,
+            "Al": -5.56,
+            "Si": -4.48,
+            "P": -6.57,
+            "S": -4.87,
+            "Cl": -6.53,
+            "Ar": -5.63,
+            "K": -6.92,
+            "Ca": -5.67,
+            "Sc": -8.86,
+            "Ti": -7.01,
+            "V": -8.03,
+            "Cr": -6.36,
+            "Mn": -6.64,
+            "Fe": -4.51,
+            "Co": -7.11,
+            "Ni": -5.78,
+            "Cu": -7.82,
+            "Zn": -7.43,
+        }
+
 class DepletionPatterns:
 
     """
     Class containing various depletion patterns.
-
-    Depletion of 1 -> no depletion, while 0 -> fully depleted.
 
     Noble gases aren't depleted (even though there is some
     evidence for Argon depletion
@@ -306,31 +343,94 @@ class DepletionPatterns:
 
     available_patterns = ['Synthesizer2024']
 
-    # Need a more meaningful name
-    class Synthesizer2024:
+
+    class Jenkins2009:
+
+        """
+        Implemention of the Jenkins (2009) depletion pattern that is built into
+        cloudy23.
+        """
+
+        # (AX, BX, zX)
+        parameters = {
+            # "H": 1.0,
+            # "He": 1.0,
+            # "Li": 0.16,
+            # "Be": 0.6,
+            # "B": 0.13,
+            "C": (-0.10, -0.19, 0.80),
+            "N": (0.00, -0.11, 0.55),
+            "O": (-0.23, -0.15, 0.60),
+            # "F": 0.3,
+            # "Ne": 1.0,
+            # "Na": 0.25,
+            "Mg": (-1.00, -0.80, 0.53),
+            # "Al": 0.02,
+            "Si": (-1.14, -0.57, 0.31),
+            "P": (-0.95, -0.17, 0.49),
+            "S": (-0.88, -0.09, 0.29),
+            "Cl": (-1.24, -0.31, 0.61),
+            # "Ar": 1.0,
+            # "K": 0.3,
+            # "Ca": 0.003,
+            # "Sc": 0.005,
+            "Ti": (-2.05, -1.96, 0.43),
+            # "V": 0.006,
+            "Cr": (-1.45, -1.51, 0.47),
+            "Mn": (-0.86, -1.35, 0.52),
+            "Fe": (-1.29, -1.51, 0.44),
+            # "Co": 0.01,
+            "Ni": (-1.49, -1.83, 0.60),
+            "Cu": (-0.71, -1.10, 0.71),
+            "Zn": (-0.61, -0.28, 0.56),
+        }
+
+
+        def __init__(self, f_star=0.5):
+
+            """
+            Args:
+                f_star (float)
+                    Parameter             
+            """
+
+            # Dx = 10**(BX +AX (F∗−zX ))
+            # This Dx factor then multiplies the ref- erence abundance to produce the post-depletion gas- phase abundances.
+
+            self.depletion = {}
+
+            for element, parameters  in self.parameters.items():
+                # unpack parameters
+                AX, BX, zX = parameters
+                # calculate depletion
+                self.depletion[element] = 10**(BX+AX*(f_star-zX))
+
+
+
+    class Gutkin2016:
 
         """
         Depletion pattern created for Synthesizer 2024.
 
         Gutkin+2016:
             https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract
+
+        Note: in previous version we adjusted N ("N": 0.89) following:
         Dopita+2013:
             https://ui.adsabs.harvard.edu/abs/2013ApJS..208...10D/abstract
         Dopita+2006:
             https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract
-
-        Note: N is replaced by Dopita+2013 value as Gutkin+2016 assumes no
-        depletion of N.
         """
 
-        depletion = {
+        # This is the inverse depletion
+        inverse_depletion = {
             "H": 1.0,
             "He": 1.0,
             "Li": 0.16,
             "Be": 0.6,
             "B": 0.13,
             "C": 0.5,
-            "N": 0.89,
+            "N": 1.0,
             "O": 0.7,
             "F": 0.3,
             "Ne": 1.0,
@@ -356,6 +456,21 @@ class DepletionPatterns:
             "Zn": 0.25,
         }
 
+        def __init__(self, scale=1.0):
+
+            """
+            Args:
+                scale (float)
+                    Scale factor for the depletion.
+            """
+            self.depletion = {element: scale*(1-inverse_depletion_)
+                              for element, inverse_depletion_ in
+                              self.inverse_depletion.items()}
+            
+
+
+
+
 
 class Abundances(ElementDefinitions):
 
@@ -369,9 +484,11 @@ class Abundances(ElementDefinitions):
         metallicity=SolarAbundances.Asplund2009.metallicity,
         alpha=0.0,
         abundances=False,
-        dust_to_metal_ratio=False,
         solar=SolarAbundances.Asplund2009,
-        depletion_pattern=DepletionPatterns.Synthesizer2024,
+        depletion=None,
+        depletion_model=None,
+        depletion_scale=None,
+        dust_to_metal_ratio=None,
     ):
         """
         Initialise an abundance pattern
@@ -385,12 +502,18 @@ class Abundances(ElementDefinitions):
             abundances (dict, float/str)
                 A dictionary containing the abundances for specific elements or
                 functions to calculate them for the specified metallicity.
-            dust_to_metal_ratio (float)
-                the fraction of metals in dust.
             solar (object)
                 Solar abundance pattern object.
-            depletion_pattern (object)
-                Depletion pattern object.
+            depletion (dict, float)
+                The depletion pattern to use.
+            depletion_model (object)
+                The depletion model object.
+            depletion_scale (float)
+                The depletion scale factor. Sometimes this is linear, but for 
+                some models (e.g. Jenkins (2009)) it's more complex.
+            dust_to_metal_ratio (float)
+                the fraction of metals in dust.
+
 
 
         """
@@ -398,12 +521,18 @@ class Abundances(ElementDefinitions):
         # save all parameters to object
         self.metallicity = metallicity  # mass fraction in metals
         self.alpha = alpha
-        self.dust_to_metal_ratio = dust_to_metal_ratio
+        
         self.solar = solar
-        self.depletion_pattern = depletion_pattern
+
+        # depletion on to dust
+        self.depletion = depletion
+        self.depletion_model = depletion_model
+        self.depletion_scale = depletion_scale
+        self.dust_to_metal_ratio = dust_to_metal_ratio
+
 
         # set depletions to be zero initially
-        self.depletion = {element: 0.0 for element in self.all_elements}
+        # self.depletion = {element: 0.0 for element in self.all_elements}
 
         # Set helium mass fraction following Bressan et al. (2012)
         # 10.1111/j.1365-2966.2012.21948.x
@@ -492,51 +621,89 @@ class Abundances(ElementDefinitions):
         # save as attribute
         self.total = total
 
-        # copy total to be gas
-        self.gas = deepcopy(total)
+        # If provided apply depletion pattern by calling the depletion model 
+        # with the depletion scale.
+        if depletion_model:
+            if self.depletion_scale:
+                self.depletion = self.depletion_model(self.depletion_scale).depletion
+            else:
+                self.depletion = self.depletion_model().depletion
+
+        # apply depletion pattern
+        if self.depletion:
+
+            # deplete the gas and dust
+            self.gas = {}
+            self.dust = {}
+            for element in self.all_elements:
+
+                # if an entry exists for the element apply depletion
+                if element in self.depletion.keys():
+
+                    self.gas[element] = (
+                        self.total[element]
+                        + np.log10(1.-self.depletion[element])
+                        )
+
+                    if self.depletion[element] == 0.0:
+                        self.dust[element] = -np.inf
+                    else:
+                        self.dust[element] = (
+                            self.total[element]
+                            + np.log10(self.depletion[element])
+                            )
+                        
+                # otherwise assume no depletion
+                else:
+                    self.depletion[element] = 0.0
+                    self.gas[element] = self.total[element]
+                    self.dust[element] = -np.inf
+                    
+            # calculate dust-to-metal ratio and save as an attribute
+            self.dust_to_metal_ratio = self.get_dust_to_metal_ratio()
 
         # calculate the maximum dust-to-metal ratio possible
-        self.max_dust_to_metal_ratio = self.get_max_dust_to_metal_ratio()
+        # self.max_dust_to_metal_ratio = self.get_max_dust_to_metal_ratio()
 
-        if dust_to_metal_ratio:
-            # check that the dust to metal ratio is allowed
-            if dust_to_metal_ratio <= self.max_dust_to_metal_ratio:
-                # get scaled depletion values, i.e. the fraction of each
-                # element which is depleted on to dust
-                self.get_depletions()
+        # if dust_to_metal_ratio:
+        #     # check that the dust to metal ratio is allowed
+        #     if dust_to_metal_ratio <= self.max_dust_to_metal_ratio:
+        #         # get scaled depletion values, i.e. the fraction of each
+        #         # element which is depleted on to dust
+        #         self.get_depletions()
 
-                # define dust abundances
-                self.dust = {}
+        #         # define dust abundances
+        #         self.dust = {}
 
-                # neither Hydrogen or Helium are depleted on to dust
-                self.dust["H"] = -99
-                self.dust["He"] = -99
+        #         # neither Hydrogen or Helium are depleted on to dust
+        #         self.dust["H"] = -99
+        #         self.dust["He"] = -99
 
-                # deplete elements in the gas
-                for element in self.metals:
-                    self.gas[element] += np.log10(1 - self.depletion[element])
+        #         # deplete elements in the gas
+        #         for element in self.metals:
+        #             self.gas[element] += np.log10(1 - self.depletion[element])
 
-                    # calculate (X/H) contained in dust
-                    if self.depletion[element] > 0.0:
-                        self.dust[element] = np.log10(
-                            self.depletion[element] * 10 ** self.total[element]
-                        )
-                    else:
-                        self.dust[element] = -99
+        #             # calculate (X/H) contained in dust
+        #             if self.depletion[element] > 0.0:
+        #                 self.dust[element] = np.log10(
+        #                     self.depletion[element] * 10 ** self.total[element]
+        #                 )
+        #             else:
+        #                 self.dust[element] = -99
 
-            else:
-                # this doesn't work
-                InconsistentParameter(
-                    f"The dust-to-metal ratio (dust_to_metal_ratio) must be \
-                    less than the maximum possible ratio \
-                    ({self.max_dust_to_metal_ratio:.2f})"
-                )
+        #     else:
+        #         # this doesn't work
+        #         InconsistentParameter(
+        #             f"The dust-to-metal ratio (dust_to_metal_ratio) must be \
+        #             less than the maximum possible ratio \
+        #             ({self.max_dust_to_metal_ratio:.2f})"
+        #         )
 
-        else:
-            # If not dust_to_metal_ratio ratio is provided set the dust to be
-            # None.
-            self.dust = {element: -99 for element in self.all_elements}
-            self.depletion = {element: 0.0 for element in self.all_elements}
+        # else:
+        #     # If not dust_to_metal_ratio ratio is provided set the dust to be
+        #     # None.
+        #     self.dust = {element: -99 for element in self.all_elements}
+        #     self.depletion = {element: 0.0 for element in self.all_elements}
 
     def __getitem__(self, arg):
         """
@@ -586,9 +753,9 @@ class Abundances(ElementDefinitions):
         summary += f"Z/Z_sol: {self.metallicity/self.solar.metallicity:.2g}\n"
         summary += f"alpha: {self.alpha:.3f}\n"
         summary += f"dust-to-metal ratio: {self.dust_to_metal_ratio}\n"
-        summary += (
-            f"MAX dust-to-metal ratio: {self.max_dust_to_metal_ratio:.3f}\n"
-        )
+        # summary += (
+        #     f"MAX dust-to-metal ratio: {self.max_dust_to_metal_ratio:.3f}\n"
+        # )
 
         summary += "-" * 10 + "\n"
         summary += (
@@ -599,11 +766,16 @@ class Abundances(ElementDefinitions):
             summary += (
                 f"{self.name[ele]}: {self.total[ele]:.2f} "
                 f"({self.total[ele]+12:.2f}) "
-                f"[{self.total[ele]-self.solar.abundance[ele]:.2f}] "
-                f"|{self.depletion[ele]:.2f}| "
-                f"{self.gas[ele]:.2f} "
-                f"{self.dust[ele]:.2f}\n"
-            )
+                f"[{self.total[ele]-self.solar.abundance[ele]:.2f}] ")
+
+            if self.depletion:
+                summary += (
+                        f"|{self.depletion[ele]:.2f}| "
+                        f"{self.gas[ele]:.2f} "
+                        f"{self.dust[ele]:.2f}"
+                )
+            summary += "\n"
+            
         summary += "-" * 20
 
         return summary
@@ -696,12 +868,12 @@ class Abundances(ElementDefinitions):
         """
 
         dust = 0.0  # mass fraction in dust
+        metals = 0.0
         for element in self.metals:
-            dust += (
-                10 ** (self.total[element]) - 10 ** (self.gas[element])
-            ) * self.A[element]
+            dust += (10 ** self.dust[element]) * self.A[element]
+            metals += (10 ** self.total[element]) * self.A[element]
 
-        return dust / self.metallicity
+        return dust / metals
 
 
 def plot_abundance_pattern(a, show=False, ylim=None, components=["total"]):
