@@ -599,9 +599,9 @@ class Abundances(ElementDefinitions):
         scaled_metals = set(self.metals) - unscaled_metals
 
         # Calculate the mass in unscaled, scaled, and non-metals.
-        mass_in_unscaled_metals = self.get_mass(list(unscaled_metals), a=total)
-        mass_in_scaled_metals = self.get_mass(list(scaled_metals), a=total)
-        mass_in_non_metals = self.get_mass(["H", "He"], a=total)
+        mass_in_unscaled_metals = self.calculate_mass(list(unscaled_metals), a=total)
+        mass_in_scaled_metals = self.calculate_mass(list(scaled_metals), a=total)
+        mass_in_non_metals = self.calculate_mass(["H", "He"], a=total)
 
         # Now, calculate the scaling factor. The metallicity is:
         # metallicity = scaling*mass_in_scaled_metals + mass_in_unscaled_metals
@@ -621,16 +621,42 @@ class Abundances(ElementDefinitions):
         # save as attribute
         self.total = total
 
-        # If provided apply depletion pattern by calling the depletion model 
-        # with the depletion scale.
+        # If a depletion pattern or depletion_model is provided then calculate
+        # the depletion.
+        if (depletion is not False) or (depletion_model is not False):
+            self.add_depletion(
+                depletion=depletion,
+                depletion_model=depletion_model,
+                depletion_scale=depletion_scale)
+
+    def add_depletion(self,
+                      depletion=False,
+                      depletion_model=False,
+                      depletion_scale=False):
+
+        """
+        Function to add depletion.
+        
+        
+        """
+
+        # Add exception if both a depletion pattern and depletion_model is
+        # provided.
+
+
+        # If provided, calculate depletion pattern by calling the depletion
+        # model with the depletion scale.
         if depletion_model:
+
+            # If a depletion_scale is provided use this...
             if self.depletion_scale:
-                self.depletion = self.depletion_model(self.depletion_scale).depletion
+                depletion = depletion_model(depletion_scale).depletion
+            # ... otherwise use the default.
             else:
-                self.depletion = self.depletion_model().depletion
+                depletion = depletion_model().depletion
 
         # apply depletion pattern
-        if self.depletion:
+        if depletion:
 
             # deplete the gas and dust
             self.gas = {}
@@ -638,72 +664,46 @@ class Abundances(ElementDefinitions):
             for element in self.all_elements:
 
                 # if an entry exists for the element apply depletion
-                if element in self.depletion.keys():
+                if element in depletion.keys():
 
                     self.gas[element] = (
                         self.total[element]
-                        + np.log10(1.-self.depletion[element])
+                        + np.log10(1.-depletion[element])
                         )
 
-                    if self.depletion[element] == 0.0:
+                    if depletion[element] == 0.0:
                         self.dust[element] = -np.inf
                     else:
                         self.dust[element] = (
                             self.total[element]
-                            + np.log10(self.depletion[element])
+                            + np.log10(depletion[element])
                             )
                         
                 # otherwise assume no depletion
                 else:
-                    self.depletion[element] = 0.0
+                    depletion[element] = 0.0
                     self.gas[element] = self.total[element]
                     self.dust[element] = -np.inf
                     
+            # calculate mass fraction in metals
+            # NOTE: this should be identical to the metallicity.
+            self.metal_mass_fraction = self.calculate_mass_fraction(
+                self.metals)
+
+            # calculate mass fraction in dust
+            self.dust_mass_fraction = self.calculate_mass_fraction(
+                self.metals,
+                a=self.dust)
+
             # calculate dust-to-metal ratio and save as an attribute
-            self.dust_to_metal_ratio = self.get_dust_to_metal_ratio()
+            self.dust_to_metal_ratio = (self.dust_mass_fraction /
+                                        self.metal_mass_fraction)
 
-        # calculate the maximum dust-to-metal ratio possible
-        # self.max_dust_to_metal_ratio = self.get_max_dust_to_metal_ratio()
+            # Associate parameters with object
+            self.depletion = depletion
+            self.depletion_scale = depletion_scale
+            self.depletion_model = depletion_model
 
-        # if dust_to_metal_ratio:
-        #     # check that the dust to metal ratio is allowed
-        #     if dust_to_metal_ratio <= self.max_dust_to_metal_ratio:
-        #         # get scaled depletion values, i.e. the fraction of each
-        #         # element which is depleted on to dust
-        #         self.get_depletions()
-
-        #         # define dust abundances
-        #         self.dust = {}
-
-        #         # neither Hydrogen or Helium are depleted on to dust
-        #         self.dust["H"] = -99
-        #         self.dust["He"] = -99
-
-        #         # deplete elements in the gas
-        #         for element in self.metals:
-        #             self.gas[element] += np.log10(1 - self.depletion[element])
-
-        #             # calculate (X/H) contained in dust
-        #             if self.depletion[element] > 0.0:
-        #                 self.dust[element] = np.log10(
-        #                     self.depletion[element] * 10 ** self.total[element]
-        #                 )
-        #             else:
-        #                 self.dust[element] = -99
-
-        #     else:
-        #         # this doesn't work
-        #         InconsistentParameter(
-        #             f"The dust-to-metal ratio (dust_to_metal_ratio) must be \
-        #             less than the maximum possible ratio \
-        #             ({self.max_dust_to_metal_ratio:.2f})"
-        #         )
-
-        # else:
-        #     # If not dust_to_metal_ratio ratio is provided set the dust to be
-        #     # None.
-        #     self.dust = {element: -99 for element in self.all_elements}
-        #     self.depletion = {element: 0.0 for element in self.all_elements}
 
     def __getitem__(self, arg):
         """
@@ -780,7 +780,29 @@ class Abundances(ElementDefinitions):
 
         return summary
 
-    def get_mass(self, elements, a=None):
+    def calculate_integrated_abundance(self, elements, a=None):
+        """
+        Method to get the integrated abundance for a collection of elements.
+
+        Args:
+            elements (list, str)
+                A list of element names.
+            a (dict)
+                The component to use.
+
+        Returns:
+            integrated abundance (float)
+                The mass in those elements. Normally this needs to be
+                normalised to be useful.
+        """
+
+        # if the component is not provided, assume it's the total
+        if not a:
+            a = self.total
+
+        return np.sum([10 ** (a[i]) for i in elements])
+
+    def calculate_mass(self, elements, a=None):
         """
         Method to get the mass for a collection of elements.
 
@@ -801,23 +823,28 @@ class Abundances(ElementDefinitions):
             a = self.total
 
         return np.sum([self.A[i] * 10 ** (a[i]) for i in elements])
-
-    def get_depletions(self):
+    
+    def calculate_mass_fraction(self, elements, a=None):
         """
-        A method to calculate the depletion after scaling using the solar
-        abundances and depletion patterns from the dust-to-metal ratio. This is
-        the fraction of each element that is depleted on to dust.
+        Method to get the mass fraction for a collection of elements.
+
+        Args:
+            elements (list, str)
+                A list of element names.
+            a (dict)
+                The component to use.
 
         Returns:
-            depletion (dict, float)
-                The depletion pattern.
+            mass (float)
+                The mass in those elements. Normally this needs to be
+                normalised to be useful.
         """
-        for element in self.all_elements:
-            self.depletion[element] = (
-                self.dust_to_metal_ratio / self.max_dust_to_metal_ratio
-            ) * (1.0 - self.depletion_pattern.depletion[element])
 
-        return self.depletion
+        # calculate the total mass
+        total_mass = self.calculate_mass(self.all_elements)
+
+        return self.calculate_mass(elements, a=a)/total_mass
+
 
     def solar_relative_abundance(self, element, ref_element="H"):
         """
@@ -861,19 +888,7 @@ class Abundances(ElementDefinitions):
 
         return dust / self.metallicity
 
-    def get_dust_to_metal_ratio(self):
-        """
-        This function measures the dust-to-metal ratio for the
-        calculated depletion
-        """
 
-        dust = 0.0  # mass fraction in dust
-        metals = 0.0
-        for element in self.metals:
-            dust += (10 ** self.dust[element]) * self.A[element]
-            metals += (10 ** self.total[element]) * self.A[element]
-
-        return dust / metals
 
 
 def plot_abundance_pattern(a, show=False, ylim=None, components=["total"]):
