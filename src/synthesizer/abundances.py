@@ -411,7 +411,7 @@ class DepletionPatterns:
         """
 
         # This is the inverse depletion
-        inverse_depletion = {
+        depletion_ = {
             "H": 1.0,
             "He": 1.0,
             "Li": 0.16,
@@ -451,9 +451,9 @@ class DepletionPatterns:
                 scale (float)
                     Scale factor for the depletion.
             """
-            self.depletion = {element: scale*(1-inverse_depletion_)
-                              for element, inverse_depletion_ in
-                              self.inverse_depletion.items()}
+            self.depletion = {element: scale*depletion
+                              for element, depletion in
+                              self.depletion_.items()}
             
     class Gutkin2016:
 
@@ -471,7 +471,7 @@ class DepletionPatterns:
         """
 
         # This is the inverse depletion
-        inverse_depletion = {
+        depletion_ = {
             "H": 1.0,
             "He": 1.0,
             "Li": 0.16,
@@ -511,9 +511,9 @@ class DepletionPatterns:
                 scale (float)
                     Scale factor for the depletion.
             """
-            self.depletion = {element: scale*(1-inverse_depletion_)
-                              for element, inverse_depletion_ in
-                              self.inverse_depletion.items()}
+            self.depletion = {element: scale*depletion
+                              for element, depletion in
+                              self.depletion_.items()}
             
 
 
@@ -697,8 +697,9 @@ class Abundances(ElementDefinitions):
         if depletion_model:
 
             # If a depletion_scale is provided use this...
-            if self.depletion_scale:
+            if self.depletion_scale is not None:
                 depletion = depletion_model(depletion_scale).depletion
+                
             # ... otherwise use the default.
             else:
                 depletion = depletion_model().depletion
@@ -714,18 +715,16 @@ class Abundances(ElementDefinitions):
                 # if an entry exists for the element apply depletion
                 if element in depletion.keys():
 
-                    self.gas[element] = (
-                        self.total[element]
-                        + np.log10(1.-depletion[element])
+                    self.gas[element] = np.log10(
+                        10**self.total[element]*depletion[element]
                         )
 
                     if depletion[element] == 0.0:
                         self.dust[element] = -np.inf
                     else:
-                        self.dust[element] = (
-                            self.total[element]
-                            + np.log10(depletion[element])
-                            )
+                        self.dust[element] = np.log10(
+                            10**self.total[element]*(1-depletion[element])
+                        )
                         
                 # otherwise assume no depletion
                 else:
