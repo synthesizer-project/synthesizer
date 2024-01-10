@@ -355,24 +355,24 @@ class DepletionPatterns:
         parameters = {
             # "H": 1.0,
             # "He": 1.0,
-            # "Li": 0.16,
+            "Li": (-1.136, -0.246, 0.000),
             # "Be": 0.6,
-            # "B": 0.13,
+            "B": (-0.101,  -0.193,  0.803),
             "C": (-0.10, -0.19, 0.80),
             "N": (0.00, -0.11, 0.55),
             "O": (-0.23, -0.15, 0.60),
             # "F": 0.3,
             # "Ne": 1.0,
-            # "Na": 0.25,
+            "Na": (2.071,  -3.059,  0.000),
             "Mg": (-1.00, -0.80, 0.53),
-            # "Al": 0.02,
+            "Al": (-3.330, 0.179, 0.000),
             "Si": (-1.14, -0.57, 0.31),
             "P": (-0.95, -0.17, 0.49),
             "S": (-0.88, -0.09, 0.29),
             "Cl": (-1.24, -0.31, 0.61),
-            # "Ar": 1.0,
-            # "K": 0.3,
-            # "Ca": 0.003,
+            "Ar": (-0.516,  -0.133,  0.000),
+            "K": (-0.133,  -0.859,  0.000),
+            "Ca": (-1.822,  -1.768,  0.000),
             # "Sc": 0.005,
             "Ti": (-2.05, -1.96, 0.43),
             # "V": 0.006,
@@ -405,8 +405,56 @@ class DepletionPatterns:
                 # calculate depletion
                 self.depletion[element] = 10**(BX+AX*(f_star-zX))
 
+    class CloudyClassic:
 
+        """
+        """
 
+        # This is the inverse depletion
+        inverse_depletion = {
+            "H": 1.0,
+            "He": 1.0,
+            "Li": 0.16,
+            "Be": 0.6,
+            "B": 0.13,
+            "C": 0.4,
+            "N": 1.0,
+            "O": 0.6,
+            "F": 0.3,
+            "Ne": 1.0,
+            "Na": 0.2,
+            "Mg": 0.2,
+            "Al": 0.01,
+            "Si": 0.03,
+            "P": 0.25,
+            "S": 1.0,
+            "Cl": 0.4,
+            "Ar": 1.0,
+            "K": 0.3,
+            "Ca": 0.0001,
+            "Sc": 0.005,
+            "Ti": 0.008,
+            "V": 0.006,
+            "Cr": 0.006,
+            "Mn": 0.05,
+            "Fe": 0.01,
+            "Co": 0.01,
+            "Ni": 0.01,
+            "Cu": 0.1,
+            "Zn": 0.25,
+        }
+
+        def __init__(self, scale=1.0):
+
+            """
+            Args:
+                scale (float)
+                    Scale factor for the depletion.
+            """
+            self.depletion = {element: scale*(1-inverse_depletion_)
+                              for element, inverse_depletion_ in
+                              self.inverse_depletion.items()}
+            
     class Gutkin2016:
 
         """
