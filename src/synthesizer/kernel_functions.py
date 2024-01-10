@@ -2,7 +2,7 @@ import numpy as np
 from scipy import integrate
 
 
-class kernel:
+class Kernel:
 
     """
     Line of sight distance along a particle, l = 2*sqrt(h^2 + b^2),
@@ -75,9 +75,7 @@ class kernel:
 
         kernel = self.get_kernel()
         header = np.array([{"kernel": self.name, "bins": self.binsize}])
-        np.savez(
-            "kernel_{}.npz".format(self.name), header=header, kernel=kernel
-        )
+        np.savez("kernel_{}.npz".format(self.name), header=header, kernel=kernel)
 
         print(header)
 
@@ -121,9 +119,7 @@ def cubic(r):
 def quintic(r):
     if r < 0.333333333:
         return 27.0 * (
-            6.4457752 * r * r * r * r * (1.0 - r)
-            - 1.4323945 * r * r
-            + 0.17507044
+            6.4457752 * r * r * r * r * (1.0 - r) - 1.4323945 * r * r + 0.17507044
         )
     elif r < 0.666666667:
         return 27.0 * (
