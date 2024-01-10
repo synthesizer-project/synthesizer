@@ -118,7 +118,9 @@ sph_kernel = Kernel()
 kernel_data = sph_kernel.get_kernel()
 
 # Calculate the tau_vs
-tau_v = galaxy.calculate_los_tau_v(kappa=0.07, kernel=kernel_data, force_loop=True)
+tau_v = galaxy.calculate_los_tau_v(
+    kappa=0.07, kernel=kernel_data, force_loop=True
+)
 
 # Get the attenuated spectra
 galaxy.stars.particle_spectra["attenuated"] = galaxy.stars.particle_spectra[
