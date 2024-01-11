@@ -924,10 +924,10 @@ class Abundances(ElementDefinitions):
 
         column_names = (
             "Element",
-            "log10(X/H)_total", 
-            "(log10(X/H)+12)",
-            "[[X/H]]",
-            "|depletion|",
+            "log10(X/H)",
+            "log10(X/H)+12",
+            "[X/H]",
+            "depletion",
             "log10(X/H)_gas",
             "log10(X/H)_dust",
         )
