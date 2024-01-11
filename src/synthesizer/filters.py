@@ -638,7 +638,7 @@ class FilterCollection:
             f = self.filters[fcode]
             f.t = f._interpolate_wavelength(self.lam)
 
-    def _transmission_curve_ax(self, ax):
+    def _transmission_curve_ax(self, ax, **kwargs):
         """
         Add filter transmission curves to a given axes.
 
@@ -654,13 +654,13 @@ class FilterCollection:
         # Loop over the filters plotting their curves.
         for key in self.filters:
             f = self.filters[key]
-            ax.plot(f._lam, f.t, label=f.filter_code)
+            ax.plot(f._lam, f.t, label=f.filter_code, **kwargs)
 
         # Label the axes
         ax.set_xlabel(r"$\rm \lambda/\AA$")
         ax.set_ylabel(r"$\rm T_{\lambda}$")
 
-    def plot_transmission_curves(self, show=False):
+    def plot_transmission_curves(self, show=False, fig=None, ax=None, **kwargs):
         """
         Create a filter transmission curve plot of all Filters in the
         FilterCollection.
@@ -677,17 +677,20 @@ class FilterCollection:
         """
 
         # Set up figure
-        fig = plt.figure(figsize=(5.0, 3.5))
-        left = 0.1
-        height = 0.8
-        bottom = 0.15
-        width = 0.85
+        if fig is None:
+            fig = plt.figure(figsize=(5.0, 3.5))
 
-        # Add an axis to hold plot
-        ax = fig.add_axes((left, bottom, width, height))
+        if ax is None:
+            left = 0.1
+            height = 0.8
+            bottom = 0.15
+            width = 0.85
+
+            # Add an axis to hold plot
+            ax = fig.add_axes((left, bottom, width, height))
 
         # Make plot
-        self._transmission_curve_ax(ax)
+        self._transmission_curve_ax(ax, **kwargs)
 
         ax.legend(
             loc="upper center",
