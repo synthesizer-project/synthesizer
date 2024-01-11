@@ -715,11 +715,15 @@ class Abundances(ElementDefinitions):
                 # if an entry exists for the element apply depletion
                 if element in depletion.keys():
 
+                    # depletion factors >1.0 are unphysical so cap at 1.0
+                    if depletion[element] > 1.0:
+                        depletion[element] = 1.0
+
                     self.gas[element] = np.log10(
                         10**self.total[element]*depletion[element]
                         )
 
-                    if depletion[element] == 0.0:
+                    if depletion[element] == 1.0:
                         self.dust[element] = -np.inf
                     else:
                         self.dust[element] = np.log10(
@@ -728,7 +732,7 @@ class Abundances(ElementDefinitions):
                         
                 # otherwise assume no depletion
                 else:
-                    depletion[element] = 0.0
+                    depletion[element] = 1.0
                     self.gas[element] = self.total[element]
                     self.dust[element] = -np.inf
                     
