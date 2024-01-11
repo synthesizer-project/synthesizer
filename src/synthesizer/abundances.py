@@ -832,8 +832,8 @@ class Abundances(ElementDefinitions):
                         depletion[element] = 1.0
 
                     self.gas[element] = np.log10(
-                        10**self.total[element]*depletion[element]
-                        )
+                        10**self.total[element] * depletion[element]
+                    )
 
                     if depletion[element] == 1.0:
                         self.dust[element] = -np.inf
@@ -859,8 +859,8 @@ class Abundances(ElementDefinitions):
                 a=self.dust)
 
             # calculate dust-to-metal ratio and save as an attribute
-            self.dust_to_metal_ratio = (self.dust_mass_fraction /
-                                        self.metal_mass_fraction)
+            self.dust_to_metal_ratio = (self.dust_mass_fraction
+                                        / self.metal_mass_fraction)
 
             # Associate parameters with object
             self.depletion = depletion
