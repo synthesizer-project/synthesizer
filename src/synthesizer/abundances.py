@@ -167,7 +167,7 @@ class ElementDefinitions:
         "Ar",
         "Ca",
         "Ti",
-    ]  
+    ]
 
     # Name
     name = {}
@@ -375,22 +375,22 @@ class DepletionPatterns:
             # "He": 1.0,
             "Li": (-1.136, -0.246, 0.000),
             # "Be": 0.6,
-            "B": (-0.101,  -0.193,  0.803),
+            "B": (-0.101, -0.193, 0.803),
             "C": (-0.10, -0.19, 0.80),
             "N": (0.00, -0.11, 0.55),
             "O": (-0.23, -0.15, 0.60),
             # "F": 0.3,
             # "Ne": 1.0,
-            "Na": (2.071,  -3.059,  0.000),
+            "Na": (2.071, -3.059, 0.000),
             "Mg": (-1.00, -0.80, 0.53),
             "Al": (-3.330, 0.179, 0.000),
             "Si": (-1.14, -0.57, 0.31),
             "P": (-0.95, -0.17, 0.49),
             "S": (-0.88, -0.09, 0.29),
             "Cl": (-1.24, -0.31, 0.61),
-            "Ar": (-0.516,  -0.133,  0.000),
-            "K": (-0.133,  -0.859,  0.000),
-            "Ca": (-1.822,  -1.768,  0.000),
+            "Ar": (-0.516, -0.133, 0.000),
+            "K": (-0.133, -0.859, 0.000),
+            "Ca": (-1.822, -1.768, 0.000),
             # "Sc": 0.005,
             "Ti": (-2.05, -1.96, 0.43),
             # "V": 0.006,
@@ -418,7 +418,7 @@ class DepletionPatterns:
                 # unpack parameters. Despite convention I've chosen to use
                 a_x, b_x, z_x = parameters
                 # calculate depletion
-                self.depletion[element] = 10**(b_x+a_x*(fstar-z_x))
+                self.depletion[element] = 10**(b_x + a_x * (fstar - z_x))
 
     class CloudyClassic:
 
@@ -467,7 +467,7 @@ class DepletionPatterns:
                 scale (float)
                     Scale factor for the depletion.
             """
-            self.depletion = {element: scale*depletion
+            self.depletion = {element: scale * depletion
                               for element, depletion in
                               self.depletion_.items()}
 
@@ -527,7 +527,7 @@ class DepletionPatterns:
                 scale (float)
                     Scale factor for the depletion.
             """
-            self.depletion = {element: scale*depletion
+            self.depletion = {element: scale * depletion
                               for element, depletion in
                               self.depletion_.items()}
 
@@ -613,7 +613,7 @@ class Abundances(ElementDefinitions):
                 The depletion pattern to use. Should not be provided with
                 depletion_model.
             depletion_model (class or str)
-                The depletion model class or string defining the class. 
+                The depletion model class or string defining the class.
                 Should not be provided with depletion.
             depletion_scale (float)
                 The depletion scale factor. Sometimes this is linear, but for
@@ -639,11 +639,10 @@ class Abundances(ElementDefinitions):
                 raise exceptions.UnrecognisedOption("""Solar abundance pattern
                 not recognised!""")
 
-        # If a metallicity is not provided use the metallicity assumed by the 
+        # If a metallicity is not provided use the metallicity assumed by the
         # Solar abundance pattern.
         if self.metallicity is None:
             self.metallicity = self.solar.metallicity
-
 
         # Set helium mass fraction following Bressan et al. (2012)
         # 10.1111/j.1365-2966.2012.21948.x
@@ -790,7 +789,7 @@ class Abundances(ElementDefinitions):
             if depletion_model in DepletionPatterns.available_patterns:
                 depletion_model = getattr(DepletionPatterns, depletion_model)
             else:
-                raise exceptions.UnrecognisedOption("""Depletion model not 
+                raise exceptions.UnrecognisedOption("""Depletion model not
                 recognised!""")
 
         # Raise exception if both a depletion pattern and depletion_model is
@@ -840,7 +839,7 @@ class Abundances(ElementDefinitions):
                         self.dust[element] = -np.inf
                     else:
                         self.dust[element] = np.log10(
-                            10**self.total[element]*(1-depletion[element])
+                            10**self.total[element] * (1 - depletion[element])
                         )
 
                 # otherwise assume no depletion
@@ -931,7 +930,7 @@ class Abundances(ElementDefinitions):
             "log10(X/H)_gas",
             "log10(X/H)_dust",
         )
-        summary += column_format.format(*column_names)  + "\n"
+        summary += column_format.format(*column_names) + "\n"
 
         for ele in self.all_elements:
 
@@ -1012,7 +1011,7 @@ class Abundances(ElementDefinitions):
         # calculate the total mass
         total_mass = self.calculate_mass(self.all_elements)
 
-        return self.calculate_mass(elements, a=a)/total_mass
+        return self.calculate_mass(elements, a=a) / total_mass
 
     def solar_relative_abundance(self, element, ref_element="H"):
         """
