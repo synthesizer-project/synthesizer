@@ -12,7 +12,7 @@ import numpy as np
 from scipy import signal
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from unyt import unyt_quantity, unyt_array, unyt_quantity
+from unyt import unyt_quantity, unyt_array
 from unyt.dimensions import angle
 
 import synthesizer.exceptions as exceptions
