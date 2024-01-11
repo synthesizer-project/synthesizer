@@ -188,12 +188,12 @@ def create_cloudy_input(
     # See 2023 release paper section 5
     if params["depletion_model"] == 'Jenkins2009':
 
-        if params["fstar"] == 0.5:  
-            cinput.append(f"metals deplete Jenkins 2009")
+        if params["fstar"] == 0.5:
+            cinput.append("metals deplete Jenkins 2009")
 
             # turn on grains
             if params["grains"]:
-                cinput.append(f"grains")
+                cinput.append("grains")
 
         else:
             value = params["fstar"]
@@ -205,21 +205,18 @@ def create_cloudy_input(
                 # for non-default (!= 0.5) fstar values, grains needs to be
                 # scaled.
 
-                # calculate the dust mass fraction for the default parameter 
+                # calculate the dust mass fraction for the default parameter
                 # choice.
                 default_dust_mass_fraction = abundances.apply_depletion(
                     depletion_model='Jenkins2009').dust_abundance
 
-                # calculate the dust mass fraction for the provided value of 
+                # calculate the dust mass fraction for the provided value of
                 # fstar.
                 dust_mass_fraction = abundances.apply_depletion(
                     depletion_model='Jenkins2009',
                     depletion_scaling=params["fstar"]).dust_abundance
-                
                 ratio = dust_mass_fraction / default_dust_mass_fraction
-
                 cinput.append(f"grains {ratio}")
-
 
     U = params["ionisation_parameter"]
     log10U = np.log10(U)
