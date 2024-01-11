@@ -660,7 +660,13 @@ class FilterCollection:
         ax.set_xlabel(r"$\rm \lambda/\AA$")
         ax.set_ylabel(r"$\rm T_{\lambda}$")
 
-    def plot_transmission_curves(self, show=False, fig=None, ax=None, **kwargs):
+    def plot_transmission_curves(
+        self,
+        show=False,
+        fig=None,
+        ax=None,
+        **kwargs
+    ):
         """
         Create a filter transmission curve plot of all Filters in the
         FilterCollection.
