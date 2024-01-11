@@ -107,6 +107,7 @@ class FilterCollection:
         filter_codes=None,
         tophat_dict=None,
         generic_dict=None,
+        filters=None,
         path=None,
         new_lam=None,
     ):
@@ -117,7 +118,7 @@ class FilterCollection:
             filter_codes  (list, string)
                 A list of SVO filter codes, used to retrieve filter data from
                 the database.
-            tophat_dict (dict, Filter)
+            tophat_dict (dict)
                 A dictionary containing the data to make a collection of top
                 hat filters from user defined properties. The dictionary must
                 have the form:
@@ -133,6 +134,9 @@ class FilterCollection:
                 must have the form:
                     {<filter_code1> : {"transmission": <transmission_array>}}.
                 For generic filters new_lam must be provided.
+            filters (list, Filter)
+                A list of existing `Filter` objects to be added to the
+                collection.
             path (string)
                 A filepath defining the HDF5 file from which to load the
                 FilterCollection.
@@ -183,11 +187,13 @@ class FilterCollection:
 
             # Let's make the filters
             if filter_codes is not None:
-                self._make_svo_collection(filter_codes)
+                self._include_svo_filters(filter_codes)
             if tophat_dict is not None:
-                self._make_top_hat_collection(tophat_dict)
+                self._include_top_hat_filters(tophat_dict)
             if generic_dict is not None:
-                self._make_generic_collection(generic_dict)
+                self._include_generic_filters(generic_dict)
+            if filters is not None:
+                self._include_synthesizer_filters(filters)
 
             # How many filters are there?
             self.nfilters = len(self.filter_codes)
@@ -301,9 +307,9 @@ class FilterCollection:
 
         hdf.close()
 
-    def _make_svo_collection(self, filter_codes):
+    def _include_svo_filters(self, filter_codes):
         """
-        Populate the FilterCollection with filters from SVO.
+        Populate the `FilterCollection` with filters from SVO.
 
         Args:
             filter_codes (list, string)
@@ -320,9 +326,9 @@ class FilterCollection:
             self.filters[_filter.filter_code] = _filter
             self.filter_codes.append(_filter.filter_code)
 
-    def _make_top_hat_collection(self, tophat_dict):
+    def _include_top_hat_filters(self, tophat_dict):
         """
-        Populate the FilterCollection with user defined top hat filters.
+        Populate the `FilterCollection` with user defined top-hat filters.
 
         Args:
             tophat_dict (dict)
@@ -371,9 +377,9 @@ class FilterCollection:
             self.filters[_filter.filter_code] = _filter
             self.filter_codes.append(_filter.filter_code)
 
-    def _make_generic_collection(self, generic_dict):
+    def _include_generic_filters(self, generic_dict):
         """
-        Populate the FilterCollection with user defined filters.
+        Populate the `FilterCollection` with user defined filters.
 
         Args:
             generic_dict (dict)
@@ -392,6 +398,23 @@ class FilterCollection:
             # Instantiate the filter
             _filter = Filter(key, transmission=t, new_lam=self.lam)
 
+            # Store the filter and its code
+            self.filters[_filter.filter_code] = _filter
+            self.filter_codes.append(_filter.filter_code)
+
+    def _include_synthesizer_filters(self, filters):
+        """
+        Populate the `FilterCollection` with a list of individual
+        `Filter` objects.
+
+        Args:
+            filter_codes (list, string)
+                A list of SVO filter codes, used to retrieve filter data from
+                the database.
+        """
+
+        # Loop over the given filter codes
+        for _filter in filters:
             # Store the filter and its code
             self.filters[_filter.filter_code] = _filter
             self.filter_codes.append(_filter.filter_code)
@@ -430,6 +453,16 @@ class FilterCollection:
 
         # Update the number of filters we have
         self.nfilters = len(self.filter_codes)
+
+        # Now resample the filters onto the filter collection's wavelength
+        # array,
+        # NOTE: If the new filter extends beyond the filter collection's
+        # wavlength array a warning is given and that filter curve will
+        # truncated at the limits. This is because we can't have the
+        # filter collection's wavelength array modified, if that were
+        # to happen it could become inconsistent with Sed wavelength arrays
+        # and photometry would be impossible.
+        self.resample_filters(new_lam=self.lam)
 
         return self
 
@@ -598,6 +631,9 @@ class FilterCollection:
         self.lam = new_lam
 
         # Loop over filters unifying them onto this wavelength array
+        # NOTE: Filters already on self.lam will be uneffected but doing a
+        # np.all condition to check for matches and skip them is more expensive
+        # than just doing the interpolation for all filters
         for fcode in self.filters:
             f = self.filters[fcode]
             f.t = f._interpolate_wavelength(self.lam)
@@ -1165,6 +1201,22 @@ class Filter:
         # If we've been handed a wavelength array we must overwrite the
         # current one
         if new_lam is not None:
+            # Warn the user if we're about to truncate the existing wavelength
+            # array
+            truncated = False
+            if new_lam.min() > self.lam.min():
+                truncated = True
+            if new_lam.max() < self.lam.max():
+                truncated = True
+            if truncated:
+                print(
+                    f"Warning: {self.filter_code} is being truncated "
+                    "(old_lam_bounds = "
+                    f"({self.lam.min():.2e}, {self.lam.max():.2e}), "
+                    "new_lam_bounds = "
+                    f"({new_lam.min():.2e}, {new_lam.max():.2e}))"
+                )
+
             self.lam = new_lam
 
         # Perform interpolation
