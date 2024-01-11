@@ -309,7 +309,7 @@ class FilterCollection:
 
     def _include_svo_filters(self, filter_codes):
         """
-        Populate the FilterCollection with filters from SVO.
+        Populate the `FilterCollection` with filters from SVO.
 
         Args:
             filter_codes (list, string)
@@ -328,7 +328,7 @@ class FilterCollection:
 
     def _include_top_hat_filters(self, tophat_dict):
         """
-        Populate the FilterCollection with user defined top hat filters.
+        Populate the `FilterCollection` with user defined top-hat filters.
 
         Args:
             tophat_dict (dict)
@@ -379,7 +379,7 @@ class FilterCollection:
 
     def _include_generic_filters(self, generic_dict):
         """
-        Populate the FilterCollection with user defined filters.
+        Populate the `FilterCollection` with user defined filters.
 
         Args:
             generic_dict (dict)
@@ -404,7 +404,8 @@ class FilterCollection:
 
     def _include_synthesizer_filters(self, filters):
         """
-        Populate the FilterCollection with filters from SVO.
+        Populate the `FilterCollection` with a list of individual
+        `Filter` objects.
 
         Args:
             filter_codes (list, string)
