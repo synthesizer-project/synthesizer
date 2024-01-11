@@ -354,7 +354,7 @@ class DepletionPatterns:
         (X/H)_{dust} = (1-D_{x})\times (X/H)_{total}
     """
 
-    available_patterns = ['Jenkins2009']
+    available_patterns = ['Jenkins2009', 'CloudyClassic', 'Gutkin2016']
 
     class Jenkins2009:
 
@@ -552,7 +552,7 @@ class Abundances(ElementDefinitions):
             functions to calculate them for the specified metallicity. Optional
             initialisation argument. Defaults to None.
         solar (object)
-            Solar abundance pattern object. Optional initialisation argument.
+            Solar abundance pattern. Optional initialisation argument.
             Defaults to Asplund (2009) pattern.
         depletion (dict, float)
             The depletion pattern to use. Should not be provided with
@@ -607,14 +607,14 @@ class Abundances(ElementDefinitions):
             abundances (dict, float/str)
                 A dictionary containing the abundances for specific elements or
                 functions to calculate them for the specified metallicity.
-            solar (object)
-                Solar abundance pattern object.
+            solar (class or str)
+                Solar abundance pattern object or str defining the class.
             depletion (dict, float)
                 The depletion pattern to use. Should not be provided with
                 depletion_model.
-            depletion_model (object)
-                The depletion model object. Should not be provided with
-                depletion.
+            depletion_model (class or str)
+                The depletion model class or string defining the class. 
+                Should not be provided with depletion.
             depletion_scale (float)
                 The depletion scale factor. Sometimes this is linear, but for
                 some models (e.g. Jenkins (2009)) it's more complex.
@@ -650,6 +650,15 @@ class Abundances(ElementDefinitions):
             / self.hydrogen_mass_fraction
             / self.A["He"]
         )
+
+        # If depletion model is provided as a string use this to extract the
+        # class.
+        if isinstance(solar, str):
+            if solar in SolarAbundances.available_patterns:
+                self.solar = getattr(SolarAbundances, solar)
+            else:
+                raise exceptions.UnrecognisedOption("""Solar abundance pattern
+                not recognised!""")
 
         # Scale elemental abundances from solar abundances based on given
         # metallicity
@@ -768,6 +777,15 @@ class Abundances(ElementDefinitions):
                 The depletion scale factor. Sometimes this is linear, but for
                 some models (e.g. Jenkins (2009)) it's more complex.
         """
+
+        # If depletion model is provided as a string use this to extract the
+        # class.
+        if isinstance(depletion_model, str):
+            if depletion_model in DepletionPatterns.available_patterns:
+                depletion_model = getattr(DepletionPatterns, depletion_model)
+            else:
+                raise exceptions.UnrecognisedOption("""Depletion model not 
+                recognised!""")
 
         # Raise exception if both a depletion pattern and depletion_model is
         # provided.
