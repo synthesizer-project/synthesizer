@@ -630,6 +630,9 @@ class FilterCollection:
         self.lam = new_lam
 
         # Loop over filters unifying them onto this wavelength array
+        # NOTE: Filters already on self.lam will be uneffected but doing a
+        # np.all condition to check for matches and skip them is more expensive
+        # than just doing the interpolation for all filters
         for fcode in self.filters:
             f = self.filters[fcode]
             f.t = f._interpolate_wavelength(self.lam)
