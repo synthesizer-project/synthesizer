@@ -587,7 +587,7 @@ class Abundances(ElementDefinitions):
 
     def __init__(
         self,
-        metallicity=SolarAbundances.Asplund2009.metallicity,
+        metallicity=None,
         alpha=0.0,
         abundances=None,
         solar=SolarAbundances.Asplund2009,
@@ -630,6 +630,21 @@ class Abundances(ElementDefinitions):
         self.depletion_model = depletion_model
         self.depletion_scale = depletion_scale
 
+        # If depletion model is provided as a string use this to extract the
+        # class.
+        if isinstance(solar, str):
+            if solar in SolarAbundances.available_patterns:
+                self.solar = getattr(SolarAbundances, solar)
+            else:
+                raise exceptions.UnrecognisedOption("""Solar abundance pattern
+                not recognised!""")
+
+        # If a metallicity is not provided use the metallicity assumed by the 
+        # Solar abundance pattern.
+        if self.metallicity is None:
+            self.metallicity = self.solar.metallicity
+
+
         # Set helium mass fraction following Bressan et al. (2012)
         # 10.1111/j.1365-2966.2012.21948.x
         # https://ui.adsabs.harvard.edu/abs/2012MNRAS.427..127B/abstract
@@ -650,15 +665,6 @@ class Abundances(ElementDefinitions):
             / self.hydrogen_mass_fraction
             / self.A["He"]
         )
-
-        # If depletion model is provided as a string use this to extract the
-        # class.
-        if isinstance(solar, str):
-            if solar in SolarAbundances.available_patterns:
-                self.solar = getattr(SolarAbundances, solar)
-            else:
-                raise exceptions.UnrecognisedOption("""Solar abundance pattern
-                not recognised!""")
 
         # Scale elemental abundances from solar abundances based on given
         # metallicity
@@ -719,9 +725,9 @@ class Abundances(ElementDefinitions):
         # and so (by rearranging) the scaling factor is:
         scaling = (
             mass_in_unscaled_metals
-            - metallicity * mass_in_unscaled_metals
-            - metallicity * mass_in_non_metals
-        ) / (mass_in_scaled_metals * (metallicity - 1))
+            - self.metallicity * mass_in_unscaled_metals
+            - self.metallicity * mass_in_non_metals
+        ) / (mass_in_scaled_metals * (self.metallicity - 1))
 
         # now apply this scaling
         for i in scaled_metals:
