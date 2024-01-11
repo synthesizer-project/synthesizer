@@ -13,7 +13,6 @@ class ShapeCommands:
 
     """
     A class for holding different cloudy shape commands
-
     """
 
     def table_sed(model_name, lam, lnu, output_dir="./"):
@@ -175,18 +174,102 @@ def create_cloudy_input(
     # add spectral shape commands
     cinput += shape_commands
 
-    # Define the chemical composition
-    for ele in ["He"] + abundances.metals:
-        cinput.append(
-            (
-                f"element abundance {abundances.name[ele]} "
-                f"{abundances.gas[ele]}\n"
+    # The original method of handling depletion and grain
+    if params["depletion_model"] in ["ClassicCloudy", "Gutkin2016"]:
+        # Define the chemical composition, here we use the depleted (gas-phase)
+        # abundances and set "no grains".
+        for ele in ["He"] + abundances.metals:
+            cinput.append(
+                (
+                    f"element abundance {abundances.name[ele]} "
+                    f"{abundances.gas[ele]} no grains\n"
+                )
             )
-        )
+
+        """
+        add graphite and silicate grains
+
+        This old version does not actually conserve mass
+        as the commands `abundances` and `grains` do not
+        really talk with each other
+        """
+        # # graphite, scale by total C abundance relative to ISM
+        # scale = 10**a_nodep['C']/2.784000e-04
+        # cinput.append(f'grains Orion graphite {scale}'+'\n')
+        # # silicate, scale by total Si abundance relative to ISM
+        # # NOTE: silicates also rely on other elements.
+        # scale = 10**a_nodep['Si']/3.280000e-05
+        # cinput.append(f'grains Orion silicate {scale}'+'\n')
+
+        """ specifies graphitic and silicate grains with a size
+        distribution and abundance appropriate for those along
+        the line of sight to the Trapezium stars in Orion. The
+        Orion size distribution is deficient in small particles
+        and so produces the relatively grey extinction observed
+        in Orion (Baldwin et al., 1991). One problem with the
+        grains approach is metals/element abundances do not talk
+        to the grains command and hence there is issues with mass
+        conservation (see cloudy documentation). To alleviate
+        this one needs to make the orion grain abundances
+        consistent with the depletion values. Assume 1 per cent of
+        C is in PAH's.
+
+        PAHs appear to exist mainly at the interface between the
+        H+ region and the molecular clouds. Apparently PAHs are
+        destroyed in ionized gas (Sellgren et al., 1990, AGN3
+        section 8.5) by ionizing photons and by collisions with
+        ions (mainly H+ ) and may be depleted into larger grains
+        in molecular regions. Also assume the carbon fraction of
+        PAHs from Abel+2008
+        (https://iopscience.iop.org/article/10.1086/591505)
+        assuming 1 percent of Carbon in PAHs. The factors in the
+        denominators are the abundances of the carbon, silicon and
+        PAH fractions when setting a value of 1 (fiducial abundance)
+        for the orion and PAH grains.
+
+        Another way is to scale the abundance as a function of the
+        metallicity using the Z_PAH vs Z_gas relation from
+        Galliano+2008
+        (https://iopscience.iop.org/article/10.1086/523621,
+        y = 4.17*Z_gas_sol - 7.085),
+        which will again introduce issues on mass conservation.
+        """
+
+        # If grain physics are required, add this self-consistently
+        if (abundances.dust_to_metal_ratio > 0) & params["grains"]:
+            delta_C = 10**abundances.total["C"] - 10**abundances.gas["C"]
+            delta_PAH = 0.01 * (10 ** abundances.total["C"])
+            delta_graphite = delta_C - delta_PAH
+            delta_Si = 10**abundances.total["Si"] - 10**abundances.gas["Si"]
+            orion_C_abund = -3.6259
+            orion_Si_abund = -4.5547
+            PAH_abund = -4.446
+            f_graphite = delta_graphite / (10 ** (orion_C_abund))
+            f_Si = delta_Si / (10 ** (orion_Si_abund))
+            f_pah = delta_PAH / (10 ** (PAH_abund))
+            command = (
+                f"grains Orion graphite {f_graphite} "
+                f"\ngrains Orion silicate {f_Si} \ngrains "
+                f"PAH {f_pah}"
+            )
+            cinput.append(command + "\n")
+        else:
+            f_graphite, f_Si, f_pah = 0, 0, 0
 
     # Jenkins 2009 depletion model as implemented by cloudy.
     # See 2023 release paper section 5
-    if params["depletion_model"] == 'Jenkins2009':
+    elif params["depletion_model"] == 'Jenkins2009':
+
+        # Define the chemical composition, because Jenkins2009 applies
+        # depletion as a cloudy command we use total abundances and there
+        # is no need to use the "no grains" command.
+        for ele in ["He"] + abundances.metals:
+            cinput.append(
+                (
+                    f"element abundance {abundances.name[ele]} "
+                    f"{abundances.total[ele]}\n"
+                )
+            )
 
         if params["fstar"] == 0.5:
             cinput.append("metals deplete Jenkins 2009")
@@ -218,24 +301,22 @@ def create_cloudy_input(
                 ratio = dust_mass_fraction / default_dust_mass_fraction
                 cinput.append(f"grains {ratio}")
 
-    U = params["ionisation_parameter"]
-    log10U = np.log10(U)
+    ionisation_parameter = params["ionisation_parameter"]
+    log10ionisation_parameter = np.log10(ionisation_parameter)
 
     # plane parallel geometry
     if params["geometry"] == "planeparallel":
-        cinput.append(f"ionization parameter = {log10U:.3f}\n")
+        cinput.append(
+            f"ionization parameter = {log10ionisation_parameter:.3f}\n")
 
-        # NOTE: I don't think the below is needed.
-        # inner radius = 10^30 cm and thickness = 10^21.5 cm (==1 kpc) this is
-        # essentially plane parallel geometry
-
-        # cinput.append(f"radius 30.0 21.5\n")
-
+    # spherical geometry
     if params["geometry"] == "spherical":
         # in the spherical geometry case I think U is some average U, not U at
         # the inner face of the cloud.
-        log10Q = np.log10(calculate_Q_from_U(U, params["hydrogen_density"]))
-        cinput.append(f"Q(H) = {log10Q}\n")
+        log10ionising_luminosity = np.log10(calculate_Q_from_U(
+            log10ionisation_parameter,
+            params["hydrogen_density"]))
+        cinput.append(f"Q(H) = {log10ionising_luminosity}\n")
         cinput.append(f'radius {np.log10(params["radius"])} log parsecs\n')
         cinput.append("sphere\n")
 
