@@ -18,84 +18,11 @@ import numpy as np
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import synthesizer.exceptions as exceptions
-
-
-class ScalingFunctions:
-
-    """
-    This is a class holds scaling functions for individual elements. In each
-    case the function returns the logarthimic abundance relative to Hydrogen
-    for a given metallicity.
-
-    Example:
-
-    ScalingFunctions.N.Dopita2006(0.016)
-
-    or
-
-    element_functions = getattr(ScalingFunctions, 'N')
-    scaling_function = getattr(element_functions, 'Dopita2006')
-    scaling_function(0.016)
-
-    """
-
-    available_scalings = ['Dopita2006']
-
-    class Dopita2006:
-
-        """Scaling functions for Nitrogen."""
-
-        ads = "https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract"
-        doi = "10.1086/508261"
-        available_elements = ['N', 'C']
-
-        def N(metallicity):
-            """
-
-            Args:
-                metallicity (float)
-                    The metallicity (mass fraction in metals)
-
-            Returns:
-                abundance (float)
-                    The logarithmic abundance relative to Hydrogen.
-
-            """
-
-            # the metallicity scaled to the Dopita (2006) value
-            dopita_solar_metallicity = 0.016
-            scaled_metallicity = metallicity / dopita_solar_metallicity
-
-            abundance = np.log10(
-                1.1e-5 * scaled_metallicity
-                + 4.9e-5 * (scaled_metallicity) ** 2
-            )
-
-            return abundance
-
-        def C(metallicity):
-            """
-            Scaling functions for Carbon.
-
-            Args:
-                metallicity (float)
-                    The metallicity (mass fraction in metals)
-
-            Returns:
-                abundance (float)
-                    The logarithmic abundance relative to Hydrogen.
-
-            """
-
-            # the metallicity scaled to the Dopita (2006) value
-            dopita_solar_metallicity = 0.016
-            scaled_metallicity = metallicity / dopita_solar_metallicity
-
-            abundance = np.log10(
-                6e-5 * scaled_metallicity + 2e-4 * (scaled_metallicity) ** 2
-            )
-
-            return abundance
+from synthesizer.abundances import (
+    solar_abundance_patterns,
+    depletion_models,
+    abundance_scalings,
+)
 
 
 class ElementDefinitions:
@@ -236,302 +163,6 @@ class ElementDefinitions:
     A["Zn"] = 65.38
 
 
-class SolarAbundances:
-
-    """
-    A class containing various Solar abundance patterns.
-    """
-
-    available_patterns = ['Asplund2009', 'Gutkin2016']
-
-    class Asplund2009:
-
-        """
-        The Solar abundance pattern used by Asplund (2009).
-        """
-
-        # meta information
-        ads = """https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/
-            abstract"""
-        doi = '10.1146/annurev.astro.46.060407.145222'
-        arxiv = 'arXiv:0909.0948'
-        bibcode = '2009ARA&A..47..481A'
-
-        # total metallicity
-        metallicity = 0.0134
-
-        # logarthmic abundances, i.e. log10(N_element/N_H)
-        abundance = {
-            "H": 0.0,
-            "He": -1.07,
-            "Li": -10.95,
-            "Be": -10.62,
-            "B": -9.3,
-            "C": -3.57,
-            "N": -4.17,
-            "O": -3.31,
-            "F": -7.44,
-            "Ne": -4.07,
-            "Na": -5.07,
-            "Mg": -4.40,
-            "Al": -5.55,
-            "Si": -4.49,
-            "P": -6.59,
-            "S": -4.88,
-            "Cl": -6.5,
-            "Ar": -5.60,
-            "K": -6.97,
-            "Ca": -5.66,
-            "Sc": -8.85,
-            "Ti": -7.05,
-            "V": -8.07,
-            "Cr": -6.36,
-            "Mn": -6.57,
-            "Fe": -4.50,
-            "Co": -7.01,
-            "Ni": -5.78,
-            "Cu": -7.81,
-            "Zn": -7.44,
-        }
-
-    class Gutkin2016:
-
-        """
-        The Solar abundance pattern used by Gutkin (2016).
-        """
-
-        # meta information
-        ads = """https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/
-        abstract"""
-        doi = '10.1093/mnras/stw1716'
-        arxiv = 'arXiv:1607.06086'
-        bibcode = '2016MNRAS.462.1757G'
-
-        # total metallicity
-        metallicity = 0.01524
-
-        # logarthmic abundances, i.e. log10(N_element/N_H)
-        abundance = {
-            "H": 0.0,
-            "He": -1.01,
-            "Li": -10.99,
-            "Be": -10.63,
-            "B": -9.47,
-            "C": -3.53,
-            "N": -4.32,
-            "O": -3.17,
-            "F": -7.44,
-            "Ne": -4.01,
-            "Na": -5.70,
-            "Mg": -4.45,
-            "Al": -5.56,
-            "Si": -4.48,
-            "P": -6.57,
-            "S": -4.87,
-            "Cl": -6.53,
-            "Ar": -5.63,
-            "K": -6.92,
-            "Ca": -5.67,
-            "Sc": -8.86,
-            "Ti": -7.01,
-            "V": -8.03,
-            "Cr": -6.36,
-            "Mn": -6.64,
-            "Fe": -4.51,
-            "Co": -7.11,
-            "Ni": -5.78,
-            "Cu": -7.82,
-            "Zn": -7.43,
-        }
-
-
-class DepletionPatterns:
-
-    """
-    Parent class containing various depletion models. Depletion models relate
-    The gas phase depleted abundances to the total abundances, i.e.:
-        (X/H)_{gas,dep} = D_{x}\times (X/H)_{total}
-        (X/H)_{dust} = (1-D_{x})\times (X/H)_{total}
-    """
-
-    available_patterns = ['Jenkins2009', 'CloudyClassic', 'Gutkin2016']
-
-    class Jenkins2009:
-
-        """
-        Implemention of the Jenkins (2009) depletion pattern that is built into
-        cloudy23.
-
-        In this model the depletion (D_x) is written as:
-            D_x = 10**(B_x +A_x (F_* − z_x ))
-        A_x, B_x, and z_X are the fitted parameters for each element while
-        f_* (fstar) is the scaling parameter.
-        """
-
-        # (a_x, b_x, z_x)
-        #
-        parameters = {
-            # "H": 1.0,
-            # "He": 1.0,
-            "Li": (-1.136, -0.246, 0.000),
-            # "Be": 0.6,
-            "B": (-0.101, -0.193, 0.803),
-            "C": (-0.10, -0.19, 0.80),
-            "N": (0.00, -0.11, 0.55),
-            "O": (-0.23, -0.15, 0.60),
-            # "F": 0.3,
-            # "Ne": 1.0,
-            "Na": (2.071, -3.059, 0.000),
-            "Mg": (-1.00, -0.80, 0.53),
-            "Al": (-3.330, 0.179, 0.000),
-            "Si": (-1.14, -0.57, 0.31),
-            "P": (-0.95, -0.17, 0.49),
-            "S": (-0.88, -0.09, 0.29),
-            "Cl": (-1.24, -0.31, 0.61),
-            "Ar": (-0.516, -0.133, 0.000),
-            "K": (-0.133, -0.859, 0.000),
-            "Ca": (-1.822, -1.768, 0.000),
-            # "Sc": 0.005,
-            "Ti": (-2.05, -1.96, 0.43),
-            # "V": 0.006,
-            "Cr": (-1.45, -1.51, 0.47),
-            "Mn": (-0.86, -1.35, 0.52),
-            "Fe": (-1.29, -1.51, 0.44),
-            # "Co": 0.01,
-            "Ni": (-1.49, -1.83, 0.60),
-            "Cu": (-0.71, -1.10, 0.71),
-            "Zn": (-0.61, -0.28, 0.56),
-        }
-
-        def __init__(self, fstar=0.5):
-
-            """
-            Initialise the class.
-
-            Args:
-                fstar (float)
-                    The Jenkins (2009) scaling parameter.
-            """
-
-            self.depletion = {}
-            for element, parameters in self.parameters.items():
-                # unpack parameters. Despite convention I've chosen to use
-                a_x, b_x, z_x = parameters
-                # calculate depletion
-                self.depletion[element] = 10**(b_x + a_x * (fstar - z_x))
-
-    class CloudyClassic:
-
-        """
-        Implemention of the 'cloudy classic' depletion pattern that is built
-        into cloudy23.
-        """
-
-        depletion_ = {
-            "H": 1.0,
-            "He": 1.0,
-            "Li": 0.16,
-            "Be": 0.6,
-            "B": 0.13,
-            "C": 0.4,
-            "N": 1.0,
-            "O": 0.6,
-            "F": 0.3,
-            "Ne": 1.0,
-            "Na": 0.2,
-            "Mg": 0.2,
-            "Al": 0.01,
-            "Si": 0.03,
-            "P": 0.25,
-            "S": 1.0,
-            "Cl": 0.4,
-            "Ar": 1.0,
-            "K": 0.3,
-            "Ca": 0.0001,
-            "Sc": 0.005,
-            "Ti": 0.008,
-            "V": 0.006,
-            "Cr": 0.006,
-            "Mn": 0.05,
-            "Fe": 0.01,
-            "Co": 0.01,
-            "Ni": 0.01,
-            "Cu": 0.1,
-            "Zn": 0.25,
-        }
-
-        def __init__(self, scale=1.0):
-
-            """
-            Args:
-                scale (float)
-                    Scale factor for the depletion.
-            """
-            self.depletion = {element: scale * depletion
-                              for element, depletion in
-                              self.depletion_.items()}
-
-    class Gutkin2016:
-
-        """
-        Depletion pattern created for Synthesizer 2024.
-
-        Gutkin+2016:
-            https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract
-
-        Note: in previous version we adjusted N ("N": 0.89) following:
-        Dopita+2013:
-            https://ui.adsabs.harvard.edu/abs/2013ApJS..208...10D/abstract
-        Dopita+2006:
-            https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract
-        """
-
-        # This is the inverse depletion
-        depletion_ = {
-            "H": 1.0,
-            "He": 1.0,
-            "Li": 0.16,
-            "Be": 0.6,
-            "B": 0.13,
-            "C": 0.5,
-            "N": 1.0,
-            "O": 0.7,
-            "F": 0.3,
-            "Ne": 1.0,
-            "Na": 0.25,
-            "Mg": 0.2,
-            "Al": 0.02,
-            "Si": 0.1,
-            "P": 0.25,
-            "S": 1.0,
-            "Cl": 0.5,
-            "Ar": 1.0,
-            "K": 0.3,
-            "Ca": 0.003,
-            "Sc": 0.005,
-            "Ti": 0.008,
-            "V": 0.006,
-            "Cr": 0.006,
-            "Mn": 0.05,
-            "Fe": 0.01,
-            "Co": 0.01,
-            "Ni": 0.04,
-            "Cu": 0.1,
-            "Zn": 0.25,
-        }
-
-        def __init__(self, scale=1.0):
-
-            """
-            Args:
-                scale (float)
-                    Scale factor for the depletion.
-            """
-            self.depletion = {element: scale * depletion
-                              for element, depletion in
-                              self.depletion_.items()}
-
-
 class Abundances(ElementDefinitions):
 
     """
@@ -590,7 +221,7 @@ class Abundances(ElementDefinitions):
         metallicity=None,
         alpha=0.0,
         abundances=None,
-        solar=SolarAbundances.Asplund2009,
+        solar=solar_abundance_patterns.Asplund2009,
         depletion=None,
         depletion_model=None,
         depletion_scale=None,
@@ -633,8 +264,8 @@ class Abundances(ElementDefinitions):
         # If depletion model is provided as a string use this to extract the
         # class.
         if isinstance(solar, str):
-            if solar in SolarAbundances.available_patterns:
-                self.solar = getattr(SolarAbundances, solar)
+            if solar in solar_abundance_patterns.available_patterns:
+                self.solar = getattr(solar_abundance_patterns, solar)
             else:
                 raise exceptions.UnrecognisedOption("""Solar abundance pattern
                 not recognised!""")
@@ -701,7 +332,7 @@ class Abundances(ElementDefinitions):
                 # calculate the abundance from the metallicity.
                 elif isinstance(value, str):
                     # get the class holding functions for this element
-                    study_functions = getattr(ScalingFunctions, value)
+                    study_functions = getattr(abundance_scalings, value)
 
                     # get the specific function request by value
                     scaling_function = getattr(study_functions, element)
@@ -786,8 +417,8 @@ class Abundances(ElementDefinitions):
         # If depletion model is provided as a string use this to extract the
         # class.
         if isinstance(depletion_model, str):
-            if depletion_model in DepletionPatterns.available_patterns:
-                depletion_model = getattr(DepletionPatterns, depletion_model)
+            if depletion_model in depletion_models.available_patterns:
+                depletion_model = getattr(depletion_models, depletion_model)
             else:
                 raise exceptions.UnrecognisedOption("""Depletion model not
                 recognised!""")
