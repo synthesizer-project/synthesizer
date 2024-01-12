@@ -1,3 +1,1 @@
-from synthesizer.abundances.abundances import (
-    Abundances
-)
+from synthesizer.abundances.abundance_patterns import Abundances
