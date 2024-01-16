@@ -8,7 +8,7 @@ Example usage:
 import numpy as np
 import h5py
 import re
-from unyt import c, h, um, erg, s, Hz, kb, unyt_array, unyt_quantity
+from unyt import c, h, um, erg, s, Hz, kb, mp, Msun, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 
@@ -109,6 +109,7 @@ def process_dl07_to_hdf5(grid_name='MW3.1', grid_loc='./',
     """
     Function to process the text files from dl07 to N-dimensional hdf5 grids
     for use in dust/emission.py
+    These are the updated 2014 files.
     Args:
         grid_name (str)
             Name of the hdf5 grid to create from input data
@@ -120,84 +121,109 @@ def process_dl07_to_hdf5(grid_name='MW3.1', grid_loc='./',
             Location of the input data file to process
     """
 
-    spec_names = ['emission']
+    spec_names = ['pdr', 'diffuse', 'fsil_pdr', 'fsil_diffuse']
 
     # Define the models parameters
-    suffix = np.array(['00', '10', '20', '30', '40', '50', '60'])
-    qpahs = np.array([0.0047, 0.0112, 0.0177, 0.0250, 0.0319, 0.0390,
-                      0.0458])
-    umins = np.array(['0.10', '0.15', '0.20', '0.30', '0.40', '0.50', '0.70',
-                      '0.80', '1.00', '1.20', '1.50', '2.00', '2.50', '3.00',
-                      '4.00', '5.00', '7.00', '8.00', '12.0', '15.0', '20.0',
-                      '25.0', '1e2', '3e2', '1e3', '3e3', '1e4', '3e4', '1e5',
-                      '3e5'])
-    umaxs = np.array(['1e2', '1e3', '1e4', '1e5', '1e6'])
+    suffix = np.array(['000', '010', '020', '030', '040', '050',
+                       '060', '070', '080', '090', '100'])
+    qpahs = 0.01 * np.array([0.47, 1.12, 1.77, 2.50, 3.19, 3.90, 4.58,
+                             5.26, 5.95, 6.63, 7.32])
+    # np.array([0.0047, 0.0112, 0.0177, 0.0250, 0.0319, 0.0390,
+    #                   0.0458])
+    alphas = np.arange(1.0, 3.1, 0.1)
+    umins = np.array(['0.100', '0.120', '0.150', '0.170', '0.200',
+                      '0.250', '0.300', '0.350', '0.400', '0.500',
+                      '0.600', '0.700', '0.800', '1.000', '1.200',
+                      '1.500', '1.700', '2.000', '2.500', '3.000',
+                      '3.500', '4.000', '5.000', '6.000', '7.000',
+                      '8.000', '10.00', '12.00', '15.00', '17.00',
+                      '20.00', '25.00', '30.00', '35.00', '40.00',
+                      '50.00'])
+    umaxs = np.array(['1e7'])
 
-    umins_umaxs = np.array([])
-    for ii, umin in enumerate(umins):
-        
-        umins_umaxs = np.append(umins_umaxs, F'{umin}_{umin}')
-        if float(umin)<1e2:
-            this_umaxs = umaxs[(umaxs.astype(float)>umin.astype(float))]
-            umins_umaxs = np.append(umins_umaxs, np.array([F'{umin}_{jj}' for jj in this_umaxs]))
-    
-    umins_umaxs = umins_umaxs.astype('S')
-    axes_shape = list([len(qpahs), len(umins_umaxs)])
+    axes_shape = list([len(qpahs), len(umins), len(alphas)])
     
     # Read from a file to get wavelength array and its shape
-    tmp = np.genfromtxt(F'{data_loc}/U0.10/U0.10_1e6_{data_name}_{suffix[0]}.txt',
-                        skip_header=61)
+    tmp = np.genfromtxt(F'{data_loc}/U0.100_0.100_{data_name}_{suffix[0]}/spec_1.0.dat',
+                        skip_header=71)
     lam = tmp[:,0][::-1]
     n_lam = len(lam)
     nu = c/(lam*um)
     nu = nu.to(Hz).value
+    msun_by_mp = (Msun/mp).value
 
     with h5py.File(F'{grid_loc}/{grid_name}.hdf5', 'w') as hf:
-        hf.attrs['axes'] = ['qpah', 'umin_umax']
+        hf.attrs['axes'] = ['qpah', 'umin', 'alpha']
         axes = hf.create_group('axes')
         axes['qpah'] = qpahs
         axes['qpah'].attrs['Description'] = "Fraction of dust mass in the \
                                              form of PAHs"
         axes['qpah'].attrs['Units'] = "dimensionless"
-        axes['umin_umax'] = umins_umaxs
-        axes['umin_umax'].attrs['Description'] = "Minimum and Maximum \
-                                        radiation field heating the dust"
-        axes['umin_umax'].attrs['Units'] = "dimensionless"
-        # axes['umin'] = umins
-        # axes['umin'].attrs['Description'] = "Radiation field heating majority \
-        #                                      of the dust"
-        # axes['umin'].attrs['Units'] = "dimensionless"
+        axes['umin'] = umins.astype(float)
+        axes['umin'].attrs['Description'] = "Radiation field heating majority \
+                                             of the dust or diffuse dust"
+        axes['umin'].attrs['Units'] = "dimensionless"
+        axes['alpha'] = alphas
+        axes['alpha'].attrs['Description'] = "Powerlaw slope dU/dM propto U^alpha"
+        axes['alpha'].attrs['Units'] = "dimensionless"
         # axes['umax'] = umaxs
         # axes['umax'].attrs['Description'] = "Maximum radiation field heating \
         #                                     the dust"
         # axes['umax'].attrs['Units'] = "dimensionless"
 
         spectra = hf.create_group('spectra')  # create a group holding the spectra in the grid file
-        spectra.attrs['spec_names'] = spec_names  # save list of spectra as attribute
-        for spec_name in spec_names:
-            spectra[spec_name] = np.zeros((*axes_shape, n_lam))
+        spectra.attrs['spec_names'] = spec_names  # save list of spectra as attribute        
+        spectra['pdr'] = np.zeros((*axes_shape, n_lam))
+        spectra['diffuse'] = np.zeros((len(qpahs), len(umins), n_lam))
+
+        spectra['pdr_fsil'] = np.zeros((*axes_shape, n_lam))
+        spectra['diffuse_fsil'] = np.zeros((len(qpahs), len(umins), n_lam))
 
         for ii, qpah in enumerate(qpahs):
-            qpah_spectra = np.zeros((len(umins_umaxs), n_lam))
-            for jj, umin_umax in enumerate(umins_umaxs):
-                    umin_umax = umin_umax.decode('utf-8')
-                    umin, umax = re.split('_', umin_umax)
+            diffuse_spectra = np.zeros((len(umins), n_lam))
+            pdr_spectra = np.zeros((len(umins), len(alphas), n_lam))
+            diffuse_fsil = np.zeros((len(umins), n_lam))
+            pdr_fsil = np.zeros((len(umins), len(alphas), n_lam))
+            for jj, umin in enumerate(umins):
                     
-                    with open(F'{data_loc}/U{umin}/U{umin_umax}_{data_name}_{suffix[ii]}.txt') as f:
+                    # diffuse dust spectrum
+                    fname=F'{data_loc}/U{umin}_{umin}_{data_name}_{suffix[ii]}/spec_1.0.dat'
+                    with open(F'{fname}') as f:
                         tmp = f.readlines()
                         skip_header=len(tmp)-1001 # Number of wavelength values
                     
-                    if skip_header>0:
-                        tmp = np.genfromtxt(F'{data_loc}/U{umin}/U{umin_umax}_{data_name}_{suffix[ii]}.txt',
+                    tmp = np.genfromtxt(F'{fname}',
+                        skip_header=skip_header)
+                    
+                    spec = tmp[:,1][::-1] * erg/s
+                    spec/=(nu*Hz)
+                    spec = spec.to(erg/s/Hz).value
+                    diffuse_spectra[jj]=spec * msun_by_mp # erg/s/Hz/Mdust
+
+                    fsil = tmp[:,4][::-1]/(tmp[:,3][::-1]+tmp[:,4][::-1])
+                    diffuse_fsil[jj]=fsil
+
+                    # pdr dust spectrum
+                    for kk, alpha in enumerate(alphas):
+                        fname=F'{data_loc}/U{umin}_{umaxs[0]}_{data_name}_{suffix[ii]}/spec_{np.round(alpha,2)}.dat'
+                        with open(F'{fname}') as f:
+                            tmp = f.readlines()
+                            skip_header=len(tmp)-1001 # Number of wavelength values
+                    
+                        tmp = np.genfromtxt(F'{fname}',
                             skip_header=skip_header)
                         
-                        tmp = tmp[:,1][::-1] * erg/s
-                        tmp/=(nu*Hz)
-                        tmp = tmp.to(erg/s/Hz).value
-                        qpah_spectra[jj]=tmp
-        
-            for spec_name in spec_names: 
-                spectra[spec_name][ii] = qpah_spectra
+                        spec = tmp[:,1][::-1] * erg/s
+                        spec/=(nu*Hz)
+                        spec = spec.to(erg/s/Hz).value
+                        pdr_spectra[jj,kk]=spec * msun_by_mp # erg/s/Hz/Mdust
+
+                        fsil = tmp[:,4][::-1]/(tmp[:,3][::-1]+tmp[:,4][::-1])
+                        pdr_fsil[jj,kk]=fsil
+             
+            spectra['pdr'][ii] = pdr_spectra
+            spectra['diffuse'][ii] = diffuse_spectra
+            spectra['pdr_fsil'][ii] = pdr_fsil
+            spectra['diffuse_fsil'][ii] = diffuse_fsil
 
         spectra['wavelength'] = lam * 1e4 # convert to Angstrom
-  
