@@ -81,7 +81,7 @@ class EmissionBase:
         sed._lnu /= sed.measure_bolometric_luminosity().value
 
         return sed
-    
+
 
 class Blackbody(EmissionBase):
     """
@@ -379,35 +379,35 @@ class IR_templates():
                 print(
                     "Gamma, Umin or alpha for DL07 model not provided, "
                     "using default values"
-                    )
+                        )
                 print(
                     "Computing required values using Magdis+2012 "
                     "stacking results"
-                    )
-            
-            self.u_avg = u_mean_magdis12((self.mdust/Msun).value,
-                                         (self.ldust/Lsun).value, self.p0)
+                        )
+
+            self.u_avg = u_mean_magdis12((self.mdust / Msun).value,
+                                         (self.ldust / Lsun).value, self.p0)
 
             if self.gamma is None:
                 if self.verbose:
                     print("Gamma not provided")
                     print("Choosing default gamma value as 5%")
-                
+
                 self.gamma = 0.05
-            
+
             func = partial(solve_umin, umax=umax, u_avg=self.u_avg,
                            gamma=self.gamma)
             self.umin = fsolve(func, [0.1])
 
-        qpah_id = (qpahs == qpahs[np.argmin(np.abs(qpahs-self.qpah))])
-        umin_id = (umins == umins[np.argmin(np.abs(umins-self.umin))])
-        alpha_id = (alphas == alphas[np.argmin(np.abs(alphas-self.alpha))])
+        qpah_id = (qpahs == qpahs[np.argmin(np.abs(qpahs - self.qpah))])
+        umin_id = (umins == umins[np.argmin(np.abs(umins - self.umin))])
+        alpha_id = (alphas == alphas[np.argmin(np.abs(alphas - self.alpha))])
 
         if np.sum(umin_id) == 0:
             raise exceptions.UnimplementedFunctionality.GridError(
                 "No valid model templates found for the given values"
             )
-        
+
         self.qpah_id = qpah_id
         self.umin_id = umin_id
         self.alpha_id = alpha_id
@@ -422,7 +422,7 @@ class IR_templates():
                     An array of wavelengths (expected in AA, global unit)
 
             dust_components (boolean)
-                    If True, returns the constituent dust components 
+                    If True, returns the constituent dust components
 
         """
 
@@ -445,14 +445,14 @@ class IR_templates():
         lnu_old = (
             (1. - self.gamma) *
             self.grid.spectra['diffuse'][self.qpah_id, self.umin_id][0]
-            * (self.mdust/Msun).value
+            * (self.mdust / Msun).value
         )
 
         lnu_young = (
             self.gamma *
             self.grid.spectra['pdr'][self.qpah_id, self.umin_id,
                                      self.alpha_id][0]
-            * (self.mdust/Msun).value
+            * (self.mdust / Msun).value
         )
 
         sed_old = Sed(lam=lam, lnu=lnu_old * (erg / s / Hz))
@@ -484,10 +484,10 @@ def u_mean(umin, umax, gamma):
     For fixed alpha=2.0
     """
 
-    return ((1-gamma) * umin 
-            + gamma * np.log(umax/umin)
+    return ((1. - gamma) * umin
+            + gamma * np.log(umax / umin)
             / (umin**(-1) - umax**(-1)))
-   
+
 
 def solve_umin(umin, umax, u_avg, gamma):
     """

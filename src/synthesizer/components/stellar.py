@@ -810,27 +810,29 @@ class StarsComponent:
                 )
 
                 if hasattr(dust_emission_model, 'template'):
-                    print ("Using IR template models for dust emission")
+                    print("Using IR template models for dust emission")
                     if dust_emission_model.ldust is None:
                         dust_emission_model.ldust = (
                             dust_bolometric_luminosity.to(Lsun)
                         )
-                    
+
                     self.spectra['dust'] = dust_emission_model.get_spectra(
                         grid.lam)
-                   
+
                 else:
                     print(
                         "Using dust temperature based models for "
                         "dust emission"
                     )
-                    # Get normalised dust spectrum, this is an synthesizer.sed.Sed
-                    # object.
+                    # Get normalised dust spectrum, this is an synthesizer.sed.
+                    # Sed object.
                     self.spectra['dust'] = dust_emission_model.get_spectra(
                         grid.lam)
 
                     # scale the dust spectra by the dust_bolometric_luminosity
-                    self.spectra['dust']._lnu *= dust_bolometric_luminosity.value
+                    self.spectra['dust']._lnu *= (
+                        dust_bolometric_luminosity.value
+                    )
 
                 # define total as the sum of emergent and dust
                 self.spectra["total"] = (
@@ -973,7 +975,7 @@ class StarsComponent:
                     # Scale the dust spectra by the dust_bolometric_luminosity.
                     self.spectra['young_dust_ISM']._lnu *= (
                         dust_bolometric_luminosity.value)
-                
+
                     # Combine both dust components for young stars
                     self.spectra['young_dust'] = (
                         self.spectra["young_dust_BC"] +
@@ -988,7 +990,7 @@ class StarsComponent:
                 if hasattr(dust_emission_model, 'template'):
                     ldust += dust_bolometric_luminosity.to(Lsun)
                     dust_emission_model.ldust = ldust
-                    
+
                     # making dust components from IR templates
                     # Better classified as diffuse dust and
                     # pdr dust
@@ -1004,7 +1006,7 @@ class StarsComponent:
                     # Scale the dust spectra by the dust_bolometric_luminosity.
                     self.spectra['old_dust']._lnu *= (
                         dust_bolometric_luminosity.value)
-                
+
                 # Combine both dust components for young stars
                 self.spectra['young_total'] = (
                     self.spectra['young_emergent'] +
@@ -1014,13 +1016,13 @@ class StarsComponent:
                 self.spectra['old_total'] = (
                     self.spectra['old_emergent'] +
                     self.spectra['old_dust'])
-                
+
                 self.spectra['dust'] = (self.spectra['young_dust']
                                         + self.spectra['old_dust'])
-                
+
                 self.spectra['total'] = (self.spectra['young_total']
                                          + self.spectra['old_total'])
-                    
+
         # Return total spectra if a dust_emission_model is provided, otherwise
         # return the emergent spectra.
         if dust_emission_model is not None:
