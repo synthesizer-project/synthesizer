@@ -353,7 +353,7 @@ class IR_templates():
         self.umin = umin
         self.alpha = alpha
         self.p0 = p0
-        self.verbose=verbose
+        self.verbose = verbose
 
     def dl07(self, grid):
         """
@@ -374,38 +374,38 @@ class IR_templates():
         # default Umax=1e7
         umax = 1e7
 
-        if (self.gamma==None) or (self.umin==None) or ((self.alpha==2.)):
+        if (self.gamma is None) or (self.umin is None) or ((self.alpha == 2.)):
             if self.verbose:
-                print (
+                print(
                     "Gamma, Umin or alpha for DL07 model not provided, "
                     "using default values"
                     )
-                print (
+                print(
                     "Computing required values using Magdis+2012 "
                     "stacking results"
                     )
             
-            self.u_avg = u_mean_magdis12((self.mdust/Msun).value, 
-                                    (self.ldust/Lsun).value, self.p0)
+            self.u_avg = u_mean_magdis12((self.mdust/Msun).value,
+                                         (self.ldust/Lsun).value, self.p0)
 
-            if self.gamma==None:
+            if self.gamma is None:
                 if self.verbose:
-                    print ("Gamma not provided")
+                    print("Gamma not provided")
                     print("Choosing default gamma value as 5%")
                 
-                self.gamma=0.05
+                self.gamma = 0.05
             
             func = partial(solve_umin, umax=umax, u_avg=self.u_avg,
-                            gamma=self.gamma)
-            self.umin = fsolve(func, [0.1])  
+                           gamma=self.gamma)
+            self.umin = fsolve(func, [0.1])
 
-        qpah_id = (qpahs==qpahs[np.argmin(np.abs(qpahs-self.qpah))])
-        umin_id = (umins==umins[np.argmin(np.abs(umins-self.umin))])
-        alpha_id = (alphas==alphas[np.argmin(np.abs(alphas-self.alpha))])
+        qpah_id = (qpahs == qpahs[np.argmin(np.abs(qpahs-self.qpah))])
+        umin_id = (umins == umins[np.argmin(np.abs(umins-self.umin))])
+        alpha_id = (alphas == alphas[np.argmin(np.abs(alphas-self.alpha))])
 
-        if np.sum(umin_id)==0:
+        if np.sum(umin_id) == 0:
             raise exceptions.UnimplementedFunctionality.GridError(
-            "No valid model templates found for the given values"
+                "No valid model templates found for the given values"
             )
         
         self.qpah_id = qpah_id
@@ -426,12 +426,12 @@ class IR_templates():
 
         """
 
-        if self.template=='DL07':
-            print ("Using the Draine & Li 2007 dust models")
+        if self.template == 'DL07':
+            print("Using the Draine & Li 2007 dust models")
             self.dl07(self.grid)
         else:
             raise exceptions.UnimplementedFunctionality(
-            F"{self.template} not a valid model!"
+                F"{self.template} not a valid model!"
             )
 
         if isinstance(_lam, (unyt_quantity, unyt_array)):
@@ -443,30 +443,31 @@ class IR_templates():
         # wavelength range
         self.grid.interp_spectra(new_lam=lam)
         lnu_old = (
-            (1.-self.gamma) *
+            (1. - self.gamma) *
             self.grid.spectra['diffuse'][self.qpah_id, self.umin_id][0]
             * (self.mdust/Msun).value
         )
 
         lnu_young = (
             self.gamma *
-            self.grid.spectra['pdr'][self.qpah_id, self.umin_id, self.alpha_id][0]
+            self.grid.spectra['pdr'][self.qpah_id, self.umin_id,
+                                     self.alpha_id][0]
             * (self.mdust/Msun).value
         )
 
         sed_old = Sed(lam=lam, lnu=lnu_old * (erg / s / Hz))
         sed_young = Sed(lam=lam, lnu=lnu_young * (erg / s / Hz))
-                  
-        
+
         # Replace NaNs with zero for wavelength regimes
         # with no values given
-        sed_old._lnu[np.isnan(sed_old._lnu)]=0.
-        sed_young._lnu[np.isnan(sed_young._lnu)]=0.
+        sed_old._lnu[np.isnan(sed_old._lnu)] = 0.
+        sed_young._lnu[np.isnan(sed_young._lnu)] = 0.
 
-        if dust_components:        
+        if dust_components:
             return sed_old, sed_young
         else:
             return sed_old + sed_young
+
 
 def u_mean_magdis12(mdust, ldust, p0):
     """
@@ -477,6 +478,7 @@ def u_mean_magdis12(mdust, ldust, p0):
 
     return ldust / (p0 * mdust)
 
+
 def u_mean(umin, umax, gamma):
     """
     For fixed alpha=2.0
@@ -486,6 +488,7 @@ def u_mean(umin, umax, gamma):
             + gamma * np.log(umax/umin)
             / (umin**(-1) - umax**(-1)))
    
+
 def solve_umin(umin, umax, u_avg, gamma):
     """
     For fixed alpha=2.0
