@@ -7,7 +7,6 @@ Example usage:
 """
 import numpy as np
 import h5py
-import re
 from unyt import c, h, um, erg, s, Hz, kb, mp, Msun, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
@@ -144,9 +143,10 @@ def process_dl07_to_hdf5(grid_name='MW3.1', grid_loc='./',
     axes_shape = list([len(qpahs), len(umins), len(alphas)])
     
     # Read from a file to get wavelength array and its shape
-    tmp = np.genfromtxt(F'{data_loc}/U0.100_0.100_{data_name}_{suffix[0]}/spec_1.0.dat',
+    test_file = F'{data_loc}/U0.100_0.100_{data_name}_{suffix[0]}/spec_1.0.dat'
+    tmp = np.genfromtxt(test_file,
                         skip_header=71)
-    lam = tmp[:,0][::-1]
+    lam = tmp[:, 0][::-1]
     n_lam = len(lam)
     nu = c/(lam*um)
     nu = nu.to(Hz).value
@@ -171,8 +171,10 @@ def process_dl07_to_hdf5(grid_name='MW3.1', grid_loc='./',
         #                                     the dust"
         # axes['umax'].attrs['Units'] = "dimensionless"
 
-        spectra = hf.create_group('spectra')  # create a group holding the spectra in the grid file
-        spectra.attrs['spec_names'] = spec_names  # save list of spectra as attribute        
+        # create a group holding the spectra in the grid file
+        spectra = hf.create_group('spectra')
+        # save list of spectra as attribute
+        spectra.attrs['spec_names'] = spec_names
         spectra['pdr'] = np.zeros((*axes_shape, n_lam))
         spectra['diffuse'] = np.zeros((len(qpahs), len(umins), n_lam))
 
@@ -186,47 +188,48 @@ def process_dl07_to_hdf5(grid_name='MW3.1', grid_loc='./',
             pdr_fsil = np.zeros((len(umins), len(alphas), n_lam))
             for jj, umin in enumerate(umins):
                     
-                    # diffuse dust spectrum
-                    fname=F'{data_loc}/U{umin}_{umin}_{data_name}_{suffix[ii]}/spec_1.0.dat'
+                # diffuse dust spectrum
+                fname = F'{data_loc}/U{umin}_{umin}_{data_name}_{suffix[ii]}'
+                with open(F'{fname}/spec_1.0.dat') as f:
+                    tmp = f.readlines()
+                    # Number of wavelength values
+                    skip_header = len(tmp) - 1001
+
+                tmp = np.genfromtxt(F'{fname}', skip_header=skip_header)
+                
+                spec = tmp[:, 1][::-1] * erg/s
+                spec /= (nu*Hz)
+                spec = spec.to(erg/s/Hz).value
+                diffuse_spectra[jj] = spec * msun_by_mp  # erg/s/Hz/Mdust
+
+                fsil = tmp[:, 4][::-1]/(tmp[:, 3][::-1]+tmp[:, 4][::-1])
+                diffuse_fsil[jj] = fsil
+
+                # pdr dust spectrum
+                for kk, alpha in enumerate(alphas):
+                    fname = F'{data_loc}/U{umin}_{umaxs[0]}_{data_name}_' \
+                            + F'{suffix[ii]}/spec_{np.round(alpha,2)}.dat'
                     with open(F'{fname}') as f:
                         tmp = f.readlines()
-                        skip_header=len(tmp)-1001 # Number of wavelength values
+                        # Number of wavelength values
+                        skip_header = len(tmp) - 1001
+                
+                    tmp = np.genfromtxt(F'{fname}', skip_header=skip_header)
                     
-                    tmp = np.genfromtxt(F'{fname}',
-                        skip_header=skip_header)
-                    
-                    spec = tmp[:,1][::-1] * erg/s
-                    spec/=(nu*Hz)
+                    spec = tmp[:, 1][::-1] * erg/s
+                    spec /= (nu*Hz)
                     spec = spec.to(erg/s/Hz).value
-                    diffuse_spectra[jj]=spec * msun_by_mp # erg/s/Hz/Mdust
+                    pdr_spectra[jj, kk] = spec * msun_by_mp  # erg/s/Hz/Mdust
 
-                    fsil = tmp[:,4][::-1]/(tmp[:,3][::-1]+tmp[:,4][::-1])
-                    diffuse_fsil[jj]=fsil
-
-                    # pdr dust spectrum
-                    for kk, alpha in enumerate(alphas):
-                        fname=F'{data_loc}/U{umin}_{umaxs[0]}_{data_name}_{suffix[ii]}/spec_{np.round(alpha,2)}.dat'
-                        with open(F'{fname}') as f:
-                            tmp = f.readlines()
-                            skip_header=len(tmp)-1001 # Number of wavelength values
-                    
-                        tmp = np.genfromtxt(F'{fname}',
-                            skip_header=skip_header)
-                        
-                        spec = tmp[:,1][::-1] * erg/s
-                        spec/=(nu*Hz)
-                        spec = spec.to(erg/s/Hz).value
-                        pdr_spectra[jj,kk]=spec * msun_by_mp # erg/s/Hz/Mdust
-
-                        fsil = tmp[:,4][::-1]/(tmp[:,3][::-1]+tmp[:,4][::-1])
-                        pdr_fsil[jj,kk]=fsil
+                    fsil = tmp[:, 4][::-1]/(tmp[:, 3][::-1]+tmp[:, 4][::-1])
+                    pdr_fsil[jj, kk] = fsil
              
-            spectra['pdr'][ii] = pdr_spectra
-            spectra['diffuse'][ii] = diffuse_spectra
-            spectra['pdr_fsil'][ii] = pdr_fsil
-            spectra['diffuse_fsil'][ii] = diffuse_fsil
+            spectra['pdr'][ii] = pdr_spectra  # type: ignore
+            spectra['diffuse'][ii] = diffuse_spectra  # type: ignore
+            spectra['pdr_fsil'][ii] = pdr_fsil  # type: ignore
+            spectra['diffuse_fsil'][ii] = diffuse_fsil  # type: ignore
 
-        spectra['wavelength'] = lam * 1e4 # convert to Angstrom
+        spectra['wavelength'] = lam * 1e4  # convert to Angstrom
 
 
 def value_to_array(value):
