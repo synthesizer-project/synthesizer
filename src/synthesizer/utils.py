@@ -141,7 +141,7 @@ def process_dl07_to_hdf5(grid_name='MW3.1', grid_loc='./',
     umaxs = np.array(['1e7'])
 
     axes_shape = list([len(qpahs), len(umins), len(alphas)])
-    
+
     # Read from a file to get wavelength array and its shape
     test_file = F'{data_loc}/U0.100_0.100_{data_name}_{suffix[0]}/spec_1.0.dat'
     tmp = np.genfromtxt(test_file,
@@ -164,12 +164,9 @@ def process_dl07_to_hdf5(grid_name='MW3.1', grid_loc='./',
                                              of the dust or diffuse dust"
         axes['umin'].attrs['Units'] = "dimensionless"
         axes['alpha'] = alphas
-        axes['alpha'].attrs['Description'] = "Powerlaw slope dU/dM propto U^alpha"
+        axes['alpha'].attrs['Description'] = "Powerlaw slope dU/dM propto \
+                                                U^alpha"
         axes['alpha'].attrs['Units'] = "dimensionless"
-        # axes['umax'] = umaxs
-        # axes['umax'].attrs['Description'] = "Maximum radiation field heating \
-        #                                     the dust"
-        # axes['umax'].attrs['Units'] = "dimensionless"
 
         # create a group holding the spectra in the grid file
         spectra = hf.create_group('spectra')
@@ -187,7 +184,7 @@ def process_dl07_to_hdf5(grid_name='MW3.1', grid_loc='./',
             diffuse_fsil = np.zeros((len(umins), n_lam))
             pdr_fsil = np.zeros((len(umins), len(alphas), n_lam))
             for jj, umin in enumerate(umins):
-                    
+
                 # diffuse dust spectrum
                 fname = F'{data_loc}/U{umin}_{umin}_{data_name}_{suffix[ii]}'
                 with open(F'{fname}/spec_1.0.dat') as f:
@@ -196,13 +193,13 @@ def process_dl07_to_hdf5(grid_name='MW3.1', grid_loc='./',
                     skip_header = len(tmp) - 1001
 
                 tmp = np.genfromtxt(F'{fname}', skip_header=skip_header)
-                
-                spec = tmp[:, 1][::-1] * erg/s
-                spec /= (nu*Hz)
-                spec = spec.to(erg/s/Hz).value
+
+                spec = tmp[:, 1][::-1] * erg / s
+                spec /= (nu * Hz)
+                spec = spec.to(erg / s / Hz).value
                 diffuse_spectra[jj] = spec * msun_by_mp  # erg/s/Hz/Mdust
 
-                fsil = tmp[:, 4][::-1]/(tmp[:, 3][::-1]+tmp[:, 4][::-1])
+                fsil = tmp[:, 4][::-1] / (tmp[:, 3][::-1] + tmp[:, 4][::-1])
                 diffuse_fsil[jj] = fsil
 
                 # pdr dust spectrum
@@ -213,17 +210,18 @@ def process_dl07_to_hdf5(grid_name='MW3.1', grid_loc='./',
                         tmp = f.readlines()
                         # Number of wavelength values
                         skip_header = len(tmp) - 1001
-                
+
                     tmp = np.genfromtxt(F'{fname}', skip_header=skip_header)
-                    
-                    spec = tmp[:, 1][::-1] * erg/s
-                    spec /= (nu*Hz)
-                    spec = spec.to(erg/s/Hz).value
+
+                    spec = tmp[:, 1][::-1] * erg / s
+                    spec /= (nu * Hz)
+                    spec = spec.to(erg / s / Hz).value
                     pdr_spectra[jj, kk] = spec * msun_by_mp  # erg/s/Hz/Mdust
 
-                    fsil = tmp[:, 4][::-1]/(tmp[:, 3][::-1]+tmp[:, 4][::-1])
+                    fsil = tmp[:, 4][::-1] / (tmp[:, 3][::-1]
+                                              + tmp[:, 4][::-1])
                     pdr_fsil[jj, kk] = fsil
-             
+
             spectra['pdr'][ii] = pdr_spectra  # type: ignore
             spectra['diffuse'][ii] = diffuse_spectra  # type: ignore
             spectra['pdr_fsil'][ii] = pdr_fsil  # type: ignore
