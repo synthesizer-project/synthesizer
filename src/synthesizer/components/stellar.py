@@ -980,7 +980,7 @@ class StarsComponent:
                     self.spectra['young_dust'] = (
                         self.spectra["young_dust_BC"]
                         + self.spectra["young_dust_ISM"]
-                        )
+                    )
 
                 # ISM dust heated by old stars.
                 dust_bolometric_luminosity = (
@@ -1010,14 +1010,15 @@ class StarsComponent:
 
                 # Combine both dust components for young stars
                 self.spectra['young_total'] = (
-                    self.spectra['young_emergent'] +
-                    self.spectra['young_dust'])
+                    self.spectra['young_emergent']
+                    + self.spectra['young_dust']
+                )
 
                 # Combine both dust components for young stars
                 self.spectra['old_total'] = (
                     self.spectra['old_emergent']
                     + self.spectra['old_dust']
-                    )
+                )
 
                 self.spectra['dust'] = (self.spectra['young_dust']
                                         + self.spectra['old_dust'])
