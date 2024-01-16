@@ -1,29 +1,28 @@
-from numpy import *
+"""calculates the absorption due to the intergalactic medium
+using e.g. Madau et al. formalism."""
+
 import os
 import numpy as np
 from . import __file__ as filepath
-
-# --- calculates the absorption due to the intergalactic medium using e.g. Madau et al. formalism.
 
 
 __all__ = ["Inoue14", "Madau96"]
 
 
 class Inoue14:
+    """
+    IGM absorption from Inoue et al. (2014)
 
-    """Taken from py-eazy"""
+    Taken from py-eazy.
 
-    def __init__(self, scale_tau=1.0):
-        """
-        IGM absorption from Inoue et al. (2014)
-
-        Parameters
-        ----------
+    Args:
         scale_tau : float
             Parameter multiplied to the IGM :math:`\tau` values (exponential
             in the linear absorption fraction).
-            I.e., :math:`f_\mathrm{igm} = e^{-\mathrm{scale\_tau} \tau}`.
-        """
+            I.e., :math:`f_{\\mathrm{igm}} = e^{-\\mathrm{scale_\tau} \tau}`.
+    """
+
+    def __init__(self, scale_tau=1.0):
         self._load_data()
         self.scale_tau = scale_tau
         self.name = "Inoue14"
@@ -101,7 +100,9 @@ class Inoue14:
         if zS < z1DLA:
             tLCDLA_value[x0] = (
                 0.2113 * _pow(1.0 + zS, 2)
-                - 0.07661 * _pow(1.0 + zS, 2.3) * _pow(lobs[x0] / lamL, (-3e-1))
+                - 0.07661
+                * _pow(1.0 + zS, 2.3)
+                * _pow(lobs[x0] / lamL, (-3e-1))
                 - 0.1347 * _pow(lobs[x0] / lamL, 2)
             )
         else:
@@ -109,13 +110,17 @@ class Inoue14:
 
             tLCDLA_value[x0 & x1] = (
                 0.04696 * _pow(1.0 + zS, 3)
-                - 0.01779 * _pow(1.0 + zS, 3.3) * _pow(lobs[x0 & x1] / lamL, (-3e-1))
+                - 0.01779
+                * _pow(1.0 + zS, 3.3)
+                * _pow(lobs[x0 & x1] / lamL, (-3e-1))
                 - 0.02916 * _pow(lobs[x0 & x1] / lamL, 3)
             )
             tLCDLA_value[x0 & ~x1] = (
                 0.6340
                 + 0.04696 * _pow(1.0 + zS, 3)
-                - 0.01779 * _pow(1.0 + zS, 3.3) * _pow(lobs[x0 & ~x1] / lamL, (-3e-1))
+                - 0.01779
+                * _pow(1.0 + zS, 3.3)
+                * _pow(lobs[x0 & ~x1] / lamL, (-3e-1))
                 - 0.1347 * _pow(lobs[x0 & ~x1] / lamL, 2)
                 - 0.2905 * _pow(lobs[x0 & ~x1] / lamL, (-3e-1))
             )
@@ -146,7 +151,9 @@ class Inoue14:
                 - _pow(lobs[x0 & x1] / lamL, 3.7)
             )
             tLCLAF_value[x0 & ~x1] = (
-                2.545e-2 * _pow(1.0 + zS, 1.6) * _pow(lobs[x0 & ~x1] / lamL, 2.1)
+                2.545e-2
+                * _pow(1.0 + zS, 1.6)
+                * _pow(lobs[x0 & ~x1] / lamL, 2.1)
                 + 0.3248 * _pow(lobs[x0 & ~x1] / lamL, 1.2)
                 - 0.2496 * _pow(lobs[x0 & ~x1] / lamL, 2.1)
             )
@@ -160,12 +167,16 @@ class Inoue14:
                 - _pow(lobs[x0 & x1] / lamL, 5.5)
             )
             tLCLAF_value[x0 & x2] = (
-                5.221e-4 * _pow(1.0 + zS, 3.4) * _pow(lobs[x0 & x2] / lamL, 2.1)
+                5.221e-4
+                * _pow(1.0 + zS, 3.4)
+                * _pow(lobs[x0 & x2] / lamL, 2.1)
                 + 0.2182 * _pow(lobs[x0 & x2] / lamL, 2.1)
                 - 2.545e-2 * _pow(lobs[x0 & x2] / lamL, 3.7)
             )
             tLCLAF_value[x0 & x3] = (
-                5.221e-4 * _pow(1.0 + zS, 3.4) * _pow(lobs[x0 & x3] / lamL, 2.1)
+                5.221e-4
+                * _pow(1.0 + zS, 3.4)
+                * _pow(lobs[x0 & x3] / lamL, 2.1)
                 + 0.3248 * _pow(lobs[x0 & x3] / lamL, 1.2)
                 - 3.140e-2 * _pow(lobs[x0 & x3] / lamL, 2.1)
             )
@@ -205,7 +216,7 @@ class Inoue14:
         tau = self.tau(z, lobs)
         t = np.exp(-tau)
 
-        t[t != t] = 0.0  #  squash NaNs
+        t[t != t] = 0.0  # squash NaNs
         t[t > 1] = 1
 
         return t
@@ -219,38 +230,42 @@ class Madau96:
 
     def T(self, z, lobs):
         Expteff = np.array([])
-        for l in lobs:
-            if l > self.wvs[0] * (1 + z):
+        for _l in lobs:
+            if _l > self.wvs[0] * (1 + z):
                 Expteff = np.append(Expteff, 1)
                 continue
 
-            if l <= self.wvs[-1] * (1 + z) - 1500:
+            if _l <= self.wvs[-1] * (1 + z) - 1500:
                 Expteff = np.append(Expteff, 0)
                 continue
 
             teff = 0
             for i in range(0, len(self.wvs) - 1, 1):
-                teff += self.a[i] * (l / self.wvs[i]) ** 3.46
-                if self.wvs[i + 1] * (1 + z) < l <= self.wvs[i] * (1 + z):
+                teff += self.a[i] * (_l / self.wvs[i]) ** 3.46
+                if self.wvs[i + 1] * (1 + z) < _l <= self.wvs[i] * (1 + z):
                     Expteff = np.append(Expteff, np.exp(-teff))
                     continue
 
-            if l <= self.wvs[-1] * (1 + z):
+            if _l <= self.wvs[-1] * (1 + z):
                 Expteff = np.append(
                     Expteff,
                     np.exp(
                         -(
                             teff
                             + 0.25
-                            * (l / self.wvs[-1]) ** 3
-                            * ((1 + z) ** 0.46 - (l / self.wvs[-1]) ** 0.46)
+                            * (_l / self.wvs[-1]) ** 3
+                            * ((1 + z) ** 0.46 - (_l / self.wvs[-1]) ** 0.46)
                             + 9.4
-                            * (l / self.wvs[-1]) ** 1.5
-                            * ((1 + z) ** 0.18 - (l / self.wvs[-1]) ** 0.18)
+                            * (_l / self.wvs[-1]) ** 1.5
+                            * ((1 + z) ** 0.18 - (_l / self.wvs[-1]) ** 0.18)
                             - 0.7
-                            * (l / self.wvs[-1]) ** 3
-                            * ((l / self.wvs[-1]) ** (-1.32) - (1 + z) ** (-1.32))
-                            + 0.023 * ((l / self.wvs[-1]) ** 1.68 - (1 + z) ** 1.68)
+                            * (_l / self.wvs[-1]) ** 3
+                            * (
+                                (_l / self.wvs[-1]) ** (-1.32)
+                                - (1 + z) ** (-1.32)
+                            )
+                            + 0.023
+                            * ((_l / self.wvs[-1]) ** 1.68 - (1 + z) ** 1.68)
                         )
                     ),
                 )

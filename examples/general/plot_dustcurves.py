@@ -14,7 +14,7 @@ import cmasher as cmr
 
 models = [
     "PowerLaw",
-    'Calzetti2000',
+    "Calzetti2000",
     "MW_N18",
     "GrainsWD01",
     "GrainsWD01",
@@ -23,7 +23,7 @@ models = [
 
 params = [
     {"slope": -1.0},
-    {'slope': 0., 'cent_lam': 0.2175, 'ampl': 1.26, 'gamma': 0.0356},
+    {"slope": 0.0, "cent_lam": 0.2175, "ampl": 1.26, "gamma": 0.0356},
     {},
     {"model": "MW"},
     {"model": "SMC"},
@@ -37,7 +37,9 @@ lam = np.arange(1000, 10000, 10) * Angstrom
 for ii, (model, param) in enumerate(zip(models, params)):
     emodel = getattr(attenuation, model)(**param)
 
-    plt.plot(lam, emodel.get_tau(lam), color=colors[ii], label=f"{model}, {param}")
+    plt.plot(
+        lam, emodel.get_tau(lam), color=colors[ii], label=f"{model}, {param}"
+    )
 
 plt.xlabel(r"$\lambda/(\AA)$", fontsize=12)
 plt.ylabel(r"A$_{\lambda}/$A$_{V}$", fontsize=12)

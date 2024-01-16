@@ -1,3 +1,5 @@
+"""Module containing dust emission functionality
+"""
 import numpy as np
 from scipy import integrate
 from scipy.optimize import fsolve
@@ -54,14 +56,14 @@ class EmissionBase:
             c / (1000 * um),
             c / (8 * um),
             full_output=False,
-            limit=100
+            limit=100,
         )[0]
 
     def get_spectra(self, _lam):
         """
         Returns the normalised lnu for the provided wavelength grid
 
-        Arguments:
+        Args:
             _lam (float/array-like, float)
                     An array of wavelengths (expected in AA, global unit)
 
@@ -71,12 +73,11 @@ class EmissionBase:
         else:
             lam = _lam * Angstrom
 
-        # lnu = (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
         lnu = (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
 
         sed = Sed(lam=lam, lnu=lnu)
 
-        # normalise the spectrum 
+        # normalise the spectrum
         sed._lnu /= sed.measure_bolometric_luminosity().value
 
         return sed
@@ -160,7 +161,7 @@ class Greybody(EmissionBase):
 
         """
 
-        return nu ** self.emissivity * planck(nu, self.temperature)
+        return nu**self.emissivity * planck(nu, self.temperature)
 
 
 class Casey12(EmissionBase):
@@ -190,8 +191,9 @@ class Casey12(EmissionBase):
     """
 
     @accepts(temperature=temperature_dim)
-    def __init__(self, temperature, emissivity, alpha,
-                 N_bb=1.0, lam_0=200.0 * um):
+    def __init__(
+        self, temperature, emissivity, alpha, N_bb=1.0, lam_0=200.0 * um
+    ):
         """
         Args:
             lam (unyt_array)
@@ -225,9 +227,9 @@ class Casey12(EmissionBase):
         b3 = 0.0001905
         b4 = 0.00007243
         lum = (
-            ((b1 + b2 * alpha) ** -2 + (b3 + b4 * alpha)
-             * temperature.to("K").value) ** -1
-        )
+            (b1 + b2 * alpha) ** -2
+            + (b3 + b4 * alpha) * temperature.to("K").value
+        ) ** -1
 
         self.lam_c = (3.0 / 4.0) * lum * um
 
@@ -274,7 +276,8 @@ class Casey12(EmissionBase):
                     The wavelengths at which to calculate lnu.
             """
             return (
-                self.n_pl * ((lam / self.lam_c) ** (self.alpha))
+                self.n_pl
+                * ((lam / self.lam_c) ** (self.alpha))
                 * np.exp(-((lam / self.lam_c) ** 2))
             )
 

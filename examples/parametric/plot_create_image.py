@@ -84,7 +84,7 @@ if __name__ == "__main__":
     img = galaxy.make_images(
         resolution=resolution,
         filters=filters,
-        sed=galaxy.stars.spectra["incident"],
+        stellar_spectra_type="incident",
         fov=fov,
     )
 

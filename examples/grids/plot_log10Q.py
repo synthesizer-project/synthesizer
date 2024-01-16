@@ -2,8 +2,8 @@
 Plot ionising luminosity
 ========================
 
-Makes a plot of the specific ionising luminosity for a given choice of grid
-and ion. 
+Makes a plot of the specific ionising luminosity for a
+given choice of grid and ion.
 """
 import argparse
 import matplotlib.pyplot as plt
@@ -30,12 +30,20 @@ if __name__ == "__main__":
 
     # The name of the grid. Defaults to the test grid.
     parser.add_argument(
-        "-grid_name", "--grid_name", type=str, required=False, default="test_grid"
+        "-grid_name",
+        "--grid_name",
+        type=str,
+        required=False,
+        default="test_grid",
     )
 
     # The path to the grid directory. Defaults to the test grid directory.
     parser.add_argument(
-        "-grid_dir", "--grid_dir", type=str, required=False, default=test_grid_dir
+        "-grid_dir",
+        "--grid_dir",
+        type=str,
+        required=False,
+        default=test_grid_dir,
     )
 
     # The desired ion.

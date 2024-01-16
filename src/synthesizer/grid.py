@@ -240,7 +240,10 @@ class Grid:
         self.grid_dir = grid_dir
 
         # Have we been passed an extension?
-        if grid_name.split(".")[-1] == "hdf5" or grid_name.split(".")[-1] == "h5":
+        if (
+            grid_name.split(".")[-1] == "hdf5"
+            or grid_name.split(".")[-1] == "h5"
+        ):
             self.grid_ext = grid_name.split(".")[-1]
         else:
             self.grid_ext = "hdf5"
@@ -249,7 +252,9 @@ class Grid:
         self.grid_name = grid_name.replace(".hdf5", "").replace(".h5", "")
 
         # Construct the full path
-        self.grid_filename = f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
+        self.grid_filename = (
+            f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
+        )
 
         # Flags for reading behaviour
         self.read_lines = read_lines
@@ -271,7 +276,9 @@ class Grid:
             self.axes = list(hf.attrs["axes"])
 
             # Put the values of each axis in a dictionary
-            self.axes_values = {axis: hf["axes"][axis][:] for axis in self.axes}
+            self.axes_values = {
+                axis: hf["axes"][axis][:] for axis in self.axes
+            }
 
             # Set the values of each axis as an attribute
             # e.g. self.log10age == self.axes_values['log10age']
@@ -291,7 +298,9 @@ class Grid:
         if read_spectra:
             self.spectra = {}
 
-            with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
+            with h5py.File(
+                f"{self.grid_dir}/{self.grid_name}.hdf5", "r"
+            ) as hf:
                 # Get list of available spectra
                 spectra_ids = list(hf["spectra"].keys())
 
@@ -306,8 +315,8 @@ class Grid:
                     self.lam = hf["spectra/wavelength"][:]
                     self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
 
-            # If a full cloudy grid is available calculate some other spectra for
-            # convenience.
+            # If a full cloudy grid is available calculate some
+            # other spectra for convenience.
             if "linecont" in self.spectra.keys():
                 self.spectra["total"] = (
                     self.spectra["transmitted"] + self.spectra["nebular"]
@@ -346,19 +355,26 @@ class Grid:
             else:
                 read_lines = get_available_lines(self.grid_name, self.grid_dir)
 
-            with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
+            with h5py.File(
+                f"{self.grid_dir}/{self.grid_name}.hdf5", "r"
+            ) as hf:
                 for line in read_lines:
                     self.lines[line] = {}
                     self.lines[line]["wavelength"] = hf["lines"][line].attrs[
                         "wavelength"
                     ]
-                    self.lines[line]["luminosity"] = hf["lines"][line]["luminosity"][:]
-                    self.lines[line]["continuum"] = hf["lines"][line]["continuum"][:]
+                    self.lines[line]["luminosity"] = hf["lines"][line][
+                        "luminosity"
+                    ][:]
+                    self.lines[line]["continuum"] = hf["lines"][line][
+                        "continuum"
+                    ][:]
 
             # Save list of available lines
             self.available_lines = list(self.lines.keys())
 
-        # Has a new wavelength grid been passed to interpolate the spectra onto?
+        # Has a new wavelength grid been passed to interpolate
+        # the spectra onto?
         if new_lam is not None:
             # Double check we aren't being asked to do something impossible.
             if not read_spectra:
@@ -407,7 +423,9 @@ class Grid:
                 new_spectra = np.asarray(new_spectra)
             else:
                 # Evaluate the function at the desired wavelengths
-                new_spectra = spectres(new_lam, self._lam, self.spectra[spectra_type])
+                new_spectra = spectres(
+                    new_lam, self._lam, self.spectra[spectra_type]
+                )
 
             # Update this spectra
             self.spectra[spectra_type] = new_spectra
@@ -445,7 +463,7 @@ class Grid:
 
         TODO: This could be moved to utils?
 
-        Arguments:
+        Args:
             value (float/unyt_quantity)
                 The target value.
 
@@ -475,7 +493,7 @@ class Grid:
         """
         Function to identify the nearest grid point for a tuple of values.
 
-        Arguments:
+        Args:
             values (tuple)
                 The values for which we want the grid point. These have to be
                 in the same order as the axes.
@@ -496,7 +514,7 @@ class Grid:
         """
         Function for creating an Sed object for a specific grid point.
 
-        Arguments:
+        Args:
             grid_point (tuple)
                 A tuple of integers specifying the closest grid point.
             spectra_id (str)
@@ -528,7 +546,7 @@ class Grid:
         """
         Function for creating a Line object for a given line_id and grid_point.
 
-        Arguments:
+        Args:
             grid_point (tuple)
                 A tuple of integers specifying the closest grid point.
             line_id (str)
@@ -571,7 +589,7 @@ class Grid:
         """
         Function a LineCollection of multiple lines.
 
-        Arguments:
+        Args:
             grid_point (tuple)
                 A tuple of the grid point indices.
             line_ids (list)
@@ -709,7 +727,9 @@ class Grid:
         fig.colorbar(cmapper, cax=cax, orientation="horizontal")
         cax.xaxis.tick_top()
         cax.xaxis.set_label_position("top")
-        cax.set_xlabel(r"$\rm log_{10}(\dot{n}_{" + ion + "}/s^{-1}\ M_{\odot}^{-1})$")
+        cax.set_xlabel(
+            r"$\rm log_{10}(\dot{n}_{" + ion + "}/s^{-1}\\ M_{\\odot}^{-1})$"
+        )
         cax.set_yticks([])
 
         # Set custom tick marks
@@ -717,7 +737,7 @@ class Grid:
         ax.minorticks_off()
 
         # Set labels
-        ax.set_xlabel("$\log_{10}(\mathrm{age}/\mathrm{yr})$")
+        ax.set_xlabel("$\\log_{10}(\\mathrm{age}/\\mathrm{yr})$")
         ax.set_ylabel("$Z$")
 
         return fig, ax

@@ -113,7 +113,7 @@ void weight_loop_cic(const double **grid_props, const double **part_props,
 
       /* Use the grid edge. */
       part_cell = 0;
-      frac = 1;
+      frac = 0;
 
     } else if (part_val > grid_prop[dims[dim] - 1]) {
 
@@ -214,11 +214,16 @@ void weight_loop_ngp(const double **grid_props, const double **part_props,
     /* Get this particle property. */
     const double part_val = part_props[dim][p];
 
+    /* Handle weird grids with only 1 grid cell on a particuar axis.  */
+    int part_cell;
+    if (dims[dim] == 1) {
+      part_cell = 0;
+    }
+
     /* Here we need to handle if we are outside the range of values. If so
      * there's no point in searching and we return the edge nearest to the
      * value. */
-    int part_cell;
-    if (part_val <= grid_prop[0]) {
+    else if (part_val <= grid_prop[0]) {
 
       /* Use the grid edge. */
       part_cell = 0;
@@ -236,8 +241,11 @@ void weight_loop_ngp(const double **grid_props, const double **part_props,
     }
 
     /* Set the index to the closest grid point either side of part_val. */
-    if ((part_val - grid_prop[part_cell - 1]) <
-        (grid_prop[part_cell] - part_val)) {
+    if (part_cell == 0) {
+      /* Handle the case where part_cell - 1 doesn't exist. */
+      part_indices[dim] = part_cell;
+    } else if ((part_val - grid_prop[part_cell - 1]) <
+               (grid_prop[part_cell] - part_val)) {
       part_indices[dim] = part_cell - 1;
     } else {
       part_indices[dim] = part_cell;

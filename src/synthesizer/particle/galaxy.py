@@ -16,13 +16,12 @@ Example usage:
 
 """
 import numpy as np
-from unyt import kpc, Myr, unyt_quantity
+from unyt import Myr, unyt_quantity
 from scipy.spatial import cKDTree
 
 from synthesizer.particle import Stars
 from synthesizer.particle import Gas
 from synthesizer.sed import Sed
-from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
 from synthesizer.imaging.images import ParticleImage
@@ -34,7 +33,8 @@ class Galaxy(BaseGalaxy):
 
     When working with particles this object provides interfaces for calculating
     spectra, galaxy properties and images. A galaxy can be composed of any
-    combination of particle.Stars, particle.Gas, or particle.BlackHoles objects.
+    combination of particle.Stars, particle.Gas, or
+    particle.BlackHoles objects.
 
     Attributes:
 
@@ -61,8 +61,8 @@ class Galaxy(BaseGalaxy):
 
         Args:
             name (str)
-                A name to identify the galaxy. Only used for external labelling,
-                has no internal use.
+                A name to identify the galaxy. Only used for external
+                labelling, has no internal use.
             stars (object, Stars/Stars)
                 An instance of Stars containing the stellar particle data
             gas (object, Gas)
@@ -80,8 +80,9 @@ class Galaxy(BaseGalaxy):
         # Check we haven't been given a SFZH
         if isinstance(stars, ParametricStars):
             raise exceptions.InconsistentArguments(
-                "Parametric Stars passed instead of particle based Stars object."
-                " Did you mean synthesizer.parametric.Galaxy instead?"
+                "Parametric Stars passed instead of particle based Stars "
+                "object. Did you mean synthesizer.parametric.Galaxy "
+                "instead?"
             )
 
         # Set the type of galaxy
@@ -141,7 +142,9 @@ class Galaxy(BaseGalaxy):
 
                 # mass weighted gas phase metallicity
                 self.sf_gas_metallicity = (
-                    np.sum(self.gas.masses[mask] * self.gas.metallicities[mask])
+                    np.sum(
+                        self.gas.masses[mask] * self.gas.metallicities[mask]
+                    )
                     / self.sf_gas_mass
                 )
 
@@ -149,7 +152,7 @@ class Galaxy(BaseGalaxy):
         """
         Load arrays for star properties into a `Stars`  object,
         and attach to this galaxy object
-        
+
         TODO: this should be able to take a pre-existing stars object!
 
         Args:
@@ -194,8 +197,8 @@ class Galaxy(BaseGalaxy):
     def calculate_black_hole_metallicity(self, default_metallicity=0.012):
         """
         Calculates the metallicity of the region surrounding a black hole. This
-        is defined as the mass weighted average metallicity of all gas particles
-        whose SPH kernels intersect the black holes position.
+        is defined as the mass weighted average metallicity of all gas
+        particles whose SPH kernels intersect the black holes position.
 
         Args:
             default_metallicity (float)
@@ -206,8 +209,9 @@ class Galaxy(BaseGalaxy):
         # Ensure we actually have Gas and black holes
         if self.gas is None:
             raise exceptions.InconsistentArguments(
-                "Calculating the metallicity of the region surrounding the black"
-                " hole requires a Galaxy to be intialised with a Gas object!"
+                "Calculating the metallicity of the region surrounding the "
+                "black hole requires a Galaxy to be intialised with a Gas "
+                "object!"
             )
         if self.black_holes is None:
             raise exceptions.InconsistentArguments(
@@ -266,12 +270,12 @@ class Galaxy(BaseGalaxy):
         Args:
             kernel (array_like, float)
                 A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value of
-                impact parameter q via kernel[int(k*q)]. Note, this can be an
-                arbitrary kernel.
+                order such that a k element array can be indexed for the value
+                of impact parameter q via kernel[int(k*q)]. Note, this can be
+                an arbitrary kernel.
             mask (bool)
-                A mask to be applied to the stars. Surface densities will only be
-                computed and returned for stars with True in the mask.
+                A mask to be applied to the stars. Surface densities will only
+                be computed and returned for stars with True in the mask.
             threshold (float)
                 The threshold above which the SPH kernel is 0. This is normally
                 at a value of the impact parameter of q = r / h = 1.
@@ -291,7 +295,9 @@ class Galaxy(BaseGalaxy):
                 "Star object is missing coordinates!"
             )
         if self.gas.coordinates is None:
-            raise exceptions.InconsistentArguments("Gas object is missing coordinates!")
+            raise exceptions.InconsistentArguments(
+                "Gas object is missing coordinates!"
+            )
         if self.gas.smoothing_lengths is None:
             raise exceptions.InconsistentArguments(
                 "Gas object is missing smoothing lengths!"
@@ -301,7 +307,9 @@ class Galaxy(BaseGalaxy):
                 "Gas object is missing metallicities!"
             )
         if self.gas.masses is None:
-            raise exceptions.InconsistentArguments("Gas object is missing masses!")
+            raise exceptions.InconsistentArguments(
+                "Gas object is missing masses!"
+            )
         if self.gas.dust_to_metal_ratio is None:
             raise exceptions.InconsistentArguments(
                 "Gas object is missing DTMs (dust_to_metal_ratio)!"
@@ -319,12 +327,17 @@ class Galaxy(BaseGalaxy):
 
         # Set up the gas inputs to the C function.
         gas_pos = np.ascontiguousarray(self.gas._coordinates, dtype=np.float64)
-        gas_sml = np.ascontiguousarray(self.gas._smoothing_lengths, dtype=np.float64)
-        gas_met = np.ascontiguousarray(self.gas.metallicities, dtype=np.float64)
+        gas_sml = np.ascontiguousarray(
+            self.gas._smoothing_lengths, dtype=np.float64
+        )
+        gas_met = np.ascontiguousarray(
+            self.gas.metallicities, dtype=np.float64
+        )
         gas_mass = np.ascontiguousarray(self.gas._masses, dtype=np.float64)
         if isinstance(self.gas.dust_to_metal_ratio, float):
             gas_dtm = np.ascontiguousarray(
-                np.full_like(gas_mass, self.gas.dust_to_metal_ratio), dtype=np.float64
+                np.full_like(gas_mass, self.gas.dust_to_metal_ratio),
+                dtype=np.float64,
             )
         else:
             gas_dtm = np.ascontiguousarray(
@@ -347,6 +360,34 @@ class Galaxy(BaseGalaxy):
             np.max(gas_sml),
             force_loop,
         )
+
+    def integrate_particle_spectra(self):
+        """
+        Integrates all particle spectra on any attached components.
+        """
+
+        # Handle stellar spectra
+        if self.stars is not None:
+            # Loop over stellar particle spectra
+            for key, sed in self.stars.particle_spectra.items():
+                self.stars.spectra[key] = Sed(
+                    sed.lam,
+                    np.sum(sed._lnu, axis=0),
+                )
+
+        # Handle black hole spectra
+        if self.black_holes is not None:
+            # Loop over stellar particle spectra
+            for key, sed in self.black_holes.particle_spectra.items():
+                self.black_holes.spectra[key] = Sed(
+                    sed.lam,
+                    np.sum(sed._lnu, axis=0),
+                )
+
+        # Handle gas spectra
+        if self.gas is not None:
+            # Nothing to do here... YET
+            pass
 
     def get_line_los():
         """
@@ -379,7 +420,8 @@ class Galaxy(BaseGalaxy):
         #             self.stars.log10ages[age_mask],
         #             self.stars.log10metallicities[age_mask])):
 
-        #         weights_temp = self._calculate_weights(grid, metal, age, mass,
+        #         weights_temp = self._calculate_weights(grid, metal, age,
+        #                                                mass,
         #                                                young_stars=True)
         #         lum[i] = np.sum(grid.line_luminosities * weights_temp,
         #                         axis=(1, 2))
@@ -417,12 +459,12 @@ class Galaxy(BaseGalaxy):
                 ...
             kernel (array_like/float)
                 A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value of
-                impact parameter q via kernel[int(k*q)]. Note, this can be an
-                arbitrary kernel.
+                order such that a k element array can be indexed for the value
+                of impact parameter q via kernel[int(k*q)]. Note, this can be
+                an arbitrary kernel.
             mask (bool)
-                A mask to be applied to the stars. Surface densities will only be
-                computed and returned for stars with True in the mask.
+                A mask to be applied to the stars. Surface densities will only
+                be computed and returned for stars with True in the mask.
             threshold (float)
                 The threshold above which the SPH kernel is 0. This is normally
                 at a value of the impact parameter of q = r / h = 1.
@@ -475,7 +517,8 @@ class Galaxy(BaseGalaxy):
 
         Z_SF is the star forming gas metallicity, Z_MW is the Milky
         Way value (defaults to value from Zahid+14), M_SF is the star forming
-        gas mass, M_star is the stellar mass, and beta is a normalisation value.
+        gas mass, M_star is the stellar mass, and beta is a normalisation
+        value.
 
         The gamma array can be used directly in attenuation methods.
 
@@ -530,9 +573,9 @@ class Galaxy(BaseGalaxy):
         elif stellar_mass == 0.0:
             gamma = gamma_min
         else:
-            C = 1 + (sf_gas_metallicity / Z_norm) * (sf_gas_mass / stellar_mass) * (
-                1.0 / beta
-            )
+            C = 1 + (sf_gas_metallicity / Z_norm) * (
+                sf_gas_mass / stellar_mass
+            ) * (1.0 / beta)
             gamma = gamma_max - (gamma_max - gamma_min) / C
 
         return gamma
@@ -542,7 +585,8 @@ class Galaxy(BaseGalaxy):
         resolution,
         fov,
         img_type="hist",
-        sed=None,
+        stellar_spectra_type=None,
+        blackhole_spectra_type=None,
         filters=(),
         pixel_values=None,
         psfs=None,
@@ -563,6 +607,11 @@ class Galaxy(BaseGalaxy):
         either a simple histogram or smoothing particles over a kernel. Either
         of these operations can be done with or without a PSF and noise.
 
+        If multiple components are requested they will be combined into a
+        single output image.
+
+        NOTE: Either npix or fov must be defined.
+
         Args:
             resolution (Quantity, float)
                 The size of a pixel.
@@ -572,37 +621,39 @@ class Galaxy(BaseGalaxy):
             img_type : str
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
-            sed : obj (SED)
-                An sed object containing the spectra for this image.
+            stellar_spectra_type (string)
+                The stellar spectra key to use for the image.
+            blackhole_spectra_type (string)
+                The black hole spectra key to use for the image.
             filters : obj (FilterCollection)
-                An imutable collection of Filter objects. If provided images are
-                made for each filter.
+                An imutable collection of Filter objects. If provided images
+                are made for each filter.
             pixel_values : array-like (float)
-                The values to be sorted/smoothed into pixels. Only needed if an sed
-                and filters are not used.
+                The values to be sorted/smoothed into pixels. Only needed if
+                an sed and filters are not used.
             psfs : dict
                 A dictionary containing the psf in each filter where the key is
                 each filter code and the value is the psf in that filter.
             depths : dict
-                A dictionary containing the depth of an observation in each filter
-                where the key is each filter code and the value is the depth in
-                that filter.
+                A dictionary containing the depth of an observation in each
+                filter where the key is each filter code and the value is the
+                depth in that filter.
             aperture : float/dict
                 Either a float describing the size of the aperture in which the
-                depth is defined or a dictionary containing the size of the depth
-                aperture in each filter.
+                depth is defined or a dictionary containing the size of the
+                depth aperture in each filter.
             rest_frame : bool
                 Are we making an observation in the rest frame?
             cosmo : obj (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological calculations
-                when converting rest frame luminosity to flux.
+                A cosmology object from astropy, used for cosmological
+                calculations when converting rest frame luminosity to flux.
             psf_resample_factor : float
-                The factor by which the image should be resampled for robust PSF
-                convolution. Note the images after PSF application will be
+                The factor by which the image should be resampled for robust
+                PSF convolution. Note the images after PSF application will be
                 downsampled to the native pixel scale.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
 
@@ -617,67 +668,132 @@ class Galaxy(BaseGalaxy):
             if psf_resample_factor != 1:
                 resolution /= psf_resample_factor
 
-        # Instantiate the Image object.
-        img = ParticleImage(
-            resolution=resolution,
-            fov=fov,
-            sed=sed,
-            filters=filters,
-            coordinates=self.stars._coordinates,
-            smoothing_lengths=self.stars._smoothing_lengths,
-            pixel_values=pixel_values,
-            rest_frame=rest_frame,
-            redshift=self.redshift,
-            cosmo=cosmo,
-            psfs=psfs,
-            depths=depths,
-            apertures=aperture,
-            snrs=snrs,
-            kernel=kernel,
-            kernel_threshold=kernel_threshold,
-        )
-
-        # Make the image, handling incorrect image types
-        if img_type == "hist":
-            # Compute the image
-            img.get_hist_imgs()
-
-            if psfs is not None:
-                # Convolve the image/images
-                img.get_psfed_imgs()
-
-                # Downsample to the native resolution if we need to.
-                if psf_resample_factor is not None:
-                    if psf_resample_factor != 1:
-                        img.downsample(1 / psf_resample_factor)
-
-            if depths is not None or noises is not None:
-                img.get_noisy_imgs(noises)
-
-            return img
-
-        elif img_type == "smoothed":
-            # Compute image
-            img.get_imgs()
-
-            if psfs is not None:
-                # Convolve the image/images
-                img.get_psfed_imgs()
-
-                # Downsample to the native resolution if we need to.
-                if psf_resample_factor is not None:
-                    if psf_resample_factor != 1:
-                        img.downsample(1 / psf_resample_factor)
-
-            if depths is not None or noises is not None:
-                img.get_noisy_imgs(noises)
-
-            return img
-
-        else:
-            raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+        # Make sure we have an image to make
+        if (
+            stellar_spectra_type is None
+            and blackhole_spectra_type is None
+            and pixel_values is None
+        ):
+            raise exceptions.InconsistentArguments(
+                "At least one spectra type must be provided "
+                "(stellar_spectra_type or blackhole_spectra_type)!"
+                " What component do you want images of?"
             )
+
+        # Make stellar image if requested
+        if stellar_spectra_type is not None or pixel_values is not None:
+            # Instantiate the Image object.
+            stellar_img = ParticleImage(
+                resolution=resolution,
+                fov=fov,
+                sed=self.stars.particle_spectra[stellar_spectra_type]
+                if stellar_spectra_type is not None
+                else None,
+                filters=filters,
+                coordinates=self.stars._coordinates,
+                smoothing_lengths=self.stars._smoothing_lengths,
+                pixel_values=pixel_values,
+                rest_frame=rest_frame,
+                redshift=self.redshift,
+                cosmo=cosmo,
+                psfs=psfs,
+                depths=depths,
+                apertures=aperture,
+                snrs=snrs,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+            )
+
+            # Make the image, handling incorrect image types
+            if img_type == "hist":
+                # Compute the image
+                stellar_img.get_hist_imgs()
+
+                if psfs is not None:
+                    # Convolve the image/images
+                    stellar_img.get_psfed_imgs()
+
+                    # Downsample to the native resolution if we need to.
+                    if psf_resample_factor is not None:
+                        if psf_resample_factor != 1:
+                            stellar_img.downsample(1 / psf_resample_factor)
+
+                if depths is not None or noises is not None:
+                    stellar_img.get_noisy_imgs(noises)
+
+            elif img_type == "smoothed":
+                # Compute image
+                stellar_img.get_imgs()
+
+                if psfs is not None:
+                    # Convolve the image/images
+                    stellar_img.get_psfed_imgs()
+
+                    # Downsample to the native resolution if we need to.
+                    if psf_resample_factor is not None:
+                        if psf_resample_factor != 1:
+                            stellar_img.downsample(1 / psf_resample_factor)
+
+                if depths is not None or noises is not None:
+                    stellar_img.get_noisy_imgs(noises)
+
+            else:
+                raise exceptions.UnknownImageType(
+                    "Unknown img_type %s. (Options are 'hist' or "
+                    "'smoothed')" % img_type
+                )
+
+        # Make blackhole image if requested
+        if blackhole_spectra_type is not None:
+            # Instantiate the Image object.
+            blackhole_img = ParticleImage(
+                resolution=resolution,
+                fov=fov,
+                sed=self.black_holes.particle_spectra[blackhole_spectra_type],
+                filters=filters,
+                coordinates=self.black_holes._coordinates,
+                pixel_values=pixel_values,
+                rest_frame=rest_frame,
+                redshift=self.redshift,
+                cosmo=cosmo,
+                psfs=psfs,
+                depths=depths,
+                apertures=aperture,
+                snrs=snrs,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+            )
+
+            # Compute the image
+            blackhole_img.get_hist_imgs()
+
+            if psfs is not None:
+                # Convolve the image/images
+                blackhole_img.get_psfed_imgs()
+
+                # Downsample to the native resolution if we need to.
+                if psf_resample_factor is not None:
+                    if psf_resample_factor != 1:
+                        blackhole_img.downsample(1 / psf_resample_factor)
+
+            if depths is not None or noises is not None:
+                blackhole_img.get_noisy_imgs(noises)
+
+        # Combine images
+        if stellar_spectra_type is not None and blackhole_spectra_type is None:
+            img = stellar_img
+        elif (
+            stellar_spectra_type is not None
+            and blackhole_spectra_type is not None
+        ):
+            img = stellar_img + blackhole_img
+        elif (
+            stellar_spectra_type is None and blackhole_spectra_type is not None
+        ):
+            img = blackhole_img
+        else:
+            img = stellar_img  # pixel_value case
+        return img
 
     def make_stellar_mass_map(
         self,
@@ -700,11 +816,11 @@ class Galaxy(BaseGalaxy):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
             cosmo (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological calculations
-                when converting rest frame luminosity to flux.
+                A cosmology object from astropy, used for cosmological
+                calculations when converting rest frame luminosity to flux.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
 
@@ -736,7 +852,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
             )
 
         return img
@@ -762,11 +879,11 @@ class Galaxy(BaseGalaxy):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
             cosmo (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological calculations
-                when converting rest frame luminosity to flux.
+                A cosmology object from astropy, used for cosmological
+                calculations when converting rest frame luminosity to flux.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
 
@@ -798,7 +915,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
             )
 
         return img
@@ -826,11 +944,11 @@ class Galaxy(BaseGalaxy):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
             cosmo (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological calculations
-                when converting rest frame luminosity to flux.
+                A cosmology object from astropy, used for cosmological
+                calculations when converting rest frame luminosity to flux.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
 
@@ -862,7 +980,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
             )
 
         # Set up the initial mass image
@@ -915,11 +1034,11 @@ class Galaxy(BaseGalaxy):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
             cosmo (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological calculations
-                when converting rest frame luminosity to flux.
+                A cosmology object from astropy, used for cosmological
+                calculations when converting rest frame luminosity to flux.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
 
@@ -951,7 +1070,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                f"Unknown img_type {img_type}. (Options are 'hist' or 'smoothed')"
+                f"Unknown img_type {img_type}. "
+                "(Options are 'hist' or 'smoothed')"
             )
 
         # Make the mass image
@@ -989,11 +1109,11 @@ class Galaxy(BaseGalaxy):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
             cosmo (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological calculations
-                when converting rest frame luminosity to flux.
+                A cosmology object from astropy, used for cosmological
+                calculations when converting rest frame luminosity to flux.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
 
@@ -1025,7 +1145,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                f"Unknown img_type {img_type}. (Options are 'hist' or 'smoothed')"
+                f"Unknown img_type {img_type}. "
+                "(Options are 'hist' or 'smoothed')"
             )
 
         # Make the mass image
@@ -1059,11 +1180,11 @@ class Galaxy(BaseGalaxy):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
             cosmo (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological calculations
-                when converting rest frame luminosity to flux.
+                A cosmology object from astropy, used for cosmological
+                calculations when converting rest frame luminosity to flux.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
 
@@ -1095,7 +1216,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                f"Unknown img_type {img_type}. (Options are 'hist' or 'smoothed')"
+                f"Unknown img_type {img_type}. "
+                "(Options are 'hist' or 'smoothed')"
             )
 
         return img
@@ -1123,11 +1245,11 @@ class Galaxy(BaseGalaxy):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
             cosmo (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological calculations
-                when converting rest frame luminosity to flux.
+                A cosmology object from astropy, used for cosmological
+                calculations when converting rest frame luminosity to flux.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
 
@@ -1159,7 +1281,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                f"Unknown img_type {img_type}. (Options are 'hist' or 'smoothed')"
+                f"Unknown img_type {img_type}. "
+                "(Options are 'hist' or 'smoothed')"
             )
 
         return img
@@ -1189,11 +1312,11 @@ class Galaxy(BaseGalaxy):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
             cosmo (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological calculations
-                when converting rest frame luminosity to flux.
+                A cosmology object from astropy, used for cosmological
+                calculations when converting rest frame luminosity to flux.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
             age_bin (unyt_quantity/float)
@@ -1242,7 +1365,8 @@ class Galaxy(BaseGalaxy):
 
         else:
             raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or " "'smoothed')" % img_type
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
             )
 
         # Convert the initial mass map to SFR
@@ -1275,11 +1399,11 @@ class Galaxy(BaseGalaxy):
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
             cosmo (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological calculations
-                when converting rest frame luminosity to flux.
+                A cosmology object from astropy, used for cosmological
+                calculations when converting rest frame luminosity to flux.
             kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions module.
-                Only used for smoothed images.
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
             age_bin (unyt_quantity/float)

@@ -21,7 +21,7 @@ Example usage:
 
     bar_with_units = foo.bar
     bar_no_units = foo._bar
-    
+
 """
 from unyt import (
     nJy,
@@ -82,7 +82,6 @@ default_units = {
     "ages": yr,
     "accretion_rate": Msun.in_base("galactic") / yr,
     "accretion_rates": Msun.in_base("galactic") / yr,
-    "bol_luminosity": erg / s,
     "bb_temperature": K,
     "bb_temperatures": K,
     "inclination": deg,
@@ -91,6 +90,8 @@ default_units = {
     "fov": Mpc,
     "orig_resolution": Mpc,
     "centre": Mpc,
+    "photo_luminosities": erg / s,
+    "photo_fluxes": erg / s / cm**2,
 }
 
 
@@ -112,7 +113,8 @@ class UnitSingleton(type):
         When a new instance is made (calling class), this method is called.
 
         Unless forced to redefine Units (highly inadvisable), the original
-        instance is returned giving it a new reference to the original instance.
+        instance is returned giving it a new reference to the original
+        instance.
 
         If a new unit system is passed and one already exists and warning is
         printed and the original is returned.
@@ -125,20 +127,24 @@ class UnitSingleton(type):
 
         # Are we forcing an update?... I hope not
         if force:
-            cls._instances[cls] = super(UnitSingleton, cls).__call__(new_units, force)
+            cls._instances[cls] = super(UnitSingleton, cls).__call__(
+                new_units, force
+            )
 
         # Print a warning if an instance exists and arguments have been passed
         elif cls in cls._instances and new_units is not None:
             print(
-                "WARNING! Units are already set. \nAny modified units will not "
-                "take effect. \nUnits should be configured before running "
-                "anything else... \nbut you could (and shouldn't) force it: "
-                "Units(new_units_dict, force=True)."
+                "WARNING! Units are already set. \nAny modified units will "
+                "not take effect. \nUnits should be configured before "
+                "running anything else... \nbut you could (and "
+                "shouldn't) force it: Units(new_units_dict, force=True)."
             )
 
         # If we don't already have an instance the dictionary will be empty
         if cls not in cls._instances:
-            cls._instances[cls] = super(UnitSingleton, cls).__call__(new_units, force)
+            cls._instances[cls] = super(UnitSingleton, cls).__call__(
+                new_units, force
+            )
 
         return cls._instances[cls]
 
@@ -156,11 +162,12 @@ class Units(metaclass=UnitSingleton):
     instantiating the original Units instance with a dictionary of units of
     the form {"variable": unyt.unit}. This must be done before any calculations
     have been performed, changing the unit system will not retroactively
-    convert computed quantities! In fact, if any quantities have been calculated
-    the original default Units object will have already been instantiated, thus
-    the default Units will be returned regardless of the modifications
-    dictionary due to the rules of a Singleton metaclass. The user can force an
-    update but BE WARNED this is dangerous and should be avoided.
+    convert computed quantities! In fact, if any quantities have been
+    calculated the original default Units object will have already been
+    instantiated, thus the default Units will be returned regardless
+    of the modifications dictionary due to the rules of a Singleton
+    metaclass. The user can force an update but BE WARNED this is
+    dangerous and should be avoided.
 
     Attributes:
         lam (unyt.unit_object.Unit)
@@ -195,6 +202,11 @@ class Units(metaclass=UnitSingleton):
         flux (unyt.unit_object.Unit)
             "Rest frame" Spectral flux density (at 10 pc) unit.
 
+        photo_luminosities (unyt.unit_object.Unit)
+            Rest frame photometry unit.
+        photo_fluxes (unyt.unit_object.Unit)
+            Observer frame photometry unit.
+
         ew (unyt.unit_object.Unit)
             Equivalent width unit.
 
@@ -224,8 +236,6 @@ class Units(metaclass=UnitSingleton):
 
         accretion_rate (unyt.unit_object.Unit)
             Black hole accretion rate unit.
-        bol_luminosity (unyt.unit_object.Unit)
-            Bolometric luminositiy unit.
         bolometric_luminosity (unyt.unit_object.Unit)
             Bolometric luminositiy unit.
         bolometric_luminosities (unyt.unit_object.Unit)
@@ -288,7 +298,6 @@ class Units(metaclass=UnitSingleton):
         # Luminosities
         self.luminosity = erg / s  # luminosity
         self.luminosities = erg / s
-        self.bol_luminosity = erg / s
         self.bolometric_luminosity = erg / s
         self.bolometric_luminosities = erg / s
         self.eddington_luminosity = erg / s
@@ -301,6 +310,10 @@ class Units(metaclass=UnitSingleton):
         # Fluxes
         self.fnu = nJy  # rest frame flux
         self.flux = erg / s / cm**2  # rest frame "flux" at 10 pc
+
+        # Photometry
+        self.photo_luminosities = erg / s  # rest frame photometry
+        self.photo_fluxes = erg / s / cm**2  # observer frame photometry
 
         # Equivalent width
         self.ew = Angstrom
@@ -360,7 +373,9 @@ class Units(metaclass=UnitSingleton):
         out_str = "Unit System: \n"
         for key in default_units:
             out_str += (
-                "%s: ".ljust(22 - len(key)) % key + getattr(self, key).__str__() + "\n"
+                "%s: ".ljust(22 - len(key)) % key
+                + getattr(self, key).__str__()
+                + "\n"
             )
 
         return out_str

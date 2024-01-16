@@ -1,6 +1,7 @@
 """Load Simba galaxy data from a caesar file and snapshot
 
-Method for loading galaxy and particle data for the [Simba](http://simba.roe.ac.uk/) simulation
+Method for loading galaxy and particle data for
+the [Simba](http://simba.roe.ac.uk/) simulation
 """
 import h5py
 import numpy as np
@@ -50,7 +51,7 @@ def load_Simba(
 
         _metals = hf["PartType4/Metallicity"][:]
 
-        g_sfr = hf["PartType0/StarFormationRate"][:]
+        # g_sfr = hf["PartType0/StarFormationRate"][:]
         g_h2fraction = hf["PartType0/FractionH2"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/Metallicity"][:][:, 0]
@@ -82,9 +83,9 @@ def load_Simba(
 
     # check which kind of object we're loading
     if load_halo:
-        obj_str = 'halo_data'
+        obj_str = "halo_data"
     else:
-        obj_str = 'galaxy_data'
+        obj_str = "galaxy_data"
 
     if caesar_directory is None:
         caesar_directory = directory
@@ -115,17 +116,16 @@ def load_Simba(
         end = hf[f"{obj_str}/glist_end"][:]
 
     for i, (b, e) in enumerate(zip(begin, end)):
-
         # Use the H2 masses computed in Simba directly to
         # estimate the star forming gas mass and metallicity.
         # Alternative to setting star_forming property on
         # each gas particle
         h2_masses = g_masses[b:e] * g_h2fraction[b:e]
         galaxies[i].sf_gas_mass = np.sum(h2_masses)
-        galaxies[i].sf_gas_metallicity =\
-                np.sum(h2_masses * g_metals[b:e]) /\
-                galaxies[i].sf_gas_mass
-        
+        galaxies[i].sf_gas_metallicity = (
+            np.sum(h2_masses * g_metals[b:e]) / galaxies[i].sf_gas_mass
+        )
+
         galaxies[i].load_gas(
             coordinates=g_coods[b:e] * kpc,
             masses=g_masses[b:e] * Msun,

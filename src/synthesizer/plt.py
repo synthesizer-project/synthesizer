@@ -6,8 +6,6 @@ Example usage:
     fig, ax, haxx, haxy = single_histxy(size=3.5, set_axis_off=True)
 """
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import numpy as np
 
 
 def single(size=3.5):
@@ -75,8 +73,8 @@ def single_wcbar_right(hsize=3.5):
 
 def single_histxy(size=3.5, set_axis_off=True):
     """
-    Set up a matplotlib figure containing a single axis, and a histogram on each
-    axis.
+    Set up a matplotlib figure containing a single axis, and a
+    histogram on each axis.
 
     Args:
         size (float)

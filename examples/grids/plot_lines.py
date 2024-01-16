@@ -8,8 +8,6 @@ This example demonstrates how to:
 - get line quantities for a single grid point
 - ad hoc load an additional line
 """
-
-
 import matplotlib.pyplot as plt
 from synthesizer.grid import Grid
 
@@ -40,8 +38,9 @@ if __name__ == "__main__":
     print(line)
 
     # or a combination of lines, e.g. a doublet
-    line = grid.get_lines(grid_point,
-                          ["H 1 4862.69A", "O 3 4958.91A", "O 3 5006.84A"])
+    line = grid.get_lines(
+        grid_point, ["H 1 4862.69A", "O 3 4958.91A", "O 3 5006.84A"]
+    )
     print(line)
 
     # create a line collection from all lines
@@ -58,7 +57,7 @@ if __name__ == "__main__":
         ratio = lines.get_ratio(ratio_id)
         print(f"{ratio_id}: {ratio:.2f}")
 
-    # we can plot a ratio against metallicity by looping over the metallicity 
+    # we can plot a ratio against metallicity by looping over the metallicity
     # grid
     ratio_id = "R23"
     ia = 0  # 1 Myr old for test grid

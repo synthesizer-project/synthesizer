@@ -46,7 +46,21 @@ def get_roman_numeral(number):
     """
 
     num = [1, 4, 5, 9, 10, 40, 50, 90, 100, 400, 500, 900, 1000]
-    sym = ["I", "IV", "V", "IX", "X", "XL", "L", "XC", "C", "CD", "D", "CM", "M"]
+    sym = [
+        "I",
+        "IV",
+        "V",
+        "IX",
+        "X",
+        "XL",
+        "L",
+        "XC",
+        "C",
+        "CD",
+        "D",
+        "CM",
+        "M",
+    ]
     i = 12
 
     roman = ""
@@ -78,10 +92,51 @@ def get_fancy_line_id(id):
     return f"{element}{get_roman_numeral(int(ion))}{wavelength: .4g}"
 
 
+def get_bpt_kewley01(logNII_Ha):
+    """BPT-NII demarcations from Kewley+2001
+
+    Kewley+03: https://arxiv.org/abs/astro-ph/0106324
+    Demarcation defined by:
+        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19
+
+    Args:
+        logNII_Ha (array)
+            Array of log([NII]/Halpha) values to give the
+            SF-AGN demarcation line
+
+    Returns:
+        array
+            Corresponding log([OIII]/Hb) ratio array
+    """
+
+    return 0.61 / (logNII_Ha - 0.47) + 1.19
+
+
+def get_bpt_kauffman03(logNII_Ha):
+    """BPT-NII demarcations from Kauffman+2003
+
+    Kauffman+03: https://arxiv.org/abs/astro-ph/0304239
+    Demarcation defined by:
+        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3
+
+     Args:
+        logNII_Ha (array)
+            Array of log([NII]/Halpha) values to give the
+            SF-AGN demarcation line
+
+    Returns:
+        array
+            Corresponding log([OIII]/Hb) ratio array
+    """
+
+    return 0.61 / (logNII_Ha - 0.05) + 1.3
+
+
 class LineRatios:
 
     """
-    A dataclass holding useful line ratios (e.g. R23) and diagrams (pairs of ratios), e.g. BPT.
+    A dataclass holding useful line ratios (e.g. R23) and
+    diagrams (pairs of ratios), e.g. BPT.
     """
 
     # short-hand
@@ -98,24 +153,31 @@ class LineRatios:
 
         self.ratios = {}
 
-        # Balmer decrement, should be ~2.86 for dust free
+        # Balmer decrement, should be [2.79--2.86] (Te, ne, dependent)
+        # for dust free
         self.ratios["BalmerDecrement"] = [[Ha], [Hb]]
-        self.ratios["N2"] = [["N 2 6583.45A"], [Ha]]  #  add reference
-        self.ratios["S2"] = [["S 2 6730.82A", "S 2 6716.44A"], [Ha]]  #  add reference
-        self.ratios["O1"] = [["O 1 6300.30A"], [Ha]]  #  add reference
-        self.ratios["R2"] = [[O2b], [Hb]]  #  add reference
-        self.ratios["R3"] = R3 = [[O3r], [Hb]]  #  add reference
-        self.ratios["R23"] = [O3 + O2, [Hb]]  #  add reference
-        self.ratios["O32"] = [[O3r], [O2b]]  #  add reference
-        self.ratios["Ne3O2"] = [["NE 3 3868.76A"], [O2b]]  #  add reference
+        self.ratios["N2"] = [["N 2 6583.45A"], [Ha]]  # add reference
+        self.ratios["S2"] = S2 = [
+            ["S 2 6730.82A", "S 2 6716.44A"],
+            [Ha],
+        ]  # add reference
+        self.ratios["O1"] = O1 = [["O 1 6300.30A"], [Ha]]  # add reference
+        self.ratios["R2"] = [[O2b], [Hb]]  # add reference
+        self.ratios["R3"] = R3 = [[O3r], [Hb]]  # add reference
+        self.ratios["R23"] = [O3 + O2, [Hb]]  # add reference
+        self.ratios["O32"] = [[O3r], [O2b]]  # add reference
+        self.ratios["Ne3O2"] = [["NE 3 3868.76A"], [O2b]]  # add reference
 
         self.available_ratios = tuple(self.ratios.keys())
 
         self.diagrams = {}
-        self.diagrams["OHNO"] = [R3, [["NE 3 3868.76A"], O2]]  #  add reference
-        self.diagrams["BPT-NII"] = [[["N 2 6583.45A"], [Ha]], R3]  #  add reference
-        # diagrams['VO78'] = [[], []]
-        # diagrams['unVO78'] = [[], []]
+        self.diagrams["OHNO"] = [R3, [["NE 3 3868.76A"], O2]]  # add reference
+        self.diagrams["BPT-NII"] = [
+            [["N 2 6583.45A"], [Ha]],
+            R3,
+        ]  # add reference
+        self.diagrams["VO78-SII"] = [[S2, [Ha]], R3]
+        self.diagrams["VO78-OI"] = [[O1, [Ha]], R3]
 
         self.available_diagrams = tuple(self.diagrams.keys())
 
@@ -182,7 +244,10 @@ class LineCollection:
         self.lines = lines
         self.line_ids = list(self.lines.keys())
 
-        # these should be filtered to only show ones that are available for the availalbe line_ids
+        """
+        these should be filtered to only show ones that are available
+        for the available line_ids
+        """
 
         # Atrributes to enable looping
         self._current_ind = 0
@@ -199,12 +264,14 @@ class LineCollection:
     def __str__(self):
         """Function to print a basic summary of the LineCollection object.
 
-        Returns a string containing the id, wavelength, luminosity, equivalent width, and flux if generated.
+        Returns a string containing the id, wavelength, luminosity,
+        equivalent width, and flux if generated.
 
         Returns
         -------
         str
-            Summary string containing the total mass formed and lists of the available SEDs, lines, and images.
+            Summary string containing the total mass formed and
+            lists of the available SEDs, lines, and images.
         """
 
         # Set up string for printing
@@ -212,7 +279,7 @@ class LineCollection:
 
         # Add the content of the summary to the string to be printed
         pstr += "-" * 10 + "\n"
-        pstr += f"LINE COLLECTION\n"
+        pstr += "LINE COLLECTION\n"
         pstr += f"lines: {self.line_ids}\n"
         pstr += f"available ratios: {self.available_ratios}\n"
         pstr += f"available diagrams: {self.available_diagrams}\n"
@@ -261,8 +328,8 @@ class LineCollection:
 
         a, b = ab
 
-        return np.sum([self.lines[l].luminosity for l in a]) / np.sum(
-            [self.lines[l].luminosity for l in b]
+        return np.sum([self.lines[_line].luminosity for _line in a]) / np.sum(
+            [self.lines[_line].luminosity for _line in b]
         )
 
     def get_ratio(self, ratio_id):
@@ -334,7 +401,8 @@ class LineCollection:
         Arguments
         -------
         ratdiagram_idio_id
-            a diagram_id where the pairs of ratio lines are defined in LineRatios
+            a diagram_id where the pairs of ratio lines are
+            defined in LineRatios
 
         Returns
         -------
@@ -389,7 +457,8 @@ class Line:
     def __init__(self, id_, wavelength_, luminosity_, continuum_):
         self.id_ = id_
 
-        # --- these are maintained because we may want to hold on to the individual lines of a doublet
+        """ these are maintained because we may want to hold on
+        to the individual lines of a doublet"""
         self.wavelength_ = wavelength_
         self.luminosity_ = luminosity_
         self.continuum_ = continuum_
@@ -397,7 +466,7 @@ class Line:
         self.id = get_line_id(id_)
         self.continuum = np.mean(
             continuum_
-        )  #  mean continuum value in units of erg/s/Hz
+        )  # mean continuum value in units of erg/s/Hz
         self.wavelength = np.mean(
             wavelength_
         )  # mean wavelength of the line in units of AA
@@ -413,12 +482,14 @@ class Line:
     def __str__(self):
         """Function to print a basic summary of the Line object.
 
-        Returns a string containing the id, wavelength, luminosity, equivalent width, and flux if generated.
+        Returns a string containing the id, wavelength, luminosity,
+        equivalent width, and flux if generated.
 
         Returns
         -------
         str
-            Summary string containing the total mass formed and lists of the available SEDs, lines, and images.
+            Summary string containing the total mass formed and
+            lists of the available SEDs, lines, and images.
         """
 
         # Set up string for printing
@@ -429,8 +500,8 @@ class Line:
         pstr += f"SUMMARY OF {self.id}" + "\n"
         pstr += f"wavelength: {self.wavelength:.1f}" + "\n"
         pstr += (
-            f"log10(luminosity/{self.luminosity.units}): {np.log10(self.luminosity):.2f}"
-            + "\n"
+            f"log10(luminosity/{self.luminosity.units}): "
+            f"{np.log10(self.luminosity):.2f}\n"
         )
         pstr += f"equivalent width: {self.ew:.0f}" + "\n"
         if self._flux:
@@ -441,7 +512,8 @@ class Line:
 
     def __add__(self, second_line):
         """
-        Function allowing adding of two Line objects together. This should NOT be used to add different lines together.
+        Function allowing adding of two Line objects together. This should
+        NOT be used to add different lines together.
 
         Returns
         -------
@@ -458,7 +530,9 @@ class Line:
             )
 
         else:
-            raise exceptions.InconsistentAddition("Wavelength grids must be identical")
+            raise exceptions.InconsistentAddition(
+                "Wavelength grids must be identical"
+            )
 
     def get_flux(self, cosmo, z):
         """Calculate the line flux in units of erg/s/cm2
