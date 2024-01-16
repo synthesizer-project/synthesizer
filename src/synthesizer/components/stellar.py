@@ -5,8 +5,12 @@ particle.Stars and parametric.Stars and contains attributes
 and methods common between them.
 """
 import numpy as np
+<<<<<<< HEAD
 import matplotlib.pyplot as plt
 from unyt import Myr, unyt_quantity, Lsun
+=======
+from unyt import Myr, unyt_quantity
+>>>>>>> main
 
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
@@ -90,8 +94,8 @@ class StarsComponent:
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         **kwargs,
     ):
         """
@@ -107,11 +111,11 @@ class StarsComponent:
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             kwargs
                 Any keyword arguments which can be passed to
@@ -123,7 +127,7 @@ class StarsComponent:
         """
 
         # Make sure young and old in Myr, if provided
-        young, old = self.check_young_old_units(young, old)
+        young, old = self._check_young_old_units(young, old)
 
         # Generate contribution of line emission alone and reduce the
         # contribution of Lyman-alpha
@@ -147,8 +151,8 @@ class StarsComponent:
     def get_spectra_incident(
         self,
         grid,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -159,11 +163,11 @@ class StarsComponent:
         Args:
             grid (obj):
                 Spectral grid object.
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -178,7 +182,7 @@ class StarsComponent:
         """
 
         # Make sure young and old in Myr, if provided
-        young, old = self.check_young_old_units(young, old)
+        young, old = self._check_young_old_units(young, old)
 
         # Get the incident spectra
         lnu = self.generate_lnu(
@@ -201,8 +205,8 @@ class StarsComponent:
         self,
         grid,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -217,11 +221,11 @@ class StarsComponent:
             fesc (float):
                 Fraction of stellar emission that escapeds unattenuated from
                 the birth cloud (defaults to 0.0).
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -236,7 +240,7 @@ class StarsComponent:
         """
 
         # Make sure young and old in Myr, if provided
-        young, old = self.check_young_old_units(young, old)
+        young, old = self._check_young_old_units(young, old)
 
         # Get the transmitted spectra
         lnu = (1.0 - fesc) * self.generate_lnu(
@@ -259,8 +263,8 @@ class StarsComponent:
         self,
         grid,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -274,11 +278,11 @@ class StarsComponent:
             fesc (float):
                 Fraction of stellar emission that escapeds unattenuated from
                 the birth cloud (defaults to 0.0).
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -293,7 +297,7 @@ class StarsComponent:
         """
 
         # Make sure young and old in Myr, if provided
-        young, old = self.check_young_old_units(young, old)
+        young, old = self._check_young_old_units(young, old)
 
         # Get the nebular emission spectra
         lnu = self.generate_lnu(
@@ -320,8 +324,8 @@ class StarsComponent:
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         verbose=False,
         **kwargs,
@@ -346,11 +350,11 @@ class StarsComponent:
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string):
                 A modifier for the spectra dictionary key such that the
@@ -377,7 +381,7 @@ class StarsComponent:
         """
 
         # Make sure young and old in Myr, if provided
-        young, old = self.check_young_old_units(young, old)
+        young, old = self._check_young_old_units(young, old)
 
         # Check if grid has been run through a photoionisation code
         if grid.read_lines is False:
@@ -399,7 +403,9 @@ class StarsComponent:
                 **kwargs,
             )
 
-            self.spectra[f"{label}intrinsic"] = self.spectra[f"{label}incident"]
+            self.spectra[f"{label}intrinsic"] = self.spectra[
+                f"{label}incident"
+            ]
             return spec
 
         # The incident emission
@@ -480,8 +486,8 @@ class StarsComponent:
         grid,
         tau_v,
         dust_curve=PowerLaw(slope=-1.0),
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -497,11 +503,11 @@ class StarsComponent:
                 The V-band optical depth.
             dust_curve (object)
                 Instance of a dust_curve from synthesizer.dust.attenuation.
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -516,7 +522,7 @@ class StarsComponent:
         """
 
         # Make sure young and old in Myr, if provided
-        young, old = self.check_young_old_units(young, old)
+        young, old = self._check_young_old_units(young, old)
 
         # Generate intrinsic spectra using full star formation and metal
         # enrichment history or all particles
@@ -581,9 +587,8 @@ class StarsComponent:
                 Instance of a dust_curve from synthesizer.dust.attenuation.
             alpha (float):
                 The dust curve slope.
-            young_old_thresh (float):
-                The threshold in log10(age/yr) for young/old stellar
-                populations.
+            young_old_thresh (unyt_quantity):
+                The threshold for young/old stellar populations with units.
             fesc :(float):
                 Lyman continuum escaped fraction.
             fesc_LyA (float):
@@ -665,8 +670,8 @@ class StarsComponent:
                 alpha, (list, tuple, np.ndarray)
             ):
                 raise exceptions.InconsistentArguments(
-                    "Only singular values are supported for tau_v and alpha in "
-                    "a single dust screen situation."
+                    "Only singular values are supported for tau_v and alpha "
+                    "in a single dust screen situation."
                 )
 
         # If grid has photoinoisation outputs, use the reprocessed outputs
@@ -706,7 +711,7 @@ class StarsComponent:
                 fesc,
                 fesc_LyA=fesc_LyA,
                 young=young_old_thresh,
-                old=False,
+                old=None,
                 label="young_",
                 **kwargs,
             )
@@ -717,7 +722,7 @@ class StarsComponent:
                 grid,
                 fesc,
                 fesc_LyA=fesc_LyA,
-                young=False,
+                young=None,
                 old=young_old_thresh,
                 label="old_",
                 **kwargs,
@@ -726,16 +731,19 @@ class StarsComponent:
             # Combine young and old spectra
             if grid.read_lines:
                 self.spectra["incident"] = (
-                    self.spectra["young_incident"] + self.spectra["old_incident"]
+                    self.spectra["young_incident"]
+                    + self.spectra["old_incident"]
                 )
                 self.spectra["transmitted"] = (
-                    self.spectra["young_transmitted"] + self.spectra["old_transmitted"]
+                    self.spectra["young_transmitted"]
+                    + self.spectra["old_transmitted"]
                 )
                 self.spectra["nebular"] = (
                     self.spectra["young_nebular"] + self.spectra["old_nebular"]
                 )
                 self.spectra["reprocessed"] = (
-                    self.spectra["young_reprocessed"] + self.spectra["old_reprocessed"]
+                    self.spectra["young_reprocessed"]
+                    + self.spectra["old_reprocessed"]
                 )
 
             self.spectra["intrinsic"] = (
@@ -758,8 +766,8 @@ class StarsComponent:
                 grid,
                 fesc,
                 fesc_LyA=fesc_LyA,
-                young=False,
-                old=False,
+                young=None,
+                old=None,
                 **kwargs,
             )
 
@@ -772,7 +780,7 @@ class StarsComponent:
             # if dust_emission_model:
             #   - dust
             #   - total
-  
+
             dust_curve.slope = alpha
 
             # Calculate the attenuated emission
@@ -789,22 +797,22 @@ class StarsComponent:
                 self.spectra["emergent"]._lnu = self.spectra["attenuated"]._lnu
             else:
                 self.spectra["emergent"]._lnu = (
-                    self.spectra["escaped"]._lnu +
-                    self.spectra["attenuated"]._lnu
+                    self.spectra["escaped"]._lnu
+                    + self.spectra["attenuated"]._lnu
                 )
 
-            # Force updating of the bolometric luminosity attribute. I don't 
+            # Force updating of the bolometric luminosity attribute. I don't
             # know why this is necessary.
             self.spectra["emergent"].measure_bolometric_luminosity()
 
             if dust_emission_model is not None:
-
                 # Calculate the dust bolometric luminosity as the difference
-                # between the emergent and incident bolometric luminosities.
+                # between the emergent and incident bolometric luminosities.
 
                 dust_bolometric_luminosity = (
-                    self.spectra["incident"].bolometric_luminosity -
-                    self.spectra["emergent"].bolometric_luminosity)
+                    self.spectra["incident"].bolometric_luminosity
+                    - self.spectra["emergent"].bolometric_luminosity
+                )
 
                 if hasattr(dust_emission_model, 'template'):
                     print ("Using IR template models for dust emission")
@@ -828,9 +836,10 @@ class StarsComponent:
                     self.spectra['dust']._lnu *= dust_bolometric_luminosity.value
 
                 # define total as the sum of emergent and dust
-                self.spectra['total'] = (self.spectra['dust'] +
-                                         self.spectra['emergent'])
-            
+                self.spectra["total"] = (
+                    self.spectra["dust"] + self.spectra["emergent"]
+                )
+
         elif np.isscalar(tau_v) is False:
             # Apply separate attenuation to both the young and old components.
 
@@ -838,7 +847,7 @@ class StarsComponent:
             # dust.
 
             # Generates:
-            #   - young_attenuated_BC 
+            #   - young_attenuated_BC
             #   - young_attenuated
             #   - young_emergent
             #   - old_attenuated
@@ -883,9 +892,9 @@ class StarsComponent:
             self.spectra["young_attenuated"] = young_attenuated
 
             # Calculate attenuated spectra of old stars
-            old_attenuated = self.spectra[f"old_{reprocessed_name}"].apply_attenuation(
-                tau_v[0], dust_curve=dust_curve
-            )
+            old_attenuated = self.spectra[
+                f"old_{reprocessed_name}"
+            ].apply_attenuation(tau_v[0], dust_curve=dust_curve)
             self.spectra["old_attenuated"] = old_attenuated
 
             # Get the combined attenuated spectra
@@ -901,7 +910,9 @@ class StarsComponent:
                 self.spectra["young_emergent"]._lnu = self.spectra[
                     "young_attenuated"
                 ]._lnu
-                self.spectra["old_emergent"]._lnu = self.spectra["old_attenuated"]._lnu
+                self.spectra["old_emergent"]._lnu = self.spectra[
+                    "old_attenuated"
+                ]._lnu
             else:
                 self.spectra["young_emergent"]._lnu = (
                     self.spectra["young_escaped"]._lnu
@@ -912,29 +923,32 @@ class StarsComponent:
                     + self.spectra["old_attenuated"]._lnu
                 )
 
-            # Force updating of the bolometric luminosity attribute. I don't 
+            # Force updating of the bolometric luminosity attribute. I don't
             # know why this is necessary.
             self.spectra["young_emergent"].measure_bolometric_luminosity()
             self.spectra["old_emergent"].measure_bolometric_luminosity()
 
             if dust_emission_model is not None:
-
                 if (not isinstance(dust_emission_model, list)) \
                     and (not hasattr(dust_emission_model, 'template')):
+
                     print(
                         (
                             "Separate dust emission model for diffuse and "
                             "birth cloud dust not given"
                         )
                     )
-                
-                    dust_emission_model = [dust_emission_model,
-                                            dust_emission_model]
-     
+
+                    dust_emission_model = [
+                        dust_emission_model,
+                        dust_emission_model,
+                    ]
+
                 # Start with the birth cloud dust.
                 dust_bolometric_luminosity = (
-                    self.spectra["young_transmitted"].bolometric_luminosity -
-                    self.spectra["young_attenuated_BC"].bolometric_luminosity)
+                    self.spectra["young_transmitted"].bolometric_luminosity
+                    - self.spectra["young_attenuated_BC"].bolometric_luminosity
+                )
 
                 if hasattr(dust_emission_model, 'template'):
                     ldust=dust_bolometric_luminosity.to(Lsun)
@@ -946,11 +960,12 @@ class StarsComponent:
                     self.spectra['young_dust_BC']._lnu *= (
                         dust_bolometric_luminosity.value)
 
-                # ISM dust heated by young stars. This is the difference 
+                # ISM dust heated by young stars. This is the difference
                 # between the birth cloud and ISM attenuated spectra.
                 dust_bolometric_luminosity = (
-                    self.spectra["young_attenuated_BC"].bolometric_luminosity -
-                    self.spectra["young_attenuated"].bolometric_luminosity)
+                    self.spectra["young_attenuated_BC"].bolometric_luminosity
+                    - self.spectra["young_attenuated"].bolometric_luminosity
+                )
 
                 if hasattr(dust_emission_model, 'template'):
                     ldust+=dust_bolometric_luminosity.to(Lsun)
@@ -970,8 +985,9 @@ class StarsComponent:
                 
                 # ISM dust heated by old stars. 
                 dust_bolometric_luminosity = (
-                    self.spectra["old_transmitted"].bolometric_luminosity -
-                    self.spectra["old_attenuated"].bolometric_luminosity)
+                    self.spectra["old_transmitted"].bolometric_luminosity
+                    - self.spectra["old_attenuated"].bolometric_luminosity
+                )
 
                 if hasattr(dust_emission_model, 'template'):
                     ldust+=dust_bolometric_luminosity.to(Lsun)
@@ -1011,7 +1027,7 @@ class StarsComponent:
                                          + self.spectra['old_total'])
                     
         # Return total spectra if a dust_emission_model is provided, otherwise
-        # return the emergent spectra.      
+        # return the emergent spectra.
         if dust_emission_model is not None:
             return self.spectra["total"]
         else:
@@ -1024,7 +1040,7 @@ class StarsComponent:
         tau_v_BC=1.0,
         alpha_ISM=None,
         alpha_BC=None,
-        young_old_thresh=7.0,
+        young_old_thresh=10 * Myr,
         **kwargs,
     ):
         """
@@ -1041,14 +1057,13 @@ class StarsComponent:
             tau_v_BC (float)
                 The birth cloud optical depth in the V-band.
             alpha_ISM (float)
-                The slope of the ISM dust curve, (defaults to dust_curve.slope=-1,
-                Recommended: -0.7 from MAGPHYS)
+                The slope of the ISM dust curve, (defaults to
+                dust_curve.slope=-1, Recommended: -0.7 from MAGPHYS)
             alpha_BC (float)
                 The slope of the birth cloud dust curve, (defaults to
                 dust_curve.slope=-1, Recommended: -1.3 from MAGPHYS)
-            young_old_thresh (float)
-                The threshold in log10(age/yr) for young/old stellar
-                populations.
+            young_old_thresh (unyt_quantity)
+                The threshold for young/old stellar populations with units.
             kwargs
                 Any keyword arguments which can be passed to
                 generate_lnu.
@@ -1141,8 +1156,8 @@ class StarsComponent:
             grid (Grid)
                 The Grid object.
             line_ids (list/str)
-                A list of line_ids or a str denoting a single line. Doublets can be
-                specified as a nested list or using a comma
+                A list of line_ids or a str denoting a single line. Doublets
+                can be specified as a nested list or using a comma
                 (e.g. 'OIII4363,OIII4959').
             fesc (float)
                 The Lyman continuum escaped fraction, the fraction of
@@ -1180,7 +1195,9 @@ class StarsComponent:
         # Loop over the intrinsic lines
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # Calculate attenuation
-            T_BC = dust_curve_BC.get_transmission(tau_v_BC, intrinsic_line._wavelength)
+            T_BC = dust_curve_BC.get_transmission(
+                tau_v_BC, intrinsic_line._wavelength
+            )
             T_ISM = dust_curve_ISM.get_transmission(
                 tau_v_ISM, intrinsic_line._wavelength
             )
@@ -1232,8 +1249,8 @@ class StarsComponent:
             grid (Grid)
                 The Grid object.
             line_ids (list/str)
-                A list of line_ids or a str denoting a single line. Doublets can be
-                specified as a nested list or using a comma
+                A list of line_ids or a str denoting a single line. Doublets
+                can be specified as a nested list or using a comma
                 (e.g. 'OIII4363,OIII4959').
             fesc (float)
                 The Lyman continuum escaped fraction, the fraction of
@@ -1258,31 +1275,34 @@ class StarsComponent:
             dust_curve_stellar=dust_curve,
         )
 
-    def check_young_old_units(self, young, old):
+    def _check_young_old_units(self, young, old):
         """
         Checks whether the `young` and `old` arguments to many
         spectra generation methods are in the right units (Myr)
 
         Args:
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
         """
 
-        if young:
+        if young is not None:
             if isinstance(young, (unyt_quantity)):
                 young = young.to("Myr")
             else:
-                young *= Myr
-
-        if old:
+                raise exceptions.InconsistentArguments(
+                    "young must be a unyt_quantity (i.e. a value with units)"
+                )
+        if old is not None:
             if isinstance(old, (unyt_quantity)):
                 old = old.to("Myr")
             else:
-                old *= Myr
+                raise exceptions.InconsistentArguments(
+                    "young must be a unyt_quantity (i.e. a value with units)"
+                )
 
         return young, old
 

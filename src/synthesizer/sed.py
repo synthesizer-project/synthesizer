@@ -1,4 +1,4 @@
-""" Functionality related to spectra storage and manipulation.
+"""Functionality related to spectra storage and manipulation.
 
 When a spectra is computed from a `Galaxy` or a Galaxy component the resulting
 calculated spectra are stored in `Sed` objects. These provide helper functions
@@ -10,7 +10,7 @@ Example usage:
     sed = Sed(lams, lnu)
     sed.get_fnu(redshift)
     sed.apply_attenutation(tau_v=0.7)
-    sed.get_broadband_fluxes(filters)
+    sed.get_photo_fluxes(filters)
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,11 +18,12 @@ from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from scipy import integrate
 from spectres import spectres
-from unyt import c, h, nJy, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
+from unyt import c, h, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.photometry import PhotometryCollection
 from synthesizer.utils import rebin_1d
 from synthesizer.units import Quantity
 from synthesizer.igm import Inoue14
@@ -30,7 +31,6 @@ from synthesizer.utils import has_units
 
 
 class Sed:
-
     """
     A class representing a spectral energy distribution (SED).
 
@@ -53,10 +53,10 @@ class Sed:
             An optional descriptive string defining the Sed.
         redshift (float)
             The redshift of the Sed.
-        broadband_luminosities (dict, float)
+        photo_luminosities (dict, float)
             The rest frame broadband photometry in arbitrary filters
             (filter_code: photometry).
-        broadband_fluxes (dict, float)
+        photo_fluxes (dict, float)
             The observed broadband photometry in arbitrary filters
             (filter_code: photometry).
     """
@@ -136,8 +136,8 @@ class Sed:
         self.fnu = None
 
         # Broadband photometry
-        self.broadband_luminosities = None
-        self.broadband_fluxes = None
+        self.photo_luminosities = None
+        self.photo_fluxes = None
 
     def concat(self, *other_seds):
         """
@@ -221,24 +221,51 @@ class Sed:
         # could instead check the first and last entry and the shape.
         # In rare instances this could fail though.
         if not np.array_equal(self._lam, second_sed._lam):
-            raise exceptions.InconsistentAddition("Wavelength grids must be identical")
+            raise exceptions.InconsistentAddition(
+                "Wavelength grids must be identical"
+            )
 
         # Ensure the lnu arrays are compatible
         # This check is redudant for Sed.lnu.shape = (nlam, ) spectra but will
         # not erroneously error. Nor is it expensive.
         if self._lnu.shape[0] != second_sed._lnu.shape[0]:
-            raise exceptions.InconsistentAddition("SEDs must have same dimensions")
+            raise exceptions.InconsistentAddition(
+                "SEDs must have same dimensions"
+            )
 
         # They're compatible, add them
         return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+
+    def __radd__(self, second_sed):
+        """
+        Overloads "reflected" addition to allow sed objects to be added
+        together when in reverse order, i.e. second_sed + self.
+
+        This may seem superfluous, but it is needed to enable the use of sum()
+        on lists of Seds.
+
+        Returns:
+            Sed
+                A new instance of Sed with added lnu arrays.
+
+        Raises:
+            InconsistentAddition
+                If wavelength arrays or lnu arrays are incompatible an error
+                is raised.
+        """
+        # Handle the int case explictly which is triggered by the use of sum
+        if isinstance(second_sed, int) and second_sed == 0:
+            return self
+        return self.__add__(second_sed)
 
     def __mul__(self, scaling):
         """
         Overide multiplication operator to allow lnu to be scaled.
         This only works scaling * x.
 
-        Note: only acts on the rest frame spectra. To get the scaled fnu get_fnu
-        must be called on the newly scaled Sed object.
+        Note: only acts on the rest frame spectra. To get the
+        scaled fnu get_fnu must be called on the newly scaled
+        Sed object.
 
         Args:
             scaling (float)
@@ -255,8 +282,9 @@ class Sed:
         """
         As above but for x * scaling.
 
-        Note: only acts on the rest frame spectra. To get the scaled fnu get_fnu
-        must be called on the newly scaled Sed object.
+        Note: only acts on the rest frame spectra. To get the
+        scaled fnu get_fnu must be called on the newly
+        scaled Sed object.
 
         Args:
             scaling (float)
@@ -291,10 +319,11 @@ class Sed:
         # calculate it.
         if self.bolometric_luminosity is None:
             self.bolometric_luminosity = self.measure_bolometric_luminosity()
-
-        pstr += f"log10(Bolometric luminosity/ \
-            {self.bolometric_luminosity.units}): \
-            {np.log10(self.bolometric_luminosity):.2f} \n"
+        pstr += (
+            "log10(Bolometric luminosity/"
+            f"{str(self.bolometric_luminosity.units)}):"
+            f"{np.log10(self.bolometric_luminosity)}"
+        )
         pstr += "-" * 10
 
         return pstr
@@ -376,7 +405,7 @@ class Sed:
         """
         return np.ndim(self.lnu)
 
-    def _get_lnu_at_nu(self, nu, kind=False):
+    def _get_lnu_at_nu(self, nu, kind=False, ind=None):
         """
         A simple internal function for getting lnu at nu assuming the default
         unit system.
@@ -386,13 +415,17 @@ class Sed:
                 The frequency(s) of interest.
             kind (str)
                 Interpolation kind, see scipy.interp1d docs.
+            ind (int)
+                Row index of the spectra. Only applicable for muiti-dimensional
+                spectra.
 
         Returns:
             luminosity (float/array-like, float)
                 The luminosity (lnu) at the provided wavelength.
         """
-
-        return interp1d(self._nu, self._lnu, kind=kind)(nu)
+        if ind is None:
+            return interp1d(self._nu, self._lnu, kind=kind)(nu)
+        return interp1d(self._nu, self._lnu[ind, :], kind=kind)(nu)
 
     def get_lnu_at_nu(self, nu, kind=False):
         """
@@ -410,10 +443,11 @@ class Sed:
         """
 
         return (
-            self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind) * self.lnu.units
+            self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind)
+            * self.lnu.units
         )
 
-    def _get_lnu_at_lam(self, lam, kind=False):
+    def _get_lnu_at_lam(self, lam, kind=False, ind=None):
         """
         Return lnu without units at a provided wavelength using 1d
         interpolation.
@@ -423,13 +457,17 @@ class Sed:
                 The wavelength(s) of interest.
             kind (str)
                 Interpolation kind, see scipy.interp1d docs.
+            ind (int)
+                Row index of the spectra. Only applicable for muiti-dimensional
+                spectra.
 
         Returns:
             luminosity (float/array-like, float)
                 The luminosity (lnu) at the provided wavelength.
         """
-
-        return interp1d(self._lam, self._lnu, kind=kind)(lam)
+        if ind is None:
+            return interp1d(self._lam, self._lnu, kind=kind)(lam)
+        return interp1d(self._lam, self._lnu[ind, :], kind=kind)(lam)
 
     def get_lnu_at_lam(self, lam, kind=False):
         """
@@ -470,13 +508,53 @@ class Sed:
                 If method is an incompatible option an error is raised.
         """
 
-        # Integrate using the requested method
+        # If the method is trapz we can do any number of dimensions
         if method == "trapz":
-            bolometric_luminosity = np.trapz(self.lnu[::-1], x=self.nu[::-1])
-        elif method == "quad":
-            bolometric_luminosity = (
-                integrate.quad(self._get_lnu_at_nu, 1e12, 1e16)[0] * self.lnu.units * Hz
+            bolometric_luminosity = np.trapz(
+                np.flip(self._lnu, axis=-1),
+                x=self._nu[::-1],
+                axis=-1,
             )
+        elif method == "quad":
+            # Handle multiple dimensions explicitly
+            if self._lnu.ndim == 1:
+                # Integrate using quad
+                bolometric_luminosity = (
+                    integrate.quad(
+                        self._get_lnu_at_nu,
+                        1e12,
+                        1e16,
+                        args=("cubic"),
+                    )[0]
+                    * self.lnu.units
+                    * Hz
+                )
+
+            elif self._lnu.ndim == 2:
+                # Set up bolometric luminosity array
+                bolometric_luminosity = np.zeros(self._lnu.shape[0])
+
+                # Loop over spectra
+                for ind in range(self._lnu.shape[0]):
+                    bolometric_luminosity[ind] = (
+                        integrate.quad(
+                            self._get_lnu_at_nu,
+                            1e12,
+                            1e16,
+                            args=("cubic", ind),
+                        )[0]
+                        * self.lnu.units
+                        * Hz
+                    )
+            else:
+                raise exceptions.UnimplementedFunctionality(
+                    "Measuring bolometric luminosities for Sed.lnu.ndim > 2"
+                    " not yet implemented! Feel free to implement and raise "
+                    "a pull request. Guidance for contributing can be found "
+                    "at https://github.com/flaresimulations/"
+                    "synthesizer/blob/main/"
+                    "docs/CONTRIBUTING.md"
+                )
         else:
             raise exceptions.UnrecognisedOption(
                 f"Unrecognised integration method ({method}). "
@@ -484,7 +562,7 @@ class Sed:
             )
 
         self.bolometric_luminosity = bolometric_luminosity
-        return bolometric_luminosity
+        return self.bolometric_luminosity
 
     def measure_window_luminosity(self, window, method="trapz"):
         """
@@ -512,14 +590,18 @@ class Sed:
             # base units.
             lims = (c / np.array(window)).to(self.nu.units).value
             luminosity = (
-                integrate.quad(self._get_lnu_at_nu, *lims)[0] * self.lnu.units * Hz
+                integrate.quad(self._get_lnu_at_nu, *lims)[0]
+                * self.lnu.units
+                * Hz
             )
 
         elif method == "trapz":
             # Define a pseudo transmission function
             transmission = (self.lam > window[0]) & (self.lam < window[1])
             transmission = transmission.astype(float)
-            luminosity = np.trapz(self.lnu[::-1] * transmission[::-1], x=self.nu[::-1])
+            luminosity = np.trapz(
+                self.lnu[::-1] * transmission[::-1], x=self.nu[::-1]
+            )
         else:
             raise exceptions.UnrecognisedOption(
                 f"Unrecognised integration method ({method}). "
@@ -582,7 +664,9 @@ class Sed:
                 Lnu = (
                     np.array(
                         [
-                            np.trapz(_lnu[::-1] * transmission[::-1] / nu, x=nu)
+                            np.trapz(
+                                _lnu[::-1] * transmission[::-1] / nu, x=nu
+                            )
                             / np.trapz(transmission[::-1] / nu, x=nu)
                             for _lnu in self._lnu
                         ]
@@ -607,7 +691,9 @@ class Sed:
             def inv(x):
                 return 1 / x
 
-            Lnu = integrate.quad(func, *lims)[0] / integrate.quad(inv, *lims)[0]
+            Lnu = (
+                integrate.quad(func, *lims)[0] / integrate.quad(inv, *lims)[0]
+            )
 
             Lnu = Lnu * self.lnu.units
 
@@ -709,7 +795,9 @@ class Sed:
             if self._spec_dims == 2:
                 beta = np.array(
                     [
-                        linregress(np.log10(self._lam[s]), np.log10(_lnu[..., s]))[0]
+                        linregress(
+                            np.log10(self._lam[s]), np.log10(_lnu[..., s])
+                        )[0]
                         - 2.0
                         for _lnu in self.lnu
                     ]
@@ -717,7 +805,10 @@ class Sed:
 
             else:
                 beta = (
-                    linregress(np.log10(self._lam[s]), np.log10(self._lnu[s]))[0] - 2.0
+                    linregress(np.log10(self._lam[s]), np.log10(self._lnu[s]))[
+                        0
+                    ]
+                    - 2.0
                 )
 
         # If two windows are provided
@@ -732,7 +823,8 @@ class Sed:
 
             # Measure beta
             beta = (
-                np.log10(lnu_blue / lnu_red) / np.log10(np.mean(blue) / np.mean(red))
+                np.log10(lnu_blue / lnu_red)
+                / np.log10(np.mean(blue) / np.mean(red))
                 - 2.0
             )
 
@@ -742,31 +834,6 @@ class Sed:
             )
 
         return beta
-
-    def get_broadband_luminosities(self, filters):
-        """
-        Calculate broadband luminosities using a FilterCollection object
-
-        Args:
-            filters (filters.FilterCollection)
-                A FilterCollection object.
-
-        Returns:
-            broadband_luminosities (dict)
-                A dictionary of rest frame broadband luminosities.
-        """
-
-        # Intialise result dictionary
-        self.broadband_luminosities = {}
-
-        # Loop over filters
-        for f in filters:
-            # Apply the filter transmission curve and store the resulting
-            # luminosity
-            bb_lum = f.apply_filter(self._lnu, nu=self._nu) * self.lnu.units
-            self.broadband_luminosities[f.filter_code] = bb_lum
-
-        return self.broadband_luminosities
 
     def get_fnu0(self):
         """
@@ -819,7 +886,9 @@ class Sed:
 
         # Finally, compute the flux SED and apply unit conversions to get
         # to nJy
-        self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
+        self.fnu = (
+            self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
+        )
 
         # If we are applying an IGM model apply it
         if igm:
@@ -827,17 +896,62 @@ class Sed:
 
         return self.fnu
 
-    def get_broadband_fluxes(self, fc, verbose=True):  # broad band flux/nJy
+    def get_photo_luminosities(self, filters, verbose=True):
         """
         Calculate broadband luminosities using a FilterCollection object
 
         Args:
-            fc (object)
+            filters (filters.FilterCollection)
                 A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            photo_luminosities (dict)
+                A dictionary of rest frame broadband luminosities.
+        """
+
+        # Intialise result dictionary
+        photo_luminosities = {}
+
+        # Loop over filters
+        for f in filters:
+            # Check whether the filter transmission curve wavelength grid
+            # and the spectral grid are the same array
+            if not np.array_equal(f.lam, self.lam):
+                if verbose:
+                    print(
+                        (
+                            "WARNING: filter wavelength grid is not "
+                            "the same as the SED wavelength grid."
+                        )
+                    )
+
+            # Apply the filter transmission curve and store the resulting
+            # luminosity
+            bb_lum = f.apply_filter(self._lnu, nu=self._nu)
+            photo_luminosities[f.filter_code] = bb_lum
+
+        # Create the photometry collection and store it in the object
+        self.photo_luminosities = PhotometryCollection(
+            filters, rest_frame=True, **photo_luminosities
+        )
+
+        return self.photo_luminosities
+
+    def get_photo_fluxes(self, filters, verbose=True):
+        """
+        Calculate broadband fluxes using a FilterCollection object
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
 
         Returns:
             (dict)
-                A dictionary of fluxes in each filter in fc.
+                A dictionary of fluxes in each filter in filters.
         """
 
         # Ensure fluxes actually exist
@@ -851,10 +965,10 @@ class Sed:
             )
 
         # Set up flux dictionary
-        self.broadband_fluxes = {}
+        photo_fluxes = {}
 
         # Loop over filters in filter collection
-        for f in fc:
+        for f in filters:
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
             if not np.array_equal(f.lam, self.lam):
@@ -867,10 +981,15 @@ class Sed:
                     )
 
             # Calculate and store the broadband flux in this filter
-            bb_flux = f.apply_filter(self._fnu, nu=self._obsnu) * nJy
-            self.broadband_fluxes[f.filter_code] = bb_flux
+            bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
+            photo_fluxes[f.filter_code] = bb_flux
 
-        return self.broadband_fluxes
+        # Create the photometry collection and store it in the object
+        self.photo_fluxes = PhotometryCollection(
+            filters, rest_frame=False, **photo_fluxes
+        )
+
+        return self.photo_fluxes
 
     def measure_colour(self, f1, f2):
         """
@@ -888,16 +1007,16 @@ class Sed:
         """
 
         # Ensure fluxes exist
-        if not bool(self.broadband_fluxes):
+        if not bool(self.photo_fluxes):
             raise ValueError(
                 (
                     "Broadband fluxes not yet calculated, "
-                    "run `get_broadband_fluxes` with a "
+                    "run `get_photo_fluxes` with a "
                     "FilterCollection"
                 )
             )
 
-        return 2.5 * np.log10(self.broadband_fluxes[f2] / self.broadband_fluxes[f1])
+        return 2.5 * np.log10(self.photo_fluxes[f2] / self.photo_fluxes[f1])
 
     def measure_index(self, feature, blue, red):
         """
@@ -913,8 +1032,10 @@ class Sed:
 
         Returns:
             index (float)
-                Absorption feature index in units of wavelength
+               Absorption feature index in units of wavelength
         """
+
+        # self.lnu = np.array([self.lnu, self.lnu*2])
 
         # Measure the red and blue windows
         lnu_blue = self.measure_window_lnu(blue)
@@ -924,43 +1045,46 @@ class Sed:
         transmission = (self.lam > feature[0]) & (self.lam < feature[1])
         feature_lam = self.lam[transmission]
 
-        # Using the red and blue windows fit the continuum
-        # note, this does not conserve units so we need to add them back in
-        # later.
+        # Extract mean values
+        mean_blue = np.mean(blue)
+        mean_red = np.mean(red)
 
         # Handle different spectra shapes
         if self._spec_dims == 2:
             # Multiple spectra case
 
-            # Set up output array
-            index = np.zeros(len(self.lnu)) * self.lam.units
-
-            # Note: I'm sure this could be done better.
-            for i, _lnu in enumerate(self.lnu):
-                continuum_fit = np.polyfit(
-                    [np.mean(blue), np.mean(red)], [lnu_blue[i], lnu_red[i]], 1
+            # Perform polyfit for the continuum fit for all spectra
+            continuum_fits = np.polyfit(
+                [mean_blue, mean_red], [lnu_blue, lnu_red], 1
+            )
+            # Use the continuum fit to define the continuum for all spectra
+            continuum = (
+                (
+                    np.column_stack(
+                        continuum_fits[0]
+                        * feature_lam.to(self.lam.units).value[:, np.newaxis]
+                    )
+                    + continuum_fits[1][:, np.newaxis]
                 )
+            ) * self.lnu.units
 
-                # Use the continuum fit to define the continuum
-                continuum = (
-                    (continuum_fit[0] * feature_lam.to(self.lam.units).value)
-                    + continuum_fit[1]
-                ) * self.lnu.units
+            # Define the continuum subtracted spectrum for all SEDs
+            feature_lum = self.lnu[:, transmission]
+            feature_lum_continuum_subtracted = (
+                -(feature_lum - continuum) / continuum
+            )
 
-                # Define the continuum subtracted spectrum
-                feature_lum = _lnu[transmission]
-                feature_lum_continuum_subtracted = (
-                    -(feature_lum - continuum) / continuum
-                )
-
-                # Measure index
-                index[i] = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
+            # Measure index for all SEDs
+            index = np.trapz(
+                feature_lum_continuum_subtracted, x=feature_lam, axis=1
+            )
 
         else:
             # Single spectra case
 
+            # Perform polyfit for the continuum fit
             continuum_fit = np.polyfit(
-                [np.mean(blue), np.mean(red)], [lnu_blue, lnu_red], 1
+                [mean_blue, mean_red], [lnu_blue, lnu_red], 1
             )
 
             # Use the continuum fit to define the continuum
@@ -971,8 +1095,9 @@ class Sed:
 
             # Define the continuum subtracted spectrum
             feature_lum = self.lnu[transmission]
-
-            feature_lum_continuum_subtracted = -(feature_lum - continuum) / continuum
+            feature_lum_continuum_subtracted = (
+                -(feature_lum - continuum) / continuum
+            )
 
             # Measure index
             index = np.trapz(feature_lum_continuum_subtracted, x=feature_lam)
@@ -1059,7 +1184,8 @@ class Sed:
         if mask is not None:
             if self._lnu.ndim < 2:
                 raise exceptions.InconsistentArguments(
-                    "Masks are only applicable for Seds containing multiple spectra"
+                    "Masks are only applicable for Seds containing "
+                    "multiple spectra"
                 )
             if self._lnu.shape[0] != mask.size:
                 raise exceptions.InconsistentArguments(
@@ -1172,8 +1298,9 @@ def plot_spectra(
             figure and axes.
         ylimits (tuple)
             The limits to apply to the y axis. If not provided the limits
-            will be calculated with the lower limit set to 1000 (100) times less
-            than the peak of the spectrum for rest_frame (observed) spectra.
+            will be calculated with the lower limit set to 1000 (100) times
+            less than the peak of the spectrum for rest_frame (observed)
+            spectra.
         xlimits (tuple)
             The limits to apply to the x axis. If not provided the optimal
             limits are found based on the ylimits.
@@ -1258,7 +1385,8 @@ def plot_spectra(
             # Ensure we have fluxes
             if sed.fnu is None:
                 raise exceptions.MissingSpectraType(
-                    f"This Sed has no fluxes ({key})! Have you called Sed.get_fnu()?"
+                    f"This Sed has no fluxes ({key})! Have you called "
+                    "Sed.get_fnu()?"
                 )
 
             # Ok everything is fine
@@ -1417,8 +1545,9 @@ def plot_observed_spectra(
             figure and axes.
         ylimits (tuple)
             The limits to apply to the y axis. If not provided the limits
-            will be calculated with the lower limit set to 1000 (100) times less
-            than the peak of the spectrum for rest_frame (observed) spectra.
+            will be calculated with the lower limit set to 1000 (100) times
+            less than the peak of the spectrum for rest_frame (observed)
+            spectra.
         xlimits (tuple)
             The limits to apply to the x axis. If not provided the optimal
             limits are found based on the ylimits.
@@ -1493,14 +1622,14 @@ def plot_observed_spectra(
         # Loop over spectra plotting photometry and filter curves
         for sed in spectra.values():
             # Get the photometry
-            sed.get_broadband_fluxes(filters)
+            sed.get_photo_fluxes(filters)
 
             # Plot the photometry for each filter
             for f in filters:
                 piv_lam = f.pivwv()
                 ax.scatter(
                     piv_lam * (1 + redshift),
-                    sed.broadband_fluxes[f.filter_code],
+                    sed.photo_fluxes[f.filter_code],
                     zorder=4,
                 )
 

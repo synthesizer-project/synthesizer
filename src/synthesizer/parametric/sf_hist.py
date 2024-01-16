@@ -26,8 +26,7 @@ from synthesizer.stats import weighted_median, weighted_mean
 # Define a list of the available parametrisations
 parametrisations = (
     "Constant",
-    "Exponential"
-    "TruncatedExponential",
+    "Exponential" "TruncatedExponential",
     "LogNormal",
     "ExponentiallyyDeclining",
     "DelayedExponentiallyDeclining",
@@ -94,7 +93,7 @@ class Common:
 
         return self._sfr(age)
 
-    def calculate_sfh(self, t_range=(0, 10 ** 10), dt=10 ** 6):
+    def calculate_sfh(self, t_range=(0, 10**10), dt=10**6):
         """
         Calcualte the age of a given star formation history.
 
@@ -119,7 +118,7 @@ class Common:
 
         return t, sfh
 
-    def calculate_median_age(self, t_range=(0, 10 ** 10), dt=10 ** 6):
+    def calculate_median_age(self, t_range=(0, 10**10), dt=10**6):
         """
         Calcualte the median age of a given star formation history.
 
@@ -141,7 +140,7 @@ class Common:
 
         return weighted_median(t, sfh) * yr
 
-    def calculate_mean_age(self, t_range=(0, 10 ** 10), dt=10 ** 6):
+    def calculate_mean_age(self, t_range=(0, 10**10), dt=10**6):
         """
         Calcualte the median age of a given star formation history.
 
@@ -186,7 +185,9 @@ class Common:
         pstr += str(self.__class__) + "\n"
         for parameter_name, parameter_value in self.parameters.items():
             pstr += f"{parameter_name}: {parameter_value}" + "\n"
-        pstr += f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
+        pstr += (
+            f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
+        )
         pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
         pstr += "-" * 10 + "\n"
 
@@ -362,7 +363,7 @@ class LogNormal(Common):
 
         # Calculate the relative ages and peak for the calculation
         self.tpeak = self.max_age - self.peak_age
-        self.t_0 = np.log(self.tpeak) + self.tau ** 2
+        self.t_0 = np.log(self.tpeak) + self.tau**2
 
     def _sfr(self, age):
         """
@@ -375,7 +376,9 @@ class LogNormal(Common):
         if age < self.max_age:
             norm = 1.0 / (self.max_age - age)
             exponent = (
-                (np.log(self.max_age - age) - self.t_0) ** 2 / 2 / self.tau ** 2
+                (np.log(self.max_age - age) - self.t_0) ** 2
+                / 2
+                / self.tau**2
             )
             return norm * np.exp(-exponent)
 

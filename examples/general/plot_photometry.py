@@ -2,7 +2,7 @@
 Photometry example
 ==================
 
-An example demonstrating the observed spectrum for a parametric galaxy 
+An example demonstrating the observed spectrum for a parametric galaxy
 including photometry. This example will:
 - build a parametric galaxy (see make_stars and make_sed).
 - calculate spectral luminosity density (see make_sed).
@@ -11,8 +11,6 @@ including photometry. This example will:
 - calculate photometry.
 - plot the redshift evolution of photometry.
 """
-import os
-import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
@@ -20,9 +18,8 @@ from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy
-from synthesizer.plt import single, single_histxy
-from unyt import yr, Myr, c, angstrom
-from synthesizer.igm import Madau96, Inoue14
+from unyt import Myr
+from synthesizer.igm import Madau96
 from astropy.cosmology import Planck18 as cosmo
 
 
@@ -36,9 +33,12 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
-    # define the parameters of the star formation and metal enrichment histories
+    # define the parameters of the star formation and metal
+    # enrichment histories
     sfh_p = {"duration": 10 * Myr}
-    Z_p = {"log10metallicity": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    Z_p = {
+        "log10metallicity": -2.0
+    }  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = 1e9
 
     # define the functional form of the star formation and metal
@@ -62,7 +62,15 @@ if __name__ == "__main__":
     # Define Filters
     filter_codes = [
         f"JWST/NIRCam.{f}"
-        for f in ["F090W", "F115W", "F150W", "F200W", "F277W", "F356W", "F444W"]
+        for f in [
+            "F090W",
+            "F115W",
+            "F150W",
+            "F200W",
+            "F277W",
+            "F356W",
+            "F444W",
+        ]
     ]
     filter_codes += [f"JWST/MIRI.{f}" for f in ["F770W"]]
     filters = FilterCollection(filter_codes=filter_codes, new_lam=grid.lam)
@@ -101,8 +109,10 @@ if __name__ == "__main__":
         ax.text(
             0.05,
             0.1,
-            f"$z=%.1f$" % z,
-            bbox=dict(boxstyle="round,pad=0.3", fc="w", ec="k", lw=1, alpha=0.8),
+            f"$z={z:.1f}$",
+            bbox=dict(
+                boxstyle="round,pad=0.3", fc="w", ec="k", lw=1, alpha=0.8
+            ),
             transform=ax.transAxes,
             horizontalalignment="left",
         )
@@ -118,7 +128,13 @@ if __name__ == "__main__":
                 zorder=0,
             )
         else:
-            ax.plot(seds[z].obslam, seds[z]._fnu, color="k", linestyle="--", zorder=0)
+            ax.plot(
+                seds[z].obslam,
+                seds[z]._fnu,
+                color="k",
+                linestyle="--",
+                zorder=0,
+            )
 
         # Make the first legend
         if ind == 0:
@@ -158,7 +174,12 @@ if __name__ == "__main__":
 
             # Plot the photometry
             ax.scatter(
-                f.pivwv(), phot, s=50, color=colors[f.filter_code], marker="D", zorder=2
+                f.pivwv(),
+                phot,
+                s=50,
+                color=colors[f.filter_code],
+                marker="D",
+                zorder=2,
             )
 
         # Make the second legened

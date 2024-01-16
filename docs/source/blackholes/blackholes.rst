@@ -9,5 +9,4 @@ Synthesizer can be used to model emission from black holes.
    grids
    emission_models
    particle_blackholes 
-
-
+   parametric_blackholes

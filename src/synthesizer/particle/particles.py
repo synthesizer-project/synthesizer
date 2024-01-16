@@ -42,7 +42,13 @@ class Particles:
     softening_lengths = Quantity()
 
     def __init__(
-        self, coordinates, velocities, masses, redshift, softening_length, nparticles
+        self,
+        coordinates,
+        velocities,
+        masses,
+        redshift,
+        softening_length,
+        nparticles,
     ):
         """
         Intialise the Particles.
@@ -82,7 +88,9 @@ class Particles:
         # How many particles are there?
         self.nparticles = nparticles
 
-    def _check_part_args(self, coordinates, velocities, masses, softening_length):
+    def _check_part_args(
+        self, coordinates, velocities, masses, softening_length
+    ):
         """
         Sanitizes the inputs ensuring all arguments agree and are compatible.
 

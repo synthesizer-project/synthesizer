@@ -14,7 +14,7 @@ Example usages:
 
     stars = Stars(initial_masses, ages, metallicities,
                   redshift=redshift, current_masses=current_masses, ...)
-    stars = sample_sfhz(sfzh, n, total_initial_mass, 
+    stars = sample_sfhz(sfzh, n, total_initial_mass,
                         smoothing_lengths=smoothing_lengths,
                         tau_v=tau_vs, coordinates=coordinates, ...)
 """
@@ -44,8 +44,8 @@ class Stars(Particles, StarsComponent):
     about the stars needed in other computations. For example a Galaxy object
     can be passed a stars object for use with any of the Galaxy helper methods.
 
-    Note that due to the many possible operations, this class has a large number
-    of optional attributes which are set to None if not provided.
+    Note that due to the many possible operations, this class has a large
+    number of optional attributes which are set to None if not provided.
 
     Attributes:
         initial_masses (array-like, float)
@@ -123,9 +123,9 @@ class Stars(Particles, StarsComponent):
         softening_length=None,
     ):
         """
-        Intialise the Stars instance. The first 3 arguments are always required.
-        All other arguments are optional attributes applicable in different
-        situations.
+        Intialise the Stars instance. The first 3 arguments are always
+        required. All other arguments are optional attributes applicable
+        in different situations.
 
         Args:
             initial_masses (array-like, float)
@@ -217,7 +217,8 @@ class Stars(Particles, StarsComponent):
         # Intialise the flag for resampling
         self.resampled = False
 
-        # Set a frontfacing clone of the number of particles with clearer naming
+        # Set a frontfacing clone of the number of particles
+        # with clearer naming
         self.nstars = self.nparticles
 
         # Check the arguments we've been given
@@ -250,7 +251,8 @@ class Stars(Particles, StarsComponent):
     def __str__(self):
         """
         Overloads the __str__ operator, enabling the printing of a summary of
-        the Stars with print(stars) syntax, where stars is an instance of Stars.
+        the Stars with print(stars) syntax, where stars is an instance of
+        Stars.
 
         Returns:
             pstr (str)
@@ -292,8 +294,8 @@ class Stars(Particles, StarsComponent):
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
             mask (bool)
-                A mask to be applied to the stars. Spectra will only be computed
-                and returned for stars with True in the mask.
+                A mask to be applied to the stars. Spectra will only be
+                computed and returned for stars with True in the mask.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -367,8 +369,8 @@ class Stars(Particles, StarsComponent):
         grid,
         spectra_name,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -387,10 +389,10 @@ class Stars(Particles, StarsComponent):
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
             young (bool/float)
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
             old (bool/float)
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             verbose (bool)
                 Flag for verbose output.
@@ -422,19 +424,24 @@ class Stars(Particles, StarsComponent):
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
             # How many particles lie below the grid limits?
-            n_below_age = self.log10ages[self.log10ages < grid.log10age[0]].size
+            n_below_age = self.log10ages[
+                self.log10ages < grid.log10age[0]
+            ].size
             n_below_metal = self.metallicities[
                 self.metallicities < grid.metallicity[0]
             ].size
 
             # How many particles lie above the grid limits?
-            n_above_age = self.log10ages[self.log10ages > grid.log10age[-1]].size
+            n_above_age = self.log10ages[
+                self.log10ages > grid.log10age[-1]
+            ].size
             n_above_metal = self.metallicities[
                 self.metallicities > grid.metallicity[-1]
             ].size
 
-            # Check the fraction of particles outside of the grid (these will be
-            # pinned to the edge of the grid) by finding those inside
+            # Check the fraction of particles outside of the grid (these
+            # will be pinned to the edge of the grid) by finding
+            # those inside
             age_inside_mask = np.logical_and(
                 self.log10ages <= grid.log10age[-1],
                 self.log10ages >= grid.log10age[0],
@@ -456,21 +463,26 @@ class Stars(Particles, StarsComponent):
             # Tell the user if there are particles outside the grid
             if ratio_out > 0:
                 print(
-                    f"{ratio_out * 100:.2f}% of particles lie outside the grid! "
+                    f"{ratio_out * 100:.2f}% of particles lie "
+                    "outside the grid! "
                     "These will be pinned at the grid limits."
                 )
-                print(f"Of these:")
+                print("Of these:")
                 print(
-                    f"  {n_below_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[0]}"
+                    f"  {n_below_age / self.nparticles * 100:.2f}%"
+                    f" have log10(ages/yr) > {grid.log10age[0]}"
                 )
                 print(
-                    f"  {n_below_metal / self.nparticles * 100:.2f}% have metallicities < {grid.metallicity[0]}"
+                    f"  {n_below_metal / self.nparticles * 100:.2f}%"
+                    f" have metallicities < {grid.metallicity[0]}"
                 )
                 print(
-                    f"  {n_above_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[-1]}"
+                    f"  {n_above_age / self.nparticles * 100:.2f}%"
+                    f" have log10(ages/yr) > {grid.log10age[-1]}"
                 )
                 print(
-                    f"  {n_above_metal / self.nparticles * 100:.2f}% have metallicities > {grid.metallicity[-1]}"
+                    f"  {n_above_metal / self.nparticles * 100:.2f}%"
+                    f" have metallicities > {grid.metallicity[-1]}"
                 )
 
         # Get particle age masks
@@ -564,11 +576,14 @@ class Stars(Particles, StarsComponent):
 
                 # Line luminosity erg/s
                 luminosity.append(
-                    (1 - fesc) * np.sum(grid_line["luminosity"] * self.initial_masses)
+                    (1 - fesc)
+                    * np.sum(grid_line["luminosity"] * self.initial_masses)
                 )
 
                 # Continuum at line wavelength, erg/s/Hz
-                continuum.append(np.sum(grid_line["continuum"] * self.initial_masses))
+                continuum.append(
+                    np.sum(grid_line["continuum"] * self.initial_masses)
+                )
 
         else:
             raise exceptions.InconsistentArguments(
@@ -583,8 +598,8 @@ class Stars(Particles, StarsComponent):
         grid,
         spectra_name,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -603,10 +618,10 @@ class Stars(Particles, StarsComponent):
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
             young (bool/float)
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
             old (bool/float)
-                If not False, specifies age in Myr at which to filter
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             verbose (bool)
                 Flag for verbose output. By default False.
@@ -638,19 +653,23 @@ class Stars(Particles, StarsComponent):
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
             # How many particles lie below the grid limits?
-            n_below_age = self.log10ages[self.log10ages < grid.log10age[0]].size
+            n_below_age = self.log10ages[
+                self.log10ages < grid.log10age[0]
+            ].size
             n_below_metal = self.metallicities[
                 self.metallicities < grid.metallicity[0]
             ].size
 
             # How many particles lie above the grid limits?
-            n_above_age = self.log10ages[self.log10ages > grid.log10age[-1]].size
+            n_above_age = self.log10ages[
+                self.log10ages > grid.log10age[-1]
+            ].size
             n_above_metal = self.metallicities[
                 self.metallicities > grid.metallicity[-1]
             ].size
 
-            # Check the fraction of particles outside of the grid (these will be
-            # pinned to the edge of the grid) by finding those inside
+            # Check the fraction of particles outside of the grid (these will
+            # be pinned to the edge of the grid) by finding those inside
             age_inside_mask = np.logical_and(
                 self.log10ages <= grid.log10age[-1],
                 self.log10ages >= grid.log10age[0],
@@ -672,21 +691,26 @@ class Stars(Particles, StarsComponent):
             # Tell the user if there are particles outside the grid
             if ratio_out > 0:
                 print(
-                    f"{ratio_out * 100:.2f}% of particles lie outside the grid! "
+                    f"{ratio_out * 100:.2f}% of particles "
+                    "lie outside the grid! "
                     "These will be pinned at the grid limits."
                 )
-                print(f"Of these:")
+                print("Of these:")
                 print(
-                    f"  {n_below_age / self.nparticles * 100:.2f}% have log10(ages/yr) < {grid.log10age[0]}"
+                    f"  {n_below_age / self.nparticles * 100:.2f}%"
+                    f" have log10(ages/yr) < {grid.log10age[0]}"
                 )
                 print(
-                    f"  {n_below_metal / self.nparticles * 100:.2f}% have metallicities < {grid.metallicity[0]}"
+                    f"  {n_below_metal / self.nparticles * 100:.2f}% "
+                    f"have metallicities < {grid.metallicity[0]}"
                 )
                 print(
-                    f"  {n_above_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[-1]}"
+                    f"  {n_above_age / self.nparticles * 100:.2f}% "
+                    f"have log10(ages/yr) > {grid.log10age[-1]}"
                 )
                 print(
-                    f"  {n_above_metal / self.nparticles * 100:.2f}% have metallicities > {grid.metallicity[-1]}"
+                    f"  {n_above_metal / self.nparticles * 100:.2f}% "
+                    f"have metallicities > {grid.metallicity[-1]}"
                 )
 
         # Get particle age masks
@@ -711,8 +735,15 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        spec = compute_particle_seds(*args)
+        masked_spec = compute_particle_seds(*args)
 
+        # If there's no mask we're done
+        if mask is None:
+            return masked_spec
+
+        # If we have a mask we need to account for the zeroed spectra
+        spec = np.zeros((self.nstars, masked_spec.shape[-1]))
+        spec[mask] = masked_spec
         return spec
 
     def generate_particle_line(self, grid, line_id, fesc):
@@ -738,8 +769,8 @@ class Stars(Particles, StarsComponent):
 
         Returns:
             Line
-                An instance of Line containing this lines wavelenth, luminosity,
-                and continuum for each star particle.
+                An instance of Line containing this lines wavelenth,
+                luminosity, and continuum for each star particle.
         """
 
         # If the line_id is a str denoting a single line
@@ -749,7 +780,9 @@ class Stars(Particles, StarsComponent):
             wavelength = grid_line["wavelength"]
 
             # Line luminosity erg/s
-            luminosity = (1 - fesc) * (grid_line["luminosity"] * self.initial_masses)
+            luminosity = (1 - fesc) * (
+                grid_line["luminosity"] * self.initial_masses
+            )
 
             # Continuum at line wavelength, erg/s/Hz
             continuum = grid_line["continuum"] * self.initial_masses
@@ -998,7 +1031,10 @@ class Stars(Particles, StarsComponent):
             setattr(
                 self,
                 attr,
-                np.append(getattr(self, attr), np.repeat(attr_array, new_lens, axis=0)),
+                np.append(
+                    getattr(self, attr),
+                    np.repeat(attr_array, new_lens, axis=0),
+                ),
             )
 
         if verbose:
@@ -1027,8 +1063,8 @@ class Stars(Particles, StarsComponent):
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         **kwargs,
     ):
         """
@@ -1042,11 +1078,14 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            fesc_LyA (float)
+                Fraction of Lyman-alpha emission that can escape unimpeded
+                by the ISM/IGM.
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             kwargs
                 Any keyword arguments which can be passed to
@@ -1079,8 +1118,8 @@ class Stars(Particles, StarsComponent):
     def get_particle_spectra_incident(
         self,
         grid,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -1091,11 +1130,11 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (obj):
                 Spectral grid object.
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -1131,8 +1170,8 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -1148,11 +1187,11 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -1187,8 +1226,8 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         fesc=0.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -1203,11 +1242,11 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -1242,8 +1281,8 @@ class Stars(Particles, StarsComponent):
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=False,
-        old=False,
+        young=None,
+        old=None,
         label="",
         **kwargs,
     ):
@@ -1265,11 +1304,11 @@ class Stars(Particles, StarsComponent):
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (bool, float):
-                If not False, specifies age in Myr at which to filter
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for young star particles.
-            old (bool, float):
-                If not False, specifies age in Myr at which to filter
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
                 for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
@@ -1476,7 +1515,9 @@ class Stars(Particles, StarsComponent):
         # Loop over the intrinsic lines
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # Calculate attenuation
-            T_BC = dust_curve_BC.get_transmission(tau_v_BC, intrinsic_line._wavelength)
+            T_BC = dust_curve_BC.get_transmission(
+                tau_v_BC, intrinsic_line._wavelength
+            )
             T_ISM = dust_curve_ISM.get_transmission(
                 tau_v_ISM, intrinsic_line._wavelength
             )
@@ -1586,7 +1627,9 @@ class Stars(Particles, StarsComponent):
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
             np.ascontiguousarray(self.metallicities, dtype=np.float64),
         ]
-        part_mass = np.ascontiguousarray(self._initial_masses, dtype=np.float64)
+        part_mass = np.ascontiguousarray(
+            self._initial_masses, dtype=np.float64
+        )
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))
@@ -1735,7 +1778,8 @@ def sample_sfhz(
 
     Args:
         sfhz (array-like, float)
-            The Star Formation Metallicity History grid (from parametric.Stars).
+            The Star Formation Metallicity History grid
+            (from parametric.Stars).
         log10ages (array-like, float)
             The log of the SFZH age axis.
         log10metallicities (array-like, float)
@@ -1768,7 +1812,9 @@ def sample_sfhz(
     )
 
     # Extract the sampled ages and metallicites and create an array
-    random_from_cdf = np.column_stack((log10ages[x_idx], log10metallicities[y_idx]))
+    random_from_cdf = np.column_stack(
+        (log10ages[x_idx], log10metallicities[y_idx])
+    )
 
     # Extract the individual logged quantities
     log10ages, log10metallicities = random_from_cdf.T

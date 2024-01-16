@@ -359,7 +359,9 @@ def load_CAMELS_Simba(
         form_time = hf["PartType4/StellarFormationTime"][:]
         coods = hf["PartType4/Coordinates"][:]
         masses = hf["PartType4/Masses"][:]
-        imasses = np.ones(len(masses)) * 0.00155  # * hf['Header'].attrs['MassTable'][1]
+        imasses = (
+            np.ones(len(masses)) * 0.00155
+        )  # * hf['Header'].attrs['MassTable'][1]
         _metals = hf["PartType4/Metallicity"][:]
 
         g_sfr = hf["PartType0/StarFormationRate"][:]

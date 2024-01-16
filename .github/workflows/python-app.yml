@@ -31,26 +31,32 @@ jobs:
         pip install flake8 pytest
         pip install -e .
         # Install google API for downloading test data
-        pip install --upgrade google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client gdown
+        pip install --upgrade google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client gdown==v4.6.3
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        # ignores: 
+        # - E402 "module level import not at top of file" (isolate C imports in case python alternatives exist)
+        # - W503 "line break before binary operator" (we enforce line breaks before operators, to follow black style, and penalise line breaks after)
+        # - F811 "redefinition of unused name from line N" (breaks quantity objects)
+        # - E203 "whitespace before ‘,’, ‘;’, or ‘:’" (conflicts with black formatting of array indexing, `:`)
+        flake8 . --count --ignore=E402,W503,F811,E203 --max-line-length=79 --show-source --statistics --per-file-ignores="src/synthesizer/__init__.py:F401 src/synthesizer/components/__init__.py:F401 src/synthesizer/parametric/__init__.py:F401 src/synthesizer/particle/__init__.py:F401 src/synthesizer/photoionisation/__init__.py:F401 docs/source/conf.py:E501"
     - name: Download test data
       env:
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
       run: |
         cd tests/
+        # download test grid data
         ./get_test_grid.sh
         cd ../
     - name: Test with pytest
       run: |
         pytest
+        # test ipython notebooks
         pytest --nbmake docs/source/*.ipynb docs/source/*/*.ipynb
     - name: Sphinx Build
       run: |
+        # test sphinx build (runs all notebooks)
         cd docs
         sudo apt install pandoc
         pip install -r requirements.txt

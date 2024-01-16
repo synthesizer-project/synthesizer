@@ -1,12 +1,12 @@
 """ Definitions for image objects
 """
-import synthesizer.exceptions as exceptions
 import numpy as np
-import math
 import warnings
 from unyt import kpc, mas
-from unyt.dimensions import length, angle
+from unyt.dimensions import angle
+
 from synthesizer.imaging.scene import Scene, ParticleScene
+import synthesizer.exceptions as exceptions
 
 
 class SpectralCube:
@@ -155,8 +155,8 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             A cosmology object from astropy, used for cosmological calculations
             when converting rest frame luminosity to flux.
         kernel (array-like, float)
-            The values from one of the kernels from the kernel_functions module.
-            Only used for smoothed images.
+            The values from one of the kernels from the kernel_functions
+            module. Only used for smoothed images.
         kernel_threshold (float)
             The kernel's impact parameter threshold (by default 1).
         Raises
@@ -211,7 +211,8 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
            Errors when an incorrect combination of arguments is passed.
         """
 
-        # Warn that specifying redshift does nothing for rest frame observations
+        # Warn that specifying redshift does nothing
+        # for rest frame observations
         if rest_frame and redshift is not None:
             warnings.warn(
                 "Warning, redshift not used when computing rest " "frame SEDs!"
@@ -226,7 +227,7 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
     def get_hist_ifu(self):
         """
         A method to calculate an IFU with no smoothing.
-        
+
         Returns:
             img (array_like, float)
                 A 3D array containing the pixel values sorted into individual
@@ -249,9 +250,9 @@ class ParticleSpectralCube(ParticleScene, SpectralCube):
             ):
                 continue
 
-            self.ifu[self.pix_pos[ind, 0], self.pix_pos[ind, 1], :] += self.sed_values[
-                ind, :
-            ]
+            self.ifu[
+                self.pix_pos[ind, 0], self.pix_pos[ind, 1], :
+            ] += self.sed_values[ind, :]
 
         return self.ifu
 
@@ -386,10 +387,14 @@ class ParametricSpectralCube(Scene, SpectralCube):
         # Define 1D bin centres of each pixel
         if self.spatial_unit.dimensions == angle:
             res = (self.resolution * self.spatial_unit).to("mas").value
-            bin_centres = res * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
+            bin_centres = res * np.linspace(
+                -self.npix / 2, self.npix / 2, self.npix
+            )
         else:
             res = (self.resolution * self.spatial_unit).to("kpc").value
-            bin_centres = res * np.linspace(-self.npix / 2, self.npix / 2, self.npix)
+            bin_centres = res * np.linspace(
+                -self.npix / 2, self.npix / 2, self.npix
+            )
 
         # Convert the 1D grid into 2D grids coordinate grids
         self._xx, self._yy = np.meshgrid(bin_centres, bin_centres)
