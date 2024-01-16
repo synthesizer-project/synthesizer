@@ -148,9 +148,9 @@ def process_dl07_to_hdf5(grid_name='MW3.1', grid_loc='./',
                         skip_header=71)
     lam = tmp[:, 0][::-1]
     n_lam = len(lam)
-    nu = c/(lam*um)
+    nu = c / (lam * um)
     nu = nu.to(Hz).value
-    msun_by_mp = (Msun/mp).value
+    msun_by_mp = (Msun / mp).value
 
     with h5py.File(F'{grid_loc}/{grid_name}.hdf5', 'w') as hf:
         hf.attrs['axes'] = ['qpah', 'umin', 'alpha']
