@@ -379,11 +379,11 @@ class IR_templates():
                 print(
                     "Gamma, Umin or alpha for DL07 model not provided, "
                     "using default values"
-                        )
+                    )
                 print(
                     "Computing required values using Magdis+2012 "
                     "stacking results"
-                        )
+                    )
 
             self.u_avg = u_mean_magdis12((self.mdust / Msun).value,
                                          (self.ldust / Lsun).value, self.p0)
@@ -443,15 +443,15 @@ class IR_templates():
         # wavelength range
         self.grid.interp_spectra(new_lam=lam)
         lnu_old = (
-            (1. - self.gamma) *
-            self.grid.spectra['diffuse'][self.qpah_id, self.umin_id][0]
+            (1. - self.gamma)
+            * self.grid.spectra['diffuse'][self.qpah_id, self.umin_id][0]
             * (self.mdust / Msun).value
         )
 
         lnu_young = (
-            self.gamma *
-            self.grid.spectra['pdr'][self.qpah_id, self.umin_id,
-                                     self.alpha_id][0]
+            self.gamma
+            * self.grid.spectra['pdr'][self.qpah_id, self.umin_id,
+                                       self.alpha_id][0]
             * (self.mdust / Msun).value
         )
 

@@ -929,7 +929,7 @@ class StarsComponent:
 
             if dust_emission_model is not None:
                 if (not isinstance(dust_emission_model, list)) \
-                    and (not hasattr(dust_emission_model, 'template')):
+                        and (not hasattr(dust_emission_model, 'template')):
 
                     print(
                         (
@@ -978,8 +978,9 @@ class StarsComponent:
 
                     # Combine both dust components for young stars
                     self.spectra['young_dust'] = (
-                        self.spectra["young_dust_BC"] +
-                        self.spectra["young_dust_ISM"])
+                        self.spectra["young_dust_BC"]
+                        + self.spectra["young_dust_ISM"]
+                        )
 
                 # ISM dust heated by old stars.
                 dust_bolometric_luminosity = (
@@ -1014,8 +1015,9 @@ class StarsComponent:
 
                 # Combine both dust components for young stars
                 self.spectra['old_total'] = (
-                    self.spectra['old_emergent'] +
-                    self.spectra['old_dust'])
+                    self.spectra['old_emergent']
+                    + self.spectra['old_dust']
+                    )
 
                 self.spectra['dust'] = (self.spectra['young_dust']
                                         + self.spectra['old_dust'])
