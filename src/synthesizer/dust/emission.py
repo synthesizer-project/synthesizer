@@ -379,11 +379,11 @@ class IR_templates():
                 print(
                     "Gamma, Umin or alpha for DL07 model not provided, "
                     "using default values"
-                    )
+                )
                 print(
                     "Computing required values using Magdis+2012 "
                     "stacking results"
-                    )
+                )
 
             self.u_avg = u_mean_magdis12((self.mdust / Msun).value,
                                          (self.ldust / Lsun).value, self.p0)
