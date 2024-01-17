@@ -123,6 +123,12 @@ class Galaxy(BaseGalaxy):
         if self.stars.current_masses is not None:
             self.stellar_mass = np.sum(self.stars.current_masses)
 
+            if self.stars.ages is not None:
+                self.stellar_mass_weighted_age = (
+                    np.sum(self.stars.ages * self.stars.current_masses)
+                    / self.stellar_mass
+                )
+
     def calculate_integrated_gas_properties(self):
         """
         Calculate integrated gas properties
@@ -131,6 +137,12 @@ class Galaxy(BaseGalaxy):
         # Define integrated properties of this galaxy
         if self.gas.masses is not None:
             self.gas_mass = np.sum(self.gas.masses)
+
+            # mass weighted gas phase metallicity
+            self.mass_weighted_gas_metallicity = (
+                np.sum(self.gas.masses * self.gas.metallicities)
+                / self.gas_mass
+            )
 
         if self.gas.star_forming is not None:
             mask = self.gas.star_forming
@@ -585,6 +597,51 @@ class Galaxy(BaseGalaxy):
             gamma = gamma_max - (gamma_max - gamma_min) / C
 
         return gamma
+
+    def dust_to_metal_vijayan19(
+        self, stellar_mass_weighted_age=None, ism_metallicity=None
+    ):
+        """
+        Fitting function for the dust-to-metals ratio based on
+        galaxy properties, from L-GALAXIES dust modeling.
+
+        Vijayan+19: https://arxiv.org/abs/1904.02196
+
+        Args:
+            Formula uses Age in Gyr while the supplied Age is in Myr
+        """
+
+        if stellar_mass_weighted_age is None:
+            if self.stellar_mass_weighted_age is None:
+                raise ValueError("No stellar_mass_weighted_age provided")
+            else:
+                stellar_mass_weighted_age = (
+                    self.stellar_mass_weighted_age.value / 1e6
+                )  # Myr
+
+        if ism_metallicity is None:
+            if self.mass_weighted_gas_metallicity is None:
+                raise ValueError("No mass_weighted_gas_metallicity provided")
+            else:
+                ism_metallicity = self.mass_weighted_gas_metallicity
+
+        D0, D1, alpha, beta, gamma = 0.008, 0.329, 0.017, -1.337, 2.122
+        tau = 5e-5 / (D0 * ism_metallicity)
+        dtm = D0 + (D1 - D0) * (
+            1.0
+            - np.exp(
+                -alpha
+                * (ism_metallicity**beta)
+                * ((stellar_mass_weighted_age / (1e3 * tau)) ** gamma)
+            )
+        )
+        if np.isnan(dtm) or np.isinf(dtm):
+            dtm = 0.0
+
+        # Save under gas properties
+        self.gas.dust_to_metal_ratio = dtm
+
+        return dtm
 
     def make_images(
         self,
