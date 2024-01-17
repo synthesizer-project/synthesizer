@@ -721,7 +721,7 @@ class Stars(Particles, StarsComponent):
             if verbose:
                 print("Age mask has filtered out all particles")
 
-            return np.zeros(len(grid.lam))
+            return np.zeros((self.nstars, len(grid.lam)))
 
         from ..extensions.particle_spectra import compute_particle_seds
 
