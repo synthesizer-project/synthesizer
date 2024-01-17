@@ -42,8 +42,12 @@ def load_Simba(
     """
 
     with h5py.File(f"{directory}/{snap_name}", "r") as hf:
+        scale_factor = hf["Header"].attrs["Time"]
+        Om0 = hf["Header"].attrs["Omega0"]
+        h = hf["Header"].attrs["HubbleParam"]
+
         form_time = hf["PartType4/StellarFormationTime"][:]
-        coods = hf["PartType4/Coordinates"][:]
+        coods = hf["PartType4/Coordinates"][:] * scale_factor  # Mpc (physical)
         masses = hf["PartType4/Masses"][:]
 
         imasses = np.ones(len(masses)) * 0.00155
@@ -55,14 +59,12 @@ def load_Simba(
         g_h2fraction = hf["PartType0/FractionH2"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/Metallicity"][:][:, 0]
-        g_coods = hf["PartType0/Coordinates"][:]
-        g_hsml = hf["PartType0/SmoothingLength"][:]
+        g_coods = (
+            hf["PartType0/Coordinates"][:] * scale_factor
+        )  # Mpc (physical)
+        g_hsml = hf["PartType0/SmoothingLength"][:]  # Mpc
 
         g_dustmass = hf["PartType0/Dust_Masses"][:]
-
-        scale_factor = hf["Header"].attrs["Time"]
-        Om0 = hf["Header"].attrs["Omega0"]
-        h = hf["Header"].attrs["HubbleParam"]
 
     # convert units
     masses = (masses * 1e10) / h
