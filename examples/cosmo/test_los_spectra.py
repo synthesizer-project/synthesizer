@@ -6,7 +6,7 @@ Test the calculation of tau_v along the line of sight
 to each star particle
 """
 from synthesizer.load_data import load_CAMELS_IllustrisTNG
-from synthesizer.kernel_functions import kernel
+from synthesizer.kernel_functions import Kernel
 
 gals = load_CAMELS_IllustrisTNG(
     "../../tests/data/",
@@ -15,7 +15,7 @@ gals = load_CAMELS_IllustrisTNG(
     fof_dir="../../tests/data/",
 )
 
-kern = kernel()
-kern.get_kernel()
+kernel = Kernel()
+kernel.get_kernel()
 
-gals[0].calculate_los_tau_v(kappa=0.3, kernel=kern.get_kernel())
+gals[0].calculate_los_tau_v(kappa=0.3, kernel=kernel.get_kernel())
