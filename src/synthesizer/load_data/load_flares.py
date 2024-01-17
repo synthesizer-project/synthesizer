@@ -32,7 +32,9 @@ def load_FLARES(master_file, region, tag):
         glens = hf[f"{region}/{tag}/Galaxy/G_Length"][:]
 
         ages = hf[f"{region}/{tag}/Particle/S_Age"][:]  # Gyr
-        coods = hf[f"{region}/{tag}/Particle/S_Coordinates"][:].T  # Mpc
+        coods = (
+            hf[f"{region}/{tag}/Particle/S_Coordinates"][:].T * scale_factor
+        )  # Mpc (physical)
         masses = hf[f"{region}/{tag}/Particle/S_Mass"][:]  # 1e10 Msol
         imasses = hf[f"{region}/{tag}/Particle/S_MassInitial"][:]  # 1e10 Msol
 
@@ -43,8 +45,12 @@ def load_FLARES(master_file, region, tag):
         g_sfr = hf[f"{region}/{tag}/Particle/G_SFR"][:]  # Msol / yr
         g_masses = hf[f"{region}/{tag}/Particle/G_Mass"][:]  # 1e10 Msol
         g_metals = hf[f"{region}/{tag}/Particle/G_Z_smooth"][:]
-        g_coods = hf[f"{region}/{tag}/Particle/G_Coordinates"][:].T  # Mpc
-        g_hsml = hf[f"{region}/{tag}/Particle/G_sml"][:] / scale_factor  # Mpc
+        g_coods = (
+            hf[f"{region}/{tag}/Particle/G_Coordinates"][:].T * scale_factor
+        )  # Mpc (physical)
+        g_hsml = hf[f"{region}/{tag}/Particle/G_sml"][
+            :
+        ]  # Mpc (physical)
 
     # Convert units
     ages = ages * 1e9  # yr
@@ -58,7 +64,7 @@ def load_FLARES(master_file, region, tag):
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
         # Create the individual galaxy objects
-        galaxies[i] = Galaxy()
+        galaxies[i] = Galaxy(redshift=zed)
 
         galaxies[i].load_stars(
             imasses[b:e] * Msun,
