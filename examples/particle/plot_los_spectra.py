@@ -17,7 +17,7 @@ from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
-from synthesizer.kernel_functions import kernel
+from synthesizer.kernel_functions import Kernel
 
 
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -114,11 +114,13 @@ galaxy = Galaxy("Galaxy", stars=stars, gas=gas, redshift=1)
 galaxy.stars.get_particle_spectra_incident(grid)
 
 # Get the SPH kernel
-sph_kernel = kernel()
+sph_kernel = Kernel()
 kernel_data = sph_kernel.get_kernel()
 
 # Calculate the tau_vs
-tau_v = galaxy.calculate_los_tau_v(kappa=0.07, kernel=kernel_data)
+tau_v = galaxy.calculate_los_tau_v(
+    kappa=0.07, kernel=kernel_data, force_loop=True
+)
 
 # Get the attenuated spectra
 galaxy.stars.particle_spectra["attenuated"] = galaxy.stars.particle_spectra[
