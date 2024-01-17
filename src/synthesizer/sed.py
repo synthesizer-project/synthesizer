@@ -139,6 +139,24 @@ class Sed:
         self.photo_luminosities = None
         self.photo_fluxes = None
 
+    def sum(self):
+        """
+        For multidimensional `sed`'s, sum the luminosity to provide a 1D
+        integrated SED.
+
+        Returns:
+            sed (object, Sed)
+                Summed 1D SED.
+        """
+
+        # Check that the lnu array is multidimensional
+        if len(self._lnu.shape) > 1:
+            # Return a new sed object with the first Lnu dimension collapsed
+            return Sed(self.lam, np.sum(self._lnu, axis=0))
+        else:
+            # If 1D, just return the original array
+            return self
+
     def concat(self, *other_seds):
         """
         Concatenate the spectra arrays of multiple Sed objects.
@@ -1759,3 +1777,21 @@ def get_attenuation_at_1500(intrinsic_sed, attenuated_sed):
         intrinsic_sed,
         attenuated_sed,
     )
+
+
+def combine_list_of_seds(sed_list):
+    """
+    Combine a list of `Sed` objects (length `Ngal`) into a single
+    `Sed` object, with dimensions `Ngal x Nlam`. Each `Sed` object
+    in the list should have an identical wavelength range.
+
+    Args:
+        sed_list (list)
+            list of `Sed` objects
+    """
+
+    out_sed = sed_list[0]
+    for sed in sed_list[1:]:
+        out_sed = out_sed.concat(sed)
+
+    return out_sed
