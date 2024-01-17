@@ -599,7 +599,9 @@ class Galaxy(BaseGalaxy):
         return gamma
 
     def dust_to_metal_vijayan19(
-        self, stellar_mass_weighted_age=None, ism_metallicity=None
+        self,
+        stellar_mass_weighted_age=None,
+        ism_metallicity=None
     ):
         """
         Fitting function for the dust-to-metals ratio based on
@@ -608,13 +610,20 @@ class Galaxy(BaseGalaxy):
         Vijayan+19: https://arxiv.org/abs/1904.02196
 
         Args:
-            Formula uses Age in Gyr while the supplied Age is in Myr
+            stellar_mass_weighted_age (float)
+                Mass weighted age of stars in Myr. Defaults to None,
+                and uses value provided on this galaxy object (in Gyr)
+                ism_metallicity (float)
+                Mass weighted gas-phase metallicity. Defaults to None,
+                and uses value provided on this galaxy object
+                (dimensionless)
         """
 
         if stellar_mass_weighted_age is None:
             if self.stellar_mass_weighted_age is None:
                 raise ValueError("No stellar_mass_weighted_age provided")
             else:
+                # Formula uses Age in Gyr while the supplied Age is in Myr
                 stellar_mass_weighted_age = (
                     self.stellar_mass_weighted_age.value / 1e6
                 )  # Myr
@@ -625,6 +634,7 @@ class Galaxy(BaseGalaxy):
             else:
                 ism_metallicity = self.mass_weighted_gas_metallicity
 
+        # Fixed parameters from Vijayan+21
         D0, D1, alpha, beta, gamma = 0.008, 0.329, 0.017, -1.337, 2.122
         tau = 5e-5 / (D0 * ism_metallicity)
         dtm = D0 + (D1 - D0) * (
