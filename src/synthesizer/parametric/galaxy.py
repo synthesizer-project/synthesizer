@@ -296,7 +296,8 @@ class Galaxy(BaseGalaxy):
 
     def get_Q(self, grid):
         """
-        Return the ionising photon luminosity (log10_specific_ionising_lum) for a given SFZH.
+        Return the ionising photon luminosity (log10_specific_ionising_lum) for
+        a given SFZH.
 
         Args:
             grid (object, Grid):
