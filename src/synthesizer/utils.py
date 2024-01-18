@@ -8,7 +8,6 @@ Example usage:
 import numpy as np
 from unyt import c, h, kb, unyt_array, unyt_quantity
 
-
 from synthesizer import exceptions
 
 
