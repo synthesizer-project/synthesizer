@@ -288,11 +288,14 @@ class Grid:
             # Number of axes
             self.naxes = len(self.axes)
 
-            # If log10Q is available set this as an attribute as well
-            if "log10Q" in hf.keys():
-                self.log10Q = {}
-                for ion in hf["log10Q"].keys():
-                    self.log10Q[ion] = hf["log10Q"][ion][:]
+            # If specific ionising photon luminosity is available set this
+            # as an attribute as well
+            if "log10_specific_ionising_luminosity" in hf.keys():
+                self.log10_specific_ionising_lum = {}
+                for ion in hf["log10_specific_ionising_luminosity"].keys():
+                    self.log10_specific_ionising_lum[ion] = hf[
+                        "log10_specific_ionising_luminosity"
+                    ][ion][:]
 
         # Read in spectra
         if read_spectra:
