@@ -269,8 +269,10 @@ def create_cloudy_input(
     if params["geometry"] == "spherical":
         # in the spherical geometry case I think U is some average U, not U at
         # the inner face of the cloud.
-        log10Q = np.log10(calculate_Q_from_U(U, params["hydrogen_density"]))
-        cinput.append(f"Q(H) = {log10Q}\n")
+        log10_specific_ionising_lum = np.log10(
+            calculate_Q_from_U(U, params["hydrogen_density"])
+        )
+        cinput.append(f"Q(H) = {log10_specific_ionising_lum}\n")
         cinput.append(f'radius {np.log10(params["radius"])} log parsecs\n')
         cinput.append("sphere\n")
 
