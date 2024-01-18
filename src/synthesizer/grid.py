@@ -297,6 +297,13 @@ class Grid:
                         "log10_specific_ionising_luminosity"
                     ][ion][:]
 
+            # If log10Q is available set this as an attribute as well
+            # TODO: This needs to die
+            if "log10Q" in hf.keys():
+                self.log10Q = {}
+                for ion in hf["log10Q"].keys():
+                    self.log10Q[ion] = hf["log10Q"][ion][:]
+
         # Read in spectra
         if read_spectra:
             self.spectra = {}
