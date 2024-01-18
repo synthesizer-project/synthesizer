@@ -296,7 +296,7 @@ class Galaxy(BaseGalaxy):
 
     def get_Q(self, grid):
         """
-        Return the ionising photon luminosity (log10Q) for a given SFZH.
+        Return the ionising photon luminosity (log10_specific_ionising_lum) for a given SFZH.
 
         Args:
             grid (object, Grid):
@@ -306,7 +306,10 @@ class Galaxy(BaseGalaxy):
             Log of the ionising photon luminosity over the grid dimensions
         """
 
-        return np.sum(10 ** grid.log10Q["HI"] * self.sfzh, axis=(0, 1))
+        return np.sum(
+            10 ** grid.log10_specific_ionising_lum["HI"] * self.sfzh,
+            axis=(0, 1),
+        )
 
     def make_images(
         self,
