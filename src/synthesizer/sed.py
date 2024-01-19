@@ -1,4 +1,4 @@
-""" Functionality related to spectra storage and manipulation.
+"""Functionality related to spectra storage and manipulation.
 
 When a spectra is computed from a `Galaxy` or a Galaxy component the resulting
 calculated spectra are stored in `Sed` objects. These provide helper functions
@@ -10,7 +10,7 @@ Example usage:
     sed = Sed(lams, lnu)
     sed.get_fnu(redshift)
     sed.apply_attenutation(tau_v=0.7)
-    sed.get_broadband_fluxes(filters)
+    sed.get_photo_fluxes(filters)
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -31,7 +31,6 @@ from synthesizer.utils import has_units
 
 
 class Sed:
-
     """
     A class representing a spectral energy distribution (SED).
 
@@ -54,10 +53,10 @@ class Sed:
             An optional descriptive string defining the Sed.
         redshift (float)
             The redshift of the Sed.
-        broadband_luminosities (dict, float)
+        photo_luminosities (dict, float)
             The rest frame broadband photometry in arbitrary filters
             (filter_code: photometry).
-        broadband_fluxes (dict, float)
+        photo_fluxes (dict, float)
             The observed broadband photometry in arbitrary filters
             (filter_code: photometry).
     """
@@ -137,8 +136,26 @@ class Sed:
         self.fnu = None
 
         # Broadband photometry
-        self.broadband_luminosities = None
-        self.broadband_fluxes = None
+        self.photo_luminosities = None
+        self.photo_fluxes = None
+
+    def sum(self):
+        """
+        For multidimensional `sed`'s, sum the luminosity to provide a 1D
+        integrated SED.
+
+        Returns:
+            sed (object, Sed)
+                Summed 1D SED.
+        """
+
+        # Check that the lnu array is multidimensional
+        if len(self._lnu.shape) > 1:
+            # Return a new sed object with the first Lnu dimension collapsed
+            return Sed(self.lam, np.sum(self._lnu, axis=0))
+        else:
+            # If 1D, just return the original array
+            return self
 
     def concat(self, *other_seds):
         """
@@ -897,7 +914,7 @@ class Sed:
 
         return self.fnu
 
-    def get_broadband_luminosities(self, filters, verbose=True):
+    def get_photo_luminosities(self, filters, verbose=True):
         """
         Calculate broadband luminosities using a FilterCollection object
 
@@ -908,12 +925,12 @@ class Sed:
                 Are we talking?
 
         Returns:
-            broadband_luminosities (dict)
+            photo_luminosities (dict)
                 A dictionary of rest frame broadband luminosities.
         """
 
         # Intialise result dictionary
-        broadband_luminosities = {}
+        photo_luminosities = {}
 
         # Loop over filters
         for f in filters:
@@ -931,16 +948,16 @@ class Sed:
             # Apply the filter transmission curve and store the resulting
             # luminosity
             bb_lum = f.apply_filter(self._lnu, nu=self._nu)
-            broadband_luminosities[f.filter_code] = bb_lum
+            photo_luminosities[f.filter_code] = bb_lum
 
         # Create the photometry collection and store it in the object
-        self.broadband_luminosities = PhotometryCollection(
-            filters, rest_frame=True, **broadband_luminosities
+        self.photo_luminosities = PhotometryCollection(
+            filters, rest_frame=True, **photo_luminosities
         )
 
-        return self.broadband_luminosities
+        return self.photo_luminosities
 
-    def get_broadband_fluxes(self, filters, verbose=True):
+    def get_photo_fluxes(self, filters, verbose=True):
         """
         Calculate broadband fluxes using a FilterCollection object
 
@@ -966,7 +983,7 @@ class Sed:
             )
 
         # Set up flux dictionary
-        broadband_fluxes = {}
+        photo_fluxes = {}
 
         # Loop over filters in filter collection
         for f in filters:
@@ -983,14 +1000,14 @@ class Sed:
 
             # Calculate and store the broadband flux in this filter
             bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
-            broadband_fluxes[f.filter_code] = bb_flux
+            photo_fluxes[f.filter_code] = bb_flux
 
         # Create the photometry collection and store it in the object
-        self.broadband_fluxes = PhotometryCollection(
-            filters, rest_frame=True, **broadband_fluxes
+        self.photo_fluxes = PhotometryCollection(
+            filters, rest_frame=False, **photo_fluxes
         )
 
-        return self.broadband_fluxes
+        return self.photo_fluxes
 
     def measure_colour(self, f1, f2):
         """
@@ -1008,18 +1025,16 @@ class Sed:
         """
 
         # Ensure fluxes exist
-        if not bool(self.broadband_fluxes):
+        if not bool(self.photo_fluxes):
             raise ValueError(
                 (
                     "Broadband fluxes not yet calculated, "
-                    "run `get_broadband_fluxes` with a "
+                    "run `get_photo_fluxes` with a "
                     "FilterCollection"
                 )
             )
 
-        return 2.5 * np.log10(
-            self.broadband_fluxes[f2] / self.broadband_fluxes[f1]
-        )
+        return 2.5 * np.log10(self.photo_fluxes[f2] / self.photo_fluxes[f1])
 
     def measure_index(self, feature, blue, red):
         """
@@ -1625,14 +1640,14 @@ def plot_observed_spectra(
         # Loop over spectra plotting photometry and filter curves
         for sed in spectra.values():
             # Get the photometry
-            sed.get_broadband_fluxes(filters)
+            sed.get_photo_fluxes(filters)
 
             # Plot the photometry for each filter
             for f in filters:
                 piv_lam = f.pivwv()
                 ax.scatter(
                     piv_lam * (1 + redshift),
-                    sed.broadband_fluxes[f.filter_code],
+                    sed.photo_fluxes[f.filter_code],
                     zorder=4,
                 )
 
@@ -1762,3 +1777,21 @@ def get_attenuation_at_1500(intrinsic_sed, attenuated_sed):
         intrinsic_sed,
         attenuated_sed,
     )
+
+
+def combine_list_of_seds(sed_list):
+    """
+    Combine a list of `Sed` objects (length `Ngal`) into a single
+    `Sed` object, with dimensions `Ngal x Nlam`. Each `Sed` object
+    in the list should have an identical wavelength range.
+
+    Args:
+        sed_list (list)
+            list of `Sed` objects
+    """
+
+    out_sed = sed_list[0]
+    for sed in sed_list[1:]:
+        out_sed = out_sed.concat(sed)
+
+    return out_sed
