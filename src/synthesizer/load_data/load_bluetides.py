@@ -219,6 +219,8 @@ def load_BlueTides(redshift, dataholder=None, galaxy_BHID=[], end_arr=108001, bl
 
         star_pos = (dataholder.Position_IND[star_off[0]:star_off[1]]) * (
                     1 + dataholder.redshift)  # Position_IND is in proper, so converting back to comoving
+
+        ### centering all stars around the BH such that (0, 0, 0) is the BH position 
         star_relpos = star_pos - (dataholder.BHposition[:, bh_index] * (1 + dataholder.redshift))  # same for BH_position
         X = star_relpos[:, 0]
         Y = star_relpos[:, 1]
