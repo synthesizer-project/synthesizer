@@ -23,6 +23,8 @@ class BlueTidesDataHolder:
     with open(file_name, 'wb') as file:
         pickle.dump(BlueTidesDataHolder_instance, file, protocol=pickle.HIGHEST_PROTOCOL)
         print(f'Object successfully saved to "{file_name}"')
+
+    *** everything is in proper distance
     """
     def __init__(self, z, bluetides_data_folder="/fred/oz183/sberger/bluetides/BlueTides/", end_of_arr=108001):
         ## Units
@@ -217,11 +219,10 @@ def load_BlueTides(redshift, dataholder=None, galaxy_BHID=[], end_arr=108001, bl
         Masses = np.ones(Ages.shape) * 1E10 * 5.90556119E-05 / 0.697  # mass of each star particle in M_sol
         Metallicities = dataholder.metallicity_IND[star_off[0]:star_off[1]]
 
-        star_pos = (dataholder.Position_IND[star_off[0]:star_off[1]]) * (
-                    1 + dataholder.redshift)  # Position_IND is in proper, so converting back to comoving
+        star_pos = (dataholder.Position_IND[star_off[0]:star_off[1]])
 
         ### centering all stars around the BH such that (0, 0, 0) is the BH position 
-        star_relpos = star_pos - (dataholder.BHposition[:, bh_index] * (1 + dataholder.redshift))  # same for BH_position
+        star_relpos = star_pos - dataholder.BHposition[:, bh_index]  # same for BH_position
         X = star_relpos[:, 0]
         Y = star_relpos[:, 1]
         Z = star_relpos[:, 2]
