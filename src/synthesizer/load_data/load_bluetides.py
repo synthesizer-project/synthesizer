@@ -194,7 +194,7 @@ def load_BlueTides(redshift, dataholder=None, galaxy_BHID=[], end_arr=108001, bl
 
     galaxies_length = len(dataholder.BHmass)  # holder array for galaxies of the same length
     galaxies = [None] * galaxies_length
-    smoothing_length_comoving_bluetides = 1.5 / dataholder.hh * dataholder.Kpc
+    smoothing_length_proper_bluetides = (1.5 / dataholder.hh * dataholder.Kpc) / (1 + self.z)
 
     if len(galaxy_BHID) == 0:
         galaxy_cycle = np.arange(galaxies_length) # take every galaxy
@@ -227,7 +227,7 @@ def load_BlueTides(redshift, dataholder=None, galaxy_BHID=[], end_arr=108001, bl
         Y = star_relpos[:, 1]
         Z = star_relpos[:, 2]
 
-        smoothing_lengths = np.full(Ages.shape, smoothing_length_comoving_bluetides)
+        smoothing_lengths = np.full(Ages.shape, smoothing_length_proper_bluetides)
 
         coords = np.transpose([X, Y, Z])
         galaxies[ii].load_stars(
