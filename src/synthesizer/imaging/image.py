@@ -15,7 +15,9 @@ Example Usage:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         img.get_img(signal, density_grid)
 """
+import matplotlib.pyplot as plt
 import numpy as np
+from scipy.ndimage import zoom
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
@@ -42,6 +44,8 @@ class Image:
             The number of pixels in the image.
         arr (array_like, float):
             The array containing the image.
+        units (unyt.Units):
+            The units of the image.
     """
 
     # Define quantities
@@ -73,6 +77,68 @@ class Image:
 
         # Attributes to hold the image units
         self.units = None
+
+    def resample(self, factor):
+        """
+        Resample the image by factor.
+
+        Args:
+            factor (float)
+                The factor by which to resample the image, >1 increases
+                resolution, <1 decreases resolution.
+        """
+        # Perform the conversion on the basic image properties
+        self.resolution /= factor
+        self._compute_npix()
+
+        # Resample the image.
+        # NOTE: skimage.transform.pyramid_gaussian is more efficient but adds
+        #       another dependency.
+        if self.img is not None:
+            self.img = zoom(self.img, factor)
+            new_shape = self.img.shape
+        else:
+            raise exceptions.MissingImage(
+                "The image array hasn't been generated yet. Please run "
+                "get_img_hist() or get_img_smoothed() before resampling."
+            )
+
+        # Handle the edge case where the conversion between resolutions has
+        # messed with Scene properties.
+        if self.npix != new_shape[0]:
+            self.npix = new_shape
+            self._compute_fov()
+
+    def __add__(self, other_img):
+        """
+        Add 2 Images together.
+
+        Args:
+        """
+        pass
+
+    def __mul__(self, mult):
+        """
+        Multiply the image by a multiplier.
+
+        Args:
+            mult (int/float/array-like)
+                The number to multiply the image array by.
+
+        Returns:
+            Image
+                The new image containing the multipled array.
+        """
+        # Create the new image
+        new_img = Image(self.resolution, self.fov)
+
+        # Associate the image array and units
+        new_img.arr = self.arr
+        new_img.units = self.units
+
+        # Multiply the image array
+        new_img.arr *= mult
+        return new_img
 
     def get_img_hist(
         self,
@@ -112,7 +178,7 @@ class Image:
             weights=signal,
         )[0]
 
-        return self.arr
+        return self.arr * self.units if self.units is not None else self.arr
 
     def get_img_smoothed(
         self,
@@ -183,7 +249,9 @@ class Image:
             # Multiply the density grid by the sed to get the IFU
             self.img = density_grid[:, :] * signal
 
-            return self.arr
+            return (
+                self.arr * self.units if self.units is not None else self.arr
+            )
 
         from .extensions.image import make_img
 
@@ -212,4 +280,89 @@ class Image:
             self.kernel_dim,
         )
 
-        return self.arr
+        return self.arr * self.units if self.units is not None else self.arr
+
+    def apply_psf(self, psf):
+        pass
+
+    def apply_noise(self, noise):
+        pass
+
+    def plot_map(
+        self,
+        show=False,
+        vmin=None,
+        vmax=None,
+        extent=None,
+        cmap="Greys_r",
+        cbar_label=None,
+        norm=None,
+        tick_formatter=None,
+    ):
+        """
+        Plot a map. Unlike an image we want a colorbar and know ahead of time
+        there is only 1 image in the Image and only a "standard" image.
+
+        Args:
+            show (bool)
+                Whether to show the plot or not (Default False).
+            extent (array_like)
+                The extent of the x and y axes.
+            cmap (str)
+                The name of the matplotlib colormap for image plotting. Can be
+                any valid string that can be passed to the cmap argument of
+                imshow. Defaults to "Greys_r".
+            cbar_label (str)
+                The label for the colorbar.
+            norm (function)
+                A normalisation function. This can be custom made or one of
+                matplotlib's normalisation functions. It must take an array and
+                return the same array after normalisation.
+            tick_formatter (matplotlib.ticker.FuncFormatter)
+                An instance of the tick formatter for formatting the colorbar
+                ticks.
+
+        Returns:
+            matplotlib.pyplot.figure
+                The figure object containing the plot
+            matplotlib.pyplot.figure.axis
+                The axis object containing the image.
+
+        Raises:
+            MissingImage
+                If there is no image then there's nothing to plot and an error
+                is thrown.
+        """
+
+        # Ensure an img exists
+        if self.img is None:
+            raise exceptions.MissingImage("There is no image to plot!")
+
+        # Get the image
+        img = self.img
+
+        # Set up the figure
+        fig = plt.figure(figsize=(3.5, 3.5))
+
+        # Create the axis
+        ax = fig.add_subplot(111)
+
+        # Plot the image and remove the surrounding axis
+        im = ax.imshow(
+            img,
+            extent=extent,
+            origin="lower",
+            interpolation="nearest",
+            cmap=cmap,
+            norm=norm,
+        )
+
+        # Make the colorbar with the format if provided
+        cbar = fig.colorbar(im, format=tick_formatter)
+        if cbar_label is not None:
+            cbar.set_label(cbar_label)
+
+        if show:
+            plt.show()
+
+        return fig, ax
