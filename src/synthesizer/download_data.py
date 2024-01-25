@@ -120,7 +120,7 @@ def download():
     """Download different datasets based on command line args."""
     # Create the parser
     parser = argparse.ArgumentParser(
-        description="Download the datasets for synthesizer."
+        description="Download datasets for synthesizer"
     )
 
     # Add a flag to handle the test data
@@ -128,7 +128,7 @@ def download():
         "--test-grids",
         "-t",
         action="store_true",
-        help="Download the test data for synthesizer.",
+        help="Download the test data for synthesizer",
     )
 
     # Add the flag for dust data
@@ -145,7 +145,7 @@ def download():
         "--camels-data",
         "-c",
         action="store_true",
-        help="Download the CAMELS dataset.",
+        help="Download the CAMELS dataset",
     )
 
     # Add the CAMELs arguments
