@@ -110,7 +110,7 @@ test = ["pytest"]
 
 # Entry points
 [project.scripts]
-synthesizer-download="src.synthesizer.download:download"
+synthesizer-download="synthesizer.download_data:download"
 
 # Package data
 [tool.setuptools.package-data]
