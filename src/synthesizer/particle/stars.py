@@ -51,7 +51,7 @@ class Stars(Particles, StarsComponent):
         initial_masses (array-like, float)
             The intial stellar mass of each particle in Msun.
         ages (array-like, float)
-            The age of each stellar particle in Myrs.
+            The age of each stellar particle in yrs.
         metallicities (array-like, float)
             The metallicity of each stellar particle.
         tau_v (array-like, float)
