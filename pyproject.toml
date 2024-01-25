@@ -93,6 +93,7 @@ dependencies = [
   "nbsphinx",
   "matplotlib",
   "spectres",
+  "tqdm",
 ]
 
 # Optional dependencies for specific use cases.
@@ -108,9 +109,8 @@ test = ["pytest"]
 "Documentation" = "https://flaresimulations.github.io/synthesizer/"
 
 # Entry points
-[project.scripts]  # Optional
-init_bc03="grids.grid_bc03:main"
-init_fsps="grids.grid_fsps:main"
+[project.scripts]
+synthesizer-download="src.synthesizer.download:download"
 
 # Package data
 [tool.setuptools.package-data]
