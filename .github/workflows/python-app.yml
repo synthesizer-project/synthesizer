@@ -49,6 +49,7 @@ jobs:
         # download test grid data
         ./get_test_grid.sh
         cd ../
+        synthesizer-download --test-grids -d tests/test_grid/
     - name: Test with pytest
       run: |
         pytest
