@@ -52,7 +52,7 @@ class Image:
     resolution = Quantity()
     fov = Quantity()
 
-    def __init__(self, resolution, fov):
+    def __init__(self, resolution, fov, img=None):
         """
         Create an image with the images metadata.
 
@@ -61,6 +61,10 @@ class Image:
                 The resolution of the image.
             fov (unyt_quantity, float):
                 The field of view of the image.
+            img (unyt_array/array_like, float):
+                The image array. Only used to attach an existing image array
+                to an image instance. Mostly used internally when methods
+                make a new image instance for self.
         """
         # Set the quantities
         self.resolution = resolution
@@ -77,6 +81,11 @@ class Image:
 
         # Attributes to hold the image units
         self.units = None
+
+        # Attach an image if handed one
+        if img is not None:
+            self.arr = img.value if isinstance(img, unyt_array) else img
+            self.units = img.units if isinstance(img, unyt_array) else None
 
     def resample(self, factor):
         """
@@ -288,11 +297,61 @@ class Image:
     def apply_noise(self, noise):
         pass
 
+    def plot_img(
+        self,
+        show=False,
+        cmap="Greys_r",
+        norm=None,
+    ):
+        """
+        Plot an image.
+
+        Args:
+            show (bool)
+                Whether to show the plot or not (Default False).
+            cmap (str)
+                The name of the matplotlib colormap for image plotting. Can be
+                any valid string that can be passed to the cmap argument of
+                imshow. Defaults to "Greys_r".
+            norm (function)
+                A normalisation function. This can be custom made or one of
+                matplotlib's normalisation functions. It must take an array and
+                return the same array after normalisation.
+            tick_formatter (matplotlib.ticker.FuncFormatter)
+                An instance of the tick formatter for formatting the colorbar
+                ticks.
+
+        Returns:
+            matplotlib.pyplot.figure
+                The figure object containing the plot
+            matplotlib.pyplot.figure.axis
+                The axis object containing the image.
+        """
+        # Get the image
+        img = self.arr
+
+        # Set up the figure
+        fig = plt.figure(figsize=(3.5, 3.5))
+
+        # Create the axis and turn off the ticks and frame
+        ax = fig.add_subplot(111)
+        ax.axis("off")
+
+        # Plot the image and remove the surrounding axis
+        ax.imshow(
+            img,
+            cmap=cmap,
+            norm=norm,
+        )
+
+        if show:
+            plt.show()
+
+        return fig, ax
+
     def plot_map(
         self,
         show=False,
-        vmin=None,
-        vmax=None,
         extent=None,
         cmap="Greys_r",
         cbar_label=None,
@@ -300,8 +359,9 @@ class Image:
         tick_formatter=None,
     ):
         """
-        Plot a map. Unlike an image we want a colorbar and know ahead of time
-        there is only 1 image in the Image and only a "standard" image.
+        Plot a map.
+
+        Unlike an image we want a colorbar and axes for a map.
 
         Args:
             show (bool)
@@ -327,19 +387,9 @@ class Image:
                 The figure object containing the plot
             matplotlib.pyplot.figure.axis
                 The axis object containing the image.
-
-        Raises:
-            MissingImage
-                If there is no image then there's nothing to plot and an error
-                is thrown.
         """
-
-        # Ensure an img exists
-        if self.img is None:
-            raise exceptions.MissingImage("There is no image to plot!")
-
         # Get the image
-        img = self.img
+        img = self.arr
 
         # Set up the figure
         fig = plt.figure(figsize=(3.5, 3.5))
@@ -368,20 +418,7 @@ class Image:
         return fig, ax
 
     def print_ascii(self):
-        """
-        Print an ASCII representation of an image.
-
-        Args:
-        img_type : str
-            The type of images to combine. Can be "standard" for noiseless
-            and psfless images (self.imgs), "psf" for images with psf
-            (self.imgs_psf), or "noise" for images with noise
-            (self.imgs_noise).
-        filter_code : str
-            The filter code of the image to be plotted. If provided a plot is
-            made only for this filter. This is not needed if the image object
-            only contains a single image.
-        """
+        """Print an ASCII representation of an image."""
         # Define the possible ASCII symbols in density order
         scale = (
             "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft|()1{}[]?-_+~<>"
@@ -391,16 +428,8 @@ class Image:
         # Define the number of symbols
         nscale = len(scale)
 
-        # If a filter code has been provided extract that image, otherwise use
-        # the standalone image
-        if self.arr is None:
-            raise exceptions.InconsistentArguments(
-                "A filter code needs to be supplied"
-            )
-        img = self.img
-
         # Map the image onto a range of 0 -> nscale - 1
-        img = (nscale - 1) * img / np.max(img)
+        img = (nscale - 1) * self.arr / np.max(self.arr)
 
         # Convert to integers for indexing
         img = img.astype(int)
