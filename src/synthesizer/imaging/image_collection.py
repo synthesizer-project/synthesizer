@@ -485,7 +485,7 @@ class ImageCollection:
             # Apply the noise to this image
             noisy_imgs[f], noise_maps[f], weight_maps[f] = self.imgs[
                 f
-            ].apply_noise_from_array(noise_arrs[f])
+            ].apply_noise_array(noise_arrs[f])
 
         return ImageCollection(
             resolution=self.resolution,
@@ -495,7 +495,7 @@ class ImageCollection:
             weight_maps=weight_maps,
         )
 
-    def apply_noise_from_std(self, noise_stds):
+    def apply_noise_from_stds(self, noise_stds):
         """
         Apply noise based on standard deviations of the noise distribution.
 
@@ -547,7 +547,7 @@ class ImageCollection:
             weight_maps=weight_maps,
         )
 
-    def apply_noise_from_snr(self, snrs, depths, aperture_radius):
+    def apply_noise_from_snrs(self, snrs, depths, aperture_radius=None):
         """
         Apply noise based on SNRs and depths for each image.
 
@@ -563,7 +563,8 @@ class ImageCollection:
             aperture_radius (unyt_quantity)
                 The radius of the aperture in which the SNR and depth is
                 defined. This must have units attached and be in the same
-                system as the images resolution (e.g. cartesian or angular.)
+                system as the images resolution (e.g. cartesian or angular).
+                If not set a point source depth and SNR is assumed.
 
         Returns:
             ImageCollection
