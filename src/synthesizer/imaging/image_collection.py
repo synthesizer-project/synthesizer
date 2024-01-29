@@ -15,7 +15,7 @@ from unyt import unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.image import Image
-from syntheiszer.units import Quantity
+from synthesizer.units import Quantity
 
 
 class ImageCollection:
