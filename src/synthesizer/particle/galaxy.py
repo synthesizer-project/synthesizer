@@ -717,16 +717,20 @@ class Galaxy(BaseGalaxy):
             if img_type == "hist":
                 # Compute the image
                 stellar_imgs.get_imgs_hist(
-                    photometry=self.stars.particle_spectra.photo_luminosities,
+                    photometry=self.stars.particle_spectra[
+                        stellar_spectra
+                    ].photo_luminosities,
                     coordinates=self.stars.coordinates,
                 )
 
             elif img_type == "smoothed":
                 # Compute the image
                 stellar_imgs.get_imgs_smoothed(
-                    photometry=self.stars.particle_spectra.photo_luminosities,
-                    coordinates=self.stars.coordinates,
-                    smoothing_lengths=self.stars.smoothing_lengths,
+                    photometry=self.stars.particle_spectra[
+                        stellar_spectra
+                    ].photo_luminosities,
+                    coordinates=self.stars._coordinates,
+                    smoothing_lengths=self.stars._smoothing_lengths,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                 )
@@ -744,8 +748,10 @@ class Galaxy(BaseGalaxy):
 
             # Compute the image
             blackhole_imgs.get_imgs_hist(
-                photometry=self.black_holes.particle_spectra.photo_luminosities,
-                coordinates=self.black_holes.coordinates,
+                photometry=self.black_holes.particle_spectra[
+                    blackhole_spectra
+                ].photo_luminosities,
+                coordinates=self.black_holes._coordinates,
             )
 
         # Return the images, combining if there are multiple components
@@ -821,16 +827,20 @@ class Galaxy(BaseGalaxy):
             if img_type == "hist":
                 # Compute the image
                 stellar_imgs.get_imgs_hist(
-                    photometry=self.stars.particle_spectra.photo_fluxes,
-                    coordinates=self.stars.coordinates,
+                    photometry=self.stars.particle_spectra[
+                        stellar_spectra
+                    ].photo_fluxes,
+                    coordinates=self.stars._coordinates,
                 )
 
             elif img_type == "smoothed":
                 # Compute the image
                 stellar_imgs.get_imgs_smoothed(
-                    photometry=self.stars.particle_spectra.photo_fluxes,
-                    coordinates=self.stars.coordinates,
-                    smoothing_lengths=self.stars.smoothing_lengths,
+                    photometry=self.stars.particle_spectra[
+                        stellar_spectra
+                    ].photo_fluxes,
+                    coordinates=self.stars._coordinates,
+                    smoothing_lengths=self.stars._smoothing_lengths,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                 )
@@ -848,8 +858,10 @@ class Galaxy(BaseGalaxy):
 
             # Compute the image
             blackhole_imgs.get_imgs_hist(
-                photometry=self.black_holes.particle_spectra.photo_luminosities,
-                coordinates=self.black_holes.coordinates,
+                photometry=self.black_holes.particle_spectra[
+                    blackhole_spectra
+                ].photo_fluxes,
+                coordinates=self.black_holes._coordinates,
             )
 
         # Return the images, combining if there are multiple components
@@ -859,12 +871,72 @@ class Galaxy(BaseGalaxy):
             return stellar_imgs
         return blackhole_imgs
 
-    def get_stellar_mass_map(
+    def get_map_stellar_mass(
         self,
         resolution,
         fov,
         img_type="hist",
-        cosmo=None,
+        kernel=None,
+        kernel_threshold=1,
+    ):
+        """
+        Makes a mass map, either with or without smoothing.
+
+        Args:
+            resolution (float)
+                The size of a pixel.
+            fov (float)
+                The width of the image in image coordinates.
+            img_type (str)
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+
+        Returns:
+            Image
+        """
+
+        # Instantiate the Image object.
+        img = Image(
+            resolution=resolution,
+            fov=fov,
+        )
+
+        # Make the image, handling incorrect image types
+        if img_type == "hist":
+            # Compute the image
+            img.get_img_hist(
+                signal=self.stars._current_masses,
+                coordinates=self.stars._coordinates,
+            )
+
+        elif img_type == "smoothed":
+            # Compute image
+            img.get_img_smooth(
+                signal=self.stars._current_masses,
+                coordinates=self.stars._coordinates,
+                smoothing_lengths=self.stars._smoothing_lengths,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+            )
+
+        else:
+            raise exceptions.UnknownImageType(
+                "Unknown img_type %s. (Options are 'hist' or "
+                "'smoothed')" % img_type
+            )
+
+        return img
+
+    def get_map_gas_mass(
+        self,
+        resolution,
+        fov,
+        img_type="hist",
         kernel=None,
         kernel_threshold=1,
     ):
@@ -891,28 +963,29 @@ class Galaxy(BaseGalaxy):
         Returns:
             Image
         """
-
         # Instantiate the Image object.
-        img = ParticleImage(
+        img = Image(
             resolution=resolution,
             fov=fov,
-            coordinates=self.stars._coordinates,
-            smoothing_lengths=self.stars._smoothing_lengths,
-            pixel_values=self.stars._current_masses,
-            redshift=self.redshift,
-            cosmo=cosmo,
-            kernel=kernel,
-            kernel_threshold=kernel_threshold,
         )
 
         # Make the image, handling incorrect image types
         if img_type == "hist":
             # Compute the image
-            img.get_hist_imgs()
+            img.get_img_hist(
+                signal=self.gas._current_masses,
+                coordinates=self.gas._coordinates,
+            )
 
         elif img_type == "smoothed":
             # Compute image
-            img.get_imgs()
+            img.get_img_smooth(
+                signal=self.gas._current_masses,
+                coordinates=self.gas._coordinates,
+                smoothing_lengths=self.gas._smoothing_lengths,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+            )
 
         else:
             raise exceptions.UnknownImageType(
@@ -922,81 +995,18 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def get_gas_mass_map(
+    def get_map_stellar_age(
         self,
         resolution,
         fov,
         img_type="hist",
-        cosmo=None,
         kernel=None,
         kernel_threshold=1,
     ):
         """
-        Makes a mass map, either with or without smoothing.
+        Make an age map, either with or without smoothing.
 
-        Args:
-            resolution (float)
-                The size of a pixel.
-            fov (float)
-                The width of the image in image coordinates.
-            img_type (str)
-                The type of image to be made, either "hist" -> a histogram, or
-                "smoothed" -> particles smoothed over a kernel.
-            cosmo (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological
-                calculations when converting rest frame luminosity to flux.
-            kernel (array-like, float)
-                The values from one of the kernels from the kernel_functions
-                module. Only used for smoothed images.
-            kernel_threshold (float)
-                The kernel's impact parameter threshold (by default 1).
-
-        Returns:
-            Image
-        """
-
-        # Instantiate the Image object.
-        img = ParticleImage(
-            resolution=resolution,
-            fov=fov,
-            coordinates=self.gas._coordinates,
-            smoothing_lengths=self.gas._smoothing_lengths,
-            pixel_values=self.gas._masses,
-            redshift=self.redshift,
-            cosmo=cosmo,
-            kernel=kernel,
-            kernel_threshold=kernel_threshold,
-        )
-
-        # Make the image, handling incorrect image types
-        if img_type == "hist":
-            # Compute the image
-            img.get_hist_imgs()
-
-        elif img_type == "smoothed":
-            # Compute image
-            img.get_imgs()
-
-        else:
-            raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or "
-                "'smoothed')" % img_type
-            )
-
-        return img
-
-    def get_stellar_age_map(
-        self,
-        resolution,
-        fov,
-        img_type="hist",
-        cosmo=None,
-        kernel=None,
-        kernel_threshold=1,
-    ):
-        """
-        Makes a age map, either with or without smoothing. The
-        age in a pixel is the initial mass weighted average age in that
+        The age in a pixel is the initial mass weighted average age in that
         pixel.
 
         Args:
@@ -1019,28 +1029,29 @@ class Galaxy(BaseGalaxy):
         Returns:
             Image
         """
-
         # Instantiate the Image object.
-        img = ParticleImage(
+        weighted_img = Image(
             resolution=resolution,
             fov=fov,
-            coordinates=self.stars._coordinates,
-            smoothing_lengths=self.stars._smoothing_lengths,
-            pixel_values=self.stars._ages * self.stars._initial_masses,
-            redshift=self.redshift,
-            cosmo=cosmo,
-            kernel=kernel,
-            kernel_threshold=kernel_threshold,
         )
 
         # Make the image, handling incorrect image types
         if img_type == "hist":
             # Compute the image
-            img.get_hist_imgs()
+            weighted_img.get_img_hist(
+                signal=self.stars._ages * self.stars._initial_masses,
+                coordinates=self.stars._coordinates,
+            )
 
         elif img_type == "smoothed":
             # Compute image
-            img.get_imgs()
+            weighted_img.get_img_smooth(
+                signal=self.stars._ages * self.stars._initial_masses,
+                coordinates=self.stars._coordinates,
+                smoothing_lengths=self.stars._smoothing_lengths,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+            )
 
         else:
             raise exceptions.UnknownImageType(
@@ -1049,38 +1060,45 @@ class Galaxy(BaseGalaxy):
             )
 
         # Set up the initial mass image
-        mass_img = ParticleImage(
+        mass_img = Image(
             resolution=resolution,
             fov=fov,
-            coordinates=self.stars._coordinates,
-            smoothing_lengths=self.stars._smoothing_lengths,
-            pixel_values=self.stars._initial_masses,
-            redshift=self.redshift,
-            cosmo=cosmo,
-            kernel=kernel,
-            kernel_threshold=kernel_threshold,
         )
 
         # Make the initial mass map
         if img_type == "hist":
             # Compute the image
-            mass_img.get_hist_imgs()
+            mass_img.get_img_hist(
+                signal=self.stars._initial_masses,
+                coordinates=self.stars._coordinates,
+            )
 
-        else:
+        elif img_type == "smoothed":
             # Compute image
-            mass_img.get_imgs()
+            mass_img.get_img_smooth(
+                signal=self.stars._initial_masses,
+                coordinates=self.stars._coordinates,
+                smoothing_lengths=self.stars._smoothing_lengths,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+            )
 
-            # Divide out the mass contribution to get the mean metallicity
-        img.img[img.img > 0] /= mass_img.img[mass_img.img > 0]
+        # Divide out the mass contribution, handling zero contribution pixels
+        img = weighted_img.arr
+        img[img > 0] /= mass_img.arr[mass_img.arr > 0]
+        img *= self.stars.ages.units
 
-        return img
+        return Image(
+            resolution=self.resolution,
+            fov=self.fov,
+            img=img,
+        )
 
-    def get_stellar_metallicity_map(
+    def get_map_stellar_metallicity(
         self,
         resolution,
         fov,
         img_type="hist",
-        cosmo=None,
         kernel=None,
         kernel_threshold=1,
     ):
@@ -1148,12 +1166,11 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def get_gas_metallicity_map(
+    def get_map_gas_metallicity(
         self,
         resolution,
         fov,
         img_type="hist",
-        cosmo=None,
         kernel=None,
         kernel_threshold=1,
     ):
@@ -1223,12 +1240,11 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def get_stellar_metal_mass_map(
+    def get_map_stellar_metal_mass(
         self,
         resolution,
         fov,
         img_type="hist",
-        cosmo=None,
         kernel=None,
         kernel_threshold=1,
     ):
@@ -1286,12 +1302,11 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def get_gas_metal_mass_map(
+    def get_map_gas_metal_mass(
         self,
         resolution,
         fov,
         img_type="hist",
-        cosmo=None,
         kernel=None,
         kernel_threshold=1,
     ):
@@ -1351,12 +1366,11 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def get_sfr_map(
+    def get_map_sfr(
         self,
         resolution,
         fov,
         img_type="hist",
-        cosmo=None,
         kernel=None,
         kernel_threshold=1,
         age_bin=100 * Myr,
@@ -1438,12 +1452,11 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def get_ssfr_map(
+    def get_map_ssfr(
         self,
         resolution,
         fov,
         img_type="hist",
-        cosmo=None,
         kernel=None,
         kernel_threshold=1,
         age_bin=100 * Myr,
@@ -1479,7 +1492,7 @@ class Galaxy(BaseGalaxy):
         """
 
         # Get the SFR map
-        img = self.get_sfr_map(
+        img = self.get_map_sfr(
             resolution=resolution,
             fov=fov,
             img_type=img_type,
