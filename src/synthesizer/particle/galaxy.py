@@ -1,4 +1,4 @@
-""" A module containing all the funtionality for Particle based galaxies.
+"""A module containing all the funtionality for Particle based galaxies.
 
 Like it's parametric variant this module contains the Galaxy object definition
 from which all galaxy focused functionality can be performed. This variant uses
@@ -24,7 +24,7 @@ from synthesizer.particle import Gas
 from synthesizer.sed import Sed
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
-from synthesizer.imaging.images import ParticleImage
+from synthesizer.imaging import Image, ImageCollection
 from synthesizer.parametric import Stars as ParametricStars
 
 
@@ -599,9 +599,7 @@ class Galaxy(BaseGalaxy):
         return gamma
 
     def dust_to_metal_vijayan19(
-        self,
-        stellar_mass_weighted_age=None,
-        ism_metallicity=None
+        self, stellar_mass_weighted_age=None, ism_metallicity=None
     ):
         """
         Fitting function for the dust-to-metals ratio based on
@@ -653,32 +651,26 @@ class Galaxy(BaseGalaxy):
 
         return dtm
 
-    def make_images(
+    def get_images_luminosity(
         self,
         resolution,
         fov,
         img_type="hist",
-        stellar_spectra_type=None,
-        blackhole_spectra_type=None,
-        filters=(),
-        pixel_values=None,
-        psfs=None,
-        depths=None,
-        snrs=None,
-        aperture=None,
-        noises=None,
-        rest_frame=True,
-        cosmo=None,
-        psf_resample_factor=1,
+        stellar_spectra=None,
+        blackhole_spectra=None,
         kernel=None,
         kernel_threshold=1,
     ):
         """
-        Makes images, either one or one per filter. This is a generic method
-        that will make every sort of image using every possible combination of
-        arguments allowed by the ParticleImage class. These methods can be
-        either a simple histogram or smoothing particles over a kernel. Either
-        of these operations can be done with or without a PSF and noise.
+        Make an ImageCollection from luminosities.
+
+        Images can either be a simple histogram ("hist") or an image with
+        particles smoothed over their SPH kernel. The photometry used for these
+        images is extracted from the Sed stored on a component under the key
+        defined by <component>_spectra.
+
+        Note that black holes will never be smoothed and only produce a
+        histogram due to the point source nature of black holes.
 
         If multiple components are requested they will be combined into a
         single output image.
@@ -694,121 +686,50 @@ class Galaxy(BaseGalaxy):
             img_type : str
                 The type of image to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel.
-            stellar_spectra_type (string)
+            stellar_spectra (string)
                 The stellar spectra key to use for the image.
-            blackhole_spectra_type (string)
+            blackhole_spectra (string)
                 The black hole spectra key to use for the image.
-            filters : obj (FilterCollection)
-                An imutable collection of Filter objects. If provided images
-                are made for each filter.
-            pixel_values : array-like (float)
-                The values to be sorted/smoothed into pixels. Only needed if
-                an sed and filters are not used.
-            psfs : dict
-                A dictionary containing the psf in each filter where the key is
-                each filter code and the value is the psf in that filter.
-            depths : dict
-                A dictionary containing the depth of an observation in each
-                filter where the key is each filter code and the value is the
-                depth in that filter.
-            aperture : float/dict
-                Either a float describing the size of the aperture in which the
-                depth is defined or a dictionary containing the size of the
-                depth aperture in each filter.
-            rest_frame : bool
-                Are we making an observation in the rest frame?
-            cosmo : obj (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological
-                calculations when converting rest frame luminosity to flux.
-            psf_resample_factor : float
-                The factor by which the image should be resampled for robust
-                PSF convolution. Note the images after PSF application will be
-                downsampled to the native pixel scale.
             kernel (array-like, float)
                 The values from one of the kernels from the kernel_functions
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
 
-        Returns
-        -------
-        Image : array-like
-            A 2D array containing the image.
+        Returns:
+            Image : array-like
+                A 2D array containing the image.
         """
-
-        # Handle a super resolution image
-        if psf_resample_factor is not None:
-            if psf_resample_factor != 1:
-                resolution /= psf_resample_factor
-
         # Make sure we have an image to make
-        if (
-            stellar_spectra_type is None
-            and blackhole_spectra_type is None
-            and pixel_values is None
-        ):
+        if stellar_spectra is None and blackhole_spectra is None:
             raise exceptions.InconsistentArguments(
                 "At least one spectra type must be provided "
-                "(stellar_spectra_type or blackhole_spectra_type)!"
+                "(stellar_spectra or blackhole_spectra)!"
                 " What component do you want images of?"
             )
 
         # Make stellar image if requested
-        if stellar_spectra_type is not None or pixel_values is not None:
-            # Instantiate the Image object.
-            stellar_img = ParticleImage(
-                resolution=resolution,
-                fov=fov,
-                sed=self.stars.particle_spectra[stellar_spectra_type]
-                if stellar_spectra_type is not None
-                else None,
-                filters=filters,
-                coordinates=self.stars._coordinates,
-                smoothing_lengths=self.stars._smoothing_lengths,
-                pixel_values=pixel_values,
-                rest_frame=rest_frame,
-                redshift=self.redshift,
-                cosmo=cosmo,
-                psfs=psfs,
-                depths=depths,
-                apertures=aperture,
-                snrs=snrs,
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-            )
+        if stellar_spectra is not None:
+            # Instantiate the Image colection ready to make the image.
+            stellar_imgs = ImageCollection(resolution=resolution, fov=fov)
 
-            # Make the image, handling incorrect image types
+            # Make the image
             if img_type == "hist":
                 # Compute the image
-                stellar_img.get_hist_imgs()
-
-                if psfs is not None:
-                    # Convolve the image/images
-                    stellar_img.get_psfed_imgs()
-
-                    # Downsample to the native resolution if we need to.
-                    if psf_resample_factor is not None:
-                        if psf_resample_factor != 1:
-                            stellar_img.downsample(1 / psf_resample_factor)
-
-                if depths is not None or noises is not None:
-                    stellar_img.get_noisy_imgs(noises)
+                stellar_imgs.get_imgs_hist(
+                    photometry=self.stars.particle_spectra.photo_luminosities,
+                    coordinates=self.stars.coordinates,
+                )
 
             elif img_type == "smoothed":
-                # Compute image
-                stellar_img.get_imgs()
-
-                if psfs is not None:
-                    # Convolve the image/images
-                    stellar_img.get_psfed_imgs()
-
-                    # Downsample to the native resolution if we need to.
-                    if psf_resample_factor is not None:
-                        if psf_resample_factor != 1:
-                            stellar_img.downsample(1 / psf_resample_factor)
-
-                if depths is not None or noises is not None:
-                    stellar_img.get_noisy_imgs(noises)
+                # Compute the image
+                stellar_imgs.get_imgs_smoothed(
+                    photometry=self.stars.particle_spectra.photo_luminosities,
+                    coordinates=self.stars.coordinates,
+                    smoothing_lengths=self.stars.smoothing_lengths,
+                    kernel=kernel,
+                    kernel_threshold=kernel_threshold,
+                )
 
             else:
                 raise exceptions.UnknownImageType(
@@ -817,58 +738,128 @@ class Galaxy(BaseGalaxy):
                 )
 
         # Make blackhole image if requested
-        if blackhole_spectra_type is not None:
-            # Instantiate the Image object.
-            blackhole_img = ParticleImage(
-                resolution=resolution,
-                fov=fov,
-                sed=self.black_holes.particle_spectra[blackhole_spectra_type],
-                filters=filters,
-                coordinates=self.black_holes._coordinates,
-                pixel_values=pixel_values,
-                rest_frame=rest_frame,
-                redshift=self.redshift,
-                cosmo=cosmo,
-                psfs=psfs,
-                depths=depths,
-                apertures=aperture,
-                snrs=snrs,
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-            )
+        if blackhole_spectra is not None:
+            # Instantiate the Image colection ready to make the image.
+            blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
 
             # Compute the image
-            blackhole_img.get_hist_imgs()
+            blackhole_imgs.get_imgs_hist(
+                photometry=self.black_holes.particle_spectra.photo_luminosities,
+                coordinates=self.black_holes.coordinates,
+            )
 
-            if psfs is not None:
-                # Convolve the image/images
-                blackhole_img.get_psfed_imgs()
+        # Return the images, combining if there are multiple components
+        if stellar_spectra is not None and blackhole_spectra is not None:
+            return stellar_imgs + blackhole_imgs
+        elif stellar_spectra is not None:
+            return stellar_imgs
+        return blackhole_imgs
 
-                # Downsample to the native resolution if we need to.
-                if psf_resample_factor is not None:
-                    if psf_resample_factor != 1:
-                        blackhole_img.downsample(1 / psf_resample_factor)
+    def get_images_flux(
+        self,
+        resolution,
+        fov,
+        img_type="hist",
+        stellar_spectra=None,
+        blackhole_spectra=None,
+        kernel=None,
+        kernel_threshold=1,
+    ):
+        """
+        Make an ImageCollection from fluxes.
 
-            if depths is not None or noises is not None:
-                blackhole_img.get_noisy_imgs(noises)
+        Images can either be a simple histogram ("hist") or an image with
+        particles smoothed over their SPH kernel. The photometry used for these
+        images is extracted from the Sed stored on a component under the key
+        defined by <component>_spectra.
 
-        # Combine images
-        if stellar_spectra_type is not None and blackhole_spectra_type is None:
-            img = stellar_img
-        elif (
-            stellar_spectra_type is not None
-            and blackhole_spectra_type is not None
-        ):
-            img = stellar_img + blackhole_img
-        elif (
-            stellar_spectra_type is None and blackhole_spectra_type is not None
-        ):
-            img = blackhole_img
-        else:
-            img = stellar_img  # pixel_value case
-        return img
+        Note that black holes will never be smoothed and only produce a
+        histogram due to the point source nature of black holes.
 
-    def make_stellar_mass_map(
+        If multiple components are requested they will be combined into a
+        single output image.
+
+        NOTE: Either npix or fov must be defined.
+
+        Args:
+            resolution (Quantity, float)
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov : float
+                The width of the image in image coordinates.
+            img_type : str
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel.
+            stellar_spectra (string)
+                The stellar spectra key to use for the image.
+            blackhole_spectra (string)
+                The black hole spectra key to use for the image.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+
+        Returns:
+            Image : array-like
+                A 2D array containing the image.
+        """
+        # Make sure we have an image to make
+        if stellar_spectra is None and blackhole_spectra is None:
+            raise exceptions.InconsistentArguments(
+                "At least one spectra type must be provided "
+                "(stellar_spectra or blackhole_spectra)!"
+                " What component do you want images of?"
+            )
+
+        # Make stellar image if requested
+        if stellar_spectra is not None:
+            # Instantiate the Image colection ready to make the image.
+            stellar_imgs = ImageCollection(resolution=resolution, fov=fov)
+
+            # Make the image
+            if img_type == "hist":
+                # Compute the image
+                stellar_imgs.get_imgs_hist(
+                    photometry=self.stars.particle_spectra.photo_fluxes,
+                    coordinates=self.stars.coordinates,
+                )
+
+            elif img_type == "smoothed":
+                # Compute the image
+                stellar_imgs.get_imgs_smoothed(
+                    photometry=self.stars.particle_spectra.photo_fluxes,
+                    coordinates=self.stars.coordinates,
+                    smoothing_lengths=self.stars.smoothing_lengths,
+                    kernel=kernel,
+                    kernel_threshold=kernel_threshold,
+                )
+
+            else:
+                raise exceptions.UnknownImageType(
+                    "Unknown img_type %s. (Options are 'hist' or "
+                    "'smoothed')" % img_type
+                )
+
+        # Make blackhole image if requested
+        if blackhole_spectra is not None:
+            # Instantiate the Image colection ready to make the image.
+            blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
+
+            # Compute the image
+            blackhole_imgs.get_imgs_hist(
+                photometry=self.black_holes.particle_spectra.photo_luminosities,
+                coordinates=self.black_holes.coordinates,
+            )
+
+        # Return the images, combining if there are multiple components
+        if stellar_spectra is not None and blackhole_spectra is not None:
+            return stellar_imgs + blackhole_imgs
+        elif stellar_spectra is not None:
+            return stellar_imgs
+        return blackhole_imgs
+
+    def get_stellar_mass_map(
         self,
         resolution,
         fov,
@@ -931,7 +922,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def make_gas_mass_map(
+    def get_gas_mass_map(
         self,
         resolution,
         fov,
@@ -994,7 +985,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def make_stellar_age_map(
+    def get_stellar_age_map(
         self,
         resolution,
         fov,
@@ -1084,7 +1075,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def make_stellar_metallicity_map(
+    def get_stellar_metallicity_map(
         self,
         resolution,
         fov,
@@ -1157,7 +1148,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def make_gas_metallicity_map(
+    def get_gas_metallicity_map(
         self,
         resolution,
         fov,
@@ -1232,7 +1223,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def make_stellar_metal_mass_map(
+    def get_stellar_metal_mass_map(
         self,
         resolution,
         fov,
@@ -1295,7 +1286,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def make_gas_metal_mass_map(
+    def get_gas_metal_mass_map(
         self,
         resolution,
         fov,
@@ -1360,7 +1351,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def make_sfr_map(
+    def get_sfr_map(
         self,
         resolution,
         fov,
@@ -1447,7 +1438,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    def make_ssfr_map(
+    def get_ssfr_map(
         self,
         resolution,
         fov,
@@ -1488,7 +1479,7 @@ class Galaxy(BaseGalaxy):
         """
 
         # Get the SFR map
-        img = self.make_sfr_map(
+        img = self.get_sfr_map(
             resolution=resolution,
             fov=fov,
             img_type=img_type,
