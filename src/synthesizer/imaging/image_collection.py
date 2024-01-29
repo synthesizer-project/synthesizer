@@ -352,6 +352,7 @@ class ImageCollection:
         coordinates=None,
         smoothing_lengths=None,
         kernel=None,
+        kernel_threshold=1,
         density_grid=None,
     ):
         """
@@ -392,6 +393,7 @@ class ImageCollection:
                 coordinates=coordinates,
                 smoothing_lengths=smoothing_lengths,
                 kernel=kernel,
+                kernel_threshold=kernel_threshold,
                 density_grid=density_grid,
             )
             self.filter_codes.append(f)

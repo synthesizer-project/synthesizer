@@ -196,6 +196,7 @@ class Image:
         coordinates=None,
         smoothing_lengths=None,
         kernel=None,
+        kernel_threshold=1,
         density_grid=None,
     ):
         """
@@ -217,6 +218,8 @@ class Image:
                 The smoothing lengths of the particles. (particle case only)
             kernel (str):
                 The kernel to use for smoothing. (particle case only)
+            kernel_threshold (float):
+                The threshold for the kernel. (particle case only)
             density_grid (array_like, float):
                 The density grid to smooth over. (parametric case only)
 
@@ -282,12 +285,12 @@ class Image:
             smls,
             xs,
             ys,
-            self.kernel,
+            kernel,
             self._resolution,
             self.npix[0],
-            self.coordinates.shape[0],
-            self.kernel_threshold,
-            self.kernel_dim,
+            coordinates.shape[0],
+            kernel_threshold,
+            kernel.size,
         )
 
         return self.arr * self.units if self.units is not None else self.arr
