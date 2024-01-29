@@ -18,6 +18,7 @@ Example Usage:
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.ndimage import zoom
+from scipy import signal
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
@@ -292,10 +293,139 @@ class Image:
         return self.arr * self.units if self.units is not None else self.arr
 
     def apply_psf(self, psf):
-        pass
+        """
+        Apply a Point Spread Function to this image.
 
-    def apply_noise(self, noise):
-        pass
+        Args:
+            psf (np.ndarray)
+                An array describing the point spread function.
+
+        Returns:
+            Image
+                The image convolved with the psf.
+        """
+
+        # Perform the convolution
+        convolved_img = signal.fftconvolve(self.arr, psf, mode="same")
+
+        # Include units if we have them
+        if self.units is not None:
+            convolved_img *= self.units
+
+        return Image(
+            resolution=self.resolution,
+            fov=self.fov,
+            img=convolved_img,
+        )
+
+    def apply_noise_array(self, noise_arr):
+        """
+        Apply a noise array.
+
+        Args:
+            noise_arr (np.ndarray)
+                The noise array to add to the image.
+
+        Returns:
+            Image
+                The image including the noise array
+            np.ndarray
+                The weight map, derived from 1 / std **2
+        """
+
+        # Add the noise array to the image
+        noisy_img = self.arr + noise_arr
+
+        # Include units if we have them
+        if self.units is not None:
+            noisy_img *= noisy_img
+
+        # Make the new image
+        new_img = Image(
+            resolution=self.resolution,
+            fov=self.fov,
+            img=noisy_img,
+        )
+
+        # Calculate the weight map
+        weight_map = 1 / np.std(noise_arr) ** 2
+
+        return new_img, weight_map
+
+    def apply_noise_from_std(self, noise_std):
+        """
+        Apply noise derived from a standard deviation.
+
+        This creates noise with a normal distribution centred on 0 with the
+        passed standard deviation.
+
+        Args:
+            noise_std (float)
+                The standard deviation of the noise to add to the image.
+
+        Returns:
+            Image
+                The image including the noise array
+            np.ndarray
+                The weight map.
+        """
+
+        # Get the noise array
+        noise_arr = np.random.normal(
+            loc=0,
+            scale=noise_std,
+            size=(self.npix, self.npix),
+        )
+
+        # Add the noise to the image
+        new_img, _ = self.apply_noise_array(noise_arr)
+
+        # Calculate the weight map
+        weight_map = 1 / noise_std**2
+
+        return new_img, noise_arr, weight_map
+
+    def apply_noise_from_snr(self, snr, depth, aperture_radius=None):
+        """
+        Apply noise derived from a SNR and depth.
+
+        This can either be for a point source or an aperture if aperture_radius
+        is passed.
+
+        This assumes the SNR is defined as SNR = S / sqrt(noise_std)
+
+        Args:
+
+        Returns:
+            Image
+                The image including the noise array
+            np.ndarray
+                The noise array.
+            np.ndarray
+                The weight map.
+        """
+
+        # Calculate the noise array from an aperture or point source
+        if aperture_radius is not None:
+            # Calculate the total noise in the aperture
+            # NOTE: this assumes SNR = S / sqrt(app_noise)
+            app_noise = (depth / snr) ** 2
+
+            # Calculate the aperture area in image coordinates
+            app_area_coordinates = np.pi * aperture_radius**2
+
+            # Convert the aperture area to per pixel
+            app_area_pix = app_area_coordinates / self.resolution**2
+
+            # Get the noise per pixel
+            noise_std = app_noise / app_area_pix
+
+        # Calculate the noise from the depth and snr for a point source.
+        else:
+            # Calculate noise in a pixel
+            noise_std = (depth / snr) ** 2
+
+        return self.apply_noise_from_std(noise_std)
 
     def plot_img(
         self,
