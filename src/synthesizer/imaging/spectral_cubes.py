@@ -5,7 +5,6 @@ import warnings
 from unyt import kpc, mas
 from unyt.dimensions import angle
 
-from synthesizer.imaging.scene import Scene, ParticleScene
 import synthesizer.exceptions as exceptions
 
 
