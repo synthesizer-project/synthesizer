@@ -366,3 +366,50 @@ class Image:
             plt.show()
 
         return fig, ax
+
+    def print_ascii(self):
+        """
+        Print an ASCII representation of an image.
+
+        Args:
+        img_type : str
+            The type of images to combine. Can be "standard" for noiseless
+            and psfless images (self.imgs), "psf" for images with psf
+            (self.imgs_psf), or "noise" for images with noise
+            (self.imgs_noise).
+        filter_code : str
+            The filter code of the image to be plotted. If provided a plot is
+            made only for this filter. This is not needed if the image object
+            only contains a single image.
+        """
+        # Define the possible ASCII symbols in density order
+        scale = (
+            "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft|()1{}[]?-_+~<>"
+            "i!lI;:,\"^`'. "[::-1]
+        )
+
+        # Define the number of symbols
+        nscale = len(scale)
+
+        # If a filter code has been provided extract that image, otherwise use
+        # the standalone image
+        if self.arr is None:
+            raise exceptions.InconsistentArguments(
+                "A filter code needs to be supplied"
+            )
+        img = self.img
+
+        # Map the image onto a range of 0 -> nscale - 1
+        img = (nscale - 1) * img / np.max(img)
+
+        # Convert to integers for indexing
+        img = img.astype(int)
+
+        # Create the ASCII string image
+        ascii_img = ""
+        for i in range(img.shape[0]):
+            for j in range(img.shape[1]):
+                ascii_img += 2 * scale[img[i, j]]
+            ascii_img += "\n"
+
+        print(ascii_img)
