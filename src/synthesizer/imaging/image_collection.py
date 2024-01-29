@@ -11,6 +11,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from unyt import unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.image import Image
@@ -31,10 +32,23 @@ class ImageCollection:
     fov = Quantity()
     orig_resolution = Quantity()
 
-    def __init__(self, resolution, fov=None, npix=None):
+    def __init__(
+        self,
+        resolution,
+        fov=None,
+        npix=None,
+        imgs=None,
+        noise_maps=None,
+        weight_maps=None,
+    ):
         """Initialize the image collection.
 
         Either fov or npix must be specified.
+
+        An ImageCollection can either generate images or be initialised with
+        an image dictionary, and optionally noise and weight maps. In practice
+        the latter approach is mainly used only internally when generating
+        new images from an existing ImageCollection.
 
         Args:
             resolution (unyt_quantity)
@@ -43,6 +57,12 @@ class ImageCollection:
                 The width of the image.
             npix (int/tuple, int)
                 The number of pixels in the image.
+            imgs (dict)
+                A dictionary of images to be turned into a collection.
+            noise_maps (dict)
+                A dictionary of noise maps associated to imgs.
+            weight_maps (dict)
+                A dictionary of weight maps associated to imgs.
         """
         # Check the arguments
         self._check_args(resolution, fov, npix)
@@ -74,6 +94,35 @@ class ImageCollection:
         # Container for images (populated when image creation methods are
         # called)
         self.imgs = {}
+
+        # Create placeholders for any noise and weight maps
+        self.noise_maps = None
+        self.weight_maps = None
+
+        # Attribute for looping
+        self._current_ind = 0
+
+        # Store the filter codes
+        self.filter_codes = []
+
+        # A place holder for the RGB image
+        self.rgb_img = None
+
+        # Attach any images
+        if imgs is not None:
+            for f, img in imgs.items():
+                self.imgs[f] = img
+                self.filter_codes.append(f)
+
+        # Attach any noise and weight maps
+        if noise_maps is not None:
+            self.noise_maps = {}
+            for f, noise in noise_maps.items():
+                self.noise_maps[f] = noise
+        if weight_maps is not None:
+            self.weight_maps = {}
+            for f, weight in weight_maps.items():
+                self.weight_maps[f] = weight
 
     def _check_args(self, resolution, fov, npix):
         """
@@ -190,9 +239,38 @@ class ImageCollection:
         for f in self.imgs:
             self.imgs[f].resample(factor)
 
+    def __len__(self):
+        """Overload the len operator to return how many images there are."""
+        return len(self.imgs)
+
+    def __iter__(self):
+        """
+        Overload iteration to allow simple looping over Image objects.
+
+        Combined with __next__ this enables for f in ImageCollection syntax
+        """
+        return self
+
+    def __next__(self):
+        """
+        Overload iteration to allow simple looping over Image objects.
+
+        Combined with __iter__ this enables for f in ImageCollection syntax
+        """
+        # Check we haven't finished
+        if self._current_ind >= len(self):
+            self._current_ind = 0
+            raise StopIteration
+        else:
+            # Increment index
+            self._current_ind += 1
+
+            # Return the filter
+            return self.imgs[self.filter_codes[self._current_ind - 1]]
+
     def __add__(self, other_img):
         """
-        Add two img objects together.
+        Add two ImageCollections together.
 
         This combines all images with a common key.
 
@@ -266,6 +344,7 @@ class ImageCollection:
 
             # Store the image
             self.imgs[f] = img
+            self.filter_codes.append(f)
 
     def get_imgs_smoothed(
         self,
@@ -315,16 +394,11 @@ class ImageCollection:
                 kernel=kernel,
                 density_grid=density_grid,
             )
+            self.filter_codes.append(f)
 
     def apply_psf(self, psfs):
         """
         Convolve this ImageCollection's images with their PSFs.
-
-        This function will handle the different cases for image creation. If
-        there are multiple filters it will use the psf for each filters,
-        unless a single psf is provided in which case each filter will be
-        convolved with the singular psf. If the Image only contains a single
-        image it will convolve the psf with that image.
 
         To more accurately apply the PSF we recommend using a super resolution
         image. This can be done via the supersample method and then
@@ -332,12 +406,15 @@ class ImageCollection:
         is more efficient and robust to start at the super resolution initially
         and then downsample after the fact.
 
+        Args:
+            psfs (dict)
+                A dictionary with a point spread function for each image within
+                the ImageCollection. The key of each PSF must be the
+                filter_code of the image it should be applied to.
         Returns:
-            img/imgs (array_like/dictionary, float)
-                If pixel_values exists: A singular image convolved with the
-                PSF. If a filter list exists: Each img in self.imgs is
-                returned convolved with the corresponding PSF (or the single
-                PSF if an array was supplied for psf).
+            ImageCollection
+                A new image collection containing the images convolved with a
+                PSF.
 
         Raises:
             InconsistentArguments
@@ -345,218 +422,207 @@ class ImageCollection:
                 filters an error is raised.
         """
         # Check we have a valid set of PSFs
-        if len(self.filters) == 0 and isinstance(psfs, dict):
+        if not isinstance(psfs, dict):
             raise exceptions.InconsistentArguments(
-                "To convolve with a single image an array should be "
-                "provided for the PSF not a dictionary."
+                "psfs must be a dictionary with a PSF for each image"
             )
-        elif len(self.filters) > 0 and isinstance(psfs, dict):
-            # What filters are we missing psfs for?
-            filter_codes = set(self.filters.filter_codes)
-            for key in psfs:
-                filter_codes -= set(
-                    [
-                        key,
-                    ]
-                )
+        missing_psfs = [f for f in self.imgs.keys() if f not in psfs]
+        if len(missing_psfs) > 0:
+            raise exceptions.InconsistentArguments(
+                f"Missing a psf for the following filters: {missing_psfs}"
+            )
 
-            # If filters are missing raise an error saying which filters we
-            # are missing
-            if len(filter_codes) > 0:
-                raise exceptions.InconsistentArguments(
-                    "Either a single PSF or a dictionary with a PSF for each "
-                    "filter must be given. PSFs are missing for filters: "
-                    "[" + ", ".join(list(filter_codes)) + "]"
-                )
-
-        # Handle the possible cases (multiple filters or single image)
-        if len(self.filters) == 0:
-            self.img_psf = self._get_psfed_single_img(self.img, psfs)
-
-            return self.img_psf
-
-        # Otherwise, we need to loop over filters and return a dictionary of
-        # convolved images.
-        for f in self.filters:
-            # Get the PSF
-            if isinstance(psfs, dict):
-                psf = psfs[f.filter_code]
-            else:
-                psf = psfs
-
+        # Loop over each images and perform the convolution
+        psfed_imgs = {}
+        for f in psfs:
             # Apply the PSF to this image
-            self.imgs_psf[f.filter_code] = self._get_psfed_single_img(
-                self.imgs[f.filter_code], psf
-            )
+            psfed_imgs[f] = self.imgs[f].apply_psf(psfs[f])
 
-        return self.imgs_psf
+        return ImageCollection(
+            resolution=self.resolution,
+            npix=self.npix,
+            imgs=psfed_imgs,
+        )
 
-    def apply_noise(self, noises=None):
+    def apply_noise_arrays(self, noise_arrs):
         """
-        Make and add a noise array to each image in this Image object. The
-        noise is defined by either a depth and signal-to-noise in an aperture
-        or by an explicit noise pixel value.
-
-        Note that the noise will be applied to the psfed images by default
-        if they exist (those stored in self.imgs_psf). If those images do not
-        exist then it will be applied to the standard images in self.imgs.
+        Apply an existing noise array to each image.
 
         Args:
-            noises (float/dict, float)
-                The standard deviation of the noise distribution. If noises is
-                provided then depth, snr and aperture are ignored. Can either
-                be a single value or a value per filter in a dictionary.
+            noise_arrs (dict)
+                A dictionary with a noise array for each image within the
+                ImageCollection. The key of each noise array must be the
+                filter_code of the image it should be applied to.
+
         Returns:
-            noisy_img (array_like, float)
-                The image with a noise contribution.
+            ImageCollection
+                A new image collection containing the images with noise
+                applied.
 
         Raises:
             InconsistentArguments
-                If dictionaries are provided and each filter doesn't have an
-                entry and error is thrown.
+                If the noise arrays dict is missing arguments an error is
+                raised.
         """
-
-        # Check we have a valid set of noise attributes
-        if len(self.filters) == 0 and (
-            isinstance(self.depths, dict)
-            or isinstance(self.snrs, dict)
-            or isinstance(self.apertures, dict)
-            or isinstance(noises, dict)
-        ):
+        # Check we have a valid set of noise arrays
+        if not isinstance(noise_arrs, dict):
             raise exceptions.InconsistentArguments(
-                "If there is a single image then noise arguments should be "
-                "floats not dictionaries."
+                "noise_arrs must be a dictionary with a noise "
+                "array for each image"
             )
-        if len(self.filters) > 0 and isinstance(self.depths, dict):
-            # What filters are we missing psfs for?
-            filter_codes = set(self.filters.filter_codes)
-            for key in self.depths:
-                filter_codes -= set(
-                    [
-                        key,
-                    ]
-                )
-
-            # If filters are missing raise an error saying which filters we
-            # are missing
-            if len(filter_codes) > 0:
-                raise exceptions.InconsistentArguments(
-                    "Either a single depth or a dictionary of depths for each "
-                    "filter must be given. Depths are missing for filters: "
-                    "[" + ", ".join(list(filter_codes)) + "]"
-                )
-
-        if len(self.filters) > 0 and isinstance(self.snrs, dict):
-            # What filters are we missing psfs for?
-            filter_codes = set(self.filters.filter_codes)
-            for key in self.snrs:
-                filter_codes -= set(
-                    [
-                        key,
-                    ]
-                )
-
-            # If filters are missing raise an error saying which filters we
-            # are missing
-            if len(filter_codes) > 0:
-                raise exceptions.InconsistentArguments(
-                    "Either a single SNR or a dictionary of SNRs for each "
-                    "filter must be given. SNRs are missing for filters: "
-                    "[" + ", ".join(list(filter_codes)) + "]"
-                )
-
-        if len(self.filters) > 0 and isinstance(self.apertures, dict):
-            # What filters are we missing psfs for?
-            filter_codes = set(self.filters.filter_codes)
-            for key in self.apertures:
-                filter_codes -= set(
-                    [
-                        key,
-                    ]
-                )
-
-            # If filters are missing raise an error saying which filters we
-            # are missing
-            if len(filter_codes) > 0:
-                raise exceptions.InconsistentArguments(
-                    "Either a single aperture or a dictionary of apertures for"
-                    " each filter must be given. Apertures are missing for "
-                    "filters: "
-                    "[" + ", ".join(list(filter_codes)) + "]"
-                )
-
-        if len(self.filters) > 0 and isinstance(noises, dict):
-            # What filters are we missing psfs for?
-            filter_codes = set(self.filters.filter_codes)
-            for key in noises:
-                filter_codes -= set(
-                    [
-                        key,
-                    ]
-                )
-
-            # If filters are missing raise an error saying which filters we
-            # are missing
-            if len(filter_codes) > 0:
-                raise exceptions.InconsistentArguments(
-                    "Either a single noise or a dictionary of noises for each "
-                    "filter must be given. Noises are missing for filters: "
-                    "[" + ", ".join(list(filter_codes)) + "]"
-                )
-
-        # Handle the possible cases (multiple filters or single image)
-        if len(self.filters) == 0:
-            # Apply noise to the image
-            noise_tuple = self._get_noisy_single_img(
-                self.img_psf, self.depths, self.snrs, self.apertures, noises
+        missing = [f for f in self.filter_codes if f not in noise_arrs]
+        if len(missing) > 0:
+            raise exceptions.InconsistentArguments(
+                "Missing a noise array for the following "
+                f"filters: {missing}"
             )
 
-            self.img_noise, self.weight_map, self.noise_arr = noise_tuple
+        # Loop over each images getting the noisy version
+        noisy_imgs = {}
+        noise_maps = {}
+        weight_maps = {}
+        for f in noise_arrs:
+            # Apply the noise to this image
+            noisy_imgs[f], noise_maps[f], weight_maps[f] = self.imgs[
+                f
+            ].apply_noise_from_array(noise_arrs[f])
 
-            return self.img_noise, self.weight_map, self.noise_arr
+        return ImageCollection(
+            resolution=self.resolution,
+            npix=self.npix,
+            imgs=noisy_imgs,
+            noise_maps=noise_maps,
+            weight_maps=weight_maps,
+        )
 
-        # Otherwise, we need to loop over filters and return a dictionary of
-        # convolved images.
-        for f in self.filters:
-            # Extract the arguments
-            if isinstance(self.depths, dict):
-                depth = self.depths[f.filter_code]
-            else:
-                depth = self.depths
-            if isinstance(self.snrs, dict):
-                snr = self.snrs[f.filter_code]
-            else:
-                snr = self.snrs
-            if isinstance(self.apertures, dict):
-                aperture = self.apertures[f.filter_code]
-            else:
-                aperture = self.apertures
-            if isinstance(noises, dict):
-                noise = noises[f.filter_code]
-            else:
-                noise = noises
+    def apply_noise_from_std(self, noise_stds):
+        """
+        Apply noise based on standard deviations of the noise distribution.
 
-            # Calculate and apply noise to this image
-            if len(self.imgs_psf) > 0:
-                noise_tuple = self._get_noisy_single_img(
-                    self.imgs_psf[f.filter_code], depth, snr, aperture, noise
-                )
-            else:
-                noise_tuple = self._get_noisy_single_img(
-                    self.imgs[f.filter_code], depth, snr, aperture, noise
-                )
+        Args:
+            noise_stds (dict)
+                A dictionary with a standard deviation for each image within
+                the ImageCollection. The key of each standard deviation must
+                be the filter_code of the image it should be applied to.
 
-            # Store the resulting noisy image, weight, and noise arrays
-            self.imgs_noise[f.filter_code] = noise_tuple[0]
-            self.weight_maps[f.filter_code] = noise_tuple[1]
-            self.noise_arrs[f.filter_code] = noise_tuple[2]
+        Returns:
+            ImageCollection
+                A new image collection containing the images with noise
+                applied.
 
-        return self.imgs_noise, self.weight_maps, self.noise_arrs
+
+        Raises:
+            InconsistentArguments
+                If a standard deviation for an image is missing an error is
+                raised.
+        """
+        # Check we have a valid set of noise standard deviations
+        if not isinstance(noise_stds, dict):
+            raise exceptions.InconsistentArguments(
+                "noise_stds must be a dictionary with a standard "
+                "deviation for each image"
+            )
+        missing = [f for f in self.filter_codes if f not in noise_stds]
+        if len(missing) > 0:
+            raise exceptions.InconsistentArguments(
+                "Missing a standard deviation for the following "
+                f"filters: {missing}"
+            )
+
+        # Loop over each image getting the noisy version
+        noisy_imgs = {}
+        noise_maps = {}
+        weight_maps = {}
+        for f in noise_stds:
+            # Apply the noise to this image
+            noisy_imgs[f], noise_maps[f], weight_maps[f] = self.imgs[
+                f
+            ].apply_noise_from_std(noise_stds[f])
+
+        return ImageCollection(
+            resolution=self.resolution,
+            npix=self.npix,
+            imgs=noisy_imgs,
+            noise_maps=noise_maps,
+            weight_maps=weight_maps,
+        )
+
+    def apply_noise_from_snr(self, snrs, depths, aperture_radius):
+        """
+        Apply noise based on SNRs and depths for each image.
+
+        Args:
+            snrs (dict)
+                A dictionary containing the signal to noise ratio for each
+                image within the ImageCollection. The key of each SNR must
+                be the filter_code of the image it should be applied to.
+            depths (dict)
+                A dictionary containing the depth for each image within the
+                ImageCollection. The key of each dpeth must be the filter_code
+                of the image it should be applied to.
+            aperture_radius (unyt_quantity)
+                The radius of the aperture in which the SNR and depth is
+                defined. This must have units attached and be in the same
+                system as the images resolution (e.g. cartesian or angular.)
+
+        Returns:
+            ImageCollection
+                A new image collection containing the images with noise
+                applied.
+
+        Raises:
+            InconsistentArguments
+                If a snr or depth for an image is missing an error is raised.
+        """
+        # Check we have a valid set of noise standard deviations
+        if not isinstance(snrs, dict):
+            raise exceptions.InconsistentArguments(
+                "snrs must be a dictionary with a SNR for each image"
+            )
+        if not isinstance(depths, dict):
+            raise exceptions.InconsistentArguments(
+                "depths must be a dictionary with a depth for each image"
+            )
+        missing_snrs = [f for f in self.filter_codes if f not in snrs]
+        missing_depths = [f for f in self.filter_codes if f not in depths]
+        if len(missing_snrs) > 0:
+            raise exceptions.InconsistentArguments(
+                "Missing a SNR for the following " f"filters: {missing_snrs}"
+            )
+        if len(missing_depths) > 0:
+            raise exceptions.InconsistentArguments(
+                "Missing a depth for the following "
+                f"filters: {missing_depths}"
+            )
+        if not isinstance(aperture_radius, unyt_quantity):
+            raise exceptions.InconsistentArguments(
+                "aperture_radius must be given with units"
+            )
+
+        # Loop over each image getting the noisy version
+        noisy_imgs = {}
+        noise_maps = {}
+        weight_maps = {}
+        for f in snrs:
+            # Apply the noise to this image
+            noisy_imgs[f], noise_maps[f], weight_maps[f] = self.imgs[
+                f
+            ].apply_noise_from_array(
+                snr=snrs[f],
+                depth=depths[f],
+                aperture_radius=aperture_radius.to(self.resolution.units),
+            )
+
+        return ImageCollection(
+            resolution=self.resolution,
+            npix=self.npix,
+            imgs=noisy_imgs,
+            noise_maps=noise_maps,
+            weight_maps=weight_maps,
+        )
 
     def plot_images(
         self,
-        img_type="standard",
-        filter_code=None,
         show=False,
         vmin=None,
         vmax=None,
@@ -564,7 +630,7 @@ class ImageCollection:
         cmap="Greys_r",
     ):
         """
-        Plot an image.
+        Plot all images.
 
         If this image object contains multiple filters each with an image and
         the filter_code argument is not specified, then all images will be
@@ -578,15 +644,6 @@ class ImageCollection:
         across all filters.
 
         Args:
-            img_type (str)
-                The type of images to combine. Can be "standard" for noiseless
-                and psfless images (self.imgs), "psf" for images with psf
-                (self.imgs_psf), or "noise" for images with noise
-                (self.imgs_noise).
-            filter_code (str)
-                The filter code of the image to be plotted. If provided a plot
-                is made only for this filter. This is not needed if the image
-                object only contains a single image.
             show (bool)
                 Whether to show the plot or not (Default False).
             vmin (float)
@@ -613,46 +670,38 @@ class ImageCollection:
                 If the requested image type has not yet been created and
                 stored in this image object an exception is raised.
         """
-
         # Handle the scaling function for less branches
         if scaling_func is None:
 
             def scaling_func(x):
                 return x
 
-        # What type of image are we plotting?
-        if img_type == "standard":
-            img = self.img
-            imgs = self.imgs
-        elif img_type == "psf":
-            img = self.img_psf
-            imgs = self.imgs_psf
-        elif img_type == "noise":
-            img = self.img_noise
-            imgs = self.imgs_noise
-        else:
-            raise exceptions.UnknownImageType(
-                "img_type can be 'standard', 'psf', or 'noise' "
-                "not '%s'" % img_type
-            )
+        # Do we need to find the normalisation for each filter?
+        unique_norm_min = vmin is None
+        unique_norm_max = vmax is None
 
-        # Are we only plotting a single image from a set?
-        if filter_code is not None:
-            # Get that image
-            img = imgs[filter_code]
+        # Set up the figure
+        fig = plt.figure(
+            figsize=(4 * 3.5, int(np.ceil(len(self.filters) / 4)) * 3.5)
+        )
 
-        # Plot the single image
-        if img is not None:
-            # Set up the figure
-            fig = plt.figure(figsize=(3.5, 3.5))
+        # Create a gridspec grid
+        gs = gridspec.GridSpec(
+            int(np.ceil(len(self.filters) / 4)), 4, hspace=0.0, wspace=0.0
+        )
+
+        # Loop over filters making each image
+        for ind, f in enumerate(self.filter_codes):
+            # Get the image
+            img = self.imgs[f.filter_code]
 
             # Create the axis
-            ax = fig.add_subplot(111)
+            ax = fig.add_subplot(gs[int(np.floor(ind / 4)), ind % 4])
 
             # Set up minima and maxima
-            if vmin is None:
+            if unique_norm_min:
                 vmin = np.min(img)
-            if vmax is None:
+            if unique_norm_max:
                 vmax = np.max(img)
 
             # Normalise the image.
@@ -665,64 +714,21 @@ class ImageCollection:
             ax.imshow(img, origin="lower", interpolation="nearest", cmap=cmap)
             ax.axis("off")
 
-        else:
-            # Ok, plot a grid of filter images
-
-            # Do we need to find the normalisation for each filter?
-            unique_norm_min = vmin is None
-            unique_norm_max = vmax is None
-
-            # Set up the figure
-            fig = plt.figure(
-                figsize=(4 * 3.5, int(np.ceil(len(self.filters) / 4)) * 3.5)
+            # Place a label for which filter this ised_ASCII
+            ax.text(
+                0.95,
+                0.9,
+                f.filter_code,
+                bbox=dict(
+                    boxstyle="round,pad=0.3",
+                    fc="w",
+                    ec="k",
+                    lw=1,
+                    alpha=0.8,
+                ),
+                transform=ax.transAxes,
+                horizontalalignment="right",
             )
-
-            # Create a gridspec grid
-            gs = gridspec.GridSpec(
-                int(np.ceil(len(self.filters) / 4)), 4, hspace=0.0, wspace=0.0
-            )
-
-            # Loop over filters making each image
-            for ind, f in enumerate(self.filters):
-                # Get the image
-                img = imgs[f.filter_code]
-
-                # Create the axis
-                ax = fig.add_subplot(gs[int(np.floor(ind / 4)), ind % 4])
-
-                # Set up minima and maxima
-                if unique_norm_min:
-                    vmin = np.min(img)
-                if unique_norm_max:
-                    vmax = np.max(img)
-
-                # Normalise the image.
-                img = (img - vmin) / (vmax - vmin)
-
-                # Scale the image
-                img = scaling_func(img)
-
-                # Plot the image and remove the surrounding axis
-                ax.imshow(
-                    img, origin="lower", interpolation="nearest", cmap=cmap
-                )
-                ax.axis("off")
-
-                # Place a label for which filter this ised_ASCII
-                ax.text(
-                    0.95,
-                    0.9,
-                    f.filter_code,
-                    bbox=dict(
-                        boxstyle="round,pad=0.3",
-                        fc="w",
-                        ec="k",
-                        lw=1,
-                        alpha=0.8,
-                    ),
-                    transform=ax.transAxes,
-                    horizontalalignment="right",
-                )
 
         if show:
             plt.show()
@@ -730,36 +736,40 @@ class ImageCollection:
         return fig, ax
 
     def make_rgb_image(
-        self, rgb_filters, img_type="standard", weights=None, scaling_func=None
+        self,
+        rgb_filters,
+        weights=None,
+        scaling_func=None,
     ):
         """
-        Makes an rgb image of specified filters with optional weights in
-        each filter.
+        Make an rgb image from the ImageCollection.
+
+        The filters in each channel are defined via the rgb_filters dict,
+        with the option of providing weights for each filter.
 
         Args:
             rgb_filters (dict, array_like, str)
                 A dictionary containing lists of each filter to combine to
                 create the red, green, and blue channels.
-                e.g. {"R": "Webb/NIRCam.F277W",
-                "G": "Webb/NIRCam.F150W", "B": "Webb/NIRCam.F090W"}.
-            img_type (str)
-                The type of images to combine. Can be "standard" for noiseless
-                and psfless images (self.imgs), "psf" for images with psf
-                (self.imgs_psf), or "noise" for images with noise
-                (self.imgs_noise).
+                e.g.
+                {
+                "R": "Webb/NIRCam.F277W",
+                "G": "Webb/NIRCam.F150W",
+                "B": "Webb/NIRCam.F090W",
+                }.
             weights (dict, array_like, float)
                 A dictionary of weights for each filter. Defaults to equal
                 weights.
             scaling_func (function)
-                A function to scale the image by. Defaults to arcsinh. This
-                function should take a single array and produce an array of the
-                same shape but scaled in the desired manner.
+                A function to scale the image by. This function should take a
+                single array and produce an array of the same shape but scaled
+                in the desired manner. The scaling is done to each channel
+                individually.
 
         Returns:
-            array_like (float)
-                The image array itself.
+            np.ndarray
+                The RGB image array.
         """
-
         # Handle the scaling function for less branches
         if scaling_func is None:
 
@@ -784,25 +794,12 @@ class ImageCollection:
         # Set up the rgb image
         rgb_img = np.zeros((self.npix, self.npix, 3), dtype=np.float64)
 
+        # Loop over each filter calcualting the RGB channels
         for rgb_ind, rgb in enumerate(rgb_filters):
             for f in rgb_filters[rgb]:
-                if img_type == "standard":
-                    rgb_img[:, :, rgb_ind] += scaling_func(
-                        weights[f] * self.imgs[f]
-                    )
-                elif img_type == "psf":
-                    rgb_img[:, :, rgb_ind] += scaling_func(
-                        weights[f] * self.imgs_psf[f]
-                    )
-                elif img_type == "noise":
-                    rgb_img[:, :, rgb_ind] += scaling_func(
-                        weights[f] * self.imgs_noise[f]
-                    )
-                else:
-                    raise exceptions.UnknownImageType(
-                        "img_type can be 'standard', 'psf', or 'noise' "
-                        "not '%s'" % img_type
-                    )
+                rgb_img[:, :, rgb_ind] += scaling_func(
+                    weights[f] * self.imgs[f]
+                )
 
         self.rgb_img = rgb_img
 
@@ -825,7 +822,7 @@ class ImageCollection:
                 The figure object containing the plot
             matplotlib.pyplot.figure.axis
                 The axis object containing the image.
-            array_like (float)
+            np.ndarray
                 The rgb image array itself.
 
         Raises:
@@ -833,13 +830,12 @@ class ImageCollection:
                 If the RGB image has not yet been created and stored in this
                 image object an exception is raised.
         """
-
         # If the image hasn't been made throw an error
         if self.rgb_img is None:
             raise exceptions.MissingImage(
                 "The rgb image hasn't been computed yet. Run "
-                "Image.make_rgb_image to compute the RGB image before "
-                "plotting."
+                "ImageCollection.make_rgb_image to compute the RGB "
+                "image before plotting."
             )
 
         # Set up minima and maxima
@@ -860,53 +856,3 @@ class ImageCollection:
             plt.show()
 
         return fig, ax, rgb_img
-
-    def print_ascii(self, filter_code=None, img_type="standard"):
-        """
-        Print an ASCII representation of an image.
-
-        Args:
-        img_type : str
-            The type of images to combine. Can be "standard" for noiseless
-            and psfless images (self.imgs), "psf" for images with psf
-            (self.imgs_psf), or "noise" for images with noise
-            (self.imgs_noise).
-        filter_code : str
-            The filter code of the image to be plotted. If provided a plot is
-            made only for this filter. This is not needed if the image object
-            only contains a single image.
-        """
-        # Define the possible ASCII symbols in density order
-        scale = (
-            "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft|()1{}[]?-_+~<>"
-            "i!lI;:,\"^`'. "[::-1]
-        )
-
-        # Define the number of symbols
-        nscale = len(scale)
-
-        # If a filter code has been provided extract that image, otherwise use
-        # the standalone image
-        if filter_code:
-            img = self.imgs[filter_code]
-        else:
-            if self.img is None:
-                raise exceptions.InconsistentArguments(
-                    "A filter code needs to be supplied"
-                )
-            img = self.img
-
-        # Map the image onto a range of 0 -> nscale - 1
-        img = (nscale - 1) * img / np.max(img)
-
-        # Convert to integers for indexing
-        img = img.astype(int)
-
-        # Create the ASCII string image
-        ascii_img = ""
-        for i in range(img.shape[0]):
-            for j in range(img.shape[1]):
-                ascii_img += 2 * scale[img[i, j]]
-            ascii_img += "\n"
-
-        print(ascii_img)
