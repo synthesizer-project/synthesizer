@@ -317,8 +317,8 @@ class Galaxy(BaseGalaxy):
         self,
         resolution,
         fov,
-        stellar_spectra=None,
-        blackhole_spectra=None,
+        stellar_photometry=None,
+        blackhole_photometry=None,
     ):
         """
         Make an ImageCollection from luminosities.
@@ -338,25 +338,27 @@ class Galaxy(BaseGalaxy):
                 (Ignoring any supersampling defined by psf_resample_factor)
             fov : float
                 The width of the image in image coordinates.
-            stellar_spectra (string)
-                The stellar spectra key to use for the image.
-            blackhole_spectra (string)
-                The black hole spectra key to use for the image.
+            stellar_photometry (string)
+                The stellar spectra key from which to extract photometry
+                to use for the image.
+            blackhole_photometry (string)
+                The black hole spectra key from which to extract photometry
+                to use for the image.
 
         Returns:
             Image : array-like
                 A 2D array containing the image.
         """
         # Make sure we have an image to make
-        if stellar_spectra is None and blackhole_spectra is None:
+        if stellar_photometry is None and blackhole_photometry is None:
             raise exceptions.InconsistentArguments(
                 "At least one spectra type must be provided "
-                "(stellar_spectra or blackhole_spectra)!"
+                "(stellar_photometry or blackhole_photometry)!"
                 " What component do you want images of?"
             )
 
         # Make stellar image if requested
-        if stellar_spectra is not None:
+        if stellar_photometry is not None:
             # Instantiate the Image colection ready to make the image.
             stellar_imgs = ImageCollection(resolution=resolution, fov=fov)
 
@@ -368,13 +370,13 @@ class Galaxy(BaseGalaxy):
             # Make the image
             stellar_imgs.get_imgs_smoothed(
                 photometry=self.stars.spectra[
-                    stellar_spectra
+                    stellar_photometry
                 ].photo_luminosities,
                 density_grid=stellar_density,
             )
 
         # Make blackhole image if requested
-        if blackhole_spectra is not None:
+        if blackhole_photometry is not None:
             # Instantiate the Image colection ready to make the image.
             blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
 
@@ -386,15 +388,15 @@ class Galaxy(BaseGalaxy):
             # Compute the image
             blackhole_imgs.get_imgs_smoothed(
                 photometry=self.black_holes.spectra[
-                    blackhole_spectra
+                    blackhole_photometry
                 ].photo_luminosities,
                 density_grid=blackhole_density,
             )
 
         # Return the images, combining if there are multiple components
-        if stellar_spectra is not None and blackhole_spectra is not None:
+        if stellar_photometry is not None and blackhole_photometry is not None:
             return stellar_imgs + blackhole_imgs
-        elif stellar_spectra is not None:
+        elif stellar_photometry is not None:
             return stellar_imgs
         return blackhole_imgs
 
@@ -402,8 +404,8 @@ class Galaxy(BaseGalaxy):
         self,
         resolution,
         fov,
-        stellar_spectra=None,
-        blackhole_spectra=None,
+        stellar_photometry=None,
+        blackhole_photometry=None,
     ):
         """
         Make an ImageCollection from fluxes.
@@ -423,25 +425,27 @@ class Galaxy(BaseGalaxy):
                 (Ignoring any supersampling defined by psf_resample_factor)
             fov : float
                 The width of the image in image coordinates.
-            stellar_spectra (string)
-                The stellar spectra key to use for the image.
-            blackhole_spectra (string)
-                The black hole spectra key to use for the image.
+            stellar_photometry (string)
+                The stellar spectra key from which to extract photometry
+                to use for the image.
+            blackhole_photometry (string)
+                The black hole spectra key from which to extract photometry
+                to use for the image.
 
         Returns:
             Image : array-like
                 A 2D array containing the image.
         """
         # Make sure we have an image to make
-        if stellar_spectra is None and blackhole_spectra is None:
+        if stellar_photometry is None and blackhole_photometry is None:
             raise exceptions.InconsistentArguments(
                 "At least one spectra type must be provided "
-                "(stellar_spectra or blackhole_spectra)!"
+                "(stellar_photometry or blackhole_photometry)!"
                 " What component do you want images of?"
             )
 
         # Make stellar image if requested
-        if stellar_spectra is not None:
+        if stellar_photometry is not None:
             # Instantiate the Image colection ready to make the image.
             stellar_imgs = ImageCollection(resolution=resolution, fov=fov)
 
@@ -453,13 +457,13 @@ class Galaxy(BaseGalaxy):
             # Make the image
             stellar_imgs.get_imgs_smoothed(
                 photometry=self.stars.particle_spectra[
-                    stellar_spectra
+                    stellar_photometry
                 ].photo_fluxes,
                 density_grid=stellar_density,
             )
 
         # Make blackhole image if requested
-        if blackhole_spectra is not None:
+        if blackhole_photometry is not None:
             # Instantiate the Image colection ready to make the image.
             blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
 
@@ -471,14 +475,14 @@ class Galaxy(BaseGalaxy):
             # Compute the image
             blackhole_imgs.get_imgs_smoothed(
                 photometry=self.black_holes.particle_spectra[
-                    blackhole_spectra
+                    blackhole_photometry
                 ].photo_fluxes,
                 density_grid=blackhole_density,
             )
 
         # Return the images, combining if there are multiple components
-        if stellar_spectra is not None and blackhole_spectra is not None:
+        if stellar_photometry is not None and blackhole_photometry is not None:
             return stellar_imgs + blackhole_imgs
-        elif stellar_spectra is not None:
+        elif stellar_photometry is not None:
             return stellar_imgs
         return blackhole_imgs
