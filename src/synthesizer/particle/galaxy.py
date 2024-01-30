@@ -973,14 +973,14 @@ class Galaxy(BaseGalaxy):
         if img_type == "hist":
             # Compute the image
             img.get_img_hist(
-                signal=self.gas.current_masses,
+                signal=self.gas.masses,
                 coordinates=self.gas.centered_coordinates,
             )
 
         elif img_type == "smoothed":
             # Compute image
             img.get_img_smoothed(
-                signal=self.gas.current_masses,
+                signal=self.gas.masses,
                 coordinates=self.gas.centered_coordinates,
                 smoothing_lengths=self.gas.smoothing_lengths,
                 kernel=kernel,
@@ -1086,8 +1086,8 @@ class Galaxy(BaseGalaxy):
         img *= self.stars.ages.units
 
         return Image(
-            resolution=self.resolution,
-            fov=self.fov,
+            resolution=resolution,
+            fov=fov,
             img=img,
         )
 
@@ -1264,8 +1264,8 @@ class Galaxy(BaseGalaxy):
         img *= self.stars.ages.units
 
         return Image(
-            resolution=self.resolution,
-            fov=self.fov,
+            resolution=resolution,
+            fov=fov,
             img=img,
         )
 
@@ -1322,8 +1322,8 @@ class Galaxy(BaseGalaxy):
         img *= self.stars.ages.units
 
         return Image(
-            resolution=self.resolution,
-            fov=self.fov,
+            resolution=resolution,
+            fov=fov,
             img=img,
         )
 
@@ -1459,6 +1459,6 @@ class Galaxy(BaseGalaxy):
 
         # Convert the SFR map to sSFR
         img.arr /= self.stellar_mass.value
-        img.units /= self.stellar_mass.units
+        img.units = img.units / self.stellar_mass.units
 
         return img
