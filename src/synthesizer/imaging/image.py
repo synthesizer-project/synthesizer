@@ -468,7 +468,7 @@ class Image:
         noise_arr = np.random.normal(
             loc=0,
             scale=noise_std,
-            size=(self.npix, self.npix),
+            size=self.npix,
         )
 
         # Reapply units if we have them
