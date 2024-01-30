@@ -245,6 +245,43 @@ class ImageCollection:
         """Overload the len operator to return how many images there are."""
         return len(self.imgs)
 
+    def __getitem__(self, filter_code):
+        """
+        Enable dictionary key look up syntax.
+
+        This allows the user to extract specific images with the following
+        syntax: ImageCollection["JWST/NIRCam.F150W"].
+
+        Args:
+            filter_code (str)
+                The filter code of the desired photometry.
+
+        Returns:
+            Image
+                The image corresponding to the filter code.
+        """
+
+        # Perform the look up
+        return self.imgs[filter_code]
+
+    def keys(self):
+        """
+        Enable dict.keys() behaviour.
+        """
+        return self.imgs.keys()
+
+    def values(self):
+        """
+        Enable dict.values() behaviour.
+        """
+        return self.imgs.values()
+
+    def items(self):
+        """
+        Enables dict.items() behaviour.
+        """
+        return self.imgs.items()
+
     def __iter__(self):
         """
         Overload iteration to allow simple looping over Image objects.
@@ -397,7 +434,7 @@ class ImageCollection:
             # Store the image
             self.imgs[f] = img
 
-    def apply_psf(self, psfs):
+    def apply_psfs(self, psfs):
         """
         Convolve this ImageCollection's images with their PSFs.
 
