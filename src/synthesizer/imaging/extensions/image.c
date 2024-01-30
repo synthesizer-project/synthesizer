@@ -159,7 +159,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
         int jjj = jj - (j - delta_pix);
 
         /* Loop over the wavelength axis. */
-        img[jj + npix_x * ii] +=
+        img[jj + npix_y * ii] +=
             part_kernel[iii * kernel_cdim + jjj] * pix_values[ind];
       }
     }
