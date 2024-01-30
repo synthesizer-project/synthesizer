@@ -185,10 +185,21 @@ class Image:
         # strip them off
         coordinates = coordinates.to(self.resolution.units).value
 
+        # In case coordinates haven't been centered we need to centre them,
+        # if already centered this isn't dangerous
+        coordinates -= np.average(coordinates, axis=0, weights=signal)
+
         self.arr = np.histogram2d(
             coordinates[:, 0],
             coordinates[:, 1],
-            bins=self.npix,
+            bins=(
+                np.linspace(
+                    -self._fov[0] / 2, self._fov[0] / 2, self.npix[0] + 1
+                ),
+                np.linspace(
+                    -self._fov[1] / 2, self._fov[1] / 2, self.npix[1] + 1
+                ),
+            ),
             weights=signal,
         )[0]
 
@@ -277,12 +288,20 @@ class Image:
         coordinates = coordinates.to(self.resolution.units).value
         smoothing_lengths = smoothing_lengths.to(self.resolution.units).value
 
+        # In case coordinates haven't been centered we need to centre them,
+        # if already centered this isn't dangerous
+        coordinates -= np.average(coordinates, axis=0, weights=signal)
+
         # Prepare the inputs, we need to make sure we are passing C contiguous
         # arrays.
         signal = np.ascontiguousarray(signal, dtype=np.float64)
         smls = np.ascontiguousarray(smoothing_lengths, dtype=np.float64)
-        xs = np.ascontiguousarray(coordinates[:, 0], dtype=np.float64)
-        ys = np.ascontiguousarray(coordinates[:, 1], dtype=np.float64)
+        xs = np.ascontiguousarray(
+            coordinates[:, 0] + (self._fov[0] / 2), dtype=np.float64
+        )
+        ys = np.ascontiguousarray(
+            coordinates[:, 1] + (self._fov[1] / 2), dtype=np.float64
+        )
 
         self.arr = make_img(
             signal,
@@ -292,6 +311,7 @@ class Image:
             kernel,
             self._resolution,
             self.npix[0],
+            self.npix[1],
             coordinates.shape[0],
             kernel_threshold,
             kernel.size,
