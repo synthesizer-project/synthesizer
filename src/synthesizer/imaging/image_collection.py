@@ -295,8 +295,8 @@ class ImageCollection:
         # Make sure the images are compatible dimensions
         if (
             self.resolution != other_img.resolution
-            or self.fov != other_img.fov
-            or self.npix != other_img.npix
+            or np.any(self.fov != other_img.fov)
+            or np.any(self.npix != other_img.npix)
         ):
             raise exceptions.InconsistentAddition(
                 f"Cannot add Images: resolution=({str(self.resolution)} + "
@@ -684,18 +684,18 @@ class ImageCollection:
 
         # Set up the figure
         fig = plt.figure(
-            figsize=(4 * 3.5, int(np.ceil(len(self.filters) / 4)) * 3.5)
+            figsize=(4 * 3.5, int(np.ceil(len(self.filter_codes) / 4)) * 3.5)
         )
 
         # Create a gridspec grid
         gs = gridspec.GridSpec(
-            int(np.ceil(len(self.filters) / 4)), 4, hspace=0.0, wspace=0.0
+            int(np.ceil(len(self.filter_codes) / 4)), 4, hspace=0.0, wspace=0.0
         )
 
         # Loop over filters making each image
         for ind, f in enumerate(self.filter_codes):
             # Get the image
-            img = self.imgs[f.filter_code]
+            img = self.imgs[f].arr
 
             # Create the axis
             ax = fig.add_subplot(gs[int(np.floor(ind / 4)), ind % 4])
@@ -720,7 +720,7 @@ class ImageCollection:
             ax.text(
                 0.95,
                 0.9,
-                f.filter_code,
+                f,
                 bbox=dict(
                     boxstyle="round,pad=0.3",
                     fc="w",
@@ -794,13 +794,13 @@ class ImageCollection:
                 weights[f] /= w_sum
 
         # Set up the rgb image
-        rgb_img = np.zeros((self.npix, self.npix, 3), dtype=np.float64)
+        rgb_img = np.zeros((self.npix[0], self.npix[1], 3), dtype=np.float64)
 
         # Loop over each filter calcualting the RGB channels
         for rgb_ind, rgb in enumerate(rgb_filters):
             for f in rgb_filters[rgb]:
                 rgb_img[:, :, rgb_ind] += scaling_func(
-                    weights[f] * self.imgs[f]
+                    weights[f] * self.imgs[f].arr
                 )
 
         self.rgb_img = rgb_img
