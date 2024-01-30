@@ -72,8 +72,8 @@ class Image:
         self.fov = fov
 
         # If fov isn't a array, make it one
-        if fov is not None and fov.size == 1:
-            self.fov = np.array((fov, fov))
+        if self.fov is not None and self.fov.size == 1:
+            self.fov = np.array((self.fov, self.fov))
 
         # Calculate the shape of the image
         self._compute_npix()
