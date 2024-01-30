@@ -6,6 +6,38 @@ user should not use this class directly, but rather use the
 particle.imaging.Images and parametric.imaging.Images classes.
 
 Example usage:
+    # Create an image collection
+    img_coll = ImageCollection(resolution=0.1 * unyt.arcsec, npix=100)
+
+    # Get histograms of the particle distribution
+    img_coll.get_imgs_hist(photometry, coordinates)
+
+    # Get smoothed images of the particle distribution
+    img_coll.get_imgs_smoothed(
+        photometry,
+        coordinates,
+        smoothing_lengths,
+        kernel,
+        kernel_threshold,
+    )
+
+    # Get smoothed images of a parametric distribution
+    img_coll.get_imgs_smoothed(
+        photometry,
+        density_grid=density_grid,
+    )
+
+    # Apply PSFs to the images
+    img_coll.apply_psfs(psfs)
+
+    # Apply noise to the images
+    img_coll.apply_noise_from_stds(noise_stds)
+
+    # Plot the images
+    img_coll.plot_images()
+
+    # Make an RGB image
+    img_coll.make_rgb_image(rgb_filters, weights)
 """
 import numpy as np
 import matplotlib.pyplot as plt
