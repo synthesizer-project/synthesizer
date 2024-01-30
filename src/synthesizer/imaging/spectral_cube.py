@@ -33,6 +33,8 @@ Example usage:
     )
 """
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 import synthesizer.exceptions as exceptions
 from synthesizer.units import Quantity
@@ -388,3 +390,61 @@ class SpectralCube:
             "https://github.com/flaresimulations/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
+
+    def animate_data_cube(self, show=False, save_path=None, fps=30):
+        """
+        Create an animation of the spectral cube.
+
+        Each frame of the animation is a wavelength bin.
+
+        Note: to write out the animation you must have imagemagick installed.
+
+        Args:
+            show (bool):
+                Should the animation be shown?
+            save_path (str, optional):
+                Path to save the animation. If not specified, the
+                animation is not saved.
+            fps (int, optional):
+                the number of frames per second in the output animation.
+                Default is 30 frames per second.
+
+        Returns:
+            matplotlib.animation.FuncAnimation: The animation object.
+        """
+
+        # Create the figure and axes
+        fig, ax = plt.subplots()
+
+        # Create a list to store the frames in
+        images = []
+
+        # Loop over each wavelength to create a series of images
+        for i in range(self.lam.size):
+            ax.clear()
+            ax.axis("off")
+            img = ax.imshow(self.arr[:, :, i], origin="lower", animated=True)
+            ax.set_title(f"Wavelength: {self.lam[i]}")
+            images.append([img])
+
+        # Calculate interval in milliseconds based on fps
+        interval = 1000 / fps  # 1000 milliseconds in a second
+
+        # Create the animation
+        anim = FuncAnimation(
+            fig,
+            lambda i: images[i],
+            frames=len(images),
+            interval=interval,
+            blit=True,
+        )
+
+        # Save if a path is provided
+        if save_path is not None:
+            anim.save(save_path, writer="imagemagick")
+
+        # Are we showing?
+        if show:
+            plt.show()
+
+        return anim
