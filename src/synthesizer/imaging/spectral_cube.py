@@ -12,6 +12,25 @@ class SpectralCube:
     """
     The Spectral data cube object.
 
+    This object is used to generate and store spectral data cube. This can be
+    done in two ways: by sorting particle spectra into the data cube or by
+    smoothing particles/a density grid over the data cube.
+
+    Attributes:
+        lam (unyt_array, float):
+            The wavelengths of the data cube.
+        resolution (unyt_quantity, float):
+            The spatial resolution of the data cube.
+        fov (unyt_array, float/tuple):
+            The field of view of the data cube. If a single value is given,
+            the FOV is assumed to be square.
+        npix (unyt_array, int/tuple):
+            The number of pixels in the data cube. If a single value is given,
+            the number of pixels is assumed to be square.
+        arr (array_like, float):
+            A 3D array containing the data cube. (npix[0], npix[1], lam.size)
+        units (unyt_quantity, float):
+            The units of the data cube.
     """
 
     # Define quantities
@@ -22,14 +41,54 @@ class SpectralCube:
     def __init__(
         self,
         resolution,
-        lams,
+        lam,
         fov=None,
         npix=None,
     ):
         """
         Intialise the SpectralCube.
 
+        Either fov or npix must be given. If both are given, fov is used.
+
+        Args:
+            resolution (unyt_quantity, float):
+                The spatial resolution of the data cube.
+            lam (unyt_array, float):
+                The wavelengths of the data cube.
+            fov (unyt_array, float/tuple):
+                The field of view of the data cube. If a single value is
+                given, the FOV is assumed to be square.
+            npix (unyt_array, int/tuple):
+                The number of pixels in the data cube. If a single value is
+                given, the number of pixels is assumed to be square.
+
         """
+        # Attach resolution, fov, and npix
+        self.resolution = resolution
+        self.fov = fov
+        self.npix = npix
+
+        # If fov isn't a array, make it one
+        if self.fov is not None and self.fov.size == 1:
+            self.fov = np.array((self.fov, self.fov))
+
+        # If npix isn't an array, make it one
+        if npix is not None and not isinstance(npix, np.ndarray):
+            if isinstance(npix, int):
+                self.npix = np.array((npix, npix))
+            else:
+                self.npix = np.array(npix)
+
+        # Keep track of the input resolution and and npix so we can handle
+        # super resolution correctly.
+        self.orig_resolution = resolution
+        self.orig_npix = npix
+
+        # Handle the different input cases
+        if npix is None:
+            self._compute_npix()
+        else:
+            self._compute_fov()
 
         # Store the wavelengths
         self.lam = lams
@@ -41,51 +100,83 @@ class SpectralCube:
         # Define an attribute to hold the units
         self.units = None
 
-    def _sample_spectra_onto_wavelength_grid(self, sed):
+    @property
+    def data_cube(self):
         """
-        Sample spectra onto the wavelength grid.
+        Return the data cube.
 
-        Args:
-            spectra (array_like, float):
-                The spectra to be sampled onto the wavelength grid.
+        This is a property to allow the data cube to be accessed as an
+        attribute.
 
         Returns:
-            spectra (array_like, float):
-                The spectra sampled onto the wavelength grid.
+            array_like (float):
+                A 3D array containing the data cube. (npix[0], npix[1],
+                lam.size)
         """
+        return self.arr * self.units
 
-        # Sample the spectra onto the wavelength grid
-        resampled_spectra = sed.get_resampled_spectra(new_lam=self.lam)
+    def _compute_npix(self):
+        """
+        Compute the number of pixels in the FOV.
 
-        # If the requested quantity is a flux we need to call get_fnu on
-        # this new spectra
+        When resolution and fov are given, the number of pixels is computed
+        using this function. This can redefine the fov to ensure the FOV
+        is an integer number of pixels.
+        """
+        # Compute how many pixels fall in the FOV
+        self.npix = np.int32(np.ceil(self._fov / self._resolution))
+        if self.orig_npix is None:
+            self.orig_npix = np.int32(np.ceil(self._fov / self._resolution))
 
-        return spectra
+        # Redefine the FOV based on npix
+        self.fov = self.resolution * self.npix
 
-    def get_img_hist(
+    def _compute_fov(self):
+        """
+        Compute the FOV, based on the number of pixels.
+
+        When resolution and npix are given, the FOV is computed using this
+        function.
+        """
+        # Redefine the FOV based on npix
+        self.fov = self.resolution * self.npix
+
+    def get_data_cube_hist(
         self,
         sed,
         coordinates=None,
         quantity="lnu",
     ):
         """
-        Calculate an image with no smoothing.
+        Calculate a spectral data cube with no smoothing.
 
         This is only applicable to particle based spectral cubes.
 
         Args:
+            sed (Sed):
+                The Sed object containing the spectra to be sorted into the
+                data cube.
             coordinates (unyt_array, float):
                 The coordinates of the particles.
+            quantity (str):
+                The Sed attribute/quantity to sort into the data cube.
 
         Returns:
-            img (array_like, float)
-                A 2D array containing the pixel values sorted into the image.
-                (npix, npix)
+            array_like (float):
+                A 3D array containing particle spectra sorted into the data
+                cube. (npix[0], npix[1], lam.size)
         """
+        # Sample the spectra onto the wavelength grid
+        sed = sed.get_resampled_spectra(new_lam=self.lam)
+
+        # Get the spectra we will be sorting into the spectral cube
+        spectra = getattr(sed, quantity)
 
         # Strip off and store the units on the spectra for later
         self.units = spectra.units
         spectra = spectra.value
+
+        from .extensions.spectral_cube import make_data_cube_hist
 
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
@@ -93,43 +184,41 @@ class SpectralCube:
 
         # In case coordinates haven't been centered we need to centre them
         if not (coordinates.min() < 0 and coordinates.max() > 0):
-            coordinates -= np.average(coordinates, axis=0, weights=signal)
+            coordinates -= np.average(
+                coordinates, axis=0, weights=np.sum(spectra, axis=1)
+            )
 
-        # Set up the IFU array
-        self.ifu = np.zeros(
-            (self.npix, self.npix, self.spectral_resolution), dtype=np.float64
+        # Prepare the inputs, we need to make sure we are passing C contiguous
+        # arrays.
+        spectra = np.ascontiguousarray(spectra, dtype=np.float64)
+        xs = np.ascontiguousarray(coordinates[:, 0], dtype=np.float64)
+        ys = np.ascontiguousarray(coordinates[:, 1], dtype=np.float64)
+
+        self.arr = make_data_cube_hist(
+            spectra,
+            xs,
+            ys,
+            self._resolution,
+            self.npix[0],
+            self.npix[1],
+            coordinates.shape[0],
+            self.lams.size,
         )
 
-        # Loop over positions including the sed
-        for ind in range(self.npart):
-            # Skip particles outside the FOV
-            if (
-                coordinates[ind, 0] < 0
-                or coordinates[ind, 1] < 0
-                or coordinates[ind, 0] >= self.npix
-                or coordinates[ind, 1] >= self.npix
-            ):
-                continue
+        return self.arr * self.units
 
-            self.ifu[
-                self.pix_pos[ind, 0], self.pix_pos[ind, 1], :
-            ] += self.sed_values[ind, :]
-
-        return self.ifu
-
-        return self.arr * self.units if self.units is not None else self.arr
-
-    def get_img_smoothed(
+    def get_data_cube_smoothed(
         self,
-        spectra,
+        sed,
         coordinates=None,
         smoothing_lengths=None,
         kernel=None,
         kernel_threshold=1,
         density_grid=None,
+        quantity="lnu",
     ):
         """
-        Calculate a smoothed image.
+        Calculate a spectral data cube with smoothing.
 
         In the particle case this smooths each particle's signal over the SPH
         kernel defined by their smoothing length. This uses C extensions to
@@ -139,6 +228,9 @@ class SpectralCube:
         density grid is an array defining the weight in each pixel.
 
         Args:
+            sed (Sed):
+                The Sed object containing the spectra to be sorted into the
+                data cube.
             coordinates (unyt_array, float):
                 The coordinates of the particles. (particle case only)
             smoothing_lengths (unyt_array, float):
@@ -149,22 +241,19 @@ class SpectralCube:
                 The threshold for the kernel. (particle case only)
             density_grid (array_like, float):
                 The density grid to smooth over. (parametric case only)
+            quantity (str):
+                The Sed attribute/quantity to sort into the data cube.
 
         Returns:
-            img : array_like (float)
-                A 2D array containing particles sorted into an image.
-                (npix[0], npix[1])
+            array_like (float):
+                A 3D array containing particle spectra sorted into the data
+                cube. (npix[0], npix[1], lam.size)
 
         Raises:
             InconsistentArguments
                 If conflicting particle and parametric arguments are passed
                 or any arguments are missing an error is raised.
         """
-        # Strip off and store the units on the signal if they are present
-        if isinstance(signal, (unyt_quantity, unyt_array)):
-            self.units = signal.units
-            signal = signal.value
-
         # Ensure we have the right arguments
         if density_grid is not None and (
             coordinates is not None
@@ -184,16 +273,24 @@ class SpectralCube:
                 "smoothing_lengths, and kernel arguments to be passed."
             )
 
+        # Sample the spectra onto the wavelength grid
+        sed = sed.get_resampled_spectra(new_lam=self.lam)
+
+        # Get the spectra we will be sorting into the spectral cube
+        spectra = getattr(sed, quantity)
+
+        # Strip off and store the units on the spectra for later
+        self.units = spectra.units
+        spectra = spectra.value
+
         # Handle the parametric case
         if density_grid is not None:
             # Multiply the density grid by the sed to get the IFU
             self.arr = density_grid[:, :] * spectra
 
-            return (
-                self.arr * self.units if self.units is not None else self.arr
-            )
+            return self.arr * self.units
 
-        from .extensions.spectral_cube import make_ifu
+        from .extensions.spectral_cube import make_data_cube_smooth
 
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
@@ -202,7 +299,9 @@ class SpectralCube:
 
         # In case coordinates haven't been centered we need to centre them
         if not (coordinates.min() < 0 and coordinates.max() > 0):
-            coordinates -= np.average(coordinates, axis=0, weights=signal)
+            coordinates -= np.average(
+                coordinates, axis=0, weights=np.sum(spectra, axis=1)
+            )
 
         # Prepare the inputs, we need to make sure we are passing C contiguous
         # arrays.
@@ -211,21 +310,22 @@ class SpectralCube:
         xs = np.ascontiguousarray(coordinates[:, 0], dtype=np.float64)
         ys = np.ascontiguousarray(coordinates[:, 1], dtype=np.float64)
 
-        self.ifu = make_ifu(
+        self.arr = make_data_cube_smooth(
             spectra,
             smls,
             xs,
             ys,
-            self.kernel,
-            self.resolution,
-            self.npix,
-            self.coordinates.shape[0],
-            self.spectral_resolution,
-            self.kernel_threshold,
-            self.kernel_dim,
+            kernel,
+            self._resolution,
+            self.npix[0],
+            self.npix[1],
+            coordinates.shape[0],
+            self.lams.size,
+            kernel_threshold,
+            kernel.size,
         )
 
-        return self.ifu
+        return self.arr * self.units
 
     def apply_psf(self):
         raise exceptions.UnimplementedFunctionality(
