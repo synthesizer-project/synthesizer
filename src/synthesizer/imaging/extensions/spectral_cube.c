@@ -37,9 +37,8 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
   PyArrayObject *np_sed_values;
   PyArrayObject *np_xs, *np_ys;
 
-  if (!PyArg_ParseTuple(args, "OOOOdiiii", &np_sed_values,
-                        &np_smoothing_lengths, &np_xs, &np_ys, &res, &npix_x,
-                        &npix_y, &npart, &nlam))
+  if (!PyArg_ParseTuple(args, "OOOdiiii", &np_sed_values, &np_xs, &np_ys, &res,
+                        &npix_x, &npix_y, &npart, &nlam))
     return NULL;
 
   /* Get pointers to the actual data. */
@@ -69,7 +68,7 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
 
     /* Loop over the wavelength axis. */
     for (int ilam = 0; ilam < nlam; ilam++) {
-      int data_cube_ind = ilam + nlam * (jj + npix_y * ii);
+      int data_cube_ind = ilam + nlam * (j + npix_y * i);
       int sed_ind = (ind * nlam) + ilam;
       data_cube[data_cube_ind] += sed_values[sed_ind];
     }
@@ -137,7 +136,6 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 
     /* Get this particles smoothing length and position */
     const double smooth_length = smoothing_lengths[ind];
-    const double sml_squ = smooth_length * smooth_length;
     const double x = xs[ind];
     const double y = ys[ind];
 

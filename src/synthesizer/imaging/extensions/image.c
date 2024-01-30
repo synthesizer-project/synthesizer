@@ -69,7 +69,6 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
     /* Get this particles smoothing length and position */
     const double smooth_length = smoothing_lengths[ind];
-    const double sml_squ = smooth_length * smooth_length;
     const double x = xs[ind];
     const double y = ys[ind];
 
