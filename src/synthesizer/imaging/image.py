@@ -394,7 +394,6 @@ class Image:
             Image
                 The image convolved with the psf.
         """
-
         # Perform the convolution
         convolved_img = signal.fftconvolve(self.arr, psf, mode="same")
 
