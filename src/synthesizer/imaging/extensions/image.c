@@ -69,6 +69,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
     /* Get this particles smoothing length and position */
     const double smooth_length = smoothing_lengths[ind];
+    const double sml_squ = smooth_length * smooth_length;
     const double x = xs[ind];
     const double y = ys[ind];
 
@@ -117,8 +118,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
         int jjj = jj - (j - delta_pix);
 
         /* Calculate the impact parameter. */
-        double sml_squ = smooth_length * smooth_length;
-        double q = sqrt(rsqu) / sqrt(sml_squ);
+        double q = sqrt(rsqu) / smooth_length;
 
         /* Skip gas particles outside the kernel. */
         if (q > threshold)
