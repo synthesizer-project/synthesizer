@@ -76,10 +76,7 @@ class Image:
             self.fov = np.array((fov, fov))
 
         # Calculate the shape of the image
-        self.npix = (
-            int(self._fov[0] / self.resolution),
-            int(self._fov[1] / self.resolution),
-        )
+        self._compute_npix()
 
         # Attribute to hold the image array itself
         self.arr = None
@@ -91,6 +88,30 @@ class Image:
         if img is not None:
             self.arr = img.value if isinstance(img, unyt_array) else img
             self.units = img.units if isinstance(img, unyt_array) else None
+
+    def _compute_npix(self):
+        """
+        Compute the number of pixels in the FOV.
+
+        When resolution and fov are given, the number of pixels is computed
+        using this function. This can redefine the fov to ensure the FOV
+        is an integer number of pixels.
+        """
+        # Compute how many pixels fall in the FOV
+        self.npix = np.int32(np.ceil(self._fov / self._resolution))
+
+        # Redefine the FOV based on npix
+        self.fov = self.resolution * self.npix
+
+    def _compute_fov(self):
+        """
+        Compute the FOV, based on the number of pixels.
+
+        When resolution and npix are given, the FOV is computed using this
+        function.
+        """
+        # Redefine the FOV based on npix
+        self.fov = self.resolution * self.npix
 
     def resample(self, factor):
         """
@@ -108,9 +129,9 @@ class Image:
         # Resample the image.
         # NOTE: skimage.transform.pyramid_gaussian is more efficient but adds
         #       another dependency.
-        if self.img is not None:
-            self.img = zoom(self.img, factor)
-            new_shape = self.img.shape
+        if self.arr is not None:
+            self.arr = zoom(self.arr, (factor, factor), order=3)
+            new_shape = self.arr.shape
         else:
             raise exceptions.MissingImage(
                 "The image array hasn't been generated yet. Please run "
@@ -118,8 +139,8 @@ class Image:
             )
 
         # Handle the edge case where the conversion between resolutions has
-        # messed with Scene properties.
-        if self.npix != new_shape[0]:
+        # messed with the FOV.
+        if self.npix[0] != new_shape[0] or self.npix[1] != new_shape[1]:
             self.npix = new_shape
             self._compute_fov()
 
