@@ -502,8 +502,16 @@ class Image:
             np.ndarray
                 The weight map.
         """
-        # Convert aperture radius to consistent units
-        aperture_radius = aperture_radius.to(self.resolution.units).value
+        # Convert aperture radius to consistent units if we have it
+        if aperture_radius is not None:
+            aperture_radius = aperture_radius.to(self.resolution.units).value
+
+        # Ensure we have units if we need them
+        if self.units is not None and not isinstance(depth, unyt_quantity):
+            raise exceptions.InconsistentArguments(
+                "If the Image has units then the depth must also be passed "
+                f"with units. (image.units = {self.units})"
+            )
 
         # Strip off units from the depth if we have them
         if isinstance(depth, unyt_quantity):
@@ -515,8 +523,8 @@ class Image:
         # Calculate the noise array from an aperture or point source
         if aperture_radius is not None:
             # Calculate the total noise in the aperture
-            # NOTE: this assumes SNR = S / sqrt(app_noise)
-            app_noise = (depth / snr) ** 2
+            # NOTE: this assumes SNR = S / app_noise
+            app_noise = depth / snr
 
             # Calculate the aperture area in image coordinates
             app_area_coordinates = np.pi * aperture_radius**2
@@ -530,7 +538,7 @@ class Image:
         # Calculate the noise from the depth and snr for a point source.
         else:
             # Calculate noise in a pixel
-            noise_std = (depth / snr) ** 2
+            noise_std = depth / snr
 
         # Reapply units if we have them
         if units is not None:

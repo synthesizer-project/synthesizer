@@ -632,7 +632,9 @@ class ImageCollection:
                 "Missing a depth for the following "
                 f"filters: {missing_depths}"
             )
-        if not isinstance(aperture_radius, unyt_quantity):
+        if aperture_radius is not None and not isinstance(
+            aperture_radius, unyt_quantity
+        ):
             raise exceptions.InconsistentArguments(
                 "aperture_radius must be given with units"
             )
@@ -646,9 +648,7 @@ class ImageCollection:
             noisy_imgs[f], noise_maps[f], weight_maps[f] = self.imgs[
                 f
             ].apply_noise_from_snr(
-                snr=snrs[f],
-                depth=depths[f],
-                aperture_radius=aperture_radius.to(self.resolution.units),
+                snr=snrs[f], depth=depths[f], aperture_radius=aperture_radius
             )
 
         return ImageCollection(
