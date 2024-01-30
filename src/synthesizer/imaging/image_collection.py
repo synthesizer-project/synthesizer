@@ -7,7 +7,6 @@ particle.imaging.Images and parametric.imaging.Images classes.
 
 Example usage:
 """
-import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -72,24 +71,27 @@ class ImageCollection:
         self.fov = fov
         self.npix = npix
 
-        # If fov isn't a tuple, make it one
-        if fov is not None and not isinstance(fov, tuple):
-            self.fov = (fov, fov)
+        # If fov isn't a array, make it one
+        if self.fov is not None and self.fov.size == 1:
+            self.fov = np.array((self.fov, self.fov))
 
-        # If npix isn't a tuple, make it one
-        if npix is not None and not isinstance(npix, tuple):
-            self.npix = (npix, npix)
+        # If npix isn't an array, make it one
+        if npix is not None and not isinstance(npix, np.ndarray):
+            if isinstance(npix, int):
+                self.npix = np.array((npix, npix))
+            else:
+                self.npix = np.array(npix)
+
+        # Keep track of the input resolution and and npix so we can handle
+        # super resolution correctly.
+        self.orig_resolution = resolution
+        self.orig_npix = npix
 
         # Handle the different input cases
         if npix is None:
             self._compute_npix()
         else:
             self._compute_fov()
-
-        # Keep track of the input resolution and and npix so we can handle
-        # super resolution correctly.
-        self.orig_resolution = resolution
-        self.orig_npix = npix
 
         # Container for images (populated when image creation methods are
         # called)
@@ -162,9 +164,9 @@ class ImageCollection:
         is an integer number of pixels.
         """
         # Compute how many pixels fall in the FOV
-        self.npix = int(math.ceil(self._fov / self._resolution))
+        self.npix = np.int32(np.ceil(self._fov / self._resolution))
         if self.orig_npix is None:
-            self.orig_npix = int(math.ceil(self._fov / self._resolution))
+            self.orig_npix = np.int32(np.ceil(self._fov / self._resolution))
 
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
@@ -335,12 +337,12 @@ class ImageCollection:
         """
         # Need to loop over filters, calculate photometry, and
         # return a dictionary of images
-        for f in photometry.filters:
+        for f in photometry.filter_codes:
             # Create an Image object for this filter
             img = Image(self.resolution, self.fov)
 
             # Get the image for this filter
-            img.get_img_hist(photometry[f])
+            img.get_img_hist(photometry[f], coordinates)
 
             # Store the image
             self.imgs[f] = img
@@ -377,18 +379,12 @@ class ImageCollection:
                 (npix, npix)
         """
         # Loop over filters in the photometry making an image for each.
-        for f in photometry.filters:
+        for f in photometry.filter_codes:
             # Create an Image object for this filter
             img = Image(self.resolution, self.fov)
 
             # Get the image for this filter
-            img.get_img_hist(photometry[f])
-
-            # Store the image
-            self.imgs[f] = img
-
-            # Get and store the image for this filter
-            self.imgs[f] = self.get_img_smoothed(
+            img.get_img_smoothed(
                 signal=photometry[f],
                 coordinates=coordinates,
                 smoothing_lengths=smoothing_lengths,
@@ -397,6 +393,9 @@ class ImageCollection:
                 density_grid=density_grid,
             )
             self.filter_codes.append(f)
+
+            # Store the image
+            self.imgs[f] = img
 
     def apply_psf(self, psfs):
         """

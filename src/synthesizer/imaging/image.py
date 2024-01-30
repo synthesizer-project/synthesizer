@@ -71,10 +71,14 @@ class Image:
         self.resolution = resolution
         self.fov = fov
 
+        # If fov isn't a array, make it one
+        if fov is not None and fov.size == 1:
+            self.fov = np.array((fov, fov))
+
         # Calculate the shape of the image
         self.npix = (
-            int(self.fov[0] / self.resolution),
-            int(self.fov[1] / self.resolution),
+            int(self._fov[0] / self.resolution),
+            int(self._fov[1] / self.resolution),
         )
 
         # Attribute to hold the image array itself
