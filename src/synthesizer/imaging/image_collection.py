@@ -517,13 +517,12 @@ class ImageCollection:
 
         # Loop over each images getting the noisy version
         noisy_imgs = {}
-        noise_maps = {}
         weight_maps = {}
         for f in noise_arrs:
             # Apply the noise to this image
-            noisy_imgs[f], noise_maps[f], weight_maps[f] = self.imgs[
-                f
-            ].apply_noise_array(noise_arrs[f])
+            noisy_imgs[f], weight_maps[f] = self.imgs[f].apply_noise_array(
+                noise_arrs[f]
+            )
 
         return ImageCollection(
             resolution=self.resolution,
