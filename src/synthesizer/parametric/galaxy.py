@@ -313,35 +313,6 @@ class Galaxy(BaseGalaxy):
             axis=(0, 1),
         )
 
-    @staticmethod
-    def _get_density_grid(resolution, npix, morphology):
-        """
-        Get the density grid defined by a morphology object.
-
-        Args:
-            resolution (Quantity, float)
-                The size of a pixel.
-            npix (int)
-                The number of pixels along an axis.
-            morphology (Morphology)
-                The morphology object defining the density grid.
-        """
-        # Define 1D bin centres of each pixel
-        if resolution.units.dimensions == angle:
-            res = resolution.to("mas")
-        else:
-            res = resolution.to("kpc")
-        bin_centres = res.value * np.linspace(-npix / 2, npix / 2, npix)
-
-        # Convert the 1D grid into 2D grids coordinate grids
-        xx, yy = np.meshgrid(bin_centres, bin_centres)
-
-        # Extract the density grid from the morphology function
-        density_grid = morphology.compute_density_grid(xx, yy, units=res.units)
-
-        # And normalise it...
-        return density_grid / np.sum(density_grid)
-
     def get_images_luminosity(
         self,
         resolution,
@@ -390,15 +361,13 @@ class Galaxy(BaseGalaxy):
             stellar_imgs = ImageCollection(resolution=resolution, fov=fov)
 
             # Compute the density grid
-            stellar_density = self._get_density_grid(
-                resolution,
-                stellar_imgs.npix,
-                self.stars.morphology,
+            stellar_density = self.stars.morphology.get_density_grid(
+                resolution, stellar_imgs.npix
             )
 
             # Make the image
             stellar_imgs.get_imgs_smoothed(
-                photometry=self.stars.particle_spectra[
+                photometry=self.stars.spectra[
                     stellar_spectra
                 ].photo_luminosities,
                 density_grid=stellar_density,
@@ -410,15 +379,13 @@ class Galaxy(BaseGalaxy):
             blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
 
             # Compute the density grid
-            blackhole_density = self._get_density_grid(
-                resolution,
-                blackhole_imgs.npix,
-                self.black_holes.morphology,
+            blackhole_density = self.black_holes.morphology(
+                resolution, blackhole_imgs.npix
             )
 
             # Compute the image
             blackhole_imgs.get_imgs_smoothed(
-                photometry=self.black_holes.particle_spectra[
+                photometry=self.black_holes.spectra[
                     blackhole_spectra
                 ].photo_luminosities,
                 density_grid=blackhole_density,
@@ -479,10 +446,8 @@ class Galaxy(BaseGalaxy):
             stellar_imgs = ImageCollection(resolution=resolution, fov=fov)
 
             # Compute the density grid
-            stellar_density = self._get_density_grid(
-                resolution,
-                stellar_imgs.npix,
-                self.stars.morphology,
+            stellar_density = self.stars.morphology.get_density_grid(
+                resolution, stellar_imgs.npix
             )
 
             # Make the image
@@ -499,10 +464,8 @@ class Galaxy(BaseGalaxy):
             blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
 
             # Compute the density grid
-            blackhole_density = self._get_density_grid(
-                resolution,
-                blackhole_imgs.npix,
-                self.black_holes.morphology,
+            blackhole_density = self.black_holes.morphology(
+                resolution, blackhole_imgs.npix
             )
 
             # Compute the image
