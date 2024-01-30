@@ -720,7 +720,7 @@ class Galaxy(BaseGalaxy):
                     photometry=self.stars.particle_spectra[
                         stellar_spectra
                     ].photo_luminosities,
-                    coordinates=self.stars.coordinates,
+                    coordinates=self.stars.centered_coordinates,
                 )
 
             elif img_type == "smoothed":
@@ -729,8 +729,8 @@ class Galaxy(BaseGalaxy):
                     photometry=self.stars.particle_spectra[
                         stellar_spectra
                     ].photo_luminosities,
-                    coordinates=self.stars._coordinates,
-                    smoothing_lengths=self.stars._smoothing_lengths,
+                    coordinates=self.stars.centered_coordinates,
+                    smoothing_lengths=self.stars.smoothing_lengths,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                 )
@@ -751,7 +751,7 @@ class Galaxy(BaseGalaxy):
                 photometry=self.black_holes.particle_spectra[
                     blackhole_spectra
                 ].photo_luminosities,
-                coordinates=self.black_holes._coordinates,
+                coordinates=self.black_holes.centered_coordinates,
             )
 
         # Return the images, combining if there are multiple components
@@ -830,7 +830,7 @@ class Galaxy(BaseGalaxy):
                     photometry=self.stars.particle_spectra[
                         stellar_spectra
                     ].photo_fluxes,
-                    coordinates=self.stars._coordinates,
+                    coordinates=self.stars.centered_coordinates,
                 )
 
             elif img_type == "smoothed":
@@ -839,8 +839,8 @@ class Galaxy(BaseGalaxy):
                     photometry=self.stars.particle_spectra[
                         stellar_spectra
                     ].photo_fluxes,
-                    coordinates=self.stars._coordinates,
-                    smoothing_lengths=self.stars._smoothing_lengths,
+                    coordinates=self.stars.centered_coordinates,
+                    smoothing_lengths=self.stars.smoothing_lengths,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                 )
@@ -861,7 +861,7 @@ class Galaxy(BaseGalaxy):
                 photometry=self.black_holes.particle_spectra[
                     blackhole_spectra
                 ].photo_fluxes,
-                coordinates=self.black_holes._coordinates,
+                coordinates=self.black_holes.centered_coordinates,
             )
 
         # Return the images, combining if there are multiple components
@@ -909,16 +909,16 @@ class Galaxy(BaseGalaxy):
         if img_type == "hist":
             # Compute the image
             img.get_img_hist(
-                signal=self.stars._current_masses,
-                coordinates=self.stars._coordinates,
+                signal=self.stars.current_masses,
+                coordinates=self.stars.centered_coordinates,
             )
 
         elif img_type == "smoothed":
             # Compute image
             img.get_img_smooth(
-                signal=self.stars._current_masses,
-                coordinates=self.stars._coordinates,
-                smoothing_lengths=self.stars._smoothing_lengths,
+                signal=self.stars.current_masses,
+                coordinates=self.stars.centered_coordinates,
+                smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
             )
@@ -969,16 +969,16 @@ class Galaxy(BaseGalaxy):
         if img_type == "hist":
             # Compute the image
             img.get_img_hist(
-                signal=self.gas._current_masses,
-                coordinates=self.gas._coordinates,
+                signal=self.gas.current_masses,
+                coordinates=self.gas.centered_coordinates,
             )
 
         elif img_type == "smoothed":
             # Compute image
             img.get_img_smooth(
-                signal=self.gas._current_masses,
-                coordinates=self.gas._coordinates,
-                smoothing_lengths=self.gas._smoothing_lengths,
+                signal=self.gas.current_masses,
+                coordinates=self.gas.centered_coordinates,
+                smoothing_lengths=self.gas.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
             )
@@ -1032,16 +1032,16 @@ class Galaxy(BaseGalaxy):
         if img_type == "hist":
             # Compute the image
             weighted_img.get_img_hist(
-                signal=self.stars._ages * self.stars._initial_masses,
-                coordinates=self.stars._coordinates,
+                signal=self.stars.ages * self.stars.initial_masses,
+                coordinates=self.stars.centered_coordinates,
             )
 
         elif img_type == "smoothed":
             # Compute image
             weighted_img.get_img_smooth(
-                signal=self.stars._ages * self.stars._initial_masses,
-                coordinates=self.stars._coordinates,
-                smoothing_lengths=self.stars._smoothing_lengths,
+                signal=self.stars.ages * self.stars.initial_masses,
+                coordinates=self.stars.centered_coordinates,
+                smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
             )
@@ -1062,16 +1062,16 @@ class Galaxy(BaseGalaxy):
         if img_type == "hist":
             # Compute the image
             mass_img.get_img_hist(
-                signal=self.stars._initial_masses,
-                coordinates=self.stars._coordinates,
+                signal=self.stars.initial_masses,
+                coordinates=self.stars.centered_coordinates,
             )
 
         elif img_type == "smoothed":
             # Compute image
             mass_img.get_img_smooth(
-                signal=self.stars._initial_masses,
-                coordinates=self.stars._coordinates,
-                smoothing_lengths=self.stars._smoothing_lengths,
+                signal=self.stars.initial_masses,
+                coordinates=self.stars.centered_coordinates,
+                smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
             )
@@ -1125,16 +1125,16 @@ class Galaxy(BaseGalaxy):
         if img_type == "hist":
             # Compute the image
             img.get_img_hist(
-                signal=self.stars._metallicities * self.stars._masses,
-                coordinates=self.stars._coordinates,
+                signal=self.stars.metallicities * self.stars.masses,
+                coordinates=self.stars.centered_coordinates,
             )
 
         elif img_type == "smoothed":
             # Compute image
             img.get_img_smooth(
-                signal=self.stars._metallicities * self.stars._masses,
-                coordinates=self.stars._coordinates,
-                smoothing_lengths=self.stars._smoothing_lengths,
+                signal=self.stars.metallicities * self.stars.masses,
+                coordinates=self.stars.centered_coordinates,
+                smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
             )
@@ -1187,16 +1187,16 @@ class Galaxy(BaseGalaxy):
         if img_type == "hist":
             # Compute the image
             img.get_img_hist(
-                signal=self.gas._metallicities * self.gas._masses,
-                coordinates=self.gas._coordinates,
+                signal=self.gas.metallicities * self.gas.masses,
+                coordinates=self.gas.centered_coordinates,
             )
 
         elif img_type == "smoothed":
             # Compute image
             img.get_img_smooth(
-                signal=self.gas._metallicities * self.gas._masses,
-                coordinates=self.gas._coordinates,
-                smoothing_lengths=self.gas._smoothing_lengths,
+                signal=self.gas.metallicities * self.gas.masses,
+                coordinates=self.gas.centered_coordinates,
+                smoothing_lengths=self.gas.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
             )
@@ -1380,16 +1380,16 @@ class Galaxy(BaseGalaxy):
         if img_type == "hist":
             # Compute the image
             img.get_img_hist(
-                signal=self.stars._initial_masses[mask],
-                coordinates=self.stars._coordinates[mask, :],
+                signal=self.stars.initial_masses[mask],
+                coordinates=self.stars.centered_coordinates[mask, :],
             )
 
         elif img_type == "smoothed":
             # Compute image
             img.get_img_smoothed(
-                signal=self.stars._initial_masses[mask],
-                coordinates=self.stars._coordinates[mask, :],
-                smoothing_lengths=self.stars._smoothing_lengths[mask],
+                signal=self.stars.initial_masses[mask],
+                coordinates=self.stars.centered_coordinates[mask, :],
+                smoothing_lengths=self.stars.smoothing_lengths[mask],
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
             )
