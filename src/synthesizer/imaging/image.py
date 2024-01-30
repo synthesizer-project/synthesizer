@@ -128,8 +128,50 @@ class Image:
         Add 2 Images together.
 
         Args:
+            other_img (Image)
+                The other image to be added.
+
+        Returns:
+            Image
+                The new image containing the added arrays.
+
+        Raises:
+            InconsistentArguments
+                If the images have different resolutions or fovs, or if the
+                combination of units is incompatible an error is raised.
         """
-        pass
+        # Ensure the images have the same resolution
+        if self.resolution != other_img.resolution:
+            raise exceptions.InconsistentArguments(
+                "The images must have the same resolution to be added."
+            )
+
+        # Ensure the images have the same fov
+        if np.any(self.fov != other_img.fov):
+            raise exceptions.InconsistentArguments(
+                "The images must have the same fov to be added."
+            )
+
+        # Hanlde if units are involved or not
+        if self.units is None and other_img.units is None:
+            return Image(
+                self.resolution,
+                self.fov,
+                img=self.arr + other_img.arr,
+            )
+        elif self.units is not None and other_img.units is not None:
+            return Image(
+                self.resolution,
+                self.fov,
+                img=self.arr * self.units + other_img.arr * other_img.units,
+            )
+        else:
+            s = "dimensionless"
+            raise exceptions.InconsistentArguments(
+                "Cannot add inconsistent units "
+                f"({self.units if self.units is not None else s}, "
+                f"{other_img.units if other_img.units is not None else s})."
+            )
 
     def __mul__(self, mult):
         """
@@ -275,7 +317,7 @@ class Image:
         # Handle the parametric case
         if density_grid is not None:
             # Multiply the density grid by the sed to get the IFU
-            self.img = density_grid[:, :] * signal
+            self.arr = density_grid[:, :] * signal
 
             return (
                 self.arr * self.units if self.units is not None else self.arr
