@@ -919,7 +919,7 @@ class Galaxy(BaseGalaxy):
 
         elif img_type == "smoothed":
             # Compute image
-            img.get_img_smooth(
+            img.get_img_smoothed(
                 signal=self.stars.current_masses,
                 coordinates=self.stars.centered_coordinates,
                 smoothing_lengths=self.stars.smoothing_lengths,
@@ -979,7 +979,7 @@ class Galaxy(BaseGalaxy):
 
         elif img_type == "smoothed":
             # Compute image
-            img.get_img_smooth(
+            img.get_img_smoothed(
                 signal=self.gas.current_masses,
                 coordinates=self.gas.centered_coordinates,
                 smoothing_lengths=self.gas.smoothing_lengths,
@@ -1042,7 +1042,7 @@ class Galaxy(BaseGalaxy):
 
         elif img_type == "smoothed":
             # Compute image
-            weighted_img.get_img_smooth(
+            weighted_img.get_img_smoothed(
                 signal=self.stars.ages * self.stars.initial_masses,
                 coordinates=self.stars.centered_coordinates,
                 smoothing_lengths=self.stars.smoothing_lengths,
@@ -1072,7 +1072,7 @@ class Galaxy(BaseGalaxy):
 
         elif img_type == "smoothed":
             # Compute image
-            mass_img.get_img_smooth(
+            mass_img.get_img_smoothed(
                 signal=self.stars.initial_masses,
                 coordinates=self.stars.centered_coordinates,
                 smoothing_lengths=self.stars.smoothing_lengths,
@@ -1135,7 +1135,7 @@ class Galaxy(BaseGalaxy):
 
         elif img_type == "smoothed":
             # Compute image
-            img.get_img_smooth(
+            img.get_img_smoothed(
                 signal=self.stars.metallicities * self.stars.masses,
                 coordinates=self.stars.centered_coordinates,
                 smoothing_lengths=self.stars.smoothing_lengths,
@@ -1197,7 +1197,7 @@ class Galaxy(BaseGalaxy):
 
         elif img_type == "smoothed":
             # Compute image
-            img.get_img_smooth(
+            img.get_img_smoothed(
                 signal=self.gas.metallicities * self.gas.masses,
                 coordinates=self.gas.centered_coordinates,
                 smoothing_lengths=self.gas.smoothing_lengths,
