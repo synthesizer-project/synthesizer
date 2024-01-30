@@ -422,13 +422,11 @@ class Image:
             np.ndarray
                 The weight map, derived from 1 / std **2
         """
-
         # Add the noise array to the image
-        noisy_img = self.arr + noise_arr
-
-        # Include units if we have them
         if self.units is not None:
-            noisy_img *= noisy_img
+            noisy_img = self.arr * self.units + noise_arr
+        else:
+            noisy_img = self.arr + noise_arr
 
         # Make the new image
         new_img = Image(
@@ -459,6 +457,12 @@ class Image:
             np.ndarray
                 The weight map.
         """
+        # Strip off units if necessary
+        if isinstance(noise_std, unyt_quantity):
+            units = noise_std.units
+            noise_std = noise_std.value
+        else:
+            units = None
 
         # Get the noise array
         noise_arr = np.random.normal(
@@ -466,6 +470,10 @@ class Image:
             scale=noise_std,
             size=(self.npix, self.npix),
         )
+
+        # Reapply units if we have them
+        if units is not None:
+            noise_arr *= units
 
         # Add the noise to the image
         new_img, _ = self.apply_noise_array(noise_arr)
@@ -494,6 +502,15 @@ class Image:
             np.ndarray
                 The weight map.
         """
+        # Convert aperture radius to consistent units
+        aperture_radius = aperture_radius.to(self.resolution.units).value
+
+        # Strip off units from the depth if we have them
+        if isinstance(depth, unyt_quantity):
+            units = depth.units
+            depth = depth.value
+        else:
+            units = None
 
         # Calculate the noise array from an aperture or point source
         if aperture_radius is not None:
@@ -505,7 +522,7 @@ class Image:
             app_area_coordinates = np.pi * aperture_radius**2
 
             # Convert the aperture area to per pixel
-            app_area_pix = app_area_coordinates / self.resolution**2
+            app_area_pix = app_area_coordinates / self._resolution**2
 
             # Get the noise per pixel
             noise_std = app_noise / app_area_pix
@@ -514,6 +531,10 @@ class Image:
         else:
             # Calculate noise in a pixel
             noise_std = (depth / snr) ** 2
+
+        # Reapply units if we have them
+        if units is not None:
+            noise_std *= units
 
         return self.apply_noise_from_std(noise_std)
 
