@@ -104,9 +104,11 @@ class ImageCollection:
             resolution (unyt_quantity)
                 The size of a pixel.
             fov (unyt_quantity/tuple, unyt_quantity)
-                The width of the image.
+                The width of the image. If a single value is given then the
+                image is assumed to be square.
             npix (int/tuple, int)
-                The number of pixels in the image.
+                The number of pixels in the image. If a single value is given
+                then the image is assumed to be square.
             imgs (dict)
                 A dictionary of images to be turned into a collection.
             noise_maps (dict)

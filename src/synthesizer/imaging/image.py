@@ -61,7 +61,8 @@ class Image:
             resolution (unyt_quantity, float):
                 The resolution of the image.
             fov (unyt_quantity, float):
-                The field of view of the image.
+                The field of view of the image. If a single value is passed
+                then the FOV is assumed to be square.
             img (unyt_array/array_like, float):
                 The image array. Only used to attach an existing image array
                 to an image instance. Mostly used internally when methods
