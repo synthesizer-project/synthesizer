@@ -1,8 +1,38 @@
-"""Definitions for the SpectralCube class."""
+"""Definitions for the SpectralCube class.
+
+This file contains the definitions for the SpectralCube class. This class
+is used to generate and store spectral data cubes. This can be done in two
+ways: by sorting particle spectra into the data cube or by smoothing
+particles/a density grid over the data cube.
+
+This file is part of the synthesizer package and is distributed under the
+terms of the MIT license. See the LICENSE.md file for details.
+
+Example usage:
+    # Create a data cube
+    cube = SpectralCube(
+        resolution=0.1,
+        lam=np.arange(1000, 2000, 1),
+        fov=1,
+    )
+
+    # Get a hist data cube
+    cube.get_data_cube_hist(
+        sed=sed,
+        coordinates=coordinates,
+    )
+
+    # Get a smoothed data cube
+    cube.get_data_cube_smoothed(
+        sed=sed,
+        coordinates=coordinates,
+        smoothing_lengths=smoothing_lengths,
+        kernel=kernel,
+        kernel_threshold=kernel_threshold,
+        quantity="lnu",
+    )
+"""
 import numpy as np
-import warnings
-from unyt import kpc, mas, unyt_array, unyt_quantity
-from unyt.dimensions import angle
 
 import synthesizer.exceptions as exceptions
 from synthesizer.units import Quantity
