@@ -167,7 +167,9 @@ class Particles:
     @property
     def centered_coordinates(self):
         """Returns the coordinates centred on the geometric mean."""
-        return self.coordinates - np.mean(self.coordinates, axis=0)
+        return self.coordinates - np.average(
+            self.coordinates, axis=0, weights=self.masses
+        )
 
 
 class CoordinateGenerator:
