@@ -54,8 +54,27 @@ class ImageCollection:
     A collection of Image objects.
 
     This contains all the generic methods for creating and manipulating
-    images. Any particle or parametric functionality is defined in the
-    particle and parametric mdoules respectively.
+    images. In addition to generating images it can also apply PSFs and noise.
+
+    Both parametric and particle based imaging uses this class.
+
+    Attributes:
+        resolution (unyt_quantity)
+            The size of a pixel.
+        fov (unyt_quantity/tuple, unyt_quantity)
+            The width of the image.
+        npix (int/tuple, int)
+            The number of pixels in the image.
+        imgs (dict)
+            A dictionary of images.
+        noise_maps (dict)
+            A dictionary of noise maps associated to imgs.
+        weight_maps (dict)
+            A dictionary of weight maps associated to imgs.
+        filter_codes (list)
+            A list of the filter codes of the images.
+        rgb_img (np.ndarray)
+            The RGB image array.
     """
 
     # Define quantities
@@ -292,26 +311,19 @@ class ImageCollection:
             Image
                 The image corresponding to the filter code.
         """
-
         # Perform the look up
         return self.imgs[filter_code]
 
     def keys(self):
-        """
-        Enable dict.keys() behaviour.
-        """
+        """Enable dict.keys() behaviour."""
         return self.imgs.keys()
 
     def values(self):
-        """
-        Enable dict.values() behaviour.
-        """
+        """Enable dict.values() behaviour."""
         return self.imgs.values()
 
     def items(self):
-        """
-        Enables dict.items() behaviour.
-        """
+        """Enables dict.items() behaviour."""
         return self.imgs.items()
 
     def __iter__(self):
@@ -437,15 +449,24 @@ class ImageCollection:
         density grid is an array defining the weight in each pixel.
 
         Args:
-
-
-        Returns:
-            img/imgs (array_like/dictionary, float)
-                If pixel_values is provided: A 2D array containing particles
-                smoothed and sorted into an image. (npix, npix)
-                If a filter list is provided: A dictionary containing 2D array
-                with particles smoothed and sorted into the image.
-                (npix, npix)
+            signal (unyt_array, float)
+                The signal of each particle to be sorted into pixels.
+            coordinates (unyt_array, float)
+                The coordinates of the particles. (Only applicable to particle
+                imaging)
+            smoothing_lengths (unyt_array, float)
+                The smoothing lengths of the particles. (Only applicable to
+                particle imaging)
+            kernel (str)
+                The array describing the kernel. This is dervied from the
+                kernel_functions module. (Only applicable to particle imaging)
+            kernel_threshold (float)
+                The threshold for the kernel. Particles with a kernel value
+                below this threshold are included in the image. (Only
+                applicable to particle imaging)
+            density_grid (np.ndarray)
+                The density grid to be smoothed over. (Only applicable to
+                parametric imaging).
         """
         # Loop over filters in the photometry making an image for each.
         for f in photometry.filter_codes:
@@ -481,6 +502,7 @@ class ImageCollection:
                 A dictionary with a point spread function for each image within
                 the ImageCollection. The key of each PSF must be the
                 filter_code of the image it should be applied to.
+
         Returns:
             ImageCollection
                 A new image collection containing the images convolved with a
