@@ -16,7 +16,75 @@
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
 
 /**
- * @brief Function to compute an IFU from particle data and a kernel.
+ * @brief Function to compute a data cube from particle data without smoothing.
+ *
+ * NOTE: the implementation uses the exact position of a particle, thus
+ * accounting for sub pixel positioning.
+ *
+ * @param np_sed_values: The particle SEDs.
+ * @param np_xs: The x coordinates of the particles.
+ * @param np_ys: The y coordinates of the particles.
+ * @param res: The pixel resolution.
+ * @param npix_x: The number of pixels along the x axis.
+ * @param npix_y: The number of pixels along the y axis.
+ * @param npart: The number of particles.
+ * @param nlam: The number of wavelength elements in the SEDs.
+ */
+PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
+
+  const double res;
+  const int npix_x, npix_y, npart, nlam;
+  PyArrayObject *np_sed_values;
+  PyArrayObject *np_xs, *np_ys;
+
+  if (!PyArg_ParseTuple(args, "OOOOdiiii", &np_sed_values,
+                        &np_smoothing_lengths, &np_xs, &np_ys, &res, &npix_x,
+                        &npix_y, &npart, &nlam))
+    return NULL;
+
+  /* Get pointers to the actual data. */
+  const double *sed_values = PyArray_DATA(np_sed_values);
+  const double *xs = PyArray_DATA(np_xs);
+  const double *ys = PyArray_DATA(np_ys);
+
+  /* Allocate the data cube. */
+  const int npix = npix_x * npix_y;
+  double *data_cube = malloc(npix * nlam * sizeof(double));
+  bzero(data_cube, npix * nlam * sizeof(double));
+
+  /* Loop over positions including the sed */
+  for (int ind = 0; ind < npart; ind++) {
+
+    /* Get this particles position */
+    const double x = xs[ind];
+    const double y = ys[ind];
+
+    /* Calculate the pixel coordinates of this particle. */
+    int i = x / res;
+    int j = y / res;
+
+    /* Skip particles outside the image */
+    if (i < 0 || i >= npix_x || j < 0 || j >= npix_y)
+      continue;
+
+    /* Loop over the wavelength axis. */
+    for (int ilam = 0; ilam < nlam; ilam++) {
+      int data_cube_ind = ilam + nlam * (jj + npix_y * ii);
+      int sed_ind = (ind * nlam) + ilam;
+      data_cube[data_cube_ind] += sed_values[sed_ind];
+    }
+  }
+
+  /* Construct a numpy python array to return the DATA_CUBE. */
+  npy_intp dims[3] = {npix_x, npix_y, nlam};
+  PyArrayObject *out_data_cube = (PyArrayObject *)PyArray_SimpleNewFromData(
+      3, dims, NPY_FLOAT64, data_cube);
+
+  return Py_BuildValue("N", out_data_cube);
+}
+
+/**
+ * @brief Function to compute an DATA_CUBE from particle data and a kernel.
  *
  * The SPH kernel of a particle (integrated along the z axis) is used to
  * calculate the spaxel weight for all spaxels within a stellar particles
@@ -33,22 +101,23 @@
  * @param np_kernel: The kernel data (integrated along the z axis and softed by
  *                   impact parameter).
  * @param res: The pixel resolution.
- * @param npix: The number of pixels along an axis.
+ * @param npix_x: The number of pixels along the x axis.
+ * @param npix_y: The number of pixels along the y axis.
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements in the SEDs.
  * @param threshold: The threshold of the SPH kernel.
  * @param kdim: The number of elements in the kernel.
  */
-PyObject *make_ifu(PyObject *self, PyObject *args) {
+PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 
   const double res, threshold;
-  const int npix, npart, nlam, kdim;
+  const int npix_x, npix_y, npart, nlam, kdim;
   PyArrayObject *np_sed_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys;
 
-  if (!PyArg_ParseTuple(args, "OOOOOdiiidi", &np_sed_values,
+  if (!PyArg_ParseTuple(args, "OOOOOdiiiidi", &np_sed_values,
                         &np_smoothing_lengths, &np_xs, &np_ys, &np_kernel, &res,
-                        &npix, &npart, &nlam, &threshold, &kdim))
+                        &npix_x, &npix_y, &npart, &nlam, &threshold, &kdim))
     return NULL;
 
   /* Get pointers to the actual data. */
@@ -58,15 +127,17 @@ PyObject *make_ifu(PyObject *self, PyObject *args) {
   const double *ys = PyArray_DATA(np_ys);
   const double *kernel = PyArray_DATA(np_kernel);
 
-  /* Allocate IFU. */
-  double *ifu = malloc(npix * npix * nlam * sizeof(double));
-  bzero(ifu, npix * npix * nlam * sizeof(double));
+  /* Allocate DATA_CUBE. */
+  const int npix = npix_x * npix_y;
+  double *data_cube = malloc(npix * nlam * sizeof(double));
+  bzero(data_cube, npix * nlam * sizeof(double));
 
   /* Loop over positions including the sed */
   for (int ind = 0; ind < npart; ind++) {
 
     /* Get this particles smoothing length and position */
     const double smooth_length = smoothing_lengths[ind];
+    const double sml_squ = smooth_length * smooth_length;
     const double x = xs[ind];
     const double y = ys[ind];
 
@@ -91,7 +162,7 @@ PyObject *make_ifu(PyObject *self, PyObject *args) {
     for (int ii = i - delta_pix; ii <= i + delta_pix; ii++) {
 
       /* Skip out of bounds spaxels. */
-      if (ii < 0 || ii >= npix)
+      if (ii < 0 || ii >= npix_x)
         continue;
 
       /* Compute the x separation */
@@ -100,7 +171,7 @@ PyObject *make_ifu(PyObject *self, PyObject *args) {
       for (int jj = j - delta_pix; jj <= j + delta_pix; jj++) {
 
         /* Skip out of bounds spaxels. */
-        if (jj < 0 || jj >= npix)
+        if (jj < 0 || jj >= npix_y)
           continue;
 
         /* Compute the y separation */
@@ -115,8 +186,7 @@ PyObject *make_ifu(PyObject *self, PyObject *args) {
         int jjj = jj - (j - delta_pix);
 
         /* Calculate the impact parameter. */
-        double sml_squ = smooth_length * smooth_length;
-        double q = rsqu / sml_squ;
+        double q = sqrt(rsqu) / smooth_length;
 
         /* Skip gas particles outside the kernel. */
         if (q > threshold)
@@ -143,13 +213,13 @@ PyObject *make_ifu(PyObject *self, PyObject *args) {
     for (int ii = i - delta_pix; ii <= i + delta_pix; ii++) {
 
       /* Skip out of bounds spaxels. */
-      if (ii < 0 || ii >= npix)
+      if (ii < 0 || ii >= npix_x)
         continue;
 
       for (int jj = j - delta_pix; jj <= j + delta_pix; jj++) {
 
         /* Skip out of bounds spaxels. */
-        if (jj < 0 || jj >= npix)
+        if (jj < 0 || jj >= npix_y)
           continue;
 
         /* Get the pixel coordinates in the kernel */
@@ -158,9 +228,9 @@ PyObject *make_ifu(PyObject *self, PyObject *args) {
 
         /* Loop over the wavelength axis. */
         for (int ilam = 0; ilam < nlam; ilam++) {
-          int ifu_ind = ilam + nlam * (jj + npix * ii);
+          int data_cube_ind = ilam + nlam * (jj + npix_y * ii);
           int sed_ind = (ind * nlam) + ilam;
-          ifu[ifu_ind] +=
+          data_cube[data_cube_ind] +=
               part_kernel[iii * kernel_cdim + jjj] * sed_values[sed_ind];
         }
       }
@@ -169,16 +239,18 @@ PyObject *make_ifu(PyObject *self, PyObject *args) {
     free(part_kernel);
   }
 
-  /* Construct a numpy python array to return the IFU. */
-  npy_intp dims[3] = {npix, npix, nlam};
-  PyArrayObject *out_ifu =
-      (PyArrayObject *)PyArray_SimpleNewFromData(3, dims, NPY_FLOAT64, ifu);
+  /* Construct a numpy python array to return the DATA_CUBE. */
+  npy_intp dims[3] = {npix_x, npix_y, nlam};
+  PyArrayObject *out_data_cube = (PyArrayObject *)PyArray_SimpleNewFromData(
+      3, dims, NPY_FLOAT64, data_cube);
 
-  return Py_BuildValue("N", out_ifu);
+  return Py_BuildValue("N", out_data_cube);
 }
 
 static PyMethodDef ImageMethods[] = {
-    {"make_ifu", make_ifu, METH_VARARGS,
+    {"make_data_cube_hist", make_data_cube_hist, METH_VARARGS,
+     "Method for sorting particles into a spectral cube without smoothing."},
+    {"make_data_cube_smooth", make_data_cube_smooth, METH_VARARGS,
      "Method for smoothing particles into a spectral cube."},
     {NULL, NULL, 0, NULL},
 };
@@ -186,14 +258,14 @@ static PyMethodDef ImageMethods[] = {
 /* Make this importable. */
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
-    "spectral_cube",                        /* m_name */
-    "A module to make IFUs from particles", /* m_doc */
-    -1,                                     /* m_size */
-    ImageMethods,                           /* m_methods */
-    NULL,                                   /* m_reload */
-    NULL,                                   /* m_traverse */
-    NULL,                                   /* m_clear */
-    NULL,                                   /* m_free */
+    "spectral_cube",                              /* m_name */
+    "A module to make data cubes from particles", /* m_doc */
+    -1,                                           /* m_size */
+    ImageMethods,                                 /* m_methods */
+    NULL,                                         /* m_reload */
+    NULL,                                         /* m_traverse */
+    NULL,                                         /* m_clear */
+    NULL,                                         /* m_free */
 };
 
 PyMODINIT_FUNC PyInit_spectral_cube(void) {
