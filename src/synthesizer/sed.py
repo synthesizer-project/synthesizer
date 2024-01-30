@@ -1130,9 +1130,6 @@ class Sed:
         elements per original wavelength element (i.e. up sampling),
         or by providing a new wavelength grid to resample on to.
 
-        NOTE: This only resamples the rest frame spectra. For fluxes, `get_fnu`
-        must be called again after resampling.
-
         Args:
             resample_factor (int)
                 The number of additional wavelength elements to
@@ -1165,10 +1162,17 @@ class Sed:
             new_lam = rebin_1d(self.lam, resample_factor, func=np.mean)
 
         # Evaluate the function at the desired wavelengths
-        new_spectra = spectres(new_lam, self._lam, self.lnu)
+        new_spectra = spectres(new_lam, self._lam, self._lnu)
 
         # Instantiate the new Sed
         sed = Sed(new_lam, new_spectra)
+
+        # If self also has fnu we should resample those too and store the
+        # shifted wavelengths and frequencies
+        sed.obslam = sed._lam * (1.0 + self.redshift)
+        sed.obsnu = sed._nu / (1.0 + self.redshift)
+        sed.fnu = spectres(sed._obslam, self._obslam, self._fnu)
+        sed.redshift = self.redshift
 
         return sed
 
