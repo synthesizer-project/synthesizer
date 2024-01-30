@@ -456,9 +456,7 @@ class Galaxy(BaseGalaxy):
 
             # Make the image
             stellar_imgs.get_imgs_smoothed(
-                photometry=self.stars.particle_spectra[
-                    stellar_photometry
-                ].photo_fluxes,
+                photometry=self.stars.spectra[stellar_photometry].photo_fluxes,
                 density_grid=stellar_density,
             )
 
@@ -474,7 +472,7 @@ class Galaxy(BaseGalaxy):
 
             # Compute the image
             blackhole_imgs.get_imgs_smoothed(
-                photometry=self.black_holes.particle_spectra[
+                photometry=self.black_holes.spectra[
                     blackhole_photometry
                 ].photo_fluxes,
                 density_grid=blackhole_density,
