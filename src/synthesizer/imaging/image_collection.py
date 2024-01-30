@@ -528,7 +528,7 @@ class ImageCollection:
             resolution=self.resolution,
             npix=self.npix,
             imgs=noisy_imgs,
-            noise_maps=noise_maps,
+            noise_maps=noise_arrs,
             weight_maps=weight_maps,
         )
 
@@ -645,7 +645,7 @@ class ImageCollection:
             # Apply the noise to this image
             noisy_imgs[f], noise_maps[f], weight_maps[f] = self.imgs[
                 f
-            ].apply_noise_from_array(
+            ].apply_noise_from_snr(
                 snr=snrs[f],
                 depth=depths[f],
                 aperture_radius=aperture_radius.to(self.resolution.units),
