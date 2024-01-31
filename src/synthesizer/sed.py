@@ -1187,7 +1187,7 @@ class Sed:
 
         # If self also has fnu we should resample those too and store the
         # shifted wavelengths and frequencies
-        if self.fnu is note None:
+        if self.fnu is not None:
             sed.obslam = sed._lam * (1.0 + self.redshift)
             sed.obsnu = sed._nu / (1.0 + self.redshift)
             sed.fnu = spectres(sed._obslam, self._obslam, self._fnu)
