@@ -235,7 +235,7 @@ class Sed:
 
         Returns:
             Sed
-                A new instance of Sed with added lnu arrays.
+                A new instance of Sed with added lnu and fnu arrays.
 
         Raises:
             InconsistentAddition
@@ -260,8 +260,17 @@ class Sed:
                 "SEDs must have same dimensions"
             )
 
-        # They're compatible, add them
-        return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+        # They're compatible, add them and make a new Sed
+        new_sed = Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+
+        # If fnu exists on both then we need to add those too
+        if (self.fnu is not None) and (second_sed.fnu is not None):
+            new_sed.fnu = self.fnu + second_sed.fnu
+            new_sed.obsnu = self.obsnu
+            new_sed.obslam = self.obslam
+            new_sed.redshift = self.redshift
+
+        return new_sed
 
     def __radd__(self, second_sed):
         """
