@@ -35,6 +35,7 @@ Example usage:
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.colors import Normalize
 
 import synthesizer.exceptions as exceptions
 from synthesizer.units import Quantity
@@ -63,6 +64,11 @@ class SpectralCube:
             A 3D array containing the data cube. (npix[0], npix[1], lam.size)
         units (unyt_quantity, float):
             The units of the data cube.
+        sed (Sed):
+            The Sed used to generate the data cube.
+        quantity (str):
+            The Sed attribute/quantity to sort into the data cube, i.e.
+            "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
     """
 
     # Define quantities
@@ -123,7 +129,7 @@ class SpectralCube:
             self._compute_fov()
 
         # Store the wavelengths
-        self.lam = lams
+        self.lam = lam
 
         # Attribute to hold the IFU array. This is populated later and
         # allocated in the C extensions or when needed.
@@ -131,6 +137,10 @@ class SpectralCube:
 
         # Define an attribute to hold the units
         self.units = None
+
+        # Placeholders to store a pointer to the sed and quantity
+        self.sed = None
+        self.quantity = None
 
     @property
     def data_cube(self):
@@ -173,6 +183,68 @@ class SpectralCube:
         # Redefine the FOV based on npix
         self.fov = self.resolution * self.npix
 
+    def __add__(self, other):
+        """
+        Add two SpectralCubes together.
+
+        This is done by adding the IFU arrays together but SpectralCubes can
+        only be added if they have the same units, resolution, FOV, and
+        wavelengths.
+
+        Args:
+            other (SpectralCube):
+                The other spectral cube to add to this one.
+
+        Returns:
+            SpectralCube:
+                The new spectral cube.
+        """
+        # Ensure there are data cubes to add
+        if self.arr is None or other.arr is None:
+            raise exceptions.InconsistentArguments(
+                "Both spectral cubes must have been populated before they can "
+                "be added together."
+            )
+
+        # Check the units are the same
+        if self.units != other.units:
+            raise exceptions.InconsistentArguments(
+                "To add two spectral cubes together they must have the same "
+                "units."
+            )
+
+        # Check the resolution is the same
+        if self.resolution != other.resolution:
+            raise exceptions.InconsistentArguments(
+                "To add two spectral cubes together they must have the same "
+                "resolution."
+            )
+
+        # Check the FOV is the same
+        if np.any(self.fov != other.fov):
+            raise exceptions.InconsistentArguments(
+                "To add two spectral cubes together they must have the same "
+                "FOV."
+            )
+
+        # Create the new spectral cube
+        new_cube = SpectralCube(
+            resolution=self.resolution,
+            lam=self.lam,
+            fov=self.fov,
+        )
+
+        # Add the data cube arrays together
+        new_cube.arr = self.arr + other.arr
+
+        # Add the attached seds
+        new_cube.sed = self.sed + other.sed
+
+        # Set the quantity
+        new_cube.quantity = self.quantity
+
+        return new_cube
+
     def get_data_cube_hist(
         self,
         sed,
@@ -191,7 +263,8 @@ class SpectralCube:
             coordinates (unyt_array, float):
                 The coordinates of the particles.
             quantity (str):
-                The Sed attribute/quantity to sort into the data cube.
+                The Sed attribute/quantity to sort into the data cube, i.e.
+                "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
 
         Returns:
             array_like (float):
@@ -199,7 +272,11 @@ class SpectralCube:
                 cube. (npix[0], npix[1], lam.size)
         """
         # Sample the spectra onto the wavelength grid
-        sed = sed.get_resampled_spectra(new_lam=self.lam)
+        sed = sed.get_resampled_sed(new_lam=self.lam)
+
+        # Store the Sed and quantity
+        self.sed = sed
+        self.quantity = quantity
 
         # Get the spectra we will be sorting into the spectral cube
         spectra = getattr(sed, quantity)
@@ -223,8 +300,12 @@ class SpectralCube:
         # Prepare the inputs, we need to make sure we are passing C contiguous
         # arrays.
         spectra = np.ascontiguousarray(spectra, dtype=np.float64)
-        xs = np.ascontiguousarray(coordinates[:, 0], dtype=np.float64)
-        ys = np.ascontiguousarray(coordinates[:, 1], dtype=np.float64)
+        xs = np.ascontiguousarray(
+            coordinates[:, 0] + (self._fov[0] / 2), dtype=np.float64
+        )
+        ys = np.ascontiguousarray(
+            coordinates[:, 1] + (self._fov[1] / 2), dtype=np.float64
+        )
 
         self.arr = make_data_cube_hist(
             spectra,
@@ -234,7 +315,7 @@ class SpectralCube:
             self.npix[0],
             self.npix[1],
             coordinates.shape[0],
-            self.lams.size,
+            self.lam.size,
         )
 
         return self.arr * self.units
@@ -274,7 +355,8 @@ class SpectralCube:
             density_grid (array_like, float):
                 The density grid to smooth over. (parametric case only)
             quantity (str):
-                The Sed attribute/quantity to sort into the data cube.
+                The Sed attribute/quantity to sort into the data cube, i.e.
+                "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
 
         Returns:
             array_like (float):
@@ -306,7 +388,11 @@ class SpectralCube:
             )
 
         # Sample the spectra onto the wavelength grid
-        sed = sed.get_resampled_spectra(new_lam=self.lam)
+        sed = sed.get_resampled_sed(new_lam=self.lam)
+
+        # Store the Sed and quantity
+        self.sed = sed
+        self.quantity = quantity
 
         # Get the spectra we will be sorting into the spectral cube
         spectra = getattr(sed, quantity)
@@ -339,9 +425,12 @@ class SpectralCube:
         # arrays.
         spectra = np.ascontiguousarray(spectra, dtype=np.float64)
         smls = np.ascontiguousarray(smoothing_lengths, dtype=np.float64)
-        xs = np.ascontiguousarray(coordinates[:, 0], dtype=np.float64)
-        ys = np.ascontiguousarray(coordinates[:, 1], dtype=np.float64)
-
+        xs = np.ascontiguousarray(
+            coordinates[:, 0] + (self._fov[0] / 2), dtype=np.float64
+        )
+        ys = np.ascontiguousarray(
+            coordinates[:, 1] + (self._fov[1] / 2), dtype=np.float64
+        )
         self.arr = make_data_cube_smooth(
             spectra,
             smls,
@@ -352,7 +441,7 @@ class SpectralCube:
             self.npix[0],
             self.npix[1],
             coordinates.shape[0],
-            self.lams.size,
+            self.lam.size,
             kernel_threshold,
             kernel.size,
         )
@@ -391,13 +480,18 @@ class SpectralCube:
             "docs/CONTRIBUTING.md"
         )
 
-    def animate_data_cube(self, show=False, save_path=None, fps=30):
+    def animate_data_cube(
+        self,
+        show=False,
+        save_path=None,
+        fps=30,
+        vmin=None,
+        vmax=None,
+    ):
         """
         Create an animation of the spectral cube.
 
         Each frame of the animation is a wavelength bin.
-
-        Note: to write out the animation you must have imagemagick installed.
 
         Args:
             show (bool):
@@ -408,43 +502,96 @@ class SpectralCube:
             fps (int, optional):
                 the number of frames per second in the output animation.
                 Default is 30 frames per second.
+            vmin (float)
+                The minimum of the normalisation.
+            vmax (float)
+                The maximum of the normalisation.
 
         Returns:
             matplotlib.animation.FuncAnimation: The animation object.
         """
+        # Integrate the input Sed
+        sed = self.sed.sum()
 
         # Create the figure and axes
-        fig, ax = plt.subplots()
+        fig, (ax1, ax2) = plt.subplots(
+            2,
+            1,
+            gridspec_kw={"height_ratios": [3, 1], "hspace": 0},
+            figsize=(6, 8),
+        )
 
-        # Create a list to store the frames in
-        images = []
+        # Get the normalisation
+        if vmin is None:
+            vmin = 0
+        if vmax is None:
+            vmax = np.percentile(self.arr, 99.9)
 
-        # Loop over each wavelength to create a series of images
-        for i in range(self.lam.size):
-            ax.clear()
-            ax.axis("off")
-            img = ax.imshow(self.arr[:, :, i], origin="lower", animated=True)
-            ax.set_title(f"Wavelength: {self.lam[i]}")
-            images.append([img])
+        # Define the norm
+        norm = Normalize(vmin=vmin, vmax=vmax, clip=True)
+
+        # Create a placeholder image
+        img = ax1.imshow(
+            self.arr[:, :, 0],
+            origin="lower",
+            animated=True,
+            norm=norm,
+        )
+        ax1.axis("off")
+
+        # Second subplot for the spectra
+        spectra = getattr(sed, self.quantity)
+        ax2.semilogy(self.lam, spectra)
+        (line,) = ax2.plot(
+            [self.lam[0], self.lam[0]],
+            ax2.get_ylim(),
+            color="red",
+        )
+
+        # Get units for labels
+        x_units = str(self.lam.units)
+        y_units = str(spectra.units)
+        x_units = x_units.replace("/", r"\ / \ ").replace("*", " ")
+        y_units = y_units.replace("/", r"\ / \ ").replace("*", " ")
+
+        # Label the spectra
+        ax2.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
+
+        # Label the y axis handling all possibilities
+        if self.quantity == "lnu":
+            ax2.set_ylabel(r"$L_{\nu}/[\mathrm{" + y_units + r"}]$")
+        elif self.quantity == "llam":
+            ax2.set_ylabel(r"$L_{\lambda}/[\mathrm{" + y_units + r"}]$")
+        elif self.quantity == "luminosity":
+            ax2.set_ylabel(r"$L/[\mathrm{" + y_units + r"}]$")
+        elif self.quantity == "fnu":
+            ax2.set_ylabel(r"$F_{\nu}/[\mathrm{" + y_units + r"}]$")
+        elif self.quantity == "flam":
+            ax2.set_ylabel(r"$F_{\lambda}/[\mathrm{" + y_units + r"}]$")
+        else:
+            ax2.set_ylabel(r"$F/[\mathrm{" + y_units + r"}]$")
+
+        def update(i):
+            # Update the image for the ith frame
+            img.set_data(self.arr[:, :, i])
+            line.set_xdata([self.lam[i], self.lam[i]])
+            return [img, line]
 
         # Calculate interval in milliseconds based on fps
-        interval = 1000 / fps  # 1000 milliseconds in a second
+        interval = 1000 / fps
 
         # Create the animation
         anim = FuncAnimation(
-            fig,
-            lambda i: images[i],
-            frames=len(images),
-            interval=interval,
-            blit=True,
+            fig, update, frames=self.lam.size, interval=interval, blit=False
         )
 
         # Save if a path is provided
         if save_path is not None:
             anim.save(save_path, writer="imagemagick")
 
-        # Are we showing?
         if show:
             plt.show()
+        else:
+            plt.close(fig)
 
         return anim
