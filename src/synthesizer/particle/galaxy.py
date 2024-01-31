@@ -1534,13 +1534,13 @@ class Galaxy(BaseGalaxy):
             # Make the image using the requested method
             if cube_type == "hist":
                 stellar_cube.get_data_cube_hist(
-                    sed=self.stars.spectra[stellar_spectra],
+                    sed=self.stars.particle_spectra[stellar_spectra],
                     coordinates=self.stars.centered_coordinates,
                     quantity=quantity,
                 )
             else:
                 stellar_cube.get_data_cube_smoothed(
-                    sed=self.stars.spectra[stellar_spectra],
+                    sed=self.stars.particle_spectra[stellar_spectra],
                     coordinates=self.stars.centered_coordinates,
                     smoothing_lengths=self.stars.smoothing_lengths,
                     kernel=kernel,
@@ -1558,13 +1558,13 @@ class Galaxy(BaseGalaxy):
             # Make the image using the requested method
             if cube_type == "hist":
                 blackhole_cube.get_data_cube_hist(
-                    sed=self.blackhole.spectra[blackhole_spectra],
+                    sed=self.blackhole.particle_spectra[blackhole_spectra],
                     coordinates=self.blackhole.centered_coordinates,
                     quantity=quantity,
                 )
             else:
                 blackhole_cube.get_data_cube_smoothed(
-                    sed=self.blackhole.spectra[blackhole_spectra],
+                    sed=self.blackhole.particle_spectra[blackhole_spectra],
                     coordinates=self.blackhole.centered_coordinates,
                     smoothing_lengths=self.blackhole.smoothing_lengths,
                     kernel=kernel,
