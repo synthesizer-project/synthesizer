@@ -541,7 +541,10 @@ class SpectralCube:
 
         # Second subplot for the spectra
         spectra = getattr(sed, self.quantity)
-        ax2.semilogy(self.lam, spectra)
+        if self.quantity in ("lnu", "llam", "luminosity"):
+            ax2.semilogy(self.lam, spectra)
+        else:
+            ax2.semilogy(sed.obslam, spectra)
         (line,) = ax2.plot(
             [self.lam[0], self.lam[0]],
             ax2.get_ylim(),
