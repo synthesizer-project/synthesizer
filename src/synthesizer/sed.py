@@ -161,7 +161,7 @@ class Sed:
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
 
-                return new_sed
+            return new_sed
         else:
             # If 1D, just return the original array
             return self
