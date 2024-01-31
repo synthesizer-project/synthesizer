@@ -4,7 +4,7 @@ import numpy as np
 
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
-from synthesizer.imaging import ImageCollection
+from synthesizer.imaging import ImageCollection, SpectralCube
 from synthesizer.art import Art, get_centred_art
 from synthesizer.particle import Stars as ParticleStars
 
@@ -353,7 +353,7 @@ class Galaxy(BaseGalaxy):
             raise exceptions.InconsistentArguments(
                 "At least one spectra type must be provided "
                 "(stellar_photometry or blackhole_photometry)!"
-                " What component do you want images of?"
+                " What component/s do you want images of?"
             )
 
         # Make stellar image if requested
@@ -440,7 +440,7 @@ class Galaxy(BaseGalaxy):
             raise exceptions.InconsistentArguments(
                 "At least one spectra type must be provided "
                 "(stellar_photometry or blackhole_photometry)!"
-                " What component do you want images of?"
+                " What component/s do you want images of?"
             )
 
         # Make stellar image if requested
@@ -483,3 +483,97 @@ class Galaxy(BaseGalaxy):
         elif stellar_photometry is not None:
             return stellar_imgs
         return blackhole_imgs
+
+    def get_data_cube(
+        self,
+        resolution,
+        fov,
+        lam,
+        stellar_spectra=None,
+        blackhole_spectra=None,
+        quantity="lnu",
+    ):
+        """
+        Make a SpectralCube from an Sed.
+
+        Data cubes are calculated by smoothing spectra over the component
+        morphology. The Sed used is defined by <component>_spectra.
+
+        If multiple components are requested they will be combined into a
+        single output data cube.
+
+        NOTE: Either npix or fov must be defined.
+
+        Args:
+            resolution (Quantity, float)
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov : float
+                The width of the image in image coordinates.
+            lam (unyt_array, float)
+                The wavelength array to use for the data cube.
+            stellar_spectra (string)
+                The stellar spectra key to make into a data cube.
+            blackhole_spectra (string)
+                The black hole spectra key to make into a data cube.
+            quantity (str):
+                The Sed attribute/quantity to sort into the data cube, i.e.
+                "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
+
+        Returns:
+            SpectralCube
+                The spectral data cube object containing the derived
+                data cube.
+        """
+        # Make sure we have an image to make
+        if stellar_spectra is None and blackhole_spectra is None:
+            raise exceptions.InconsistentArguments(
+                "At least one spectra type must be provided "
+                "(stellar_spectra or blackhole_spectra)!"
+                " What component/s do you want a data cube of?"
+            )
+
+        # Make stellar image if requested
+        if stellar_spectra is not None:
+            # Instantiate the Image colection ready to make the image.
+            stellar_cube = SpectralCube(
+                resolution=resolution, fov=fov, lam=lam
+            )
+
+            # Compute the density grid
+            stellar_density = self.stars.morphology.get_density_grid(
+                resolution, stellar_cube.npix
+            )
+
+            # Make the image
+            stellar_cube.get_data_cube_smoothed(
+                sed=self.stars.spectra[stellar_spectra],
+                density_grid=stellar_density,
+                quantity=quantity,
+            )
+
+        # Make blackhole image if requested
+        if blackhole_spectra is not None:
+            # Instantiate the Image colection ready to make the image.
+            blackhole_cube = SpectralCube(
+                resolution=resolution, fov=fov, lam=lam
+            )
+
+            # Compute the density grid
+            blackhole_density = self.black_holes.morphology.get_density_grid(
+                resolution, blackhole_cube.npix
+            )
+
+            # Compute the image
+            blackhole_cube.get_data_cube_smoothed(
+                sed=self.black_holes.spectra[blackhole_spectra],
+                density_grid=blackhole_density,
+                quantity=quantity,
+            )
+
+        # Return the images, combining if there are multiple components
+        if stellar_spectra is not None and blackhole_spectra is not None:
+            return stellar_cube + blackhole_cube
+        elif stellar_spectra is not None:
+            return stellar_cube
+        return blackhole_cube
