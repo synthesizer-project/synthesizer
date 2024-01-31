@@ -24,7 +24,7 @@ from synthesizer.particle import Gas
 from synthesizer.sed import Sed
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
-from synthesizer.imaging import Image, ImageCollection
+from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
 
 
@@ -1462,3 +1462,119 @@ class Galaxy(BaseGalaxy):
         img.units = img.units / self.stellar_mass.units
 
         return img
+
+    def get_data_cube(
+        self,
+        resolution,
+        fov,
+        lam,
+        cube_type="hist",
+        stellar_spectra=None,
+        blackhole_spectra=None,
+        kernel=None,
+        kernel_threshold=1,
+        quantity="lnu",
+    ):
+        """
+        Make a SpectralCube from an Sed.
+
+        Data cubes are calculated by smoothing spectra over the component
+        morphology. The Sed used is defined by <component>_spectra.
+
+        If multiple components are requested they will be combined into a
+        single output data cube.
+
+        NOTE: Either npix or fov must be defined.
+
+        Args:
+            resolution (Quantity, float)
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov : float
+                The width of the image in image coordinates.
+            lam (unyt_array, float)
+                The wavelength array to use for the data cube.
+            cube_type (str)
+                The type of data cube to make. Either "smoothed" to smooth
+                particle spectra over a kernel or "hist" to sort particle
+                spectra into individual spaxels.
+            stellar_spectra (string)
+                The stellar spectra key to make into a data cube.
+            blackhole_spectra (string)
+                The black hole spectra key to make into a data cube.
+            kernel (array-like, float)
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float)
+                The kernel's impact parameter threshold (by default 1).
+            quantity (str):
+                The Sed attribute/quantity to sort into the data cube, i.e.
+                "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
+
+        Returns:
+            SpectralCube
+                The spectral data cube object containing the derived
+                data cube.
+        """
+        # Make sure we have an image to make
+        if stellar_spectra is None and blackhole_spectra is None:
+            raise exceptions.InconsistentArguments(
+                "At least one spectra type must be provided "
+                "(stellar_spectra or blackhole_spectra)!"
+                " What component/s do you want a data cube of?"
+            )
+
+        # Make stellar image if requested
+        if stellar_spectra is not None:
+            # Instantiate the Image colection ready to make the image.
+            stellar_cube = SpectralCube(
+                resolution=resolution, fov=fov, lam=lam
+            )
+
+            # Make the image using the requested method
+            if cube_type == "hist":
+                stellar_cube.get_data_cube_hist(
+                    sed=self.stars.spectra[stellar_spectra],
+                    coordinates=self.stars.centered_coordinates,
+                    quantity=quantity,
+                )
+            else:
+                stellar_cube.get_data_cube_smoothed(
+                    sed=self.stars.spectra[stellar_spectra],
+                    coordinates=self.stars.centered_coordinates,
+                    smoothing_lengths=self.stars.smoothing_lengths,
+                    kernel=kernel,
+                    kernel_threshold=kernel_threshold,
+                    quantity=quantity,
+                )
+
+        # Make blackhole image if requested
+        if blackhole_spectra is not None:
+            # Instantiate the Image colection ready to make the image.
+            blackhole_cube = SpectralCube(
+                resolution=resolution, fov=fov, lam=lam
+            )
+
+            # Make the image using the requested method
+            if cube_type == "hist":
+                blackhole_cube.get_data_cube_hist(
+                    sed=self.blackhole.spectra[blackhole_spectra],
+                    coordinates=self.blackhole.centered_coordinates,
+                    quantity=quantity,
+                )
+            else:
+                blackhole_cube.get_data_cube_smoothed(
+                    sed=self.blackhole.spectra[blackhole_spectra],
+                    coordinates=self.blackhole.centered_coordinates,
+                    smoothing_lengths=self.blackhole.smoothing_lengths,
+                    kernel=kernel,
+                    kernel_threshold=kernel_threshold,
+                    quantity=quantity,
+                )
+
+        # Return the images, combining if there are multiple components
+        if stellar_spectra is not None and blackhole_spectra is not None:
+            return stellar_cube + blackhole_cube
+        elif stellar_spectra is not None:
+            return stellar_cube
+        return blackhole_cube
