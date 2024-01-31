@@ -1,7 +1,6 @@
 """
 """
 import numpy as np
-from unyt.dimensions import angle
 
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
