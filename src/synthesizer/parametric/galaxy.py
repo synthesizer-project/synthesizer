@@ -380,7 +380,7 @@ class Galaxy(BaseGalaxy):
             blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
 
             # Compute the density grid
-            blackhole_density = self.black_holes.morphology(
+            blackhole_density = self.black_holes.morphology.get_density_grid(
                 resolution, blackhole_imgs.npix
             )
 
@@ -465,7 +465,7 @@ class Galaxy(BaseGalaxy):
             blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
 
             # Compute the density grid
-            blackhole_density = self.black_holes.morphology(
+            blackhole_density = self.black_holes.morphology.get_density_grid(
                 resolution, blackhole_imgs.npix
             )
 
