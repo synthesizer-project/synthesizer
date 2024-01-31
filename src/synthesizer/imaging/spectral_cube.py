@@ -404,7 +404,7 @@ class SpectralCube:
         # Handle the parametric case
         if density_grid is not None:
             # Multiply the density grid by the sed to get the IFU
-            self.arr = density_grid[:, :] * spectra
+            self.arr = density_grid[:, :, None] * spectra
 
             return self.arr * self.units
 
