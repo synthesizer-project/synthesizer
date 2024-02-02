@@ -791,3 +791,25 @@ class Grid:
                 The spectra grid as an Sed object.
         """
         return Sed(self.lam, self.spectra[spectra_type])
+
+    def unify_with_filters(self, filters, loop_spectra=False):
+        """
+        Unify the grid with a FilterCollection object.
+
+        This will interpolate the grid onto the wavelength grid of the
+        filters.
+
+        Args:
+            filters (synthesizer.filter.FilterCollection)
+                The FilterCollection object to unify the grid with.
+            loop_spectra (bool)
+                Flag for whether to do the interpolation over the whole
+                grid, or loop over the first axes. The latter is less memory
+                intensive, but slower. Defaults to False.
+        """
+
+        # Extract the filter collection's wavelength array
+        new_lam = filters.lam
+
+        # Interpolate the grid onto this wavelength grid
+        self.interp_spectra(new_lam, loop_spectra)
