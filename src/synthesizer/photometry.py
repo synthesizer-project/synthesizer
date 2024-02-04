@@ -261,7 +261,7 @@ class PhotometryCollection:
 
         # Get the photometry
         photometry = (
-            self.photo_luminosities if self.rest_frame else self.obs_photometry
+            self.photo_luminosities if self.rest_frame else self.photo_fluxes
         )
 
         # Plot the photometry
