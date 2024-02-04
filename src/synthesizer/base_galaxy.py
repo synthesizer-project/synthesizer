@@ -182,27 +182,10 @@ class BaseGalaxy:
                 igm=igm,
             )
 
-        # Loop over all stellar spectra
-        for sed in self.stars.spectra.values():
-            # Calculate the observed spectra
-            sed.get_fnu(
-                cosmo=cosmo,
-                z=self.redshift,
-                igm=igm,
-            )
-
-        # Loop over all black hole spectra
-        for sed in self.black_holes.spectra.values():
-            # Calculate the observed spectra
-            sed.get_fnu(
-                cosmo=cosmo,
-                z=self.redshift,
-                igm=igm,
-            )
-
-        # Loop over all stellar particle spectra
-        if getattr(self.stars, "particle_spectra", None) is not None:
-            for sed in self.stars.particle_spectra.values():
+        # Do we have stars?
+        if self.stars is not None:
+            # Loop over all stellar spectra
+            for sed in self.stars.spectra.values():
                 # Calculate the observed spectra
                 sed.get_fnu(
                     cosmo=cosmo,
@@ -210,15 +193,36 @@ class BaseGalaxy:
                     igm=igm,
                 )
 
-        # Loop over all black hole particle spectra
-        if getattr(self.black_holes, "particle_spectra", None) is not None:
-            for sed in self.black_holes.particle_spectra.values():
+            # Loop over all stellar particle spectra
+            if getattr(self.stars, "particle_spectra", None) is not None:
+                for sed in self.stars.particle_spectra.values():
+                    # Calculate the observed spectra
+                    sed.get_fnu(
+                        cosmo=cosmo,
+                        z=self.redshift,
+                        igm=igm,
+                    )
+
+        # Do we have black holes?
+        if self.black_holes is not None:
+            # Loop over all black hole spectra
+            for sed in self.black_holes.spectra.values():
                 # Calculate the observed spectra
                 sed.get_fnu(
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
                 )
+
+            # Loop over all black hole particle spectra
+            if getattr(self.black_holes, "particle_spectra", None) is not None:
+                for sed in self.black_holes.particle_spectra.values():
+                    # Calculate the observed spectra
+                    sed.get_fnu(
+                        cosmo=cosmo,
+                        z=self.redshift,
+                        igm=igm,
+                    )
 
     def get_spectra_combined(self):
         """
