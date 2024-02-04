@@ -1225,7 +1225,7 @@ class Filter:
                 f"(min={self.t.min()}, max={self.t.max()}). "
                 "Transmission will be clipped to [0-1]"
             )
-        self.t = np.clip(self.t, 0, 1)
+            self.t = np.clip(self.t, 0, 1)
 
     def _make_top_hat_filter(self):
         """
