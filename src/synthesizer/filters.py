@@ -1217,6 +1217,14 @@ class Filter:
         transmission curve is at most 1. So for one final check lets
         clip the transmission curve between 0 and 1
         """
+
+        # Warn the user we are are doing this
+        if self.t.max() > 1 or self.t.min() < 0:
+            print(
+                "Warning: Out of range transmission values found "
+                f"(min={self.t.min()}, max={self.t.max()}). "
+                "Transmission will be clipped to [0-1]"
+            )
         self.t = np.clip(self.t, 0, 1)
 
     def _make_top_hat_filter(self):
