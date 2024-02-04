@@ -98,6 +98,10 @@ class BlackholesComponent:
         # Initialise spectra
         self.spectra = {}
 
+        # Intialise the photometry dictionaries
+        self.photo_luminosities = {}
+        self.photo_fluxes = {}
+
         # Save the arguments as attributes
         self.mass = mass
         self.accretion_rate = accretion_rate
@@ -795,6 +799,52 @@ class BlackholesComponent:
             )
 
         return self.spectra
+
+    def get_photo_luminosities(self, filters, verbose=True):
+        """
+        Calculate luminosity photometry using a FilterCollection object.
+
+        Args:
+            filters (filters.FilterCollection)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            photo_luminosities (dict)
+                A dictionary of rest frame broadband luminosities.
+        """
+        # Loop over spectra in the component
+        for spectra in self.spectra:
+            # Create the photometry collection and store it in the object
+            self.photo_luminosities[spectra] = self.spectra[
+                spectra
+            ].get_photo_luminosities(filters, verbose)
+
+        return self.photo_luminosities
+
+    def get_photo_fluxes(self, filters, verbose=True):
+        """
+        Calculate flux photometry using a FilterCollection object.
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            (dict)
+                A dictionary of fluxes in each filter in filters.
+        """
+        # Loop over spectra in the component
+        for spectra in self.spectra:
+            # Create the photometry collection and store it in the object
+            self.photo_fluxes[spectra] = self.spectra[
+                spectra
+            ].get_photo_fluxes(filters, verbose)
+
+        return self.photo_fluxes
 
     def plot_spectra(
         self,
