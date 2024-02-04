@@ -89,10 +89,6 @@ def download_dust_grid(destination):
         "https://xcs-host.phys.sussex.ac.uk/html/sym_links/synthesizer_data/"
     )
 
-    raise exceptions.UnimplementedFunctionality(
-        "DLi+07 grid not yet available through https."
-    )
-
     # Download each file
     _download(base_url + "MW3.1.hdf5", destination)
 
