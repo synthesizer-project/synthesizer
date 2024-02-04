@@ -110,6 +110,7 @@ class FilterCollection:
         filters=None,
         path=None,
         new_lam=None,
+        fill_gaps=True,
     ):
         """
         Intialise the FilterCollection.
@@ -143,6 +144,14 @@ class FilterCollection:
             new_lam (array-like, float)
                 The wavelength array to define the transmission curve on. Can
                 have units but Angstrom assumed.
+            fill_gaps (bool)
+                Are we filling gaps in the wavelength array? Defaults to True.
+                This is only needed if new_lam has not been passed. In that
+                case the filters will be resampled onto a universal wavelength
+                grid and any gaps between filters can be filled with the
+                minimum average resolution of all filters if fill_gaps is True.
+                NOTE: This will inflate the memory footprint of the filters
+                outside the region where transmission is non-zero.
         """
 
         # Define lists to hold our filters and filter codes
@@ -201,7 +210,7 @@ class FilterCollection:
             # If we weren't passed a wavelength grid we need to resample the
             # filters onto a universal wavelength grid.
             if self.lam is None:
-                self.resample_filters()
+                self.resample_filters(fill_gaps=fill_gaps)
 
         # Calculate mean and pivot wavelengths for each filter
         self.mean_lams = self.calc_mean_lams()
@@ -571,14 +580,97 @@ class FilterCollection:
                 When the filter does not exist in self.filters an error is
                 raised.
         """
-
         return self.filters[key]
 
-    def resample_filters(self, new_lam=None, lam_resolution=1, verbose=True):
+    def _merge_filter_lams(self, fill_gaps):
         """
-        Resamples all filters onto a single wavelength array. If no wavelength
-        grid is provided an array encompassing all filter transmission curves
-        is derived with resolution stated by lam_resolution.
+        Merge the wavelength arrays of multiple filters.
+
+        Overlapping transmission adopt the values of one of the arrays.
+
+        If a gap is found between filters it can be populated with the minimum
+        average wavelength resolution of all filters if fill_gaps is True.
+
+        Returns:
+            np.ndarray
+                The combined wavelength array with gaps filled and overlaps
+                removed
+        """
+        # Get the indices sorted by pivot wavelength
+        piv_lams = [f.pivwv() for f in self]
+        sinds = np.argsort(piv_lams)
+
+        # Get filter arrays in pivot wavelength order
+        arrays = [
+            self.filters[fc]._lam[self.filters[fc].t > 0]
+            for fc in np.array(self.filter_codes)[sinds]
+        ]
+
+        # Combine everything together in order
+        new_lam = np.concatenate(arrays)
+
+        # Remove any duplicate values
+        new_lam = np.unique(new_lam)
+
+        # Get the smallest difference between adjacent values
+        diffs = np.diff(new_lam)
+
+        # New remove any overlaps by iteratively removing negative differences
+        # between adjacent elements
+        diffs = np.diff(new_lam)
+        while np.min(diffs) < 0:
+            end_val = new_lam[-1]
+            new_lam = new_lam[:-1][diffs > 0]
+            new_lam = np.append(new_lam, end_val)
+            diffs = np.diff(new_lam)
+
+        # Are we filling gaps?
+        if fill_gaps:
+            # Get the minimum resolution (largest gap between bins) of
+            # each filter for gap filling
+            min_res = np.max([np.max(np.diff(arr)) for arr in arrays])
+
+            # Get the minimum resolution of the new array
+            min_res_new = np.max(np.diff(new_lam))
+
+            # Fill any gaps until the minimum resolution is reached
+            while min_res_new > min_res:
+                # Get the indices of the gaps
+                gaps = np.where(diffs > min_res)[0]
+
+                # Loop over the gaps and fill them
+                for g in gaps:
+                    new_lam = np.insert(
+                        new_lam, g + 1, (new_lam[g] + new_lam[g + 1]) / 2
+                    )
+
+                # Get the new minimum resolution
+                diffs = np.diff(new_lam)
+                min_res_new = np.max(np.diff(new_lam))
+
+        return new_lam
+
+    def resample_filters(
+        self, new_lam=None, lam_size=None, fill_gaps=False, verbose=True
+    ):
+        """
+        Resample all filters onto a single wavelength array.
+
+        If no wavelength grid is provided then the wavelength array of each
+        individual Filter will be combined to cover the full range of the
+        FilterCollection. Any overlapping ranges will take the values from one
+        of the overlapping filters, any gaps between filters can be filled
+        with the minimum average resolution of all filters to ensure a
+        continuous array without needlessly inflating the memory footprint
+        of any lam sized arrays.
+
+        Alternatively, if new_lam is not passed, lam_size can be passed
+        in which case a wavelength array from the minimum Filter wavelength
+        to the maximum Filter wavelength will be generated with lam_size
+        wavelength bins.
+
+        an array encompassing all filter
+        transmission curves is derived with resolution stated by lam_resolution.
 
         Warning:
             If working with a Grid without passing the Grid wavelength
@@ -591,13 +683,14 @@ class FilterCollection:
                 Wavelength array on which to sample filters. Wavelengths
                 should be in Angstrom. Defaults to None and an array is
                 derived.
-            lam_resolution (float)
-                The desired resolution of the derived wavelength array. Only
-                used when new_lam is not provided.
+            lam_size (int)
+                The desired number of wavelength bins in the new wavelength
+                array, if no explicit array has been passed.
+            fill_gaps (bool)
+                Are we filling gaps in the wavelength array? Defaults to False.
             verbose (bool)
                 Are we talking?
         """
-
         # Do we need to find a wavelength array from the filters?
         if new_lam is None:
             # Set up values for looping
@@ -614,16 +707,21 @@ class FilterCollection:
                 if this_max > max_lam:
                     max_lam = this_max
 
-            # Create wavelength array
-            new_lam = np.arange(
-                min_lam, max_lam + lam_resolution, lam_resolution
-            )
+            # Are we making an array with a fixed size?
+            if lam_size is not None:
+                # Create wavelength array
+                new_lam = np.linspace(min_lam, max_lam, lam_size)
+
+            else:
+                # Ok, we are trying to be clever, merge the filter wavelength
+                # arrays into a single array.
+                new_lam = self._merge_filter_lams(fill_gaps=fill_gaps)
 
             if verbose:
                 print(
                     "Calculated wavelength array: \n"
-                    + "min = %.2e Angstrom\n" % min_lam
-                    + "max = %.2e Angstrom\n" % max_lam
+                    + "min = %.2e Angstrom\n" % new_lam.min()
+                    + "max = %.2e Angstrom\n" % new_lam.max()
                     + "FilterCollection.lam.size = %d" % new_lam.size
                 )
 
@@ -636,7 +734,7 @@ class FilterCollection:
         # than just doing the interpolation for all filters
         for fcode in self.filters:
             f = self.filters[fcode]
-            f.t = f._interpolate_wavelength(self.lam)
+            f._interpolate_wavelength(self.lam)
 
     def _transmission_curve_ax(self, ax, **kwargs):
         """
@@ -661,11 +759,7 @@ class FilterCollection:
         ax.set_ylabel(r"$\rm T_{\lambda}$")
 
     def plot_transmission_curves(
-        self,
-        show=False,
-        fig=None,
-        ax=None,
-        **kwargs
+        self, show=False, fig=None, ax=None, **kwargs
     ):
         """
         Create a filter transmission curve plot of all Filters in the
@@ -1105,6 +1199,26 @@ class Filter:
         self.nu = (c / self.lam).to("Hz").value
         self.original_nu = (c / self.original_lam).to("Hz").value
 
+        # Ensure transmission curves are in a valid range (we expect 0-1,
+        # some SVO curves return strange values above this e.g. ~60-80)
+        self.clip_transmission()
+
+    @property
+    def transmission(self):
+        """Alias for self.t."""
+        return self.t
+
+    def clip_transmission(self):
+        """
+        Clips transmission curve between 0 and 1.
+
+        Some transmission curves from SVO can come with strange
+        upper limits, the way we use them requires the maxiumum of a
+        transmission curve is at most 1. So for one final check lets
+        clip the transmission curve between 0 and 1
+        """
+        self.t = np.clip(self.t, 0, 1)
+
     def _make_top_hat_filter(self):
         """
         Make a top hat filter from the Filter's attributes.
@@ -1187,7 +1301,7 @@ class Filter:
         # If a new wavelength grid is provided, interpolate
         # the transmission curve on to that grid
         if isinstance(self._lam, np.ndarray):
-            self.t = self._interpolate_wavelength()
+            self._interpolate_wavelength()
         else:
             self.lam = self.original_lam
             self.t = self.original_t
@@ -1213,15 +1327,17 @@ class Filter:
             # Warn the user if we're about to truncate the existing wavelength
             # array
             truncated = False
-            if new_lam.min() > self.lam.min():
+            if new_lam.min() > self.lam[self.t > 0].min():
                 truncated = True
-            if new_lam.max() < self.lam.max():
+            if new_lam.max() < self.lam[self.t > 0].max():
                 truncated = True
             if truncated:
                 print(
-                    f"Warning: {self.filter_code} is being truncated "
+                    f"Warning: {self.filter_code} is being truncated where "
+                    "transmission is non-zero "
                     "(old_lam_bounds = "
-                    f"({self.lam.min():.2e}, {self.lam.max():.2e}), "
+                    f"({self.lam[self.t > 0].min():.2e}, "
+                    f"{self.lam[self.t > 0].max():.2e}), "
                     "new_lam_bounds = "
                     f"({new_lam.min():.2e}, {new_lam.max():.2e}))"
                 )
@@ -1229,9 +1345,12 @@ class Filter:
             self.lam = new_lam
 
         # Perform interpolation
-        return np.interp(
+        self.t = np.interp(
             self._lam, self._original_lam, self.original_t, left=0.0, right=0.0
         )
+
+        # And ensure transmission is in expected range
+        self.clip_transmission()
 
     def apply_filter(self, arr, lam=None, nu=None, verbose=True):
         """
