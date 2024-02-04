@@ -1333,7 +1333,7 @@ class Filter:
                 truncated = True
             if truncated:
                 print(
-                    f"Warning: {self.filter_code} is being truncated where "
+                    f"Warning: {self.filter_code} will be truncated where "
                     "transmission is non-zero "
                     "(old_lam_bounds = "
                     f"({self.lam[self.t > 0].min():.2e}, "
@@ -1348,6 +1348,14 @@ class Filter:
         self.t = np.interp(
             self._lam, self._original_lam, self.original_t, left=0.0, right=0.0
         )
+
+        # Ensure we don't have 0 transmission
+        if self.t.sum() == 0:
+            raise exceptions.InconsistentWavelengths(
+                "Interpolated transmission curve has no non-zero values. "
+                "Consider removing this filter or extending the wavelength "
+                "range."
+            )
 
         # And ensure transmission is in expected range
         self.clip_transmission()
