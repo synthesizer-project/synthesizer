@@ -669,9 +669,6 @@ class FilterCollection:
         to the maximum Filter wavelength will be generated with lam_size
         wavelength bins.
 
-        an array encompassing all filter
-        transmission curves is derived with resolution stated by lam_resolution.
-
         Warning:
             If working with a Grid without passing the Grid wavelength
             array to a FilterCollection the wavelengths arrays will not
