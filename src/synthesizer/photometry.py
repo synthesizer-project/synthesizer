@@ -8,7 +8,6 @@ return an instance of this class.
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from unyt import unyt_array, W, m
 
 from synthesizer.units import Quantity, default_units
 
