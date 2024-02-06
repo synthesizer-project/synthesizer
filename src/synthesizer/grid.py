@@ -941,4 +941,3 @@ class Grid:
             plt.close(fig)
 
         return anim
-
