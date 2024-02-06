@@ -574,6 +574,30 @@ class FilterCollection:
 
         return self.filters[key]
 
+    def get_non_zero_lam_lims(self):
+        """
+        Find the minimum and maximum wavelengths with non-zero transmission.
+
+        Returns:
+            float
+                Minimum wavelength with non-zero transmission.
+            float
+                Maximum wavelength with non-zero transmission.
+        """
+        # Get the minimum and maximum wavelength at which transmission is
+        # non-zero
+        min_lam = np.inf
+        max_lam = 0
+        for f in self.filters:
+            this_min = np.min(self.filters[f]._lam[self.filters[f].t > 0])
+            this_max = np.max(self.filters[f]._lam[self.filters[f].t > 0])
+            if this_min < min_lam:
+                min_lam = this_min
+            if this_max > max_lam:
+                max_lam = this_max
+
+        return min_lam * self.lam.units, max_lam * self.lam.units
+
     def resample_filters(self, new_lam=None, lam_resolution=1, verbose=True):
         """
         Resamples all filters onto a single wavelength array. If no wavelength
@@ -600,19 +624,8 @@ class FilterCollection:
 
         # Do we need to find a wavelength array from the filters?
         if new_lam is None:
-            # Set up values for looping
-            min_lam = np.inf
-            max_lam = 0
-
-            # Loop over filters getting the minimum and maximum wavelengths,
-            # and highest resolution from the individual filters.
-            for f in self.filters:
-                this_min = np.min(self.filters[f]._lam)
-                this_max = np.max(self.filters[f]._lam)
-                if this_min < min_lam:
-                    min_lam = this_min
-                if this_max > max_lam:
-                    max_lam = this_max
+            # Get the wavelength limits
+            min_lam, max_lam = self.get_non_zero_lam_lims()
 
             # Create wavelength array
             new_lam = np.arange(
@@ -638,6 +651,24 @@ class FilterCollection:
             f = self.filters[fcode]
             f.t = f._interpolate_wavelength(self.lam)
 
+    def unify_with_grid(self, grid, loop_spectra=False):
+        """
+        Unify a grid with this FilterCollection.
+
+        This will interpolate the grid onto the wavelength grid of this
+        FilterCollection.
+
+        Args:
+            grid (object)
+                The grid to be unified with this FilterCollection.
+            loop_spectra (bool)
+                Flag for whether to do the interpolation over the whole
+                grid, or loop over the first axes. The latter is less memory
+                intensive, but slower. Defaults to False.
+        """
+        # Interpolate the grid onto this wavelength grid
+        grid.interp_spectra(self.lam, loop_spectra)
+
     def _transmission_curve_ax(self, ax, **kwargs):
         """
         Add filter transmission curves to a given axes.
@@ -661,11 +692,7 @@ class FilterCollection:
         ax.set_ylabel(r"$\rm T_{\lambda}$")
 
     def plot_transmission_curves(
-        self,
-        show=False,
-        fig=None,
-        ax=None,
-        **kwargs
+        self, show=False, fig=None, ax=None, **kwargs
     ):
         """
         Create a filter transmission curve plot of all Filters in the
