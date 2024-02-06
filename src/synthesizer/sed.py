@@ -12,6 +12,7 @@ Example usage:
     sed.apply_attenutation(tau_v=0.7)
     sed.get_photo_fluxes(filters)
 """
+import re
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
@@ -1483,19 +1484,19 @@ def plot_spectra(
 
     # Parse the units for the labels and make them pretty
     if x_units is None:
-        x_units = str(lam.units)
+        x_units = lam.units.latex_repr
     else:
         x_units = str(x_units)
     if y_units is None:
-        y_units = str(plt_spectra.units)
+        y_units = plt_spectra.units.latex_repr
     else:
         y_units = str(y_units)
-    x_units = (
-        x_units.replace("/", r"\ / \ ").replace("**", r"^").replace("*", r"\ ")
-    )
-    y_units = (
-        y_units.replace("/", r"\ / \ ").replace("**", r"^").replace("*", r"\ ")
-    )
+
+    # Replace any \frac with a \ division
+    pattern = r"\{(.*?)\}\{(.*?)\}"
+    replacement = r"\1 \ / \ \2"
+    x_units = re.sub(pattern, replacement, x_units).replace(r"\frac", "")
+    y_units = re.sub(pattern, replacement, y_units).replace(r"\frac", "")
 
     # Label the x axis
     if rest_frame:
