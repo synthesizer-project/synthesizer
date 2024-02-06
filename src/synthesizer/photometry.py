@@ -10,18 +10,22 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, default_units
 
 
 class PhotometryCollection:
     """
-    Represents a collection of photometry values and provides unit
+    A container for photometry data.
+
+    This represents a collection of photometry values and provides unit
     association and plotting functionality.
 
-    This is a utility class returned by functions else where. Although not
+    This is a utility class returned by functions elsewhere. Although not
     an issue if it is this should never really be directly instantiated.
 
     Attributes:
+        photometry (Quantity):
+            Quantity instance representing photometry data.
         photo_luminosities (Quantity):
             Quantity instance representing photometry data in the rest frame.
         photo_fluxes (Quantity):
@@ -34,33 +38,29 @@ class PhotometryCollection:
         _look_up (dict):
             A dictionary for easy access to photometry values using
             filter codes.
-        rest_frame (bool):
-            A flag indicating whether the photometry is in the rest frame
-            (True) or observer frame (False).
     """
 
     # Define quantities (there has to be one for rest and observer frame)
     photo_luminosities = Quantity()
     photo_fluxes = Quantity()
 
-    def __init__(self, filters, rest_frame, **kwargs):
+    def __init__(self, filters, **kwargs):
         """
         Instantiate the photometry collection.
 
         To enable quantities a PhotometryCollection will store the data
         as arrays but enable access via dictionary syntax.
 
+        Whether the photometry is flux or luminosity is determined by the
+        units of the photometry passed.
+
         Args:
             filters (FilterCollection)
                 The FilterCollection used to produce the photometry.
-            rest_frame (bool)
-                A flag for whether the photometry is rest frame luminosity or
-                observer frame flux.
             kwargs (dict)
                 A dictionary of keyword arguments containing all the photometry
                 of the form {"filter_code": photometry}.
         """
-
         # Store the filter collection
         self.filters = filters
 
@@ -68,18 +68,20 @@ class PhotometryCollection:
         self.filter_codes = list(kwargs.keys())
 
         # Get the photometry
-        photometry = np.array(list(kwargs.values()))
+        photometry = list(kwargs.values())
 
-        # Put the photometry in the right place (we need to draw a distinction
-        # between rest and observer frame for units)
-        if rest_frame:
-            self.photo_luminosities = photometry
-            self.photo_fluxes = None
-            self.photometry = self.photo_luminosities
-        else:
+        # Get the dimensions of a flux for testing
+        flux_dimensions = default_units["photo_fluxes"].units.dimensions
+
+        # Check if the photometry is flux or luminosity
+        if photometry[0].units.dimensions == flux_dimensions:
             self.photo_fluxes = photometry
             self.photo_luminosities = None
             self.photometry = self.photo_fluxes
+        else:
+            self.photo_luminosities = photometry
+            self.photo_fluxes = None
+            self.photometry = self.photo_luminosities
 
         # Construct a dict for the look up, importantly we here store
         # the values in photometry not _photometry meaning they have units.
@@ -91,12 +93,10 @@ class PhotometryCollection:
             )
         }
 
-        # Store the rest frame flag for convinience
-        self.rest_frame = rest_frame
-
     def __getitem__(self, filter_code):
         """
-        Enable dictionary key look up syntax to extract specific photometry,
+        Enable dictionary key look up syntax to extract specific photometry.
+
         e.g. Sed.photo_luminosities["JWST/NIRCam.F150W"].
 
         NOTE: this will always return photometry with units. Unitless
@@ -109,31 +109,47 @@ class PhotometryCollection:
             filter_code (str)
                 The filter code of the desired photometry.
         """
-
         # Perform the look up
         return self._look_up[filter_code]
 
     def keys(self):
         """
         Enable dict.keys() behaviour.
+
+        Returns:
+            list
+                A list of filter codes.
         """
         return self._look_up.keys()
 
     def values(self):
         """
         Enable dict.values() behaviour.
+
+        Returns:
+            dict_values
+                A dict_values object containing the photometry.
         """
         return self._look_up.values()
 
     def items(self):
         """
-        Enables dict.items() behaviour.
+        Enable dict.items() behaviour.
+
+        Returns:
+            dict_items
+                A dict_items object containing the filter codes and
+                photometry.
         """
         return self._look_up.items()
 
     def __iter__(self):
         """
         Enable dict iter behaviour.
+
+        Returns:
+            iter
+                An iterator over the filter codes and photometry.
         """
         return iter(self._look_up.items())
 
@@ -144,7 +160,6 @@ class PhotometryCollection:
         Returns:
             str: A formatted string representation of the PhotometryCollection.
         """
-
         # Define the filter code column
         filters_col = [
             (
@@ -175,10 +190,10 @@ class PhotometryCollection:
         table = f"-{sep.replace('|', '-')}-\n"
 
         # Create the centered title
-        if self.rest_frame:
-            title = f"|{'REST FRAME PHOTOMETRY'.center(tot_width)}|"
+        if self.photo_luminosities is not None:
+            title = f"|{'PHOTOMETRY (LUMINOSITY)'.center(tot_width)}|"
         else:
-            title = f"|{'OBSERVED PHOTOMETRY'.center(tot_width)}|"
+            title = f"|{'PHOTOMETRY (FLUX)'.center(tot_width)}|"
         table += f"{title}\n|{sep}|\n"
 
         # Combine everything into the final table
@@ -261,9 +276,7 @@ class PhotometryCollection:
                 max_t = np.max(f.t)
 
         # Get the photometry
-        photometry = (
-            self.photo_luminosities if self.rest_frame else self.obs_photometry
-        )
+        photometry = self.photometry
 
         # Plot the photometry
         for f, phot in zip(self.filters, photometry.value):
@@ -328,7 +341,7 @@ class PhotometryCollection:
         y_units = re.sub(pattern, replacement, y_units).replace(r"\frac", "")
 
         # Label the x axis
-        if self.rest_frame:
+        if self.photo_luminosities is not None:
             ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
         else:
             ax.set_xlabel(
@@ -336,7 +349,7 @@ class PhotometryCollection:
             )
 
         # Label the y axis handling all possibilities
-        if self.rest_frame:
+        if self.photo_luminosities is not None:
             ax.set_ylabel(r"$L/[\mathrm{" + y_units + r"}]$")
         else:
             ax.set_ylabel(r"$F/[\mathrm{" + y_units + r"}]$")
