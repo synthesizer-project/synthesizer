@@ -330,12 +330,12 @@ class PhotometryCollection:
         x_units = (
             x_units.replace("/", r"\ / \ ")
             .replace("**", "^")
-            .replace("*", "\ ")
+            .replace("*", r"\ ")
         )
         y_units = (
             y_units.replace("/", r"\ / \ ")
             .replace("**", "^")
-            .replace("*", "\ ")
+            .replace("*", r"\ ")
         )
 
         # Label the x axis
