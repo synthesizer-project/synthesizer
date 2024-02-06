@@ -327,8 +327,17 @@ class PhotometryCollection:
         # Parse the units for the labels and make them pretty
         x_units = str(self.filters[self.filter_codes[0]].lam.units)
         y_units = str(photometry.units)
-        x_units = x_units.replace("/", r"\ / \ ").replace("*", " ")
-        y_units = y_units.replace("/", r"\ / \ ").replace("*", " ")
+        print(y_units)
+        x_units = (
+            x_units.replace("/", r"\ / \ ")
+            .replace("**", "^")
+            .replace("*", "\ ")
+        )
+        y_units = (
+            y_units.replace("/", r"\ / \ ")
+            .replace("**", "^")
+            .replace("*", "\ ")
+        )
 
         # Label the x axis
         if self.photo_luminosities is not None:
