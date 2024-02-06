@@ -878,6 +878,10 @@ class Sed:
         """
         Calculate the observed frame spectral energy distribution.
 
+        NOTE: if a redshift of 0 is passed the flux return will be calculated
+        assuming a distance of 10 pc. This can include an igm contribution
+        if a model has been passed.
+
         Args:
             cosmo (astropy.cosmology)
                 astropy cosmology instance.
@@ -894,6 +898,18 @@ class Sed:
 
         # Store the redshift for later use
         self.redshift = z
+
+        # If we have a redshift of 0 then the below will break since the
+        # distance will be 0. Instead call get_fnu0 to get the flux at 10 pc
+        if self.redshift == 0:
+            # Call the redshift 0 version (note this will assume flux at 10 pc)
+            self.get_fnu0()
+
+            # If we are applying an IGM model apply it
+            if igm:
+                self._fnu *= igm().T(z, self._obslam)
+
+            return self.fnu
 
         # Get the observed wavelength and frequency arrays
         self.obslam = self._lam * (1.0 + z)
