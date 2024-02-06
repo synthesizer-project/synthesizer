@@ -90,8 +90,8 @@ default_units = {
     "fov": Mpc,
     "orig_resolution": Mpc,
     "centre": Mpc,
-    "photo_luminosities": erg / s,
-    "photo_fluxes": erg / s / cm**2,
+    "photo_luminosities": erg / s / Hz,
+    "photo_fluxes": erg / s / cm**2 / Hz,
 }
 
 
@@ -312,8 +312,8 @@ class Units(metaclass=UnitSingleton):
         self.flux = erg / s / cm**2  # rest frame "flux" at 10 pc
 
         # Photometry
-        self.photo_luminosities = erg / s  # rest frame photometry
-        self.photo_fluxes = erg / s / cm**2  # observer frame photometry
+        self.photo_luminosities = erg / s / Hz  # rest frame photometry
+        self.photo_fluxes = erg / s / cm**2 / Hz  # observer frame photometry
 
         # Equivalent width
         self.ew = Angstrom
