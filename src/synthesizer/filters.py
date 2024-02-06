@@ -587,9 +587,9 @@ class FilterCollection:
         Find the minimum and maximum wavelengths with non-zero transmission.
 
         Returns:
-            float
+            unyt_quantity
                 Minimum wavelength with non-zero transmission.
-            float
+            unyt_quantity
                 Maximum wavelength with non-zero transmission.
         """
         # Get the minimum and maximum wavelength at which transmission is
@@ -604,7 +604,14 @@ class FilterCollection:
             if this_max > max_lam:
                 max_lam = this_max
 
-        return min_lam * self.lam.units, max_lam * self.lam.units
+        # It's possible to be here without having set self.lam, in that
+        # case we use the last filter in the iteration.
+        if self.lam is not None:
+            return min_lam * self.lam.units, max_lam * self.lam.units
+        return (
+            min_lam * self.filters[f].lam.units,
+            max_lam * self.filters[f].lam.units,
+        )
 
     def _merge_filter_lams(self, fill_gaps):
         """
