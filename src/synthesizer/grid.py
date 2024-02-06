@@ -5,6 +5,8 @@ import h5py
 import cmasher as cmr
 import matplotlib as mpl
 from matplotlib import cm
+from matplotlib.animation import FuncAnimation
+from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 from spectres import spectres
 from unyt import unyt_array, unyt_quantity
@@ -791,3 +793,93 @@ class Grid:
                 The spectra grid as an Sed object.
         """
         return Sed(self.lam, self.spectra[spectra_type])
+
+    def animate_grid(
+        self,
+        show=False,
+        save_path=None,
+        fps=30,
+        spectra_type="incident",
+    ):
+        """
+        Create an animation of the grid stepping through wavelength.
+
+        Each frame of the animation is a wavelength bin.
+
+        Args:
+            show (bool):
+                Should the animation be shown?
+            save_path (str, optional):
+                Path to save the animation. If not specified, the
+                animation is not saved.
+            fps (int, optional):
+                the number of frames per second in the output animation.
+                Default is 30 frames per second.
+
+        Returns:
+            matplotlib.animation.FuncAnimation: The animation object.
+        """
+        # Create the figure and axes
+        fig, ax = plt.subplots(1, 1, figsize=(6, 8))
+
+        # Get the spectra grid
+        spectra = self.spectra[spectra_type]
+
+        # Get the normalisation
+        vmin = 10**10
+        vmax = np.percentile(spectra, 99.9)
+
+        # Define the norm
+        norm = LogNorm(vmin=vmin, vmax=vmax, clip=True)
+
+        # Create a placeholder image
+        img = ax.imshow(
+            spectra[:, :, 0],
+            extent=[
+                self.log10age.min(),
+                self.log10age.max(),
+                self.metallicity.min(),
+                self.metallicity.max(),
+            ],
+            origin="lower",
+            animated=True,
+            norm=norm,
+            aspect="auto",
+        )
+
+        cbar = fig.colorbar(img)
+        cbar.set_label(
+            r"$L_{\nu}/[\mathrm{erg s}^{-1}\mathrm{ Hz}^{-1} "
+            r"\mathrm{ M_\odot}^{-1}]$"
+        )
+
+        ax.set_title(f"Wavelength: {self.lam[0]:.2f}{self.lam.units}")
+        ax.set_xlabel("$\\log_{10}(\\mathrm{age}/\\mathrm{yr})$")
+        ax.set_ylabel("$Z$")
+
+        def update(i):
+            # Update the image for the ith frame
+            img.set_data(spectra[:, :, i])
+            ax.set_title(f"Wavelength: {self.lam[i]:.2f}{self.lam.units}")
+            return [
+                img,
+            ]
+
+        # Calculate interval in milliseconds based on fps
+        interval = 1000 / fps
+
+        # Create the animation
+        anim = FuncAnimation(
+            fig, update, frames=self.lam.size, interval=interval, blit=False
+        )
+
+        # Save if a path is provided
+        if save_path is not None:
+            anim.save(save_path, writer="imagemagick")
+
+        if show:
+            plt.show()
+        else:
+            plt.close(fig)
+
+        return anim
