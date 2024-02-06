@@ -817,24 +817,35 @@ class Grid:
         """
         return Sed(self.lam, self.spectra[spectra_type])
 
-    def unify_with_filters(self, filters, loop_spectra=False):
+    def unify_with_filters(self, filters):
         """
         Unify the grid with a FilterCollection object.
 
-        This will interpolate the grid onto the wavelength grid of the
-        filters.
+        This will:
+        - Find the Grid wavelengths at which transmission is non-zero.
+        - Limit the Grid's spectra and wavelength array to where transmision
+          is non-zero.
+        - Interpolate the filter collection onto the Grid's new wavelength
+          array.
 
         Args:
             filters (synthesizer.filter.FilterCollection)
-                The FilterCollection object to unify the grid with.
-            loop_spectra (bool)
-                Flag for whether to do the interpolation over the whole
-                grid, or loop over the first axes. The latter is less memory
-                intensive, but slower. Defaults to False.
+                The FilterCollection object to unify with this grid.
         """
+        # Get the minimum and maximum wavelengths with non-zero transmission
+        min_lam, max_lam = filters.get_non_zero_lam_lims()
 
-        # Extract the filter collection's wavelength array
-        new_lam = filters.lam
+        # Define the mask to eliminate wavelengths outside this range
+        okinds = np.logical_and(self.lam >= min_lam, self.lam <= max_lam)
 
-        # Interpolate the grid onto this wavelength grid
-        self.interp_spectra(new_lam, loop_spectra)
+        # Apply the mask to the grid wavelengths
+        self.lam = self.lam[okinds]
+
+        # Apply the mask to the spectra
+        for spectra_type in self.available_spectra:
+            self.spectra[spectra_type] = self.spectra[spectra_type][
+                ..., okinds
+            ]
+
+        # Interpolate the filters onto this new wavelength range
+        filters.resample_filters(new_lam=self.lam)
