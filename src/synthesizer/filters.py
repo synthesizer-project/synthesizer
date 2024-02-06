@@ -582,7 +582,6 @@ class FilterCollection:
         """
         return self.filters[key]
 
-
     def get_non_zero_lam_lims(self):
         """
         Find the minimum and maximum wavelengths with non-zero transmission.
