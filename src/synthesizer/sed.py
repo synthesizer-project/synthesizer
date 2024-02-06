@@ -896,6 +896,10 @@ class Sed:
         """
         Calculate the observed frame spectral energy distribution.
 
+        NOTE: if a redshift of 0 is passed the flux return will be calculated
+        assuming a distance of 10 pc omitting IGM since at this distance
+        IGM contribution makes no sense.
+
         Args:
             cosmo (astropy.cosmology)
                 astropy cosmology instance.
@@ -912,6 +916,11 @@ class Sed:
 
         # Store the redshift for later use
         self.redshift = z
+
+        # If we have a redshift of 0 then the below will break since the
+        # distance will be 0. Instead call get_fnu0 to get the flux at 10 pc
+        if self.redshift == 0:
+            return self.get_fnu0()
 
         # Get the observed wavelength and frequency arrays
         self.obslam = self._lam * (1.0 + z)
@@ -966,11 +975,11 @@ class Sed:
             # Apply the filter transmission curve and store the resulting
             # luminosity
             bb_lum = f.apply_filter(self._lnu, nu=self._nu)
-            photo_luminosities[f.filter_code] = bb_lum
+            photo_luminosities[f.filter_code] = bb_lum * self.lnu.units
 
         # Create the photometry collection and store it in the object
         self.photo_luminosities = PhotometryCollection(
-            filters, rest_frame=True, **photo_luminosities
+            filters, **photo_luminosities
         )
 
         return self.photo_luminosities
@@ -1018,12 +1027,10 @@ class Sed:
 
             # Calculate and store the broadband flux in this filter
             bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
-            photo_fluxes[f.filter_code] = bb_flux
+            photo_fluxes[f.filter_code] = bb_flux * self.fnu.units
 
         # Create the photometry collection and store it in the object
-        self.photo_fluxes = PhotometryCollection(
-            filters, rest_frame=False, **photo_fluxes
-        )
+        self.photo_fluxes = PhotometryCollection(filters, **photo_fluxes)
 
         return self.photo_fluxes
 
