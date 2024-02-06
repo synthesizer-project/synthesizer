@@ -414,9 +414,9 @@ class Grid:
             # Warn the user the new_lam will be ignored
             if new_lam is not None:
                 print(
-                    "If a FilterCollection alongside new_lam then "
-                    "FilterCollection.lam takes precedence and new_lam is "
-                    "ignored"
+                    "If a FilterCollection is defined alongside new_lam "
+                    "then FilterCollection.lam takes precedence and new_lam "
+                    "is ignored"
                 )
 
             self.unify_with_filters(filters)
