@@ -1476,7 +1476,7 @@ class Galaxy(BaseGalaxy):
         quantity="lnu",
     ):
         """
-        Make a SpectralCube from an Sed.
+        Make a SpectralCube from an Sed held by this galaxy.
 
         Data cubes are calculated by smoothing spectra over the component
         morphology. The Sed used is defined by <component>_spectra.
