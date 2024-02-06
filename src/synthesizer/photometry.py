@@ -6,6 +6,7 @@ internal methods that calculate photometry
 (e.g. Sed.get_photo_luminosities)
 return an instance of this class.
 """
+import re
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -317,10 +318,14 @@ class PhotometryCollection:
         filter_ax.set_xlim(*ax.get_xlim())
 
         # Parse the units for the labels and make them pretty
-        x_units = str(self.filters[self.filter_codes[0]].lam.units)
-        y_units = str(photometry.units)
-        x_units = x_units.replace("/", r"\ / \ ").replace("*", " ")
-        y_units = y_units.replace("/", r"\ / \ ").replace("*", " ")
+        x_units = self.filters[self.filter_codes[0]].lam.units.latex_repr
+        y_units = photometry.units.latex_repr
+
+        # Replace any \frac with a \ division
+        pattern = r"\{(.*?)\}\{(.*?)\}"
+        replacement = r"\1 \ / \ \2"
+        x_units = re.sub(pattern, replacement, x_units).replace(r"\frac", "")
+        y_units = re.sub(pattern, replacement, y_units).replace(r"\frac", "")
 
         # Label the x axis
         if self.rest_frame:
