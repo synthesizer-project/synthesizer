@@ -68,7 +68,6 @@ class PhotometryCollection:
 
         # Get the photometry
         photometry = list(kwargs.values())
-        print(photometry, photometry[0].units.dimensions)
 
         # Get the dimensions of a flux for testing
         flux_dimensions = default_units["photo_fluxes"].units.dimensions
