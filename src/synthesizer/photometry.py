@@ -14,13 +14,17 @@ from synthesizer.units import Quantity, default_units
 
 class PhotometryCollection:
     """
-    Represents a collection of photometry values and provides unit
+    A container for photometry data.
+
+    This represents a collection of photometry values and provides unit
     association and plotting functionality.
 
-    This is a utility class returned by functions else where. Although not
+    This is a utility class returned by functions elsewhere. Although not
     an issue if it is this should never really be directly instantiated.
 
     Attributes:
+        photometry (Quantity):
+            Quantity instance representing photometry data.
         photo_luminosities (Quantity):
             Quantity instance representing photometry data in the rest frame.
         photo_fluxes (Quantity):
@@ -45,6 +49,9 @@ class PhotometryCollection:
 
         To enable quantities a PhotometryCollection will store the data
         as arrays but enable access via dictionary syntax.
+
+        Whether the photometry is flux or luminosity is determined by the
+        units of the photometry passed.
 
         Args:
             filters (FilterCollection)
