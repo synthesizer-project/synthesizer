@@ -123,7 +123,7 @@ def value_to_array(value):
     # NOTE: unyt_arrays and quantities are by definition arrays and thus
     # return True for the isinstance below.
     if (
-        isinstance(value, np.ndarray, unyt_array) and value.size > 1
+        isinstance(value, (np.ndarray, unyt_array)) and value.size > 1
     ) or value is None:
         return value
 
