@@ -310,9 +310,9 @@ class BlackHoles(Particles, BlackholesComponent):
         # as many values as particles
         for ind, prop in enumerate(props):
             if isinstance(prop, float):
-                props[ind] = np.full(npart, prop)
+                props[ind] = np.full(self.nbh, prop)
             elif prop.size == 1:
-                props[ind] = np.full(npart, prop)
+                props[ind] = np.full(self.nbh, prop)
 
         # Apply the mask to each property and make contiguous
         props = [
