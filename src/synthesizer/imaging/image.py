@@ -53,7 +53,12 @@ class Image:
     resolution = Quantity()
     fov = Quantity()
 
-    def __init__(self, resolution, fov, img=None):
+    def __init__(
+        self,
+        resolution,
+        fov,
+        img=None,
+    ):
         """
         Create an image with the images metadata.
 
@@ -89,6 +94,10 @@ class Image:
         if img is not None:
             self.arr = img.value if isinstance(img, unyt_array) else img
             self.units = img.units if isinstance(img, unyt_array) else None
+
+        # Set up the noise array and weight map
+        self.noise_arr = None
+        self.weight_map = None
 
     def _compute_npix(self):
         """
@@ -435,10 +444,15 @@ class Image:
             img=noisy_img,
         )
 
-        # Calculate the weight map
-        weight_map = 1 / np.std(noise_arr) ** 2
+        # Store the noise array on the new image
+        new_img.noise_arr = noise_arr
 
-        return new_img, weight_map
+        # Calculate and store the weight map (if called from
+        # apply_noise_from_std this will be overwritten with the
+        # true standard deviation)
+        new_img.weight_map = 1 / np.std(noise_arr) ** 2
+
+        return new_img
 
     def apply_noise_from_std(self, noise_std):
         """
@@ -476,12 +490,12 @@ class Image:
             noise_arr *= units
 
         # Add the noise to the image
-        new_img, _ = self.apply_noise_array(noise_arr)
+        new_img = self.apply_noise_array(noise_arr)
 
         # Calculate the weight map
-        weight_map = 1 / noise_std**2
+        new_img.weight_map = 1 / noise_std**2
 
-        return new_img, noise_arr, weight_map
+        return new_img
 
     def apply_noise_from_snr(self, snr, depth, aperture_radius=None):
         """
