@@ -45,6 +45,10 @@ class BaseGalaxy:
         # Add some place holder attributes which are overloaded on the children
         self.spectra = {}
 
+        # Initialise the photometry dictionaries
+        self.photo_luminosities = {}
+        self.photo_fluxes = {}
+
         # Attach the components
         self.stars = stars
         self.gas = gas
@@ -142,7 +146,12 @@ class BaseGalaxy:
         - Galaxy.spectra
         - Galaxy.stars.spectra
         - Galaxy.gas.spectra (WIP)
-        - Galaxy.black_holes.spectra (WIP)
+        - Galaxy.black_holes.spectra
+
+        And in the case of particle galaxies
+        - Galaxy.stars.particle_spectra
+        - Galaxy.gas.particle_spectra (WIP)
+        - Galaxy.black_holes.particle_spectra
 
         Args:
             cosmo (astropy.cosmology.Cosmology)
@@ -153,9 +162,10 @@ class BaseGalaxy:
                 Inoue14).
 
         Raises:
+            MissingAttribute
+                If a galaxy has no redshift we can't get the observed spectra.
 
         """
-
         # Ensure we have a redshift
         if self.redshift is None:
             raise exceptions.MissingAttribute(
@@ -172,20 +182,52 @@ class BaseGalaxy:
                 igm=igm,
             )
 
-        # Loop over all stellar spectra
-        for sed in self.stars.spectra.values():
-            # Calculate the observed spectra
-            sed.get_fnu(
-                cosmo=cosmo,
-                z=self.redshift,
-                igm=igm,
-            )
+        # Do we have stars?
+        if self.stars is not None:
+            # Loop over all stellar spectra
+            for sed in self.stars.spectra.values():
+                # Calculate the observed spectra
+                sed.get_fnu(
+                    cosmo=cosmo,
+                    z=self.redshift,
+                    igm=igm,
+                )
 
-        # TODO: Once implemented do this for gas and black holes too
+            # Loop over all stellar particle spectra
+            if getattr(self.stars, "particle_spectra", None) is not None:
+                for sed in self.stars.particle_spectra.values():
+                    # Calculate the observed spectra
+                    sed.get_fnu(
+                        cosmo=cosmo,
+                        z=self.redshift,
+                        igm=igm,
+                    )
+
+        # Do we have black holes?
+        if self.black_holes is not None:
+            # Loop over all black hole spectra
+            for sed in self.black_holes.spectra.values():
+                # Calculate the observed spectra
+                sed.get_fnu(
+                    cosmo=cosmo,
+                    z=self.redshift,
+                    igm=igm,
+                )
+
+            # Loop over all black hole particle spectra
+            if getattr(self.black_holes, "particle_spectra", None) is not None:
+                for sed in self.black_holes.particle_spectra.values():
+                    # Calculate the observed spectra
+                    sed.get_fnu(
+                        cosmo=cosmo,
+                        z=self.redshift,
+                        igm=igm,
+                    )
 
     def get_spectra_combined(self):
         """
-        Combine all common component spectra from components onto the galaxy,
+        Combine all common component spectra from components onto the galaxy.
+
         e.g.:
             intrinsc = stellar_intrinsic + black_hole_intrinsic.
 
@@ -200,7 +242,6 @@ class BaseGalaxy:
 
         Note that this process is only applicable to integrated spectra.
         """
-
         # Get the spectra we have on the components to combine
         spectra = {"total": [], "intrinsic": [], "emergent": []}
         for key in spectra:
@@ -222,6 +263,82 @@ class BaseGalaxy:
         for key, lst in spectra.items():
             if len(lst) > 1:
                 self.spectra[key] = sum(lst)
+
+    def get_photo_luminosities(self, filters, verbose=True):
+        """
+        Calculate luminosity photometry using a FilterCollection object.
+
+        Args:
+            filters (filters.FilterCollection)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+        """
+        # Get stellar photometry
+        if self.stars is not None:
+            self.stars.get_photo_luminosities(filters, verbose)
+
+            # If we have particle spectra do that too (not applicable to
+            # parametric Galaxy)
+            if getattr(self.stars, "particle_spectra", None) is not None:
+                self.stars.get_particle_photo_luminosities(filters, verbose)
+
+        # Get black hole photometry
+        if self.black_holes is not None:
+            self.black_holes.get_photo_luminosities(filters, verbose)
+
+            # If we have particle spectra do that too (not applicable to
+            # parametric Galaxy)
+            if getattr(self.black_holes, "particle_spectra", None) is not None:
+                self.black_holes.get_particle_photo_luminosities(
+                    filters, verbose
+                )
+
+        # Get the combined photometry
+        for spectra in self.spectra:
+            # Create the photometry collection and store it in the object
+            self.photo_luminosities[spectra] = self.spectra[
+                spectra
+            ].get_photo_luminosities(filters, verbose)
+
+    def get_photo_fluxes(self, filters, verbose=True):
+        """
+        Calculate flux photometry using a FilterCollection object.
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            (dict)
+                A dictionary of fluxes in each filter in filters.
+        """
+        # Get stellar photometry
+        if self.stars is not None:
+            self.stars.get_photo_fluxes(filters, verbose)
+
+            # If we have particle spectra do that too (not applicable to
+            # parametric Galaxy)
+            if getattr(self.stars, "particle_spectra", None) is not None:
+                self.stars.get_particle_photo_fluxes(filters, verbose)
+
+        # Get black hole photometry
+        if self.black_holes is not None:
+            self.black_holes.get_photo_fluxes(filters, verbose)
+
+            # If we have particle spectra do that too (not applicable to
+            # parametric Galaxy)
+            if getattr(self.black_holes, "particle_spectra", None) is not None:
+                self.black_holes.get_particle_photo_fluxes(filters, verbose)
+
+        # Get the combined photometry
+        for spectra in self.spectra:
+            # Create the photometry collection and store it in the object
+            self.photo_fluxes[spectra] = self.spectra[
+                spectra
+            ].get_photo_fluxes(filters, verbose)
 
     def plot_spectra(
         self,
