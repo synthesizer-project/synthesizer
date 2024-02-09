@@ -88,8 +88,6 @@ class ImageCollection:
         fov=None,
         npix=None,
         imgs=None,
-        noise_maps=None,
-        weight_maps=None,
     ):
         """Initialize the image collection.
 
@@ -168,16 +166,6 @@ class ImageCollection:
             for f, img in imgs.items():
                 self.imgs[f] = img
                 self.filter_codes.append(f)
-
-        # Attach any noise and weight maps
-        if noise_maps is not None:
-            self.noise_maps = {}
-            for f, noise in noise_maps.items():
-                self.noise_maps[f] = noise
-        if weight_maps is not None:
-            self.weight_maps = {}
-            for f, weight in weight_maps.items():
-                self.weight_maps[f] = weight
 
     def _check_args(self, resolution, fov, npix):
         """
@@ -573,19 +561,14 @@ class ImageCollection:
 
         # Loop over each images getting the noisy version
         noisy_imgs = {}
-        weight_maps = {}
         for f in noise_arrs:
             # Apply the noise to this image
-            noisy_imgs[f], weight_maps[f] = self.imgs[f].apply_noise_array(
-                noise_arrs[f]
-            )
+            noisy_imgs[f] = self.imgs[f].apply_noise_array(noise_arrs[f])
 
         return ImageCollection(
             resolution=self.resolution,
             npix=self.npix,
             imgs=noisy_imgs,
-            noise_maps=noise_arrs,
-            weight_maps=weight_maps,
         )
 
     def apply_noise_from_stds(self, noise_stds):
@@ -624,20 +607,14 @@ class ImageCollection:
 
         # Loop over each image getting the noisy version
         noisy_imgs = {}
-        noise_maps = {}
-        weight_maps = {}
         for f in noise_stds:
             # Apply the noise to this image
-            noisy_imgs[f], noise_maps[f], weight_maps[f] = self.imgs[
-                f
-            ].apply_noise_from_std(noise_stds[f])
+            noisy_imgs[f] = self.imgs[f].apply_noise_from_std(noise_stds[f])
 
         return ImageCollection(
             resolution=self.resolution,
             npix=self.npix,
             imgs=noisy_imgs,
-            noise_maps=noise_maps,
-            weight_maps=weight_maps,
         )
 
     def apply_noise_from_snrs(self, snrs, depths, aperture_radius=None):
@@ -697,13 +674,9 @@ class ImageCollection:
 
         # Loop over each image getting the noisy version
         noisy_imgs = {}
-        noise_maps = {}
-        weight_maps = {}
         for f in snrs:
             # Apply the noise to this image
-            noisy_imgs[f], noise_maps[f], weight_maps[f] = self.imgs[
-                f
-            ].apply_noise_from_snr(
+            noisy_imgs[f] = self.imgs[f].apply_noise_from_snr(
                 snr=snrs[f], depth=depths[f], aperture_radius=aperture_radius
             )
 
@@ -711,8 +684,6 @@ class ImageCollection:
             resolution=self.resolution,
             npix=self.npix,
             imgs=noisy_imgs,
-            noise_maps=noise_maps,
-            weight_maps=weight_maps,
         )
 
     def plot_images(
