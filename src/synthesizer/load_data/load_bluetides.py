@@ -1,11 +1,12 @@
 import numpy as np
+from unyt import Msun, Lsun, gravitational_constant, kpc, yr, c
+from unyt.physical_constants import gravitational_constant, mp, kb
 
 from ..particle.galaxy import Galaxy
 
 from bigfile import BigFile
 import scipy.interpolate as interpolate
 from scipy import integrate
-
 
 class BlueTidesDataHolder:
     """
@@ -32,13 +33,6 @@ class BlueTidesDataHolder:
         end_of_arr=108001,
     ):
         # Units
-        self.m_solar = 1.99 * 10**30  # unit: kg
-        self.l_solar = 3.826 * 10**33  # unit: erg/s
-        self.g_constant = 6.67408 * 10 ** (-11)  # unit: m^3*kg^(-1)*s^(-2)
-        self.mp = 1.673e-27  # kg
-        self.kpc = 3.086 * 10**19  # unit: m
-        self.k_constant = 1.38 * 10 ** (-23)  # unit: m^2*kg*s^(-2)*K^(-1)
-
         self.factor = (
             121.14740013761634  # GADGET unit Protonmass / Bolztman const
         )
@@ -46,12 +40,10 @@ class BlueTidesDataHolder:
         self.Xh = 0.76
 
         self.hh = 0.697  # hubble constant / 100 (dimensionless)
-        self.c = 3e8  # m/s
         self.eta = 0.1
-        self.yr = 365 * 24 * 3600
 
         self.mpc_to_km = 3.086e19
-        self.sec_to_yr = 3.17098e-8  # convert to years
+        self.sec_to_yr = 1 / yr  # convert to years
         self.omk = 0
         self.oml = 0.7186
         self.omm = 0.2814
@@ -76,27 +68,27 @@ class BlueTidesDataHolder:
             )
 
         self.accretion_unit_conversion = 1e10 / (
-            self.kpc / 1e3 / self.yr
+            kpc / 1e3 / yr
         )  # to solar masses per year
         self.acrtolum = (
-            self.eta * self.c * self.c * (self.m_solar / self.yr) * 10**7
+            self.eta * c * c * (Msun / yr) * 10**7
         )  # Accounts for unit conversion to physical units already happening
         self.z = z
 
         # Load all BlueTides data
-        if self.z == 7:
+        if self.z == "7":
             sunset = BigFile(bluetides_data_folder + "sunset_208")
             pig_zoo = [bluetides_data_folder + "PIG_208"]
             length_of_bhar = end_of_arr
-        elif self.z == 6.5:
+        elif self.z == "6.5":
             sunset = BigFile(bluetides_data_folder + "sunset_271")
             pig_zoo = [bluetides_data_folder + "PIG_271"]
             length_of_bhar = end_of_arr
-        elif self.z == 7.5:
+        elif self.z == "7.5":
             pig_zoo = [bluetides_data_folder + "PIG_129"]
             sunset = BigFile(bluetides_data_folder + "sunset_129")
             length_of_bhar = end_of_arr
-        elif self.z == 8:
+        elif self.z == "8":
             pig_zoo = [bluetides_data_folder + "PIG_086"]
             sunset = BigFile(bluetides_data_folder + "sunset_086")
             length_of_bhar = end_of_arr
@@ -108,10 +100,10 @@ class BlueTidesDataHolder:
         file = pig_zoo[0]  # filename
         pig = BigFile(file)  # load data
 
-        print(f"Chosen redshift = {self.z}")
+        print(f"Chosen redshift = {self.z}") # string
         self.z = self.redshift = float(
             1.0 / pig.open("Header").attrs["Time"] - 1
-        )
+        ) # EXACT redshift
         print(f"Actual bluetides redshift = {self.z}")
 
         # If there's no OffsetByType field, use below to get the same output:
@@ -127,10 +119,8 @@ class BlueTidesDataHolder:
 
         a_cur = 1.0 / (1.0 + self.redshift)
         sft_space = np.linspace(0, a_cur, 100)
-        mpc_to_km = 3.086e19
-        sec_to_yr = 3.17098e-8
         age_space = [
-            get_age(SFT, 1.0 / (1.0 + self.redshift)) * mpc_to_km * sec_to_yr
+            get_age(SFT, 1.0 / (1.0 + self.redshift)) * self.mpc_to_km * self.sec_to_yr
             for SFT in sft_space
         ]  # yr
         self.gen_SFT_to_age = interpolate.interp1d(
@@ -215,13 +205,15 @@ def load_BlueTides(
     galaxy_bhid=[],
     end_arr=108001,
     bluetides_data_folder="",
+    center=False
 ):
     """
     Load BlueTides galaxies into a galaxy object
 
     Args:
-        redshift (float):
-            desired redshift to extract BlueTides galaxies
+        redshift (str):
+            desired redshift to extract BlueTides galaxies,
+            note the exact redshift is pulled from the BlueTides file header
         dataholder (BlueTidesDataHolder object):
             contains all data for a particular simulation of BlueTides
             (default is `None` and dataholder class will be generated from
@@ -233,11 +225,14 @@ def load_BlueTides(
         end_arr (int):
             last galaxy to include in BlueTides dataholder, selection of this
             value should be done with care to avoid galaxies with BHs too close
-            to the seed mass (10^5.8 solar masses; default is 108001)
+            to the seed mass (10^5.8 solar masses). This is ~160000 for z=6.5-7,
+            ~90090 for z=7.5. (default=108001)
         bluetides_data_folder (str):
             location of BlueTides pig/sunset files. Only required if
             dataholder is `None` (default is an empty string)
-
+        center (bool):
+             whether or not to center the galaxy on the Bh
+             (default is False)
     Returns:
         galaxies (object):
             `ParticleGalaxy` object containing specified
@@ -256,7 +251,7 @@ def load_BlueTides(
     )  # holder array for galaxies of the same length
     galaxies = [None] * galaxies_length
     smoothing_length_proper_bluetides = (
-        1.5 / dataholder.hh * dataholder.kpc
+        1.5 / dataholder.hh * kpc
     ) / (1 + dataholder.z)
 
     if len(galaxy_bhid) == 0:
@@ -294,14 +289,19 @@ def load_BlueTides(
 
         star_pos = dataholder.position_ind[star_off[0]:star_off[1]]
 
-        # Centering all stars around the BH such that (0, 0, 0) is
-        # the BH position
-        star_relpos = (
-            star_pos - dataholder.bh_position[:, bh_index]
-        )  # same for BH_position
-        x = star_relpos[:, 0]
-        y = star_relpos[:, 1]
-        z = star_relpos[:, 2]
+        if center:
+            # Centering all stars around the BH such that (0, 0, 0) is
+            # the BH position
+            star_relpos = (
+                star_pos - dataholder.bh_position[:, bh_index]
+            )
+            x = star_relpos[:, 0]
+            y = star_relpos[:, 1]
+            z = star_relpos[:, 2]
+        else:
+            x = star_pos[:, 0]
+            y = star_pos[:, 1]
+            z = star_pos[:, 2]
 
         smoothing_lengths = np.full(
             ages.shape, smoothing_length_proper_bluetides
@@ -309,11 +309,11 @@ def load_BlueTides(
 
         coords = np.transpose([x, y, z])
         galaxies[ii].load_stars(
-            initial_masses=imasses * dataholder.m_solar,
-            ages=ages * dataholder.yr,
+            initial_masses=imasses * Msun,
+            ages=ages * yr,
             metals=metallicities,
-            coordinates=coords * dataholder.kpc,
-            current_masses=masses * dataholder.m_solar,
+            coordinates=coords * kpc,
+            current_masses=masses * Msun,
             smoothing_lengths=smoothing_lengths,
         )
 
