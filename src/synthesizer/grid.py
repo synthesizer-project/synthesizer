@@ -216,6 +216,7 @@ class Grid:
         read_spectra=True,
         read_lines=True,
         new_lam=None,
+        filters=None,
     ):
         """
         Initailise the grid object, open the grid file and extracting the
@@ -234,6 +235,10 @@ class Grid:
             new_lam (array-like, float)
                 An optional user defined wavelength array the spectra will be
                 interpolated onto, see Grid.interp_spectra.
+            filters (FilterCollection)
+                An optional FilterCollection object to unify the grids
+                wavelength grid with. If provided, this will override new_lam
+                whether passed or not.
         """
         if grid_dir is None:
             grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
@@ -387,7 +392,7 @@ class Grid:
 
         # Has a new wavelength grid been passed to interpolate
         # the spectra onto?
-        if new_lam is not None:
+        if new_lam is not None and filters is None:
             # Double check we aren't being asked to do something impossible.
             if not read_spectra:
                 raise exceptions.InconsistentArguments(
@@ -397,6 +402,26 @@ class Grid:
 
             # Interpolate the spectra grid
             self.interp_spectra(new_lam)
+
+        # Are we unifying with a filter collection?
+        if filters is not None:
+            # Double check we aren't being asked to do something impossible.
+            if not read_spectra:
+                raise exceptions.InconsistentArguments(
+                    "Can't interpolate spectra onto a FilterCollection "
+                    "wavelength array if no spectra have been read in! "
+                    "Set read_spectra=True."
+                )
+
+            # Warn the user the new_lam will be ignored
+            if new_lam is not None:
+                print(
+                    "If a FilterCollection is defined alongside new_lam "
+                    "then FilterCollection.lam takes precedence and new_lam "
+                    "is ignored"
+                )
+
+            self.unify_with_filters(filters)
 
     def interp_spectra(self, new_lam, loop_grid=False):
         """
@@ -793,6 +818,39 @@ class Grid:
                 The spectra grid as an Sed object.
         """
         return Sed(self.lam, self.spectra[spectra_type])
+
+    def unify_with_filters(self, filters):
+        """
+        Unify the grid with a FilterCollection object.
+
+        This will:
+        - Find the Grid wavelengths at which transmission is non-zero.
+        - Limit the Grid's spectra and wavelength array to where transmision
+          is non-zero.
+        - Interpolate the filter collection onto the Grid's new wavelength
+          array.
+
+        Args:
+            filters (synthesizer.filter.FilterCollection)
+                The FilterCollection object to unify with this grid.
+        """
+        # Get the minimum and maximum wavelengths with non-zero transmission
+        min_lam, max_lam = filters.get_non_zero_lam_lims()
+
+        # Define the mask to eliminate wavelengths outside this range
+        okinds = np.logical_and(self.lam >= min_lam, self.lam <= max_lam)
+
+        # Apply the mask to the grid wavelengths
+        self.lam = self.lam[okinds]
+
+        # Apply the mask to the spectra
+        for spectra_type in self.available_spectra:
+            self.spectra[spectra_type] = self.spectra[spectra_type][
+                ..., okinds
+            ]
+
+        # Interpolate the filters onto this new wavelength range
+        filters.resample_filters(new_lam=self.lam)
 
     def animate_grid(
         self,

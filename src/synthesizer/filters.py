@@ -582,6 +582,37 @@ class FilterCollection:
         """
         return self.filters[key]
 
+    def get_non_zero_lam_lims(self):
+        """
+        Find the minimum and maximum wavelengths with non-zero transmission.
+
+        Returns:
+            unyt_quantity
+                Minimum wavelength with non-zero transmission.
+            unyt_quantity
+                Maximum wavelength with non-zero transmission.
+        """
+        # Get the minimum and maximum wavelength at which transmission is
+        # non-zero
+        min_lam = np.inf
+        max_lam = 0
+        for f in self.filters:
+            this_min = np.min(self.filters[f]._lam[self.filters[f].t > 0])
+            this_max = np.max(self.filters[f]._lam[self.filters[f].t > 0])
+            if this_min < min_lam:
+                min_lam = this_min
+            if this_max > max_lam:
+                max_lam = this_max
+
+        # It's possible to be here without having set self.lam, in that
+        # case we use the last filter in the iteration.
+        if self.lam is not None:
+            return min_lam * self.lam.units, max_lam * self.lam.units
+        return (
+            min_lam * self.filters[f].lam.units,
+            max_lam * self.filters[f].lam.units,
+        )
+
     def _merge_filter_lams(self, fill_gaps):
         """
         Merge the wavelength arrays of multiple filters.
@@ -690,19 +721,8 @@ class FilterCollection:
         """
         # Do we need to find a wavelength array from the filters?
         if new_lam is None:
-            # Set up values for looping
-            min_lam = np.inf
-            max_lam = 0
-
-            # Loop over filters getting the minimum and maximum wavelengths,
-            # and highest resolution from the individual filters.
-            for f in self.filters:
-                this_min = np.min(self.filters[f]._lam)
-                this_max = np.max(self.filters[f]._lam)
-                if this_min < min_lam:
-                    min_lam = this_min
-                if this_max > max_lam:
-                    max_lam = this_max
+            # Get the wavelength limits
+            min_lam, max_lam = self.get_non_zero_lam_lims()
 
             # Are we making an array with a fixed size?
             if lam_size is not None:
@@ -732,6 +752,24 @@ class FilterCollection:
         for fcode in self.filters:
             f = self.filters[fcode]
             f._interpolate_wavelength(self.lam)
+
+    def unify_with_grid(self, grid, loop_spectra=False):
+        """
+        Unify a grid with this FilterCollection.
+
+        This will interpolate the grid onto the wavelength grid of this
+        FilterCollection.
+
+        Args:
+            grid (object)
+                The grid to be unified with this FilterCollection.
+            loop_spectra (bool)
+                Flag for whether to do the interpolation over the whole
+                grid, or loop over the first axes. The latter is less memory
+                intensive, but slower. Defaults to False.
+        """
+        # Interpolate the grid onto this wavelength grid
+        grid.interp_spectra(self.lam, loop_spectra)
 
     def _transmission_curve_ax(self, ax, **kwargs):
         """
