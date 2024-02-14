@@ -4,7 +4,7 @@ import numpy as np
 
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
-from synthesizer.imaging.images import ParametricImage
+from synthesizer.imaging import ImageCollection, SpectralCube
 from synthesizer.art import Art, get_centred_art
 from synthesizer.particle import Stars as ParticleStars
 
@@ -312,29 +312,19 @@ class Galaxy(BaseGalaxy):
             axis=(0, 1),
         )
 
-    def make_images(
+    def get_images_luminosity(
         self,
         resolution,
-        fov=None,
-        npix=None,
-        stellar_spectra_type=None,
-        blackhole_spectra_type=None,
-        filters=(),
-        psfs=None,
-        depths=None,
-        snrs=None,
-        aperture=None,
-        noises=None,
-        rest_frame=True,
-        cosmo=None,
-        redshift=None,
-        psf_resample_factor=1,
+        fov,
+        stellar_photometry=None,
+        blackhole_photometry=None,
     ):
         """
-        Makes images in each filter provided in filters for either specific
-        components of the galaxy or any combination.
+        Make an ImageCollection from luminosities.
 
-        Additionally an image can be made with or without a PSF and noise.
+        Images are calculated by smoothing photometry over the component
+        morphology. The photometry is taken from the Sed stored
+        on a component under the key defined by <component>_spectra.
 
         If multiple components are requested they will be combined into a
         single output image.
@@ -342,139 +332,248 @@ class Galaxy(BaseGalaxy):
         NOTE: Either npix or fov must be defined.
 
         Args:
-            resolution (float)
-               The size of a pixel.
-               (Ignoring any supersampling defined by psf_resample_factor)
-            npix (int)
-                The number of pixels along an axis.
+            resolution (Quantity, float)
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
             fov : float
                 The width of the image in image coordinates.
-            stellar_spectra_type (string)
-                The stellar spectra key to use for the image.
-            blackhole_spectra_type (string)
-                The black hole spectra key to use for the image.
-            filters (FilterCollection)
-                An imutable collection of Filter objects. If provided images
-                are made for each filter.
-            psfs (dict)
-                A dictionary containing the psf in each filter where the key is
-                each filter code and the value is the psf in that filter.
-            depths (dict)
-                A dictionary containing the depth of an observation in each
-                filter where the key is each filter code and the value is
-                the depth in that filter.
-            aperture (float/dict)
-                Either a float describing the size of the aperture in which the
-                depth is defined or a dictionary containing the size of the
-                depth aperture in each filter.
-            rest_frame (bool)
-                Are we making an observation in the rest frame?
-            cosmo : obj (astropy.cosmology)
-                A cosmology object from astropy, used for cosmological
-                calculations when converting rest frame luminosity to flux.
-            redshift (float)
-                The redshift of the observation. Used when converting between
-                physical cartesian coordinates and angular coordinates.
-            psf_resample_factor (float)
-                The factor by which the image should be resampled for robust
-                PSF convolution. Note the images after PSF application will
-                be downsampled to the native pixel scale.
+            stellar_photometry (string)
+                The stellar spectra key from which to extract photometry
+                to use for the image.
+            blackhole_photometry (string)
+                The black hole spectra key from which to extract photometry
+                to use for the image.
 
         Returns:
-            Image
-                An instance of an Image object contain the created images.
+            Image : array-like
+                A 2D array containing the image.
         """
-
-        # Handle a super resolution image
-        if psf_resample_factor is not None:
-            if psf_resample_factor != 1:
-                resolution /= psf_resample_factor
-
         # Make sure we have an image to make
-        if stellar_spectra_type is None and blackhole_spectra_type is None:
+        if stellar_photometry is None and blackhole_photometry is None:
             raise exceptions.InconsistentArguments(
                 "At least one spectra type must be provided "
-                "(stellar_spectra_type or blackhole_spectra_type)!"
-                " What component do you want images of?"
+                "(stellar_photometry or blackhole_photometry)!"
+                " What component/s do you want images of?"
             )
 
         # Make stellar image if requested
-        if stellar_spectra_type is not None:
-            # Instantiate the Image object.
-            stellar_img = ParametricImage(
-                morphology=self.stars.morphology,
-                resolution=resolution,
-                fov=fov,
-                npix=npix,
-                sed=self.stars.spectra[stellar_spectra_type],
-                filters=filters,
-                rest_frame=rest_frame,
-                redshift=redshift,
-                cosmo=cosmo,
-                psfs=psfs,
-                depths=depths,
-                apertures=aperture,
-                snrs=snrs,
+        if stellar_photometry is not None:
+            # Instantiate the Image colection ready to make the image.
+            stellar_imgs = ImageCollection(resolution=resolution, fov=fov)
+
+            # Compute the density grid
+            stellar_density = self.stars.morphology.get_density_grid(
+                resolution, stellar_imgs.npix
             )
 
-            # Compute image
-            stellar_img.get_imgs()
-
-            if psfs is not None:
-                # Convolve the image/images
-                stellar_img.get_psfed_imgs()
-
-                # Downsample to the native resolution if we need to.
-                if psf_resample_factor is not None:
-                    if psf_resample_factor != 1:
-                        stellar_img.downsample(1 / psf_resample_factor)
-
-            if depths is not None or noises is not None:
-                stellar_img.get_noisy_imgs(noises)
-
-        # Make black hole image if requested
-        if blackhole_spectra_type is not None:
-            # Instantiate the Image object.
-            blackhole_img = ParametricImage(
-                morphology=self.black_holes.morphology,
-                resolution=resolution,
-                fov=fov,
-                npix=npix,
-                sed=self.black_holes.spectra[blackhole_spectra_type],
-                filters=filters,
-                rest_frame=rest_frame,
-                redshift=redshift,
-                cosmo=cosmo,
-                psfs=psfs,
-                depths=depths,
-                apertures=aperture,
-                snrs=snrs,
+            # Make the image
+            stellar_imgs.get_imgs_smoothed(
+                photometry=self.stars.spectra[
+                    stellar_photometry
+                ].photo_luminosities,
+                density_grid=stellar_density,
             )
 
-            # Compute image
-            blackhole_img.get_imgs()
+        # Make blackhole image if requested
+        if blackhole_photometry is not None:
+            # Instantiate the Image colection ready to make the image.
+            blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
 
-            if psfs is not None:
-                # Convolve the image/images
-                blackhole_img.get_psfed_imgs()
+            # Compute the density grid
+            blackhole_density = self.black_holes.morphology.get_density_grid(
+                resolution, blackhole_imgs.npix
+            )
 
-                # Downsample to the native resolution if we need to.
-                if psf_resample_factor is not None:
-                    if psf_resample_factor != 1:
-                        blackhole_img.downsample(1 / psf_resample_factor)
+            # Compute the image
+            blackhole_imgs.get_imgs_smoothed(
+                photometry=self.black_holes.spectra[
+                    blackhole_photometry
+                ].photo_luminosities,
+                density_grid=blackhole_density,
+            )
 
-            if depths is not None or noises is not None:
-                blackhole_img.get_noisy_imgs(noises)
+        # Return the images, combining if there are multiple components
+        if stellar_photometry is not None and blackhole_photometry is not None:
+            return stellar_imgs + blackhole_imgs
+        elif stellar_photometry is not None:
+            return stellar_imgs
+        return blackhole_imgs
 
-        # Combine images
-        if stellar_spectra_type is not None and blackhole_spectra_type is None:
-            img = stellar_img
-        elif (
-            stellar_spectra_type is not None
-            and blackhole_spectra_type is not None
-        ):
-            img = stellar_img + blackhole_img
-        else:
-            img = blackhole_img
+    def get_images_flux(
+        self,
+        resolution,
+        fov,
+        stellar_photometry=None,
+        blackhole_photometry=None,
+    ):
+        """
+        Make an ImageCollection from fluxes.
 
-        return img
+        Images are calculated by smoothing photometry over the component
+        morphology. The photometry is taken from the Sed stored
+        on a component under the key defined by <component>_spectra.
+
+        If multiple components are requested they will be combined into a
+        single output image.
+
+        NOTE: Either npix or fov must be defined.
+
+        Args:
+            resolution (Quantity, float)
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov : float
+                The width of the image in image coordinates.
+            stellar_photometry (string)
+                The stellar spectra key from which to extract photometry
+                to use for the image.
+            blackhole_photometry (string)
+                The black hole spectra key from which to extract photometry
+                to use for the image.
+
+        Returns:
+            Image : array-like
+                A 2D array containing the image.
+        """
+        # Make sure we have an image to make
+        if stellar_photometry is None and blackhole_photometry is None:
+            raise exceptions.InconsistentArguments(
+                "At least one spectra type must be provided "
+                "(stellar_photometry or blackhole_photometry)!"
+                " What component/s do you want images of?"
+            )
+
+        # Make stellar image if requested
+        if stellar_photometry is not None:
+            # Instantiate the Image colection ready to make the image.
+            stellar_imgs = ImageCollection(resolution=resolution, fov=fov)
+
+            # Compute the density grid
+            stellar_density = self.stars.morphology.get_density_grid(
+                resolution, stellar_imgs.npix
+            )
+
+            # Make the image
+            stellar_imgs.get_imgs_smoothed(
+                photometry=self.stars.spectra[stellar_photometry].photo_fluxes,
+                density_grid=stellar_density,
+            )
+
+        # Make blackhole image if requested
+        if blackhole_photometry is not None:
+            # Instantiate the Image colection ready to make the image.
+            blackhole_imgs = ImageCollection(resolution=resolution, fov=fov)
+
+            # Compute the density grid
+            blackhole_density = self.black_holes.morphology.get_density_grid(
+                resolution, blackhole_imgs.npix
+            )
+
+            # Compute the image
+            blackhole_imgs.get_imgs_smoothed(
+                photometry=self.black_holes.spectra[
+                    blackhole_photometry
+                ].photo_fluxes,
+                density_grid=blackhole_density,
+            )
+
+        # Return the images, combining if there are multiple components
+        if stellar_photometry is not None and blackhole_photometry is not None:
+            return stellar_imgs + blackhole_imgs
+        elif stellar_photometry is not None:
+            return stellar_imgs
+        return blackhole_imgs
+
+    def get_data_cube(
+        self,
+        resolution,
+        fov,
+        lam,
+        stellar_spectra=None,
+        blackhole_spectra=None,
+        quantity="lnu",
+    ):
+        """
+        Make a SpectralCube from an Sed.
+
+        Data cubes are calculated by smoothing spectra over the component
+        morphology. The Sed used is defined by <component>_spectra.
+
+        If multiple components are requested they will be combined into a
+        single output data cube.
+
+        NOTE: Either npix or fov must be defined.
+
+        Args:
+            resolution (Quantity, float)
+                The size of a pixel.
+                (Ignoring any supersampling defined by psf_resample_factor)
+            fov : float
+                The width of the image in image coordinates.
+            lam (unyt_array, float)
+                The wavelength array to use for the data cube.
+            stellar_spectra (string)
+                The stellar spectra key to make into a data cube.
+            blackhole_spectra (string)
+                The black hole spectra key to make into a data cube.
+            quantity (str):
+                The Sed attribute/quantity to sort into the data cube, i.e.
+                "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
+
+        Returns:
+            SpectralCube
+                The spectral data cube object containing the derived
+                data cube.
+        """
+        # Make sure we have an image to make
+        if stellar_spectra is None and blackhole_spectra is None:
+            raise exceptions.InconsistentArguments(
+                "At least one spectra type must be provided "
+                "(stellar_spectra or blackhole_spectra)!"
+                " What component/s do you want a data cube of?"
+            )
+
+        # Make stellar image if requested
+        if stellar_spectra is not None:
+            # Instantiate the Image colection ready to make the image.
+            stellar_cube = SpectralCube(
+                resolution=resolution, fov=fov, lam=lam
+            )
+
+            # Compute the density grid
+            stellar_density = self.stars.morphology.get_density_grid(
+                resolution, stellar_cube.npix
+            )
+
+            # Make the image
+            stellar_cube.get_data_cube_smoothed(
+                sed=self.stars.spectra[stellar_spectra],
+                density_grid=stellar_density,
+                quantity=quantity,
+            )
+
+        # Make blackhole image if requested
+        if blackhole_spectra is not None:
+            # Instantiate the Image colection ready to make the image.
+            blackhole_cube = SpectralCube(
+                resolution=resolution, fov=fov, lam=lam
+            )
+
+            # Compute the density grid
+            blackhole_density = self.black_holes.morphology.get_density_grid(
+                resolution, blackhole_cube.npix
+            )
+
+            # Compute the image
+            blackhole_cube.get_data_cube_smoothed(
+                sed=self.black_holes.spectra[blackhole_spectra],
+                density_grid=blackhole_density,
+                quantity=quantity,
+            )
+
+        # Return the images, combining if there are multiple components
+        if stellar_spectra is not None and blackhole_spectra is not None:
+            return stellar_cube + blackhole_cube
+        elif stellar_spectra is not None:
+            return stellar_cube
+        return blackhole_cube
