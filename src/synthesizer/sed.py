@@ -152,8 +152,17 @@ class Sed:
 
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
-            # Return a new sed object with the first Lnu dimension collapsed
-            return Sed(self.lam, np.sum(self._lnu, axis=0))
+            # Create a new sed object with the first Lnu dimension collapsed
+            new_sed = Sed(self.lam, np.sum(self._lnu, axis=0))
+
+            # If fnu exists, sum that too
+            if self.fnu is not None:
+                new_sed.fnu = np.sum(self.fnu, axis=0)
+                new_sed.obsnu = self.obsnu
+                new_sed.obslam = self.obslam
+                new_sed.redshift = self.redshift
+
+            return new_sed
         else:
             # If 1D, just return the original array
             return self
@@ -227,7 +236,7 @@ class Sed:
 
         Returns:
             Sed
-                A new instance of Sed with added lnu arrays.
+                A new instance of Sed with added lnu and fnu arrays.
 
         Raises:
             InconsistentAddition
@@ -252,8 +261,17 @@ class Sed:
                 "SEDs must have same dimensions"
             )
 
-        # They're compatible, add them
-        return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+        # They're compatible, add them and make a new Sed
+        new_sed = Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+
+        # If fnu exists on both then we need to add those too
+        if (self.fnu is not None) and (second_sed.fnu is not None):
+            new_sed.fnu = self.fnu + second_sed.fnu
+            new_sed.obsnu = self.obsnu
+            new_sed.obslam = self.obslam
+            new_sed.redshift = self.redshift
+
+        return new_sed
 
     def __radd__(self, second_sed):
         """
@@ -1138,9 +1156,6 @@ class Sed:
         elements per original wavelength element (i.e. up sampling),
         or by providing a new wavelength grid to resample on to.
 
-        NOTE: This only resamples the rest frame spectra. For fluxes, `get_fnu`
-        must be called again after resampling.
-
         Args:
             resample_factor (int)
                 The number of additional wavelength elements to
@@ -1173,10 +1188,18 @@ class Sed:
             new_lam = rebin_1d(self.lam, resample_factor, func=np.mean)
 
         # Evaluate the function at the desired wavelengths
-        new_spectra = spectres(new_lam, self._lam, self.lnu)
+        new_spectra = spectres(new_lam, self._lam, self._lnu)
 
         # Instantiate the new Sed
         sed = Sed(new_lam, new_spectra)
+
+        # If self also has fnu we should resample those too and store the
+        # shifted wavelengths and frequencies
+        if self.fnu is not None:
+            sed.obslam = sed._lam * (1.0 + self.redshift)
+            sed.obsnu = sed._nu / (1.0 + self.redshift)
+            sed.fnu = spectres(sed._obslam, self._obslam, self._fnu)
+            sed.redshift = self.redshift
 
         return sed
 

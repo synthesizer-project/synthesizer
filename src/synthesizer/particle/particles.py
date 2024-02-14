@@ -167,6 +167,13 @@ class Particles:
             "docs/CONTRIBUTING.md"
         )
 
+    @property
+    def centered_coordinates(self):
+        """Returns the coordinates centred on the geometric mean."""
+        return self.coordinates - np.average(
+            self.coordinates, axis=0, weights=self.masses
+        )
+
     def get_particle_photo_luminosities(self, filters, verbose=True):
         """
         Calculate luminosity photometry using a FilterCollection object.
