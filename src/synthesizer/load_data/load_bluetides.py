@@ -1,6 +1,5 @@
 import numpy as np
-from unyt import Msun, Lsun, gravitational_constant, kpc, yr, c
-from unyt.physical_constants import gravitational_constant, mp, kb
+from unyt import Msun, kpc, yr, c
 
 from ..particle.galaxy import Galaxy
 
@@ -35,7 +34,9 @@ class BlueTidesDataHolder:
         sort_bhar=True,
     ):
         # Units
-        self.factor = 121.14740013761634  # GADGET unit Protonmass / Bolztman const
+        self.factor = (
+            121.14740013761634  # GADGET unit Protonmass / Bolztman const
+        )
         self.GAMMA = 5 / 3.0
         self.Xh = 0.76
 
@@ -62,7 +63,9 @@ class BlueTidesDataHolder:
 
         def get_age(a0, a00):  # get age or time between two scale factors
             return (
-                1.0 / (self.h * 100.0) * integrate.quad(calculate_integrand, a0, a00)[0]
+                1.0
+                / (self.h * 100.0)
+                * integrate.quad(calculate_integrand, a0, a00)[0]
             )
 
         self.accretion_unit_conversion = 1e10 / (
@@ -118,7 +121,9 @@ class BlueTidesDataHolder:
         a_cur = 1.0 / (1.0 + self.redshift)
         sft_space = np.linspace(0, a_cur, 100)
         age_space = [
-            get_age(SFT, 1.0 / (1.0 + self.redshift)) * self.mpc_to_km * self.sec_to_yr
+            get_age(SFT, 1.0 / (1.0 + self.redshift))
+            * self.mpc_to_km
+            * self.sec_to_yr
             for SFT in sft_space
         ]  # yr
         self.gen_SFT_to_age = interpolate.interp1d(
@@ -144,7 +149,9 @@ class BlueTidesDataHolder:
             self.bhar[self.sorting_indices] * self.acrtolum
         )  # transfer from accretion rate to AGN luminosity
         self.bh_mass = (
-            pig.open("5/BlackholeMass")[0:length_of_bhar][self.sorting_indices]
+            pig.open("5/BlackholeMass")[0:length_of_bhar][
+                self.sorting_indices
+            ]
             * 1e10
             / self.hh
         )  # masses of BHs with largest accretion rate
@@ -152,7 +159,9 @@ class BlueTidesDataHolder:
         self.bhid = pig.open("5/ID")[0:length_of_bhar][self.sorting_indices]
 
         self.bh_position = (
-            np.transpose(pig.open("5/Position")[0:length_of_bhar][self.sorting_indices])
+            np.transpose(
+                pig.open("5/Position")[0:length_of_bhar][self.sorting_indices]
+            )
             / self.hh
             / (1 + self.z)
         )
@@ -174,14 +183,18 @@ class BlueTidesDataHolder:
         ]
         self.position_ind = (
             pig.open("4/Position")[
-                0 : StarOffset[offset_index[np.argmax(StarOffset[offset_index])]]
+                0 : StarOffset[
+                    offset_index[np.argmax(StarOffset[offset_index])]
+                ]
             ]
             / self.hh
             / (1 + self.z)
         )
         self.velocity_ind = (
             pig.open("4/Velocity")[
-                0 : StarOffset[offset_index[np.argmax(StarOffset[offset_index])]]
+                0 : StarOffset[
+                    offset_index[np.argmax(StarOffset[offset_index])]
+                ]
             ]
             / self.hh
         )
@@ -245,7 +258,9 @@ def load_BlueTides(
         dataholder.bh_mass
     )  # holder array for galaxies of the same length
     galaxies = [None] * galaxies_length
-    smoothing_length_proper_bluetides = (1.5 / dataholder.hh * kpc) / (1 + dataholder.z)
+    smoothing_length_proper_bluetides = (1.5 / dataholder.hh * kpc) / (
+        1 + dataholder.z
+    )
 
     if len(galaxy_bhid) == 0:
         galaxy_cycle = np.arange(galaxies_length)  # take every galaxy
@@ -266,12 +281,16 @@ def load_BlueTides(
         galaxies[ii] = Galaxy()
         galaxies[ii].redshift = dataholder.redshift
 
-        star_time = dataholder.star_formation_time_ind[star_off[0] : star_off[1]]
+        star_time = dataholder.star_formation_time_ind[
+            star_off[0] : star_off[1]
+        ]
         ages = (
             dataholder.gen_SFT_to_age(star_time) / 1e6
         )  # translate galaxy star formation time to ages in years
 
-        initial_gas_particle_mass = np.full(ages.shape, 2.36e6) / dataholder.hh
+        initial_gas_particle_mass = (
+            np.full(ages.shape, 2.36e6) / dataholder.hh
+        )
         imasses = initial_gas_particle_mass / 4
         masses = (
             np.ones(ages.shape) * 1e10 * 5.90556119e-05 / 0.697
@@ -292,7 +311,9 @@ def load_BlueTides(
             y = star_pos[:, 1]
             z = star_pos[:, 2]
 
-        smoothing_lengths = np.full(ages.shape, smoothing_length_proper_bluetides)
+        smoothing_lengths = np.full(
+            ages.shape, smoothing_length_proper_bluetides
+        )
 
         coords = np.transpose([x, y, z])
         galaxies[ii].load_stars(
