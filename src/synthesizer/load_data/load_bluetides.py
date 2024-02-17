@@ -8,6 +8,7 @@ from bigfile import BigFile
 import scipy.interpolate as interpolate
 from scipy import integrate
 
+
 class BlueTidesDataHolder:
     """
     A holder for BlueTides data that makes it easier to work with.
@@ -31,11 +32,10 @@ class BlueTidesDataHolder:
         z,
         bluetides_data_folder="/fred/oz183/sberger/bluetides/BlueTides/",
         end_of_arr=108001,
+        sort_bhar=True,
     ):
         # Units
-        self.factor = (
-            121.14740013761634  # GADGET unit Protonmass / Bolztman const
-        )
+        self.factor = 121.14740013761634  # GADGET unit Protonmass / Bolztman const
         self.GAMMA = 5 / 3.0
         self.Xh = 0.76
 
@@ -62,9 +62,7 @@ class BlueTidesDataHolder:
 
         def get_age(a0, a00):  # get age or time between two scale factors
             return (
-                1.0
-                / (self.h * 100.0)
-                * integrate.quad(calculate_integrand, a0, a00)[0]
+                1.0 / (self.h * 100.0) * integrate.quad(calculate_integrand, a0, a00)[0]
             )
 
         self.accretion_unit_conversion = 1e10 / (
@@ -100,10 +98,10 @@ class BlueTidesDataHolder:
         file = pig_zoo[0]  # filename
         pig = BigFile(file)  # load data
 
-        print(f"Chosen redshift = {self.z}") # string
+        print(f"Chosen redshift = {self.z}")  # string
         self.z = self.redshift = float(
             1.0 / pig.open("Header").attrs["Time"] - 1
-        ) # EXACT redshift
+        )  # EXACT redshift
         print(f"Actual bluetides redshift = {self.z}")
 
         # If there's no OffsetByType field, use below to get the same output:
@@ -132,37 +130,34 @@ class BlueTidesDataHolder:
             * self.accretion_unit_conversion
         )  # solar masses per year
 
-        # Indexes of BH with largest accretion rate,
-        # everything is sorted by this array
-        self.luminous_BH_indices = np.argsort(-self.bhar)
+        if sort_bhar:
+            # Indexes of BH with largest accretion rate,
+            # everything is sorted by this array
+            self.sorting_indices = np.argsort(-self.bhar)
+        else:
+            # In this case, an indexing array that does nothing is passed
+            # to each array, i.e., no sorting
+            self.sorting_indices = np.arange(0, length_of_bhar)
 
         # load galaxy black hole data
         self.quasarLuminosity = (
-            self.bhar[self.luminous_BH_indices] * self.acrtolum
+            self.bhar[self.sorting_indices] * self.acrtolum
         )  # transfer from accretion rate to AGN luminosity
         self.bh_mass = (
-            pig.open("5/BlackholeMass")[0:length_of_bhar][
-                self.luminous_BH_indices
-            ]
+            pig.open("5/BlackholeMass")[0:length_of_bhar][self.sorting_indices]
             * 1e10
             / self.hh
         )  # masses of BHs with largest accretion rate
 
-        self.bhid = pig.open("5/ID")[0:length_of_bhar][
-            self.luminous_BH_indices
-        ]
+        self.bhid = pig.open("5/ID")[0:length_of_bhar][self.sorting_indices]
 
         self.bh_position = (
-            np.transpose(
-                pig.open("5/Position")[0:length_of_bhar][
-                    self.luminous_BH_indices
-                ]
-            )
+            np.transpose(pig.open("5/Position")[0:length_of_bhar][self.sorting_indices])
             / self.hh
             / (1 + self.z)
         )
 
-        self.bhar = self.bhar[self.luminous_BH_indices]
+        self.bhar = self.bhar[self.sorting_indices]
 
         # Set particle location indices for the BHs in order in pig
         offset_index = []  # index in offset
@@ -172,30 +167,26 @@ class BlueTidesDataHolder:
 
         # Load stellar particle information
         self.metallicity_ind = pig.open("4/Metallicity")[
-            0:StarOffset[offset_index[np.argmax(StarOffset[offset_index])]]
+            0 : StarOffset[offset_index[np.argmax(StarOffset[offset_index])]]
         ]
         self.star_formation_time_ind = pig.open("4/StarFormationTime")[
-            0:StarOffset[offset_index[np.argmax(StarOffset[offset_index])]]
+            0 : StarOffset[offset_index[np.argmax(StarOffset[offset_index])]]
         ]
         self.position_ind = (
             pig.open("4/Position")[
-                0:StarOffset[
-                    offset_index[np.argmax(StarOffset[offset_index])]
-                ]
+                0 : StarOffset[offset_index[np.argmax(StarOffset[offset_index])]]
             ]
             / self.hh
             / (1 + self.z)
         )
         self.velocity_ind = (
             pig.open("4/Velocity")[
-                0:StarOffset[
-                    offset_index[np.argmax(StarOffset[offset_index])]
-                ]
+                0 : StarOffset[offset_index[np.argmax(StarOffset[offset_index])]]
             ]
             / self.hh
         )
         self.met_surface_densities_ind = sunset.open("4/MetSurfaceDensity")[
-            0:StarOffset[offset_index[np.argmax(StarOffset[offset_index])]]
+            0 : StarOffset[offset_index[np.argmax(StarOffset[offset_index])]]
         ]
 
 
@@ -204,8 +195,9 @@ def load_BlueTides(
     dataholder=None,
     galaxy_bhid=[],
     end_arr=108001,
+    sort_bhar=True,
     bluetides_data_folder="",
-    center=False
+    center=False,
 ):
     """
     Load BlueTides galaxies into a galaxy object
@@ -227,6 +219,8 @@ def load_BlueTides(
             value should be done with care to avoid galaxies with BHs too close
             to the seed mass (10^5.8 solar masses). This is ~160000 for z=6.5-7,
             ~90090 for z=7.5. (default=108001)
+        sort_bhar (bool):
+            whether or not to sort the BlueTides data by black hole accretion rate
         bluetides_data_folder (str):
             location of BlueTides pig/sunset files. Only required if
             dataholder is `None` (default is an empty string)
@@ -244,15 +238,14 @@ def load_BlueTides(
             redshift,
             bluetides_data_folder=bluetides_data_folder,
             end_of_arr=end_arr,
+            sort_bhar=sort_bhar,
         )
 
     galaxies_length = len(
         dataholder.bh_mass
     )  # holder array for galaxies of the same length
     galaxies = [None] * galaxies_length
-    smoothing_length_proper_bluetides = (
-        1.5 / dataholder.hh * kpc
-    ) / (1 + dataholder.z)
+    smoothing_length_proper_bluetides = (1.5 / dataholder.hh * kpc) / (1 + dataholder.z)
 
     if len(galaxy_bhid) == 0:
         galaxy_cycle = np.arange(galaxies_length)  # take every galaxy
@@ -269,13 +262,11 @@ def load_BlueTides(
     for ii, bh_index in enumerate(galaxy_cycle):
         # Get the first index of the star particle for the particular galaxy
         idx = int(dataholder.offsetIndex[bh_index])
-        star_off = dataholder.StarOffset[idx:idx + 2]
+        star_off = dataholder.StarOffset[idx : idx + 2]
         galaxies[ii] = Galaxy()
         galaxies[ii].redshift = dataholder.redshift
 
-        star_time = dataholder.star_formation_time_ind[
-            star_off[0]:star_off[1]
-        ]
+        star_time = dataholder.star_formation_time_ind[star_off[0] : star_off[1]]
         ages = (
             dataholder.gen_SFT_to_age(star_time) / 1e6
         )  # translate galaxy star formation time to ages in years
@@ -285,16 +276,14 @@ def load_BlueTides(
         masses = (
             np.ones(ages.shape) * 1e10 * 5.90556119e-05 / 0.697
         )  # mass of each star particle in M_sol
-        metallicities = dataholder.metallicity_ind[star_off[0]:star_off[1]]
+        metallicities = dataholder.metallicity_ind[star_off[0] : star_off[1]]
 
-        star_pos = dataholder.position_ind[star_off[0]:star_off[1]]
+        star_pos = dataholder.position_ind[star_off[0] : star_off[1]]
 
         if center:
             # Centering all stars around the BH such that (0, 0, 0) is
             # the BH position
-            star_relpos = (
-                star_pos - dataholder.bh_position[:, bh_index]
-            )
+            star_relpos = star_pos - dataholder.bh_position[:, bh_index]
             x = star_relpos[:, 0]
             y = star_relpos[:, 1]
             z = star_relpos[:, 2]
@@ -303,9 +292,7 @@ def load_BlueTides(
             y = star_pos[:, 1]
             z = star_pos[:, 2]
 
-        smoothing_lengths = np.full(
-            ages.shape, smoothing_length_proper_bluetides
-        )
+        smoothing_lengths = np.full(ages.shape, smoothing_length_proper_bluetides)
 
         coords = np.transpose([x, y, z])
         galaxies[ii].load_stars(
