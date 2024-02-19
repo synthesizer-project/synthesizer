@@ -230,10 +230,10 @@ def load_BlueTides(
         end_arr (int):
             last galaxy to include in BlueTides dataholder, selection of this
             value should be done with care to avoid galaxies with BHs too close
-            to the seed mass (10^5.8 solar masses). This is ~160000 for z=6.5-7,
-            ~90090 for z=7.5. (default=108001)
+            to the seed mass (10^5.8 solar masses). This is ~160000
+            for z=6.5-7, ~90090 for z=7.5. (default=108001)
         sort_bhar (bool):
-            whether or not to sort the BlueTides data by black hole accretion rate
+            whether or not to sort the BlueTides data by BHAR
         bluetides_data_folder (str):
             location of BlueTides pig/sunset files. Only required if
             dataholder is `None` (default is an empty string)
