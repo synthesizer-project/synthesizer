@@ -186,7 +186,7 @@ def measure_equivalent_width(
         metal_dist=metal_dist,
         initial_mass=stellar_mass,
     )
-    
+
     # --- create a galaxy object
     galaxy = Galaxy(sfzh)
 
