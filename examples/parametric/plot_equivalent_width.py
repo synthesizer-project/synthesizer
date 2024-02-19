@@ -85,15 +85,14 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         None
     """
 
-    # -- Calculate the equivalent width for each defined index
+    # Define the parameters of the star formation and metal
+    # enrichment histories.
+    grid = Grid(grids, grid_dir=grid_dir)
     Z = grid.metallicity
     stellar_mass = 1e8
-    
-    for i, index in enumerate(uv_index):
-        grid = Grid(grids, grid_dir=grid_dir)
 
-        # define the parameters of the star formation and metal
-        # enrichment histories
+    # -- Calculate the equivalent width for each defined index
+    for i, index in enumerate(uv_index):
         eqw = []
 
         # Compute each index for each metallicity in the grid.
