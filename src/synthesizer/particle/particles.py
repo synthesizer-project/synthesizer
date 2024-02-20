@@ -67,12 +67,15 @@ class Particles:
             nparticle : int
                 How many particles are there?
         """
-
         # Check arguments are valid
 
         # Set phase space coordinates
         self.coordinates = coordinates
         self.velocities = velocities
+
+        # Initialise the particle photometry dictionaries
+        self.particle_photo_luminosities = {}
+        self.particle_photo_fluxes = {}
 
         # Set unit information
 
@@ -163,6 +166,59 @@ class Particles:
             "https://github.com/flaresimulations/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
+
+    @property
+    def centered_coordinates(self):
+        """Returns the coordinates centred on the geometric mean."""
+        return self.coordinates - np.average(
+            self.coordinates, axis=0, weights=self.masses
+        )
+
+    def get_particle_photo_luminosities(self, filters, verbose=True):
+        """
+        Calculate luminosity photometry using a FilterCollection object.
+
+        Args:
+            filters (filters.FilterCollection)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            photo_luminosities (dict)
+                A dictionary of rest frame broadband luminosities.
+        """
+        # Loop over spectra in the component
+        for spectra in self.particle_spectra:
+            # Create the photometry collection and store it in the object
+            self.particle_photo_luminosities[spectra] = self.particle_spectra[
+                spectra
+            ].get_photo_luminosities(filters, verbose)
+
+        return self.particle_photo_luminosities
+
+    def get_particle_photo_fluxes(self, filters, verbose=True):
+        """
+        Calculate flux photometry using a FilterCollection object.
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            (dict)
+                A dictionary of fluxes in each filter in filters.
+        """
+        # Loop over spectra in the component
+        for spectra in self.particle_spectra:
+            # Create the photometry collection and store it in the object
+            self.particle_photo_fluxes[spectra] = self.particle_spectra[
+                spectra
+            ].get_photo_fluxes(filters, verbose)
+
+        return self.particle_photo_fluxes
 
 
 class CoordinateGenerator:
