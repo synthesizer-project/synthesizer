@@ -288,7 +288,17 @@ class Grid:
             # Number of axes
             self.naxes = len(self.axes)
 
+            # If specific ionising photon luminosity is available set this
+            # as an attribute as well
+            if "log10_specific_ionising_luminosity" in hf.keys():
+                self.log10_specific_ionising_lum = {}
+                for ion in hf["log10_specific_ionising_luminosity"].keys():
+                    self.log10_specific_ionising_lum[ion] = hf[
+                        "log10_specific_ionising_luminosity"
+                    ][ion][:]
+
             # If log10Q is available set this as an attribute as well
+            # TODO: This needs to die
             if "log10Q" in hf.keys():
                 self.log10Q = {}
                 for ion in hf["log10Q"].keys():
@@ -680,12 +690,17 @@ class Grid:
         y = np.arange(len(self.metallicity))
 
         # Select grid for specific ion
-        log10Q = self.log10Q[ion]
+        if hasattr(self, "log10_specific_ionising_lum"):
+            log10_specific_ionising_lum = self.log10_specific_ionising_lum[ion]
+        else:
+            log10_specific_ionising_lum = self.log10Q[ion]
 
         # Truncate grid if max age provided
         if max_log10age is not None:
             ia_max = self.get_nearest_index(max_log10age, self.log10age)
-            log10Q = log10Q[:ia_max, :]
+            log10_specific_ionising_lum = log10_specific_ionising_lum[
+                :ia_max, :
+            ]
         else:
             ia_max = -1
 
@@ -698,13 +713,13 @@ class Grid:
                 vmax = 47.5
         else:
             if vmin is None:
-                vmin = np.min(log10Q)
+                vmin = np.min(log10_specific_ionising_lum)
             if vmax is None:
-                vmax = np.max(log10Q)
+                vmax = np.max(log10_specific_ionising_lum)
 
-        # Plot the grid of log10Q
+        # Plot the grid of log10_specific_ionising_lum
         ax.imshow(
-            log10Q.T,
+            log10_specific_ionising_lum.T,
             origin="lower",
             extent=[
                 self.log10age[0],
