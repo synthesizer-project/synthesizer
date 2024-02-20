@@ -2,7 +2,7 @@ import numpy as np
 from scipy import integrate
 
 
-class kernel:
+class Kernel:
 
     """
     Line of sight distance along a particle, l = 2*sqrt(h^2 + b^2),
