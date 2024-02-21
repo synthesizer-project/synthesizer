@@ -64,7 +64,7 @@ class ShapeCommands:
 
         # collect cloudy shape commands
         shape_commands = []
-        shape_commands.append(f'table SED "{output_dir}/{model_name}.sed" \n')
+        shape_commands.append(f'table SED "{model_name}.sed" \n')
 
         return shape_commands
 
