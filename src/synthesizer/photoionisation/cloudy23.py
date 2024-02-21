@@ -303,7 +303,7 @@ def create_cloudy_input(
 
     ionisation_parameter = params["ionisation_parameter"]
 
-    print('ionisisation parameter:', ionisation_parameter)
+    # print('ionisisation parameter:', ionisation_parameter)
 
     log10ionisation_parameter = np.log10(ionisation_parameter)
 
