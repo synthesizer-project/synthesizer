@@ -175,7 +175,7 @@ def create_cloudy_input(
     cinput += shape_commands
 
     # The original method of handling depletion and grain
-    if params["depletion_model"] in ["ClassicCloudy", "Gutkin2016"]:
+    if params["depletion_model"] in ["CloudyClassic", "Gutkin2016"]:
         # Define the chemical composition, here we use the depleted (gas-phase)
         # abundances and set "no grains".
         for ele in ["He"] + abundances.metals:
@@ -302,6 +302,9 @@ def create_cloudy_input(
                 cinput.append(f"grains {ratio}")
 
     ionisation_parameter = params["ionisation_parameter"]
+
+    print('ionisisation parameter:', ionisation_parameter)
+
     log10ionisation_parameter = np.log10(ionisation_parameter)
 
     # plane parallel geometry
@@ -314,7 +317,7 @@ def create_cloudy_input(
         # in the spherical geometry case I think U is some average U, not U at
         # the inner face of the cloud.
         log10ionising_luminosity = np.log10(calculate_Q_from_U(
-            log10ionisation_parameter,
+            ionisation_parameter,
             params["hydrogen_density"]))
         cinput.append(f"Q(H) = {log10ionising_luminosity}\n")
         cinput.append(f'radius {np.log10(params["radius"])} log parsecs\n')
