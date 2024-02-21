@@ -393,8 +393,9 @@ def create_cloudy_input(
             params["output_linelist"], f"{output_dir}/linelist.dat"
         )
 
-    # --- save input file
-    open(f"{output_dir}/{model_name}.in", "w").writelines(cinput)
+    # save input file
+    if output_dir is not None:
+        open(f"{output_dir}/{model_name}.in", "w").writelines(cinput)
 
     return cinput
 
