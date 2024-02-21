@@ -18,7 +18,7 @@ from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.morphology import Sersic2D
 from synthesizer.grid import Grid
-from synthesizer.imaging.images import ParametricImage
+from synthesizer.imaging import ImageCollection
 
 
 if __name__ == "__main__":
@@ -57,22 +57,25 @@ if __name__ == "__main__":
     # Get a UVJ filter set
     filters = UVJ()
 
+    # Get photometry
+    galaxy.stars.spectra["incident"].get_photo_luminosities(filters)
+
     # Define geometry of the images
-    resolution = 0.05 * kpc  # resolution in kpc
-    npix = 50
+    resolution = 0.01 * kpc  # resolution in kpc
+    npix = 100
     fov = resolution.value * npix * kpc
 
     # Generate images using the low level image methods
-    img = ParametricImage(
-        morphology=morph,
+    img = ImageCollection(
         resolution=resolution,
-        filters=filters,
-        sed=galaxy.stars.spectra["incident"],
         fov=fov,
     )
 
     # Get the photometric images
-    img.get_imgs()
+    img.get_imgs_smoothed(
+        photometry=galaxy.stars.spectra["incident"].photo_luminosities,
+        density_grid=morph.get_density_grid(resolution, img.npix),
+    )
 
     # Make and plot an rgb image
     img.make_rgb_image(rgb_filters={"R": "J", "G": "V", "B": "U"})
@@ -81,12 +84,11 @@ if __name__ == "__main__":
     plt.show()
 
     # We can also do the same with a helper function on the galaxy object
-    img = galaxy.make_images(
+    img = galaxy.get_images_luminosity(
         resolution=resolution,
-        filters=filters,
-        stellar_spectra_type="incident",
+        stellar_photometry="incident",
         fov=fov,
     )
 
     # and... print an ASCII representation
-    img.print_ascii(filter_code="U")
+    img["J"].print_ascii()
