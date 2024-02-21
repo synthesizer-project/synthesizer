@@ -132,7 +132,7 @@ def value_to_array(value):
             ]
         )
 
-    elif isinstance(value, unyt_quantity):
+    elif isinstance(value, (unyt_quantity, unyt_array)):
         arr = (
             np.array(
                 [

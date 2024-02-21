@@ -12,6 +12,7 @@ Example usage:
     sed.apply_attenutation(tau_v=0.7)
     sed.get_photo_fluxes(filters)
 """
+import re
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
@@ -151,8 +152,17 @@ class Sed:
 
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
-            # Return a new sed object with the first Lnu dimension collapsed
-            return Sed(self.lam, np.sum(self._lnu, axis=0))
+            # Create a new sed object with the first Lnu dimension collapsed
+            new_sed = Sed(self.lam, np.sum(self._lnu, axis=0))
+
+            # If fnu exists, sum that too
+            if self.fnu is not None:
+                new_sed.fnu = np.sum(self.fnu, axis=0)
+                new_sed.obsnu = self.obsnu
+                new_sed.obslam = self.obslam
+                new_sed.redshift = self.redshift
+
+            return new_sed
         else:
             # If 1D, just return the original array
             return self
@@ -226,7 +236,7 @@ class Sed:
 
         Returns:
             Sed
-                A new instance of Sed with added lnu arrays.
+                A new instance of Sed with added lnu and fnu arrays.
 
         Raises:
             InconsistentAddition
@@ -251,8 +261,17 @@ class Sed:
                 "SEDs must have same dimensions"
             )
 
-        # They're compatible, add them
-        return Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+        # They're compatible, add them and make a new Sed
+        new_sed = Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+
+        # If fnu exists on both then we need to add those too
+        if (self.fnu is not None) and (second_sed.fnu is not None):
+            new_sed.fnu = self.fnu + second_sed.fnu
+            new_sed.obsnu = self.obsnu
+            new_sed.obslam = self.obslam
+            new_sed.redshift = self.redshift
+
+        return new_sed
 
     def __radd__(self, second_sed):
         """
@@ -878,6 +897,10 @@ class Sed:
         """
         Calculate the observed frame spectral energy distribution.
 
+        NOTE: if a redshift of 0 is passed the flux return will be calculated
+        assuming a distance of 10 pc omitting IGM since at this distance
+        IGM contribution makes no sense.
+
         Args:
             cosmo (astropy.cosmology)
                 astropy cosmology instance.
@@ -894,6 +917,11 @@ class Sed:
 
         # Store the redshift for later use
         self.redshift = z
+
+        # If we have a redshift of 0 then the below will break since the
+        # distance will be 0. Instead call get_fnu0 to get the flux at 10 pc
+        if self.redshift == 0:
+            return self.get_fnu0()
 
         # Get the observed wavelength and frequency arrays
         self.obslam = self._lam * (1.0 + z)
@@ -948,11 +976,11 @@ class Sed:
             # Apply the filter transmission curve and store the resulting
             # luminosity
             bb_lum = f.apply_filter(self._lnu, nu=self._nu)
-            photo_luminosities[f.filter_code] = bb_lum
+            photo_luminosities[f.filter_code] = bb_lum * self.lnu.units
 
         # Create the photometry collection and store it in the object
         self.photo_luminosities = PhotometryCollection(
-            filters, rest_frame=True, **photo_luminosities
+            filters, **photo_luminosities
         )
 
         return self.photo_luminosities
@@ -1000,12 +1028,10 @@ class Sed:
 
             # Calculate and store the broadband flux in this filter
             bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
-            photo_fluxes[f.filter_code] = bb_flux
+            photo_fluxes[f.filter_code] = bb_flux * self.fnu.units
 
         # Create the photometry collection and store it in the object
-        self.photo_fluxes = PhotometryCollection(
-            filters, rest_frame=False, **photo_fluxes
-        )
+        self.photo_fluxes = PhotometryCollection(filters, **photo_fluxes)
 
         return self.photo_fluxes
 
@@ -1130,9 +1156,6 @@ class Sed:
         elements per original wavelength element (i.e. up sampling),
         or by providing a new wavelength grid to resample on to.
 
-        NOTE: This only resamples the rest frame spectra. For fluxes, `get_fnu`
-        must be called again after resampling.
-
         Args:
             resample_factor (int)
                 The number of additional wavelength elements to
@@ -1165,10 +1188,18 @@ class Sed:
             new_lam = rebin_1d(self.lam, resample_factor, func=np.mean)
 
         # Evaluate the function at the desired wavelengths
-        new_spectra = spectres(new_lam, self._lam, self.lnu)
+        new_spectra = spectres(new_lam, self._lam, self._lnu)
 
         # Instantiate the new Sed
         sed = Sed(new_lam, new_spectra)
+
+        # If self also has fnu we should resample those too and store the
+        # shifted wavelengths and frequencies
+        if self.fnu is not None:
+            sed.obslam = sed._lam * (1.0 + self.redshift)
+            sed.obsnu = sed._nu / (1.0 + self.redshift)
+            sed.fnu = spectres(sed._obslam, self._obslam, self._fnu)
+            sed.redshift = self.redshift
 
         return sed
 
@@ -1483,15 +1514,19 @@ def plot_spectra(
 
     # Parse the units for the labels and make them pretty
     if x_units is None:
-        x_units = str(lam.units)
+        x_units = lam.units.latex_repr
     else:
         x_units = str(x_units)
     if y_units is None:
-        y_units = str(plt_spectra.units)
+        y_units = plt_spectra.units.latex_repr
     else:
         y_units = str(y_units)
-    x_units = x_units.replace("/", r"\ / \ ").replace("*", " ")
-    y_units = y_units.replace("/", r"\ / \ ").replace("*", " ")
+
+    # Replace any \frac with a \ division
+    pattern = r"\{(.*?)\}\{(.*?)\}"
+    replacement = r"\1 \ / \ \2"
+    x_units = re.sub(pattern, replacement, x_units).replace(r"\frac", "")
+    y_units = re.sub(pattern, replacement, y_units).replace(r"\frac", "")
 
     # Label the x axis
     if rest_frame:
