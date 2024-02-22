@@ -494,7 +494,7 @@ class Abundances(ElementDefinitions):
                                         / self.metal_mass_fraction)
 
             # calculate integrated dust abundance
-            # this is used by cloudy23 
+            # this is used by cloudy23
             self.dust_abundance = self.calculate_integrated_abundance(
                 self.metals,
                 a=self.dust)
