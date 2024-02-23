@@ -493,6 +493,12 @@ class Abundances(ElementDefinitions):
             self.dust_to_metal_ratio = (self.dust_mass_fraction
                                         / self.metal_mass_fraction)
 
+            # calculate integrated dust abundance
+            # this is used by cloudy23
+            self.dust_abundance = self.calculate_integrated_abundance(
+                self.metals,
+                a=self.dust)
+
             # Associate parameters with object
             self.depletion = depletion
             self.depletion_scale = depletion_scale
