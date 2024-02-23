@@ -273,6 +273,7 @@ def create_cloudy_input(
                 )
             )
 
+        # The Jenkins2009 depletion assumes a default scale (fstar) of 0.5.
         if params["depletion_scale"] == 0.5:
             cinput.append("metals deplete Jenkins 2009")
 
