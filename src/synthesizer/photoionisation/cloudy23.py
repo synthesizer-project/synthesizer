@@ -159,6 +159,8 @@ def create_cloudy_input(
         "output_lines": False,
         # output linelist
         "output_linelist": "linelist.dat",
+        # depletion_scale
+        "depletion_scale" : 1.0,
     }
 
     # update default_params with kwargs
@@ -271,7 +273,7 @@ def create_cloudy_input(
                 )
             )
 
-        if params["fstar"] == 0.5:
+        if params["depletion_scale"] == 0.5:
             cinput.append("metals deplete Jenkins 2009")
 
             # turn on grains
@@ -279,7 +281,7 @@ def create_cloudy_input(
                 cinput.append("grains")
 
         else:
-            value = params["fstar"]
+            value = params["depletion_scale"]
             cinput.append(f"metals depletion jenkins 2009 fstar {value}")
 
             # turn on grains
@@ -302,8 +304,6 @@ def create_cloudy_input(
                 cinput.append(f"grains {ratio}")
 
     ionisation_parameter = params["ionisation_parameter"]
-
-    # print('ionisisation parameter:', ionisation_parameter)
 
     log10ionisation_parameter = np.log10(ionisation_parameter)
 
