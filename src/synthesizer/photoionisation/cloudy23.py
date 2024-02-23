@@ -304,6 +304,18 @@ def create_cloudy_input(
                 ratio = dust_mass_fraction / default_dust_mass_fraction
                 cinput.append(f"grains {ratio}\n")
 
+    else:
+        print('WARNING: No depletion (or unrecognised depletion) specified')
+
+        for ele in ["He"] + abundances.metals:
+            cinput.append(
+                (
+                    f"element abundance {abundances.name[ele]} "
+                    f"{abundances.total[ele]}\n"
+                )
+            )
+
+
     ionisation_parameter = params["ionisation_parameter"]
 
     log10ionisation_parameter = np.log10(ionisation_parameter)
