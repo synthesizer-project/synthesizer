@@ -70,6 +70,9 @@ class Jenkins2009:
             # unpack parameters. Despite convention I've chosen to use
             a_x, b_x, z_x = parameters
             # calculate depletion
+
+            print(element, fstar, b_x, a_x, z_x)
+
             self.depletion[element] = 10**(b_x + a_x * (fstar - z_x))
 
 
