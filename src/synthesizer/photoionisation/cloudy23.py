@@ -238,7 +238,8 @@ def create_cloudy_input(
         """
 
         # If grain physics are required, add this self-consistently
-        if (abundances.dust_to_metal_ratio > 0) & params["grains"]:
+        if (abundances.dust_to_metal_ratio > 0) & (params["grains"]
+                                                   is not None):
             delta_C = 10**abundances.total["C"] - 10**abundances.gas["C"]
             delta_PAH = 0.01 * (10 ** abundances.total["C"])
             delta_graphite = delta_C - delta_PAH
@@ -278,7 +279,7 @@ def create_cloudy_input(
             cinput.append("metals deplete Jenkins 2009\n")
 
             # turn on grains
-            if params["grains"]:
+            if params["grains"] is not None:
                 cinput.append(f"grains {params['grains']}\n")
 
         else:
@@ -286,7 +287,7 @@ def create_cloudy_input(
             cinput.append(f"metals depletion jenkins 2009 fstar {value}\n")
 
             # turn on grains
-            if params["grains"]:
+            if params["grains"] is not None:
 
                 # Tor non-default (!= 0.5) fstar values, grains needs to be
                 # scaled.
