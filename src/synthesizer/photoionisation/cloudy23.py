@@ -250,9 +250,9 @@ def create_cloudy_input(
             f_Si = delta_Si / (10 ** (orion_Si_abund))
             f_pah = delta_PAH / (10 ** (PAH_abund))
             command = (
-                f"grains Orion graphite {f_graphite} "
-                f"\ngrains Orion silicate {f_Si} \ngrains "
-                f"PAH {f_pah}"
+                f"grains Orion graphite {f_graphite} \n"
+                f"grains Orion silicate {f_Si} \n"
+                f"grains PAH {f_pah}"
             )
             cinput.append(command + "\n")
         else:
@@ -260,6 +260,7 @@ def create_cloudy_input(
 
     # Jenkins 2009 depletion model as implemented by cloudy.
     # See 2023 release paper section 5
+    # 
     elif params["depletion_model"] == 'Jenkins2009':
 
         # Define the chemical composition, because Jenkins2009 applies
@@ -279,7 +280,7 @@ def create_cloudy_input(
 
             # turn on grains
             if params["grains"]:
-                cinput.append("grains\n")
+                cinput.append(f"grains {params['grains']}\n")
 
         else:
             value = params["depletion_scale"]
@@ -302,7 +303,7 @@ def create_cloudy_input(
                     depletion_model='Jenkins2009',
                     depletion_scaling=params["fstar"]).dust_abundance
                 ratio = dust_mass_fraction / default_dust_mass_fraction
-                cinput.append(f"grains {ratio}\n")
+                cinput.append(f"grains {params['grains']} {ratio}\n")
 
     else:
         print('WARNING: No depletion (or unrecognised depletion) specified')
@@ -314,6 +315,8 @@ def create_cloudy_input(
                     f"{abundances.total[ele]}\n"
                 )
             )
+        
+        # In this case it would be inconsistent to turn on grains, so don't.
 
 
     ionisation_parameter = params["ionisation_parameter"]
