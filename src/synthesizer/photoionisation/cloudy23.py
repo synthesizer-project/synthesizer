@@ -289,21 +289,28 @@ def create_cloudy_input(
             # turn on grains
             if params["grains"]:
 
-                # for non-default (!= 0.5) fstar values, grains needs to be
+                # Tor non-default (!= 0.5) fstar values, grains needs to be
                 # scaled.
 
-                # calculate the dust mass fraction for the default parameter
-                # choice.
-                default_dust_mass_fraction = abundances.add_depletion(
+                # To do this, we first calculate the dust mass fraction for
+                # the default parameter choice. For the Jenkins2009 model this
+                # is 0.5. This recalcualtes everything for a new depletion 
+                # model. This is not actually ideal.
+                abundances.add_depletion(
                     depletion_model='Jenkins2009',
-                    depletion_scale=0.5).dust_abundance
+                    depletion_scale=0.5)
+                default_dust_mass_fraction = abundances.dust_abundance
 
-                # calculate the dust mass fraction for the provided value of
-                # fstar.
-                dust_mass_fraction = abundances.add_depletion(
+                # Now recalculate depletion for the actual parameter.
+                abundances.add_depletion(
                     depletion_model='Jenkins2009',
-                    depletion_scale=params["depletion_scale"]).dust_abundance
+                    depletion_scale=params["depletion_scale"])
+                dust_mass_fraction = abundances.dust_abundance
+
+                # Calculate the ratio...
                 ratio = dust_mass_fraction / default_dust_mass_fraction
+
+                # and use this to scale the grain command.
                 cinput.append(f"grains {params['grains']} {ratio}\n")
 
     else:
