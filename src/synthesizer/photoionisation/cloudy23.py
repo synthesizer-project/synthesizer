@@ -295,7 +295,8 @@ def create_cloudy_input(
                 # calculate the dust mass fraction for the default parameter
                 # choice.
                 default_dust_mass_fraction = abundances.add_depletion(
-                    depletion_model='Jenkins2009').dust_abundance
+                    depletion_model='Jenkins2009',
+                    depletion_scaling=0.5).dust_abundance
 
                 # calculate the dust mass fraction for the provided value of
                 # fstar.
