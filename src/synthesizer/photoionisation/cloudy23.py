@@ -301,7 +301,7 @@ def create_cloudy_input(
                 # fstar.
                 dust_mass_fraction = abundances.add_depletion(
                     depletion_model='Jenkins2009',
-                    depletion_scaling=params["fstar"]).dust_abundance
+                    depletion_scaling=params["depletion_scale"]).dust_abundance
                 ratio = dust_mass_fraction / default_dust_mass_fraction
                 cinput.append(f"grains {params['grains']} {ratio}\n")
 
