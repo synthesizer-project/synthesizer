@@ -368,7 +368,7 @@ def create_cloudy_input(
         cinput.append(f'covering factor {params["covering_factor"]} linear\n')
 
     # Processing commands
-    cinput.append("iterate to convergence\n")
+    # cinput.append("iterate to convergence\n")
     if params["T_floor"]:
         cinput.append(f'set temperature floor {params["T_floor"]} linear\n')
 
@@ -394,7 +394,7 @@ def create_cloudy_input(
     if params["output_cont"]:
         cinput.append(
             (
-                f'save last continuum intrinsic "{model_name}.cont" '
+                f'save last continuum "{model_name}.cont" '
                 f"units Angstroms no clobber\n"
             )
         )
