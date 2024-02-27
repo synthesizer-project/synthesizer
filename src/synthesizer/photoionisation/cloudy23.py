@@ -410,7 +410,7 @@ def create_cloudy_input(
     # output linelist
     if params["output_linelist"]:
         cinput.append(
-            f'save linelist column intrinsic absolute last units angstroms \
+            f'save line list column absolute last units angstroms \
                   "{model_name}.elin" "linelist.dat"\n'
         )
 
