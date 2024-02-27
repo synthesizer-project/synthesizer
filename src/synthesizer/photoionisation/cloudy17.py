@@ -233,7 +233,7 @@ def create_cloudy_input(
     which will again introduce issues on mass conservation.
     """
 
-    if (abundances.dust_to_metal_ratio > 0) & params["grains"]:
+    if (abundances.dust_to_metal_ratio > 0) & (params["grains"] is not None):
         delta_C = 10 ** abundances.total["C"] - 10 ** abundances.gas["C"]
         delta_PAH = 0.01 * (10 ** abundances.total["C"])
         delta_graphite = delta_C - delta_PAH
@@ -245,9 +245,9 @@ def create_cloudy_input(
         f_Si = delta_Si / (10 ** (orion_Si_abund))
         f_pah = delta_PAH / (10 ** (PAH_abund))
         command = (
-            f"grains Orion graphite {f_graphite} "
-            f"\ngrains Orion silicate {f_Si} \ngrains "
-            f"PAH {f_pah}"
+            f"grains Orion graphite {f_graphite} \n"
+            f"grains Orion silicate {f_Si} \n"
+            f"grains PAH {f_pah}"
         )
         cinput.append(command + "\n")
     else:
