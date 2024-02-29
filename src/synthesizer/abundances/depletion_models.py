@@ -1,3 +1,5 @@
+import numpy as np
+
 """
 Module containing various depletion models. Depletion models relate he gas
 phase depleted abundances to the total abundances, i.e.:
@@ -8,11 +10,12 @@ phase depleted abundances to the total abundances, i.e.:
 available_patterns = ['Jenkins2009', 'CloudyClassic', 'Gutkin2016']
 
 
-class Jenkins2009:
+class Jenkins2009_Gunasekera2021:
 
     """
     Implemention of the Jenkins (2009) depletion pattern that is built into
-    cloudy23.
+    cloudy23 as described by Gunasekera (2021). This modification adds in 
+    additional elements that were not considered by Jenkins (2009).
 
     In this model the depletion (D_x) is written as:
         D_x = 10**(B_x +A_x (F_* − z_x ))
@@ -55,7 +58,7 @@ class Jenkins2009:
         "Zn": (-0.61, -0.28, 0.56),
     }
 
-    def __init__(self, fstar=0.5):
+    def __init__(self, fstar=0.5, limit=1.0):
 
         """
         Initialise the class.
@@ -69,8 +72,8 @@ class Jenkins2009:
         for element, parameters in self.parameters.items():
             # unpack parameters. Despite convention I've chosen to use
             a_x, b_x, z_x = parameters
-            # calculate depletion
-            self.depletion[element] = 10**(b_x + a_x * (fstar - z_x))
+            # calculate depletion, including limit
+            self.depletion[element] = np.min(limit, 10**(b_x + a_x * (fstar - z_x)))
 
 
 class CloudyClassic:
