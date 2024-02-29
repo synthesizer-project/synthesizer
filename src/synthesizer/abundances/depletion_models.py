@@ -7,7 +7,9 @@ phase depleted abundances to the total abundances, i.e.:
     (X/H)_{dust} = (1-D_{x})\times (X/H)_{total}
 """
 
-available_patterns = ['Jenkins2009', 'CloudyClassic', 'Gutkin2016']
+available_patterns = ['Jenkins2009_Gunasekera2021', 
+                      'CloudyClassic', 
+                      'Gutkin2016']
 
 
 class Jenkins2009_Gunasekera2021:
@@ -73,7 +75,8 @@ class Jenkins2009_Gunasekera2021:
             # unpack parameters. Despite convention I've chosen to use
             a_x, b_x, z_x = parameters
             # calculate depletion, including limit
-            self.depletion[element] = np.min(limit, 10**(b_x + a_x * (fstar - z_x)))
+            self.depletion[element] = np.min(limit,
+                                             10**(b_x + a_x * (fstar - z_x)))
 
 
 class CloudyClassic:
