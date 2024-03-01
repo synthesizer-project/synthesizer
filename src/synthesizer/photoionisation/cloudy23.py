@@ -344,8 +344,8 @@ def create_cloudy_input(
         )
 
     # covering factor
-    if params["covering_factor"] is not None:
-        cinput.append(f'covering factor {params["covering_factor"]} linear\n')
+    # if params["covering_factor"] is not None:
+    #     cinput.append(f'covering factor {params["covering_factor"]} linear\n')
 
     # Processing commands
     # cinput.append("iterate to convergence\n")
