@@ -32,8 +32,8 @@ class Jenkins2009_Gunasekera2021:
         # "He": 1.0,
         "Li": (-1.136, -0.246, 0.000),
         # "Be": 0.6,
-        "B": (-0.101, -0.193, 0.803),
-        "C": (-0.10, -0.19, 0.80),
+        "B": (-0.849, 0.698, 0.000),
+        "C": (-0.101, -0.193, 0.803),
         "N": (0.00, -0.11, 0.55),
         "O": (-0.23, -0.15, 0.60),
         # "F": 0.3,
@@ -75,8 +75,10 @@ class Jenkins2009_Gunasekera2021:
             # unpack parameters. Despite convention I've chosen to use
             a_x, b_x, z_x = parameters
             # calculate depletion, including limit
-            self.depletion[element] = np.min(limit,
-                                             10**(b_x + a_x * (fstar - z_x)))
+
+            depletion = np.min([limit, 10**(b_x + a_x * (fstar - z_x))])
+            print(element, depletion)
+            self.depletion[element] = depletion
 
 
 class CloudyClassic:
