@@ -11,6 +11,7 @@ Example usage:
     stars.get_spectra_incident(grid)
     stars.plot_spectra()
 """
+
 import numpy as np
 from scipy import integrate
 from unyt import unyt_quantity, unyt_array
@@ -321,6 +322,12 @@ class Stars(StarsComponent):
                 self.sf_hist[ia] = sf
                 min_age = max_age
 
+            # Normalise SFH array
+            self.sf_hist /= np.sum(self.sf_hist)
+
+            # Multiply by initial stellar mass
+            self.sf_hist *= self._initial_mass
+
         # Calculate SFH from function if necessary
         if self.metal_dist_func is not None and self.metal_dist is None:
             # Set up SFH array
@@ -341,6 +348,12 @@ class Stars(StarsComponent):
                 )[0]
                 self.metal_dist[imetal] = sf
                 min_metal = max_metal
+
+            # Normalise ZH array
+            self.metal_dist /= np.sum(self.metal_dist)
+
+            # Multiply by initial stellar mass
+            self.metal_dist *= self._initial_mass
 
         # Ensure that by this point we have an array for SFH and ZH
         if self.sf_hist is None or self.metal_dist is None:
