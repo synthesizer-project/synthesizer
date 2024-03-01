@@ -125,8 +125,46 @@ def create_cloudy_input(
 
     """
 
+    default_params = {
+        # ionisation parameter
+        "ionisation_parameter": 0.01,
+        # radius in log10 parsecs, only important for spherical geometry
+        "radius": 0.01,
+        # covering factor. Keep as 1 as it is more efficient to simply combine
+        # SEDs to get != 1.0 values
+        "covering_factor": False,
+        # K, if not provided the command is not used
+        "stop_T": False,
+        # if not provided the command is not used
+        "stop_efrac": False,
+        # K, if not provided the command is not used
+        "T_floor": False,
+        # Hydrogen density
+        "hydrogen_density": 10 ** (2.5),
+        # redshift, only necessary if CMB heating included
+        "z": 0.0,
+        # include CMB heating
+        "CMB": False,
+        # include cosmic rays
+        "cosmic_rays": False,
+        # include dust grains
+        "grains": False,
+        # the geometry
+        "geometry": "planeparallel",
+        # relative resolution the saved continuum spectra
+        "resolution": 1.0,
+        # output abundances
+        "output_abundances": True,
+        # output continuum
+        "output_cont": True,
+        # output full list of all available lines
+        "output_lines": False,
+        # output linelist
+        "output_linelist": "linelist.dat",
+    }
+
     # update default_params with kwargs
-    params = kwargs
+    params = default_params | kwargs
 
     # old approach for updated parameters
     # for key, value in list(kwargs.items()):
