@@ -7,7 +7,9 @@ import numpy as np
 import shutil
 from unyt import c, h, angstrom, unyt_array
 from synthesizer.photoionisation import calculate_Q_from_U
-
+from synthesizer.exceptions import (
+    UnimplementedFunctionality, 
+    InconsistentArguments)
 
 class ShapeCommands:
 
@@ -123,48 +125,8 @@ def create_cloudy_input(
 
     """
 
-    default_params = {
-        # ionisation parameter
-        "ionisation_parameter": 0.01,
-        # radius in log10 parsecs, only important for spherical geometry
-        "radius": 0.01,
-        # covering factor. Keep as 1 as it is more efficient to simply combine
-        # SEDs to get != 1.0 values
-        "covering_factor": False,
-        # K, if not provided the command is not used
-        "stop_T": False,
-        # if not provided the command is not used
-        "stop_efrac": False,
-        # K, if not provided the command is not used
-        "T_floor": False,
-        # Hydrogen density
-        "hydrogen_density": 10 ** (2.5),
-        # redshift, only necessary if CMB heating included
-        "z": 0.0,
-        # include CMB heating
-        "CMB": False,
-        # include cosmic rays
-        "cosmic_rays": False,
-        # include dust grains
-        "grains": False,
-        # the geometry
-        "geometry": "planeparallel",
-        # relative resolution the saved continuum spectra
-        "resolution": 1.0,
-        # output abundances
-        "output_abundances": True,
-        # output continuum
-        "output_cont": True,
-        # output full list of all available lines
-        "output_lines": False,
-        # output linelist
-        "output_linelist": "linelist.dat",
-        # depletion_scale
-        "depletion_scale" : 1.0,
-    }
-
     # update default_params with kwargs
-    params = default_params | kwargs
+    params = kwargs
 
     # old approach for updated parameters
     # for key, value in list(kwargs.items()):
@@ -176,8 +138,12 @@ def create_cloudy_input(
     # add spectral shape commands
     cinput += shape_commands
 
+    # Check on depletion model and grains
+    if (params["depletion_model"] is None) and (params["grains"] is not None):
+        raise InconsistentArguments("Can not use grains without depletion ")
+
     # The original method of handling depletion and grain
-    if params["depletion_model"] in ["CloudyClassic", "Gutkin2016"]:
+    if params["depletion_model"] is not None:
         # Define the chemical composition, here we use the depleted (gas-phase)
         # abundances and set "no grains".
         for ele in ["He"] + abundances.metals:
@@ -238,17 +204,29 @@ def create_cloudy_input(
         """
 
         # If grain physics are required, add this self-consistently
-        if (abundances.dust_to_metal_ratio > 0) & (params["grains"]
-                                                   is not None):
+        
+        if params["grains"] is None:
+            f_graphite, f_Si, f_pah = 0, 0, 0
+
+        else:
             delta_C = 10**abundances.total["C"] - 10**abundances.gas["C"]
             delta_PAH = 0.01 * (10 ** abundances.total["C"])
             delta_graphite = delta_C - delta_PAH
             delta_Si = 10**abundances.total["Si"] - 10**abundances.gas["Si"]
-            orion_C_abund = -3.6259
-            orion_Si_abund = -4.5547
+            
+            # define the reference abundances for the different grain types
+            # this should be the dust-phase abundance in the particular 
+            # reference environment.
+            if params["grains"] == "Orion":
+                reference_C_abund = -3.6259
+                reference_Si_abund = -4.5547
+            else:
+                raise UnimplementedFunctionality(
+                    'Only Orion grains are currently implemented')
+
             PAH_abund = -4.446
-            f_graphite = delta_graphite / (10 ** (orion_C_abund))
-            f_Si = delta_Si / (10 ** (orion_Si_abund))
+            f_graphite = delta_graphite / (10 ** (reference_C_abund))
+            f_Si = delta_Si / (10 ** (reference_Si_abund))
             f_pah = delta_PAH / (10 ** (PAH_abund))
             command = (
                 f"grains {params['grains']} graphite {f_graphite} \n"
@@ -256,62 +234,64 @@ def create_cloudy_input(
                 f"grains PAH {f_pah}"
             )
             cinput.append(command + "\n")
-        else:
-            f_graphite, f_Si, f_pah = 0, 0, 0
 
+    # NOTE FROM SW (01/03/24): WHILE THIS IS DESIRABLE I AM NOT CONVINCED IT 
+    # WORKS AS ADVERTISED AS LOW METALLICITY APPEARS TO HAVE A STRONG IMPACT
+    # FROM GRAINS ON LINE LUMINOSITIES
     # Jenkins 2009 depletion model as implemented by cloudy.
     # See 2023 release paper section 5
-    elif params["depletion_model"] == 'Jenkins2009':
+    # elif params["depletion_model"] == 'Jenkins2009':
 
-        # Define the chemical composition, because Jenkins2009 applies
-        # depletion as a cloudy command we use total abundances and there
-        # is no need to use the "no grains" command.
-        for ele in ["He"] + abundances.metals:
-            cinput.append(
-                (
-                    f"element abundance {abundances.name[ele]} "
-                    f"{abundances.total[ele]}\n"
-                )
-            )
+    #     # Define the chemical composition, because Jenkins2009 applies
+    #     # depletion as a cloudy command we use total abundances and there
+    #     # is no need to use the "no grains" command.
+    #     for ele in ["He"] + abundances.metals:
+    #         cinput.append(
+    #             (
+    #                 f"element abundance {abundances.name[ele]} "
+    #                 f"{abundances.total[ele]}\n"
+    #             )
+    #         )
 
-        # The Jenkins2009 depletion assumes a default scale (fstar) of 0.5.
-        if params["depletion_scale"] == 0.5:
-            cinput.append("metals deplete Jenkins 2009\n")
+    #     # The Jenkins2009 depletion assumes a default scale (fstar) of 0.5.
+    #     if params["depletion_scale"] == 0.5:
+    #         cinput.append("metals deplete Jenkins 2009\n")
 
-            # turn on grains
-            if params["grains"] is not None:
-                cinput.append(f"grains {params['grains']}\n")
+    #         # turn on grains
+    #         if params["grains"] is not None:
+    #             cinput.append(f"grains {params['grains']}\n")
 
-        else:
-            value = params["depletion_scale"]
-            cinput.append(f"metals depletion jenkins 2009 fstar {value}\n")
+    #     else:
+    #         value = params["depletion_scale"]
+    #         cinput.append(f"metals depletion jenkins 2009 fstar {value}\n")
 
-            # turn on grains
-            if params["grains"] is not None:
+    #         # turn on grains
+    #         if params["grains"] is not None:
 
-                # Tor non-default (!= 0.5) fstar values, grains needs to be
-                # scaled.
+    #             # Tor non-default (!= 0.5) fstar values, grains needs to be
+    #             # scaled.
 
-                # To do this, we first calculate the dust mass fraction for
-                # the default parameter choice. For the Jenkins2009 model this
-                # is 0.5. This recalcualtes everything for a new depletion 
-                # model. This is not actually ideal.
-                abundances.add_depletion(
-                    depletion_model='Jenkins2009',
-                    depletion_scale=0.5)
-                default_dust_mass_fraction = abundances.dust_abundance
+    #             # To do this, we first calculate the dust mass fraction for
+    #             # the default parameter choice. For the Jenkins2009 model 
+    #             # this
+    #             # is 0.5. This recalcualtes everything for a new depletion 
+    #             # model. This is not actually ideal.
+    #             abundances.add_depletion(
+    #                 depletion_model='Jenkins2009',
+    #                 depletion_scale=0.5)
+    #             default_dust_mass_fraction = abundances.dust_abundance
 
-                # Now recalculate depletion for the actual parameter.
-                abundances.add_depletion(
-                    depletion_model='Jenkins2009',
-                    depletion_scale=params["depletion_scale"])
-                dust_mass_fraction = abundances.dust_abundance
+    #             # Now recalculate depletion for the actual parameter.
+    #             abundances.add_depletion(
+    #                 depletion_model='Jenkins2009',
+    #                 depletion_scale=params["depletion_scale"])
+    #             dust_mass_fraction = abundances.dust_abundance
 
-                # Calculate the ratio...
-                ratio = dust_mass_fraction / default_dust_mass_fraction
+    #             # Calculate the ratio...
+    #             ratio = dust_mass_fraction / default_dust_mass_fraction
 
-                # and use this to scale the grain command.
-                cinput.append(f"grains {params['grains']} {ratio}\n")
+    #             # and use this to scale the grain command.
+    #             cinput.append(f"grains {params['grains']} {ratio}\n")
 
     else:
         print('WARNING: No depletion (or unrecognised depletion) specified')
@@ -364,18 +344,18 @@ def create_cloudy_input(
         )
 
     # covering factor
-    if params["covering_factor"]:
+    if params["covering_factor"] is not None:
         cinput.append(f'covering factor {params["covering_factor"]} linear\n')
 
     # Processing commands
     # cinput.append("iterate to convergence\n")
-    if params["T_floor"]:
+    if params["T_floor"] is not None:
         cinput.append(f'set temperature floor {params["T_floor"]} linear\n')
 
-    if params["stop_T"]:
+    if params["stop_T"] is not None:
         cinput.append(f'stop temperature {params["stop_T"]}K\n')
 
-    if params["stop_efrac"]:
+    if params["stop_efrac"] is not None:
         cinput.append(f'stop efrac {params["stop_efrac"]}\n')
 
     # --- output commands
