@@ -126,6 +126,8 @@ def create_cloudy_input(
     """
 
     default_params = {
+        # 
+        "no_grain_scaling": False, 
         # ionisation parameter
         "ionisation_parameter": 0.01,
         # radius in log10 parsecs, only important for spherical geometry
@@ -247,30 +249,41 @@ def create_cloudy_input(
             f_graphite, f_Si, f_pah = 0, 0, 0
 
         else:
-            delta_C = 10**abundances.total["C"] - 10**abundances.gas["C"]
-            delta_PAH = 0.01 * (10 ** abundances.total["C"])
-            delta_graphite = delta_C - delta_PAH
-            delta_Si = 10**abundances.total["Si"] - 10**abundances.gas["Si"]
-            
-            # define the reference abundances for the different grain types
-            # this should be the dust-phase abundance in the particular 
-            # reference environment.
-            if params["grains"] == "Orion":
-                reference_C_abund = -3.6259
-                reference_Si_abund = -4.5547
-            else:
-                raise UnimplementedFunctionality(
-                    'Only Orion grains are currently implemented')
 
-            PAH_abund = -4.446
-            f_graphite = delta_graphite / (10 ** (reference_C_abund))
-            f_Si = delta_Si / (10 ** (reference_Si_abund))
-            f_pah = delta_PAH / (10 ** (PAH_abund))
+            if params["no_grain_scaling"] is False:
+
+                delta_C = 10**abundances.total["C"] - 10**abundances.gas["C"]
+                delta_PAH = 0.01 * (10 ** abundances.total["C"])
+                delta_graphite = delta_C - delta_PAH
+                delta_Si = 10**abundances.total["Si"] - 10**abundances.gas["Si"]
+                
+                # define the reference abundances for the different grain types
+                # this should be the dust-phase abundance in the particular 
+                # reference environment.
+                if params["grains"] == "Orion":
+                    reference_C_abund = -3.6259
+                    reference_Si_abund = -4.5547
+                else:
+                    raise UnimplementedFunctionality(
+                        'Only Orion grains are currently implemented')
+
+                PAH_abund = -4.446
+                f_graphite = delta_graphite / (10 ** (reference_C_abund))
+                f_Si = delta_Si / (10 ** (reference_Si_abund))
+                f_pah = delta_PAH / (10 ** (PAH_abund))
+                
+            else:
+
+                f_graphite = 1.0
+                f_Si = 1.0
+                f_pah = 1.0
+
             command = (
                 f"grains {params['grains']} graphite {f_graphite} \n"
                 f"grains {params['grains']} silicate {f_Si} \n"
                 f"grains PAH {f_pah}"
-            )
+                )
+
             cinput.append(command + "\n")
 
     # NOTE FROM SW (01/03/24): WHILE THIS IS DESIRABLE I AM NOT CONVINCED IT 
