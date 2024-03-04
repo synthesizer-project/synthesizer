@@ -606,7 +606,7 @@ class Stars(Particles, StarsComponent):
             )
 
         # Combine the individual parametric forms for each particle
-        stars = sum(stars[1:], stars[0])
+        stars = sum(stars)
 
         # Get the spectra for this parametric form
         return stars.generate_lnu(grid=grid, spectra_name=spectra_name)

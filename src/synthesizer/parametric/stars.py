@@ -583,6 +583,30 @@ class Stars(StarsComponent):
 
         return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
 
+    def __radd__(self, other_stars):
+        """
+        Overloads "reflected" addition to allow two Stars instances to be added
+        together when in reverse order, i.e. second_stars + self.
+
+        This will only work for Stars objects with the same SFZH grid axes.
+
+        Args:
+            other_stars (parametric.Stars)
+                The other instance of Stars to add to this one.
+        """
+
+        if np.all(self.log10ages == other_stars.log10ages) and np.all(
+            self.metallicities == other_stars.metallicities
+        ):
+            new_sfzh = self.sfzh + other_stars.sfzh
+
+        else:
+            raise exceptions.InconsistentAddition(
+                "SFZH must be the same shape"
+            )
+
+        return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
+
     def scale_mass_by_luminosity(self, lum, scale_filter, spectra_type):
         """
         Scale the mass of the stellar population to match a luminosity in a
