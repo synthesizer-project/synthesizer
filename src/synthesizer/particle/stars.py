@@ -378,7 +378,7 @@ class Stars(Particles, StarsComponent):
         do_grid_check=False,
         grid_assignment_method="cic",
         parametric_young_stars=None,
-        parametric_sfh="Constant",
+        parametric_sfh="constant",
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
