@@ -15,6 +15,7 @@ Example usage:
     galaxystars.get_spectra_incident(...)
 
 """
+
 import numpy as np
 from unyt import Myr, unyt_quantity
 from scipy.spatial import cKDTree
@@ -55,6 +56,7 @@ class Galaxy(BaseGalaxy):
         gas=None,
         black_holes=None,
         redshift=None,
+        centre_of_potential=None,
     ):
         """Initialise a particle based Galaxy with objects derived from
            Particles.
@@ -72,6 +74,9 @@ class Galaxy(BaseGalaxy):
                 data.
             redshift (float)
                 The redshift of the galaxy.
+            centre_of_potential (float)
+                The minimum of the gravitational potential of the galaxy,
+                in kpc.
 
         Raises:
             InconsistentArguments
@@ -99,6 +104,9 @@ class Galaxy(BaseGalaxy):
 
         # Define a name for this galaxy
         self.name = name
+
+        # Store the centre of potential (for aperture calculations)
+        self.centre_of_potential = centre_of_potential
 
         # If we have them, record how many stellar / gas particles there are
         if self.stars:
@@ -183,8 +191,9 @@ class Galaxy(BaseGalaxy):
         self.stars = Stars(initial_masses, ages, metals, **kwargs)
         self.calculate_integrated_stellar_properties()
 
-        # Assign the redshift
+        # Assign additional galaxy-level properties
         self.stars.redshift = self.redshift
+        self.stars.centre_of_potential = self.centre_of_potential
 
     def load_gas(self, masses, metals, **kwargs):
         """
@@ -205,6 +214,10 @@ class Galaxy(BaseGalaxy):
         """
         self.gas = Gas(masses, metals, **kwargs)
         self.calculate_integrated_gas_properties()
+
+        # Assign additional galaxy-level properties
+        self.gas.redshift = self.redshift
+        self.gas.centre_of_potential = self.centre_of_potential
 
     def calculate_black_hole_metallicity(self, default_metallicity=0.012):
         """
