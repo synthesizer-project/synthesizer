@@ -196,7 +196,7 @@ class Stars(StarsComponent):
             self.metal_dist_func = metal_dist  # a ZDist function
             self.metal_dist = None
             instant_metallicity = None
-        elif isinstance(metal_dist, (unyt_quantity, float)):
+        elif isinstance(metal_dist, (unyt_quantity, float, np.floating)):
             instant_metallicity = metal_dist  # an instantaneous SFH
             self.metal_dist_func = None
             self.metal_dist = None
@@ -563,6 +563,30 @@ class Stars(StarsComponent):
         Add two Stars instances together.
 
         In simple terms this sums the SFZH grids of both Stars instances.
+
+        This will only work for Stars objects with the same SFZH grid axes.
+
+        Args:
+            other_stars (parametric.Stars)
+                The other instance of Stars to add to this one.
+        """
+
+        if np.all(self.log10ages == other_stars.log10ages) and np.all(
+            self.metallicities == other_stars.metallicities
+        ):
+            new_sfzh = self.sfzh + other_stars.sfzh
+
+        else:
+            raise exceptions.InconsistentAddition(
+                "SFZH must be the same shape"
+            )
+
+        return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
+
+    def __radd__(self, other_stars):
+        """
+        Overloads "reflected" addition to allow two Stars instances to be added
+        together when in reverse order, i.e. second_stars + self.
 
         This will only work for Stars objects with the same SFZH grid axes.
 

@@ -1,16 +1,15 @@
 """
 """
+
 import numpy as np
 
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
 from synthesizer.imaging import ImageCollection, SpectralCube
 from synthesizer.art import Art, get_centred_art
-from synthesizer.particle import Stars as ParticleStars
 
 
 class Galaxy(BaseGalaxy):
-
     """A class defining parametric galaxy objects"""
 
     def __init__(
@@ -35,13 +34,6 @@ class Galaxy(BaseGalaxy):
         Raises:
             InconsistentArguments
         """
-
-        # Check we haven't been given Stars
-        if isinstance(stars, ParticleStars):
-            raise exceptions.InconsistentArguments(
-                "Stars passed instead of SFZH object (Stars)."
-                " Did you mean synthesizer.particle.Galaxy instead?"
-            )
 
         # Set the type of galaxy
         self.galaxy_type = "Parametric"
