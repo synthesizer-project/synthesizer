@@ -44,14 +44,9 @@ pmask = gal.stars.ages < age_lim
 stars = []
 # Loop through each young star particle
 for _pmask in np.where(pmask)[0]:
-    # Parametric SFH parameters
-    sfh_p = {"duration": age_lim}
-    Z_p = {"metallicity": gal.stars.metallicities[_pmask]}
-    stellar_mass = gal.stars.initial_masses[_pmask]
 
-    # Initialise SFH and ZH objects
-    sfh = SFH.Constant(**sfh_p)
-    metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
+    # Initialise SFH object
+    sfh = SFH.Constant(duration=age_lim)
 
     # Create a parametric stars object
     stars.append(
@@ -59,8 +54,8 @@ for _pmask in np.where(pmask)[0]:
             grid.log10age,
             grid.metallicity,
             sf_hist=sfh,
-            metal_dist=metal_dist,
-            initial_mass=stellar_mass,
+            metal_dist=gal.stars.metallicities[_pmask],
+            initial_mass=gal.stars.initial_masses[_pmask],
         )
     )
 
