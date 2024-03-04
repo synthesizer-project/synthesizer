@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 from synthesizer.grid import Grid
-from synthesizer.parametric import SFH, ZDist, Stars
+from synthesizer.parametric import SFH, Stars
 from synthesizer.parametric.galaxy import Galaxy
 
 
