@@ -196,7 +196,7 @@ class Stars(StarsComponent):
             self.metal_dist_func = metal_dist  # a ZDist function
             self.metal_dist = None
             instant_metallicity = None
-        elif isinstance(metal_dist, (unyt_quantity, float)):
+        elif isinstance(metal_dist, (unyt_quantity, float, np.floating)):
             instant_metallicity = metal_dist  # an instantaneous SFH
             self.metal_dist_func = None
             self.metal_dist = None
