@@ -2,7 +2,7 @@
 Test the effect on the intrinsic emission of assuming a
 parametric SFH for young star particles.
 
-This is now implemented within call to `generate_lnu` 
+This is now implemented within call to `generate_lnu`
 on a parametric stars object.
 """
 
@@ -113,8 +113,8 @@ ax1.loglog(
 ax1.set_ylim(1e20, 1e30)
 ax1.set_xlim(1e2, 2e4)
 ax1.legend()
-ax1.set_xlabel("$\lambda \,/\, \AA$")
-ax1.set_ylabel("$L_{\lambda} / \mathrm{erg / Hz / s}$")
+ax1.set_xlabel("$\\lambda \\,/\\, \\AA$")
+ax1.set_ylabel("$L_{\\lambda} / \\mathrm{erg / Hz / s}$")
 
 """
 Plot SFH from particles and parametric
@@ -155,8 +155,8 @@ ax2.hist(
 )
 ax2.legend()
 # plt.show()
-ax2.set_xlabel("$\mathrm{\log_{10} Age \,/\, yr}$")
-ax2.set_ylabel("$\mathrm{log_{10} (Mass \,/\, M_{\odot})}$")
+ax2.set_xlabel("$\\mathrm{log_{10} Age \\,/\\, yr}$")
+ax2.set_ylabel("$\\mathrm{log_{10} (Mass \\,/\\, M_{\\odot})}$")
 
 plt.show()
 # plt.savefig("young_star_parametric.png", dpi=200, bbox_inches="tight")
