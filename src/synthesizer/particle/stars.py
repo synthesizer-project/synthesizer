@@ -33,7 +33,7 @@ from synthesizer.plt import single_histxy
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 from synthesizer import exceptions
-from synthesizer.parametric import SFH, ZDist
+from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 
 
@@ -378,7 +378,7 @@ class Stars(Particles, StarsComponent):
         do_grid_check=False,
         grid_assignment_method="cic",
         parametric_young_stars=None,
-        parametric_sfh=SFH.Constant,
+        parametric_sfh="Constant",
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -416,10 +416,13 @@ class Stars(Particles, StarsComponent):
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
             parametric_young_stars (bool/float)
-                If not None, specifies age in Myr at which to use a parametric
-                SFH for young particles.
-            parametric_sfh (SFH object)
-                Form of the parametric SFH to use for young stars
+                If not None, specifies age in Myr below which we replace
+                individual star particles with a parametric SFH.
+            parametric_sfh (string)
+                Form of the parametric SFH to use for young stars.
+                Currently two are supported, `Constant` and
+                `TruncatedExponential`, selected using the keyword
+                arguments `constant` and `exponential`.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
@@ -548,38 +551,61 @@ class Stars(Particles, StarsComponent):
         spectra_name,
     ):
         """
-        Replace young stars with parametric SFH
+        Replace young stars with individual parametric SFH's. Can be either a
+        constant or truncated exponential, selected with the `parametric_sfh`
+        argument. Returns the emission from these replaced particles assuming
+        this SFH. The metallicity is set to the metallicity of the parent
+        star particle.
 
         Args:
+            pmask (bool array)
+                Star particles to replace
+            age (float)
+                Age in Myr below which we replace Star particles.
+                Used to set the duration of parametric SFH
+            parametric_sfh (string)
+                Form of the parametric SFH to use for young stars.
+                Currently two are supported, `Constant` and
+                `TruncatedExponential`, selected using the keyword
+                arguments `constant` and `exponential`.
+            grid (Grid)
+                The spectral grid object.
+            spectra_name (string)
+                The name of the target spectra inside the grid file.
 
+        Returns:
+            Numpy array of integrated spectra in units of (erg / s / Hz).
         """
 
-        # Set the duration of the parametric SFH
-        sfh_p = {"duration": age}
-
         # initialise SFH object
-        sfh = parametric_sfh(**sfh_p)
+        if parametric_sfh == "constant":
+            sfh = SFH.Constant(duration=age)
+        elif parametric_sfh == "exponential":
+            sfh = SFH.TruncatedExponential(tau=age / 2, max_age=age)
+        else:
+            raise ValueError(
+                (
+                    "Value of `parametric_sfh` provided, "
+                    f"`{parametric_sfh}`, is not supported."
+                    "Please use 'constant' or 'exponential'."
+                )
+            )
 
         stars = [None] * np.sum(pmask)
 
         # Loop through particles to be replaced
         for i, _pmask in enumerate(np.where(pmask)[0]):
-            # Set metallicity to that of the parent star particle
-            Z_p = {"metallicity": self.metallicities[_pmask]}
-
-            # Initialise ZH object
-            metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
 
             # Create a parametric Stars object
             stars[i] = Para_Stars(
                 grid.log10age,
                 grid.metallicity,
                 sf_hist=sfh,
-                metal_dist=metal_dist,
+                metal_dist=self.metallicities[_pmask],
                 initial_mass=self.initial_masses[_pmask],
             )
 
-        # Combine the invidivual parametric forms for each particle
+        # Combine the individual parametric forms for each particle
         stars = sum(stars[1:], stars[0])
 
         # Get the spectra for this parametric form
