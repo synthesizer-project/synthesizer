@@ -77,7 +77,6 @@ class Jenkins2009_Gunasekera2021:
             # calculate depletion, including limit
 
             depletion = np.min([limit, 10**(b_x + a_x * (fstar - z_x))])
-            print(element, depletion)
             self.depletion[element] = depletion
 
 
