@@ -491,6 +491,14 @@ class Line:
         self.continuum_lam = lnu_to_llam(self.wavelength, self.continuum)
         self.ew = self.luminosity / self.continuum_lam  # AA
 
+        # more descriptive attribute name
+        self.equivalent_width = self.ew
+
+        # element
+        self.element = id_.split(' ')[0]
+
+
+
     def __str__(self):
         """Function to print a basic summary of the Line object.
 
