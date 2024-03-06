@@ -575,6 +575,9 @@ def read_linelist(filename, extension="elin"):
             # convert luminosity to float
             lum = float(lum)
 
+            # change the units of luminosity
+            lum /= 1E7
+
             line_ids.append(id)
             wavelengths.append(wavelength)
             luminosities.append(lum)
