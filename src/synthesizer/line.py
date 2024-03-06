@@ -9,6 +9,7 @@ import numpy as np
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.units import Quantity
 from synthesizer import exceptions
+from unyt import Angstrom
 
 
 def get_line_id(id):
@@ -242,12 +243,21 @@ class LineCollection:
 
     def __init__(self, lines):
         self.lines = lines
-        self.line_ids = list(self.lines.keys())
 
-        """
-        these should be filtered to only show ones that are available
-        for the available line_ids
-        """
+        # create an array of line_ids
+        self.line_ids = np.array(list(self.lines.keys()))
+
+        # create list of line wavelengths
+        self.wavelengths = (np.array([
+            line.wavelength.to('Angstrom').value for line in self.lines])
+            * Angstrom)
+
+        # get the arguments that would sort wavelength
+        sorted_arguments = np.argsort(self.wavelengths)
+
+        # sort the line_ids and wavelengths
+        self.line_ids = self.line_ids[sorted_arguments]
+        self.wavelengths = self.wavelengths[sorted_arguments]
 
         # Atrributes to enable looping
         self._current_ind = 0
@@ -255,6 +265,8 @@ class LineCollection:
 
         self.lineratios = LineRatios()
 
+        # NOTE: these should be filtered to only show line ratios and diagrams
+        # that are available
         self.available_ratios = self.lineratios.available_ratios
         self.available_diagrams = self.lineratios.available_diagrams
 
