@@ -510,6 +510,11 @@ class Grid:
 
         return pstr
 
+    @property
+    def shape(self):
+        """Return the shape of the grid."""
+        return self.spectra[self.available_spectra[0]].shape
+
     def get_nearest_index(self, value, array):
         """
         Function for calculating the closest index in an array for a
