@@ -217,6 +217,7 @@ class Grid:
         read_lines=True,
         new_lam=None,
         filters=None,
+        lam_lims=(),
     ):
         """
         Initailise the grid object, open the grid file and extracting the
@@ -239,6 +240,10 @@ class Grid:
                 An optional FilterCollection object to unify the grids
                 wavelength grid with. If provided, this will override new_lam
                 whether passed or not.
+            lam_lims (tuple, float)
+                A tuple of the lower and upper wavelength limits to truncate
+                the grid to (i.e. (lower_lam, upper_lam)). If new_lam or
+                filters are provided these limits will be ignored.
         """
         if grid_dir is None:
             grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
@@ -390,6 +395,14 @@ class Grid:
             # Save list of available lines
             self.available_lines = list(self.lines.keys())
 
+        # If we have both new_lam (or filters) and wavelength limits
+        # the limits become meaningless tell the user so.
+        if len(lam_lims) > 0 and (new_lam is not None or filters is not None):
+            print(
+                "Passing new_lam or filters and lam_lims is contradictory, "
+                "lam_lims will be ignored."
+            )
+
         # Has a new wavelength grid been passed to interpolate
         # the spectra onto?
         if new_lam is not None and filters is None:
@@ -422,6 +435,10 @@ class Grid:
                 )
 
             self.unify_with_filters(filters)
+
+        # If we have been given wavelength limtis truncate the grid
+        if len(lam_lims) > 0 and filters is None and new_lam is None:
+            self.truncate_grid(*lam_lims)
 
     def interp_spectra(self, new_lam, loop_grid=False):
         """
@@ -818,6 +835,33 @@ class Grid:
                 The spectra grid as an Sed object.
         """
         return Sed(self.lam, self.spectra[spectra_type])
+
+    def truncate_grid_lam(self, min_lam, max_lam):
+        """
+        Truncate the grid to a specific wavelength range.
+
+        If out of range wavlengths are requested, the grid will be
+        truncated to the nearest wavelength within the grid.
+
+        Args:
+            min_lam (unyt_quantity)
+                The minimum wavelength to truncate the grid to.
+
+            max_lam (unyt_quantity)
+                The maximum wavelength to truncate the grid to.
+        """
+
+        # Get the indices of the wavelengths to keep
+        okinds = np.logical_and(self.lam >= min_lam, self.lam <= max_lam)
+
+        # Apply the mask to the grid wavelengths
+        self.lam = self.lam[okinds]
+
+        # Apply the mask to the spectra
+        for spectra_type in self.available_spectra:
+            self.spectra[spectra_type] = self.spectra[spectra_type][
+                ..., okinds
+            ]
 
     def unify_with_filters(self, filters):
         """
