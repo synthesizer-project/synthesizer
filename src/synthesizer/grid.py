@@ -438,7 +438,7 @@ class Grid:
 
         # If we have been given wavelength limtis truncate the grid
         if len(lam_lims) > 0 and filters is None and new_lam is None:
-            self.truncate_grid(*lam_lims)
+            self.truncate_grid_lam(*lam_lims)
 
     def interp_spectra(self, new_lam, loop_grid=False):
         """
