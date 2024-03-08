@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 from spectres import spectres
-from unyt import unyt_array, unyt_quantity
+from unyt import unyt_array, unyt_quantity, angstrom
 
 from synthesizer import exceptions
 from synthesizer.sed import Sed
@@ -885,6 +885,11 @@ class Grid:
         """
         # Get the minimum and maximum wavelengths with non-zero transmission
         min_lam, max_lam = filters.get_non_zero_lam_lims()
+
+        # Ensure we have at least 1 element with 0 transmission to solve
+        # any issues at the boundaries
+        min_lam -= 10 * angstrom
+        max_lam += 10 * angstrom
 
         # Truncate the grid to these wavelength limits
         self.truncate_grid_lam(min_lam, max_lam)
