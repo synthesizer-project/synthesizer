@@ -637,14 +637,19 @@ class FilterCollection:
             for fc in np.array(self.filter_codes)[sinds]
         ]
 
+        # Include 10 zero transmission points either side of the wavelength
+        # arrays
+        for i, lam in enumerate(arrays):
+            for _ in range(10):
+                lam = np.insert(lam, 0, lam[0] - (lam[1] - lam[0]))
+                lam = np.append(lam, lam[-1] + (lam[-1] - lam[-2]))
+            arrays[i] = lam
+
         # Combine everything together in order
         new_lam = np.concatenate(arrays)
 
         # Remove any duplicate values
         new_lam = np.unique(new_lam)
-
-        # Get the smallest difference between adjacent values
-        diffs = np.diff(new_lam)
 
         # New remove any overlaps by iteratively removing negative differences
         # between adjacent elements
@@ -781,7 +786,6 @@ class FilterCollection:
             add_filter_label : bool
                 Are we labelling the filter? (NotYetImplemented)
         """
-
         # TODO: Add colours
 
         # Loop over the filters plotting their curves.
@@ -810,7 +814,6 @@ class FilterCollection:
             ax obj (matplotlib.axis)
                 The matplotlib axis object containg the plot.
         """
-
         # Set up figure
         if fig is None:
             fig = plt.figure(figsize=(5.0, 3.5))
