@@ -886,17 +886,8 @@ class Grid:
         # Get the minimum and maximum wavelengths with non-zero transmission
         min_lam, max_lam = filters.get_non_zero_lam_lims()
 
-        # Define the mask to eliminate wavelengths outside this range
-        okinds = np.logical_and(self.lam >= min_lam, self.lam <= max_lam)
-
-        # Apply the mask to the grid wavelengths
-        self.lam = self.lam[okinds]
-
-        # Apply the mask to the spectra
-        for spectra_type in self.available_spectra:
-            self.spectra[spectra_type] = self.spectra[spectra_type][
-                ..., okinds
-            ]
+        # Truncate the grid to these wavelength limits
+        self.truncate_grid_lam(min_lam, max_lam)
 
         # Interpolate the filters onto this new wavelength range
         filters.resample_filters(new_lam=self.lam)
