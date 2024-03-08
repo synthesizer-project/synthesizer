@@ -18,6 +18,7 @@ Example usages:
                         smoothing_lengths=smoothing_lengths,
                         tau_v=tau_vs, coordinates=coordinates, ...)
 """
+
 import warnings
 
 import numpy as np
@@ -32,6 +33,8 @@ from synthesizer.plt import single_histxy
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 from synthesizer import exceptions
+from synthesizer.parametric import SFH
+from synthesizer.parametric import Stars as Para_Stars
 
 
 class Stars(Particles, StarsComponent):
@@ -374,6 +377,8 @@ class Stars(Particles, StarsComponent):
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
+        parametric_young_stars=None,
+        parametric_sfh="constant",
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -410,6 +415,14 @@ class Stars(Particles, StarsComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            parametric_young_stars (bool/float)
+                If not None, specifies age in Myr below which we replace
+                individual star particles with a parametric SFH.
+            parametric_sfh (string)
+                Form of the parametric SFH to use for young stars.
+                Currently two are supported, `Constant` and
+                `TruncatedExponential`, selected using the keyword
+                arguments `constant` and `exponential`.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
@@ -495,6 +508,21 @@ class Stars(Particles, StarsComponent):
 
             return np.zeros(len(grid.lam))
 
+        if parametric_young_stars:
+            # Get mask for particles we're going to replace with parametric
+            pmask = self._get_masks(parametric_young_stars, None)
+
+            # Update the young/old mask to ignore those we're replacing
+            mask[pmask] = False
+
+            lnu_parametric = self._parametric_young_stars(
+                pmask=pmask,
+                age=parametric_young_stars,
+                parametric_sfh=parametric_sfh,
+                grid=grid,
+                spectra_name=spectra_name,
+            )
+
         from ..extensions.integrated_spectra import compute_integrated_sed
 
         # Prepare the arguments for the C function.
@@ -507,7 +535,81 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        return compute_integrated_sed(*args)
+        lnu_particle = compute_integrated_sed(*args)
+
+        if parametric_young_stars:
+            return lnu_particle + lnu_parametric
+        else:
+            return lnu_particle
+
+    def _parametric_young_stars(
+        self,
+        pmask,
+        age,
+        parametric_sfh,
+        grid,
+        spectra_name,
+    ):
+        """
+        Replace young stars with individual parametric SFH's. Can be either a
+        constant or truncated exponential, selected with the `parametric_sfh`
+        argument. Returns the emission from these replaced particles assuming
+        this SFH. The metallicity is set to the metallicity of the parent
+        star particle.
+
+        Args:
+            pmask (bool array)
+                Star particles to replace
+            age (float)
+                Age in Myr below which we replace Star particles.
+                Used to set the duration of parametric SFH
+            parametric_sfh (string)
+                Form of the parametric SFH to use for young stars.
+                Currently two are supported, `Constant` and
+                `TruncatedExponential`, selected using the keyword
+                arguments `constant` and `exponential`.
+            grid (Grid)
+                The spectral grid object.
+            spectra_name (string)
+                The name of the target spectra inside the grid file.
+
+        Returns:
+            Numpy array of integrated spectra in units of (erg / s / Hz).
+        """
+
+        # initialise SFH object
+        if parametric_sfh == "constant":
+            sfh = SFH.Constant(duration=age)
+        elif parametric_sfh == "exponential":
+            sfh = SFH.TruncatedExponential(tau=age / 2, max_age=age)
+        else:
+            raise ValueError(
+                (
+                    "Value of `parametric_sfh` provided, "
+                    f"`{parametric_sfh}`, is not supported."
+                    "Please use 'constant' or 'exponential'."
+                )
+            )
+
+        stars = [None] * np.sum(pmask)
+
+        # Loop through particles to be replaced
+        for i, _pmask in enumerate(np.where(pmask)[0]):
+
+            # Create a parametric Stars object
+            stars[i] = Para_Stars(
+                grid.log10age,
+                grid.metallicity,
+                sf_hist=sfh,
+                metal_dist=self.metallicities[_pmask],
+                initial_mass=self.initial_masses[_pmask],
+            )
+
+        # Combine the individual parametric forms for each particle
+        stars = sum(stars[1:], stars[0])
+
+        # Get the spectra for this parametric form
+        return stars.generate_lnu(grid=grid, spectra_name=spectra_name)
 
     def generate_line(self, grid, line_id, fesc):
         """
