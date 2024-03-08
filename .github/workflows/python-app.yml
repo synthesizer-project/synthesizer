@@ -42,13 +42,9 @@ jobs:
         # - E203 "whitespace before ‘,’, ‘;’, or ‘:’" (conflicts with black formatting of array indexing, `:`)
         flake8 . --count --ignore=E402,W503,F811,E203 --max-line-length=79 --show-source --statistics --per-file-ignores="src/synthesizer/__init__.py:F401 src/synthesizer/abundances/__init__.py:F401 src/synthesizer/components/__init__.py:F401 src/synthesizer/imaging/__init__.py:F401 src/synthesizer/parametric/__init__.py:F401 src/synthesizer/particle/__init__.py:F401 src/synthesizer/photoionisation/__init__.py:F401 docs/source/conf.py:E501"
     - name: Download test data
-      env:
-          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
       run: |
-        cd tests/
         # download test grid data
-        ./get_test_grid.sh
-        cd ../
+        synthesizer-download --test-grids -d tests/test_grid/ --dust-grid
     - name: Test with pytest
       run: |
         pytest
