@@ -29,6 +29,7 @@ jobs:
           cd tests/
           ./get_test_grid.sh
           cd ../
+          synthesizer-download --test-grids -d tests/test_grid/
       - name: Sphinx Build
         run: |
           cd docs
