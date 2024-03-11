@@ -5,8 +5,7 @@ particle.Stars and parametric.Stars and contains attributes
 and methods common between them.
 """
 import numpy as np
-import matplotlib.pyplot as plt
-from unyt import Myr, Gyr, unyt_quantity
+from unyt import Myr, unyt_quantity, Lsun
 
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
@@ -52,6 +51,10 @@ class StarsComponent:
 
         # Define the line dictionary to hold the stellar emission lines
         self.lines = {}
+
+        # Define the photometry dictionaries to hold the stellar photometry
+        self.photo_luminosities = {}
+        self.photo_fluxes = {}
 
         # The common stellar attributes between particle and parametric stars
         self.ages = ages
@@ -399,7 +402,9 @@ class StarsComponent:
                 **kwargs,
             )
 
-            self.spectra[f"{label}intrinsic"] = self.spectra[f"{label}incident"]
+            self.spectra[f"{label}intrinsic"] = self.spectra[
+                f"{label}incident"
+            ]
             return spec
 
         # The incident emission
@@ -664,8 +669,8 @@ class StarsComponent:
                 alpha, (list, tuple, np.ndarray)
             ):
                 raise exceptions.InconsistentArguments(
-                    "Only singular values are supported for tau_v and alpha in "
-                    "a single dust screen situation."
+                    "Only singular values are supported for tau_v and alpha "
+                    "in a single dust screen situation."
                 )
 
         # If grid has photoinoisation outputs, use the reprocessed outputs
@@ -725,16 +730,19 @@ class StarsComponent:
             # Combine young and old spectra
             if grid.read_lines:
                 self.spectra["incident"] = (
-                    self.spectra["young_incident"] + self.spectra["old_incident"]
+                    self.spectra["young_incident"]
+                    + self.spectra["old_incident"]
                 )
                 self.spectra["transmitted"] = (
-                    self.spectra["young_transmitted"] + self.spectra["old_transmitted"]
+                    self.spectra["young_transmitted"]
+                    + self.spectra["old_transmitted"]
                 )
                 self.spectra["nebular"] = (
                     self.spectra["young_nebular"] + self.spectra["old_nebular"]
                 )
                 self.spectra["reprocessed"] = (
-                    self.spectra["young_reprocessed"] + self.spectra["old_reprocessed"]
+                    self.spectra["young_reprocessed"]
+                    + self.spectra["old_reprocessed"]
                 )
 
             self.spectra["intrinsic"] = (
@@ -788,7 +796,8 @@ class StarsComponent:
                 self.spectra["emergent"]._lnu = self.spectra["attenuated"]._lnu
             else:
                 self.spectra["emergent"]._lnu = (
-                    self.spectra["escaped"]._lnu + self.spectra["attenuated"]._lnu
+                    self.spectra["escaped"]._lnu
+                    + self.spectra["attenuated"]._lnu
                 )
 
             # Force updating of the bolometric luminosity attribute. I don't
@@ -804,15 +813,37 @@ class StarsComponent:
                     - self.spectra["emergent"].bolometric_luminosity
                 )
 
-                # Get normalised dust spectrum, this is an synthesizer.sed.Sed
-                # object.
-                self.spectra["dust"] = dust_emission_model.get_spectra(grid.lam)
+                if hasattr(dust_emission_model, "template"):
+                    print("Using IR template models for dust emission")
+                    if dust_emission_model.ldust is None:
+                        dust_emission_model.ldust = (
+                            dust_bolometric_luminosity.to(Lsun)
+                        )
 
-                # scale the dust spectra by the dust_bolometric_luminosity
-                self.spectra["dust"]._lnu *= dust_bolometric_luminosity.value
+                    self.spectra["dust"] = dust_emission_model.get_spectra(
+                        grid.lam
+                    )
+
+                else:
+                    print(
+                        "Using dust temperature based models for "
+                        "dust emission"
+                    )
+                    # Get normalised dust spectrum, this is an synthesizer.sed.
+                    # Sed object.
+                    self.spectra["dust"] = dust_emission_model.get_spectra(
+                        grid.lam
+                    )
+
+                    # scale the dust spectra by the dust_bolometric_luminosity
+                    self.spectra[
+                        "dust"
+                    ]._lnu *= dust_bolometric_luminosity.value
 
                 # define total as the sum of emergent and dust
-                self.spectra["total"] = self.spectra["dust"] + self.spectra["emergent"]
+                self.spectra["total"] = (
+                    self.spectra["dust"] + self.spectra["emergent"]
+                )
 
         elif np.isscalar(tau_v) is False:
             # Apply separate attenuation to both the young and old components.
@@ -866,9 +897,9 @@ class StarsComponent:
             self.spectra["young_attenuated"] = young_attenuated
 
             # Calculate attenuated spectra of old stars
-            old_attenuated = self.spectra[f"old_{reprocessed_name}"].apply_attenuation(
-                tau_v[0], dust_curve=dust_curve
-            )
+            old_attenuated = self.spectra[
+                f"old_{reprocessed_name}"
+            ].apply_attenuation(tau_v[0], dust_curve=dust_curve)
             self.spectra["old_attenuated"] = old_attenuated
 
             # Get the combined attenuated spectra
@@ -884,7 +915,9 @@ class StarsComponent:
                 self.spectra["young_emergent"]._lnu = self.spectra[
                     "young_attenuated"
                 ]._lnu
-                self.spectra["old_emergent"]._lnu = self.spectra["old_attenuated"]._lnu
+                self.spectra["old_emergent"]._lnu = self.spectra[
+                    "old_attenuated"
+                ]._lnu
             else:
                 self.spectra["young_emergent"]._lnu = (
                     self.spectra["young_escaped"]._lnu
@@ -901,7 +934,9 @@ class StarsComponent:
             self.spectra["old_emergent"].measure_bolometric_luminosity()
 
             if dust_emission_model is not None:
-                if not isinstance(dust_emission_model, list):
+                if (not isinstance(dust_emission_model, list)) and (
+                    not hasattr(dust_emission_model, "template")
+                ):
                     print(
                         (
                             "Separate dust emission model for diffuse and "
@@ -909,7 +944,10 @@ class StarsComponent:
                         )
                     )
 
-                    dust_emission_model = [dust_emission_model, dust_emission_model]
+                    dust_emission_model = [
+                        dust_emission_model,
+                        dust_emission_model,
+                    ]
 
                 # Start with the birth cloud dust.
                 dust_bolometric_luminosity = (
@@ -917,12 +955,17 @@ class StarsComponent:
                     - self.spectra["young_attenuated_BC"].bolometric_luminosity
                 )
 
-                self.spectra["young_dust_BC"] = dust_emission_model[1].get_spectra(
-                    grid.lam
-                )
+                if hasattr(dust_emission_model, "template"):
+                    ldust = dust_bolometric_luminosity.to(Lsun)
+                else:
+                    self.spectra["young_dust_BC"] = dust_emission_model[
+                        1
+                    ].get_spectra(grid.lam)
 
-                # Scale the dust spectra by the dust_bolometric_luminosity.
-                self.spectra["young_dust_BC"]._lnu *= dust_bolometric_luminosity.value
+                    # Scale the dust spectra by the dust_bolometric_luminosity.
+                    self.spectra[
+                        "young_dust_BC"
+                    ]._lnu *= dust_bolometric_luminosity.value
 
                 # ISM dust heated by young stars. This is the difference
                 # between the birth cloud and ISM attenuated spectra.
@@ -931,22 +974,23 @@ class StarsComponent:
                     - self.spectra["young_attenuated"].bolometric_luminosity
                 )
 
-                self.spectra["young_dust_ISM"] = dust_emission_model[0].get_spectra(
-                    grid.lam
-                )
+                if hasattr(dust_emission_model, "template"):
+                    ldust += dust_bolometric_luminosity.to(Lsun)
+                else:
+                    self.spectra["young_dust_ISM"] = dust_emission_model[
+                        0
+                    ].get_spectra(grid.lam)
 
-                # Scale the dust spectra by the dust_bolometric_luminosity.
-                self.spectra["young_dust_ISM"]._lnu *= dust_bolometric_luminosity.value
+                    # Scale the dust spectra by the dust_bolometric_luminosity.
+                    self.spectra[
+                        "young_dust_ISM"
+                    ]._lnu *= dust_bolometric_luminosity.value
 
-                # Combine both dust components for young stars
-                self.spectra["young_dust"] = (
-                    self.spectra["young_dust_BC"] + self.spectra["young_dust_ISM"]
-                )
-
-                # Combine both dust components for young stars
-                self.spectra["young_total"] = (
-                    self.spectra["young_emergent"] + self.spectra["young_dust"]
-                )
+                    # Combine both dust components for young stars
+                    self.spectra["young_dust"] = (
+                        self.spectra["young_dust_BC"]
+                        + self.spectra["young_dust_ISM"]
+                    )
 
                 # ISM dust heated by old stars.
                 dust_bolometric_luminosity = (
@@ -954,10 +998,34 @@ class StarsComponent:
                     - self.spectra["old_attenuated"].bolometric_luminosity
                 )
 
-                self.spectra["old_dust"] = dust_emission_model[0].get_spectra(grid.lam)
+                if hasattr(dust_emission_model, "template"):
+                    ldust += dust_bolometric_luminosity.to(Lsun)
+                    dust_emission_model.ldust = ldust
 
-                # Scale the dust spectra by the dust_bolometric_luminosity.
-                self.spectra["old_dust"]._lnu *= dust_bolometric_luminosity.value
+                    # making dust components from IR templates
+                    # Better classified as diffuse dust and
+                    # pdr dust
+                    (
+                        self.spectra["old_dust"],
+                        self.spectra["young_dust"],
+                    ) = dust_emission_model.get_spectra(
+                        grid.lam, dust_components=True
+                    )
+
+                else:
+                    self.spectra["old_dust"] = dust_emission_model[
+                        0
+                    ].get_spectra(grid.lam)
+
+                    # Scale the dust spectra by the dust_bolometric_luminosity.
+                    self.spectra[
+                        "old_dust"
+                    ]._lnu *= dust_bolometric_luminosity.value
+
+                # Combine both dust components for young stars
+                self.spectra["young_total"] = (
+                    self.spectra["young_emergent"] + self.spectra["young_dust"]
+                )
 
                 # Combine both dust components for young stars
                 self.spectra["old_total"] = (
@@ -1003,8 +1071,8 @@ class StarsComponent:
             tau_v_BC (float)
                 The birth cloud optical depth in the V-band.
             alpha_ISM (float)
-                The slope of the ISM dust curve, (defaults to dust_curve.slope=-1,
-                Recommended: -0.7 from MAGPHYS)
+                The slope of the ISM dust curve, (defaults to
+                dust_curve.slope=-1, Recommended: -0.7 from MAGPHYS)
             alpha_BC (float)
                 The slope of the birth cloud dust curve, (defaults to
                 dust_curve.slope=-1, Recommended: -1.3 from MAGPHYS)
@@ -1102,8 +1170,8 @@ class StarsComponent:
             grid (Grid)
                 The Grid object.
             line_ids (list/str)
-                A list of line_ids or a str denoting a single line. Doublets can be
-                specified as a nested list or using a comma
+                A list of line_ids or a str denoting a single line. Doublets
+                can be specified as a nested list or using a comma
                 (e.g. 'OIII4363,OIII4959').
             fesc (float)
                 The Lyman continuum escaped fraction, the fraction of
@@ -1141,7 +1209,9 @@ class StarsComponent:
         # Loop over the intrinsic lines
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # Calculate attenuation
-            T_BC = dust_curve_BC.get_transmission(tau_v_BC, intrinsic_line._wavelength)
+            T_BC = dust_curve_BC.get_transmission(
+                tau_v_BC, intrinsic_line._wavelength
+            )
             T_ISM = dust_curve_ISM.get_transmission(
                 tau_v_ISM, intrinsic_line._wavelength
             )
@@ -1193,8 +1263,8 @@ class StarsComponent:
             grid (Grid)
                 The Grid object.
             line_ids (list/str)
-                A list of line_ids or a str denoting a single line. Doublets can be
-                specified as a nested list or using a comma
+                A list of line_ids or a str denoting a single line. Doublets
+                can be specified as a nested list or using a comma
                 (e.g. 'OIII4363,OIII4959').
             fesc (float)
                 The Lyman continuum escaped fraction, the fraction of
@@ -1249,6 +1319,52 @@ class StarsComponent:
                 )
 
         return young, old
+
+    def get_photo_luminosities(self, filters, verbose=True):
+        """
+        Calculate luminosity photometry using a FilterCollection object.
+
+        Args:
+            filters (filters.FilterCollection)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            photo_luminosities (dict)
+                A dictionary of rest frame broadband luminosities.
+        """
+        # Loop over spectra in the component
+        for spectra in self.spectra:
+            # Create the photometry collection and store it in the object
+            self.photo_luminosities[spectra] = self.spectra[
+                spectra
+            ].get_photo_luminosities(filters, verbose)
+
+        return self.photo_luminosities
+
+    def get_photo_fluxes(self, filters, verbose=True):
+        """
+        Calculate flux photometry using a FilterCollection object.
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            (dict)
+                A dictionary of fluxes in each filter in filters.
+        """
+        # Loop over spectra in the component
+        for spectra in self.spectra:
+            # Create the photometry collection and store it in the object
+            self.photo_fluxes[spectra] = self.spectra[
+                spectra
+            ].get_photo_fluxes(filters, verbose)
+
+        return self.photo_fluxes
 
     def plot_spectra(
         self,

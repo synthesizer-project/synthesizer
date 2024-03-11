@@ -7,7 +7,6 @@ grid assignment methods. These methods dictate how mass is assigned to
 spectra in the SPS grids.
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
 from unyt import Myr
 

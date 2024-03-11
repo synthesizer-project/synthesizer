@@ -23,14 +23,16 @@ def simple_UVJ(grid, target_metallicity=0.01):
     # fc.plot_transmission_curves()
 
     for ia, log10age in enumerate(grid.log10age):
-        sed = grid.get_spectra((ia, iZ))  # creates an SED object from a given grid point
+        sed = grid.get_spectra(
+            (ia, iZ)
+        )  # creates an SED object from a given grid point
 
         # --- now calculate the observed frame spectra
 
         sed.get_fnu0()  # generate dummy observed frame spectra.
 
         # --- measure broadband fluxes
-        sed.get_broadband_fluxes(fc)
+        sed.get_photo_fluxes(fc)
 
         print(
             (
@@ -42,7 +44,10 @@ def simple_UVJ(grid, target_metallicity=0.01):
 
 
 def UVJ_metallicity(grid):
-    """Calculate UVJ as a function of metallicity and save as a .ecsv file and make a figure"""
+    """
+    Calculate UVJ as a function of metallicity and save as a .ecsv file
+    and make a figure
+    """
 
     fc = UVJ(new_lam=grid.lam)
 
@@ -64,14 +69,16 @@ def UVJ_metallicity(grid):
             sed.get_fnu0()  # generate dummy observed frame spectra.
 
             # --- measure broadband fluxes
-            sed.get_broadband_fluxes(fc)
+            sed.get_photo_fluxes(fc)
 
             for f in "UVJ":
-                table[f"{Z}_{f}"][ia] = sed.broadband_fluxes[f]
+                table[f"{Z}_{f}"][ia] = sed.photo_fluxes[f]
 
     # --- make plot
 
-    fig, axes = plt.subplots(2, 1, figsize=(3.5, 4.5), sharex=True, sharey=True)
+    fig, axes = plt.subplots(
+        2, 1, figsize=(3.5, 4.5), sharex=True, sharey=True
+    )
     plt.subplots_adjust(
         left=0.15, top=0.975, bottom=0.1, right=0.95, wspace=0.0, hspace=0.0
     )

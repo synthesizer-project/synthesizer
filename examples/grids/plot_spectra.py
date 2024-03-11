@@ -2,7 +2,7 @@
 Plot spectra example
 ====================
 
-This example demonstrates how to extract a spectra directly from a grid and 
+This example demonstrates how to extract a spectra directly from a grid and
 plots all the available spectra.
 
 NOTE: this only works on 2D grids at the moment
@@ -33,24 +33,31 @@ if __name__ == "__main__":
 
     # The name of the grid. Defaults to the test grid.
     parser.add_argument(
-        "-grid_name", "--grid_name", type=str, required=False, 
-        default="test_grid"
+        "-grid_name",
+        "--grid_name",
+        type=str,
+        required=False,
+        default="test_grid",
     )
 
     # The path to the grid directory. Defaults to the test grid directory.
     parser.add_argument(
-        "-grid_dir", "--grid_dir", type=str, required=False, 
-        default=test_grid_dir
+        "-grid_dir",
+        "--grid_dir",
+        type=str,
+        required=False,
+        default=test_grid_dir,
     )
 
     # The target metallicity. The code function will find the closest
     # metallicity and report it back. The rationale behind this is
     # that this code can easily be adapted to explore other grids.
-    parser.add_argument("-metallicity", type=float, required=False, 
-                        default=0.01)
+    parser.add_argument(
+        "-metallicity", type=float, required=False, default=0.01
+    )
 
-    # The target log10(age/yr). The code function will find the closest 
-    # metallicity and report it back. The rationale behind this is that 
+    # The target log10(age/yr). The code function will find the closest
+    # metallicity and report it back. The rationale behind this is that
     # this code can easily be adapted to explore other grids.
     parser.add_argument("-log10age", type=float, required=False, default=6.0)
 
@@ -69,8 +76,13 @@ if __name__ == "__main__":
         sed = grid.get_spectra(grid_point, spectra_id=spec_name)
         # print summary of SED object
         print(sed)
-        plt.plot(np.log10(sed.lam), np.log10(sed.lnu), lw=1, alpha=0.8, 
-                 label=spec_name)
+        plt.plot(
+            np.log10(sed.lam),
+            np.log10(sed.lnu),
+            lw=1,
+            alpha=0.8,
+            label=spec_name,
+        )
 
     plt.xlim([2.0, 4.0])
     plt.ylim([18.0, 23])

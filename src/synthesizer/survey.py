@@ -101,7 +101,11 @@ class Survey:
     """
 
     def __init__(
-        self, galaxies=(), fov=None, super_resolution_factor=None, cosmo=Planck18
+        self,
+        galaxies=(),
+        fov=None,
+        super_resolution_factor=None,
+        cosmo=Planck18,
     ):
         """
         Initialise the Survey.
@@ -181,13 +185,15 @@ class Survey:
             if nfilters != len(depths):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(depths)=%d)" % (nfilters, len(depths))
+                    " len(filters)=%d, len(depths)=%d)"
+                    % (nfilters, len(depths))
                 )
         if isinstance(apertures, dict):
             if nfilters != len(apertures):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(apertures)=%d)" % (nfilters, len(apertures))
+                    " len(filters)=%d, len(apertures)=%d)"
+                    % (nfilters, len(apertures))
                 )
         if isinstance(snrs, dict):
             if nfilters != len(snrs):
@@ -199,7 +205,8 @@ class Survey:
             if nfilters != len(noises):
                 raise exceptions.InconsistentArguments(
                     "Inconsistent number of entries in instrument dictionaries"
-                    " len(filters)=%d, len(noises)=%d)" % (nfilters, len(noises))
+                    " len(filters)=%d, len(noises)=%d)"
+                    % (nfilters, len(noises))
                 )
 
         # Create this observation configurations
@@ -285,7 +292,9 @@ class Survey:
         for inst in self.instruments:
             if isinstance(self.instruments[inst].depths, dict):
                 for key in self.instruments[inst].depths:
-                    flux = apparent_mag_to_fnu(self.instruments[inst].depths[key])
+                    flux = apparent_mag_to_fnu(
+                        self.instruments[inst].depths[key]
+                    )
                     self.instruments[inst].depths[key] = flux_to_luminosity(
                         flux, self.cosmo, redshift
                     )
@@ -313,7 +322,9 @@ class Survey:
                     self.instruments[inst].depths
                 )
 
-    def get_spectra(self, grid, spectra_type, redshift=None, igm=None, rest_frame=True):
+    def get_spectra(
+        self, grid, spectra_type, redshift=None, igm=None, rest_frame=True
+    ):
         """
         Compute the integrated stellar spectra of each galaxy.
 
@@ -357,7 +368,8 @@ class Survey:
     # def get_integrated_spectra_screen(self, tau_v, redshift=None,
     #                                   igm=None, name='attenuated'):
     #     """
-    #     Compute the attenuated spectra of each galaxy using a dust screen model
+    #     Compute the attenuated spectra of each galaxy using a
+    #     dust screen model
 
     #     Args:
     #     -----
@@ -390,11 +402,18 @@ class Survey:
     #     else:
     #         self.seds[name].get_fnu(self.cosmo, redshift, igm)
 
-    # def get_integrated_spectra_charlot_fall_00(self, grid, tau_v_ISM, tau_v_BC,
-    #                                            redshift=None, igm=None,
-    #                                            name='attenuated'):
+    # def get_integrated_spectra_charlot_fall_00(
+    #     self,
+    #     grid,
+    #     tau_v_ISM,
+    #     tau_v_BC,
+    #     redshift=None,
+    #     igm=None,
+    #     name='attenuated'
+    # ):
     #     """
-    #     Compute the attenuated spectra of each galaxy using a dust screen model
+    #     Compute the attenuated spectra of each galaxy using a
+    #     dust screen model
 
     #     Args:
     #     -----
@@ -415,7 +434,8 @@ class Survey:
     #     for ind, gal in enumerate(self.galaxies):
 
     #         # Are we getting a flux or rest frame?
-    #         _specs[ind, :] = gal.apply_charlot_fall_00(grid, tau_v_ISM, tau_v_BC,
+    #         _specs[ind, :] = gal.apply_charlot_fall_00(grid,
+    #                                                    tau_v_ISM, tau_v_BC,
     #                                                    sed_object=False)
 
     #     # Create and store an SED object for these SEDs
@@ -454,7 +474,9 @@ class Survey:
             if rest_frame:
                 gal.spectra_array[spectra_type].get_fnu0()
             else:
-                gal.spectra_array[spectra_type].get_fnu(self.cosmo, redshift, igm)
+                gal.spectra_array[spectra_type].get_fnu(
+                    self.cosmo, redshift, igm
+                )
             # do we want to use redshift defined on the galaxy object?
             # need to update a lot of things to check this (and alow override)
             #         self.cosmo, gal.redshift, igm)
@@ -479,11 +501,13 @@ class Survey:
             # )
         else:
             # TODO: make a UnknownSpectralType error
-            raise exceptions.InconsistentArguments("Unrecognised spectra_type!")
+            raise exceptions.InconsistentArguments(
+                "Unrecognised spectra_type!"
+            )
 
         # Loop over each instrument
         for key in self.instruments:
-            _photometry = self.seds[spectra_type].get_broadband_fluxes(
+            _photometry = self.seds[spectra_type].get_photo_fluxes(
                 self.instruments[key].filters
             )
 

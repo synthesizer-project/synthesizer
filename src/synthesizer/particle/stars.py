@@ -14,10 +14,11 @@ Example usages:
 
     stars = Stars(initial_masses, ages, metallicities,
                   redshift=redshift, current_masses=current_masses, ...)
-    stars = sample_sfhz(sfzh, n, total_initial_mass, 
+    stars = sample_sfhz(sfzh, n, total_initial_mass,
                         smoothing_lengths=smoothing_lengths,
                         tau_v=tau_vs, coordinates=coordinates, ...)
 """
+
 import warnings
 
 import numpy as np
@@ -32,6 +33,8 @@ from synthesizer.plt import single_histxy
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 from synthesizer import exceptions
+from synthesizer.parametric import SFH
+from synthesizer.parametric import Stars as Para_Stars
 
 
 class Stars(Particles, StarsComponent):
@@ -44,14 +47,14 @@ class Stars(Particles, StarsComponent):
     about the stars needed in other computations. For example a Galaxy object
     can be passed a stars object for use with any of the Galaxy helper methods.
 
-    Note that due to the many possible operations, this class has a large number
-    of optional attributes which are set to None if not provided.
+    Note that due to the many possible operations, this class has a large
+    number of optional attributes which are set to None if not provided.
 
     Attributes:
         initial_masses (array-like, float)
             The intial stellar mass of each particle in Msun.
         ages (array-like, float)
-            The age of each stellar particle in Myrs.
+            The age of each stellar particle in yrs.
         metallicities (array-like, float)
             The metallicity of each stellar particle.
         tau_v (array-like, float)
@@ -123,9 +126,9 @@ class Stars(Particles, StarsComponent):
         softening_length=None,
     ):
         """
-        Intialise the Stars instance. The first 3 arguments are always required.
-        All other arguments are optional attributes applicable in different
-        situations.
+        Intialise the Stars instance. The first 3 arguments are always
+        required. All other arguments are optional attributes applicable
+        in different situations.
 
         Args:
             initial_masses (array-like, float)
@@ -217,7 +220,8 @@ class Stars(Particles, StarsComponent):
         # Intialise the flag for resampling
         self.resampled = False
 
-        # Set a frontfacing clone of the number of particles with clearer naming
+        # Set a frontfacing clone of the number of particles
+        # with clearer naming
         self.nstars = self.nparticles
 
         # Check the arguments we've been given
@@ -250,7 +254,8 @@ class Stars(Particles, StarsComponent):
     def __str__(self):
         """
         Overloads the __str__ operator, enabling the printing of a summary of
-        the Stars with print(stars) syntax, where stars is an instance of Stars.
+        the Stars with print(stars) syntax, where stars is an instance of
+        Stars.
 
         Returns:
             pstr (str)
@@ -292,8 +297,8 @@ class Stars(Particles, StarsComponent):
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
             mask (bool)
-                A mask to be applied to the stars. Spectra will only be computed
-                and returned for stars with True in the mask.
+                A mask to be applied to the stars. Spectra will only be
+                computed and returned for stars with True in the mask.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -372,6 +377,8 @@ class Stars(Particles, StarsComponent):
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
+        parametric_young_stars=None,
+        parametric_sfh="constant",
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -408,6 +415,14 @@ class Stars(Particles, StarsComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            parametric_young_stars (bool/float)
+                If not None, specifies age in Myr below which we replace
+                individual star particles with a parametric SFH.
+            parametric_sfh (string)
+                Form of the parametric SFH to use for young stars.
+                Currently two are supported, `Constant` and
+                `TruncatedExponential`, selected using the keyword
+                arguments `constant` and `exponential`.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
@@ -422,19 +437,24 @@ class Stars(Particles, StarsComponent):
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
             # How many particles lie below the grid limits?
-            n_below_age = self.log10ages[self.log10ages < grid.log10age[0]].size
+            n_below_age = self.log10ages[
+                self.log10ages < grid.log10age[0]
+            ].size
             n_below_metal = self.metallicities[
                 self.metallicities < grid.metallicity[0]
             ].size
 
             # How many particles lie above the grid limits?
-            n_above_age = self.log10ages[self.log10ages > grid.log10age[-1]].size
+            n_above_age = self.log10ages[
+                self.log10ages > grid.log10age[-1]
+            ].size
             n_above_metal = self.metallicities[
                 self.metallicities > grid.metallicity[-1]
             ].size
 
-            # Check the fraction of particles outside of the grid (these will be
-            # pinned to the edge of the grid) by finding those inside
+            # Check the fraction of particles outside of the grid (these
+            # will be pinned to the edge of the grid) by finding
+            # those inside
             age_inside_mask = np.logical_and(
                 self.log10ages <= grid.log10age[-1],
                 self.log10ages >= grid.log10age[0],
@@ -456,21 +476,26 @@ class Stars(Particles, StarsComponent):
             # Tell the user if there are particles outside the grid
             if ratio_out > 0:
                 print(
-                    f"{ratio_out * 100:.2f}% of particles lie outside the grid! "
+                    f"{ratio_out * 100:.2f}% of particles lie "
+                    "outside the grid! "
                     "These will be pinned at the grid limits."
                 )
-                print(f"Of these:")
+                print("Of these:")
                 print(
-                    f"  {n_below_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[0]}"
+                    f"  {n_below_age / self.nparticles * 100:.2f}%"
+                    f" have log10(ages/yr) > {grid.log10age[0]}"
                 )
                 print(
-                    f"  {n_below_metal / self.nparticles * 100:.2f}% have metallicities < {grid.metallicity[0]}"
+                    f"  {n_below_metal / self.nparticles * 100:.2f}%"
+                    f" have metallicities < {grid.metallicity[0]}"
                 )
                 print(
-                    f"  {n_above_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[-1]}"
+                    f"  {n_above_age / self.nparticles * 100:.2f}%"
+                    f" have log10(ages/yr) > {grid.log10age[-1]}"
                 )
                 print(
-                    f"  {n_above_metal / self.nparticles * 100:.2f}% have metallicities > {grid.metallicity[-1]}"
+                    f"  {n_above_metal / self.nparticles * 100:.2f}%"
+                    f" have metallicities > {grid.metallicity[-1]}"
                 )
 
         # Get particle age masks
@@ -482,6 +507,21 @@ class Stars(Particles, StarsComponent):
                 print("Age mask has filtered out all particles")
 
             return np.zeros(len(grid.lam))
+
+        if parametric_young_stars:
+            # Get mask for particles we're going to replace with parametric
+            pmask = self._get_masks(parametric_young_stars, None)
+
+            # Update the young/old mask to ignore those we're replacing
+            mask[pmask] = False
+
+            lnu_parametric = self._parametric_young_stars(
+                pmask=pmask,
+                age=parametric_young_stars,
+                parametric_sfh=parametric_sfh,
+                grid=grid,
+                spectra_name=spectra_name,
+            )
 
         from ..extensions.integrated_spectra import compute_integrated_sed
 
@@ -495,7 +535,81 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
-        return compute_integrated_sed(*args)
+        lnu_particle = compute_integrated_sed(*args)
+
+        if parametric_young_stars:
+            return lnu_particle + lnu_parametric
+        else:
+            return lnu_particle
+
+    def _parametric_young_stars(
+        self,
+        pmask,
+        age,
+        parametric_sfh,
+        grid,
+        spectra_name,
+    ):
+        """
+        Replace young stars with individual parametric SFH's. Can be either a
+        constant or truncated exponential, selected with the `parametric_sfh`
+        argument. Returns the emission from these replaced particles assuming
+        this SFH. The metallicity is set to the metallicity of the parent
+        star particle.
+
+        Args:
+            pmask (bool array)
+                Star particles to replace
+            age (float)
+                Age in Myr below which we replace Star particles.
+                Used to set the duration of parametric SFH
+            parametric_sfh (string)
+                Form of the parametric SFH to use for young stars.
+                Currently two are supported, `Constant` and
+                `TruncatedExponential`, selected using the keyword
+                arguments `constant` and `exponential`.
+            grid (Grid)
+                The spectral grid object.
+            spectra_name (string)
+                The name of the target spectra inside the grid file.
+
+        Returns:
+            Numpy array of integrated spectra in units of (erg / s / Hz).
+        """
+
+        # initialise SFH object
+        if parametric_sfh == "constant":
+            sfh = SFH.Constant(duration=age)
+        elif parametric_sfh == "exponential":
+            sfh = SFH.TruncatedExponential(tau=age / 2, max_age=age)
+        else:
+            raise ValueError(
+                (
+                    "Value of `parametric_sfh` provided, "
+                    f"`{parametric_sfh}`, is not supported."
+                    "Please use 'constant' or 'exponential'."
+                )
+            )
+
+        stars = [None] * np.sum(pmask)
+
+        # Loop through particles to be replaced
+        for i, _pmask in enumerate(np.where(pmask)[0]):
+
+            # Create a parametric Stars object
+            stars[i] = Para_Stars(
+                grid.log10age,
+                grid.metallicity,
+                sf_hist=sfh,
+                metal_dist=self.metallicities[_pmask],
+                initial_mass=self.initial_masses[_pmask],
+            )
+
+        # Combine the individual parametric forms for each particle
+        stars = sum(stars[1:], stars[0])
+
+        # Get the spectra for this parametric form
+        return stars.generate_lnu(grid=grid, spectra_name=spectra_name)
 
     def generate_line(self, grid, line_id, fesc):
         """
@@ -564,11 +678,14 @@ class Stars(Particles, StarsComponent):
 
                 # Line luminosity erg/s
                 luminosity.append(
-                    (1 - fesc) * np.sum(grid_line["luminosity"] * self.initial_masses)
+                    (1 - fesc)
+                    * np.sum(grid_line["luminosity"] * self.initial_masses)
                 )
 
                 # Continuum at line wavelength, erg/s/Hz
-                continuum.append(np.sum(grid_line["continuum"] * self.initial_masses))
+                continuum.append(
+                    np.sum(grid_line["continuum"] * self.initial_masses)
+                )
 
         else:
             raise exceptions.InconsistentArguments(
@@ -638,19 +755,23 @@ class Stars(Particles, StarsComponent):
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
             # How many particles lie below the grid limits?
-            n_below_age = self.log10ages[self.log10ages < grid.log10age[0]].size
+            n_below_age = self.log10ages[
+                self.log10ages < grid.log10age[0]
+            ].size
             n_below_metal = self.metallicities[
                 self.metallicities < grid.metallicity[0]
             ].size
 
             # How many particles lie above the grid limits?
-            n_above_age = self.log10ages[self.log10ages > grid.log10age[-1]].size
+            n_above_age = self.log10ages[
+                self.log10ages > grid.log10age[-1]
+            ].size
             n_above_metal = self.metallicities[
                 self.metallicities > grid.metallicity[-1]
             ].size
 
-            # Check the fraction of particles outside of the grid (these will be
-            # pinned to the edge of the grid) by finding those inside
+            # Check the fraction of particles outside of the grid (these will
+            # be pinned to the edge of the grid) by finding those inside
             age_inside_mask = np.logical_and(
                 self.log10ages <= grid.log10age[-1],
                 self.log10ages >= grid.log10age[0],
@@ -672,21 +793,26 @@ class Stars(Particles, StarsComponent):
             # Tell the user if there are particles outside the grid
             if ratio_out > 0:
                 print(
-                    f"{ratio_out * 100:.2f}% of particles lie outside the grid! "
+                    f"{ratio_out * 100:.2f}% of particles "
+                    "lie outside the grid! "
                     "These will be pinned at the grid limits."
                 )
-                print(f"Of these:")
+                print("Of these:")
                 print(
-                    f"  {n_below_age / self.nparticles * 100:.2f}% have log10(ages/yr) < {grid.log10age[0]}"
+                    f"  {n_below_age / self.nparticles * 100:.2f}%"
+                    f" have log10(ages/yr) < {grid.log10age[0]}"
                 )
                 print(
-                    f"  {n_below_metal / self.nparticles * 100:.2f}% have metallicities < {grid.metallicity[0]}"
+                    f"  {n_below_metal / self.nparticles * 100:.2f}% "
+                    f"have metallicities < {grid.metallicity[0]}"
                 )
                 print(
-                    f"  {n_above_age / self.nparticles * 100:.2f}% have log10(ages/yr) > {grid.log10age[-1]}"
+                    f"  {n_above_age / self.nparticles * 100:.2f}% "
+                    f"have log10(ages/yr) > {grid.log10age[-1]}"
                 )
                 print(
-                    f"  {n_above_metal / self.nparticles * 100:.2f}% have metallicities > {grid.metallicity[-1]}"
+                    f"  {n_above_metal / self.nparticles * 100:.2f}% "
+                    f"have metallicities > {grid.metallicity[-1]}"
                 )
 
         # Get particle age masks
@@ -697,7 +823,7 @@ class Stars(Particles, StarsComponent):
             if verbose:
                 print("Age mask has filtered out all particles")
 
-            return np.zeros(len(grid.lam))
+            return np.zeros((self.nstars, len(grid.lam)))
 
         from ..extensions.particle_spectra import compute_particle_seds
 
@@ -745,8 +871,8 @@ class Stars(Particles, StarsComponent):
 
         Returns:
             Line
-                An instance of Line containing this lines wavelenth, luminosity,
-                and continuum for each star particle.
+                An instance of Line containing this lines wavelenth,
+                luminosity, and continuum for each star particle.
         """
 
         # If the line_id is a str denoting a single line
@@ -756,7 +882,9 @@ class Stars(Particles, StarsComponent):
             wavelength = grid_line["wavelength"]
 
             # Line luminosity erg/s
-            luminosity = (1 - fesc) * (grid_line["luminosity"] * self.initial_masses)
+            luminosity = (1 - fesc) * (
+                grid_line["luminosity"] * self.initial_masses
+            )
 
             # Continuum at line wavelength, erg/s/Hz
             continuum = grid_line["continuum"] * self.initial_masses
@@ -1005,7 +1133,10 @@ class Stars(Particles, StarsComponent):
             setattr(
                 self,
                 attr,
-                np.append(getattr(self, attr), np.repeat(attr_array, new_lens, axis=0)),
+                np.append(
+                    getattr(self, attr),
+                    np.repeat(attr_array, new_lens, axis=0),
+                ),
             )
 
         if verbose:
@@ -1486,7 +1617,9 @@ class Stars(Particles, StarsComponent):
         # Loop over the intrinsic lines
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # Calculate attenuation
-            T_BC = dust_curve_BC.get_transmission(tau_v_BC, intrinsic_line._wavelength)
+            T_BC = dust_curve_BC.get_transmission(
+                tau_v_BC, intrinsic_line._wavelength
+            )
             T_ISM = dust_curve_ISM.get_transmission(
                 tau_v_ISM, intrinsic_line._wavelength
             )
@@ -1596,7 +1729,9 @@ class Stars(Particles, StarsComponent):
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
             np.ascontiguousarray(self.metallicities, dtype=np.float64),
         ]
-        part_mass = np.ascontiguousarray(self._initial_masses, dtype=np.float64)
+        part_mass = np.ascontiguousarray(
+            self._initial_masses, dtype=np.float64
+        )
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))
@@ -1745,7 +1880,8 @@ def sample_sfhz(
 
     Args:
         sfhz (array-like, float)
-            The Star Formation Metallicity History grid (from parametric.Stars).
+            The Star Formation Metallicity History grid
+            (from parametric.Stars).
         log10ages (array-like, float)
             The log of the SFZH age axis.
         log10metallicities (array-like, float)
@@ -1778,7 +1914,9 @@ def sample_sfhz(
     )
 
     # Extract the sampled ages and metallicites and create an array
-    random_from_cdf = np.column_stack((log10ages[x_idx], log10metallicities[y_idx]))
+    random_from_cdf = np.column_stack(
+        (log10ages[x_idx], log10metallicities[y_idx])
+    )
 
     # Extract the individual logged quantities
     log10ages, log10metallicities = random_from_cdf.T

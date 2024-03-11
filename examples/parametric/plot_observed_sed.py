@@ -2,7 +2,7 @@
 Generate parametric observed SED
 ================================
 
-Example for generating the *observed* spectrum for a parametric galaxy 
+Example for generating the *observed* spectrum for a parametric galaxy
 including photometry. This example will:
 - build a parametric galaxy (see make_sfzh and make_sed)
 - calculate spectral luminosity density (see make_sed)
@@ -33,7 +33,15 @@ if __name__ == "__main__":
     # define filters
     filter_codes = [
         f"JWST/NIRCam.{f}"
-        for f in ["F090W", "F115W", "F150W", "F200W", "F277W", "F356W", "F444W"]
+        for f in [
+            "F090W",
+            "F115W",
+            "F150W",
+            "F200W",
+            "F277W",
+            "F356W",
+            "F444W",
+        ]
     ]  # define a list of filter codes
     filter_codes += [f"JWST/MIRI.{f}" for f in ["F770W"]]
     fc = FilterCollection(filter_codes, new_lam=grid.lam)
@@ -41,7 +49,9 @@ if __name__ == "__main__":
     # define the parameters of the star formation and metal enrichment
     # histories
     sfh_p = {"duration": 10 * Myr}
-    Z_p = {"log10metallicity": -2.0}  # can also use linear metallicity e.g. {'Z': 0.01}
+    Z_p = {
+        "log10metallicity": -2.0
+    }  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = 1e8
 
     # define the functional form of the star formation and metal enrichment
@@ -81,7 +91,7 @@ if __name__ == "__main__":
     )  # generate observed frame spectra, assume Madau96 IGM model
 
     # measure broadband fluxes
-    fluxes = sed.get_broadband_fluxes(fc)
+    fluxes = sed.get_photo_fluxes(fc)
 
     # print broadband fluxes
     for filter, flux in fluxes.items():

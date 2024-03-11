@@ -8,7 +8,6 @@ Example usage:
 import numpy as np
 from unyt import c, h, kb, unyt_array, unyt_quantity
 
-
 from synthesizer import exceptions
 
 
@@ -133,7 +132,7 @@ def value_to_array(value):
             ]
         )
 
-    elif isinstance(value, unyt_quantity):
+    elif isinstance(value, (unyt_quantity, unyt_array)):
         arr = (
             np.array(
                 [

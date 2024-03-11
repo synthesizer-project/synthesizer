@@ -92,7 +92,9 @@ class BlackHole(BlackholesComponent):
 
         # Ensure the offset has units
         if not has_units(offset):
-            raise exceptions.MissingUnits("The offset must be provided with units")
+            raise exceptions.MissingUnits(
+                "The offset must be provided with units"
+            )
 
         # Initialise morphology using the in-built point-source class
         self.morphology = PointSource(offset=offset)
@@ -161,7 +163,7 @@ class BlackHole(BlackholesComponent):
                 props.append(getattr(self, axis))
 
             elif (
-                axis + "_" + line_region in emission_model.variable_parameters
+                f"{axis} {line_region}" in emission_model.variable_parameters
                 and getattr(self, axis + "_" + line_region, None) is not None
             ):
                 # Variable line region parameters defined on the black hole
@@ -172,7 +174,10 @@ class BlackHole(BlackholesComponent):
                 # line region parameters)
                 props.append(getattr(emission_model, axis))
 
-            elif getattr(emission_model, axis + "_" + line_region, None) is not None:
+            elif (
+                getattr(emission_model, axis + "_" + line_region, None)
+                is not None
+            ):
                 # Line region parameters required from the emission_model
                 props.append(getattr(emission_model, axis + "_" + line_region))
 
@@ -182,8 +187,13 @@ class BlackHole(BlackholesComponent):
                 )
 
         # Remove units from any unyt_arrays and make contiguous
-        props = [prop.value if isinstance(prop, unyt_array) else prop for prop in props]
-        props = [np.ascontiguousarray(prop, dtype=np.float64) for prop in props]
+        props = [
+            prop.value if isinstance(prop, unyt_array) else prop
+            for prop in props
+        ]
+        props = [
+            np.ascontiguousarray(prop, dtype=np.float64) for prop in props
+        ]
 
         # For black holes mass is a grid parameter but we still need to
         # multiply by mass in the extensions so just multiply by 1

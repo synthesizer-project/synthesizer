@@ -20,7 +20,6 @@ import matplotlib.pyplot as plt
 
 
 def make_report(funcs, ncalls, tottime, pcent, col_width, numeric_width=14):
-
     # Define string holding the table
     report_string = ""
 
@@ -51,14 +50,15 @@ def make_report(funcs, ncalls, tottime, pcent, col_width, numeric_width=14):
 
     # Loop over making each row
     for ind, func in enumerate(funcs):
-
         # Make this row of the table
         row_string = ""
         row_string += "|" + func.strip("\n").ljust(col_width) + "|"
         row_string += str(int(ncalls[ind])).ljust(numeric_width) + "|"
         row_string += f"{tottime[ind]:.4f}".ljust(numeric_width) + "|"
-        row_string += f"{tottime[ind] / ncalls[ind] * 1000:.4f}".ljust(
-            numeric_width) + "|"
+        row_string += (
+            f"{tottime[ind] / ncalls[ind] * 1000:.4f}".ljust(numeric_width)
+            + "|"
+        )
         row_string += f"{pcent[ind]:.2f}".ljust(numeric_width) + "|"
         row_string += "\n"
 
@@ -66,13 +66,23 @@ def make_report(funcs, ncalls, tottime, pcent, col_width, numeric_width=14):
 
         # Do we need to start again with a larger column width?
         if len(func) + 2 > col_width:
-            return make_report(funcs, ncalls, tottime, pcent,
-                               col_width=len(func.ljust(col_width)) + 1,
-                               numeric_width=numeric_width)
+            return make_report(
+                funcs,
+                ncalls,
+                tottime,
+                pcent,
+                col_width=len(func.ljust(col_width)) + 1,
+                numeric_width=numeric_width,
+            )
         elif len(str(int(ncalls[ind]))) > numeric_width:
-            return make_report(funcs, ncalls, tottime, pcent,
-                               col_width,
-                               numeric_width=len(str(int(ncalls[ind]))) + 1)
+            return make_report(
+                funcs,
+                ncalls,
+                tottime,
+                pcent,
+                col_width,
+                numeric_width=len(str(int(ncalls[ind]))) + 1,
+            )
 
     # Close off the bottom of the table
     report_string += "=" * len(head)
@@ -81,7 +91,6 @@ def make_report(funcs, ncalls, tottime, pcent, col_width, numeric_width=14):
 
 
 if __name__ == "__main__":
-
     # Get the commandline inputs
     profile_file = sys.argv[1]
     plot_loc = sys.argv[2]
@@ -94,14 +103,16 @@ if __name__ == "__main__":
     extract_data = False
 
     # Open the profile file
-    with open(profile_file, 'r') as file:
+    with open(profile_file, "r") as file:
         for iline, line in enumerate(file):
             line_split = [s for s in line.split(" ") if s != " " and s != ""]
 
             # Flag that we found the table (this is very primitive)
-            if (line_split[-1] == "seconds\n" and line_split[-3] == "in" and
-                    line_split[-4] == "calls)"):
-
+            if (
+                line_split[-1] == "seconds\n"
+                and line_split[-3] == "in"
+                and line_split[-4] == "calls)"
+            ):
                 # Flag that we can now extract data
                 extract_data = True
 
@@ -111,10 +122,8 @@ if __name__ == "__main__":
 
             # Have we reached the profiling information?
             if extract_data:
-
                 # Are we in the table?
                 if len(line_split) == 6 and line_split[0].strip() != "ncalls":
-
                     # Store the data
                     if "/" in line_split[0]:
                         ncalls[line_split[-1]] = np.max(
@@ -157,10 +166,13 @@ if __name__ == "__main__":
 
     # Clean up the function labels a bit
     for ind, func in enumerate(funcs):
-
         # Split the function signature
-        func_split = [s for s1 in func.split(":")
-                      for s2 in s1.split("(") for s in s2.split(")")]
+        func_split = [
+            s
+            for s1 in func.split(":")
+            for s2 in s1.split("(")
+            for s in s2.split(")")
+        ]
 
         if len(func_split[0]) > 0:
             funcs[ind] = func_split[0] + ":" + func_split[2]

@@ -5,9 +5,11 @@ import h5py
 import cmasher as cmr
 import matplotlib as mpl
 from matplotlib import cm
+from matplotlib.animation import FuncAnimation
+from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 from spectres import spectres
-from unyt import unyt_array, unyt_quantity
+from unyt import unyt_array, unyt_quantity, angstrom
 
 from synthesizer import exceptions
 from synthesizer.sed import Sed
@@ -214,6 +216,8 @@ class Grid:
         read_spectra=True,
         read_lines=True,
         new_lam=None,
+        filters=None,
+        lam_lims=(),
     ):
         """
         Initailise the grid object, open the grid file and extracting the
@@ -232,6 +236,14 @@ class Grid:
             new_lam (array-like, float)
                 An optional user defined wavelength array the spectra will be
                 interpolated onto, see Grid.interp_spectra.
+            filters (FilterCollection)
+                An optional FilterCollection object to unify the grids
+                wavelength grid with. If provided, this will override new_lam
+                whether passed or not.
+            lam_lims (tuple, float)
+                A tuple of the lower and upper wavelength limits to truncate
+                the grid to (i.e. (lower_lam, upper_lam)). If new_lam or
+                filters are provided these limits will be ignored.
         """
         if grid_dir is None:
             grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
@@ -240,7 +252,10 @@ class Grid:
         self.grid_dir = grid_dir
 
         # Have we been passed an extension?
-        if grid_name.split(".")[-1] == "hdf5" or grid_name.split(".")[-1] == "h5":
+        if (
+            grid_name.split(".")[-1] == "hdf5"
+            or grid_name.split(".")[-1] == "h5"
+        ):
             self.grid_ext = grid_name.split(".")[-1]
         else:
             self.grid_ext = "hdf5"
@@ -249,7 +264,9 @@ class Grid:
         self.grid_name = grid_name.replace(".hdf5", "").replace(".h5", "")
 
         # Construct the full path
-        self.grid_filename = f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
+        self.grid_filename = (
+            f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
+        )
 
         # Flags for reading behaviour
         self.read_lines = read_lines
@@ -271,7 +288,9 @@ class Grid:
             self.axes = list(hf.attrs["axes"])
 
             # Put the values of each axis in a dictionary
-            self.axes_values = {axis: hf["axes"][axis][:] for axis in self.axes}
+            self.axes_values = {
+                axis: hf["axes"][axis][:] for axis in self.axes
+            }
 
             # Set the values of each axis as an attribute
             # e.g. self.log10age == self.axes_values['log10age']
@@ -281,7 +300,17 @@ class Grid:
             # Number of axes
             self.naxes = len(self.axes)
 
+            # If specific ionising photon luminosity is available set this
+            # as an attribute as well
+            if "log10_specific_ionising_luminosity" in hf.keys():
+                self.log10_specific_ionising_lum = {}
+                for ion in hf["log10_specific_ionising_luminosity"].keys():
+                    self.log10_specific_ionising_lum[ion] = hf[
+                        "log10_specific_ionising_luminosity"
+                    ][ion][:]
+
             # If log10Q is available set this as an attribute as well
+            # TODO: This needs to die
             if "log10Q" in hf.keys():
                 self.log10Q = {}
                 for ion in hf["log10Q"].keys():
@@ -291,7 +320,9 @@ class Grid:
         if read_spectra:
             self.spectra = {}
 
-            with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
+            with h5py.File(
+                f"{self.grid_dir}/{self.grid_name}.hdf5", "r"
+            ) as hf:
                 # Get list of available spectra
                 spectra_ids = list(hf["spectra"].keys())
 
@@ -306,8 +337,8 @@ class Grid:
                     self.lam = hf["spectra/wavelength"][:]
                     self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
 
-            # If a full cloudy grid is available calculate some other spectra for
-            # convenience.
+            # If a full cloudy grid is available calculate some
+            # other spectra for convenience.
             if "linecont" in self.spectra.keys():
                 self.spectra["total"] = (
                     self.spectra["transmitted"] + self.spectra["nebular"]
@@ -346,20 +377,35 @@ class Grid:
             else:
                 read_lines = get_available_lines(self.grid_name, self.grid_dir)
 
-            with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
+            with h5py.File(
+                f"{self.grid_dir}/{self.grid_name}.hdf5", "r"
+            ) as hf:
                 for line in read_lines:
                     self.lines[line] = {}
                     self.lines[line]["wavelength"] = hf["lines"][line].attrs[
                         "wavelength"
                     ]
-                    self.lines[line]["luminosity"] = hf["lines"][line]["luminosity"][:]
-                    self.lines[line]["continuum"] = hf["lines"][line]["continuum"][:]
+                    self.lines[line]["luminosity"] = hf["lines"][line][
+                        "luminosity"
+                    ][:]
+                    self.lines[line]["continuum"] = hf["lines"][line][
+                        "continuum"
+                    ][:]
 
             # Save list of available lines
             self.available_lines = list(self.lines.keys())
 
-        # Has a new wavelength grid been passed to interpolate the spectra onto?
-        if new_lam is not None:
+        # If we have both new_lam (or filters) and wavelength limits
+        # the limits become meaningless tell the user so.
+        if len(lam_lims) > 0 and (new_lam is not None or filters is not None):
+            print(
+                "Passing new_lam or filters and lam_lims is contradictory, "
+                "lam_lims will be ignored."
+            )
+
+        # Has a new wavelength grid been passed to interpolate
+        # the spectra onto?
+        if new_lam is not None and filters is None:
             # Double check we aren't being asked to do something impossible.
             if not read_spectra:
                 raise exceptions.InconsistentArguments(
@@ -369,6 +415,30 @@ class Grid:
 
             # Interpolate the spectra grid
             self.interp_spectra(new_lam)
+
+        # Are we unifying with a filter collection?
+        if filters is not None:
+            # Double check we aren't being asked to do something impossible.
+            if not read_spectra:
+                raise exceptions.InconsistentArguments(
+                    "Can't interpolate spectra onto a FilterCollection "
+                    "wavelength array if no spectra have been read in! "
+                    "Set read_spectra=True."
+                )
+
+            # Warn the user the new_lam will be ignored
+            if new_lam is not None:
+                print(
+                    "If a FilterCollection is defined alongside new_lam "
+                    "then FilterCollection.lam takes precedence and new_lam "
+                    "is ignored"
+                )
+
+            self.unify_with_filters(filters)
+
+        # If we have been given wavelength limtis truncate the grid
+        if len(lam_lims) > 0 and filters is None and new_lam is None:
+            self.truncate_grid_lam(*lam_lims)
 
     def interp_spectra(self, new_lam, loop_grid=False):
         """
@@ -407,7 +477,9 @@ class Grid:
                 new_spectra = np.asarray(new_spectra)
             else:
                 # Evaluate the function at the desired wavelengths
-                new_spectra = spectres(new_lam, self._lam, self.spectra[spectra_type])
+                new_spectra = spectres(
+                    new_lam, self._lam, self.spectra[spectra_type]
+                )
 
             # Update this spectra
             self.spectra[spectra_type] = new_spectra
@@ -437,6 +509,11 @@ class Grid:
         pstr += "-" * 30 + "\n"
 
         return pstr
+
+    @property
+    def shape(self):
+        """Return the shape of the grid."""
+        return self.spectra[self.available_spectra[0]].shape
 
     def get_nearest_index(self, value, array):
         """
@@ -662,12 +739,17 @@ class Grid:
         y = np.arange(len(self.metallicity))
 
         # Select grid for specific ion
-        log10Q = self.log10Q[ion]
+        if hasattr(self, "log10_specific_ionising_lum"):
+            log10_specific_ionising_lum = self.log10_specific_ionising_lum[ion]
+        else:
+            log10_specific_ionising_lum = self.log10Q[ion]
 
         # Truncate grid if max age provided
         if max_log10age is not None:
             ia_max = self.get_nearest_index(max_log10age, self.log10age)
-            log10Q = log10Q[:ia_max, :]
+            log10_specific_ionising_lum = log10_specific_ionising_lum[
+                :ia_max, :
+            ]
         else:
             ia_max = -1
 
@@ -680,13 +762,13 @@ class Grid:
                 vmax = 47.5
         else:
             if vmin is None:
-                vmin = np.min(log10Q)
+                vmin = np.min(log10_specific_ionising_lum)
             if vmax is None:
-                vmax = np.max(log10Q)
+                vmax = np.max(log10_specific_ionising_lum)
 
-        # Plot the grid of log10Q
+        # Plot the grid of log10_specific_ionising_lum
         ax.imshow(
-            log10Q.T,
+            log10_specific_ionising_lum.T,
             origin="lower",
             extent=[
                 self.log10age[0],
@@ -709,7 +791,9 @@ class Grid:
         fig.colorbar(cmapper, cax=cax, orientation="horizontal")
         cax.xaxis.tick_top()
         cax.xaxis.set_label_position("top")
-        cax.set_xlabel(r"$\rm log_{10}(\dot{n}_{" + ion + "}/s^{-1}\ M_{\odot}^{-1})$")
+        cax.set_xlabel(
+            r"$\rm log_{10}(\dot{n}_{" + ion + "}/s^{-1}\\ M_{\\odot}^{-1})$"
+        )
         cax.set_yticks([])
 
         # Set custom tick marks
@@ -717,7 +801,7 @@ class Grid:
         ax.minorticks_off()
 
         # Set labels
-        ax.set_xlabel("$\log_{10}(\mathrm{age}/\mathrm{yr})$")
+        ax.set_xlabel("$\\log_{10}(\\mathrm{age}/\\mathrm{yr})$")
         ax.set_ylabel("$Z$")
 
         return fig, ax
@@ -756,3 +840,149 @@ class Grid:
                 The spectra grid as an Sed object.
         """
         return Sed(self.lam, self.spectra[spectra_type])
+
+    def truncate_grid_lam(self, min_lam, max_lam):
+        """
+        Truncate the grid to a specific wavelength range.
+
+        If out of range wavlengths are requested, the grid will be
+        truncated to the nearest wavelength within the grid.
+
+        Args:
+            min_lam (unyt_quantity)
+                The minimum wavelength to truncate the grid to.
+
+            max_lam (unyt_quantity)
+                The maximum wavelength to truncate the grid to.
+        """
+
+        # Get the indices of the wavelengths to keep
+        okinds = np.logical_and(self.lam >= min_lam, self.lam <= max_lam)
+
+        # Apply the mask to the grid wavelengths
+        self.lam = self.lam[okinds]
+
+        # Apply the mask to the spectra
+        for spectra_type in self.available_spectra:
+            self.spectra[spectra_type] = self.spectra[spectra_type][
+                ..., okinds
+            ]
+
+    def unify_with_filters(self, filters):
+        """
+        Unify the grid with a FilterCollection object.
+
+        This will:
+        - Find the Grid wavelengths at which transmission is non-zero.
+        - Limit the Grid's spectra and wavelength array to where transmision
+          is non-zero.
+        - Interpolate the filter collection onto the Grid's new wavelength
+          array.
+
+        Args:
+            filters (synthesizer.filter.FilterCollection)
+                The FilterCollection object to unify with this grid.
+        """
+        # Get the minimum and maximum wavelengths with non-zero transmission
+        min_lam, max_lam = filters.get_non_zero_lam_lims()
+
+        # Ensure we have at least 1 element with 0 transmission to solve
+        # any issues at the boundaries
+        min_lam -= 10 * angstrom
+        max_lam += 10 * angstrom
+
+        # Truncate the grid to these wavelength limits
+        self.truncate_grid_lam(min_lam, max_lam)
+
+        # Interpolate the filters onto this new wavelength range
+        filters.resample_filters(new_lam=self.lam)
+
+    def animate_grid(
+        self,
+        show=False,
+        save_path=None,
+        fps=30,
+        spectra_type="incident",
+    ):
+        """
+        Create an animation of the grid stepping through wavelength.
+
+        Each frame of the animation is a wavelength bin.
+
+        Args:
+            show (bool):
+                Should the animation be shown?
+            save_path (str, optional):
+                Path to save the animation. If not specified, the
+                animation is not saved.
+            fps (int, optional):
+                the number of frames per second in the output animation.
+                Default is 30 frames per second.
+
+        Returns:
+            matplotlib.animation.FuncAnimation: The animation object.
+        """
+        # Create the figure and axes
+        fig, ax = plt.subplots(1, 1, figsize=(6, 8))
+
+        # Get the spectra grid
+        spectra = self.spectra[spectra_type]
+
+        # Get the normalisation
+        vmin = 10**10
+        vmax = np.percentile(spectra, 99.9)
+
+        # Define the norm
+        norm = LogNorm(vmin=vmin, vmax=vmax, clip=True)
+
+        # Create a placeholder image
+        img = ax.imshow(
+            spectra[:, :, 0],
+            extent=[
+                self.log10age.min(),
+                self.log10age.max(),
+                self.metallicity.min(),
+                self.metallicity.max(),
+            ],
+            origin="lower",
+            animated=True,
+            norm=norm,
+            aspect="auto",
+        )
+
+        cbar = fig.colorbar(img)
+        cbar.set_label(
+            r"$L_{\nu}/[\mathrm{erg s}^{-1}\mathrm{ Hz}^{-1} "
+            r"\mathrm{ M_\odot}^{-1}]$"
+        )
+
+        ax.set_title(f"Wavelength: {self.lam[0]:.2f}{self.lam.units}")
+        ax.set_xlabel("$\\log_{10}(\\mathrm{age}/\\mathrm{yr})$")
+        ax.set_ylabel("$Z$")
+
+        def update(i):
+            # Update the image for the ith frame
+            img.set_data(spectra[:, :, i])
+            ax.set_title(f"Wavelength: {self.lam[i]:.2f}{self.lam.units}")
+            return [
+                img,
+            ]
+
+        # Calculate interval in milliseconds based on fps
+        interval = 1000 / fps
+
+        # Create the animation
+        anim = FuncAnimation(
+            fig, update, frames=self.lam.size, interval=interval, blit=False
+        )
+
+        # Save if a path is provided
+        if save_path is not None:
+            anim.save(save_path, writer="imagemagick")
+
+        if show:
+            plt.show()
+        else:
+            plt.close(fig)
+
+        return anim
