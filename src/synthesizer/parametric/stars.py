@@ -11,6 +11,7 @@ Example usage:
     stars.get_spectra_incident(grid)
     stars.plot_spectra()
 """
+
 import numpy as np
 from scipy import integrate
 from unyt import unyt_quantity, unyt_array
@@ -156,7 +157,10 @@ class Stars(StarsComponent):
         self.log10ages_lims = [self.log10ages[0], self.log10ages[-1]]
 
         # Set the metallicity grid properties
-        self.metallicities_lims = [self.metallicities[0], self.metallicities[-1]]
+        self.metallicities_lims = [
+            self.metallicities[0],
+            self.metallicities[-1],
+        ]
         self.log10metallicities = np.log10(metallicities)
         self.log10metallicities_lims = [
             self.log10metallicities[0],
@@ -187,12 +191,12 @@ class Stars(StarsComponent):
                 "SFH module, or a single float."
             )
 
-        # Store the metallicity distribution we've been given, this is either...
+        # Store the metallicity distribution we've been given, either...
         if issubclass(type(metal_dist), ZDistCommon):
             self.metal_dist_func = metal_dist  # a ZDist function
             self.metal_dist = None
             instant_metallicity = None
-        elif isinstance(metal_dist, (unyt_quantity, float)):
+        elif isinstance(metal_dist, (unyt_quantity, float, np.floating)):
             instant_metallicity = metal_dist  # an instantaneous SFH
             self.metal_dist_func = None
             self.metal_dist = None
@@ -242,7 +246,12 @@ class Stars(StarsComponent):
             # Regular linearly
             self.metallicity_grid_type = "Z"
 
-        elif len(set(self.log10metallicities[:-1] - self.log10metallicities[1:])) == 1:
+        elif (
+            len(
+                set(self.log10metallicities[:-1] - self.log10metallicities[1:])
+            )
+            == 1
+        ):
             # Regular in logspace
             self.metallicity_grid_type = "log10Z"
 
@@ -267,7 +276,9 @@ class Stars(StarsComponent):
         """
 
         # If no units assume unit system
-        if instant_sf is not None and not isinstance(instant_sf, unyt_quantity):
+        if instant_sf is not None and not isinstance(
+            instant_sf, unyt_quantity
+        ):
             instant_sf *= self.ages.units
 
         # Handle the instantaneous SFH case
@@ -291,7 +302,9 @@ class Stars(StarsComponent):
             self.metal_dist = np.zeros(self.metallicities.size)
 
             # Get the bin
-            imetal = (np.abs(self.metallicities - instant_metallicity)).argmin()
+            imetal = (
+                np.abs(self.metallicities - instant_metallicity)
+            ).argmin()
             self.metal_dist[imetal] = self.initial_mass
 
         # Calculate SFH from function if necessary
@@ -303,9 +316,17 @@ class Stars(StarsComponent):
             min_age = 0
             for ia, age in enumerate(self.ages[:-1]):
                 max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
-                sf = integrate.quad(self.sf_hist_func.get_sfr, min_age, max_age)[0]
+                sf = integrate.quad(
+                    self.sf_hist_func.get_sfr, min_age, max_age
+                )[0]
                 self.sf_hist[ia] = sf
                 min_age = max_age
+
+            # Normalise SFH array
+            self.sf_hist /= np.sum(self.sf_hist)
+
+            # Multiply by initial stellar mass
+            self.sf_hist *= self._initial_mass
 
         # Calculate SFH from function if necessary
         if self.metal_dist_func is not None and self.metal_dist is None:
@@ -317,13 +338,22 @@ class Stars(StarsComponent):
             min_metal = 0
             for imetal, metal in enumerate(self.metallicities[:-1]):
                 max_metal = np.mean(
-                    [self.metallicities[imetal + 1], self.metallicities[imetal]]
+                    [
+                        self.metallicities[imetal + 1],
+                        self.metallicities[imetal],
+                    ]
                 )
                 sf = integrate.quad(
                     self.metal_dist_func.get_dist_weight, min_metal, max_metal
                 )[0]
                 self.metal_dist[imetal] = sf
                 min_metal = max_metal
+
+            # Normalise ZH array
+            self.metal_dist /= np.sum(self.metal_dist)
+
+            # Multiply by initial stellar mass
+            self.metal_dist *= self._initial_mass
 
         # Ensure that by this point we have an array for SFH and ZH
         if self.sf_hist is None or self.metal_dist is None:
@@ -392,7 +422,10 @@ class Stars(StarsComponent):
         sfzh = np.expand_dims(self.sfzh, axis=2)
 
         # Account for the SFZH mask in the non-zero indices
-        non_zero_inds = (non_zero_inds[0][sfzh_mask], non_zero_inds[1][sfzh_mask])
+        non_zero_inds = (
+            non_zero_inds[0][sfzh_mask],
+            non_zero_inds[1][sfzh_mask],
+        )
 
         # Compute the spectra
         spectra = np.sum(
@@ -514,9 +547,13 @@ class Stars(StarsComponent):
         pstr = ""
         pstr += "-" * 10 + "\n"
         pstr += "SUMMARY OF BINNED SFZH" + "\n"
-        pstr += f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
+        pstr += (
+            f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
+        )
         pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
-        pstr += f"mean metallicity: {self.calculate_mean_metallicity():.4f}" + "\n"
+        pstr += (
+            f"mean metallicity: {self.calculate_mean_metallicity():.4f}" + "\n"
+        )
         pstr += "-" * 10 + "\n"
 
         return pstr
@@ -540,7 +577,33 @@ class Stars(StarsComponent):
             new_sfzh = self.sfzh + other_stars.sfzh
 
         else:
-            raise exceptions.InconsistentAddition("SFZH must be the same shape")
+            raise exceptions.InconsistentAddition(
+                "SFZH must be the same shape"
+            )
+
+        return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
+
+    def __radd__(self, other_stars):
+        """
+        Overloads "reflected" addition to allow two Stars instances to be added
+        together when in reverse order, i.e. second_stars + self.
+
+        This will only work for Stars objects with the same SFZH grid axes.
+
+        Args:
+            other_stars (parametric.Stars)
+                The other instance of Stars to add to this one.
+        """
+
+        if np.all(self.log10ages == other_stars.log10ages) and np.all(
+            self.metallicities == other_stars.metallicities
+        ):
+            new_sfzh = self.sfzh + other_stars.sfzh
+
+        else:
+            raise exceptions.InconsistentAddition(
+                "SFZH must be the same shape"
+            )
 
         return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
 
@@ -575,7 +638,9 @@ class Stars(StarsComponent):
 
         # Check we have units
         if not has_units(lum):
-            raise exceptions.IncorrectUnits("lum must be given with unyt units")
+            raise exceptions.IncorrectUnits(
+                "lum must be given with unyt units"
+            )
 
         # Calculate the current luminosity in scale_filter
         sed = self.spectra[spectra_type]
@@ -628,7 +693,9 @@ class Stars(StarsComponent):
 
         # Check we have units
         if not has_units(flux):
-            raise exceptions.IncorrectUnits("lum must be given with unyt units")
+            raise exceptions.IncorrectUnits(
+                "lum must be given with unyt units"
+            )
 
         # Get the sed object
         sed = self.spectra[spectra_type]

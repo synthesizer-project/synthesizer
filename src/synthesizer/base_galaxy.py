@@ -3,8 +3,6 @@
 The class described in this module should never be directly instatiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
-import numpy as np
-import matplotlib.pyplot as plt
 
 from synthesizer import exceptions
 from synthesizer.igm import Inoue14
@@ -47,6 +45,10 @@ class BaseGalaxy:
         # Add some place holder attributes which are overloaded on the children
         self.spectra = {}
 
+        # Initialise the photometry dictionaries
+        self.photo_luminosities = {}
+        self.photo_fluxes = {}
+
         # Attach the components
         self.stars = stars
         self.gas = gas
@@ -69,39 +71,39 @@ class BaseGalaxy:
         Calculates dust emission spectra using the attenuated and intrinsic
         spectra that have already been generated and an emission model.
 
-        Parameters
-        ----------
-        emissionmodel : obj
-            The spectral frid
+        Args:
+            emissionmodel (synthesizer.dust.emission.*)
+                The emission model from the dust module used to create dust
+                emission.
 
-        Returns
-        -------
-        obj (Sed)
-             A Sed object containing the dust attenuated spectra
+        Returns:
+            Sed
+                A Sed object containing the dust emission spectra
         """
 
-        # use wavelength grid from attenuated spectra
-        # NOTE: in future it might be good to allow a custom wavelength grid
+        # Use wavelength grid from attenuated spectra
+        lam = self.stars.spectra["emergent"].lam
 
-        lam = self.spectra["emergent"].lam
-
-        # calculate the bolometric dust lunminosity as the difference between
+        # Calculate the bolometric dust luminosity as the difference between
         # the intrinsic and attenuated
-
         dust_bolometric_luminosity = (
-            self.spectra["intrinsic"].measure_bolometric_luminosity()
-            - self.spectra["emergent"].measure_bolometric_luminosity()
+            self.stars.spectra["intrinsic"].measure_bolometric_luminosity()
+            - self.stars.spectra["emergent"].measure_bolometric_luminosity()
         )
 
-        # get the spectrum and normalise it properly
-        lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(lam)
+        # Get the spectrum and normalise it properly
+        lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(
+            lam
+        )
 
-        # create new Sed object containing dust spectra
+        # Create new Sed object containing dust emission spectra
         sed = Sed(lam, lnu=lnu)
 
-        # associate that with the component's spectra dictionarity
-        self.spectra["dust"] = sed
-        self.spectra["total"] = self.spectra["dust"] + self.spectra["emergent"]
+        # Associate that with the component's spectra dictionary
+        self.stars.spectra["dust"] = sed
+        self.stars.spectra["total"] = (
+            self.stars.spectra["dust"] + self.stars.spectra["emergent"]
+        )
 
         return sed
 
@@ -144,7 +146,12 @@ class BaseGalaxy:
         - Galaxy.spectra
         - Galaxy.stars.spectra
         - Galaxy.gas.spectra (WIP)
-        - Galaxy.black_holes.spectra (WIP)
+        - Galaxy.black_holes.spectra
+
+        And in the case of particle galaxies
+        - Galaxy.stars.particle_spectra
+        - Galaxy.gas.particle_spectra (WIP)
+        - Galaxy.black_holes.particle_spectra
 
         Args:
             cosmo (astropy.cosmology.Cosmology)
@@ -155,9 +162,10 @@ class BaseGalaxy:
                 Inoue14).
 
         Raises:
+            MissingAttribute
+                If a galaxy has no redshift we can't get the observed spectra.
 
         """
-
         # Ensure we have a redshift
         if self.redshift is None:
             raise exceptions.MissingAttribute(
@@ -174,20 +182,52 @@ class BaseGalaxy:
                 igm=igm,
             )
 
-        # Loop over all stellar spectra
-        for sed in self.stars.spectra.values():
-            # Calculate the observed spectra
-            sed.get_fnu(
-                cosmo=cosmo,
-                z=self.redshift,
-                igm=igm,
-            )
+        # Do we have stars?
+        if self.stars is not None:
+            # Loop over all stellar spectra
+            for sed in self.stars.spectra.values():
+                # Calculate the observed spectra
+                sed.get_fnu(
+                    cosmo=cosmo,
+                    z=self.redshift,
+                    igm=igm,
+                )
 
-        # TODO: Once implemented do this for gas and black holes too
+            # Loop over all stellar particle spectra
+            if getattr(self.stars, "particle_spectra", None) is not None:
+                for sed in self.stars.particle_spectra.values():
+                    # Calculate the observed spectra
+                    sed.get_fnu(
+                        cosmo=cosmo,
+                        z=self.redshift,
+                        igm=igm,
+                    )
+
+        # Do we have black holes?
+        if self.black_holes is not None:
+            # Loop over all black hole spectra
+            for sed in self.black_holes.spectra.values():
+                # Calculate the observed spectra
+                sed.get_fnu(
+                    cosmo=cosmo,
+                    z=self.redshift,
+                    igm=igm,
+                )
+
+            # Loop over all black hole particle spectra
+            if getattr(self.black_holes, "particle_spectra", None) is not None:
+                for sed in self.black_holes.particle_spectra.values():
+                    # Calculate the observed spectra
+                    sed.get_fnu(
+                        cosmo=cosmo,
+                        z=self.redshift,
+                        igm=igm,
+                    )
 
     def get_spectra_combined(self):
         """
-        Combine all common component spectra from components onto the galaxy,
+        Combine all common component spectra from components onto the galaxy.
+
         e.g.:
             intrinsc = stellar_intrinsic + black_hole_intrinsic.
 
@@ -202,13 +242,15 @@ class BaseGalaxy:
 
         Note that this process is only applicable to integrated spectra.
         """
-
         # Get the spectra we have on the components to combine
         spectra = {"total": [], "intrinsic": [], "emergent": []}
         for key in spectra:
             if self.stars is not None and key in self.stars.spectra:
                 spectra[key].append(self.stars.spectra[key])
-            if self.black_holes is not None and key in self.black_holes.spectra:
+            if (
+                self.black_holes is not None
+                and key in self.black_holes.spectra
+            ):
                 spectra[key].append(self.black_holes.spectra[key])
             if self.gas is not None and key in self.gas.spectra:
                 spectra[key].append(self.gas.spectra[key])
@@ -221,6 +263,82 @@ class BaseGalaxy:
         for key, lst in spectra.items():
             if len(lst) > 1:
                 self.spectra[key] = sum(lst)
+
+    def get_photo_luminosities(self, filters, verbose=True):
+        """
+        Calculate luminosity photometry using a FilterCollection object.
+
+        Args:
+            filters (filters.FilterCollection)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+        """
+        # Get stellar photometry
+        if self.stars is not None:
+            self.stars.get_photo_luminosities(filters, verbose)
+
+            # If we have particle spectra do that too (not applicable to
+            # parametric Galaxy)
+            if getattr(self.stars, "particle_spectra", None) is not None:
+                self.stars.get_particle_photo_luminosities(filters, verbose)
+
+        # Get black hole photometry
+        if self.black_holes is not None:
+            self.black_holes.get_photo_luminosities(filters, verbose)
+
+            # If we have particle spectra do that too (not applicable to
+            # parametric Galaxy)
+            if getattr(self.black_holes, "particle_spectra", None) is not None:
+                self.black_holes.get_particle_photo_luminosities(
+                    filters, verbose
+                )
+
+        # Get the combined photometry
+        for spectra in self.spectra:
+            # Create the photometry collection and store it in the object
+            self.photo_luminosities[spectra] = self.spectra[
+                spectra
+            ].get_photo_luminosities(filters, verbose)
+
+    def get_photo_fluxes(self, filters, verbose=True):
+        """
+        Calculate flux photometry using a FilterCollection object.
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            (dict)
+                A dictionary of fluxes in each filter in filters.
+        """
+        # Get stellar photometry
+        if self.stars is not None:
+            self.stars.get_photo_fluxes(filters, verbose)
+
+            # If we have particle spectra do that too (not applicable to
+            # parametric Galaxy)
+            if getattr(self.stars, "particle_spectra", None) is not None:
+                self.stars.get_particle_photo_fluxes(filters, verbose)
+
+        # Get black hole photometry
+        if self.black_holes is not None:
+            self.black_holes.get_photo_fluxes(filters, verbose)
+
+            # If we have particle spectra do that too (not applicable to
+            # parametric Galaxy)
+            if getattr(self.black_holes, "particle_spectra", None) is not None:
+                self.black_holes.get_particle_photo_fluxes(filters, verbose)
+
+        # Get the combined photometry
+        for spectra in self.spectra:
+            # Create the photometry collection and store it in the object
+            self.photo_fluxes[spectra] = self.spectra[
+                spectra
+            ].get_photo_fluxes(filters, verbose)
 
     def plot_spectra(
         self,
@@ -292,7 +410,9 @@ class BaseGalaxy:
         # Get the combined spectra
         if combined_spectra:
             if isinstance(combined_spectra, list):
-                spectra.update({key: self.spectra[key] for key in combined_spectra})
+                spectra.update(
+                    {key: self.spectra[key] for key in combined_spectra}
+                )
             elif isinstance(combined_spectra, Sed):
                 spectra.update(
                     {
@@ -329,7 +449,10 @@ class BaseGalaxy:
         if gas_spectra:
             if isinstance(gas_spectra, list):
                 spectra.update(
-                    {"Gas " + key: self.gas.spectra[key] for key in gas_spectra}
+                    {
+                        "Gas " + key: self.gas.spectra[key]
+                        for key in gas_spectra
+                    }
                 )
             elif isinstance(gas_spectra, Sed):
                 spectra.update(
@@ -339,7 +462,10 @@ class BaseGalaxy:
                 )
             else:
                 spectra.update(
-                    {"Gas " + key: self.gas.spectra[key] for key in self.gas.spectra}
+                    {
+                        "Gas " + key: self.gas.spectra[key]
+                        for key in self.gas.spectra
+                    }
                 )
 
         # Get the black hole spectra
@@ -429,8 +555,8 @@ class BaseGalaxy:
             figsize (tuple)
                 Tuple with size 2 defining the figure size.
             filters (FilterCollection)
-                If given then the photometry is computed and both the photometry
-                and filter curves are plotted
+                If given then the photometry is computed and both the
+                photometry and filter curves are plotted
             quantity_to_plot (string)
                 The sed property to plot. Can be "lnu", "luminosity" or "llam"
                 for rest frame spectra or "fnu", "flam" or "flux" for observed
@@ -449,7 +575,9 @@ class BaseGalaxy:
         # Get the combined spectra
         if combined_spectra:
             if isinstance(combined_spectra, list):
-                spectra.update({key: self.spectra[key] for key in combined_spectra})
+                spectra.update(
+                    {key: self.spectra[key] for key in combined_spectra}
+                )
             elif isinstance(combined_spectra, Sed):
                 spectra.update(
                     {
@@ -486,7 +614,10 @@ class BaseGalaxy:
         if gas_spectra:
             if isinstance(gas_spectra, list):
                 spectra.update(
-                    {"Gas " + key: self.gas.spectra[key] for key in gas_spectra}
+                    {
+                        "Gas " + key: self.gas.spectra[key]
+                        for key in gas_spectra
+                    }
                 )
             elif isinstance(gas_spectra, Sed):
                 spectra.update(
@@ -496,7 +627,10 @@ class BaseGalaxy:
                 )
             else:
                 spectra.update(
-                    {"Gas " + key: self.gas.spectra[key] for key in self.gas.spectra}
+                    {
+                        "Gas " + key: self.gas.spectra[key]
+                        for key in self.gas.spectra
+                    }
                 )
 
         # Get the black hole spectra

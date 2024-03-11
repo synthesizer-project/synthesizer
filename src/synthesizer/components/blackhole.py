@@ -4,7 +4,7 @@ The class defined here should never be instantiated directly, there are only
 ever instantiated by the parametric/particle child classes.
 """
 import numpy as np
-from unyt import c, rad, deg, unyt_quantity
+from unyt import c, rad, deg
 
 from synthesizer import exceptions
 from synthesizer.blackhole_emission_models import Template
@@ -98,6 +98,10 @@ class BlackholesComponent:
         # Initialise spectra
         self.spectra = {}
 
+        # Intialise the photometry dictionaries
+        self.photo_luminosities = {}
+        self.photo_fluxes = {}
+
         # Save the arguments as attributes
         self.mass = mass
         self.accretion_rate = accretion_rate
@@ -175,7 +179,9 @@ class BlackholesComponent:
         # If inclination, calculate the cosine of the inclination, required by
         # some models (e.g. AGNSED).
         if self.inclination is not None:
-            self.cosine_inclination = np.cos(self.inclination.to("radian").value)
+            self.cosine_inclination = np.cos(
+                self.inclination.to("radian").value
+            )
 
     def _prepare_sed_args(self, *args, **kwargs):
         """
@@ -268,8 +274,8 @@ class BlackholesComponent:
 
         Returns
             str
-                Summary string containing the total mass formed and lists of the
-                available SEDs, lines, and images.
+                Summary string containing the total mass formed and lists
+                of the available SEDs, lines, and images.
         """
 
         # Define the width to print within
@@ -311,7 +317,9 @@ class BlackholesComponent:
                 The black hole bolometric luminosity
         """
 
-        self.bolometric_luminosity = self.epsilon * self.accretion_rate * c**2
+        self.bolometric_luminosity = (
+            self.epsilon * self.accretion_rate * c**2
+        )
 
         return self.bolometric_luminosity
 
@@ -339,7 +347,9 @@ class BlackholesComponent:
                 The black hole eddington ratio
         """
 
-        self.eddington_ratio = self._bolometric_luminosity / self._eddington_luminosity
+        self.eddington_ratio = (
+            self._bolometric_luminosity / self._eddington_luminosity
+        )
 
         return self.eddington_ratio
 
@@ -616,7 +626,9 @@ class BlackholesComponent:
 
             # Remember the previous values to be returned after getting the
             # spectra
-            used_varaibles.append((param, getattr(emission_model, param, None)))
+            used_varaibles.append(
+                (param, getattr(emission_model, param, None))
+            )
 
             # Set the passed value
             setattr(emission_model, param, getattr(self, param, None))
@@ -776,7 +788,9 @@ class BlackholesComponent:
                 self.spectra["dust"]._lnu *= dust_bolometric_luminosity.value
 
                 # Calculate total spectrum
-                self.spectra["total"] = self.spectra["emergent"] + self.spectra["dust"]
+                self.spectra["total"] = (
+                    self.spectra["emergent"] + self.spectra["dust"]
+                )
 
         elif (dust_curve is not None) or (tau_v is not None):
             raise exceptions.MissingArgument(
@@ -785,6 +799,52 @@ class BlackholesComponent:
             )
 
         return self.spectra
+
+    def get_photo_luminosities(self, filters, verbose=True):
+        """
+        Calculate luminosity photometry using a FilterCollection object.
+
+        Args:
+            filters (filters.FilterCollection)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            photo_luminosities (dict)
+                A dictionary of rest frame broadband luminosities.
+        """
+        # Loop over spectra in the component
+        for spectra in self.spectra:
+            # Create the photometry collection and store it in the object
+            self.photo_luminosities[spectra] = self.spectra[
+                spectra
+            ].get_photo_luminosities(filters, verbose)
+
+        return self.photo_luminosities
+
+    def get_photo_fluxes(self, filters, verbose=True):
+        """
+        Calculate flux photometry using a FilterCollection object.
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            (dict)
+                A dictionary of fluxes in each filter in filters.
+        """
+        # Loop over spectra in the component
+        for spectra in self.spectra:
+            # Create the photometry collection and store it in the object
+            self.photo_fluxes[spectra] = self.spectra[
+                spectra
+            ].get_photo_fluxes(filters, verbose)
+
+        return self.photo_fluxes
 
     def plot_spectra(
         self,
@@ -810,15 +870,17 @@ class BlackholesComponent:
                 figure and axes.
             ylimits (tuple)
                 The limits to apply to the y axis. If not provided the limits
-                will be calculated with the lower limit set to 1000 (100) times less
-                than the peak of the spectrum for rest_frame (observed) spectra.
+                will be calculated with the lower limit set to 1000 (100)
+                times less than the peak of the spectrum for rest_frame
+                (observed) spectra.
             xlimits (tuple)
                 The limits to apply to the x axis. If not provided the optimal
                 limits are found based on the ylimits.
             figsize (tuple)
                 Tuple with size 2 defining the figure size.
             kwargs (dict)
-                arguments to the `sed.plot_spectra` method called from this wrapper
+                arguments to the `sed.plot_spectra` method called from this
+                wrapper
 
         Returns:
             fig (matplotlib.pyplot.figure)

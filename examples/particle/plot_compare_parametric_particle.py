@@ -2,13 +2,13 @@
 Compare parametric and particle SEDs
 =====================================
 
-This example compares a sampled and binned (parametric) SED for different numbers of particles
+This example compares a sampled and binned (parametric) SED for different
+numbers of particles
 """
 
-import os
 import numpy as np
 import matplotlib.pyplot as plt
-from unyt import yr, Myr
+from unyt import Myr
 
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
@@ -43,7 +43,12 @@ parametric_galaxy = ParametricGalaxy(sfzh)
 parametric_galaxy.stars.get_spectra_incident(grid)
 sed = parametric_galaxy.stars.spectra["incident"]
 plt.plot(
-    np.log10(sed.lam), np.log10(sed.lnu), label="parametric", lw=4, c="k", alpha=0.3
+    np.log10(sed.lam),
+    np.log10(sed.lnu),
+    label="parametric",
+    lw=4,
+    c="k",
+    alpha=0.3,
 )
 
 

@@ -8,7 +8,7 @@ indistinguishable results.
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from unyt import Msun, yr, Angstrom, deg, K, unyt_quantity, unyt_array
+from unyt import Msun, yr, deg
 
 from synthesizer.blackhole_emission_models import UnifiedAGN
 from synthesizer.parametric import BlackHole

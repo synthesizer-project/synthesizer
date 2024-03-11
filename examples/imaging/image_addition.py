@@ -4,8 +4,6 @@ Image addition example
 
 An example of how to do image addition and testing error functionality.
 """
-
-import os
 import numpy as np
 from unyt import kpc
 
@@ -29,7 +27,9 @@ grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
 # Define an arbitrary morphology to feed the imaging
-morph = Sersic2D(r_eff=1.0 * kpc, sersic_index=1.0, ellipticity=0.5, theta=35.0)
+morph = Sersic2D(
+    r_eff=1.0 * kpc, sersic_index=1.0, ellipticity=0.5, theta=35.0
+)
 
 # Define the parameters of the star formation and metal enrichment histories
 stellar_mass = 1e10
@@ -103,7 +103,10 @@ composite_mixed1 = img1 + img_with_filters1
 composite_mixed2 = img_with_filters1 + img1
 
 # Added images preserve a history of what objects were added
-print("Example of image nesting from img1 + img2 + img3:", composite.combined_imgs)
+print(
+    "Example of image nesting from img1 + img2 + img3:",
+    composite.combined_imgs,
+)
 
 print("Error Demonstration:")
 

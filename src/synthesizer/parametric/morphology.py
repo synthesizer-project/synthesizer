@@ -37,9 +37,56 @@ class MorphologyBase:
 
         plt.figure()
         plt.imshow(
-            np.log10(img), origin="lower", interpolation="nearest", vmin=-1, vmax=2
+            np.log10(img),
+            origin="lower",
+            interpolation="nearest",
+            vmin=-1,
+            vmax=2,
         )
         plt.show()
+
+    def compute_density_grid_from_arrays(self, *args):
+        """
+        Compute the density grid from coordinate grids.
+
+        This is a place holder method to be overwritten by child classes.
+        """
+        raise exceptions.NotImplemented(
+            "This method should be overwritten by child classes"
+        )
+
+    def get_density_grid(self, resolution, npix):
+        """
+        Get the density grid based on resolution and npix.
+
+        Args:
+            resolution (unyt_quantity)
+                The resolution of the grid.
+            npix (tuple, int)
+                The number of pixels in each dimension.
+        """
+        # Define 1D bin centres of each pixel
+        if resolution.units.dimensions == angle:
+            res = resolution.to("mas")
+        else:
+            res = resolution.to("kpc")
+        xbin_centres = res.value * np.linspace(
+            -npix[0] / 2, npix[0] / 2, npix[0]
+        )
+        ybin_centres = res.value * np.linspace(
+            -npix[1] / 2, npix[1] / 2, npix[1]
+        )
+
+        # Convert the 1D grid into 2D grids coordinate grids
+        xx, yy = np.meshgrid(xbin_centres, ybin_centres)
+
+        # Extract the density grid from the morphology function
+        density_grid = self.compute_density_grid_from_arrays(
+            xx, yy, units=res.units
+        )
+
+        # And normalise it...
+        return density_grid / np.sum(density_grid)
 
 
 class Sersic2D(MorphologyBase):
@@ -166,7 +213,7 @@ class Sersic2D(MorphologyBase):
                 "comoslogical calculations."
             )
 
-    def compute_density_grid(self, xx, yy, units=kpc):
+    def compute_density_grid_from_arrays(self, xx, yy, units=kpc):
         """
         Compute the density grid defined by this morphology as a function of
         the input coordinate grids.
@@ -249,7 +296,9 @@ class PointSource(MorphologyBase):
                     "The units of offset must have length or angle dimensions"
                 )
         else:
-            raise exceptions.MissingUnits("The offset must be provided with units")
+            raise exceptions.MissingUnits(
+                "The offset must be provided with units"
+            )
 
         # Associate the cosmology and redshift to this object
         self.cosmo = cosmo
@@ -270,7 +319,7 @@ class PointSource(MorphologyBase):
             else:
                 self.offset_kpc = self.offset_mas * kpc_proper_per_mas
 
-    def compute_density_grid(self, xx, yy, units=kpc):
+    def compute_density_grid_from_arrays(self, xx, yy, units=kpc):
         """
         Compute the density grid defined by this morphology as a function of
         the input coordinate grids.

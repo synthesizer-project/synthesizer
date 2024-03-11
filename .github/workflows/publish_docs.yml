@@ -21,7 +21,7 @@ jobs:
           pip install wheel
           pip install -e .
           sudo apt install pandoc
-            pip install --upgrade google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client gdown
+            pip install --upgrade google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client gdown==v4.6.3
       - name: Download test data
         env:
             GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
@@ -29,6 +29,7 @@ jobs:
           cd tests/
           ./get_test_grid.sh
           cd ../
+          synthesizer-download --test-grids -d tests/test_grid/
       - name: Sphinx Build
         run: |
           cd docs

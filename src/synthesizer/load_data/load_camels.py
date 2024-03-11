@@ -142,8 +142,13 @@ def load_CAMELS_IllustrisTNG(
     """
 
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
+        scale_factor = hf["Header"].attrs["Time"]
+        redshift = 1.0 / scale_factor - 1
+        Om0 = hf["Header"].attrs["Omega0"]
+        h = hf["Header"].attrs["HubbleParam"]
+
         form_time = hf["PartType4/GFM_StellarFormationTime"][:]
-        coods = hf["PartType4/Coordinates"][:]
+        coods = hf["PartType4/Coordinates"][:] * scale_factor  # Mpc (physical)
         masses = hf["PartType4/Masses"][:]
         imasses = hf["PartType4/GFM_InitialMass"][:]
         _metals = hf["PartType4/GFM_Metals"][:]
@@ -153,13 +158,10 @@ def load_CAMELS_IllustrisTNG(
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/GFM_Metallicity"][:]
-        g_coods = hf["PartType0/Coordinates"][:]
+        g_coods = (
+            hf["PartType0/Coordinates"][:] * scale_factor
+        )  # Mpc (physical)
         g_hsml = hf["PartType0/SubfindHsml"][:]
-
-        scale_factor = hf["Header"].attrs["Time"]
-        redshift = 1.0 / scale_factor - 1
-        Om0 = hf["Header"].attrs["Omega0"]
-        h = hf["Header"].attrs["HubbleParam"]
 
     if fof_dir:
         _dir = fof_dir  # replace if symlinks for fof files are broken
@@ -267,8 +269,13 @@ def load_CAMELS_Astrid(
     """
 
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
+        redshift = hf["Header"].attrs["Redshift"]
+        scale_factor = hf["Header"].attrs["Time"][0]
+        Om0 = hf["Header"].attrs["Omega0"][0]
+        h = hf["Header"].attrs["HubbleParam"][0]
+
         form_time = hf["PartType4/GFM_StellarFormationTime"][:]
-        coods = hf["PartType4/Coordinates"][:]
+        coods = hf["PartType4/Coordinates"][:] * scale_factor  # Mpc (physical)
         masses = hf["PartType4/Masses"][:]
 
         # TODO: update with correct scaling
@@ -280,13 +287,10 @@ def load_CAMELS_Astrid(
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/GFM_Metallicity"][:]
-        g_coods = hf["PartType0/Coordinates"][:]
+        g_coods = (
+            hf["PartType0/Coordinates"][:] * scale_factor
+        )  # Mpc (physical)
         g_hsml = hf["PartType0/SmoothingLength"][:]
-
-        redshift = hf["Header"].attrs["Redshift"]
-        scale_factor = hf["Header"].attrs["Time"][0]
-        Om0 = hf["Header"].attrs["Omega0"][0]
-        h = hf["Header"].attrs["HubbleParam"][0]
 
     masses = (masses * 1e10) / h
     g_masses = (g_masses * 1e10) / h
@@ -356,22 +360,26 @@ def load_CAMELS_Simba(
     """
 
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
+        redshift = hf["Header"].attrs["Redshift"]
+        scale_factor = hf["Header"].attrs["Time"]
+        Om0 = hf["Header"].attrs["Omega0"]
+        h = hf["Header"].attrs["HubbleParam"]
+
         form_time = hf["PartType4/StellarFormationTime"][:]
-        coods = hf["PartType4/Coordinates"][:]
+        coods = hf["PartType4/Coordinates"][:] * scale_factor  # Mpc (physical)
         masses = hf["PartType4/Masses"][:]
-        imasses = np.ones(len(masses)) * 0.00155  # * hf['Header'].attrs['MassTable'][1]
+        imasses = (
+            np.ones(len(masses)) * 0.00155
+        )  # * hf['Header'].attrs['MassTable'][1]
         _metals = hf["PartType4/Metallicity"][:]
 
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/Metallicity"][:][:, 0]
-        g_coods = hf["PartType0/Coordinates"][:]
+        g_coods = (
+            hf["PartType0/Coordinates"][:] * scale_factor
+        )  # Mpc (physical)
         g_hsml = hf["PartType0/SmoothingLength"][:]
-
-        redshift = hf["Header"].attrs["Redshift"]
-        scale_factor = hf["Header"].attrs["Time"]
-        Om0 = hf["Header"].attrs["Omega0"]
-        h = hf["Header"].attrs["HubbleParam"]
 
     masses = (masses * 1e10) / h
     g_masses = (g_masses * 1e10) / h

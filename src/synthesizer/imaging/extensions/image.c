@@ -43,13 +43,13 @@
 PyObject *make_img(PyObject *self, PyObject *args) {
 
   const double res, threshold;
-  const int npix, npart, kdim;
+  const int npix_x, npix_y, npart, kdim;
   PyArrayObject *np_pix_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys;
 
-  if (!PyArg_ParseTuple(args, "OOOOOdiidi", &np_pix_values,
+  if (!PyArg_ParseTuple(args, "OOOOOdiiidi", &np_pix_values,
                         &np_smoothing_lengths, &np_xs, &np_ys, &np_kernel, &res,
-                        &npix, &npart, &threshold, &kdim))
+                        &npix_x, &npix_y, &npart, &threshold, &kdim))
     return NULL;
 
   /* Get pointers to the actual data. */
@@ -60,8 +60,9 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   const double *kernel = PyArray_DATA(np_kernel);
 
   /* Allocate the image.. */
-  double *img = malloc(npix * npix * sizeof(double));
-  bzero(img, npix * npix * sizeof(double));
+  int npix = npix_x * npix_y;
+  double *img = malloc(npix * sizeof(double));
+  bzero(img, npix * sizeof(double));
 
   /* Loop over positions including the sed */
   for (int ind = 0; ind < npart; ind++) {
@@ -92,7 +93,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
     for (int ii = i - delta_pix; ii <= i + delta_pix; ii++) {
 
       /* Skip out of bounds pixels. */
-      if (ii < 0 || ii >= npix)
+      if (ii < 0 || ii >= npix_x)
         continue;
 
       /* Compute the x separation */
@@ -101,7 +102,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
       for (int jj = j - delta_pix; jj <= j + delta_pix; jj++) {
 
         /* Skip out of bounds pixels. */
-        if (jj < 0 || jj >= npix)
+        if (jj < 0 || jj >= npix_y)
           continue;
 
         /* Compute the y separation */
@@ -116,8 +117,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
         int jjj = jj - (j - delta_pix);
 
         /* Calculate the impact parameter. */
-        double sml_squ = smooth_length * smooth_length;
-        double q = rsqu / sml_squ;
+        double q = sqrt(rsqu) / smooth_length;
 
         /* Skip gas particles outside the kernel. */
         if (q > threshold)
@@ -144,13 +144,13 @@ PyObject *make_img(PyObject *self, PyObject *args) {
     for (int ii = i - delta_pix; ii <= i + delta_pix; ii++) {
 
       /* Skip out of bounds pixels. */
-      if (ii < 0 || ii >= npix)
+      if (ii < 0 || ii >= npix_x)
         continue;
 
       for (int jj = j - delta_pix; jj <= j + delta_pix; jj++) {
 
         /* Skip out of bounds pixels. */
-        if (jj < 0 || jj >= npix)
+        if (jj < 0 || jj >= npix_y)
           continue;
 
         /* Get the pixel coordinates in the kernel */
@@ -158,7 +158,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
         int jjj = jj - (j - delta_pix);
 
         /* Loop over the wavelength axis. */
-        img[jj + npix * ii] +=
+        img[jj + npix_y * ii] +=
             part_kernel[iii * kernel_cdim + jjj] * pix_values[ind];
       }
     }
@@ -167,7 +167,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   }
 
   /* Construct a numpy python array to return the IFU. */
-  npy_intp dims[3] = {npix, npix};
+  npy_intp dims[3] = {npix_x, npix_y};
   PyArrayObject *out_img =
       (PyArrayObject *)PyArray_SimpleNewFromData(2, dims, NPY_FLOAT64, img);
 

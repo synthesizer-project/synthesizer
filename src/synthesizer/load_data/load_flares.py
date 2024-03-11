@@ -1,13 +1,13 @@
-import h5py
 import numpy as np
+import h5py
 
-from unyt import Msun, kpc, yr
+from unyt import Msun, Mpc, yr
 
 from ..particle.galaxy import Galaxy
 from synthesizer.load_data.utils import get_len
 
 
-def load_FLARES(f, region, tag):
+def load_FLARES(master_file, region, tag):
     """
     Load FLARES galaxies from a FLARES master file
 
@@ -24,36 +24,76 @@ def load_FLARES(f, region, tag):
             `ParticleGalaxy` object containing stars
     """
 
-    with h5py.File(f, "r") as hf:
-        lens = hf[f"{region}/{tag}/Galaxy/S_Length"][:]
+    zed = float(tag[5:].replace("p", "."))
+    scale_factor = 1.0 / (1.0 + zed)
+
+    with h5py.File(master_file, "r") as hf:
+        slens = hf[f"{region}/{tag}/Galaxy/S_Length"][:]
+        glens = hf[f"{region}/{tag}/Galaxy/G_Length"][:]
+
         ages = hf[f"{region}/{tag}/Particle/S_Age"][:]  # Gyr
-        coods = hf[f"{region}/{tag}/Particle/S_Coordinates"][:].T
-        mass = hf[f"{region}/{tag}/Particle/S_Mass"][:]  # 1e10 Msol
-        imass = hf[f"{region}/{tag}/Particle/S_MassInitial"][:]  # 1e10 Msol
-        # metals = hf[f'{region}/{tag}/Particle/S_Z'][:]
+        coods = (
+            hf[f"{region}/{tag}/Particle/S_Coordinates"][:].T * scale_factor
+        )  # Mpc (physical)
+        masses = hf[f"{region}/{tag}/Particle/S_Mass"][:]  # 1e10 Msol
+        imasses = hf[f"{region}/{tag}/Particle/S_MassInitial"][:]  # 1e10 Msol
+
         metals = hf[f"{region}/{tag}/Particle/S_Z_smooth"][:]
         s_oxygen = hf[f"{region}/{tag}/Particle/S_Abundance_Oxygen"][:]
         s_hydrogen = hf[f"{region}/{tag}/Particle/S_Abundance_Hydrogen"][:]
-        # ids = hf[f'{region}/{tag}/Particle/S_ID'][:]
-        # index = hf[f'{region}/{tag}/Particle/S_Index'][:]
-        # hf[f'{pre}/S_Vel']
 
+        g_sfr = hf[f"{region}/{tag}/Particle/G_SFR"][:]  # Msol / yr
+        g_masses = hf[f"{region}/{tag}/Particle/G_Mass"][:]  # 1e10 Msol
+        g_metals = hf[f"{region}/{tag}/Particle/G_Z_smooth"][:]
+        g_coods = (
+            hf[f"{region}/{tag}/Particle/G_Coordinates"][:].T * scale_factor
+        )  # Mpc (physical)
+        g_hsml = hf[f"{region}/{tag}/Particle/G_sml"][
+            :
+        ]  # Mpc (physical)
+
+    # Convert units
     ages = ages * 1e9  # yr
-    mass = mass * 1e10  # Msol
-    imass = imass * 1e10  # Msol
+    masses = masses * 1e10  # Msol
+    imasses = imasses * 1e10  # Msol
+    g_masses = g_masses * 1e10  # Msol
 
-    begin, end = get_len(lens)
+    # Get the star particle begin / end indices
+    begin, end = get_len(slens)
 
     galaxies = [None] * len(begin)
     for i, (b, e) in enumerate(zip(begin, end)):
-        galaxies[i] = Galaxy()
+        # Create the individual galaxy objects
+        galaxies[i] = Galaxy(redshift=zed)
+
         galaxies[i].load_stars(
-            mass[b:e] * Msun,
+            imasses[b:e] * Msun,
             ages[b:e] * yr,
             metals[b:e],
             s_oxygen=s_oxygen[b:e],
             s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :] * kpc,
+            coordinates=coods[b:e, :] * Mpc,
+            current_masses=masses[b:e] * Msun,
+        )
+
+    # Get the gas particle begin / end indices
+    begin, end = get_len(glens)
+
+    for i, (b, e) in enumerate(zip(begin, end)):
+        # Use gas particle SFR for star forming mask
+        sf_mask = g_sfr[b:e] > 0
+        galaxies[i].sf_gas_mass = np.sum(g_masses[b:e][sf_mask]) * Msun
+
+        galaxies[i].sf_gas_metallicity = (
+            np.sum(g_masses[b:e][sf_mask] * g_metals[b:e][sf_mask])
+            / galaxies[i].sf_gas_mass.value
+        )
+
+        galaxies[i].load_gas(
+            coordinates=g_coods[b:e] * Mpc,
+            masses=g_masses[b:e] * Msun,
+            metals=g_metals[b:e],
+            smoothing_lengths=g_hsml[b:e] * Mpc,
         )
 
     return galaxies
