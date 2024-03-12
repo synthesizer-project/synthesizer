@@ -29,7 +29,7 @@ class BaseGalaxy:
             The BlackHole/s object holding information about the black hole/s.
     """
 
-    def __init__(self, stars, gas, black_holes, redshift, **kwargs):
+    def __init__(self, stars, gas, black_holes, redshift, centre, **kwargs):
         """
         Instantiate the base Galaxy class.
 
@@ -56,6 +56,7 @@ class BaseGalaxy:
 
         # The redshift of the galaxy
         self.redshift = redshift
+        self.centre = centre
 
         if getattr(self, "galaxy_type") is None:
             raise Warning(
