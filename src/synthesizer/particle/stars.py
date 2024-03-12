@@ -125,7 +125,7 @@ class Stars(Particles, StarsComponent):
         s_oxygen=None,
         s_hydrogen=None,
         softening_length=None,
-        centre_of_potential=None,
+        centre=None,
     ):
         """
         Intialise the Stars instance. The first 3 arguments are always
@@ -161,9 +161,9 @@ class Stars(Particles, StarsComponent):
             softening_length (float)
                 The gravitational softening lengths of each stellar
                 particle in simulation units
-            centre_of_potential (float)
-                The minimum of the gravitational potential of the parent
-                galaxy object, in kpc.
+            centre (array-like, float)
+                The centre of the star particle. Can be defined in
+                a number of way (e.g. centre of mass)
         """
 
         # Instantiate parents
@@ -175,6 +175,7 @@ class Stars(Particles, StarsComponent):
             redshift=redshift,
             softening_length=softening_length,
             nparticles=len(initial_masses),
+            centre=centre,
         )
         StarsComponent.__init__(self, ages, metallicities)
 
@@ -570,7 +571,7 @@ class Stars(Particles, StarsComponent):
 
         distance = np.sqrt(
             np.sum(
-                (self.coordinates - self.centre_of_potential).to(kpc) ** 2,
+                (self.coordinates - self.centre).to(kpc) ** 2,
                 axis=1,
             )
         )

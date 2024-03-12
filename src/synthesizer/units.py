@@ -93,7 +93,7 @@ default_units = {
     "centre": Mpc,
     "photo_luminosities": erg / s / Hz,
     "photo_fluxes": erg / s / cm**2 / Hz,
-    "centre_of_potential": Mpc,
+    "centre": Mpc,
 }
 
 
