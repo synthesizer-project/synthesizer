@@ -24,6 +24,7 @@ import warnings
 import numpy as np
 import cmasher as cmr
 import matplotlib.pyplot as plt
+from unyt import kpc
 
 from synthesizer.components import StarsComponent
 from synthesizer.dust.attenuation import PowerLaw
@@ -124,6 +125,7 @@ class Stars(Particles, StarsComponent):
         s_oxygen=None,
         s_hydrogen=None,
         softening_length=None,
+        centre=None,
     ):
         """
         Intialise the Stars instance. The first 3 arguments are always
@@ -156,8 +158,12 @@ class Stars(Particles, StarsComponent):
                 The fractional oxygen abundance.
             s_hydrogen (array-like, float)
                 The fractional hydrogen abundance.
-            imf_hmass_slope (float)
-                The slope of high mass end of the initial mass function (WIP)
+            softening_length (float)
+                The gravitational softening lengths of each stellar
+                particle in simulation units
+            centre (array-like, float)
+                The centre of the star particle. Can be defined in
+                a number of way (e.g. centre of mass)
         """
 
         # Instantiate parents
@@ -169,6 +175,7 @@ class Stars(Particles, StarsComponent):
             redshift=redshift,
             softening_length=softening_length,
             nparticles=len(initial_masses),
+            centre=centre,
         )
         StarsComponent.__init__(self, ages, metallicities)
 
@@ -379,6 +386,7 @@ class Stars(Particles, StarsComponent):
         grid_assignment_method="cic",
         parametric_young_stars=None,
         parametric_sfh="constant",
+        aperture=None,
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -508,6 +516,19 @@ class Stars(Particles, StarsComponent):
 
             return np.zeros(len(grid.lam))
 
+        if aperture is not None:
+            # Get aperture mask
+            aperture_mask = self._aperture_mask(aperture_radius=aperture)
+
+            # Ensure and warn that the masking hasn't removed everything
+            if np.sum(aperture_mask) == 0:
+                if verbose:
+                    print("Aperture mask has filtered out all particles")
+
+                return np.zeros(len(grid.lam))
+        else:
+            aperture_mask = np.ones(self.nparticles, dtype=bool)
+
         if parametric_young_stars:
             # Get mask for particles we're going to replace with parametric
             pmask = self._get_masks(parametric_young_stars, None)
@@ -516,7 +537,7 @@ class Stars(Particles, StarsComponent):
             mask[pmask] = False
 
             lnu_parametric = self._parametric_young_stars(
-                pmask=pmask,
+                pmask=pmask & aperture_mask,
                 age=parametric_young_stars,
                 parametric_sfh=parametric_sfh,
                 grid=grid,
@@ -530,7 +551,7 @@ class Stars(Particles, StarsComponent):
             grid,
             fesc=fesc,
             spectra_type=spectra_name,
-            mask=mask,
+            mask=mask & aperture_mask,
             grid_assignment_method=grid_assignment_method.lower(),
         )
 
@@ -541,6 +562,24 @@ class Stars(Particles, StarsComponent):
             return lnu_particle + lnu_parametric
         else:
             return lnu_particle
+
+    def _aperture_mask(self, aperture_radius):
+        """
+        Mask for particles within spherical aperture.
+
+        Args:
+            aperture_radius (float)
+                Radius of spherical aperture in kpc
+        """
+
+        distance = np.sqrt(
+            np.sum(
+                (self.coordinates - self.centre).to(kpc) ** 2,
+                axis=1,
+            )
+        )
+
+        return distance < aperture_radius
 
     def _parametric_young_stars(
         self,
