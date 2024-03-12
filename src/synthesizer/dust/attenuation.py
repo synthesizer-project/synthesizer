@@ -1,5 +1,6 @@
 """Module containing dust attenuation functionality
 """
+
 import os
 import numpy as np
 from scipy import interpolate
@@ -12,10 +13,10 @@ from synthesizer import exceptions
 
 this_dir, this_filename = os.path.split(__file__)
 
-__all__ = ["PowerLaw", "MW_N18", "Calzetti2000", "GrainsWD01"]
+__all__ = ["PowerLaw", "MWN18", "Calzetti2000", "GrainsWD01", "ParametricLI08"]
 
 
-def N09_tau(lam, slope, cent_lam, ampl, gamma):
+def N09Tau(lam, slope, cent_lam, ampl, gamma):
     """
     Attenuation curve using a modified version of the Calzetti
     attenuation (Calzetti+2000) law allowing for a varying UV slope
@@ -210,7 +211,7 @@ class PowerLaw(AttenuationLaw):
         return self.get_tau_at_lam(lam) / self.get_tau_at_lam(5500.0)
 
 
-class MW_N18(AttenuationLaw):
+class MWN18(AttenuationLaw):
     """
     Milky Way attenuation curve used in Narayanan+2018.
 
@@ -321,7 +322,7 @@ class Calzetti2000(AttenuationLaw):
 
     def get_tau(self, lam):
         """
-        Calculate V-band normalised optical depth. (Uses the N09_tau function
+        Calculate V-band normalised optical depth. (Uses the N09Tau function
         defined above.)
 
         Args:
@@ -333,7 +334,7 @@ class Calzetti2000(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-        return N09_tau(
+        return N09Tau(
             lam=lam,
             slope=self.slope,
             cent_lam=self.cent_lam,
@@ -428,4 +429,157 @@ class GrainsWD01:
             _lam = lam
         return self.emodel.extinguish(
             x=(_lam * Angstrom).to_astropy(), Av=1.086 * tau_v
+        )
+
+
+def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
+    """
+    Drude-like parametric expression for the attenuation curve from Li+08
+
+    Args:
+
+        lam (array-like, float)
+            The wavelengths (micron units) at which to calculate transmission.
+        UV_slope (float)
+            Dimensionless parameter describing the UV-FUV slope
+        OPT_NIR_slope (float)
+            Dimensionless parameter describing the optical/NIR slope
+        FUV_slope (float)
+            Dimensionless parameter describing the FUV slope
+        bump (float)
+            Dimensionless parameter describing the UV bump
+            strength (0< bump <1)
+        model (string)
+            Via this parameter one can choose one of the templates for
+            extinction/attenuation curves from: Calzetti, SMC, MW (R_V=3.1),
+            and LMC
+
+    # Returns:
+            tau/tau_v at each input wavelength (lam)
+
+    """
+
+    # Empirical templates (Calzetti, SMC, MW RV=3.1, LMC)
+    if model == "Calzetti":
+        UV_slope, OPT_NIR_slope, FUV_slope, bump = 44.9, 7.56, 61.2, 0.0
+    if model == "SMC":
+        UV_slope, OPT_NIR_slope, FUV_slope, bump = 38.7, 3.83, 6.34, 0.0
+    if model == "MW":
+        UV_slope, OPT_NIR_slope, FUV_slope, bump = 14.4, 6.52, 2.04, 0.0519
+    if model == "LMC":
+        UV_slope, OPT_NIR_slope, FUV_slope, bump = 4.47, 2.39, -0.988, 0.0221
+
+    # Wavelength in microns
+    if isinstance(lam, (unyt_quantity, unyt_array)):
+        lam_micron = lam.to("um").v
+    else:
+        lam_micron = lam / 1e4
+
+    # Attenuation curve (normalized to Av)
+    term1 = UV_slope / (
+        (lam_micron / 0.08) ** OPT_NIR_slope
+        + (lam_micron / 0.08) ** -OPT_NIR_slope
+        + FUV_slope
+    )
+    term2 = (
+        233.0
+        * (
+            1
+            - UV_slope
+            / (6.88**OPT_NIR_slope + 0.145**OPT_NIR_slope + FUV_slope)
+            - bump / 4.6
+        )
+    ) / ((lam_micron / 0.046) ** 2.0 + (lam_micron / 0.046) ** -2.0 + 90.0)
+    term3 = bump / (
+        (lam_micron / 0.2175) ** 2.0 + (lam_micron / 0.2175) ** -2.0 - 1.95
+    )
+
+    AlamAV = term1 + term2 + term3
+
+    return AlamAV
+
+
+class ParametricLI08(AttenuationLaw):
+    """
+    Parametric, empirical attenuation curve;
+    implemented in Li+08, Evolution of the parameters up to high-z
+    (z=12) studied in: Markov+23a,b
+
+    Attributes:
+        UV_slope (float)
+            Dimensionless parameter describing the UV-FUV slope
+        OPT_NIR_slope (float)
+            Dimensionless parameter describing the optical/NIR slope
+        FUV_slope (float)
+            Dimensionless parameter describing the FUV slope
+        bump (float)
+            Dimensionless parameter describing the UV bump
+            strength (0< bump <1)
+        model (string)
+            Fixing attenuation/extinction curve to one of the known
+            templates: MW, SMC, LMC, Calzetti
+
+    """
+
+    def __init__(
+        self,
+        UV_slope=1.0,
+        OPT_NIR_slope=1.0,
+        FUV_slope=1.0,
+        bump=0.0,
+        model="MW",
+    ):
+        """
+        Initialise the dust curve.
+        """
+        description = (
+            "Parametric attenuation curve; with option"
+            "for multiple slopes (UV_slope,OPT_NIR_slope,FUV_slope) and "
+            "varying UV-bump strength (bump)."
+            "Introduced in Li+08, see Markov+23,24 for application to "
+            "a high-z dataset."
+            "Empirical extinction/attenuation curves (MW, SMC, LMC, "
+            "Calzetti) can be selected."
+        )
+        AttenuationLaw.__init__(self, description)
+
+        # Define the parameters of the model.
+        self.UV_slope = UV_slope
+        self.OPT_NIR_slope = OPT_NIR_slope
+        self.FUV_slope = FUV_slope
+        self.bump = bump
+
+        # Get the correct model string
+        if "MW" in model:
+            self.model = "MW"
+        elif "LMC" in model:
+            self.model = "LMC"
+        elif "SMC" in model:
+            self.model = "SMC"
+        elif "Calzetti" in model:
+            self.model = "Calzetti"
+        else:
+            self.model = "None"
+
+    def get_tau(self, lam):
+        """
+        Calculate V-band normalised optical depth. (Uses the Li_08 function
+        defined above.)
+
+        Args:
+            lam (float/array-like, float)
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths (in AA, global unit).
+
+        Returns:
+            float/array-like, float
+                The optical depth.
+        """
+        return Li08(
+            lam=lam,
+            UV_slope=self.UV_slope,
+            OPT_NIR_slope=self.OPT_NIR_slope,
+            FUV_slope=self.FUV_slope,
+            bump=self.bump,
+            model=self.model,
         )
