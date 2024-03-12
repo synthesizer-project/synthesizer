@@ -12,6 +12,7 @@ Example usage:
     sed.apply_attenutation(tau_v=0.7)
     sed.get_photo_fluxes(filters)
 """
+
 import re
 import numpy as np
 import matplotlib.pyplot as plt
@@ -932,9 +933,7 @@ class Sed:
 
         # Finally, compute the flux SED and apply unit conversions to get
         # to nJy
-        self.fnu = (
-            self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
-        )
+        self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
 
         # If we are applying an IGM model apply it
         if igm:
@@ -1294,19 +1293,29 @@ class Sed:
         # Convert lnu to llam
         llam = lnu_to_llam(self.lam, self.lnu)
 
-        # Caculate ionisation wavelength
+        # Calculate ionisation wavelength
         ionisation_wavelength = h * c / ionisation_energy
 
-        # Defintion integration arrays
+        ionisation_mask = self.lam < ionisation_wavelength
+
+        # Define integration arrays
         x = self._lam
         y = llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)
 
-        return integrate.quad(
-            lambda x_: np.interp(x_, x, y.to(1 / s / angstrom).value),
-            0,
-            ionisation_wavelength.to(angstrom).value,
-            limit=limit,
-        )[0]
+        # Get value of luminosity at ionisation wavelength
+        ionisation_y = np.interp(
+            ionisation_wavelength.to(angstrom).value, x, y
+        )
+
+        # Restrict arrays to ionisation regime
+        x = x[ionisation_mask]
+        y = y[ionisation_mask]
+
+        # Add ionisation wavelength and luminosity values
+        x = np.append(x, ionisation_wavelength)
+        y = np.append(y, ionisation_y)
+
+        return integrate.trapezoid(y, x)
 
 
 def plot_spectra(
