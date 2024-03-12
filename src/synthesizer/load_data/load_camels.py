@@ -23,7 +23,7 @@ def _load_CAMELS(
     g_hsml,
     star_forming,
     redshift,
-    centre_of_potential,
+    centre,
     s_hsml=None,
     dtm=0.3,
 ):
@@ -63,8 +63,9 @@ def _load_CAMELS(
             boolean array flagging star forming gas particles
         redshift (float):
             Galaxies redshift
-        centre_of_potential (array)
-            Coordinates of the galaxies centre of potential
+        centre (array)
+            Coordinates of the galaxies centre. Can be defined
+            as required (e.g. can be centre of mass)
         dtm (float):
             dust-to-metals ratio to apply to all particles
 
@@ -79,7 +80,7 @@ def _load_CAMELS(
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
         galaxies[i].redshift = redshift
-        galaxies[i].centre_of_potential = centre_of_potential[i] * kpc
+        galaxies[i].centre = centre[i] * kpc
 
         if s_hsml is None:
             smoothing_lengths = s_hsml
@@ -240,7 +241,7 @@ def load_CAMELS_IllustrisTNG(
         g_hsml=g_hsml,
         star_forming=star_forming,
         redshift=redshift,
-        centre_of_potential=pos,
+        centre=pos,
         dtm=dtm,
     )
 
@@ -340,7 +341,7 @@ def load_CAMELS_Astrid(
         g_hsml=g_hsml,
         star_forming=star_forming,
         dtm=dtm,
-        centre_of_potential=pos,
+        centre=pos,
     )
 
 
@@ -438,5 +439,5 @@ def load_CAMELS_Simba(
         g_hsml=g_hsml,
         star_forming=star_forming,
         dtm=dtm,
-        centre_of_potential=pos,
+        centre=pos,
     )
