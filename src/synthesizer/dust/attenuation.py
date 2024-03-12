@@ -1,5 +1,6 @@
 """Module containing dust attenuation functionality
 """
+
 import os
 import numpy as np
 from scipy import interpolate
@@ -432,63 +433,77 @@ class GrainsWD01:
 
 
 def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
-        """
-        Drude-like parametric expression for the attenuation curve from Li+08
-        
-        Args:
+    """
+    Drude-like parametric expression for the attenuation curve from Li+08
 
-            lam (array-like, float)
-                The wavelengths (micron units) at which to calculate transmission.
-            UV_slope (float)
-                Dimensionless parameter describing the UV-FUV slope
-            OPT_NIR_slope (float)
-                Dimensionless parameter describing the optical/NIR slope
-            FUV_slope (float)
-                Dimensionless parameter describing the FUV slope
-            bump (float)
-                Dimensionless parameter describing the UV bump
-                strength (0< bump <1)   
-            model (string)
-                Via this parameter one can choose one of the templates for
-                extinction/attenuation curves from: Calzetti, SMC, MW (R_V=3.1),
-                and LMC
+    Args:
 
-        # Returns:
-                tau/tau_v at each input wavelength (lam)
+        lam (array-like, float)
+            The wavelengths (micron units) at which to calculate transmission.
+        UV_slope (float)
+            Dimensionless parameter describing the UV-FUV slope
+        OPT_NIR_slope (float)
+            Dimensionless parameter describing the optical/NIR slope
+        FUV_slope (float)
+            Dimensionless parameter describing the FUV slope
+        bump (float)
+            Dimensionless parameter describing the UV bump
+            strength (0< bump <1)
+        model (string)
+            Via this parameter one can choose one of the templates for
+            extinction/attenuation curves from: Calzetti, SMC, MW (R_V=3.1),
+            and LMC
 
-        """
+    # Returns:
+            tau/tau_v at each input wavelength (lam)
 
-        # Empirical templates (Calzetti, SMC, MW RV=3.1, LMC)
-        if model == 'Calzetti':
-            UV_slope,OPT_NIR_slope,FUV_slope,bump = 44.9, 7.56, 61.2, 0.
-        if model == 'SMC':
-            UV_slope,OPT_NIR_slope,FUV_slope,bump = 38.7, 3.83, 6.34, 0.
-        if model== 'MW':
-            UV_slope,OPT_NIR_slope,FUV_slope,bump = 14.4, 6.52, 2.04, 0.0519
-        if model=='LMC':
-            UV_slope,OPT_NIR_slope,FUV_slope,bump = 4.47, 2.39, -0.988, 0.0221
+    """
 
-        # Wavelength in microns
-        if isinstance(lam, (unyt_quantity, unyt_array)):
-            lam_micron = lam.to("um").v
-        else:
-            lam_micron = lam / 1e4
+    # Empirical templates (Calzetti, SMC, MW RV=3.1, LMC)
+    if model == "Calzetti":
+        UV_slope, OPT_NIR_slope, FUV_slope, bump = 44.9, 7.56, 61.2, 0.0
+    if model == "SMC":
+        UV_slope, OPT_NIR_slope, FUV_slope, bump = 38.7, 3.83, 6.34, 0.0
+    if model == "MW":
+        UV_slope, OPT_NIR_slope, FUV_slope, bump = 14.4, 6.52, 2.04, 0.0519
+    if model == "LMC":
+        UV_slope, OPT_NIR_slope, FUV_slope, bump = 4.47, 2.39, -0.988, 0.0221
 
-        # Attenuation curve (normalized to Av)
-        term1 = UV_slope / ((lam_micron/0.08)**OPT_NIR_slope + (lam_micron/0.08)**-OPT_NIR_slope + FUV_slope)
-        term2 =  (233. * (1 - UV_slope/(6.88**OPT_NIR_slope + 0.145**OPT_NIR_slope +FUV_slope) - bump/4.6)) / ((lam_micron/0.046)**2. + (lam_micron/0.046)**-2. + 90.)
-        term3 =  bump/ ((lam_micron/0.2175)**2. + (lam_micron/0.2175)**-2. - 1.95)
+    # Wavelength in microns
+    if isinstance(lam, (unyt_quantity, unyt_array)):
+        lam_micron = lam.to("um").v
+    else:
+        lam_micron = lam / 1e4
 
-        AlamAV= term1 + term2 + term3
+    # Attenuation curve (normalized to Av)
+    term1 = UV_slope / (
+        (lam_micron / 0.08) ** OPT_NIR_slope
+        + (lam_micron / 0.08) ** -OPT_NIR_slope
+        + FUV_slope
+    )
+    term2 = (
+        233.0
+        * (
+            1
+            - UV_slope
+            / (6.88**OPT_NIR_slope + 0.145**OPT_NIR_slope + FUV_slope)
+            - bump / 4.6
+        )
+    ) / ((lam_micron / 0.046) ** 2.0 + (lam_micron / 0.046) ** -2.0 + 90.0)
+    term3 = bump / (
+        (lam_micron / 0.2175) ** 2.0 + (lam_micron / 0.2175) ** -2.0 - 1.95
+    )
 
-        return AlamAV
+    AlamAV = term1 + term2 + term3
 
+    return AlamAV
 
 
 class ParametricLI08(AttenuationLaw):
     """
     Parametric, empirical attenuation curve;
-    implemented in Li+08, Evolution of the parameters up to high-z (z=12) studied in: Markov+23a,b
+    implemented in Li+08, Evolution of the parameters up to high-z
+    (z=12) studied in: Markov+23a,b
 
     Attributes:
         UV_slope (float)
@@ -499,22 +514,32 @@ class ParametricLI08(AttenuationLaw):
             Dimensionless parameter describing the FUV slope
         bump (float)
             Dimensionless parameter describing the UV bump
-            strength (0< bump <1)                
+            strength (0< bump <1)
         model (string)
             Fixing attenuation/extinction curve to one of the known
             templates: MW, SMC, LMC, Calzetti
 
     """
 
-    def __init__(self, UV_slope=1., OPT_NIR_slope=1., FUV_slope=1., bump=0., model='MW'):
+    def __init__(
+        self,
+        UV_slope=1.0,
+        OPT_NIR_slope=1.0,
+        FUV_slope=1.0,
+        bump=0.0,
+        model="MW",
+    ):
         """
         Initialise the dust curve.
         """
         description = (
             "Parametric attenuation curve; with option"
-            "for multiple slopes (UV_slope,OPT_NIR_slope,FUV_slope) and varying UV-bump strength (bump)."
-            "Introduced in Li+08, see Markov+23,24 for application to a high-z dataset."
-            "Empirical extinction/attenuation curves (MW, SMC, LMC, Calzetti) can be selected."
+            "for multiple slopes (UV_slope,OPT_NIR_slope,FUV_slope) and "
+            "varying UV-bump strength (bump)."
+            "Introduced in Li+08, see Markov+23,24 for application to "
+            "a high-z dataset."
+            "Empirical extinction/attenuation curves (MW, SMC, LMC, "
+            "Calzetti) can be selected."
         )
         AttenuationLaw.__init__(self, description)
 
@@ -551,10 +576,10 @@ class ParametricLI08(AttenuationLaw):
                 The optical depth.
         """
         return Li08(
-                lam=lam,
-                UV_slope=self.UV_slope,
-                OPT_NIR_slope=self.OPT_NIR_slope,
-                FUV_slope=self.FUV_slope,
-                bump=self.bump,
-                model=self.model
-            )
+            lam=lam,
+            UV_slope=self.UV_slope,
+            OPT_NIR_slope=self.OPT_NIR_slope,
+            FUV_slope=self.FUV_slope,
+            bump=self.bump,
+            model=self.model,
+        )
