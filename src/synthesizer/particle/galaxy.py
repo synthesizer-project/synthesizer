@@ -172,7 +172,9 @@ class Galaxy(BaseGalaxy):
                     / self.sf_gas_mass
                 )
 
-    def load_stars(self, initial_masses, ages, metals, stars=None, **kwargs):
+    def load_stars(
+        self, initial_masses=None, ages=None, metals=None, stars=None, **kwargs
+    ):
         """
         Load arrays for star properties into a `Stars`  object,
         and attach to this galaxy object
@@ -203,7 +205,7 @@ class Galaxy(BaseGalaxy):
         self.stars.redshift = self.redshift
         self.stars.centre = self.centre
 
-    def load_gas(self, masses, metals, gas=None, **kwargs):
+    def load_gas(self, masses=None, metals=None, gas=None, **kwargs):
         """
         Load arrays for gas particle properties into a `Gas` object,
         and attach to this galaxy object
