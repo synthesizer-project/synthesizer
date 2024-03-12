@@ -15,6 +15,7 @@ Example usage:
     galaxystars.get_spectra_incident(...)
 
 """
+
 import numpy as np
 from unyt import Myr, unyt_quantity
 from scipy.spatial import cKDTree
@@ -55,6 +56,7 @@ class Galaxy(BaseGalaxy):
         gas=None,
         black_holes=None,
         redshift=None,
+        centre=None,
     ):
         """Initialise a particle based Galaxy with objects derived from
            Particles.
@@ -72,6 +74,9 @@ class Galaxy(BaseGalaxy):
                 data.
             redshift (float)
                 The redshift of the galaxy.
+            centre (float)
+                Centre of the galaxy particles. Can be defined in a number
+                of ways (e.g. centre of mass)
 
         Raises:
             InconsistentArguments
@@ -88,14 +93,19 @@ class Galaxy(BaseGalaxy):
         # Set the type of galaxy
         self.galaxy_type = "Particle"
 
-        # Instantiate the parent
+        # Instantiate the parent (load stars and gas below)
         BaseGalaxy.__init__(
             self,
-            stars=stars,
-            gas=gas,
+            stars=None,
+            gas=None,
             black_holes=black_holes,
             redshift=redshift,
+            centre=centre,
         )
+
+        # Manually load stars and gas at particle level
+        self.load_stars(stars=stars)
+        self.load_gas(gas=gas)
 
         # Define a name for this galaxy
         self.name = name
@@ -160,12 +170,12 @@ class Galaxy(BaseGalaxy):
                     / self.sf_gas_mass
                 )
 
-    def load_stars(self, initial_masses, ages, metals, **kwargs):
+    def load_stars(
+        self, initial_masses=None, ages=None, metals=None, stars=None, **kwargs
+    ):
         """
         Load arrays for star properties into a `Stars`  object,
         and attach to this galaxy object
-
-        TODO: this should be able to take a pre-existing stars object!
 
         Args:
             initial_masses (array_like, float)
@@ -174,19 +184,33 @@ class Galaxy(BaseGalaxy):
                 Star particle age, Myr
             metals (array_like, float)
                 Star particle metallicity (total metal fraction)
+            stars (stars particle object)
+                A pre-existing stars particle object to use. Defaults to None.
             **kwargs
                 Arbitrary keyword arguments.
 
         Returns:
             None
         """
-        self.stars = Stars(initial_masses, ages, metals, **kwargs)
+        if stars is not None:
+            # Add Stars particle object to this galaxy
+            self.stars = stars
+        else:
+            # If nothing has been provided, just set to None and return
+            if (initial_masses is None) | (ages is None) | (metals is None):
+                self.stars = None
+                return None
+            else:
+                # Create a new Stars object from particle arrays
+                self.stars = Stars(initial_masses, ages, metals, **kwargs)
+
         self.calculate_integrated_stellar_properties()
 
-        # Assign the redshift
+        # Assign additional galaxy-level properties
         self.stars.redshift = self.redshift
+        self.stars.centre = self.centre
 
-    def load_gas(self, masses, metals, **kwargs):
+    def load_gas(self, masses=None, metals=None, gas=None, **kwargs):
         """
         Load arrays for gas particle properties into a `Gas` object,
         and attach to this galaxy object
@@ -196,15 +220,28 @@ class Galaxy(BaseGalaxy):
                 gas particle masses, Msol
             metals : array_like (float)
                 gas particle metallicity (total metal fraction)
+            gas (gas particle object)
+                A pre-existing gas particle object to use. Defaults to None.
         **kwargs
 
         Returns:
-        None
-
-        # TODO: this should be able to take a pre-existing stars object!
+            None
         """
-        self.gas = Gas(masses, metals, **kwargs)
+        if gas is not None:
+            # Add Gas particle object to this galaxy
+            self.gas = gas
+        else:
+            # If nothing has been provided, just set to None and return
+            if (masses is None) | (metals is None):
+                self.gas = None
+                return None
+            self.gas = Gas(masses, metals, **kwargs)
+
         self.calculate_integrated_gas_properties()
+
+        # Assign additional galaxy-level properties
+        self.gas.redshift = self.redshift
+        self.gas.centre = self.centre
 
     def calculate_black_hole_metallicity(self, default_metallicity=0.012):
         """

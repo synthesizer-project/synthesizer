@@ -1,4 +1,7 @@
 """
+Parametric Young Stars Example
+==============================
+
 Test the effect on the intrinsic emission of assuming a
 parametric SFH for young star particles.
 
