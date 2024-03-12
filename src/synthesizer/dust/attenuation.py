@@ -217,7 +217,7 @@ class MW_N18(AttenuationLaw):
 
     Attributes:
         data (array-like, float)
-            The data describing the dust curve, loaded from MWN18.npz.
+            The data describing the dust curve, loaded from MW_N18.npz.
         tau_lam_v (float)
             The V band optical depth.
     """
@@ -230,7 +230,7 @@ class MW_N18(AttenuationLaw):
 
         description = "MW extinction curve from Desika"
         AttenuationLaw.__init__(self, description)
-        self.data = np.load(f"{this_dir}/../data/MWN18.npz")
+        self.data = np.load(f"{this_dir}/../data/MW_N18.npz")
         self.tau_lam_v = np.interp(
             5500.0, self.data.f.mw_df_lam[::-1], self.data.f.mw_df_chi[::-1]
         )
