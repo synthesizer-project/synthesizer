@@ -23,6 +23,7 @@ Example usage:
     bar_no_units = foo._bar
 
 """
+
 from unyt import (
     nJy,
     erg,
@@ -92,6 +93,7 @@ default_units = {
     "centre": Mpc,
     "photo_luminosities": erg / s / Hz,
     "photo_fluxes": erg / s / cm**2 / Hz,
+    "centre": Mpc,
 }
 
 
@@ -150,7 +152,6 @@ class UnitSingleton(type):
 
 
 class Units(metaclass=UnitSingleton):
-
     """
     Holds the definition of the internal unit system using unyt.
 

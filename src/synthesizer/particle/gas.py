@@ -12,6 +12,7 @@ Example usages:
     gas = Gas(masses, metallicities,
               redshift=redshift, coordinates=coordinates, ...)
 """
+
 import numpy as np
 
 from synthesizer.particle.particles import Particles
@@ -77,6 +78,7 @@ class Gas(Particles):
         dust_to_metal_ratio=None,
         dust_masses=None,
         verbose=False,
+        centre=None,
     ):
         """
         Initialise the gas object.
@@ -114,6 +116,7 @@ class Gas(Particles):
             redshift=redshift,
             softening_length=softening_length,
             nparticles=len(masses),
+            centre=centre,
         )
 
         # Set the metallicites and log10 equivalent

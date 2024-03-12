@@ -4,6 +4,7 @@ This generic particle class forms the base class containing all attributes and
 methods common to all child particle types. It should rarely if ever be
 directly instantiated.
 """
+
 import numpy as np
 from numpy.random import multivariate_normal
 from unyt import unyt_quantity, unyt_array
@@ -49,6 +50,7 @@ class Particles:
         redshift,
         softening_length,
         nparticles,
+        centre,
     ):
         """
         Intialise the Particles.
@@ -64,8 +66,10 @@ class Particles:
                 The redshift/s of the particles.
             softening_length (float)
                 The physical gravitational softening length.
-            nparticle : int
+            nparticle (int)
                 How many particles are there?
+            centre (array, float)
+                Centre of the particle distribution.
         """
         # Check arguments are valid
 
@@ -90,6 +94,9 @@ class Particles:
 
         # How many particles are there?
         self.nparticles = nparticles
+
+        # Set the centre of the particle distribution
+        self.centre = centre
 
     def _check_part_args(
         self, coordinates, velocities, masses, softening_length
@@ -270,3 +277,20 @@ class CoordinateGenerator:
             "https://github.com/flaresimulations/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
+
+    def calculate_centre_of_mass(self):
+        """Calculate the centre of mass of the collection
+        of particles.
+
+        Uses the `masses` and `coordinates` attributes,
+        and assigns the centre of mass to the `centre` attribute
+        """
+        total_mass = np.sum(self.masses)
+        com = np.array([0.0, 0.0, 0.0])
+
+        for i, coods in enumerate(self.coordinates):
+            com += coods * self.masses[i]
+
+        com /= total_mass
+
+        self.center = com
