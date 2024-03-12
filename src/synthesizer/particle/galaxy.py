@@ -100,6 +100,7 @@ class Galaxy(BaseGalaxy):
             gas=None,
             black_holes=black_holes,
             redshift=redshift,
+            centre=centre,
         )
 
         # Manually load stars and gas at particle level
@@ -108,9 +109,6 @@ class Galaxy(BaseGalaxy):
 
         # Define a name for this galaxy
         self.name = name
-
-        # Store the galaxy centre (for aperture calculations)
-        self.centre = centre
 
         # If we have them, record how many stellar / gas particles there are
         if self.stars:
