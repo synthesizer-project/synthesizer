@@ -516,15 +516,18 @@ class Stars(Particles, StarsComponent):
 
             return np.zeros(len(grid.lam))
 
-        # Get aperture mask
-        aperture_mask = self._aperture_mask(aperture_radius=aperture)
+        if aperture is not None:
+            # Get aperture mask
+            aperture_mask = self._aperture_mask(aperture_radius=aperture)
 
-        # Ensure and warn that the masking hasn't removed everything
-        if np.sum(aperture_mask) == 0:
-            if verbose:
-                print("Aperture mask has filtered out all particles")
+            # Ensure and warn that the masking hasn't removed everything
+            if np.sum(aperture_mask) == 0:
+                if verbose:
+                    print("Aperture mask has filtered out all particles")
 
-            return np.zeros(len(grid.lam))
+                return np.zeros(len(grid.lam))
+        else:
+            aperture_mask = np.ones(self.nparticles, dtype=bool)
 
         if parametric_young_stars:
             # Get mask for particles we're going to replace with parametric
