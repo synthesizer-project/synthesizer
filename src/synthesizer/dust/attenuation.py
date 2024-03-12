@@ -439,11 +439,19 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
 
             lam (array-like, float)
                 The wavelengths (micron units) at which to calculate transmission.
-
-            UV_slope, OPT_NIR_slope, FUV_slope, bump (float)
-                Dimensionless parameters describing the UV-FUV slope (UV_slope,FUV_slope), optical/NIR slope (OPT_NIR_slope) and UV bump strength (0< bump <1);
+            UV_slope (float)
+                Dimensionless parameter describing the UV-FUV slope
+            OPT_NIR_slope (float)
+                Dimensionless parameter describing the optical/NIR slope
+            FUV_slope (float)
+                Dimensionless parameter describing the FUV slope
+            bump (float)
+                Dimensionless parameter describing the UV bump
+                strength (0< bump <1)   
             model (string)
-                Via this parameter one can choose one of the templates for extinction/attenuation curves from: Calzetti, SMC, MW (R_V=3.1), and LMC
+                Via this parameter one can choose one of the templates for
+                extinction/attenuation curves from: Calzetti, SMC, MW (R_V=3.1),
+                and LMC
 
         # Returns:
                 tau/tau_v at each input wavelength (lam)
@@ -483,11 +491,18 @@ class ParametricLI08(AttenuationLaw):
     implemented in Li+08, Evolution of the parameters up to high-z (z=12) studied in: Markov+23a,b
 
     Attributes:
-                UV_slope, OPT_NIR_slope, FUV_slope, bump (float)
-                Dimensionless parameters describing the UV-FUV slope (UV_slope,FUV_slope), optical/NIR slope (OPT_NIR_slope) and UV bump strength (0< bump <1);
-                
-                model (string)
-                    Fixing attenuation/extinction curve to one of the known templates: MW, SMC, LMC, Calzetti
+        UV_slope (float)
+            Dimensionless parameter describing the UV-FUV slope
+        OPT_NIR_slope (float)
+            Dimensionless parameter describing the optical/NIR slope
+        FUV_slope (float)
+            Dimensionless parameter describing the FUV slope
+        bump (float)
+            Dimensionless parameter describing the UV bump
+            strength (0< bump <1)                
+        model (string)
+            Fixing attenuation/extinction curve to one of the known
+            templates: MW, SMC, LMC, Calzetti
 
     """
 
@@ -527,8 +542,7 @@ class ParametricLI08(AttenuationLaw):
         defined above.)
 
         Args:
-            lam (float/array-li
-ke, float)
+            lam (float/array-like, float)
                 An array of wavelengths or a single wavlength at which to
                 calculate optical depths (in AA, global unit).
 
