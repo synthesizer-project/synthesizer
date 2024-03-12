@@ -193,9 +193,16 @@ class Galaxy(BaseGalaxy):
             None
         """
         if stars is not None:
+            # Add Stars particle object to this galaxy
             self.stars = stars
         else:
-            self.stars = Stars(initial_masses, ages, metals, **kwargs)
+            # If nothing has been provided, just set to None and return
+            if (initial_masses is None) | (ages is None) | (metals is None):
+                self.stars = None
+                return None
+            else:
+                # Create a new Stars object from particle arrays
+                self.stars = Stars(initial_masses, ages, metals, **kwargs)
 
         self.calculate_integrated_stellar_properties()
 
@@ -221,8 +228,13 @@ class Galaxy(BaseGalaxy):
             None
         """
         if gas is not None:
+            # Add Gas particle object to this galaxy
             self.gas = gas
         else:
+            # If nothing has been provided, just set to None and return
+            if (masses is None) | (metals is None):
+                self.gas = None
+                return None
             self.gas = Gas(masses, metals, **kwargs)
 
         self.calculate_integrated_gas_properties()
