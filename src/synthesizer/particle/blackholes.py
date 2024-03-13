@@ -823,10 +823,10 @@ class BlackHoles(Particles, BlackholesComponent):
                 )
 
                 # Calculate normalised dust emission spectrum
-                self.particle_spectra["dust"] = (
-                    dust_emission_model.get_spectra(
-                        self.particle_spectra["emergent"].lam
-                    )
+                self.particle_spectra[
+                    "dust"
+                ] = dust_emission_model.get_spectra(
+                    self.particle_spectra["emergent"].lam
                 )
 
                 # Scale the dust spectra by the dust_bolometric_luminosity.

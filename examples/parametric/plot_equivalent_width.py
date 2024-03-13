@@ -194,9 +194,9 @@ def measure_equivalent_width(
 
     # --- generate spectra
     if mode == 0:
-        sed = galaxy.stars.spectra['incident']
+        sed = galaxy.stars.spectra["incident"]
     else:
-        sed = galaxy.stars.spectra['reprocessed']
+        sed = galaxy.stars.spectra["reprocessed"]
 
     return sed.measure_index(
         feature,

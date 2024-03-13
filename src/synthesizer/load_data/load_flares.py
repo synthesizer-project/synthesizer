@@ -48,9 +48,7 @@ def load_FLARES(master_file, region, tag):
         g_coods = (
             hf[f"{region}/{tag}/Particle/G_Coordinates"][:].T * scale_factor
         )  # Mpc (physical)
-        g_hsml = hf[f"{region}/{tag}/Particle/G_sml"][
-            :
-        ]  # Mpc (physical)
+        g_hsml = hf[f"{region}/{tag}/Particle/G_sml"][:]  # Mpc (physical)
 
     # Convert units
     ages = ages * 1e9  # yr

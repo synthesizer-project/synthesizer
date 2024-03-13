@@ -1,6 +1,6 @@
 import numpy as np
 
-available_scalings = ['Dopita2006']
+available_scalings = ["Dopita2006"]
 
 
 class Dopita2006:
@@ -9,7 +9,7 @@ class Dopita2006:
 
     ads = "https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract"
     doi = "10.1086/508261"
-    available_elements = ['N', 'C']
+    available_elements = ["N", "C"]
 
     def N(metallicity):
         """
@@ -29,8 +29,7 @@ class Dopita2006:
         scaled_metallicity = metallicity / dopita_solar_metallicity
 
         abundance = np.log10(
-            1.1e-5 * scaled_metallicity
-            + 4.9e-5 * (scaled_metallicity) ** 2
+            1.1e-5 * scaled_metallicity + 4.9e-5 * (scaled_metallicity) ** 2
         )
 
         return abundance

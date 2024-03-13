@@ -237,10 +237,12 @@ def create_cloudy_input(
 
         # If grain physics are required, add this self-consistently
         if (abundances.dust_to_metal_ratio > 0) & params["grains"]:
-            delta_C = 10**abundances.total["C"] - 10**abundances.gas["C"]
+            delta_C = 10 ** abundances.total["C"] - 10 ** abundances.gas["C"]
             delta_PAH = 0.01 * (10 ** abundances.total["C"])
             delta_graphite = delta_C - delta_PAH
-            delta_Si = 10**abundances.total["Si"] - 10**abundances.gas["Si"]
+            delta_Si = (
+                10 ** abundances.total["Si"] - 10 ** abundances.gas["Si"]
+            )
             orion_C_abund = -3.6259
             orion_Si_abund = -4.5547
             PAH_abund = -4.446
@@ -258,8 +260,7 @@ def create_cloudy_input(
 
     # Jenkins 2009 depletion model as implemented by cloudy.
     # See 2023 release paper section 5
-    elif params["depletion_model"] == 'Jenkins2009':
-
+    elif params["depletion_model"] == "Jenkins2009":
         # Define the chemical composition, because Jenkins2009 applies
         # depletion as a cloudy command we use total abundances and there
         # is no need to use the "no grains" command.
@@ -284,20 +285,21 @@ def create_cloudy_input(
 
             # turn on grains
             if params["grains"]:
-
                 # for non-default (!= 0.5) fstar values, grains needs to be
                 # scaled.
 
                 # calculate the dust mass fraction for the default parameter
                 # choice.
                 default_dust_mass_fraction = abundances.apply_depletion(
-                    depletion_model='Jenkins2009').dust_abundance
+                    depletion_model="Jenkins2009"
+                ).dust_abundance
 
                 # calculate the dust mass fraction for the provided value of
                 # fstar.
                 dust_mass_fraction = abundances.apply_depletion(
-                    depletion_model='Jenkins2009',
-                    depletion_scaling=params["fstar"]).dust_abundance
+                    depletion_model="Jenkins2009",
+                    depletion_scaling=params["fstar"],
+                ).dust_abundance
                 ratio = dust_mass_fraction / default_dust_mass_fraction
                 cinput.append(f"grains {ratio}")
 
@@ -310,15 +312,18 @@ def create_cloudy_input(
     # plane parallel geometry
     if params["geometry"] == "planeparallel":
         cinput.append(
-            f"ionization parameter = {log10ionisation_parameter:.3f}\n")
+            f"ionization parameter = {log10ionisation_parameter:.3f}\n"
+        )
 
     # spherical geometry
     if params["geometry"] == "spherical":
         # in the spherical geometry case I think U is some average U, not U at
         # the inner face of the cloud.
-        log10ionising_luminosity = np.log10(calculate_Q_from_U(
-            ionisation_parameter,
-            params["hydrogen_density"]))
+        log10ionising_luminosity = np.log10(
+            calculate_Q_from_U(
+                ionisation_parameter, params["hydrogen_density"]
+            )
+        )
         cinput.append(f"Q(H) = {log10ionising_luminosity}\n")
         cinput.append(f'radius {np.log10(params["radius"])} log parsecs\n')
         cinput.append("sphere\n")
