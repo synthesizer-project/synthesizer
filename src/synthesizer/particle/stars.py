@@ -634,7 +634,6 @@ class Stars(Particles, StarsComponent):
 
         # Loop through particles to be replaced
         for i, _pmask in enumerate(np.where(pmask)[0]):
-
             # Create a parametric Stars object
             stars[i] = Para_Stars(
                 grid.log10age,

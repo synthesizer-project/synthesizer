@@ -46,7 +46,6 @@ print("Galaxy centre unchanged: gal.centre = ", gal.centre)
 fig, ax = plt.subplots(1, 1)
 
 for aperture_radius in np.array([30, 10, 5, 2, 1, 0.5]) * kpc:
-
     spec = gal.stars.get_spectra_incident(grid=grid, aperture=aperture_radius)
 
     ax.loglog(spec.lam, spec.lnu, label=f"Aperture: {aperture_radius.value}")

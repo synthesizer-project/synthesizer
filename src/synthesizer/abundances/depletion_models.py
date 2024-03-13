@@ -5,7 +5,7 @@ phase depleted abundances to the total abundances, i.e.:
     (X/H)_{dust} = (1-D_{x})\times (X/H)_{total}
 """
 
-available_patterns = ['Jenkins2009', 'CloudyClassic', 'Gutkin2016']
+available_patterns = ["Jenkins2009", "CloudyClassic", "Gutkin2016"]
 
 
 class Jenkins2009:
@@ -56,7 +56,6 @@ class Jenkins2009:
     }
 
     def __init__(self, fstar=0.5):
-
         """
         Initialise the class.
 
@@ -70,7 +69,7 @@ class Jenkins2009:
             # unpack parameters. Despite convention I've chosen to use
             a_x, b_x, z_x = parameters
             # calculate depletion
-            self.depletion[element] = 10**(b_x + a_x * (fstar - z_x))
+            self.depletion[element] = 10 ** (b_x + a_x * (fstar - z_x))
 
 
 class CloudyClassic:
@@ -114,14 +113,15 @@ class CloudyClassic:
     }
 
     def __init__(self, scale=1.0):
-
         """
         Args:
             scale (float)
                 Scale factor for the depletion.
         """
-        self.depletion = {element: scale * depletion for element, depletion
-                          in self.depletion_.items()}
+        self.depletion = {
+            element: scale * depletion
+            for element, depletion in self.depletion_.items()
+        }
 
 
 class Gutkin2016:
@@ -174,11 +174,12 @@ class Gutkin2016:
     }
 
     def __init__(self, scale=1.0):
-
         """
         Args:
             scale (float)
                 Scale factor for the depletion.
         """
-        self.depletion = {element: scale * depletion for element, depletion in
-                          self.depletion_.items()}
+        self.depletion = {
+            element: scale * depletion
+            for element, depletion in self.depletion_.items()
+        }
