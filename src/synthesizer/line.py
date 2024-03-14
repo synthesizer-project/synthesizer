@@ -23,7 +23,7 @@ def get_line_id(id):
     Returns
         id (str)
             string representation of the id
-    """ 
+    """
 
     if isinstance(id, list):
         return ",".join(id)
@@ -70,7 +70,7 @@ def get_line_label(line_id):
                 unit = r'\AA'
             if unit == 'm':
                 unit = r'\mu m'
-            wavelength = wavelength[:-1]+unit
+            wavelength = wavelength[:-1] + unit
 
             line_labels.append(
                 f"{element}{get_roman_numeral(int(ion))}{wavelength}")
@@ -284,9 +284,9 @@ class LineCollection:
     """
 
     def __init__(self, lines):
-    
+
         self.lines = lines
-    
+
         # create an array of line_ids
         self.line_ids = np.array(list(self.lines.keys()))
 
