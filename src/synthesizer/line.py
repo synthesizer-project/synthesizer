@@ -57,11 +57,11 @@ def get_line_label(line_id):
     else:
 
         line_id = line_id.split(',')
-        line_label = ''
+        line_labels = []
         for line_id_ in line_id:
 
-            # get the element, ion, and wavelength 
-            element, ion, wavelength = line_id.split(' ')
+            # get the element, ion, and wavelength
+            element, ion, wavelength = line_id_.split(' ')
 
             # extract unit and convert to latex str
             unit = wavelength[-1]
@@ -72,7 +72,10 @@ def get_line_label(line_id):
                 unit = r'\mu m'
             wavelength = wavelength[:-1]+unit
 
-            line_label += f"{element}{get_roman_numeral(int(ion))}{wavelength}"
+            line_labels.append(
+                f"{element}{get_roman_numeral(int(ion))}{wavelength}")
+
+        line_label = '+'.join(line_labels)
 
     return line_label
 
@@ -327,7 +330,7 @@ class LineCollection:
 
             # check if line ratio is available
             if set(diagram_line_ids).issubset(self.line_ids):
-                self.available_ratios.append(diagram_id)
+                self.available_diagrams.append(diagram_id)
 
     def __getitem__(self, line_id):
         return self.lines[line_id]
