@@ -167,12 +167,13 @@ class LineRatios:
         self.ratios["R3"] = R3 = [[O3r], [Hb]]  # add reference
         self.ratios["R23"] = [O3 + O2, [Hb]]  # add reference
         self.ratios["O32"] = [[O3r], [O2b]]  # add reference
-        self.ratios["Ne3O2"] = [["NE 3 3868.76A"], [O2b]]  # add reference
+        self.ratios["Ne3O2"] = [["Ne 3 3868.76A"], [O2b]]  # add reference
+        self.ratios["Si2"] = [["Si 3 1892.03A"], ["Si 3 1882.71A"]]  # add reference
 
         self.available_ratios = tuple(self.ratios.keys())
 
         self.diagrams = {}
-        self.diagrams["OHNO"] = [R3, [["NE 3 3868.76A"], O2]]  # add reference
+        self.diagrams["OHNO"] = [R3, [["Ne 3 3868.76A"], O2]]  # add reference
         self.diagrams["BPT-NII"] = [
             [["N 2 6583.45A"], [Ha]],
             R3,
@@ -248,16 +249,16 @@ class LineCollection:
         self.line_ids = np.array(list(self.lines.keys()))
 
         # create list of line wavelengths
-        self.wavelengths = (np.array([
-            line.wavelength.to('Angstrom').value for line in self.lines])
-            * Angstrom)
+        # self.wavelengths = (np.array([
+        #     line.wavelength.to('Angstrom').value for line in self.lines])
+        #     * Angstrom)
 
-        # get the arguments that would sort wavelength
-        sorted_arguments = np.argsort(self.wavelengths)
+        # # get the arguments that would sort wavelength
+        # sorted_arguments = np.argsort(self.wavelengths)
 
-        # sort the line_ids and wavelengths
-        self.line_ids = self.line_ids[sorted_arguments]
-        self.wavelengths = self.wavelengths[sorted_arguments]
+        # # sort the line_ids and wavelengths
+        # self.line_ids = self.line_ids[sorted_arguments]
+        # self.wavelengths = self.wavelengths[sorted_arguments]
 
         # Atrributes to enable looping
         self._current_ind = 0
@@ -494,8 +495,15 @@ class Line:
         # more descriptive attribute name
         self.equivalent_width = self.ew
 
-        # element
-        self.element = id_.split(' ')[0]
+        # get the element id
+        if isinstance(id_, list):
+            self.element = [_.split(' ')[0] for _ in id_]
+            # if all entries are identical just report the element
+            if len(set(self.element)) <= 1:
+                self.element = self.element[0]
+        else:
+            self.element = id_.split(' ')[0]
+
 
 
 
