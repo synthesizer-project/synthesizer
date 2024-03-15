@@ -17,21 +17,120 @@ def get_line_id(id):
     A class representing a spectral line or set of lines (e.g. a doublet)
 
     Arguments
-    ----------
-    id : str, list, tuple
-        a str, list, or tuple containing the id(s) of the lines
+        id (str, list, tuple)
+            a str, list, or tuple containing the id(s) of the lines
 
     Returns
-    -------
-    string
-        string representation of the id
-
-    """ "H 1 6564.62A"
+        id (str)
+            string representation of the id
+    """
 
     if isinstance(id, list):
         return ",".join(id)
     else:
         return id
+
+
+# dictionary of common line labels to use by default
+special_line_labels = {
+    'O 2 3726.03A,O 2 3728.81A': '[OII]3726,3729',
+    'H 1 4862.69A': r'H\beta',
+    'O 3 4958.91A,O 3 5006.84A': '[OIII]4959,5007',
+    'H 1 6564.62A': r'H\alpha',
+    'O 3 5006.84A': '[OIII]5007',
+    'N 2 6583.45A': '[NII]6583',
+    'N 2 6583.45A': '[NII]6583',
+}
+
+
+def get_line_label(line_id):
+    """
+    Get a line label for a given line_id, ratio, or diagram.
+    """
+
+    # if the line_id is a list (denoting a doublet or higher)
+    if isinstance(line_id, list):
+        line_id = ','.join(line_id)
+
+    if line_id in special_line_labels.keys():
+        line_label = special_line_labels[line_id]
+    else:
+
+        line_id = line_id.split(',')
+        line_labels = []
+        for line_id_ in line_id:
+
+            # get the element, ion, and wavelength
+            element, ion, wavelength = line_id_.split(' ')
+
+            # extract unit and convert to latex str
+            unit = wavelength[-1]
+
+            if unit == 'A':
+                unit = r'\AA'
+            if unit == 'm':
+                unit = r'\mu m'
+            wavelength = wavelength[:-1] + unit
+
+            line_labels.append(
+                f"{element}{get_roman_numeral(int(ion))}{wavelength}")
+
+        line_label = '+'.join(line_labels)
+
+    return line_label
+
+
+def get_ratio_label(ratio_id):
+    """
+    Get a label for a given ratio_id.
+
+    TODO: enable label creation for arbitrary ratios
+
+    Arguments:
+        ratio_id (str)
+            The ratio identificantion, e.g. R23.
+
+    Returns:
+        label (str)
+            A string representation of the label.
+    """
+
+    # get the list of lines for a given ratio_id
+
+    # if the id is a string get the lines from the LineRatios class
+    if isinstance(ratio_id, str):
+        ratio_line_ids = LineRatios.ratios[ratio_id]
+    if isinstance(ratio_id, list):
+        ratio_line_ids = ratio_id
+
+    numerator = get_line_label(ratio_line_ids[0])
+    denominator = get_line_label(ratio_line_ids[1])
+    label = f'{numerator}/{denominator}'
+
+    return label
+
+
+def get_diagram_labels(diagram_id):
+    """
+    Get a x and y labels for a given diagram_id
+
+    Arguments:
+        diagram_id (str)
+            The diagram identificantion, e.g. OHNO.
+
+    Returns:
+        xlabel (str)
+            A string representation of the x-label.
+        ylabel (str)
+            A string representation of the y-label.
+    """
+
+    # get the list of lines for a given ratio_id
+    diagram_line_ids = LineRatios.diagrams[diagram_id]
+    xlabel = get_ratio_label(diagram_line_ids[0])
+    ylabel = get_ratio_label(diagram_line_ids[1])
+
+    return xlabel, ylabel
 
 
 def get_roman_numeral(number):
@@ -76,23 +175,6 @@ def get_roman_numeral(number):
     return roman
 
 
-def get_fancy_line_id(id):
-    """
-    Function to get a nicer line id, e.g. "O 3 5008.24A" -> "OIII5008"
-
-    Returns
-    ---------
-    str
-        the fancy line id
-    """
-
-    element, ion, wavelength = id.split(" ")
-
-    wavelength = float(wavelength[:-1])
-
-    return f"{element}{get_roman_numeral(int(ion))}{wavelength: .4g}"
-
-
 def get_bpt_kewley01(logNII_Ha):
     """BPT-NII demarcations from Kewley+2001
 
@@ -120,7 +202,7 @@ def get_bpt_kauffman03(logNII_Ha):
     Demarcation defined by:
         log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3
 
-     Args:
+    Args:
         logNII_Ha (array)
             Array of log([NII]/Halpha) values to give the
             SF-AGN demarcation line
@@ -140,92 +222,52 @@ class LineRatios:
     diagrams (pairs of ratios), e.g. BPT.
     """
 
-    # short-hand
+    # shorthand for common lines
+    O3b = "O 3 4958.91A"
+    O3r = "O 3 5006.84A"
+    O3 = [O3b, O3r]
+    O2b = "O 2 3726.03A"
+    O2r = "O 2 3728.81A"
+    O2 = [O2b, O2r]
+    Hb = "H 1 4862.69A"
+    Ha = "H 1 6564.62A"
 
-    def __init__(self):
-        O3b = "O 3 4958.91A"
-        O3r = "O 3 5006.84A"
-        O3 = [O3b, O3r]
-        O2b = "O 2 3726.03A"
-        O2r = "O 2 3728.81A"
-        O2 = [O2b, O2r]
-        Hb = "H 1 4862.69A"
-        Ha = "H 1 6564.62A"
+    ratios = {}
 
-        self.ratios = {}
+    # Balmer decrement, should be [2.79--2.86] (Te, ne, dependent)
+    # for dust free
+    ratios["BalmerDecrement"] = [[Ha], [Hb]]
 
-        # Balmer decrement, should be [2.79--2.86] (Te, ne, dependent)
-        # for dust free
-        self.ratios["BalmerDecrement"] = [[Ha], [Hb]]
-        self.ratios["N2"] = [["N 2 6583.45A"], [Ha]]  # add reference
-        self.ratios["S2"] = S2 = [
-            ["S 2 6730.82A", "S 2 6716.44A"],
-            [Ha],
-        ]  # add reference
-        self.ratios["O1"] = O1 = [["O 1 6300.30A"], [Ha]]  # add reference
-        self.ratios["R2"] = [[O2b], [Hb]]  # add reference
-        self.ratios["R3"] = R3 = [[O3r], [Hb]]  # add reference
-        self.ratios["R23"] = [O3 + O2, [Hb]]  # add reference
-        self.ratios["O32"] = [[O3r], [O2b]]  # add reference
-        self.ratios["Ne3O2"] = [["Ne 3 3868.76A"], [O2b]]  # add reference
-        self.ratios["Si2"] = [["Si 3 1892.03A"], ["Si 3 1882.71A"]]  # add reference
+    # add reference
+    ratios["N2"] = [["N 2 6583.45A"], [Ha]]
+    # add reference
+    ratios["S2"] = S2 = [["S 2 6730.82A", "S 2 6716.44A"], [Ha]]
+    ratios["O1"] = O1 = [["O 1 6300.30A"], [Ha]]
+    ratios["R2"] = [[O2b], [Hb]]
+    ratios["R3"] = R3 = [[O3r], [Hb]]
+    ratios["R23"] = [O3 + O2, [Hb]]
+    ratios["O32"] = [[O3r], [O2b]]
+    ratios["Ne3O2"] = [["NE 3 3868.76A"], [O2b]]
 
-        self.available_ratios = tuple(self.ratios.keys())
+    # tuple of available ratios
+    available_ratios = tuple(ratios.keys())
 
-        self.diagrams = {}
-        self.diagrams["OHNO"] = [R3, [["Ne 3 3868.76A"], O2]]  # add reference
-        self.diagrams["BPT-NII"] = [
-            [["N 2 6583.45A"], [Ha]],
-            R3,
-        ]  # add reference
-        self.diagrams["VO78-SII"] = [[S2, [Ha]], R3]
-        self.diagrams["VO78-OI"] = [[O1, [Ha]], R3]
+    # dictionary of diagrams
+    diagrams = {}
 
-        self.available_diagrams = tuple(self.diagrams.keys())
+    # add reference
+    diagrams["OHNO"] = [R3, [["NE 3 3868.76A"], O2]]
 
-    def get_ratio_label_(self, ab, fancy=False):
-        """
-        Get a line ratio label
+    # add reference
+    diagrams["BPT-NII"] = [[["N 2 6583.45A"], [Ha]], R3]
 
-        Arguments
-        -------
-        ab
-            a list of lists of lines, e.g. [[l1,l2], [l3]]
-        fancy
-            flag to return fancy label instead
+    # add reference
+    # diagrams["VO78-SII"] = [[S2, [Ha]], R3]
 
-        Returns
-        -------
-        str
-            a label
-        """
+    # add reference
+    # diagrams["VO78-OI"] = [[O1, [Ha]], R3]
 
-        a, b = ab
-
-        if fancy:
-            a = map(get_fancy_line_id, a)
-            b = map(get_fancy_line_id, b)
-
-        return f"({'+'.join(a)})/({'+'.join(b)})"
-
-    def get_ratio_label(self, ratio_id, fancy=False):
-        """
-        Get a line ratio label
-
-        Arguments
-        -------
-        ratio_id
-            a ratio_id where the ratio lines are defined in LineRatios
-
-        Returns
-        -------
-        str
-            a label
-        """
-
-        ab = self.ratios[ratio_id]
-
-        return f"{ratio_id}={self.get_ratio_label_(ab, fancy = fancy)}"
+    available_diagrams = tuple(diagrams.keys())
 
 
 class LineCollection:
@@ -233,43 +275,62 @@ class LineCollection:
     """
     A class holding a collection of emission lines
 
-    Attributes
-    ----------
-    lines : dictionary of Line objects
+    Arguments
+        lines (dictionary of Line objects)
+            A dictionary of line objects.
 
     Methods
-    -------
 
     """
 
     def __init__(self, lines):
+
         self.lines = lines
 
         # create an array of line_ids
         self.line_ids = np.array(list(self.lines.keys()))
 
-        # create list of line wavelengths
-        # self.wavelengths = (np.array([
-        #     line.wavelength.to('Angstrom').value for line in self.lines])
-        #     * Angstrom)
-
-        # # get the arguments that would sort wavelength
-        # sorted_arguments = np.argsort(self.wavelengths)
-
-        # # sort the line_ids and wavelengths
-        # self.line_ids = self.line_ids[sorted_arguments]
-        # self.wavelengths = self.wavelengths[sorted_arguments]
-
         # Atrributes to enable looping
         self._current_ind = 0
         self.nlines = len(self.line_ids)
 
-        self.lineratios = LineRatios()
+        # create list of line wavelengths
+        self.wavelengths = (np.array([
+            line.wavelength.to('Angstrom').value for line in
+            self.lines.values()]) * Angstrom)
 
-        # NOTE: these should be filtered to only show line ratios and diagrams
-        # that are available
-        self.available_ratios = self.lineratios.available_ratios
-        self.available_diagrams = self.lineratios.available_diagrams
+        # get the arguments that would sort wavelength
+        sorted_arguments = np.argsort(self.wavelengths)
+
+        # sort the line_ids and wavelengths
+        self.line_ids = self.line_ids[sorted_arguments]
+        self.wavelengths = self.wavelengths[sorted_arguments]
+
+        # include line ratio and diagram definitions dataclass
+        self.lineratios = LineRatios
+
+        # create list of available line ratios
+        self.available_ratios = []
+        for ratio_id, ratio in self.lineratios.ratios.items():
+
+            # flatten line ratio list
+            ratio_line_ids = [x for xs in ratio for x in xs]
+
+            # check if line ratio is available
+            if set(ratio_line_ids).issubset(self.line_ids):
+                self.available_ratios.append(ratio_id)
+
+        # create list of available line diagnostics
+        self.available_diagrams = []
+        for diagram_id, diagram in self.lineratios.diagrams.items():
+
+            # flatten line ratio list
+            diagram_line_ids = [x for xs in diagram[0] for x in xs] \
+                + [x for xs in diagram[1] for x in xs]
+
+            # check if line ratio is available
+            if set(diagram_line_ids).issubset(self.line_ids):
+                self.available_diagrams.append(diagram_id)
 
     def __getitem__(self, line_id):
         return self.lines[line_id]
@@ -364,49 +425,6 @@ class LineCollection:
 
         return self.get_ratio_(ab)
 
-    def get_ratio_label_(self, ab, fancy=False):
-        """
-        Get a line ratio label
-
-        Arguments
-        -------
-        ab
-            a list of lists of lines, e.g. [[l1,l2], [l3]]
-        fancy
-            flag to return fancy label instead
-
-        Returns
-        -------
-        str
-            a label
-        """
-
-        a, b = ab
-
-        if fancy:
-            a = map(get_fancy_line_id, a)
-            b = map(get_fancy_line_id, b)
-
-        return f"({','.join(a)})/({','.join(b)})"
-
-    def get_ratio_label(self, ratio_id, fancy=False):
-        """
-        Get a line ratio label
-
-        Arguments
-        -------
-        ratio_id
-            a ratio_id where the ratio lines are defined in LineRatios
-
-        Returns
-        -------
-        str
-            a label
-        """
-        ab = self.lineratios.ratios[ratio_id]
-
-        return f"{ratio_id}={self.get_ratio_label_(ab, fancy = fancy)}"
-
     def get_diagram(self, diagram_id):
         """
         Return a pair of line ratios for a given diagram_id (E.g. BPT)
@@ -425,26 +443,6 @@ class LineCollection:
         ab, cd = self.lineratios.diagrams[diagram_id]
 
         return self.get_ratio_(ab), self.get_ratio_(cd)
-
-    def get_diagram_label(self, diagram_id, fancy=False):
-        """
-        Get a line ratio label
-
-        Arguments
-        -------
-        ab
-            a list of lists of lines, e.g. [[l1,l2], [l3]]
-
-        Returns
-        -------
-        str
-            a label
-        """
-        ab, cd = self.lineratios.diagrams[diagram_id]
-
-        return self.get_ratio_label_(ab, fancy=fancy), self.get_ratio_label_(
-            cd, fancy=fancy
-        )
 
 
 class Line:
@@ -495,17 +493,8 @@ class Line:
         # more descriptive attribute name
         self.equivalent_width = self.ew
 
-        # get the element id
-        if isinstance(id_, list):
-            self.element = [_.split(' ')[0] for _ in id_]
-            # if all entries are identical just report the element
-            if len(set(self.element)) <= 1:
-                self.element = self.element[0]
-        else:
-            self.element = id_.split(' ')[0]
-
-
-
+        # element
+        self.element = self.id.split(' ')[0]
 
     def __str__(self):
         """Function to print a basic summary of the Line object.

@@ -11,6 +11,7 @@ Example usage:
     stars.get_spectra_incident(grid)
     stars.plot_spectra()
 """
+
 import numpy as np
 from scipy import integrate
 from unyt import unyt_quantity, unyt_array
@@ -195,7 +196,7 @@ class Stars(StarsComponent):
             self.metal_dist_func = metal_dist  # a ZDist function
             self.metal_dist = None
             instant_metallicity = None
-        elif isinstance(metal_dist, (unyt_quantity, float)):
+        elif isinstance(metal_dist, (unyt_quantity, float, np.floating)):
             instant_metallicity = metal_dist  # an instantaneous SFH
             self.metal_dist_func = None
             self.metal_dist = None
@@ -321,6 +322,12 @@ class Stars(StarsComponent):
                 self.sf_hist[ia] = sf
                 min_age = max_age
 
+            # Normalise SFH array
+            self.sf_hist /= np.sum(self.sf_hist)
+
+            # Multiply by initial stellar mass
+            self.sf_hist *= self._initial_mass
+
         # Calculate SFH from function if necessary
         if self.metal_dist_func is not None and self.metal_dist is None:
             # Set up SFH array
@@ -341,6 +348,12 @@ class Stars(StarsComponent):
                 )[0]
                 self.metal_dist[imetal] = sf
                 min_metal = max_metal
+
+            # Normalise ZH array
+            self.metal_dist /= np.sum(self.metal_dist)
+
+            # Multiply by initial stellar mass
+            self.metal_dist *= self._initial_mass
 
         # Ensure that by this point we have an array for SFH and ZH
         if self.sf_hist is None or self.metal_dist is None:
@@ -550,6 +563,30 @@ class Stars(StarsComponent):
         Add two Stars instances together.
 
         In simple terms this sums the SFZH grids of both Stars instances.
+
+        This will only work for Stars objects with the same SFZH grid axes.
+
+        Args:
+            other_stars (parametric.Stars)
+                The other instance of Stars to add to this one.
+        """
+
+        if np.all(self.log10ages == other_stars.log10ages) and np.all(
+            self.metallicities == other_stars.metallicities
+        ):
+            new_sfzh = self.sfzh + other_stars.sfzh
+
+        else:
+            raise exceptions.InconsistentAddition(
+                "SFZH must be the same shape"
+            )
+
+        return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
+
+    def __radd__(self, other_stars):
+        """
+        Overloads "reflected" addition to allow two Stars instances to be added
+        together when in reverse order, i.e. second_stars + self.
 
         This will only work for Stars objects with the same SFZH grid axes.
 

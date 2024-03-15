@@ -23,6 +23,7 @@ def _load_CAMELS(
     g_hsml,
     star_forming,
     redshift,
+    centre,
     s_hsml=None,
     dtm=0.3,
 ):
@@ -61,7 +62,10 @@ def _load_CAMELS(
         star_forming (array):
             boolean array flagging star forming gas particles
         redshift (float):
-            galaxies redshift
+            Galaxies redshift
+        centre (array)
+            Coordinates of the galaxies centre. Can be defined
+            as required (e.g. can be centre of mass)
         dtm (float):
             dust-to-metals ratio to apply to all particles
 
@@ -76,6 +80,7 @@ def _load_CAMELS(
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i] = Galaxy()
         galaxies[i].redshift = redshift
+        galaxies[i].centre = centre[i] * kpc
 
         if s_hsml is None:
             smoothing_lengths = s_hsml
@@ -148,7 +153,7 @@ def load_CAMELS_IllustrisTNG(
         h = hf["Header"].attrs["HubbleParam"]
 
         form_time = hf["PartType4/GFM_StellarFormationTime"][:]
-        coods = hf["PartType4/Coordinates"][:] * scale_factor  # Mpc (physical)
+        coods = hf["PartType4/Coordinates"][:]  # kpc (comoving)
         masses = hf["PartType4/Masses"][:]
         imasses = hf["PartType4/GFM_InitialMass"][:]
         _metals = hf["PartType4/GFM_Metals"][:]
@@ -158,15 +163,14 @@ def load_CAMELS_IllustrisTNG(
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/GFM_Metallicity"][:]
-        g_coods = (
-            hf["PartType0/Coordinates"][:] * scale_factor
-        )  # Mpc (physical)
+        g_coods = hf["PartType0/Coordinates"][:]  # kpc (physical)
         g_hsml = hf["PartType0/SubfindHsml"][:]
 
     if fof_dir:
         _dir = fof_dir  # replace if symlinks for fof files are broken
     with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
+        pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
 
     """
     remove wind particles
@@ -207,12 +211,13 @@ def load_CAMELS_IllustrisTNG(
     s_oxygen = _metals[:, 4]
     s_hydrogen = 1.0 - np.sum(_metals[:, 1:], axis=1)
 
-    # If asked, convert coordinates to physical kpc
+    # Convert comoving coordinates to physical kpc
     if physical:
         coods *= scale_factor
         g_coods *= scale_factor
         hsml *= scale_factor
         g_hsml *= scale_factor
+        pos *= scale_factor
 
     # convert formation times to ages
     cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
@@ -236,6 +241,7 @@ def load_CAMELS_IllustrisTNG(
         g_hsml=g_hsml,
         star_forming=star_forming,
         redshift=redshift,
+        centre=pos,
         dtm=dtm,
     )
 
@@ -246,6 +252,7 @@ def load_CAMELS_Astrid(
     fof_name="fof_subhalo_tab_090.hdf5",
     fof_dir=None,
     dtm=0.3,
+    physical=True,
 ):
     """
     Load CAMELS-Astrid galaxies
@@ -275,7 +282,7 @@ def load_CAMELS_Astrid(
         h = hf["Header"].attrs["HubbleParam"][0]
 
         form_time = hf["PartType4/GFM_StellarFormationTime"][:]
-        coods = hf["PartType4/Coordinates"][:] * scale_factor  # Mpc (physical)
+        coods = hf["PartType4/Coordinates"][:]  # kpc (comoving)
         masses = hf["PartType4/Masses"][:]
 
         # TODO: update with correct scaling
@@ -287,9 +294,7 @@ def load_CAMELS_Astrid(
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/GFM_Metallicity"][:]
-        g_coods = (
-            hf["PartType0/Coordinates"][:] * scale_factor
-        )  # Mpc (physical)
+        g_coods = hf["PartType0/Coordinates"][:]  # kpc (comoving)
         g_hsml = hf["PartType0/SmoothingLength"][:]
 
     masses = (masses * 1e10) / h
@@ -311,6 +316,14 @@ def load_CAMELS_Astrid(
         _dir = fof_dir  # replace if symlinks for fof files are broken
     with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
+        pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
+
+    # Convert comoving coordinates to physical kpc
+    if physical:
+        coods *= scale_factor
+        g_coods *= scale_factor
+        g_hsml *= scale_factor
+        pos *= scale_factor
 
     return _load_CAMELS(
         redshift=redshift,
@@ -328,6 +341,7 @@ def load_CAMELS_Astrid(
         g_hsml=g_hsml,
         star_forming=star_forming,
         dtm=dtm,
+        centre=pos,
     )
 
 
@@ -337,6 +351,7 @@ def load_CAMELS_Simba(
     fof_name="fof_subhalo_tab_033.hdf5",
     fof_dir=None,
     dtm=0.3,
+    physical=True,
 ):
     """
     Load CAMELS-SIMBA galaxies
@@ -366,7 +381,7 @@ def load_CAMELS_Simba(
         h = hf["Header"].attrs["HubbleParam"]
 
         form_time = hf["PartType4/StellarFormationTime"][:]
-        coods = hf["PartType4/Coordinates"][:] * scale_factor  # Mpc (physical)
+        coods = hf["PartType4/Coordinates"][:]  # kpc (comoving)
         masses = hf["PartType4/Masses"][:]
         imasses = (
             np.ones(len(masses)) * 0.00155
@@ -376,9 +391,7 @@ def load_CAMELS_Simba(
         g_sfr = hf["PartType0/StarFormationRate"][:]
         g_masses = hf["PartType0/Masses"][:]
         g_metals = hf["PartType0/Metallicity"][:][:, 0]
-        g_coods = (
-            hf["PartType0/Coordinates"][:] * scale_factor
-        )  # Mpc (physical)
+        g_coods = hf["PartType0/Coordinates"][:]  # kpc (comoving)
         g_hsml = hf["PartType0/SmoothingLength"][:]
 
     masses = (masses * 1e10) / h
@@ -401,6 +414,14 @@ def load_CAMELS_Simba(
         _dir = fof_dir  # replace if symlinks for fof files are broken
     with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
+        pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
+
+    # Convert comoving coordinates to physical kpc
+    if physical:
+        coods *= scale_factor
+        g_coods *= scale_factor
+        g_hsml *= scale_factor
+        pos *= scale_factor
 
     return _load_CAMELS(
         redshift=redshift,
@@ -418,4 +439,5 @@ def load_CAMELS_Simba(
         g_hsml=g_hsml,
         star_forming=star_forming,
         dtm=dtm,
+        centre=pos,
     )
