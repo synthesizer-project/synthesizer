@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 from spectres import spectres
-from unyt import unyt_array, unyt_quantity
+from unyt import unyt_array, unyt_quantity, angstrom
 
 from synthesizer import exceptions
 from synthesizer.sed import Sed
@@ -217,6 +217,7 @@ class Grid:
         read_lines=True,
         new_lam=None,
         filters=None,
+        lam_lims=(),
     ):
         """
         Initailise the grid object, open the grid file and extracting the
@@ -239,6 +240,10 @@ class Grid:
                 An optional FilterCollection object to unify the grids
                 wavelength grid with. If provided, this will override new_lam
                 whether passed or not.
+            lam_lims (tuple, float)
+                A tuple of the lower and upper wavelength limits to truncate
+                the grid to (i.e. (lower_lam, upper_lam)). If new_lam or
+                filters are provided these limits will be ignored.
         """
         if grid_dir is None:
             grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
@@ -390,6 +395,14 @@ class Grid:
             # Save list of available lines
             self.available_lines = list(self.lines.keys())
 
+        # If we have both new_lam (or filters) and wavelength limits
+        # the limits become meaningless tell the user so.
+        if len(lam_lims) > 0 and (new_lam is not None or filters is not None):
+            print(
+                "Passing new_lam or filters and lam_lims is contradictory, "
+                "lam_lims will be ignored."
+            )
+
         # Has a new wavelength grid been passed to interpolate
         # the spectra onto?
         if new_lam is not None and filters is None:
@@ -422,6 +435,10 @@ class Grid:
                 )
 
             self.unify_with_filters(filters)
+
+        # If we have been given wavelength limtis truncate the grid
+        if len(lam_lims) > 0 and filters is None and new_lam is None:
+            self.truncate_grid_lam(*lam_lims)
 
     def interp_spectra(self, new_lam, loop_grid=False):
         """
@@ -492,6 +509,11 @@ class Grid:
         pstr += "-" * 30 + "\n"
 
         return pstr
+
+    @property
+    def shape(self):
+        """Return the shape of the grid."""
+        return self.spectra[self.available_spectra[0]].shape
 
     def get_nearest_index(self, value, array):
         """
@@ -819,6 +841,33 @@ class Grid:
         """
         return Sed(self.lam, self.spectra[spectra_type])
 
+    def truncate_grid_lam(self, min_lam, max_lam):
+        """
+        Truncate the grid to a specific wavelength range.
+
+        If out of range wavlengths are requested, the grid will be
+        truncated to the nearest wavelength within the grid.
+
+        Args:
+            min_lam (unyt_quantity)
+                The minimum wavelength to truncate the grid to.
+
+            max_lam (unyt_quantity)
+                The maximum wavelength to truncate the grid to.
+        """
+
+        # Get the indices of the wavelengths to keep
+        okinds = np.logical_and(self.lam >= min_lam, self.lam <= max_lam)
+
+        # Apply the mask to the grid wavelengths
+        self.lam = self.lam[okinds]
+
+        # Apply the mask to the spectra
+        for spectra_type in self.available_spectra:
+            self.spectra[spectra_type] = self.spectra[spectra_type][
+                ..., okinds
+            ]
+
     def unify_with_filters(self, filters):
         """
         Unify the grid with a FilterCollection object.
@@ -837,17 +886,13 @@ class Grid:
         # Get the minimum and maximum wavelengths with non-zero transmission
         min_lam, max_lam = filters.get_non_zero_lam_lims()
 
-        # Define the mask to eliminate wavelengths outside this range
-        okinds = np.logical_and(self.lam >= min_lam, self.lam <= max_lam)
+        # Ensure we have at least 1 element with 0 transmission to solve
+        # any issues at the boundaries
+        min_lam -= 10 * angstrom
+        max_lam += 10 * angstrom
 
-        # Apply the mask to the grid wavelengths
-        self.lam = self.lam[okinds]
-
-        # Apply the mask to the spectra
-        for spectra_type in self.available_spectra:
-            self.spectra[spectra_type] = self.spectra[spectra_type][
-                ..., okinds
-            ]
+        # Truncate the grid to these wavelength limits
+        self.truncate_grid_lam(min_lam, max_lam)
 
         # Interpolate the filters onto this new wavelength range
         filters.resample_filters(new_lam=self.lam)

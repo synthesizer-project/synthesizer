@@ -12,6 +12,7 @@ Example usages:
     bhs = BlackHoles(masses, metallicities,
                      redshift=redshift, accretion_rate=accretion_rate, ...)
 """
+
 import numpy as np
 from unyt import rad, deg, unyt_array
 
@@ -80,6 +81,7 @@ class BlackHoles(Particles, BlackholesComponent):
         velocities=None,
         softening_length=None,
         smoothing_lengths=None,
+        centre=None,
         **kwargs,
     ):
         """
@@ -133,6 +135,7 @@ class BlackHoles(Particles, BlackholesComponent):
             redshift=redshift,
             softening_length=softening_length,
             nparticles=len(masses),
+            centre=centre,
         )
         BlackholesComponent.__init__(
             self,
@@ -820,10 +823,10 @@ class BlackHoles(Particles, BlackholesComponent):
                 )
 
                 # Calculate normalised dust emission spectrum
-                self.particle_spectra[
-                    "dust"
-                ] = dust_emission_model.get_spectra(
-                    self.particle_spectra["emergent"].lam
+                self.particle_spectra["dust"] = (
+                    dust_emission_model.get_spectra(
+                        self.particle_spectra["emergent"].lam
+                    )
                 )
 
                 # Scale the dust spectra by the dust_bolometric_luminosity.

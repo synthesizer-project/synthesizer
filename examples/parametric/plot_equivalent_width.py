@@ -85,14 +85,14 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         None
     """
 
+    # Define the parameters of the star formation and metal
+    # enrichment histories.
+    grid = Grid(grids, grid_dir=grid_dir)
+    Z = grid.metallicity
+    stellar_mass = 1e8
+
     # -- Calculate the equivalent width for each defined index
     for i, index in enumerate(uv_index):
-        grid = Grid(grids, grid_dir=grid_dir)
-
-        # define the parameters of the star formation and metal
-        # enrichment histories
-        Z = grid.metallicity
-        stellar_mass = 1e8
         eqw = []
 
         # Compute each index for each metallicity in the grid.
@@ -190,11 +190,13 @@ def measure_equivalent_width(
     # --- create a galaxy object
     galaxy = Galaxy(sfzh)
 
+    galaxy.stars.get_spectra_reprocessed(grid, fesc=0.0)
+
     # --- generate spectra
     if mode == 0:
-        sed = galaxy.stars.get_spectra_incident(grid)
+        sed = galaxy.stars.spectra['incident']
     else:
-        sed = galaxy.stars.get_spectra_intrinsic(grid, fesc=0.5)
+        sed = galaxy.stars.spectra['reprocessed']
 
     return sed.measure_index(
         feature,
