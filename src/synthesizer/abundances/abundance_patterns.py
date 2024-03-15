@@ -316,27 +316,41 @@ class Abundances(ElementDefinitions):
         if abundances is not None:
             # loop over each element in the dictionary
             for element, value in abundances.items():
-                # Setting alpha, nitrogen_abundance, or carbon_abundance will
-                # result in the metallicity no longer being correct. To account
-                # for this we need to rescale the abundances to recover the
-                # correct metallicity. However, we don't want to rescale the
-                # things we've changed. For this reason, here we record the
-                # elements which have changed. See below for the rescaling.
-                unscaled_metals.add(element)
 
-                # if value is a float simply set the abundance to this value.
-                if isinstance(value, float):
-                    total[element] = value
+                # Let's check whether we're specifying an absolute value or
+                # a relative ratio.
 
-                # if value is a str use this to call the specific function to
-                # calculate the abundance from the metallicity.
-                elif isinstance(value, str):
-                    # get the class holding functions for this element
-                    study_functions = getattr(abundance_scalings, value)
+                # If it's a ratio.
+                if len(element.split('/')) > 1:
+                    element, ratio_element = element.split('/')
+                    total[element] = total[ratio_element] + value
 
-                    # get the specific function request by value
-                    scaling_function = getattr(study_functions, element)
-                    total[element] = scaling_function(metallicity)
+                # Otherwise
+                else:
+
+                    # if value is a float simply set the abundance to this 
+                    # value.
+                    if isinstance(value, float):
+                        total[element] = value
+
+                    # if value is a str use this to call the specific function 
+                    # to calculate the abundance from the metallicity.
+                    elif isinstance(value, str):
+                        # get the class holding functions for this element
+                        study_functions = getattr(abundance_scalings, value)
+
+                        # get the specific function request by value
+                        scaling_function = getattr(study_functions, element)
+                        total[element] = scaling_function(metallicity)
+
+                    # Setting alpha, nitrogen_abundance, or carbon_abundance
+                    # will result in the metallicity no longer being correct.
+                    # To account for this we need to rescale the abundances
+                    # to recover the correct metallicity. However, we don't
+                    # want to rescale the things we've changed. For this
+                    # reason, here we record the elements which have changed.
+                    # See below for the rescaling.
+                    unscaled_metals.add(element)
 
         # Set of the metals to be scaled, see above.
         scaled_metals = set(self.metals) - unscaled_metals
