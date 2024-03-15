@@ -425,7 +425,7 @@ class Abundances(elements.Elements):
         summary += f"X: {self.hydrogen_mass_fraction:.3f}\n"
         summary += f"Y: {self.helium_mass_fraction:.3f}\n"
         summary += f"Z: {self.metallicity:.3f}\n"
-        ratio = self.metallicity/self.reference.metallicity
+        ratio = self.metallicity / self.reference.metallicity
         summary += f"Z/Z_ref: {ratio:.2g}\n"
         summary += f"alpha: {self.alpha:.3f}\n"
         summary += f"dust mass fraction: {self.dust_mass_fraction}\n"
@@ -545,8 +545,8 @@ class Abundances(elements.Elements):
 
         """
         return (self.total[element] - self.total[ref_element]) - (
-            self.reference.abundance[element] -
-            self.reference.abundance[ref_element]
+            self.reference.abundance[element]
+            - self.reference.abundance[ref_element]
         )
 
 
