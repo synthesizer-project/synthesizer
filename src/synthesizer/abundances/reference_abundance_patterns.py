@@ -1,6 +1,6 @@
 
 
-available_patterns = ['Asplund2009', 'Gutkin2016']
+available_patterns = ['Asplund2009', 'GalacticConcordance', 'Gutkin2016']
 
 
 class Asplund2009:
@@ -50,6 +50,56 @@ class Asplund2009:
         "Co": -7.01,
         "Ni": -5.78,
         "Cu": -7.81,
+        "Zn": -7.44,
+    }
+
+
+class GalacticConcordance:
+
+    """
+    The Galactic Concordance pattern from Nicholls et al.
+    """
+
+    # meta information
+    ads = """https://ui.adsabs.harvard.edu/abs/2017MNRAS.466.4403N/abstract"""
+    doi = 'https://doi.org/10.1093/mnras/stw3235'
+    arxiv = None
+    bibcode = '2017MNRAS.466.4403N'
+
+    # total metallicity
+    metallicity = 0.015
+
+    # logarthmic abundances, i.e. log10(N_element/N_H)
+    abundance = {
+        "H": 0.0,
+        "He": -1.09,
+        "Li": -8.722,
+        "Be": -10.68,
+        "B": -9.193,
+        "C": -3.577,
+        "N": -4.21,
+        "O": -3.24,
+        "F": -7.56,
+        "Ne": -3.91,
+        "Na": -5.79,
+        "Mg": -4.44,
+        "Al": -5.57,
+        "Si": -4.50,
+        "P": -6.59,
+        "S": -4.88,
+        "Cl": -6.75,
+        "Ar": -5.60,
+        "K": -6.96,
+        "Ca": -5.68,
+        "Sc": -8.84,
+        "Ti": -7.07,
+        "V": -8.11,
+        "Cr": -6.38,
+        "Mn": -6.58,
+        "Fe": -4.48,
+        "Co": -7.07,
+        "Ni": -5.80,
+        "Cu": -7.82,
         "Zn": -7.44,
     }
 
