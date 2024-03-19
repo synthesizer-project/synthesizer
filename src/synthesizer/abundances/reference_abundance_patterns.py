@@ -1,8 +1,9 @@
-
+from dataclasses import dataclass
 
 available_patterns = ['Asplund2009', 'GalacticConcordance', 'Gutkin2016']
 
 
+@dataclass
 class Asplund2009:
 
     def __init__(self):
@@ -56,6 +57,7 @@ class Asplund2009:
         }
 
 
+@dataclass
 class GalacticConcordance:
 
     def __init__(self):
@@ -109,6 +111,7 @@ class GalacticConcordance:
         }
 
 
+@dataclass
 class Gutkin2016:
 
     def __init__(self):
