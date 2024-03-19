@@ -23,7 +23,7 @@ from synthesizer.abundances import (
 )
 
 
-class Abundances(elements.Elements):
+class Abundances():
 
     """
     A class for calculating elemental abundances including various
@@ -81,7 +81,7 @@ class Abundances(elements.Elements):
         metallicity=None,
         alpha=0.0,
         abundances=None,
-        reference=reference_abundance_patterns.Asplund2009,
+        reference=reference_abundance_patterns.GalacticConcordance,
         depletion=None,
         depletion_model=None,
         depletion_scale=None,
@@ -112,6 +112,14 @@ class Abundances(elements.Elements):
 
         """
 
+        # basic element info
+        self.metals = elements.Elements().metals
+        self.non_metals = elements.Elements().non_metals
+        self.all_elements = elements.Elements().all_elements
+        self.alpha_elements = elements.Elements().alpha_elements
+        self.element_name = elements.Elements().name
+        self.atomic_mass = elements.Elements().atomic_mass
+
         # save all arguments to object
         self.metallicity = metallicity  # mass fraction in metals
         self.alpha = alpha
@@ -130,7 +138,10 @@ class Abundances(elements.Elements):
             else:
                 raise exceptions.UnrecognisedOption("""Reference abundance
                 pattern not recognised!""")
-
+        
+        # initialise class
+        self.reference = self.reference()
+        
         # If a metallicity is not provided use the metallicity assumed by the
         # Reference abundance pattern.
         if self.metallicity is None:
@@ -474,7 +485,7 @@ class Abundances(elements.Elements):
         for ele in self.all_elements:
 
             quantities = (
-                f'{self.name[ele]}',
+                f'{self.element_name[ele]}',
                 f'{self.total[ele]:.2f}',
                 f'{self.total[ele]+12:.2f}',
                 f'{self.total[ele]-self.reference.abundance[ele]:.2f}',
@@ -625,7 +636,7 @@ def plot_abundance_pattern(a, show=False, ylim=None, components=["total"]):
 
     ax.legend()
     ax.set_xticks(
-        range(len(a.all_elements)), a.name, rotation=90, fontsize=6.0
+        range(len(a.all_elements)), a.element_name, rotation=90, fontsize=6.0
     )
 
     ax.set_ylabel(r"$\rm log_{10}(X/H)$")
@@ -699,7 +710,7 @@ def plot_multiple_abundance_patterns(
 
     ax.legend()
     ax.set_xticks(
-        range(len(a.all_elements)), a.name, rotation=90, fontsize=6.0
+        range(len(a.all_elements)), a.element_name, rotation=90, fontsize=6.0
     )
 
     ax.set_ylabel(r"$\rm log_{10}(X/H)$")
