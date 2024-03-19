@@ -16,7 +16,7 @@ class Elements:
             A list of the elements classified as alpha-elements.
         name (dict, string)
             A dictionary holding the full name of each element.
-        A (dict, float)
+        atomic_mass (dict, float)
             Atomic mass of each element (in amus).
     """
 
@@ -103,35 +103,35 @@ class Elements:
     name["Cu"] = "Copper"
     name["Zn"] = "Zinc"
 
-    # mass of elements in amus
-    A = {}
-    A["H"] = 1.008
-    A["He"] = 4.003
-    A["Li"] = 6.940
-    A["Be"] = 9.012
-    A["B"] = 10.81
-    A["C"] = 12.011
-    A["N"] = 14.007
-    A["O"] = 15.999
-    A["F"] = 18.998
-    A["Ne"] = 20.180
-    A["Na"] = 22.990
-    A["Mg"] = 24.305
-    A["Al"] = 26.982
-    A["Si"] = 28.085
-    A["P"] = 30.973
-    A["S"] = 32.06
-    A["Cl"] = 35.45
-    A["Ar"] = 39.948
-    A["K"] = 39.0983
-    A["Ca"] = 40.078
-    A["Sc"] = 44.955
-    A["Ti"] = 47.867
-    A["V"] = 50.9415
-    A["Cr"] = 51.9961
-    A["Mn"] = 54.938
-    A["Fe"] = 55.845
-    A["Co"] = 58.933
-    A["Ni"] = 58.693
-    A["Cu"] = 63.546
-    A["Zn"] = 65.38
+    # atomic mass of each element elements in amus
+    atomic_mass = {}
+    atomic_mass["H"] = 1.008
+    atomic_mass["He"] = 4.003
+    atomic_mass["Li"] = 6.940
+    atomic_mass["Be"] = 9.012
+    atomic_mass["B"] = 10.81
+    atomic_mass["C"] = 12.011
+    atomic_mass["N"] = 14.007
+    atomic_mass["O"] = 15.999
+    atomic_mass["F"] = 18.998
+    atomic_mass["Ne"] = 20.180
+    atomic_mass["Na"] = 22.990
+    atomic_mass["Mg"] = 24.305
+    atomic_mass["Al"] = 26.982
+    atomic_mass["Si"] = 28.085
+    atomic_mass["P"] = 30.973
+    atomic_mass["S"] = 32.06
+    atomic_mass["Cl"] = 35.45
+    atomic_mass["Ar"] = 39.948
+    atomic_mass["K"] = 39.0983
+    atomic_mass["Ca"] = 40.078
+    atomic_mass["Sc"] = 44.955
+    atomic_mass["Ti"] = 47.867
+    atomic_mass["V"] = 50.9415
+    atomic_mass["Cr"] = 51.9961
+    atomic_mass["Mn"] = 54.938
+    atomic_mass["Fe"] = 55.845
+    atomic_mass["Co"] = 58.933
+    atomic_mass["Ni"] = 58.693
+    atomic_mass["Cu"] = 63.546
+    atomic_mass["Zn"] = 65.38
