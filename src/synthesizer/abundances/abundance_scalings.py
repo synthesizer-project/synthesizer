@@ -199,10 +199,10 @@ class GalacticConcordance:
             if log10xi < self.lower_break:
                 delta_x = self.scaling_parameter
             elif log10xi > self.upper_break:
-                delta_x = ((self.scaling_parameter/self.lower_break)
+                delta_x = ((self.scaling_parameter / self.lower_break)
                            * self.upper_break)
             else:
-                delta_x = ((self.scaling_parameter/self.lower_break)
+                delta_x = ((self.scaling_parameter / self.lower_break)
                            * log10xi)
 
             abundance = (self.reference_abundances[self.element]

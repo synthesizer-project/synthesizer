@@ -1,7 +1,5 @@
 """ A module containing functionality for working with spectral lines.
 
-TODO: Complete doc string.
-
 Example usage:
 """
 import numpy as np
@@ -83,8 +81,6 @@ def get_line_label(line_id):
 def get_ratio_label(ratio_id):
     """
     Get a label for a given ratio_id.
-
-    TODO: enable label creation for arbitrary ratios
 
     Arguments:
         ratio_id (str)
