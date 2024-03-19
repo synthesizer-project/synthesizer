@@ -1,17 +1,23 @@
 import numpy as np
 
-available_scalings = ['Dopita2006']
+available_scalings = ['Dopita2006', 'GalacticConcordance']
 
 
 class Dopita2006:
 
-    """Scaling functions for Nitrogen."""
+    def __init__(self):
 
-    ads = "https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract"
-    doi = "10.1086/508261"
-    available_elements = ['N', 'C']
+        """Scaling functions for Nitrogen."""
 
-    def N(metallicity):
+        self.ads = 'https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/'\
+                   'abstract'
+        self.doi = "10.1086/508261"
+        self.available_elements = ['N', 'C']
+
+        # the reference metallicity for the model
+        self.reference_metallicity = 0.016
+
+    def N(self, metallicity):
         """
 
         Args:
@@ -25,8 +31,7 @@ class Dopita2006:
         """
 
         # the metallicity scaled to the Dopita (2006) value
-        dopita_solar_metallicity = 0.016
-        scaled_metallicity = metallicity / dopita_solar_metallicity
+        scaled_metallicity = metallicity / self.reference_metallicity
 
         abundance = np.log10(
             1.1e-5 * scaled_metallicity
@@ -35,7 +40,7 @@ class Dopita2006:
 
         return abundance
 
-    def C(metallicity):
+    def C(self, metallicity):
         """
         Scaling functions for Carbon.
 
@@ -50,11 +55,260 @@ class Dopita2006:
         """
 
         # the metallicity scaled to the Dopita (2006) value
-        dopita_solar_metallicity = 0.016
-        scaled_metallicity = metallicity / dopita_solar_metallicity
+        scaled_metallicity = metallicity / self.reference_metallicity
 
         abundance = np.log10(
             6e-5 * scaled_metallicity + 2e-4 * (scaled_metallicity) ** 2
         )
+
+        return abundance
+
+
+class GalacticConcordance:
+
+    """
+    The "Galactic Concordance" model from Nicholls et al. 2017.
+
+    In addition to providing a reference abundance pattern Nicholls et al.
+    2017 provide scalings for a large range of elements.
+
+    For most of these the scaling, relative to Oxygen, is a simple linear
+    scaling with plataus at low and high O/H.
+
+    For Nitrogen and Carbon a more complicated scheme is used.
+    """
+
+    def __init__(self):
+
+        # meta information
+        self.ads = 'https://ui.adsabs.harvard.edu/abs/2017MNRAS.466.4403N/'\
+                   'abstract'
+        self.doi = 'https://doi.org/10.1093/mnras/stw3235'
+        self.arxiv = None
+        self.bibcode = '2017MNRAS.466.4403N'
+
+        # the reference metallicity (mass fraction in metals), i.e. Z
+        self.reference_metallicity = 0.015
+
+        # logarthmic abundances, i.e. log10(N_element/N_H)
+        self.reference_abundance = {
+            "H": 0.0,
+            "He": -1.09,
+            "Li": -8.722,
+            "Be": -10.68,
+            "B": -9.193,
+            "C": -3.577,
+            "N": -4.21,
+            "O": -3.24,
+            "F": -7.56,
+            "Ne": -3.91,
+            "Na": -5.79,
+            "Mg": -4.44,
+            "Al": -5.57,
+            "Si": -4.50,
+            "P": -6.59,
+            "S": -4.88,
+            "Cl": -6.75,
+            "Ar": -5.60,
+            "K": -6.96,
+            "Ca": -5.68,
+            "Sc": -8.84,
+            "Ti": -7.07,
+            "V": -8.11,
+            "Cr": -6.38,
+            "Mn": -6.58,
+            "Fe": -4.48,
+            "Co": -7.07,
+            "Ni": -5.80,
+            "Cu": -7.82,
+            "Zn": -7.44,
+        }
+
+        # the reference oxygen abundance for GalacticConcordance, i.e. [O/H]
+        self.reference_oxygen_abundance = self.reference_abundance['O']
+
+        # these are the scaling parameters used for elements other than CNO
+        # and a handful of light elements
+        self.scaling_parameters = {
+            "F": 0.00,
+            "Ne": 0.00,
+            "Na": -0.30,
+            "Mg": -0.10,
+            "Al": -0.10,
+            "Si": -0.10,
+            "P": -0.50,
+            "S": -0.10,
+            "Cl": 0.00,
+            "Ar": 0.00,
+            "K": -0.10,
+            "Ca": -0.15,
+            "Sc": -0.25,
+            "Ti": -0.15,
+            "V": -0.50,
+            "Cr": -0.50,
+            "Mn": -0.50,
+            "Fe": -0.50,
+            "Co": -0.50,
+            "Ni": -0.50,
+            "Cu": -0.50,
+            "Zn": -0.30,
+        }
+
+        self.available_elements = ['N', 'C']
+
+        # create a method for every element contained in scaling_parameters
+        for element, scaling_parameter in self.scaling_parameters.items():
+            setattr(self, element, self.scaling_method_creator(
+                element,
+                scaling_parameter,
+                reference_abundances=self.reference_abundance))
+
+            # append element to available element list
+            self.available_elements.append(element)
+
+    class scaling_method_creator:
+
+        """
+        This is a class for making the scaling methods for individual elements
+        using the dictionary above.
+        """
+
+        def __init__(self,
+                     element,
+                     scaling_parameter,
+                     lower_break=-0.25,
+                     upper_break=0.5,
+                     reference_metallicity=0.015,
+                     reference_abundances={},
+                     ):
+
+            self.element = element
+            self.lower_break = lower_break
+            self.upper_break = upper_break
+            self.scaling_parameter = scaling_parameter
+
+            # should try and inherit these
+            self.reference_metallicity = reference_metallicity
+            self.reference_abundances = reference_abundances
+
+        def __call__(self, metallicity):
+
+            # calculate log10(oxygen to hydrogen) for a given metallicity
+            log10xi = np.log10(metallicity / self.reference_metallicity)
+
+            if log10xi < self.lower_break:
+                delta_x = self.scaling_parameter
+            elif log10xi > self.upper_break:
+                delta_x = ((self.scaling_parameter/self.lower_break)
+                           * self.upper_break)
+            else:
+                delta_x = ((self.scaling_parameter/self.lower_break)
+                           * log10xi)
+
+            abundance = (self.reference_abundances[self.element]
+                         + delta_x
+                         + log10xi)
+
+            return abundance
+
+    def oxygen_to_hydrogen(self, metallicity):
+        """
+        Calculate the oxygen to hydrogen ratio (O/H) for the provided
+        metallicity.
+
+        Arguments:
+            metallicity (float)
+                The metallicity.
+
+        Returns:
+            oxygen_to_hydrogen (float)
+                The Oxygen to Hydrogen ratio (O/H).
+        """
+
+        # calculate oxygen to hydroge for a given metallicity
+        return (self.reference_oxygen_abundance
+                + np.log10(metallicity / self.reference_metallicity))
+
+    def nitrogen_to_oxygen(self, oxygen_to_hydrogen):
+        """
+        Calculate the Nitrogen to Oxygen abundance for a given (O/H).
+
+        Args:
+            oxygen_to_hydrogen (float)
+                The log of the Oxygen to Hydrogen ratio, i.e. (O/H).
+
+        Returns:
+            nitrogen_to_oxygen (float)
+                The logarithmic abundance relative to Oxygen.
+
+        """
+
+        a = -1.732
+        b = 2.19
+        nitrogen_to_oxygen = np.log10(10**a + 10**(oxygen_to_hydrogen + b))
+
+        return nitrogen_to_oxygen
+
+    def N(self, metallicity):
+        """
+        Calculate the Nitrogen abundance (N/H) for a given metallicity.
+
+        Args:
+            metallicity (float)
+                The metallicity.
+
+        Returns:
+            abundance (float)
+                The logarithmic Nitrogen abundance, i.e. (N/H).
+
+        """
+
+        # calculate oxygen to hydrogen for a given metallicity
+        oxygen_to_hydrogen = self.oxygen_to_hydrogen(metallicity)
+
+        abundance = (self.nitrogen_to_oxygen(oxygen_to_hydrogen)
+                     + oxygen_to_hydrogen)
+
+        return abundance
+
+    def carbon_to_oxygen(self, oxygen_to_hydrogen):
+        """
+        Calculate the Carbon to Oxygen abundance for a given (O/H).
+
+        Args:
+            oxygen_to_hydrogen (float)
+                The log of the Oxygen to Hydrogen ratio, i.e. (O/H).
+
+        Returns:
+            carbon_to_oxygen (float)
+                The logarithmic abundance relative to Oxygen.
+
+        """
+
+        a = -0.8
+        b = 2.72
+        carbon_to_oxygen = np.log10(10**a + 10**(oxygen_to_hydrogen + b))
+
+        return carbon_to_oxygen
+
+    def C(self, metallicity):
+        """
+        Calculate the Carbon abundance (C/H) for a given metallicity.
+
+        Args:
+            metallicity (float)
+                The metallicity.
+
+        Returns:
+            abundance (float)
+                The logarithmic Carbon abundance, i.e. (C/H).
+
+        """
+
+        # calculate oxygen to hydrogen for a given metallicity
+        oxygen_to_hydrogen = self.oxygen_to_hydrogen(metallicity)
+
+        abundance = (self.carbon_to_oxygen(oxygen_to_hydrogen)
+                     + oxygen_to_hydrogen)
 
         return abundance
