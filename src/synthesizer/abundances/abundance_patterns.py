@@ -138,10 +138,10 @@ class Abundances():
             else:
                 raise exceptions.UnrecognisedOption("""Reference abundance
                 pattern not recognised!""")
-        
+
         # initialise class
         self.reference = self.reference()
-        
+
         # If a metallicity is not provided use the metallicity assumed by the
         # Reference abundance pattern.
         if self.metallicity is None:
