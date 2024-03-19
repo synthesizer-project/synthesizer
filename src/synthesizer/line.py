@@ -29,22 +29,21 @@ def get_line_id(id):
         return id
 
 
-# dictionary of common line labels to use by default
-special_line_labels = {
-    'O 2 3726.03A,O 2 3728.81A': '[OII]3726,3729',
-    'H 1 4862.69A': r'H\beta',
-    'O 3 4958.91A,O 3 5006.84A': '[OIII]4959,5007',
-    'H 1 6564.62A': r'H\alpha',
-    'O 3 5006.84A': '[OIII]5007',
-    'N 2 6583.45A': '[NII]6583',
-    'N 2 6583.45A': '[NII]6583',
-}
-
-
 def get_line_label(line_id):
     """
     Get a line label for a given line_id, ratio, or diagram.
     """
+
+    # dictionary of common line labels to use by default
+    special_line_labels = {
+        'O 2 3726.03A,O 2 3728.81A': '[OII]3726,3729',
+        'H 1 4862.69A': r'H\beta',
+        'O 3 4958.91A,O 3 5006.84A': '[OIII]4959,5007',
+        'H 1 6564.62A': r'H\alpha',
+        'O 3 5006.84A': '[OIII]5007',
+        'N 2 6583.45A': '[NII]6583',
+        'N 2 6583.45A': '[NII]6583',
+    }
 
     # if the line_id is a list (denoting a doublet or higher)
     if isinstance(line_id, list):
@@ -439,6 +438,9 @@ class LineCollection:
         ab, cd = self.lineratios.diagrams[diagram_id]
 
         return self.get_ratio_(ab), self.get_ratio_(cd)
+
+
+
 
 
 class Line:
