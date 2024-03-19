@@ -154,7 +154,7 @@ class Abundances(elements.Elements):
         total["He"] = np.log10(
             self.helium_mass_fraction
             / self.hydrogen_mass_fraction
-            / self.A["He"]
+            / self.atomic_mass["He"]
         )
 
         # Scale elemental abundances from reference abundances based on given
@@ -529,7 +529,7 @@ class Abundances(elements.Elements):
         if not a:
             a = self.total
 
-        return np.sum([self.A[i] * 10 ** (a[i]) for i in elements])
+        return np.sum([self.atomic_mass[i] * 10 ** (a[i]) for i in elements])
 
     def calculate_mass_fraction(self, elements, a=None):
         """
