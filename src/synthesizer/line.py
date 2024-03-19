@@ -439,8 +439,21 @@ class LineCollection:
 
         return self.get_ratio_(ab), self.get_ratio_(cd)
 
+    def get_ratio_label(self, ratio_id):
 
+        """
+        Wrapper around get_ratio_label
+        """
 
+        return get_ratio_label(ratio_id)
+
+    def get_diagram_labels(self, diagram_id):
+
+        """
+        Wrapper around get_ratio_label
+        """
+
+        return get_diagram_labels(diagram_id)
 
 
 class Line:
