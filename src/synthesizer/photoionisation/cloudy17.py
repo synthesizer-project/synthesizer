@@ -179,7 +179,7 @@ def create_cloudy_input(
     for ele in ["He"] + abundances.metals:
         cinput.append(
             (
-                f"element abundance {abundances.name[ele]} "
+                f"element abundance {abundances.element_name[ele]} "
                 f"{abundances.gas[ele]} no grains\n"
             )
         )
