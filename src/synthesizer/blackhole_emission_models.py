@@ -12,12 +12,12 @@ Example Usage:
 """
 
 import numpy as np
-from unyt import deg, km, cm, s, K, rad, Hz, unyt_array
+from unyt import Hz, K, cm, deg, km, rad, s, unyt_array
 
+from synthesizer import exceptions
 from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
-from synthesizer import exceptions
 from synthesizer.units import Quantity
 
 

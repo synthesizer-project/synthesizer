@@ -6,15 +6,13 @@ A sanity check example for a single star in both parametric and particle
 objects. These should give indistinguishable results.
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
 from synthesizer.grid import Grid
-from synthesizer.particle import Stars as ParticleStars
 from synthesizer.parametric import Stars as ParametricStars
-
+from synthesizer.particle import Stars as ParticleStars
 
 # Define the grid
 grid_name = "test_grid"

@@ -17,16 +17,15 @@ Example usage:
 """
 
 import numpy as np
-from unyt import Myr, unyt_quantity
 from scipy.spatial import cKDTree
+from unyt import Myr, unyt_quantity
 
-from synthesizer.particle import Stars
-from synthesizer.particle import Gas
-from synthesizer.sed import Sed
-from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
+from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
+from synthesizer.particle import Gas, Stars
+from synthesizer.sed import Sed
 
 
 class Galaxy(BaseGalaxy):

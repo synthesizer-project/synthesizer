@@ -6,15 +6,14 @@ Currently implemented are loading methods for
 """
 
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator as RGI
 from scipy.interpolate import NearestNDInterpolator as NNI
-
+from scipy.interpolate import RegularGridInterpolator as RGI
 from unyt import Msun, yr
 
-from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
-from synthesizer.particle.stars import Stars as ParticleStars
+from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
+from synthesizer.particle.stars import Stars as ParticleStars
 
 
 def load_SCSAM(fname, method, grid=None, verbose=False):

@@ -1,6 +1,5 @@
-import pytest
 import numpy as np
-
+import pytest
 from synthesizer.igm import Inoue14, Madau96
 
 
@@ -15,11 +14,11 @@ def m96():
 
 
 def test_I14_name(i14):
-    assert type(i14.name) is str
+    assert isinstance(i14.name, str)
 
 
 def test_M96_name(m96):
-    assert type(m96.name) is str
+    assert isinstance(m96.name, str)
 
 
 def test_I14_transmission(i14):

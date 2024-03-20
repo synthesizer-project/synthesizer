@@ -7,9 +7,9 @@ Example usage:
 
 import numpy as np
 
+from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.units import Quantity
-from synthesizer import exceptions
 
 
 def get_line_id(id):

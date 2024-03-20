@@ -23,17 +23,18 @@ transmission curves:
 
 """
 
-import h5py
-import numpy as np
 import urllib.request
-import matplotlib.pyplot as plt
-from scipy import integrate
-from unyt import Angstrom, c, Hz, unyt_array, unyt_quantity
 from urllib.error import URLError
 
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy import integrate
+from unyt import Angstrom, Hz, c, unyt_array, unyt_quantity
+
 import synthesizer.exceptions as exceptions
-from synthesizer.units import Quantity
 from synthesizer._version import __version__
+from synthesizer.units import Quantity
 
 
 def UVJ(new_lam=None):

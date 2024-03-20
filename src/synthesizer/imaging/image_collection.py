@@ -40,9 +40,9 @@ Example usage:
     img_coll.make_rgb_image(rgb_filters, weights)
 """
 
-import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
+import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions

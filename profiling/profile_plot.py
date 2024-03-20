@@ -16,8 +16,9 @@ will exhibit the same runtime.
 """
 
 import sys
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def make_report(funcs, ncalls, tottime, pcent, col_width, numeric_width=14):

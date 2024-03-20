@@ -5,7 +5,7 @@ ever instantiated by the parametric/particle child classes.
 """
 
 import numpy as np
-from unyt import c, rad, deg
+from unyt import c, deg, rad
 
 from synthesizer import exceptions
 from synthesizer.blackhole_emission_models import Template

@@ -8,18 +8,16 @@ can later be scaled in terms of mass to achieve a particular brightness in
 a particular filter.
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
+import numpy as np
 from astropy.cosmology import Planck18 as cosmo
-from unyt import Myr, Msun, erg, nJy
-
-from synthesizer.grid import Grid
-from synthesizer.filters import Filter
-from synthesizer.parametric import Stars, SFH, ZDist
+from matplotlib.lines import Line2D
 from synthesizer import galaxy
 from synthesizer.conversions import apparent_mag_to_fnu, fnu_to_lnu
-
+from synthesizer.filters import Filter
+from synthesizer.grid import Grid
+from synthesizer.parametric import SFH, Stars, ZDist
+from unyt import Msun, Myr, erg, nJy
 
 # Set up a figure to plot on
 fig = plt.figure()

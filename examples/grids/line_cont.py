@@ -3,11 +3,11 @@ Demonstrate how to create spectra using a collection of line luminosities
 instead of the default approach. Mostly for testing purposes.
 """
 
+import matplotlib.pyplot as plt
+import numpy as np
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
-import numpy as np
-import matplotlib.pyplot as plt
-from unyt import c, erg, s, Hz
+from unyt import Hz, c, erg, s
 
 # define grid
 grid_name = "test_grid"

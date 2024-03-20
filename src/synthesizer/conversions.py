@@ -13,7 +13,7 @@ Example usage:
 """
 
 import numpy as np
-from unyt import c, nJy, erg, s, Hz, cm, pc
+from unyt import Hz, c, cm, erg, nJy, pc, s
 
 from synthesizer import exceptions
 from synthesizer.utils import has_units

@@ -7,10 +7,10 @@ directly instantiated.
 
 import numpy as np
 from numpy.random import multivariate_normal
-from unyt import unyt_quantity, unyt_array
+from unyt import unyt_array, unyt_quantity
 
-from synthesizer.units import Quantity
 from synthesizer import exceptions
+from synthesizer.units import Quantity
 
 
 class Particles:

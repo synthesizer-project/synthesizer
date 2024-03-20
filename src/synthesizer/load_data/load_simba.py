@@ -6,7 +6,6 @@ the [Simba](http://simba.roe.ac.uk/) simulation
 
 import h5py
 import numpy as np
-
 from astropy.cosmology import FlatLambdaCDM
 from unyt import Msun, kpc, yr
 

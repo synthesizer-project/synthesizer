@@ -8,14 +8,13 @@ This example plots all the spectra for a single metallicity.
 import argparse
 import glob
 import os
-import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
+
 import cmasher as cmr
-
+import matplotlib as mpl
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+import numpy as np
 from synthesizer.grid import Grid
-
 
 # colourmap to use
 cmap = cmr.bubblegum

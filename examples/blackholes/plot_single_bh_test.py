@@ -7,14 +7,13 @@ from the parametric, particle and grid method. These should give
 indistinguishable results.
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
-from unyt import Msun, yr, deg
-
+import numpy as np
 from synthesizer.blackhole_emission_models import UnifiedAGN
 from synthesizer.parametric import BlackHole
 from synthesizer.particle import BlackHoles
 from synthesizer.sed import plot_spectra
+from unyt import Msun, deg, yr
 
 # Set a random number seed to ensure consistent results
 np.random.seed(42)

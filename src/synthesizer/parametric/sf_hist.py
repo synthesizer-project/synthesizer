@@ -21,8 +21,7 @@ import numpy as np
 from unyt import yr
 
 from synthesizer import exceptions
-from synthesizer.stats import weighted_median, weighted_mean
-
+from synthesizer.stats import weighted_mean, weighted_median
 
 # Define a list of the available parametrisations
 parametrisations = (
