@@ -1,7 +1,7 @@
 # Contributing 
 
 Please feel free to submit issues and pull requests to this repository. 
-The github workflow will automatically run [flake8](https://flake8.pycqa.org/en/latest/) and [pytest](https://docs.pytest.org/en/7.2.x/) on any contributions; builds that fail these tests will not be accepted. Further notes on code style are detailed below.
+The GitHub workflow will automatically run [Ruff](https://github.com/astral-sh/ruff) on any contributions; builds that fail these tests will not be accepted. Further notes on code style are detailed below.
 
 **Contents:**
 - [Setting up Ruff](#setting-up-ruff)
