@@ -1,10 +1,11 @@
-""" A module containing general utility functions.
+"""A module containing general utility functions.
 
 Example usage:
 
     planck(frequency, temperature=10000 * K)
     rebin_1d(arr, 10, func=np.sum)
 """
+
 import numpy as np
 from unyt import c, h, kb, unyt_array, unyt_quantity
 

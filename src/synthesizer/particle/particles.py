@@ -1,4 +1,4 @@
-""" The base module from which all other particle types inherit.
+"""The base module from which all other particle types inherit.
 
 This generic particle class forms the base class containing all attributes and
 methods common to all child particle types. It should rarely if ever be

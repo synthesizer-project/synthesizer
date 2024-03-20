@@ -90,7 +90,6 @@ class MorphologyBase:
 
 
 class Sersic2D(MorphologyBase):
-
     """
     A class holding the Sersic2D profile. This is a wrapper around the
     astropy.models.Sersic2D class.
@@ -259,7 +258,6 @@ class Sersic2D(MorphologyBase):
 
 
 class PointSource(MorphologyBase):
-
     """
     A class holding the Sersic2D profile. This is a wrapper around the
     astropy.models.Sersic2D class.

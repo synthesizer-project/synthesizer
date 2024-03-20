@@ -1,9 +1,10 @@
-""" Setup file for synthesizer.
+"""Setup file for synthesizer.
 
 Most the of the build is defined in pyproject.toml but C extensions are not
 supported in pyproject.toml yet. To enable the compilation of the C extensions
 we use the legacy setup.py. This is ONLY used for the C extensions.
 """
+
 import tempfile
 
 from setuptools import setup, Extension

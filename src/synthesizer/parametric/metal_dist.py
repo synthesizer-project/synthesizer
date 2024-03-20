@@ -1,4 +1,4 @@
-""" A module for creating and manipulating metallicity distributions.
+"""A module for creating and manipulating metallicity distributions.
 
 NOTE: This module is imported as ZDist in parametric.__init__ enabling the
       syntax shown below.
@@ -15,6 +15,7 @@ Example usage:
     metal_dist.get_dist_weight(metals)
 
 """
+
 import numpy as np
 
 from synthesizer import exceptions

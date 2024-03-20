@@ -7,6 +7,7 @@ mass which is passed at instantiation. This example shows how a galaxy
 can later be scaled in terms of mass to achieve a particular brightness in
 a particular filter.
 """
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D

@@ -1,9 +1,10 @@
-""" A module for particle and parametric stars.
+"""A module for particle and parametric stars.
 
 This should never be directly instantiated. Instead it is the parent class for
 particle.Stars and parametric.Stars and contains attributes
 and methods common between them.
 """
+
 import numpy as np
 from unyt import Myr, unyt_quantity, Lsun
 

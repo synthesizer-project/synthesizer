@@ -5,6 +5,7 @@ Plot line of sight diagnostics
 This example shows how to compute line of sight dust surface densities,
 and plots some diagnostics.
 """
+
 import time
 import numpy as np
 import matplotlib.pyplot as plt

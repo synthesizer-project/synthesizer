@@ -10,7 +10,6 @@ from synthesizer.photoionisation import calculate_Q_from_U
 
 
 class ShapeCommands:
-
     """
     A class for holding different cloudy shape commands
 

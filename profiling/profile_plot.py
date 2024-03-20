@@ -14,6 +14,7 @@ charts.
 Note that percentages are not exclusive, functions nested in other functions
 will exhibit the same runtime.
 """
+
 import sys
 import numpy as np
 import matplotlib.pyplot as plt

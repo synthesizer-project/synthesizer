@@ -9,7 +9,6 @@ Example for generating a rest-frame physical scale image. This example will:
 - Make an image of the galaxy, including an RGB image.
 """
 
-
 import matplotlib.pyplot as plt
 from unyt import kpc, Myr
 

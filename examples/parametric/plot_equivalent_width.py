@@ -113,7 +113,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         plt.grid(True)
 
         if i == 0 or i == 3 or i == 6:
-            plt.ylabel("EW (\u212B)", fontsize=8)
+            plt.ylabel("EW (\u212b)", fontsize=8)
         if i > 5:
             plt.xlabel("metallicity", fontsize=8)
 
@@ -194,9 +194,9 @@ def measure_equivalent_width(
 
     # --- generate spectra
     if mode == 0:
-        sed = galaxy.stars.spectra['incident']
+        sed = galaxy.stars.spectra["incident"]
     else:
-        sed = galaxy.stars.spectra['reprocessed']
+        sed = galaxy.stars.spectra["reprocessed"]
 
     return sed.measure_index(
         feature,

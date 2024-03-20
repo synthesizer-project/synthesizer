@@ -1,9 +1,10 @@
-""" A module for interfacing with the outputs of Semi Analytic Models.
+"""A module for interfacing with the outputs of Semi Analytic Models.
 
 Currently implemented are loading methods for
 - SC-SAM (using a parametric method)
 - SC-SAM (using a particle method)
 """
+
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator as RGI
 from scipy.interpolate import NearestNDInterpolator as NNI

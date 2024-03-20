@@ -1,5 +1,5 @@
-"""Module containing dust emission functionality
-"""
+"""Module containing dust emission functionality"""
+
 import numpy as np
 from scipy import integrate
 from scipy.optimize import fsolve
@@ -16,7 +16,6 @@ from synthesizer.sed import Sed
 
 
 class EmissionBase:
-
     """
     Dust emission base class for holding common methods.
 
@@ -299,7 +298,7 @@ class Casey12(EmissionBase):
         return _power_law(c / nu) + _blackbody(c / nu)
 
 
-class IR_templates():
+class IR_templates:
     """
     A class to generate a dust emission spectrum using either:
     (i) Draine and Li model (2007) --
@@ -341,9 +340,19 @@ class IR_templates():
     """
 
     @accepts(mdust=mass_dim)
-    def __init__(self, grid, mdust, ldust=None, template='DL07', gamma=None,
-                 qpah=0.025, umin=None, alpha=2., p0=125., verbose=True):
-
+    def __init__(
+        self,
+        grid,
+        mdust,
+        ldust=None,
+        template="DL07",
+        gamma=None,
+        qpah=0.025,
+        umin=None,
+        alpha=2.0,
+        p0=125.0,
+        verbose=True,
+    ):
         self.grid = grid
         self.mdust = mdust
         self.template = template
@@ -367,14 +376,14 @@ class IR_templates():
         """
 
         # Define the models parameters
-        qpahs = grid.axes_values['qpah']
-        umins = grid.axes_values['umin']
-        alphas = grid.axes_values['alpha']
+        qpahs = grid.axes_values["qpah"]
+        umins = grid.axes_values["umin"]
+        alphas = grid.axes_values["alpha"]
 
         # default Umax=1e7
         umax = 1e7
 
-        if (self.gamma is None) or (self.umin is None) or ((self.alpha == 2.)):
+        if (self.gamma is None) or (self.umin is None) or (self.alpha == 2.0):
             if self.verbose:
                 print(
                     "Gamma, Umin or alpha for DL07 model not provided, "
@@ -385,8 +394,9 @@ class IR_templates():
                     "stacking results"
                 )
 
-            self.u_avg = u_mean_magdis12((self.mdust / Msun).value,
-                                         (self.ldust / Lsun).value, self.p0)
+            self.u_avg = u_mean_magdis12(
+                (self.mdust / Msun).value, (self.ldust / Lsun).value, self.p0
+            )
 
             if self.gamma is None:
                 if self.verbose:
@@ -395,13 +405,14 @@ class IR_templates():
 
                 self.gamma = 0.05
 
-            func = partial(solve_umin, umax=umax, u_avg=self.u_avg,
-                           gamma=self.gamma)
+            func = partial(
+                solve_umin, umax=umax, u_avg=self.u_avg, gamma=self.gamma
+            )
             self.umin = fsolve(func, [0.1])
 
-        qpah_id = (qpahs == qpahs[np.argmin(np.abs(qpahs - self.qpah))])
-        umin_id = (umins == umins[np.argmin(np.abs(umins - self.umin))])
-        alpha_id = (alphas == alphas[np.argmin(np.abs(alphas - self.alpha))])
+        qpah_id = qpahs == qpahs[np.argmin(np.abs(qpahs - self.qpah))]
+        umin_id = umins == umins[np.argmin(np.abs(umins - self.umin))]
+        alpha_id = alphas == alphas[np.argmin(np.abs(alphas - self.alpha))]
 
         if np.sum(umin_id) == 0:
             raise exceptions.UnimplementedFunctionality.GridError(
@@ -413,7 +424,6 @@ class IR_templates():
         self.alpha_id = alpha_id
 
     def get_spectra(self, _lam, dust_components=False):
-
         """
         Returns the lnu for the provided wavelength grid
 
@@ -426,12 +436,12 @@ class IR_templates():
 
         """
 
-        if self.template == 'DL07':
+        if self.template == "DL07":
             print("Using the Draine & Li 2007 dust models")
             self.dl07(self.grid)
         else:
             raise exceptions.UnimplementedFunctionality(
-                F"{self.template} not a valid model!"
+                f"{self.template} not a valid model!"
             )
 
         if isinstance(_lam, (unyt_quantity, unyt_array)):
@@ -443,15 +453,16 @@ class IR_templates():
         # wavelength range
         self.grid.interp_spectra(new_lam=lam)
         lnu_old = (
-            (1. - self.gamma)
-            * self.grid.spectra['diffuse'][self.qpah_id, self.umin_id][0]
+            (1.0 - self.gamma)
+            * self.grid.spectra["diffuse"][self.qpah_id, self.umin_id][0]
             * (self.mdust / Msun).value
         )
 
         lnu_young = (
             self.gamma
-            * self.grid.spectra['pdr'][self.qpah_id, self.umin_id,
-                                       self.alpha_id][0]
+            * self.grid.spectra["pdr"][
+                self.qpah_id, self.umin_id, self.alpha_id
+            ][0]
             * (self.mdust / Msun).value
         )
 
@@ -460,8 +471,8 @@ class IR_templates():
 
         # Replace NaNs with zero for wavelength regimes
         # with no values given
-        sed_old._lnu[np.isnan(sed_old._lnu)] = 0.
-        sed_young._lnu[np.isnan(sed_young._lnu)] = 0.
+        sed_old._lnu[np.isnan(sed_old._lnu)] = 0.0
+        sed_young._lnu[np.isnan(sed_young._lnu)] = 0.0
 
         if dust_components:
             return sed_old, sed_young
@@ -484,9 +495,9 @@ def u_mean(umin, umax, gamma):
     For fixed alpha=2.0
     """
 
-    return ((1. - gamma) * umin
-            + gamma * np.log(umax / umin)
-            / (umin**(-1) - umax**(-1)))
+    return (1.0 - gamma) * umin + gamma * np.log(umax / umin) / (
+        umin ** (-1) - umax ** (-1)
+    )
 
 
 def solve_umin(umin, umax, u_avg, gamma):

@@ -8,7 +8,6 @@ including photometry. This example will:
 - calculate spectral luminosity density
 """
 
-
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars

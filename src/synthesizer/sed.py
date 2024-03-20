@@ -12,6 +12,7 @@ Example usage:
     sed.apply_attenutation(tau_v=0.7)
     sed.get_photo_fluxes(filters)
 """
+
 import re
 import numpy as np
 import matplotlib.pyplot as plt
@@ -932,9 +933,7 @@ class Sed:
 
         # Finally, compute the flux SED and apply unit conversions to get
         # to nJy
-        self.fnu = (
-            self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
-        )
+        self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
 
         # If we are applying an IGM model apply it
         if igm:
@@ -1103,13 +1102,11 @@ class Sed:
             )
             # Use the continuum fit to define the continuum for all spectra
             continuum = (
-                (
-                    np.column_stack(
-                        continuum_fits[0]
-                        * feature_lam.to(self.lam.units).value[:, np.newaxis]
-                    )
-                    + continuum_fits[1][:, np.newaxis]
+                np.column_stack(
+                    continuum_fits[0]
+                    * feature_lam.to(self.lam.units).value[:, np.newaxis]
                 )
+                + continuum_fits[1][:, np.newaxis]
             ) * self.lnu.units
 
             # Define the continuum subtracted spectrum for all SEDs

@@ -10,6 +10,7 @@ Example Usage:
         grid_dir=grid_dir
 )
 """
+
 import numpy as np
 from unyt import deg, km, cm, s, K, rad, Hz, unyt_array
 
@@ -21,7 +22,6 @@ from synthesizer.units import Quantity
 
 
 class Template:
-
     """
     Use a template for the emission model.
 
@@ -108,7 +108,6 @@ class Template:
 
 
 class UnifiedAGN:
-
     """
     The Unified AGN model.
     This combines a disc model, along with modelling of the NLR, BLR,

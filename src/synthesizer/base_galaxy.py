@@ -1,4 +1,4 @@
-""" A module for common functionality in Parametric and Particle Galaxies
+"""A module for common functionality in Parametric and Particle Galaxies
 
 The class described in this module should never be directly instatiated. It
 only contains common attributes and methods to reduce boilerplate.

@@ -1,6 +1,7 @@
 """
 Survey functionality
 """
+
 import numpy as np
 
 from astropy.cosmology import Planck18
