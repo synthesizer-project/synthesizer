@@ -7,11 +7,10 @@ we use the legacy setup.py. This is ONLY used for the C extensions.
 
 import tempfile
 
-from setuptools import setup, Extension
+import numpy as np
+from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 from setuptools.errors import CompileError
-
-import numpy as np
 
 
 def has_flags(compiler, flags):

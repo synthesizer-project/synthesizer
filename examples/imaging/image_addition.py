@@ -6,15 +6,14 @@ An example of how to do image addition and testing error functionality.
 """
 
 import numpy as np
-from unyt import kpc
-
-from synthesizer.grid import Grid
 from synthesizer.exceptions import InconsistentAddition
 from synthesizer.filters import FilterCollection as Filters
-from synthesizer.parametric.morphology import Sersic2D
+from synthesizer.grid import Grid
 from synthesizer.imaging.images import ParametricImage, ParticleImage
-from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.parametric import Stars
+from synthesizer.parametric.galaxy import Galaxy
+from synthesizer.parametric.morphology import Sersic2D
+from unyt import kpc
 
 # First set up some stuff so we can make demonstration images.
 

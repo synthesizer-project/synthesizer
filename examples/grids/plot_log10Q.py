@@ -7,10 +7,9 @@ given choice of grid and ion.
 """
 
 import argparse
+
 import matplotlib.pyplot as plt
-
 from synthesizer.grid import Grid
-
 
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this

@@ -10,9 +10,8 @@ from a parametric galaxy
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 from synthesizer.grid import Grid
-from synthesizer.parametric import SFH, ZDist, Stars
+from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
 

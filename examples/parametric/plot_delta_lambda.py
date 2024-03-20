@@ -8,14 +8,12 @@ It includes the following steps:
 - Retrieves delta_lambda for the galaxy using the grid.
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
-
+import numpy as np
 from synthesizer.grid import Grid
-from synthesizer.parametric import SFH, ZDist, Stars
+from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
-
 
 if __name__ == "__main__":
     # Define the grid

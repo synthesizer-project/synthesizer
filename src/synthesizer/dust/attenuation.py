@@ -1,14 +1,13 @@
 """Module containing dust attenuation functionality"""
 
 import os
-import numpy as np
-from scipy import interpolate
-from unyt import Angstrom, unyt_quantity, unyt_array
 
+import numpy as np
 from dust_extinction.grain_models import WD01
+from scipy import interpolate
+from unyt import Angstrom, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-
 
 this_dir, this_filename = os.path.split(__file__)
 

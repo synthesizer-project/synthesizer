@@ -18,8 +18,8 @@ Example Usage:
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.ndimage import zoom
 from scipy import signal
+from scipy.ndimage import zoom
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions

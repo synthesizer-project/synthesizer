@@ -20,7 +20,6 @@ import numpy as np
 
 from synthesizer import exceptions
 
-
 # Define a list of the available parametrisations
 parametrisations = (
     "DeltaConstant",

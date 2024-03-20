@@ -6,7 +6,7 @@ only contains common attributes and methods to reduce boilerplate.
 
 from synthesizer import exceptions
 from synthesizer.igm import Inoue14
-from synthesizer.sed import Sed, plot_spectra, plot_observed_spectra
+from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
 
 
 class BaseGalaxy:

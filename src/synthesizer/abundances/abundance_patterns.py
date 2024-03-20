@@ -14,14 +14,15 @@ Some notes on (standard) notation:
 - [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
 """
 
-import numpy as np
 import cmasher as cmr
 import matplotlib.pyplot as plt
+import numpy as np
+
 import synthesizer.exceptions as exceptions
 from synthesizer.abundances import (
-    solar_abundance_patterns,
-    depletion_models,
     abundance_scalings,
+    depletion_models,
+    solar_abundance_patterns,
 )
 
 

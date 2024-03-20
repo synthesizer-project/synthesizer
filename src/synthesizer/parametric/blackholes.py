@@ -18,11 +18,11 @@ Example usages:
 """
 
 import numpy as np
-from unyt import unyt_array, kpc
+from unyt import kpc, unyt_array
 
 from synthesizer import exceptions
-from synthesizer.parametric.morphology import PointSource
 from synthesizer.components import BlackholesComponent
+from synthesizer.parametric.morphology import PointSource
 from synthesizer.utils import has_units
 
 

@@ -6,7 +6,7 @@ and methods common between them.
 """
 
 import numpy as np
-from unyt import Myr, unyt_quantity, Lsun
+from unyt import Lsun, Myr, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw

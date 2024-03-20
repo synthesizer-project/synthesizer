@@ -8,14 +8,12 @@ spectra in the SPS grids.
 """
 
 import matplotlib.pyplot as plt
-from unyt import Myr
-
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.particle.stars import sample_sfhz
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
-
+from synthesizer.particle.stars import sample_sfhz
+from unyt import Myr
 
 # Define the grid
 grid_name = "test_grid"

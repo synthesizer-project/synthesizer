@@ -11,10 +11,9 @@ will:
 """
 
 from synthesizer.grid import Grid
-from synthesizer.parametric import SFH, ZDist, Stars
+from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
-
 
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this

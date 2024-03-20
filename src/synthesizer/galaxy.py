@@ -22,9 +22,9 @@ gal = galaxy(stars=parametric.Stars(...),  ...)
 """
 
 from synthesizer import exceptions
-from synthesizer.particle import Galaxy as ParticleGalaxy
-from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.parametric import Galaxy as ParametricGalaxy
+from synthesizer.parametric import Stars as ParametricStars
+from synthesizer.particle import Galaxy as ParticleGalaxy
 
 
 def galaxy(

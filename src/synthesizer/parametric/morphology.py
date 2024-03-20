@@ -1,8 +1,8 @@
+import matplotlib.pyplot as plt
 import numpy as np
 from astropy.modeling.models import Sersic2D as Sersic2D_
 from unyt import kpc, mas, unyt_array
-from unyt.dimensions import length, angle
-import matplotlib.pyplot as plt
+from unyt.dimensions import angle, length
 
 from synthesizer import exceptions
 

@@ -15,9 +15,9 @@ Example usages:
 
 import numpy as np
 
+from synthesizer import exceptions
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
-from synthesizer import exceptions
 
 
 class Gas(Particles):

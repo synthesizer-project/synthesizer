@@ -2,9 +2,10 @@
 using e.g. Madau et al. formalism."""
 
 import os
-import numpy as np
-from . import __file__ as filepath
 
+import numpy as np
+
+from . import __file__ as filepath
 
 __all__ = ["Inoue14", "Madau96"]
 

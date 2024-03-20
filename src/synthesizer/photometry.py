@@ -8,8 +8,9 @@ return an instance of this class.
 """
 
 import re
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 from synthesizer.units import Quantity, default_units
 
