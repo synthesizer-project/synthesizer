@@ -30,27 +30,19 @@ jobs:
         pip install wheel
         pip install pytest
         pip install -e .
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        # ignores: 
-        # - E402 "module level import not at top of file" (isolate C imports in case python alternatives exist)
-        # - W503 "line break before binary operator" (we enforce line breaks before operators, to follow black style, and penalise line breaks after)
-        # - F811 "redefinition of unused name from line N" (breaks quantity objects)
-        # - E203 "whitespace before ‘,’, ‘;’, or ‘:’" (conflicts with black formatting of array indexing, `:`)
-        flake8 . --count --ignore=E402,W503,F811,E203 --max-line-length=79 --show-source --statistics --per-file-ignores="src/synthesizer/__init__.py:F401 src/synthesizer/abundances/__init__.py:F401 src/synthesizer/components/__init__.py:F401 src/synthesizer/imaging/__init__.py:F401 src/synthesizer/parametric/__init__.py:F401 src/synthesizer/particle/__init__.py:F401 src/synthesizer/photoionisation/__init__.py:F401 docs/source/conf.py:E501"
+    - uses: chartboost/ruff-action@v1  # Lint with Ruff
     - name: Download test data
       run: |
-        # download test grid data
+        # Download test grid data
         synthesizer-download --test-grids -d tests/test_grid/ --dust-grid
     - name: Test with pytest
       run: |
         pytest
-        # test ipython notebooks
+        # Test ipython notebooks
         pytest --nbmake docs/source/*.ipynb docs/source/*/*.ipynb
     - name: Sphinx Build
       run: |
-        # test sphinx build (runs all notebooks)
+        # Test sphinx build (runs all notebooks)
         cd docs
         sudo apt install pandoc
         pip install -r requirements.txt
