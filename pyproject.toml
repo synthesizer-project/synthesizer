@@ -168,16 +168,20 @@ exclude = [
 line-length = 79
 indent-width = 4
 
+
 # Assume Python 3.8 by default regardless
 target-version = "py38"
 
-[lint]
+[tool.ruff.lint]
 # Enable Pyflakes (`F`) and pycodestyle (`E`)  codes by default.
-select = ["F", "E"]
+select = ["F", "E", "W"]
 ignore = [
        "E402",  # "module level import not at top of file" (isolate C imports in case python alternatives exist)
        "F811",  # "redefinition of unused name from line N" (breaks quantity objects)
        ]
+
+# Sort imports alphabetically
+extend-select = ["I"]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
@@ -186,7 +190,7 @@ unfixable = []
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-[format]
+[tool.ruff.format]
 # Like Black, use double quotes for strings.
 quote-style = "double"
 
