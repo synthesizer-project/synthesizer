@@ -1,4 +1,4 @@
-""" A module for creating and manipulating star formation histories.
+"""A module for creating and manipulating star formation histories.
 
 NOTE: This module is imported as SFH in parametric.__init__ enabling the syntax
       shown below.
@@ -16,6 +16,7 @@ Example usage:
     sfh.calculate_sfh()
 
 """
+
 import numpy as np
 from unyt import yr
 
@@ -376,9 +377,7 @@ class LogNormal(Common):
         if age < self.max_age:
             norm = 1.0 / (self.max_age - age)
             exponent = (
-                (np.log(self.max_age - age) - self.t_0) ** 2
-                / 2
-                / self.tau**2
+                (np.log(self.max_age - age) - self.t_0) ** 2 / 2 / self.tau**2
             )
             return norm * np.exp(-exponent)
 

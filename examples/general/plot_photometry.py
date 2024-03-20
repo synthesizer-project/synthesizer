@@ -11,6 +11,7 @@ including photometry. This example will:
 - calculate photometry.
 - plot the redshift evolution of photometry.
 """
+
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 

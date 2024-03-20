@@ -1,10 +1,7 @@
-
-
-available_patterns = ['Asplund2009', 'Gutkin2016']
+available_patterns = ["Asplund2009", "Gutkin2016"]
 
 
 class Asplund2009:
-
     """
     The Solar abundance pattern used by Asplund (2009).
     """
@@ -12,9 +9,9 @@ class Asplund2009:
     # meta information
     ads = """https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/
         abstract"""
-    doi = '10.1146/annurev.astro.46.060407.145222'
-    arxiv = 'arXiv:0909.0948'
-    bibcode = '2009ARA&A..47..481A'
+    doi = "10.1146/annurev.astro.46.060407.145222"
+    arxiv = "arXiv:0909.0948"
+    bibcode = "2009ARA&A..47..481A"
 
     # total metallicity
     metallicity = 0.0134
@@ -55,7 +52,6 @@ class Asplund2009:
 
 
 class Gutkin2016:
-
     """
     The Solar abundance pattern used by Gutkin (2016).
     """
@@ -63,9 +59,9 @@ class Gutkin2016:
     # meta information
     ads = """https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/
     abstract"""
-    doi = '10.1093/mnras/stw1716'
-    arxiv = 'arXiv:1607.06086'
-    bibcode = '2016MNRAS.462.1757G'
+    doi = "10.1093/mnras/stw1716"
+    arxiv = "arXiv:1607.06086"
+    bibcode = "2016MNRAS.462.1757G"
 
     # total metallicity
     metallicity = 0.01524

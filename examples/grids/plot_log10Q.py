@@ -5,6 +5,7 @@ Plot ionising luminosity
 Makes a plot of the specific ionising luminosity for a
 given choice of grid and ion.
 """
+
 import argparse
 import matplotlib.pyplot as plt
 

@@ -1,4 +1,4 @@
-""" A factory function to return the correct galaxy type.
+"""A factory function to return the correct galaxy type.
 
 This function means the user doesn't need to worry which galaxy they need to
 import. They only need to import the galaxy function, and pass the arguments

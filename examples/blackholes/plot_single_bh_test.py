@@ -6,6 +6,7 @@ A sanity check example for a single blackhole, comparing the spectra generated
 from the parametric, particle and grid method. These should give
 indistinguishable results.
 """
+
 import numpy as np
 import matplotlib.pyplot as plt
 from unyt import Msun, yr, deg

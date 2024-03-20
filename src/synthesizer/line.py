@@ -1,9 +1,10 @@
-""" A module containing functionality for working with spectral lines.
+"""A module containing functionality for working with spectral lines.
 
 TODO: Complete doc string.
 
 Example usage:
 """
+
 import numpy as np
 
 from synthesizer.conversions import lnu_to_llam
@@ -133,7 +134,6 @@ def get_bpt_kauffman03(logNII_Ha):
 
 
 class LineRatios:
-
     """
     A dataclass holding useful line ratios (e.g. R23) and
     diagrams (pairs of ratios), e.g. BPT.
@@ -227,7 +227,6 @@ class LineRatios:
 
 
 class LineCollection:
-
     """
     A class holding a collection of emission lines
 
@@ -435,7 +434,6 @@ class LineCollection:
 
 
 class Line:
-
     """
     A class representing a spectral line or set of lines (e.g. a doublet)
 

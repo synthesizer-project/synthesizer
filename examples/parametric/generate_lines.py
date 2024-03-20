@@ -10,7 +10,6 @@ will:
 - calculate dust-attenuated line properties
 """
 
-
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars
 from synthesizer.parametric.galaxy import Galaxy

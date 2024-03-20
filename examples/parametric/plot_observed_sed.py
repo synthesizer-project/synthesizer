@@ -10,7 +10,6 @@ including photometry. This example will:
 - calculate observed frame fluxes
 """
 
-
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist, Stars

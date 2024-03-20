@@ -39,6 +39,7 @@ Example usage:
     # Make an RGB image
     img_coll.make_rgb_image(rgb_filters, weights)
 """
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec

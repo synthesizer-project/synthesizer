@@ -3,7 +3,6 @@ Demonstrate how to create spectra using a collection of line luminosities
 instead of the default approach. Mostly for testing purposes.
 """
 
-
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
 import numpy as np

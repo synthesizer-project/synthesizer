@@ -1,4 +1,4 @@
-""" A module for creating and manipulating parametric stellar populations.
+"""A module for creating and manipulating parametric stellar populations.
 
 This is the parametric analog of particle.Stars. It not only computes and holds
 the SFZH grid but everything describing a parametric Galaxy's stellar

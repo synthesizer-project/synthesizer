@@ -5,6 +5,7 @@ Line of sight example
 Test the calculation of tau_v along the line of sight
 to each star particle
 """
+
 from synthesizer.load_data import load_CAMELS_IllustrisTNG
 from synthesizer.kernel_functions import Kernel
 

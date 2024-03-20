@@ -1,5 +1,4 @@
-"""Module containing dust attenuation functionality
-"""
+"""Module containing dust attenuation functionality"""
 
 import os
 import numpy as np

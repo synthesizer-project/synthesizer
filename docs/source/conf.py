@@ -5,17 +5,17 @@
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+import os
+import sys
 
 project = "synthesizer"
-copyright = "2023, Chris Lovell, Stephen Wilkins, Aswin Vijayan, Will Roper"
+copyright = "2024, Chris Lovell, Stephen Wilkins, Aswin Vijayan, Will Roper"
 author = "Chris Lovell, Stephen Wilkins, Aswin Vijayan, Will Roper"
-release = "0.1"
+release = "0.3.0-beta"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-import os
-import sys
 
 sys.path.insert(
     0, os.path.abspath("../../synthesizer")

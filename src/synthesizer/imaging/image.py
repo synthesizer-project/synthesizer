@@ -15,6 +15,7 @@ Example Usage:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         img.get_img(signal, density_grid)
 """
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.ndimage import zoom

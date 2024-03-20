@@ -47,7 +47,6 @@ pmask = gal.stars.ages < age_lim
 stars = []
 # Loop through each young star particle
 for _pmask in np.where(pmask)[0]:
-
     # Initialise SFH object
     sfh = SFH.Constant(duration=age_lim)
 

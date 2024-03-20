@@ -1,4 +1,4 @@
-""" A module containing functions for conversions.
+"""A module containing functions for conversions.
 
 This module contains helpful conversions for converting between different
 observables. This mainly covers conversions between flux, luminosity and
@@ -11,6 +11,7 @@ Example usage:
     lnu = absolute_mag_to_lnu(M)
 
 """
+
 import numpy as np
 from unyt import c, nJy, erg, s, Hz, cm, pc
 
