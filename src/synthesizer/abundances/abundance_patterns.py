@@ -14,19 +14,19 @@ Some notes on (standard) notation:
 - [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
 """
 
-import numpy as np
 import cmasher as cmr
 import matplotlib.pyplot as plt
+import numpy as np
+
 import synthesizer.exceptions as exceptions
 from synthesizer.abundances import (
-    solar_abundance_patterns,
-    depletion_models,
     abundance_scalings,
+    depletion_models,
+    solar_abundance_patterns,
 )
 
 
 class ElementDefinitions:
-
     """
     A simple class containing various useful lists and dictionaries.
 
@@ -164,7 +164,6 @@ class ElementDefinitions:
 
 
 class Abundances(ElementDefinitions):
-
     """
     A class for calculating elemental abundances including various
     scaling and depletion on to dust.
@@ -343,9 +342,11 @@ class Abundances(ElementDefinitions):
 
         # Calculate the mass in unscaled, scaled, and non-metals.
         mass_in_unscaled_metals = self.calculate_mass(
-            list(unscaled_metals), a=total)
+            list(unscaled_metals), a=total
+        )
         mass_in_scaled_metals = self.calculate_mass(
-            list(scaled_metals), a=total)
+            list(scaled_metals), a=total
+        )
         mass_in_non_metals = self.calculate_mass(["H", "He"], a=total)
 
         # Now, calculate the scaling factor. The metallicity is:
@@ -372,7 +373,8 @@ class Abundances(ElementDefinitions):
             self.add_depletion(
                 depletion=depletion,
                 depletion_model=depletion_model,
-                depletion_scale=depletion_scale)
+                depletion_scale=depletion_scale,
+            )
         else:
             self.gas = self.total
             self.depletion = {element: 1.0 for element in self.all_elements}
@@ -381,11 +383,9 @@ class Abundances(ElementDefinitions):
             self.dust_mass_fraction = 0.0
             self.dust_to_metal_ratio = 0.0
 
-    def add_depletion(self,
-                      depletion=None,
-                      depletion_model=None,
-                      depletion_scale=None):
-
+    def add_depletion(
+        self, depletion=None, depletion_model=None, depletion_scale=None
+    ):
         """
         Method to add depletion using a provided depletion pattern or model.
         This method creates the following attributes:
@@ -427,19 +427,20 @@ class Abundances(ElementDefinitions):
         # provided.
         if (depletion is not None) and (depletion_model is not None):
             raise exceptions.InconsistentParameter(
-                "Can not provide by a depletion pattern and a depletion model")
+                "Can not provide by a depletion pattern and a depletion model"
+            )
 
         # Raise exception if a depletion_scale is provided by not a
         # depletion_model.
         if (depletion_scale is not None) and (depletion_model is None):
             raise exceptions.InconsistentParameter(
                 """If a depletion scale is provided then a depletion model must
-                also be provided""")
+                also be provided"""
+            )
 
         # If provided, calculate depletion pattern by calling the depletion
         # model with the depletion scale.
         if depletion_model:
-
             # If a depletion_scale is provided use this...
             if self.depletion_scale is not None:
                 depletion = depletion_model(depletion_scale).depletion
@@ -449,28 +450,26 @@ class Abundances(ElementDefinitions):
 
         # apply depletion pattern
         if depletion:
-
             # deplete the gas and dust
             self.gas = {}
             self.dust = {}
             for element in self.all_elements:
-
                 # if an entry exists for the element apply depletion
                 if element in depletion.keys():
-
                     # depletion factors >1.0 are unphysical so cap at 1.0
                     if depletion[element] > 1.0:
                         depletion[element] = 1.0
 
                     self.gas[element] = np.log10(
-                        10**self.total[element] * depletion[element]
+                        10 ** self.total[element] * depletion[element]
                     )
 
                     if depletion[element] == 1.0:
                         self.dust[element] = -np.inf
                     else:
                         self.dust[element] = np.log10(
-                            10**self.total[element] * (1 - depletion[element])
+                            10 ** self.total[element]
+                            * (1 - depletion[element])
                         )
 
                 # otherwise assume no depletion
@@ -482,22 +481,24 @@ class Abundances(ElementDefinitions):
             # calculate mass fraction in metals
             # NOTE: this should be identical to the metallicity.
             self.metal_mass_fraction = self.calculate_mass_fraction(
-                self.metals)
+                self.metals
+            )
 
             # calculate mass fraction in dust
             self.dust_mass_fraction = self.calculate_mass_fraction(
-                self.metals,
-                a=self.dust)
+                self.metals, a=self.dust
+            )
 
             # calculate dust-to-metal ratio and save as an attribute
-            self.dust_to_metal_ratio = (self.dust_mass_fraction
-                                        / self.metal_mass_fraction)
+            self.dust_to_metal_ratio = (
+                self.dust_mass_fraction / self.metal_mass_fraction
+            )
 
             # calculate integrated dust abundance
             # this is used by cloudy23
             self.dust_abundance = self.calculate_integrated_abundance(
-                self.metals,
-                a=self.dust)
+                self.metals, a=self.dust
+            )
 
             # Associate parameters with object
             self.depletion = depletion
@@ -556,7 +557,7 @@ class Abundances(ElementDefinitions):
         summary += "-" * 10 + "\n"
 
         column_width = 16
-        column_format = ' '.join(f'{{{i}:<{column_width}}}' for i in range(7))
+        column_format = " ".join(f"{{{i}:<{column_width}}}" for i in range(7))
 
         column_names = (
             "Element",
@@ -570,15 +571,14 @@ class Abundances(ElementDefinitions):
         summary += column_format.format(*column_names) + "\n"
 
         for ele in self.all_elements:
-
             quantities = (
-                f'{self.name[ele]}',
-                f'{self.total[ele]:.2f}',
-                f'{self.total[ele]+12:.2f}',
-                f'{self.total[ele]-self.solar.abundance[ele]:.2f}',
-                f'{self.depletion[ele]:.2f}',
-                f'{self.gas[ele]:.2f}',
-                f'{self.dust[ele]:.2f}',
+                f"{self.name[ele]}",
+                f"{self.total[ele]:.2f}",
+                f"{self.total[ele]+12:.2f}",
+                f"{self.total[ele]-self.solar.abundance[ele]:.2f}",
+                f"{self.depletion[ele]:.2f}",
+                f"{self.gas[ele]:.2f}",
+                f"{self.dust[ele]:.2f}",
             )
             summary += column_format.format(*quantities) + "\n"
 

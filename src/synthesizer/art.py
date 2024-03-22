@@ -1,4 +1,4 @@
-""" A module containing ASCII art for pretty outputs.
+"""A module containing ASCII art for pretty outputs.
 
 Example usage:
 
