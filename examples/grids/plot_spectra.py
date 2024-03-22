@@ -9,10 +9,10 @@ NOTE: this only works on 2D grids at the moment
 """
 
 import argparse
-from synthesizer.grid import Grid
-import numpy as np
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
+import numpy as np
+from synthesizer.grid import Grid
 
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this

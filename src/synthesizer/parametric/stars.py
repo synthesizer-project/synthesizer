@@ -1,4 +1,4 @@
-""" A module for creating and manipulating parametric stellar populations.
+"""A module for creating and manipulating parametric stellar populations.
 
 This is the parametric analog of particle.Stars. It not only computes and holds
 the SFZH grid but everything describing a parametric Galaxy's stellar
@@ -12,21 +12,19 @@ Example usage:
     stars.plot_spectra()
 """
 
+import cmasher as cmr
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
-from unyt import unyt_quantity, unyt_array
-
-
-import matplotlib.pyplot as plt
-import cmasher as cmr
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
 from synthesizer.line import Line
-from synthesizer.stats import weighted_median, weighted_mean
-from synthesizer.plt import single_histxy
-from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
+from synthesizer.parametric.sf_hist import Common as SFHCommon
+from synthesizer.plt import single_histxy
+from synthesizer.stats import weighted_mean, weighted_median
 from synthesizer.units import Quantity
 from synthesizer.utils import has_units
 

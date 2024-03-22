@@ -1,0 +1,28 @@
+# This file contains the configuration for pre commit hooks used to sanitise the repository.
+repos:
+  # General pre-commit hooks to stop bad things happening.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+    -   id: check-merge-conflict  # Check for files that contain merge conflict strings.
+    -   id: check-case-conflict # Ensure we don't have case clashes in the repository.
+    -   id: check-added-large-files  # Prevent large files from being added to the repository.
+
+  # Linting and formatting for Python.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.3.3
+    hooks:
+      # Run the linter.
+      - id: ruff
+        types_or: [ python, pyi, jupyter ]
+        args: [ --fix ]
+      # Run the formatter.
+      - id: ruff-format
+        types_or: [ python, pyi, jupyter ]
+
+  # Sanitise Jupyter notebooks.
+  - repo: https://github.com/srstevenson/nb-clean
+    rev: 3.2.0
+    hooks:
+      - id: nb-clean
