@@ -36,43 +36,42 @@ def get_line_label(line_id):
 
     # dictionary of common line labels to use by default
     special_line_labels = {
-        'O 2 3726.03A,O 2 3728.81A': '[OII]3726,3729',
-        'H 1 4862.69A': r'H\beta',
-        'O 3 4958.91A,O 3 5006.84A': '[OIII]4959,5007',
-        'H 1 6564.62A': r'H\alpha',
-        'O 3 5006.84A': '[OIII]5007',
-        'N 2 6583.45A': '[NII]6583',
-        'N 2 6583.45A': '[NII]6583',
+        "O 2 3726.03A,O 2 3728.81A": "[OII]3726,3729",
+        "H 1 4862.69A": r"H\beta",
+        "O 3 4958.91A,O 3 5006.84A": "[OIII]4959,5007",
+        "H 1 6564.62A": r"H\alpha",
+        "O 3 5006.84A": "[OIII]5007",
+        "N 2 6583.45A": "[NII]6583",
+        "N 2 6583.45A": "[NII]6583",
     }
 
     # if the line_id is a list (denoting a doublet or higher)
     if isinstance(line_id, list):
-        line_id = ','.join(line_id)
+        line_id = ",".join(line_id)
 
     if line_id in special_line_labels.keys():
         line_label = special_line_labels[line_id]
     else:
-
-        line_id = line_id.split(',')
+        line_id = line_id.split(",")
         line_labels = []
         for line_id_ in line_id:
-
             # get the element, ion, and wavelength
-            element, ion, wavelength = line_id_.split(' ')
+            element, ion, wavelength = line_id_.split(" ")
 
             # extract unit and convert to latex str
             unit = wavelength[-1]
 
-            if unit == 'A':
-                unit = r'\AA'
-            if unit == 'm':
-                unit = r'\mu m'
+            if unit == "A":
+                unit = r"\AA"
+            if unit == "m":
+                unit = r"\mu m"
             wavelength = wavelength[:-1] + unit
 
             line_labels.append(
-                f"{element}{get_roman_numeral(int(ion))}{wavelength}")
+                f"{element}{get_roman_numeral(int(ion))}{wavelength}"
+            )
 
-        line_label = '+'.join(line_labels)
+        line_label = "+".join(line_labels)
 
     return line_label
 
@@ -100,7 +99,7 @@ def get_ratio_label(ratio_id):
 
     numerator = get_line_label(ratio_line_ids[0])
     denominator = get_line_label(ratio_line_ids[1])
-    label = f'{numerator}/{denominator}'
+    label = f"{numerator}/{denominator}"
 
     return label
 
@@ -279,7 +278,6 @@ class LineCollection:
     """
 
     def __init__(self, lines):
-
         self.lines = lines
 
         # create an array of line_ids
@@ -290,9 +288,15 @@ class LineCollection:
         self.nlines = len(self.line_ids)
 
         # create list of line wavelengths
-        self.wavelengths = (np.array([
-            line.wavelength.to('Angstrom').value for line in
-            self.lines.values()]) * Angstrom)
+        self.wavelengths = (
+            np.array(
+                [
+                    line.wavelength.to("Angstrom").value
+                    for line in self.lines.values()
+                ]
+            )
+            * Angstrom
+        )
 
         # get the arguments that would sort wavelength
         sorted_arguments = np.argsort(self.wavelengths)
@@ -307,7 +311,6 @@ class LineCollection:
         # create list of available line ratios
         self.available_ratios = []
         for ratio_id, ratio in self.lineratios.ratios.items():
-
             # flatten line ratio list
             ratio_line_ids = [x for xs in ratio for x in xs]
 
@@ -318,10 +321,10 @@ class LineCollection:
         # create list of available line diagnostics
         self.available_diagrams = []
         for diagram_id, diagram in self.lineratios.diagrams.items():
-
             # flatten line ratio list
-            diagram_line_ids = [x for xs in diagram[0] for x in xs] \
-                + [x for xs in diagram[1] for x in xs]
+            diagram_line_ids = [x for xs in diagram[0] for x in xs] + [
+                x for xs in diagram[1] for x in xs
+            ]
 
             # check if line ratio is available
             if set(diagram_line_ids).issubset(self.line_ids):
@@ -440,7 +443,6 @@ class LineCollection:
         return self.get_ratio_(ab), self.get_ratio_(cd)
 
     def get_ratio_label(self, ratio_id):
-
         """
         Wrapper around get_ratio_label
         """
@@ -448,7 +450,6 @@ class LineCollection:
         return get_ratio_label(ratio_id)
 
     def get_diagram_labels(self, diagram_id):
-
         """
         Wrapper around get_ratio_label
         """
@@ -499,13 +500,10 @@ class Line:
 
         # continuum at line wavelength, erg/s/AA
         self.continuum_lam = lnu_to_llam(self.wavelength, self.continuum)
-        self.ew = self.luminosity / self.continuum_lam  # AA
-
-        # more descriptive attribute name
-        self.equivalent_width = self.ew
+        self.equivalent_width = self.luminosity / self.continuum_lam  # AA
 
         # element
-        self.element = self.id.split(' ')[0]
+        self.element = self.id.split(" ")[0]
 
     def __str__(self):
         """Function to print a basic summary of the Line object.
