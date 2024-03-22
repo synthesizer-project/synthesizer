@@ -10,9 +10,8 @@ from a parametric galaxy
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 from synthesizer.grid import Grid
-from synthesizer.parametric import SFH, ZDist, Stars
+from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
 
@@ -113,7 +112,7 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
         plt.grid(True)
 
         if i == 0 or i == 3 or i == 6:
-            plt.ylabel("EW (\u212B)", fontsize=8)
+            plt.ylabel("EW (\u212b)", fontsize=8)
         if i > 5:
             plt.xlabel("metallicity", fontsize=8)
 

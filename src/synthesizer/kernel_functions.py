@@ -3,7 +3,6 @@ from scipy import integrate
 
 
 class Kernel:
-
     """
     Line of sight distance along a particle, l = 2*sqrt(h^2 + b^2),
     where h and b are the smoothing length and the impact parameter

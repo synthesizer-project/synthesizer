@@ -25,23 +25,22 @@ Example usage:
 """
 
 from unyt import (
-    nJy,
-    erg,
-    s,
-    Hz,
     Angstrom,
-    cm,
-    Mpc,
-    yr,
-    km,
-    Msun,
+    Hz,
     K,
+    Mpc,
+    Msun,
+    cm,
     deg,
-    unyt_quantity,
-    unyt_array,
     dimensionless,
+    erg,
+    km,
+    nJy,
+    s,
+    unyt_array,
+    unyt_quantity,
+    yr,
 )
-
 
 # Define an importable dictionary with the default unit system
 default_units = {
@@ -93,7 +92,6 @@ default_units = {
     "centre": Mpc,
     "photo_luminosities": erg / s / Hz,
     "photo_fluxes": erg / s / cm**2 / Hz,
-    "centre": Mpc,
 }
 
 

@@ -1,11 +1,10 @@
 import numpy as np
-from unyt import Msun, kpc, yr, c
+import scipy.interpolate as interpolate
+from bigfile import BigFile
+from scipy import integrate
+from unyt import Msun, c, kpc, yr
 
 from ..particle.galaxy import Galaxy
-
-from bigfile import BigFile
-import scipy.interpolate as interpolate
-from scipy import integrate
 
 
 class BlueTidesDataHolder:

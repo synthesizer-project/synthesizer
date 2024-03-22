@@ -6,17 +6,15 @@ This example compares a sampled and binned (parametric) SED for different
 numbers of particles
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
-from unyt import Myr
-
+import numpy as np
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.particle.stars import sample_sfhz
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
-
+from synthesizer.particle.stars import sample_sfhz
+from unyt import Myr
 
 # Define the grid
 grid_name = "test_grid"

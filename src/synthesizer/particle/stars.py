@@ -21,21 +21,21 @@ Example usages:
 
 import warnings
 
-import numpy as np
 import cmasher as cmr
 import matplotlib.pyplot as plt
+import numpy as np
 from unyt import kpc
 
+from synthesizer import exceptions
 from synthesizer.components import StarsComponent
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.line import Line, LineCollection
+from synthesizer.parametric import SFH
+from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
 from synthesizer.plt import single_histxy
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
-from synthesizer import exceptions
-from synthesizer.parametric import SFH
-from synthesizer.parametric import Stars as Para_Stars
 
 
 class Stars(Particles, StarsComponent):

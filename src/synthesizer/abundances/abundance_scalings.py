@@ -4,7 +4,6 @@ available_scalings = ["Dopita2006"]
 
 
 class Dopita2006:
-
     """Scaling functions for Nitrogen."""
 
     ads = "https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract"
