@@ -5,11 +5,10 @@ SC-SAM example
 Load SC-SAM example data into a list of galaxy objects.
 """
 
-import numpy as np
-from synthesizer.load_data.load_scsam import load_SCSAM
-from synthesizer.grid import Grid
 import matplotlib.pyplot as plt
-
+import numpy as np
+from synthesizer.grid import Grid
+from synthesizer.load_data.load_scsam import load_SCSAM
 
 if __name__ == "__main__":
     # Define the grid

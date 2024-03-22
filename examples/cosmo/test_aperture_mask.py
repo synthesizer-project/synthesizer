@@ -6,13 +6,11 @@ Show how to implement fixed spherical apertures
 when getting the emission from galaxy objects.
 """
 
-import numpy as np
-from unyt import kpc
 import matplotlib.pyplot as plt
-
-from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
+import numpy as np
 from synthesizer.grid import Grid
-
+from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
+from unyt import kpc
 
 grid_dir = "../../tests/test_grid"
 grid_name = "test_grid"
@@ -46,7 +44,6 @@ print("Galaxy centre unchanged: gal.centre = ", gal.centre)
 fig, ax = plt.subplots(1, 1)
 
 for aperture_radius in np.array([30, 10, 5, 2, 1, 0.5]) * kpc:
-
     spec = gal.stars.get_spectra_incident(grid=grid, aperture=aperture_radius)
 
     ax.loglog(spec.lam, spec.lnu, label=f"Aperture: {aperture_radius.value}")

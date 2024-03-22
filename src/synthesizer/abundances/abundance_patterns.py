@@ -11,9 +11,10 @@ Some notes on (standard) notation:
 - [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
 """
 
-import numpy as np
 import cmasher as cmr
 import matplotlib.pyplot as plt
+import numpy as np
+
 import synthesizer.exceptions as exceptions
 from synthesizer.abundances import (
     reference_abundance_patterns,
@@ -23,7 +24,7 @@ from synthesizer.abundances import (
 )
 
 
-class Abundances():
+class Abundances:
 
     """
     A class for calculating elemental abundances including various
@@ -133,11 +134,14 @@ class Abundances():
         # class.
         if isinstance(reference, str):
             if reference in reference_abundance_patterns.available_patterns:
-                self.reference = getattr(reference_abundance_patterns,
-                                         reference)
+                self.reference = getattr(
+                    reference_abundance_patterns, reference
+                )
             else:
-                raise exceptions.UnrecognisedOption("""Reference abundance
-                pattern not recognised!""")
+                raise exceptions.UnrecognisedOption(
+                    """Reference abundance
+                pattern not recognised!"""
+                )
 
         # initialise class
         self.reference = self.reference()
@@ -186,17 +190,14 @@ class Abundances():
 
         # If abundances argument is provided go ahead and set the abundances.
         if abundances is not None:
-
             # if abundances are given as a single string, then use that model
             # to scale every available element.
             if isinstance(abundances, str):
-
                 # get the scaling study
                 scaling_study = getattr(abundance_scalings, abundances)()
 
                 # loop over each element in the dictionary
                 for element in scaling_study.available_elements:
-
                     # get the specific function request by value
                     scaling_function = getattr(scaling_study, element)
                     total[element] = scaling_function(metallicity)
@@ -211,16 +212,14 @@ class Abundances():
                     unscaled_metals.add(element)
 
             if isinstance(abundances, dict):
-
                 # loop over each element in the dictionary
                 for element, value in abundances.items():
-
                     # Let's check whether we're specifying an absolute value or
                     # a relative ratio.
 
                     # If it's a ratio.
-                    if len(element.split('/')) > 1:
-                        element, ratio_element = element.split('/')
+                    if len(element.split("/")) > 1:
+                        element, ratio_element = element.split("/")
                         total[element] = total[ratio_element] + value
 
                     else:
@@ -234,8 +233,9 @@ class Abundances():
                         # metallicity.
                         elif isinstance(value, str):
                             # get the class holding functions for this element
-                            scaling_study = getattr(abundance_scalings,
-                                                    value)()
+                            scaling_study = getattr(
+                                abundance_scalings, value
+                            )()
 
                             # get the specific function request by value
                             scaling_function = getattr(scaling_study, element)
@@ -255,9 +255,11 @@ class Abundances():
 
         # Calculate the mass in unscaled, scaled, and non-metals.
         mass_in_unscaled_metals = self.calculate_mass(
-            list(unscaled_metals), a=total)
+            list(unscaled_metals), a=total
+        )
         mass_in_scaled_metals = self.calculate_mass(
-            list(scaled_metals), a=total)
+            list(scaled_metals), a=total
+        )
         mass_in_non_metals = self.calculate_mass(["H", "He"], a=total)
 
         # Now, calculate the scaling factor. The metallicity is:
@@ -284,7 +286,8 @@ class Abundances():
             self.add_depletion(
                 depletion=depletion,
                 depletion_model=depletion_model,
-                depletion_scale=depletion_scale)
+                depletion_scale=depletion_scale,
+            )
         else:
             self.gas = self.total
             self.depletion = {element: 1.0 for element in self.all_elements}
@@ -293,11 +296,9 @@ class Abundances():
             self.dust_mass_fraction = 0.0
             self.dust_to_metal_ratio = 0.0
 
-    def add_depletion(self,
-                      depletion=None,
-                      depletion_model=None,
-                      depletion_scale=None):
-
+    def add_depletion(
+        self, depletion=None, depletion_model=None, depletion_scale=None
+    ):
         """
         Method to add depletion using a provided depletion pattern or model.
         This method creates the following attributes:
@@ -332,26 +333,29 @@ class Abundances():
             if depletion_model in depletion_models.available_patterns:
                 depletion_model = getattr(depletion_models, depletion_model)
             else:
-                raise exceptions.UnrecognisedOption("""Depletion model not
-                recognised!""")
+                raise exceptions.UnrecognisedOption(
+                    """Depletion model not
+                recognised!"""
+                )
 
         # Raise exception if both a depletion pattern and depletion_model is
         # provided.
         if (depletion is not None) and (depletion_model is not None):
             raise exceptions.InconsistentParameter(
-                "Can not provide by a depletion pattern and a depletion model")
+                "Can not provide by a depletion pattern and a depletion model"
+            )
 
         # Raise exception if a depletion_scale is provided by not a
         # depletion_model.
         if (depletion_scale is not None) and (depletion_model is None):
             raise exceptions.InconsistentParameter(
                 """If a depletion scale is provided then a depletion model must
-                also be provided""")
+                also be provided"""
+            )
 
         # If provided, calculate depletion pattern by calling the depletion
         # model with the depletion scale.
         if depletion_model:
-
             # If a depletion_scale is provided use this...
             if self.depletion_scale is not None:
                 depletion = depletion_model(depletion_scale).depletion
@@ -361,28 +365,26 @@ class Abundances():
 
         # apply depletion pattern
         if depletion:
-
             # deplete the gas and dust
             self.gas = {}
             self.dust = {}
             for element in self.all_elements:
-
                 # if an entry exists for the element apply depletion
                 if element in depletion.keys():
-
                     # depletion factors >1.0 are unphysical so cap at 1.0
                     if depletion[element] > 1.0:
                         depletion[element] = 1.0
 
                     self.gas[element] = np.log10(
-                        10**self.total[element] * depletion[element]
+                        10 ** self.total[element] * depletion[element]
                     )
 
                     if depletion[element] == 1.0:
                         self.dust[element] = -np.inf
                     else:
                         self.dust[element] = np.log10(
-                            10**self.total[element] * (1 - depletion[element])
+                            10 ** self.total[element]
+                            * (1 - depletion[element])
                         )
 
                 # otherwise assume no depletion
@@ -394,22 +396,24 @@ class Abundances():
             # calculate mass fraction in metals
             # NOTE: this should be identical to the metallicity.
             self.metal_mass_fraction = self.calculate_mass_fraction(
-                self.metals)
+                self.metals
+            )
 
             # calculate mass fraction in dust
             self.dust_mass_fraction = self.calculate_mass_fraction(
-                self.metals,
-                a=self.dust)
+                self.metals, a=self.dust
+            )
 
             # calculate dust-to-metal ratio and save as an attribute
-            self.dust_to_metal_ratio = (self.dust_mass_fraction
-                                        / self.metal_mass_fraction)
+            self.dust_to_metal_ratio = (
+                self.dust_mass_fraction / self.metal_mass_fraction
+            )
 
             # calculate integrated dust abundance
             # this is used by cloudy23
             self.dust_abundance = self.calculate_integrated_abundance(
-                self.metals,
-                a=self.dust)
+                self.metals, a=self.dust
+            )
 
             # Associate parameters with object
             self.depletion = depletion
@@ -469,7 +473,7 @@ class Abundances():
         summary += "-" * 10 + "\n"
 
         column_width = 16
-        column_format = ' '.join(f'{{{i}:<{column_width}}}' for i in range(7))
+        column_format = " ".join(f"{{{i}:<{column_width}}}" for i in range(7))
 
         column_names = (
             "Element",
@@ -483,15 +487,14 @@ class Abundances():
         summary += column_format.format(*column_names) + "\n"
 
         for ele in self.all_elements:
-
             quantities = (
-                f'{self.element_name[ele]}',
-                f'{self.total[ele]:.2f}',
-                f'{self.total[ele]+12:.2f}',
-                f'{self.total[ele]-self.reference.abundance[ele]:.2f}',
-                f'{self.depletion[ele]:.2f}',
-                f'{self.gas[ele]:.2f}',
-                f'{self.dust[ele]:.2f}',
+                f"{self.name[ele]}",
+                f"{self.total[ele]:.2f}",
+                f"{self.total[ele]+12:.2f}",
+                f"{self.total[ele]-self.solar.abundance[ele]:.2f}",
+                f"{self.depletion[ele]:.2f}",
+                f"{self.gas[ele]:.2f}",
+                f"{self.dust[ele]:.2f}",
             )
             summary += column_format.format(*quantities) + "\n"
 

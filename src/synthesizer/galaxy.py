@@ -1,4 +1,4 @@
-""" A factory function to return the correct galaxy type.
+"""A factory function to return the correct galaxy type.
 
 This function means the user doesn't need to worry which galaxy they need to
 import. They only need to import the galaxy function, and pass the arguments
@@ -22,9 +22,9 @@ gal = galaxy(stars=parametric.Stars(...),  ...)
 """
 
 from synthesizer import exceptions
-from synthesizer.particle import Galaxy as ParticleGalaxy
-from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.parametric import Galaxy as ParametricGalaxy
+from synthesizer.parametric import Stars as ParametricStars
+from synthesizer.particle import Galaxy as ParticleGalaxy
 
 
 def galaxy(
