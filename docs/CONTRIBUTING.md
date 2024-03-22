@@ -1,24 +1,45 @@
 # Contributing 
 
 Please feel free to submit issues and pull requests to this repository. 
-The github workflow will automatically run [flake8](https://flake8.pycqa.org/en/latest/) and [pytest](https://docs.pytest.org/en/7.2.x/) on any contributions; builds that fail these tests will not be accepted. Further notes on code style are detailed below.
+The GitHub workflow will automatically run [Ruff](https://github.com/astral-sh/ruff) on any contributions; builds that fail these tests will not be accepted. Further notes on code style are detailed below.
 
 **Contents:**
+- [Setting up Ruff](#setting-up-ruff)
+- [Setting up pre-commit hooks](#setting-up-pre-commit-hooks)
 - [Style guide](#style-guide)
 - [Contributing to the Documentation](#contributing-to-the-documentation)
     - [Getting set up](#getting-set-up)
     - [Adding notebooks](#adding-notebooks)
     - [Adding example scripts](#adding-example-scripts)
+    
+## Setting up Ruff
+
+We use [Ruff](https://github.com/astral-sh/ruff) for both linting and formatting. If you want to run `ruff` locally you can install it via pip (`pip install ruff`) and then run linting with `ruff check` and formatting with `ruff format` (each followed by the files to consider). 
+
+The `ruff` configuration is defined in our `pyproject.toml` so there's no need to configure it yourself, we've made all the decisions for you (for better or worse). Any merge request will be checked with the `ruff` linter and must pass before being eligable to merge.
+
+## Setting up pre-commit hooks
+
+We also provide a pre-commit hook which will run on any files committed to the repo on any branch. If you plan to commit anything to Synthesizer it is highly recommended you install the pre-commit hook to make your life easier. This pre-commit hook will guard against files containing merge conflict strings, check case conflicts in file names, guard against the commiting of large files, santise jupyter notebooks (using `nb-clean`) and, most importantly, will run `ruff` in both linter and formatter mode.
+
+This requires a small amount of set up on your part. To install the the pre-commit hook navigate to the root of the repo and invoke:
+```
+pip install ruff pre-commit nb-clean; pre-commit install
+```
+
+and you're done. Now every time you commit a file the pre commit hook will be run automatically.
+
+If you would like to test whether it works you can run `pre-commit run --all-files` to run the pre-commit hook on the whole repo. You should see each stage complete without issue in a clean clone.
 
 
 ## Style guide
-All new PRs should follow these guidelines. We adhere to the pep8 style guide, and verify using flake8. We use the [Google docstring format](https://google.github.io/styleguide/pyguide.html#s3.8-comments-and-docstrings).
+All new PRs should follow these guidelines. We adhere to the pep8 style guide, and as described above this is verified with `ruff`. We use the [Google docstring format](https://google.github.io/styleguide/pyguide.html#s3.8-comments-and-docstrings).
 
 Some specific examples of common style issues:
 - Do not use capatilised single letters for attributes. For example, `T` could be transmission or temperature. Instead, one should write out the full word.
 - Operators should be surrounded with whitespace.
 - We use `get_` and/or `calculate_` nomenclature for methods that perform a calculation and return the result to the user.
-- Variables should adhere to snake_case style while class names should be in PascalCase.
+- Variables should adhere to `snake_case` style while class names should be in `PascalCase`.
 - Block comments should have their first letter capitalised, i.e.
 ```
 # This is a block comment
@@ -33,27 +54,6 @@ z = x * 2  # this is an inline comment
 ## Contributing to the Documentation
 The synthesizer documentation is written in a combination of restructuredText, Jupyter notebooks and Python scripts. 
 Adding content should be relatively simple, if you follow the instructions below.
-
-### Getting set up
-
-First we're going to make some small changes to the git configuration to prevent excessive git diffs in the future when contributing changes to notebooks.
-
-1. First, add the following lines to the end of the `.git/config` file at the root of the synthesizer repository
-
-        [filter "strip-notebook-output"]
-        clean = "jupyter nbconvert --ClearOutputPreprocessor.enabled=True --ClearMetadataPreprocessor.enabled=True --to=notebook --stdin --stdout --log-level=ERROR"
-
-2. Then (if it does not already exist) create a file called `.gitattributes` in the root of the synthesizer repository, and add the following
-
-        *.ipynb filter=strip-notebook-output
-
-
-This will reset all instances of `execution_count` with `null`, and replace the `metadata` tag with an empty dictionary, and prevent spurious git diffs to notebooks when they have been run multiple times.
-
-    ...
-    "execution_count": null,
-    "metadata": {},
-    ...
 
 ### Adding notebooks
 To add jupyter notebooks to the documentation:

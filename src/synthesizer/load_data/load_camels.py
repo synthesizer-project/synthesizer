@@ -1,11 +1,11 @@
 import h5py
 import numpy as np
-
 from astropy.cosmology import FlatLambdaCDM
 from unyt import Msun, kpc, yr
 
-from ..particle.galaxy import Galaxy
 from synthesizer.load_data.utils import get_len
+
+from ..particle.galaxy import Galaxy
 
 
 def _load_CAMELS(
