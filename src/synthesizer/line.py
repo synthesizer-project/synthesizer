@@ -529,7 +529,7 @@ class Line:
             f"log10(luminosity/{self.luminosity.units}): "
             f"{np.log10(self.luminosity):.2f}\n"
         )
-        pstr += f"equivalent width: {self.ew:.0f}" + "\n"
+        pstr += f"equivalent width: {self.equivalent_width:.0f}" + "\n"
         if self._flux:
             pstr += f"log10(flux/{self.flux.units}): {np.log10(self.flux):.2f}"
         pstr += "-" * 10
