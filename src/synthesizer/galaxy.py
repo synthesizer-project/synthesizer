@@ -21,19 +21,23 @@ gal = galaxy(stars=parametric.Stars(...),  ...)
 
 """
 
-from synthesizer import exceptions
+from typing import Optional, Union
+
+from synthesizer.exceptions import InconsistentArguments
 from synthesizer.parametric import Galaxy as ParametricGalaxy
 from synthesizer.parametric import Stars as ParametricStars
+from synthesizer.particle import BlackHoles, Gas
 from synthesizer.particle import Galaxy as ParticleGalaxy
+from synthesizer.particle import Stars as ParticleStars
 
 
 def galaxy(
-    stars=None,
-    gas=None,
-    black_holes=None,
-    redshift=None,
-    name="galaxy",
-):
+    stars: Optional[Union[ParticleStars, ParametricStars]] = None,
+    gas: Optional[Gas] = None,
+    black_holes: Optional[BlackHoles] = None,
+    redshift: Optional[float] = None,
+    name: str = "galaxy",
+) -> Union[ParticleGalaxy, ParametricGalaxy]:
     """A factory fucntion to return the desired type of galaxy.
 
     This function provides a simple interface to ensure the user doesn't try to
@@ -45,38 +49,31 @@ def galaxy(
     error is raised.
 
     Args:
-        name (str)
-            A name to identify the galaxy. Only used for external labelling,
-            has no internal use.
-        stars (object, Stars/Stars)
-            An instance of Stars containing the stellar particle data or an
-            instance of Stars containing the combined star formation and
-            metallicity histories. The former is only applicable to a
-            particle.Galaxy while the latter is only applicable to a
-            parametric.Galaxy.
-        gas (object, Gas)
-            An instance of Gas containing the gas particle data.
-            Only applicable to a particle.Galaxy.
-        black_holes (object, BlackHoles)
-            An instance of BlackHoles containing the black hole particle data.
-            Only applicable to a particle.Galaxy.
-        redshift (float)
-            The redshift of the galaxy.
+        name: A name to identify the galaxy. Only used for external labelling,
+              has no internal use.
+        stars: An instance of Stars containing the stellar particle data or an
+               instance of Stars containing the combined star formation and
+               metallicity histories. The former is only applicable to a
+               particle.Galaxy while the latter is only applicable to a
+               parametric.Galaxy.
+        gas: An instance of Gas containing the gas particle data. Only
+             applicable to a particle.Galaxy.
+        black_holes: An instance of BlackHoles containing the black hole
+                     particle data. Only applicable to a particle.Galaxy.
+        redshift: The redshift of the galaxy.
 
     Returns:
-        Galaxy (particle.Galaxy/parametric.Galaxy)
             The appropriate Galaxy object based on input arguments.
 
     Raises:
-        InconsistentArguments
-            If passed both particle and parametric arguments an error is
-            raised.
+        InconsistentArguments: If passed both particle and parametric arguments
+                               an error is raised.
     """
 
     # Ensure the passed arguments make sense
     if isinstance(stars, ParametricStars):
         if gas is not None or black_holes is not None:
-            raise exceptions.InconsistentArguments(
+            raise InconsistentArguments(
                 "A parametric Stars has been passed in conjunction with "
                 "particle based gas or black hole objects. These are "
                 "incompatible. Did you mean to pass a particle based Stars "
