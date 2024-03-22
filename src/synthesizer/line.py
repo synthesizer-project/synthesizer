@@ -6,6 +6,7 @@ Example usage:
 """
 
 import numpy as np
+from unyt import Angstrom
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
@@ -43,7 +44,6 @@ def get_line_label(line_id):
         "O 3 4958.91A,O 3 5006.84A": "[OIII]4959,5007",
         "H 1 6564.62A": r"H\alpha",
         "O 3 5006.84A": "[OIII]5007",
-        "N 2 6583.45A": "[NII]6583",
         "N 2 6583.45A": "[NII]6583",
     }
 

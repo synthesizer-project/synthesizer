@@ -11,7 +11,7 @@ This example demonstrates how to:
 
 import matplotlib.pyplot as plt
 from synthesizer.grid import Grid
-from synthesizer.line import get_ratio_label, get_diagram_labels
+from synthesizer.line import get_diagram_labels, get_ratio_label
 
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this
@@ -100,6 +100,6 @@ if __name__ == "__main__":
     # grab x and y labels, this time use "fancy" label ids
     xlabel, ylabel = get_diagram_labels(diagram_id)
 
-    plt.xlabel(rf'${xlabel}$')
-    plt.ylabel(rf'${ylabel}$')
+    plt.xlabel(rf"${xlabel}$")
+    plt.ylabel(rf"${ylabel}$")
     plt.show()

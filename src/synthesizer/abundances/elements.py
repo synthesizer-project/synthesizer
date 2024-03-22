@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 @dataclass
 class Elements:
-
     """
     A simple class containing various useful lists and dictionaries.
 
@@ -24,7 +23,6 @@ class Elements:
     """
 
     def __init__(self):
-
         self.non_metals = [
             "H",
             "He",

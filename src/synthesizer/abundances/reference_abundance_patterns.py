@@ -1,23 +1,23 @@
 from dataclasses import dataclass
 
-available_patterns = ['Asplund2009', 'GalacticConcordance', 'Gutkin2016']
+available_patterns = ["Asplund2009", "GalacticConcordance", "Gutkin2016"]
 
 
 @dataclass
 class Asplund2009:
-
     def __init__(self):
-
         """
         The Solar abundance pattern used by Asplund (2009).
         """
 
         # meta information
-        self.ads = 'https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/'\
-            'abstract'
-        self.doi = '10.1146/annurev.astro.46.060407.145222'
-        self.arxiv = 'arXiv:0909.0948'
-        self.bibcode = '2009ARA&A..47..481A'
+        self.ads = (
+            "https://ui.adsabs.harvard.edu/abs/2009ARA%26A..47..481A/"
+            "abstract"
+        )
+        self.doi = "10.1146/annurev.astro.46.060407.145222"
+        self.arxiv = "arXiv:0909.0948"
+        self.bibcode = "2009ARA&A..47..481A"
 
         # total metallicity
         self.metallicity = 0.0134
@@ -59,19 +59,18 @@ class Asplund2009:
 
 @dataclass
 class GalacticConcordance:
-
     def __init__(self):
-
         """
         The Galactic Concordance pattern from Nicholls et al.
         """
 
         # meta information
-        self.ads = 'https://ui.adsabs.harvard.edu/abs/2017MNRAS.466.4403N/'\
-            'abstract'
-        self.doi = 'https://doi.org/10.1093/mnras/stw3235'
+        self.ads = (
+            "https://ui.adsabs.harvard.edu/abs/2017MNRAS.466.4403N/" "abstract"
+        )
+        self.doi = "https://doi.org/10.1093/mnras/stw3235"
         self.arxiv = None
-        self.bibcode = '2017MNRAS.466.4403N'
+        self.bibcode = "2017MNRAS.466.4403N"
 
         # total metallicity
         self.metallicity = 0.015
@@ -113,9 +112,7 @@ class GalacticConcordance:
 
 @dataclass
 class Gutkin2016:
-
     def __init__(self):
-
         """
         The Solar abundance pattern used by Gutkin (2016).
         """
@@ -123,9 +120,9 @@ class Gutkin2016:
         # meta information
         self.ads = """https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/
         abstract"""
-        self.doi = '10.1093/mnras/stw1716'
-        self.arxiv = 'arXiv:1607.06086'
-        self.bibcode = '2016MNRAS.462.1757G'
+        self.doi = "10.1093/mnras/stw1716"
+        self.arxiv = "arXiv:1607.06086"
+        self.bibcode = "2016MNRAS.462.1757G"
 
         # total metallicity
         self.metallicity = 0.01524
