@@ -1,5 +1,7 @@
 """A module containing functionality for working with spectral lines.
 
+TODO: Complete doc string.
+
 Example usage:
 """
 

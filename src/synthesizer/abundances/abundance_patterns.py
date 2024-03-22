@@ -25,7 +25,6 @@ from synthesizer.abundances import (
 
 
 class Abundances:
-
     """
     A class for calculating elemental abundances including various
     scaling and depletion on to dust.
