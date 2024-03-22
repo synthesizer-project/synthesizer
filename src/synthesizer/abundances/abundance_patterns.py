@@ -17,10 +17,10 @@ import numpy as np
 
 import synthesizer.exceptions as exceptions
 from synthesizer.abundances import (
-    reference_abundance_patterns,
-    depletion_models,
     abundance_scalings,
+    depletion_models,
     elements,
+    reference_abundance_patterns,
 )
 
 

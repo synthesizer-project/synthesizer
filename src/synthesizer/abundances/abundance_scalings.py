@@ -176,7 +176,6 @@ class GalacticConcordance:
             self.available_elements.append(element)
 
     class scaling_method_creator:
-
         """
         This is a class for making the scaling methods for individual elements
         using the dictionary above.
