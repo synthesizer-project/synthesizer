@@ -487,9 +487,10 @@ class Abundances:
 
         for ele in self.all_elements:
             quantities = (
+                f"{self.element_name[ele]}",
                 f"{self.total[ele]:.2f}",
                 f"{self.total[ele]+12:.2f}",
-                f"{self.total[ele]-self.solar.abundance[ele]:.2f}",
+                f"{self.total[ele]-self.reference.abundance[ele]:.2f}",
                 f"{self.depletion[ele]:.2f}",
                 f"{self.gas[ele]:.2f}",
                 f"{self.dust[ele]:.2f}",
