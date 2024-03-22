@@ -1,8 +1,8 @@
+import matplotlib.pyplot as plt
 import numpy as np
 from astropy.modeling.models import Sersic2D as Sersic2D_
 from unyt import kpc, mas, unyt_array
-from unyt.dimensions import length, angle
-import matplotlib.pyplot as plt
+from unyt.dimensions import angle, length
 
 from synthesizer import exceptions
 
@@ -90,7 +90,6 @@ class MorphologyBase:
 
 
 class Sersic2D(MorphologyBase):
-
     """
     A class holding the Sersic2D profile. This is a wrapper around the
     astropy.models.Sersic2D class.
@@ -259,7 +258,6 @@ class Sersic2D(MorphologyBase):
 
 
 class PointSource(MorphologyBase):
-
     """
     A class holding the Sersic2D profile. This is a wrapper around the
     astropy.models.Sersic2D class.

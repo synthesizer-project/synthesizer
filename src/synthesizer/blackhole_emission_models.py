@@ -10,18 +10,18 @@ Example Usage:
         grid_dir=grid_dir
 )
 """
-import numpy as np
-from unyt import deg, km, cm, s, K, rad, Hz, unyt_array
 
+import numpy as np
+from unyt import Hz, K, cm, deg, km, rad, s, unyt_array
+
+from synthesizer import exceptions
 from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
-from synthesizer import exceptions
 from synthesizer.units import Quantity
 
 
 class Template:
-
     """
     Use a template for the emission model.
 
@@ -108,7 +108,6 @@ class Template:
 
 
 class UnifiedAGN:
-
     """
     The Unified AGN model.
     This combines a disc model, along with modelling of the NLR, BLR,
