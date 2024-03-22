@@ -9,7 +9,6 @@ available_patterns = ["Jenkins2009", "CloudyClassic", "Gutkin2016"]
 
 
 class Jenkins2009:
-
     """
     Implemention of the Jenkins (2009) depletion pattern that is built into
     cloudy23.
@@ -73,7 +72,6 @@ class Jenkins2009:
 
 
 class CloudyClassic:
-
     """
     Implemention of the 'cloudy classic' depletion pattern that is built into
     cloudy23.
@@ -125,7 +123,6 @@ class CloudyClassic:
 
 
 class Gutkin2016:
-
     """
     Depletion pattern created for Synthesizer 2024.
 

@@ -2,7 +2,6 @@ available_patterns = ["Asplund2009", "Gutkin2016"]
 
 
 class Asplund2009:
-
     """
     The Solar abundance pattern used by Asplund (2009).
     """
@@ -53,7 +52,6 @@ class Asplund2009:
 
 
 class Gutkin2016:
-
     """
     The Solar abundance pattern used by Gutkin (2016).
     """

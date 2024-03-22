@@ -1,10 +1,10 @@
-import numpy as np
 import h5py
+import numpy as np
+from unyt import Mpc, Msun, yr
 
-from unyt import Msun, Mpc, yr
+from synthesizer.load_data.utils import get_len
 
 from ..particle.galaxy import Galaxy
-from synthesizer.load_data.utils import get_len
 
 
 def load_FLARES(master_file, region, tag):

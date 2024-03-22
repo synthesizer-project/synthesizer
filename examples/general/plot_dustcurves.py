@@ -5,13 +5,11 @@ Dust curves example
 Plot dust curves
 """
 
+import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Angstrom
-
 from synthesizer.dust import attenuation
-
-import cmasher as cmr
+from unyt import Angstrom
 
 models = [
     "PowerLaw",

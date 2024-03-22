@@ -9,15 +9,13 @@ This is now implemented within call to `generate_lnu`
 on a parametric stars object.
 """
 
-import numpy as np
-from unyt import Myr
 import matplotlib.pyplot as plt
-
-from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
+import numpy as np
 from synthesizer.grid import Grid
+from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 from synthesizer.parametric import SFH, Stars
 from synthesizer.parametric.galaxy import Galaxy
-
+from unyt import Myr
 
 grid_dir = "../../tests/test_grid"
 grid_name = "test_grid"

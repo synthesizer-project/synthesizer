@@ -12,23 +12,24 @@ Example usage:
     sed.apply_attenutation(tau_v=0.7)
     sed.get_photo_fluxes(filters)
 """
+
 import re
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
+from scipy import integrate
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
-from scipy import integrate
 from spectres import spectres
-from unyt import c, h, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
+from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
-from synthesizer.photometry import PhotometryCollection
-from synthesizer.utils import rebin_1d
-from synthesizer.units import Quantity
 from synthesizer.igm import Inoue14
-from synthesizer.utils import has_units
+from synthesizer.photometry import PhotometryCollection
+from synthesizer.units import Quantity
+from synthesizer.utils import has_units, rebin_1d
 
 
 class Sed:
@@ -932,9 +933,7 @@ class Sed:
 
         # Finally, compute the flux SED and apply unit conversions to get
         # to nJy
-        self.fnu = (
-            self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
-        )
+        self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
 
         # If we are applying an IGM model apply it
         if igm:
@@ -1103,13 +1102,11 @@ class Sed:
             )
             # Use the continuum fit to define the continuum for all spectra
             continuum = (
-                (
-                    np.column_stack(
-                        continuum_fits[0]
-                        * feature_lam.to(self.lam.units).value[:, np.newaxis]
-                    )
-                    + continuum_fits[1][:, np.newaxis]
+                np.column_stack(
+                    continuum_fits[0]
+                    * feature_lam.to(self.lam.units).value[:, np.newaxis]
                 )
+                + continuum_fits[1][:, np.newaxis]
             ) * self.lnu.units
 
             # Define the continuum subtracted spectrum for all SEDs

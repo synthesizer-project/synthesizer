@@ -6,13 +6,11 @@ Show how to implement fixed spherical apertures
 when getting the emission from galaxy objects.
 """
 
-import numpy as np
-from unyt import kpc
 import matplotlib.pyplot as plt
-
-from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
+import numpy as np
 from synthesizer.grid import Grid
-
+from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
+from unyt import kpc
 
 grid_dir = "../../tests/test_grid"
 grid_name = "test_grid"

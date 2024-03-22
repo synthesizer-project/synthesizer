@@ -14,12 +14,12 @@ Example usages:
 """
 
 import numpy as np
-from unyt import rad, deg, unyt_array
+from unyt import deg, rad, unyt_array
 
-from synthesizer.particle.particles import Particles
-from synthesizer.components import BlackholesComponent
-from synthesizer.blackhole_emission_models import Template
 from synthesizer import exceptions
+from synthesizer.blackhole_emission_models import Template
+from synthesizer.components import BlackholesComponent
+from synthesizer.particle.particles import Particles
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 from synthesizer.utils import value_to_array

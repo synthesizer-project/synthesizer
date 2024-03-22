@@ -1,22 +1,34 @@
-"""Module containing dust emission functionality
-"""
+"""Module containing dust emission functionality"""
+
+from functools import partial
+
 import numpy as np
 from scipy import integrate
 from scipy.optimize import fsolve
-from functools import partial
-from unyt import h, c, kb, um, erg, s, Hz, Msun, Lsun
-from unyt import accepts
-from unyt.dimensions import temperature as temperature_dim
+from unyt import (
+    Angstrom,
+    Hz,
+    Lsun,
+    Msun,
+    accepts,
+    c,
+    erg,
+    h,
+    kb,
+    s,
+    um,
+    unyt_array,
+    unyt_quantity,
+)
 from unyt.dimensions import mass as mass_dim
-from unyt import Angstrom, unyt_quantity, unyt_array
+from unyt.dimensions import temperature as temperature_dim
 
 from synthesizer import exceptions
-from synthesizer.utils import planck
 from synthesizer.sed import Sed
+from synthesizer.utils import planck
 
 
 class EmissionBase:
-
     """
     Dust emission base class for holding common methods.
 
@@ -384,11 +396,7 @@ class IR_templates:
         # default Umax=1e7
         umax = 1e7
 
-        if (
-            (self.gamma is None)
-            or (self.umin is None)
-            or ((self.alpha == 2.0))
-        ):
+        if (self.gamma is None) or (self.umin is None) or (self.alpha == 2.0):
             if self.verbose:
                 print(
                     "Gamma, Umin or alpha for DL07 model not provided, "
