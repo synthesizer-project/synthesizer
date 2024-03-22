@@ -3,14 +3,15 @@ Given an SED (from an SPS model, for example), generate a cloudy atmosphere
 grid. Can optionally generate an array of input files for selected parameters.
 """
 
-import numpy as np
 import shutil
-from unyt import c, h, angstrom, unyt_array
+
+import numpy as np
+from unyt import angstrom, c, h, unyt_array
+
 from synthesizer.photoionisation import calculate_Q_from_U
 
 
 class ShapeCommands:
-
     """
     A class for holding different cloudy shape commands
 

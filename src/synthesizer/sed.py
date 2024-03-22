@@ -14,22 +14,22 @@ Example usage:
 """
 
 import re
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
+from scipy import integrate
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
-from scipy import integrate
 from spectres import spectres
-from unyt import c, h, erg, s, Hz, pc, angstrom, eV, unyt_array, cm
+from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
-from synthesizer.photometry import PhotometryCollection
-from synthesizer.utils import rebin_1d
-from synthesizer.units import Quantity
 from synthesizer.igm import Inoue14
-from synthesizer.utils import has_units
+from synthesizer.photometry import PhotometryCollection
+from synthesizer.units import Quantity
+from synthesizer.utils import has_units, rebin_1d
 
 
 class Sed:
@@ -1102,13 +1102,11 @@ class Sed:
             )
             # Use the continuum fit to define the continuum for all spectra
             continuum = (
-                (
-                    np.column_stack(
-                        continuum_fits[0]
-                        * feature_lam.to(self.lam.units).value[:, np.newaxis]
-                    )
-                    + continuum_fits[1][:, np.newaxis]
+                np.column_stack(
+                    continuum_fits[0]
+                    * feature_lam.to(self.lam.units).value[:, np.newaxis]
                 )
+                + continuum_fits[1][:, np.newaxis]
             ) * self.lnu.units
 
             # Define the continuum subtracted spectrum for all SEDs

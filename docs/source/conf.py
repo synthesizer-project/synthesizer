@@ -5,17 +5,17 @@
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+import os
+import sys
 
 project = "synthesizer"
-copyright = "2023, Chris Lovell, Stephen Wilkins, Aswin Vijayan, Will Roper"
+copyright = "2024, Chris Lovell, Stephen Wilkins, Aswin Vijayan, Will Roper"
 author = "Chris Lovell, Stephen Wilkins, Aswin Vijayan, Will Roper"
-release = "0.1"
+release = "0.3.0-beta"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-import os
-import sys
 
 sys.path.insert(
     0, os.path.abspath("../../synthesizer")
@@ -29,10 +29,12 @@ sys.path.insert(0, os.path.abspath("."))
 extensions = [
     "nbsphinx",
     "sphinx.ext.napoleon",
-    "sphinx.ext.autodoc",  # Core library for html generation from docstrings
-    "sphinx.ext.autosummary",  # Create neat summary tables
-    "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
-    "sphinx_autodoc_typehints",  # Automatically document param types (less noise in class signature)
+    "sphinx.ext.autodoc",  # core library for html generation from docstrings
+    "sphinx.ext.autosummary",  # create neat summary tables
+    # Add a link to the Python source code for classes, functions etc.
+    "sphinx.ext.viewcode",
+    # Automatically document param types (less noise in class signature)
+    "sphinx_autodoc_typehints",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_gallery.gen_gallery",
     "sphinx_toolbox.collapse",
@@ -40,9 +42,10 @@ extensions = [
 
 sphinx_gallery_conf = {
     "examples_dirs": "../../examples",  # path to your example scripts
-    "gallery_dirs": "auto_examples",  # path to where to save gallery generated output
+    # Path to where to save gallery generated output
+    "gallery_dirs": "auto_examples",
     "nested_sections": True,
-    # directory where function/class granular galleries are stored
+    # Directory where function/class granular galleries are stored
     "backreferences_dir": "_autosummary/backreferences",
     # Modules for which function/class level galleries are created. In
     # this case sphinx_gallery and numpy in a tuple of strings.
