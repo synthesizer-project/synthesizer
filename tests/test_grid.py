@@ -3,7 +3,7 @@ from synthesizer.grid import Grid
 
 
 @pytest.fixture
-def open_grid():
+def open_grid() -> Grid:
     """returns a Grid object"""
 
     return Grid("test_grid", grid_dir="/tests/test_grid")
