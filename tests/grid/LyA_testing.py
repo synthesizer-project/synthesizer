@@ -3,22 +3,25 @@ import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+from numpy.typing import NDArray
 from synthesizer.grid import Grid
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 )
 
+iZ: int
+ia: int
+log10Z: float = -2.0
+log10age: float = 6.0
 
-log10Z = -2.0
-log10age = 6.0
+sps_name: str = "bpass-v2.2.1_chab100-bin_cloudy-v17.0_logUref-2"
 
-sps_name = "bpass-v2.2.1_chab100-bin_cloudy-v17.0_logUref-2"
+fesc_LyA: float = 0.5
 
-fesc_LyA = 0.5
-
-grid = Grid(sps_name)
-
+grid: Grid = Grid(sps_name)
 
 iZ, log10Z = grid.get_nearest_log10Z(log10Z)
 print(f"closest metallicity: {log10Z:.2f}")
@@ -26,20 +29,20 @@ ia, log10age = grid.get_nearest_log10age(log10age)
 print(f"closest age: {log10age:.2f}")
 
 
-fig = plt.figure(figsize=(3.5, 5.0))
+fig: Figure = plt.figure(figsize=(3.5, 5.0))
 
-left = 0.15
-height = 0.8
-bottom = 0.1
-width = 0.8
+left: float = 0.15
+height: float = 0.8
+bottom: float = 0.1
+width: float = 0.8
 
-ax = fig.add_axes((left, bottom, width, height))
+ax: Axes = fig.add_axes((left, bottom, width, height))
 
-Lnu = grid.spectra["linecont"][iZ, ia, :]
+Lnu: NDArray[np.float64] = grid.spectra["linecont"][iZ, ia, :]
 ax.plot(np.log10(grid.lam), np.log10(Lnu), lw=2, alpha=0.3, c="k")
 
 
-idx = grid.get_nearest_index(1216.0, grid.lam)
+idx: int = grid.get_nearest_index(1216.0, grid.lam)
 Lnu[idx] *= fesc_LyA
 
 ax.plot(np.log10(grid.lam), np.log10(Lnu), lw=1, alpha=1, c="k")
