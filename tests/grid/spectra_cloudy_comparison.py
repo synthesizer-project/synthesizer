@@ -1,8 +1,11 @@
 import os
 import sys
+from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from synthesizer.grid import Grid
 
 sys.path.insert(
@@ -10,46 +13,36 @@ sys.path.insert(
 )
 
 
-def plot_spectra(grid, log10Z=-2.0, log10age=6.0, spec_names=None):
-    return fig, ax
-
-
 if __name__ == "__main__":
-    """
-    Define choise of SPS model and initial mass function (IMF)
-    """
-    sps_names = [
+    # Define choice of SPS model and initial mass function (IMF)
+    sps_names: List[str] = [
         "bpass-v2.2.1-bin_chab-100_cloudy-v17.03_log10Uref-2",
         "bpass-v2.2.1-bin_chab-100_cloudy-v17.00_log10Uref-2",
     ]
 
-    log10Z = -2.0  # log10(metallicity)
-    log10age = 6.0  # log10(age/yr)
+    iZ: int
+    ia: int
+    log10Z: float = -2.0  # log10(metallicity)
+    log10age: float = 6.0  # log10(age/yr)
 
-    spec_names = ["total"]
+    spec_names: List[str] = ["total"]
 
-    grid1 = Grid(sps_names[0])
-    grid2 = Grid(sps_names[1])
+    grid1: Grid = Grid(sps_names[0])
+    grid2: Grid = Grid(sps_names[1])
 
     iZ, log10Z = grid1.get_nearest_log10Z(log10Z)
     print(f"closest metallicity: {log10Z:.2f}")
     ia, log10age = grid1.get_nearest_log10age(log10age)
     print(f"closest age: {log10age:.2f}")
 
-    fig = plt.figure(figsize=(3.5, 5.0))
-
-    left = 0.2
-    height = 0.8
-    bottom = 0.1
-    width = 0.75
-
-    ax = fig.add_axes((left, bottom, width, height))
+    fig: Figure = plt.figure(figsize=(3.5, 5.0))
+    ax: Axes = fig.add_axes((0.2, 0.1, 0.75, 0.8))
 
     ax.axhline(c="k", lw=3, alpha=0.05)
 
     for spec_name in spec_names:
-        Lnu1 = grid1.spectra[spec_name][ia, iZ, :]
-        Lnu2 = grid2.spectra[spec_name][ia, iZ, :]
+        Lnu1: np.ndarray = grid1.spectra[spec_name][ia, iZ, :]
+        Lnu2: np.ndarray = grid2.spectra[spec_name][ia, iZ, :]
 
         ax.plot(
             np.log10(grid1.lam),
