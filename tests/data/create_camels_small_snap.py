@@ -1,38 +1,40 @@
 import h5py
 import numpy as np
+from numpy import float64, int32
+from numpy.typing import NDArray
 
-_dir = "."
-snap_name = "LH_1_snap_031.hdf5"
-fof_name = "LH_1_fof_subhalo_tab_031.hdf5"
-N = 10  # number of galaxies to extract
-ignore_N = 1  # number of galaxies to ignore
+_dir: str = "."
+snap_name: str = "LH_1_snap_031.hdf5"
+fof_name: str = "LH_1_fof_subhalo_tab_031.hdf5"
+N: int = 10  # number of galaxies to extract
+ignore_N: int = 1  # number of galaxies to ignore
 
 with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
-    form_time = hf["PartType4/GFM_StellarFormationTime"][:]
-    coods = hf["PartType4/Coordinates"][:]
-    masses = hf["PartType4/Masses"][:]
-    imasses = hf["PartType4/GFM_InitialMass"][:]
-    _metals = hf["PartType4/GFM_Metals"][:]
-    metallicity = hf["PartType4/GFM_Metallicity"][:]
-    hsmls = hf["PartType4/SubfindHsml"][:]
+    form_time: NDArray[float64] = hf["PartType4/GFM_StellarFormationTime"][:]
+    coods: NDArray[float64] = hf["PartType4/Coordinates"][:]
+    masses: NDArray[float64] = hf["PartType4/Masses"][:]
+    imasses: NDArray[float64] = hf["PartType4/GFM_InitialMass"][:]
+    _metals: NDArray[float64] = hf["PartType4/GFM_Metals"][:]
+    metallicity: NDArray[float64] = hf["PartType4/GFM_Metallicity"][:]
+    hsmls: NDArray[float64] = hf["PartType4/SubfindHsml"][:]
 
-    g_sfr = hf["PartType0/StarFormationRate"][:]
-    g_masses = hf["PartType0/Masses"][:]
-    g_metals = hf["PartType0/GFM_Metallicity"][:]
-    g_coods = hf["PartType0/Coordinates"][:]
-    g_hsml = hf["PartType0/SubfindHsml"][:]
+    g_sfr: NDArray[float64] = hf["PartType0/StarFormationRate"][:]
+    g_masses: NDArray[float64] = hf["PartType0/Masses"][:]
+    g_metals: NDArray[float64] = hf["PartType0/GFM_Metallicity"][:]
+    g_coods: NDArray[float64] = hf["PartType0/Coordinates"][:]
+    g_hsml: NDArray[float64] = hf["PartType0/SubfindHsml"][:]
 
-    scale_factor = hf["Header"].attrs["Time"]
-    Om0 = hf["Header"].attrs["Omega0"]
-    h = hf["Header"].attrs["HubbleParam"]
+    scale_factor: float = hf["Header"].attrs["Time"]
+    Om0: float = hf["Header"].attrs["Omega0"]
+    h: float = hf["Header"].attrs["HubbleParam"]
 
 
 with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
-    lens = hf["Subhalo/SubhaloLenType"][:]
-    pos = hf["Subhalo/SubhaloPos"][:]
+    lens: NDArray[int32] = hf["Subhalo/SubhaloLenType"][:]
+    pos: NDArray[np.int64] = hf["Subhalo/SubhaloPos"][:]
 
-lens4 = np.append(0, np.cumsum(lens[: ignore_N + N, 4]))
-lens0 = np.append(0, np.cumsum(lens[: ignore_N + N, 0]))
+lens4: NDArray[int32] = np.append(0, np.cumsum(lens[: ignore_N + N, 4]))
+lens0: NDArray[int32] = np.append(0, np.cumsum(lens[: ignore_N + N, 0]))
 
 # ignore the first `ignore_N` galaxies (often massive)
 lens4 = lens4[ignore_N:]
