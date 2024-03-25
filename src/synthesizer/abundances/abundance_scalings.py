@@ -1,4 +1,7 @@
 import numpy as np
+from synthesizer.abundances import (
+    elements,
+)
 
 available_scalings = ["Dopita2006", "GalacticConcordance"]
 
@@ -159,12 +162,21 @@ class GalacticConcordance:
         }
 
         self.available_elements = ["N", "C"]
+        self.available_elements_names = ["nitrogen", "carbon"]
+
+        # initialise elements dataclass to access dictionary mapping id to name
+        element_info = elements.Elements()
 
         # create a method for every element contained in scaling_parameters
         for element, scaling_parameter in self.scaling_parameters.items():
+
+            # get element name
+            element_name = element_info.name[element]
+
+            # create method
             setattr(
                 self,
-                element,
+                element_name,
                 self.scaling_method_creator(
                     element,
                     scaling_parameter,
@@ -174,6 +186,7 @@ class GalacticConcordance:
 
             # append element to available element list
             self.available_elements.append(element)
+            self.available_elements_names.append(element_name)
 
     class scaling_method_creator:
         """
@@ -257,7 +270,7 @@ class GalacticConcordance:
 
         return nitrogen_to_oxygen
 
-    def N(self, metallicity):
+    def nitrogen(self, metallicity):
         """
         Calculate the Nitrogen abundance (N/H) for a given metallicity.
 
@@ -300,7 +313,7 @@ class GalacticConcordance:
 
         return carbon_to_oxygen
 
-    def C(self, metallicity):
+    def carbon(self, metallicity):
         """
         Calculate the Carbon abundance (C/H) for a given metallicity.
 
