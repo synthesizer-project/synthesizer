@@ -96,6 +96,16 @@ dependencies = [
   "tqdm",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.3.0",
+]
+test = [
+    "pytest",
+    "ruff>=0.3.0",
+    "mypy>=0.910",
+]
+
 # Optional dependencies for specific use cases.
 [project.optional-dependencies]
 dev = ["black"]
