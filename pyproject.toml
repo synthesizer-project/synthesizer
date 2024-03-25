@@ -114,7 +114,7 @@ synthesizer-download="synthesizer.download_data:download"
 
 # Package data
 [tool.setuptools.package-data]
-data = ["src/synthesizer/data/*.txt", "src/synthesizer/data/*.npz"]
+synthesizer = ["data/*.txt", "data/*.npz", "py.typed"]
 
 # Set up the build system
 [build-system]
@@ -202,3 +202,11 @@ skip-magic-trailing-comma = false
 
 # Like Black, automatically detect the appropriate line ending.
 line-ending = "auto"
+
+# Configure mypy
+[tool.mypy]
+python_version = "3.8"
+check_untyped_defs = true
+ignore_missing_imports = true
+disallow_untyped_defs = true
+warn_return_any = true
