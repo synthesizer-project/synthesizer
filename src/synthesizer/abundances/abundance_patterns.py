@@ -32,8 +32,8 @@ class Abundances:
     Attributes:
         metallicity (float)
             Mass fraction in metals, default is reference metallicity.
-            Optional initialisation argument. Defaults to reference metallicity
-            assuming Asplund (2009).
+            Optional initialisation argument. If not provided is calculated
+            from the provided abundance pattern.
         alpha (float)
             Enhancement of the alpha elements relative to the reference
             abundance pattern. Optional initialisation argument. Defaults to
@@ -44,7 +44,7 @@ class Abundances:
             initialisation argument. Defaults to None.
         reference (object)
             reference abundance pattern. Optional initialisation argument.
-            Defaults to Asplund (2009) pattern.
+            Defaults to the GalacticConcordance pattern.
         depletion (dict, float)
             The depletion pattern to use. Should not be provided with
             depletion_model. Optional initialisation argument. Defaults to
@@ -120,6 +120,10 @@ class Abundances:
         self.element_name = elements.Elements().name
         self.atomic_mass = elements.Elements().atomic_mass
 
+        # define dictionary for element_name to element_id
+        self.element_name_to_id = {name: id for id, name in
+                                   self.element_name.items()}
+
         # save all arguments to object
         self.metallicity = metallicity  # mass fraction in metals
         self.alpha = alpha
@@ -192,13 +196,19 @@ class Abundances:
             # if abundances are given as a single string, then use that model
             # to scale every available element.
             if isinstance(abundances, str):
+
                 # get the scaling study
                 scaling_study = getattr(abundance_scalings, abundances)()
 
                 # loop over each element in the dictionary
                 for element in scaling_study.available_elements:
+
+                    # get the full element name since scaling methods are
+                    # labelled with the full name PEP8 reasons.
+                    element_name = self.element_name[element]
+
                     # get the specific function request by value
-                    scaling_function = getattr(scaling_study, element)
+                    scaling_function = getattr(scaling_study, element_name)
                     total[element] = scaling_function(metallicity)
 
                     # Setting alpha or abundances will result in the
@@ -212,18 +222,45 @@ class Abundances:
 
             if isinstance(abundances, dict):
                 # loop over each element in the dictionary
-                for element, value in abundances.items():
+                for element_key, value in abundances.items():
                     # Let's check whether we're specifying an absolute value or
                     # a relative ratio.
 
-                    # If it's a ratio.
-                    if len(element.split("/")) > 1:
-                        element, ratio_element = element.split("/")
+                    # If it's a ratio, labelled as e.g. "N/H". This is less
+                    # readable than the below.
+                    if len(element_key.split("/")) > 1:
+                        element, ratio_element = element_key.split("/")
                         total[element] = total[ratio_element] + value
 
+                    # If it's a ratio, labelled as e.g. "nitrogen_to_oxygen".
+                    elif len(element_key.split("_to_")) > 1:
+                        # get element name and ration element name
+                        element_name, ratio_element_name = (
+                            element_key.split("_to_"))
+                        # convert these names to element ids instead
+                        element = self.element_name_to_id[element_name]
+                        ratio_element = self.element_name_to_id[
+                            ratio_element_name]
+
+                        total[element] = total[ratio_element] + value
+
+                    # Else, if it's not a ratio simply set the abundance to
+                    # this value.
                     else:
-                        # if value is a float simply set the abundance to this
-                        # value.
+
+                        # Check the element key to see whether it's an ID or
+                        # name.
+                        if element_key in self.all_elements:
+                            element = element_key
+                        elif element_key in list(self.element_name.values()):
+                            element = self.element_name_to_id[element_key]
+                        else:
+                            raise exceptions.InconsistentArguments(
+                                """Element key not recognised. Use either an
+                                element ID (e.g. 'N') or element name (e.g. 
+                                'nitrogen').""")
+
+                        # If it's just a value just set the value.
                         if isinstance(value, float):
                             total[element] = value
 
@@ -236,8 +273,14 @@ class Abundances:
                                 abundance_scalings, value
                             )()
 
+                            # get the full element name since scaling methods
+                            # are labelled with the full name PEP8 reasons.
+                            element_name = self.element_name[element]
+
                             # get the specific function request by value
-                            scaling_function = getattr(scaling_study, element)
+                            scaling_function = getattr(scaling_study,
+                                                       element_name)
+
                             total[element] = scaling_function(metallicity)
 
                         # Setting alpha or abundances will result in the
