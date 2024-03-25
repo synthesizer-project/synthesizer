@@ -98,7 +98,7 @@ def get_ratio_label(ratio_id):
 
     # if the id is a string get the lines from the LineRatios class
     if isinstance(ratio_id, str):
-        ratio_line_ids = LineRatios.ratios[ratio_id]
+        ratio_line_ids = LineRatios().ratios[ratio_id]
     if isinstance(ratio_id, list):
         ratio_line_ids = ratio_id
 
@@ -125,7 +125,7 @@ def get_diagram_labels(diagram_id):
     """
 
     # get the list of lines for a given ratio_id
-    diagram_line_ids = LineRatios.diagrams[diagram_id]
+    diagram_line_ids = LineRatios().diagrams[diagram_id]
     xlabel = get_ratio_label(diagram_line_ids[0])
     ylabel = get_ratio_label(diagram_line_ids[1])
 
