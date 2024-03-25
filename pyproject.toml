@@ -77,7 +77,6 @@ classifiers = [  # Optional
 
 # Dependancies
 dependencies = [
-  "nbmake",
   "astropy",
   "h5py",
   "mpmath",
@@ -90,7 +89,6 @@ dependencies = [
   "unyt",
   "cmasher",
   "dust_extinction",
-  "nbsphinx",
   "matplotlib",
   "spectres",
   "tqdm",
@@ -101,17 +99,24 @@ dev = [
     "ruff>=0.3.0",
 ]
 test = [
+    "nbmake",
     "pytest",
     "ruff>=0.3.0",
     "mypy>=0.910",
 ]
+docs = [
+    "spinx==7.1.1",
+    "pandoc==2.2",
+    "furo",
+    "sphinx_autodoc_typehints",
+    "ipython",
+    "sphinx_gallery",
+    "pillow",
+    "sphinx-toolbox",
+    "nbsphinx",
+]
 
-# Optional dependencies for specific use cases.
-[project.optional-dependencies]
-dev = ["black"]
-test = ["pytest"]
-
-# Project urls
+# Project "urls
 [project.urls]
 "Homepage" = "https://github.com/flaresimulations/synthesizer"
 "Bug Reports" = "https://github.com/flaresimulations/synthesizer/issues"
