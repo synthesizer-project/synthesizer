@@ -146,8 +146,9 @@ class Abundances:
                 pattern not recognised!"""
                 )
 
-        # initialise class
-        self.reference = self.reference()
+        # check if self.reference is instantiated and if not initialise class
+        if isinstance(self.reference, type):
+            self.reference = self.reference()
 
         # If a metallicity is not provided use the metallicity assumed by the
         # Reference abundance pattern.
@@ -257,7 +258,7 @@ class Abundances:
                         else:
                             raise exceptions.InconsistentArguments(
                                 """Element key not recognised. Use either an
-                                element ID (e.g. 'N') or element name (e.g. 
+                                element ID (e.g. 'N') or element name (e.g.
                                 'nitrogen').""")
 
                         # If it's just a value just set the value.
