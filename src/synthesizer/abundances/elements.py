@@ -16,9 +16,9 @@ class Elements:
             and non-metals.
         alpha_elements (list, string)
             A list of the elements classified as alpha-elements.
-        self.name (dict, string)
+        name (dict, string)
             A dictionary holding the full self.name of each element.
-        self.atomic_mass (dict, float)
+        atomic_mass (dict, float)
             Atomic mass of each element (in amus).
     """
 
