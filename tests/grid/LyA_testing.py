@@ -48,8 +48,8 @@ Lnu[idx] *= fesc_LyA
 ax.plot(np.log10(grid.lam), np.log10(Lnu), lw=1, alpha=1, c="k")
 
 
-ax.set_xlim([2.8, 3.6])
-ax.set_ylim([18.0, 23])
+ax.set_xlim(2.8, 3.6)
+ax.set_ylim(18.0, 23)
 ax.legend(fontsize=8, labelspacing=0.0)
 ax.set_xlabel(r"$\rm log_{10}(\lambda/\AA)$")
 ax.set_ylabel(r"$\rm log_{10}(L_{\nu}/erg\ s^{-1}\ Hz^{-1} M_{\odot}^{-1})$")
