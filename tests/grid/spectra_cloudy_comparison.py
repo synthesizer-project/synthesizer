@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from numpy.typing import NDArray
 from synthesizer.grid import Grid
 
 sys.path.insert(
@@ -41,8 +42,8 @@ if __name__ == "__main__":
     ax.axhline(c="k", lw=3, alpha=0.05)
 
     for spec_name in spec_names:
-        Lnu1: np.ndarray = grid1.spectra[spec_name][ia, iZ, :]
-        Lnu2: np.ndarray = grid2.spectra[spec_name][ia, iZ, :]
+        Lnu1: NDArray[np.float64] = grid1.spectra[spec_name][ia, iZ, :]
+        Lnu2: NDArray[np.float64] = grid2.spectra[spec_name][ia, iZ, :]
 
         ax.plot(
             np.log10(grid1.lam),
