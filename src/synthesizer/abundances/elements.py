@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -22,119 +22,122 @@ class Elements:
             Atomic mass of each element (in amus).
     """
 
-    def __init__(self):
-        self.non_metals = [
-            "H",
-            "He",
-        ]
+    non_metals: list = field(default_factory=lambda: [
+        "H",
+        "He",
+    ])
 
-        self.metals = [
-            "Li",
-            "Be",
-            "B",
-            "C",
-            "N",
-            "O",
-            "F",
-            "Ne",
-            "Na",
-            "Mg",
-            "Al",
-            "Si",
-            "P",
-            "S",
-            "Cl",
-            "Ar",
-            "K",
-            "Ca",
-            "Sc",
-            "Ti",
-            "V",
-            "Cr",
-            "Mn",
-            "Fe",
-            "Co",
-            "Ni",
-            "Cu",
-            "Zn",
-        ]
+    metals: list = field(default_factory=lambda: [
+        "Li",
+        "Be",
+        "B",
+        "C",
+        "N",
+        "O",
+        "F",
+        "Ne",
+        "Na",
+        "Mg",
+        "Al",
+        "Si",
+        "P",
+        "S",
+        "Cl",
+        "Ar",
+        "K",
+        "Ca",
+        "Sc",
+        "Ti",
+        "V",
+        "Cr",
+        "Mn",
+        "Fe",
+        "Co",
+        "Ni",
+        "Cu",
+        "Zn",
+    ])
 
+    # the alpha process elements
+    alpha_elements: list = field(default_factory=lambda: [
+        "O",
+        "Ne",
+        "Mg",
+        "Si",
+        "S",
+        "Ar",
+        "Ca",
+        "Ti",
+    ])
+
+    name: dict = field(default_factory=lambda: {
+        "H": "hydrogen",
+        "He": "helium",
+        "Li": "lithium",
+        "Be": "beryllium",
+        "B": "boron",
+        "C": "carbon",
+        "N": "nitrogen",
+        "O": "oxygen",
+        "F": "fluorine",
+        "Ne": "neon",
+        "Na": "sodium",
+        "Mg": "magnesium",
+        "Al": "aluminium",
+        "Si": "silicon",
+        "P": "phosphorus",
+        "S": "sulphur",
+        "Cl": "chlorine",
+        "Ar": "argon",
+        "K": "potassium",
+        "Ca": "calcium",
+        "Sc": "scandium",
+        "Ti": "titanium",
+        "V": "vanadium",
+        "Cr": "chromium",
+        "Mn": "manganese",
+        "Fe": "iron",
+        "Co": "cobalt",
+        "Ni": "nickel",
+        "Cu": "copper",
+        "Zn": "zinc",
+    })
+
+    # atomic mass of each element elements in amus
+    atomic_mass: dict = field(default_factory=lambda: {
+        "H": 1.008,
+        "He": 4.003,
+        "Li": 6.940,
+        "Be": 9.012,
+        "B": 10.81,
+        "C": 12.011,
+        "N": 14.007,
+        "O": 15.999,
+        "F": 18.998,
+        "Ne": 20.180,
+        "Na": 22.990,
+        "Mg": 24.305,
+        "Al": 26.982,
+        "Si": 28.085,
+        "P": 30.973,
+        "S": 32.06,
+        "Cl": 35.45,
+        "Ar": 39.948,
+        "K": 39.0983,
+        "Ca": 40.078,
+        "Sc": 44.955,
+        "Ti": 47.867,
+        "V": 50.9415,
+        "Cr": 51.9961,
+        "Mn": 54.938,
+        "Fe": 55.845,
+        "Co": 58.933,
+        "Ni": 58.693,
+        "Cu": 63.546,
+        "Zn": 65.38,
+    })
+
+    def __post_init__(self):
+
+        # create list of all elements
         self.all_elements = self.non_metals + self.metals
-
-        # the alpha process elements
-        self.alpha_elements = [
-            "O",
-            "Ne",
-            "Mg",
-            "Si",
-            "S",
-            "Ar",
-            "Ca",
-            "Ti",
-        ]
-
-        # self.name
-        self.name = {}
-        self.name["H"] = "hydrogen"
-        self.name["He"] = "helium"
-        self.name["Li"] = "lithium"
-        self.name["Be"] = "beryllium"
-        self.name["B"] = "boron"
-        self.name["C"] = "carbon"
-        self.name["N"] = "nitrogen"
-        self.name["O"] = "oxygen"
-        self.name["F"] = "fluorine"
-        self.name["Ne"] = "neon"
-        self.name["Na"] = "sodium"
-        self.name["Mg"] = "magnesium"
-        self.name["Al"] = "aluminium"
-        self.name["Si"] = "silicon"
-        self.name["P"] = "phosphorus"
-        self.name["S"] = "sulphur"
-        self.name["Cl"] = "chlorine"
-        self.name["Ar"] = "argon"
-        self.name["K"] = "potassium"
-        self.name["Ca"] = "calcium"
-        self.name["Sc"] = "scandium"
-        self.name["Ti"] = "titanium"
-        self.name["V"] = "vanadium"
-        self.name["Cr"] = "chromium"
-        self.name["Mn"] = "manganese"
-        self.name["Fe"] = "iron"
-        self.name["Co"] = "cobalt"
-        self.name["Ni"] = "nickel"
-        self.name["Cu"] = "copper"
-        self.name["Zn"] = "zinc"
-
-        # atomic mass of each element elements in amus
-        self.atomic_mass = {}
-        self.atomic_mass["H"] = 1.008
-        self.atomic_mass["He"] = 4.003
-        self.atomic_mass["Li"] = 6.940
-        self.atomic_mass["Be"] = 9.012
-        self.atomic_mass["B"] = 10.81
-        self.atomic_mass["C"] = 12.011
-        self.atomic_mass["N"] = 14.007
-        self.atomic_mass["O"] = 15.999
-        self.atomic_mass["F"] = 18.998
-        self.atomic_mass["Ne"] = 20.180
-        self.atomic_mass["Na"] = 22.990
-        self.atomic_mass["Mg"] = 24.305
-        self.atomic_mass["Al"] = 26.982
-        self.atomic_mass["Si"] = 28.085
-        self.atomic_mass["P"] = 30.973
-        self.atomic_mass["S"] = 32.06
-        self.atomic_mass["Cl"] = 35.45
-        self.atomic_mass["Ar"] = 39.948
-        self.atomic_mass["K"] = 39.0983
-        self.atomic_mass["Ca"] = 40.078
-        self.atomic_mass["Sc"] = 44.955
-        self.atomic_mass["Ti"] = 47.867
-        self.atomic_mass["V"] = 50.9415
-        self.atomic_mass["Cr"] = 51.9961
-        self.atomic_mass["Mn"] = 54.938
-        self.atomic_mass["Fe"] = 55.845
-        self.atomic_mass["Co"] = 58.933
-        self.atomic_mass["Ni"] = 58.693
-        self.atomic_mass["Cu"] = 63.546
-        self.atomic_mass["Zn"] = 65.38
