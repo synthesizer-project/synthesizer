@@ -92,6 +92,7 @@ dependencies = [
   "matplotlib",
   "spectres",
   "tqdm",
+  "requests",
 ]
 
 [project.optional-dependencies]
