@@ -1,4 +1,5 @@
 import numpy as np
+
 from synthesizer.abundances import (
     elements,
 )
@@ -169,7 +170,6 @@ class GalacticConcordance:
 
         # create a method for every element contained in scaling_parameters
         for element, scaling_parameter in self.scaling_parameters.items():
-
             # get element name
             element_name = element_info.name[element]
 

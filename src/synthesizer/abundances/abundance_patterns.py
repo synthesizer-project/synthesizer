@@ -121,8 +121,9 @@ class Abundances:
         self.atomic_mass = elements.Elements().atomic_mass
 
         # define dictionary for element_name to element_id
-        self.element_name_to_id = {name: id for id, name in
-                                   self.element_name.items()}
+        self.element_name_to_id = {
+            name: id for id, name in self.element_name.items()
+        }
 
         # save all arguments to object
         self.metallicity = metallicity  # mass fraction in metals
@@ -197,13 +198,11 @@ class Abundances:
             # if abundances are given as a single string, then use that model
             # to scale every available element.
             if isinstance(abundances, str):
-
                 # get the scaling study
                 scaling_study = getattr(abundance_scalings, abundances)()
 
                 # loop over each element in the dictionary
                 for element in scaling_study.available_elements:
-
                     # get the full element name since scaling methods are
                     # labelled with the full name PEP8 reasons.
                     element_name = self.element_name[element]
@@ -236,19 +235,20 @@ class Abundances:
                     # If it's a ratio, labelled as e.g. "nitrogen_to_oxygen".
                     elif len(element_key.split("_to_")) > 1:
                         # get element name and ration element name
-                        element_name, ratio_element_name = (
-                            element_key.split("_to_"))
+                        element_name, ratio_element_name = element_key.split(
+                            "_to_"
+                        )
                         # convert these names to element ids instead
                         element = self.element_name_to_id[element_name]
                         ratio_element = self.element_name_to_id[
-                            ratio_element_name]
+                            ratio_element_name
+                        ]
 
                         total[element] = total[ratio_element] + value
 
                     # Else, if it's not a ratio simply set the abundance to
                     # this value.
                     else:
-
                         # Check the element key to see whether it's an ID or
                         # name.
                         if element_key in self.all_elements:
@@ -259,7 +259,8 @@ class Abundances:
                             raise exceptions.InconsistentArguments(
                                 """Element key not recognised. Use either an
                                 element ID (e.g. 'N') or element name (e.g.
-                                'nitrogen').""")
+                                'nitrogen')."""
+                            )
 
                         # If it's just a value just set the value.
                         if isinstance(value, float):
@@ -279,8 +280,9 @@ class Abundances:
                             element_name = self.element_name[element]
 
                             # get the specific function request by value
-                            scaling_function = getattr(scaling_study,
-                                                       element_name)
+                            scaling_function = getattr(
+                                scaling_study, element_name
+                            )
 
                             total[element] = scaling_function(metallicity)
 
