@@ -5,6 +5,9 @@ TODO: Complete doc string.
 Example usage:
 """
 
+from dataclasses import dataclass, field
+from typing import Dict, List, Tuple
+
 import numpy as np
 from unyt import Angstrom
 
@@ -211,58 +214,73 @@ def get_bpt_kauffman03(logNII_Ha):
     return 0.61 / (logNII_Ha - 0.05) + 1.3
 
 
+@dataclass
 class LineRatios:
     """
     A dataclass holding useful line ratios (e.g. R23) and
     diagrams (pairs of ratios), e.g. BPT.
     """
 
-    # shorthand for common lines
-    O3b = "O 3 4958.91A"
-    O3r = "O 3 5006.84A"
-    O3 = [O3b, O3r]
-    O2b = "O 2 3726.03A"
-    O2r = "O 2 3728.81A"
-    O2 = [O2b, O2r]
-    Hb = "H 1 4862.69A"
-    Ha = "H 1 6564.62A"
-
-    ratios = {}
+    # Shorthand for common lines
+    O3b: str = "O 3 4958.91A"
+    O3r: str = "O 3 5006.84A"
+    O3: List[str] = field(
+        default_factory=lambda: ["O 3 4958.91A", "O 3 5006.84A"]
+    )
+    O2b: str = "O 2 3726.03A"
+    O2r: str = "O 2 3728.81A"
+    O2: List[str] = field(
+        default_factory=lambda: ["O 2 3726.03A", "O 2 3728.81A"]
+    )
+    Hb: str = "H 1 4862.69A"
+    Ha: str = "H 1 6564.62A"
 
     # Balmer decrement, should be [2.79--2.86] (Te, ne, dependent)
     # for dust free
-    ratios["BalmerDecrement"] = [[Ha], [Hb]]
+    ratios: Dict[str, List[List[str]]] = field(
+        default_factory=lambda: {
+            "BalmerDecrement": [[["H 1 6564.62A"], ["H 1 4862.69A"]]],
+            "N2": [[["N 2 6583.45A"], ["H 1 6564.62A"]]],
+            "S2": [[["S 2 6730.82A", "S 2 6716.44A"], ["H 1 6564.62A"]]],
+            "O1": [[["O 1 6300.30A"], ["H 1 6564.62A"]]],
+            "R2": [[["O 2 3726.03A"], ["H 1 4862.69A"]]],
+            "R3": [[["O 3 5006.84A"], ["H 1 4862.69A"]]],
+            "R23": [
+                [
+                    [
+                        "O 3 4958.91A",
+                        "O 3 5006.84A",
+                        "O 2 3726.03A",
+                        "O 2 3728.81A",
+                    ],
+                    ["H 1 4862.69A"],
+                ]
+            ],
+            "O32": [[["O 3 5006.84A"], ["O 2 3726.03A"]]],
+            "Ne3O2": [[["NE 3 3868.76A"], ["O 2 3726.03A"]]],
+        }
+    )
 
-    # add reference
-    ratios["N2"] = [["N 2 6583.45A"], [Ha]]
-    # add reference
-    ratios["S2"] = S2 = [["S 2 6730.82A", "S 2 6716.44A"], [Ha]]
-    ratios["O1"] = O1 = [["O 1 6300.30A"], [Ha]]
-    ratios["R2"] = [[O2b], [Hb]]
-    ratios["R3"] = R3 = [[O3r], [Hb]]
-    ratios["R23"] = [O3 + O2, [Hb]]
-    ratios["O32"] = [[O3r], [O2b]]
-    ratios["Ne3O2"] = [["NE 3 3868.76A"], [O2b]]
+    diagrams: Dict[str, List[List[List[str]]]] = field(
+        default_factory=lambda: {
+            "OHNO": [
+                [
+                    ["O 3 5006.84A"],
+                    ["NE 3 3868.76A"],
+                    ["O 2 3726.03A", "O 2 3728.81A"],
+                ]
+            ],
+            "BPT-NII": [
+                [["N 2 6583.45A"], ["H 1 6564.62A"]],
+                [["O 3 5006.84A"], ["H 1 4862.69A"]],
+            ],
+        }
+    )
 
-    # tuple of available ratios
-    available_ratios = tuple(ratios.keys())
-
-    # dictionary of diagrams
-    diagrams = {}
-
-    # add reference
-    diagrams["OHNO"] = [R3, [["NE 3 3868.76A"], O2]]
-
-    # add reference
-    diagrams["BPT-NII"] = [[["N 2 6583.45A"], [Ha]], R3]
-
-    # add reference
-    # diagrams["VO78-SII"] = [[S2, [Ha]], R3]
-
-    # add reference
-    # diagrams["VO78-OI"] = [[O1, [Ha]], R3]
-
-    available_diagrams = tuple(diagrams.keys())
+    def __post_init__(self):
+        # Provide lists of what is included
+        self.available_ratios: Tuple[str, ...] = tuple(self.ratios.keys())
+        self.available_diagrams: Tuple[str, ...] = tuple(self.diagrams.keys())
 
 
 class LineCollection:
@@ -306,7 +324,7 @@ class LineCollection:
         self.wavelengths = self.wavelengths[sorted_arguments]
 
         # include line ratio and diagram definitions dataclass
-        self.lineratios = LineRatios
+        self.lineratios = LineRatios()
 
         # create list of available line ratios
         self.available_ratios = []
