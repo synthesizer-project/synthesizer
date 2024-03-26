@@ -77,29 +77,46 @@ classifiers = [  # Optional
 
 # Dependancies
 dependencies = [
-  "nbmake",
   "astropy",
   "h5py",
-  "mpmath",
   "numpy >= 1.23",
   "packaging",
-  "pyerfa",
-  "pyparsing",
-  "PyYAML",
   "scipy",
   "unyt",
   "cmasher",
   "dust_extinction",
-  "nbsphinx",
   "matplotlib",
   "spectres",
   "tqdm",
+  "requests",
 ]
 
-# Optional dependencies for specific use cases.
+# Optional dependancies for specific use cases
 [project.optional-dependencies]
-dev = ["black"]
-test = ["pytest"]
+# Development
+dev = [
+    "ruff>=0.3.0",
+]
+# Testing
+test = [
+    "nbmake",
+    "pytest",
+    "ruff>=0.3.0",
+    "mypy>=0.910",
+]
+# Documentation building
+docs = [
+    "spinx==7.1.1",
+    "pandoc==2.2",
+    "furo",
+    "sphinx_autodoc_typehints",
+    "ipython",
+    "sphinx_gallery",
+    "pillow",
+    "sphinx-toolbox",
+    "nbsphinx",
+]
+
 
 # Project urls
 [project.urls]
