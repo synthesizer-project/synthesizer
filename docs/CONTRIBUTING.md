@@ -4,7 +4,8 @@ Please feel free to submit issues and pull requests to this repository.
 The GitHub workflow will automatically run [Ruff](https://github.com/astral-sh/ruff) on any contributions; builds that fail these tests will not be accepted. Further notes on code style are detailed below.
 
 **Contents:**
-- [Setting up Ruff](#setting-up-ruff)
+- [Setting up your development environment](#setting-up-your-development-environment)
+- [Using Ruff](#using-ruff)
 - [Setting up pre-commit hooks](#setting-up-pre-commit-hooks)
 - [Style guide](#style-guide)
 - [Contributing to the Documentation](#contributing-to-the-documentation)
@@ -12,9 +13,15 @@ The GitHub workflow will automatically run [Ruff](https://github.com/astral-sh/r
     - [Adding notebooks](#adding-notebooks)
     - [Adding example scripts](#adding-example-scripts)
     
-## Setting up Ruff
+## Settting up your development environment
 
-We use [Ruff](https://github.com/astral-sh/ruff) for both linting and formatting. If you want to run `ruff` locally you can install it via pip (`pip install ruff`) and then run linting with `ruff check` and formatting with `ruff format` (each followed by the files to consider). 
+If you are going to contribute to Synthesizer you might weant to install the extra dependancies we use for development. These can be installed using the `dev` dependancy set.
+
+    pip install -e .[dev]
+    
+## Using Ruff
+
+We use [Ruff](https://github.com/astral-sh/ruff) for both linting and formatting. Assuming you installed the development dependancies (if not you can install `ruff` with pip: `pip install ruff`), you can run the linting with `ruff check` and the formatting with `ruff format` (each followed by the files to consider).
 
 The `ruff` configuration is defined in our `pyproject.toml` so there's no need to configure it yourself, we've made all the decisions for you (for better or worse). Any merge request will be checked with the `ruff` linter and must pass before being eligable to merge.
 
