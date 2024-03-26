@@ -929,6 +929,11 @@ class StarsComponent:
                     + self.spectra["old_attenuated"]._lnu
                 )
 
+            # Combine emergent spectra for young and old stars
+            self.spectra["emergent"] = (
+                self.spectra["young_emergent"] + self.spectra["old_emergent"]
+            )
+
             # Force updating of the bolometric luminosity attribute. I don't
             # know why this is necessary.
             self.spectra["young_emergent"].measure_bolometric_luminosity()
