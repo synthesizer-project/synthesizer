@@ -1,10 +1,11 @@
-""" A module containg helper functions for working with matplotlib.
+"""A module containg helper functions for working with matplotlib.
 
 Example usage:
 
     fig, ax = single(3.5)
     fig, ax, haxx, haxy = single_histxy(size=3.5, set_axis_off=True)
 """
+
 import matplotlib.pyplot as plt
 
 

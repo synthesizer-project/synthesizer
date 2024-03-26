@@ -1,12 +1,11 @@
-"""
-"""
+""" """
 
 import numpy as np
 
-from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer import exceptions
-from synthesizer.imaging import ImageCollection, SpectralCube
 from synthesizer.art import Art, get_centred_art
+from synthesizer.base_galaxy import BaseGalaxy
+from synthesizer.imaging import ImageCollection, SpectralCube
 
 
 class Galaxy(BaseGalaxy):

@@ -1,19 +1,19 @@
 import os
-import numpy as np
-import h5py
 
 import cmasher as cmr
+import h5py
 import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib import cm
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import LogNorm
-import matplotlib.pyplot as plt
 from spectres import spectres
-from unyt import unyt_array, unyt_quantity, angstrom
+from unyt import angstrom, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.sed import Sed
 from synthesizer.line import Line, LineCollection
+from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 
 from . import __file__ as filepath
@@ -623,7 +623,7 @@ class Grid:
                 "as an argument should have same shape as the grid."
             )
 
-        if type(line_id) is str:
+        if isinstance(line_id, str):
             line_id = [line_id]
 
         wavelength = []

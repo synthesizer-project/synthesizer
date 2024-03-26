@@ -3,9 +3,11 @@ Given an SED (from an SPS model, for example), generate a cloudy atmosphere
 grid. Can optionally generate an array of input files for selected parameters.
 """
 
-import numpy as np
 import shutil
-from unyt import c, h, angstrom, unyt_array
+
+import numpy as np
+from unyt import angstrom, c, h, unyt_array
+
 from synthesizer.photoionisation import calculate_Q_from_U
 from synthesizer.exceptions import (
     UnimplementedFunctionality,
@@ -13,7 +15,6 @@ from synthesizer.exceptions import (
 
 
 class ShapeCommands:
-
     """
     A class for holding different cloudy shape commands
     """
@@ -373,15 +374,18 @@ def create_cloudy_input(
     # plane parallel geometry
     if params["geometry"] == "planeparallel":
         cinput.append(
-            f"ionization parameter = {log10ionisation_parameter:.3f}\n")
+            f"ionization parameter = {log10ionisation_parameter:.3f}\n"
+        )
 
     # spherical geometry
     if params["geometry"] == "spherical":
         # in the spherical geometry case I think U is some average U, not U at
         # the inner face of the cloud.
-        log10ionising_luminosity = np.log10(calculate_Q_from_U(
-            ionisation_parameter,
-            params["hydrogen_density"]))
+        log10ionising_luminosity = np.log10(
+            calculate_Q_from_U(
+                ionisation_parameter, params["hydrogen_density"]
+            )
+        )
         cinput.append(f"Q(H) = {log10ionising_luminosity}\n")
         cinput.append(f'radius {np.log10(params["radius"])} log parsecs\n')
         cinput.append("sphere\n")
@@ -405,8 +409,8 @@ def create_cloudy_input(
     if params["constant_pressure"] is not None:
         cinput.append("constant pressure\n")
 
-    if (params["constant_density"] is not None) and \
-        (params["constant_pressure"] is not None):
+    if ((params["constant_density"] is not None) and
+        (params["constant_pressure"] is not None)):
         raise InconsistentArguments(
             """Cannot specify both constant pressure and density""")
 
