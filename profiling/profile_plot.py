@@ -16,7 +16,7 @@ will exhibit the same runtime.
 """
 
 import sys
-from typing import List
+from typing import Any, Dict
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,10 +26,10 @@ from numpy.typing import NDArray
 
 
 def make_report(
-    funcs: List[str],
-    ncalls: List[float],
-    tottime: List[float],
-    pcent: List[float],
+    funcs: NDArray[Any],
+    ncalls: NDArray[np.int32],
+    tottime: NDArray[np.float64],
+    pcent: NDArray[np.float64],
     col_width: int,
     numeric_width: int = 14,
 ) -> str:
@@ -121,8 +121,8 @@ if __name__ == "__main__":
     profile_file: str = sys.argv[1]
     plot_loc: str = sys.argv[2]
 
-    ncalls: dict[str, float] = {}
-    tottime: dict[str, float] = {}
+    ncalls_dict: Dict[str, float] = {}
+    tottime_dict: Dict[str, float] = {}
     extract_data: bool = False
 
     with open(profile_file, "r") as file:
@@ -141,16 +141,16 @@ if __name__ == "__main__":
             ):
                 func_name: str = line_split[-1]
                 if "/" in line_split[0]:
-                    ncalls[func_name] = max(
+                    ncalls_dict[func_name] = max(
                         float(val) for val in line_split[0].split("/")
                     )
                 else:
-                    ncalls[func_name] = float(line_split[0])
-                    tottime[func_name] = float(line_split[1])
+                    ncalls_dict[func_name] = float(line_split[0])
+                    tottime_dict[func_name] = float(line_split[1])
 
-    funcs: List[str] = list(ncalls.keys())
-    ncalls_list: List[float] = list(ncalls.values())
-    tottime_list: List[float] = list(tottime.values())
+    funcs: NDArray[Any] = np.array(list(ncalls_dict.keys()))
+    ncalls: NDArray[np.int32] = np.array(list(ncalls_dict.values()))
+    tottime: NDArray[np.float64] = np.array(list(tottime_dict.values()))
 
     # Mask away inconsequential operations
     okinds: NDArray[np.bool_] = tottime > 0.05 * total_runtime
@@ -221,30 +221,30 @@ if __name__ == "__main__":
     plt.close(fig)
 
     # Now make a plot of the number of calls
-    fig: Figure = plt.figure(figsize=(3.5, 3.5))
-    ax: Axes = fig.add_subplot(111)
-    ax.semilogy()
-    ax.grid(True)
-    ax.set_axisbelow(True)
-    ax.bar(funcs, ncalls, width=1, edgecolor="grey", alpha=0.8)
-    ax.set_xticks(ax.get_xticks())
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=-90)
-    ax.set_title(file_name)
-    ax.set_ylabel("Number of calls")
+    fig1: Figure = plt.figure(figsize=(3.5, 3.5))
+    ax1: Axes = fig.add_subplot(111)
+    ax1.semilogy()
+    ax1.grid(True)
+    ax1.set_axisbelow(True)
+    ax1.bar(funcs, ncalls, width=1, edgecolor="grey", alpha=0.8)
+    ax1.set_xticks(ax.get_xticks())
+    ax1.set_xticklabels(ax.get_xticklabels(), rotation=-90)
+    ax1.set_title(file_name)
+    ax1.set_ylabel("Number of calls")
     outpng = plot_loc + file_name + "_ncalls.png"
-    fig.savefig(outpng, bbox_inches="tight")
-    plt.close(fig)
+    fig1.savefig(outpng, bbox_inches="tight")
+    plt.close(fig1)
 
     # Now make a plot of the number of calls
-    fig: Figure = plt.figure(figsize=(3.5, 3.5))
-    ax: Axes = fig.add_subplot(111)
-    ax.grid(True)
-    ax.set_axisbelow(True)
-    ax.scatter(funcs, tottime, marker="+")
-    ax.set_xticks(ax.get_xticks())
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=-90)
-    ax.set_title(file_name)
-    ax.set_ylabel("Runtime (s)")
+    fig2: Figure = plt.figure(figsize=(3.5, 3.5))
+    ax2: Axes = fig.add_subplot(111)
+    ax2.grid(True)
+    ax2.set_axisbelow(True)
+    ax2.scatter(funcs, tottime, marker="+")
+    ax2.set_xticks(ax.get_xticks())
+    ax2.set_xticklabels(ax.get_xticklabels(), rotation=-90)
+    ax2.set_title(file_name)
+    ax2.set_ylabel("Runtime (s)")
     outpng = plot_loc + file_name + "_tot_time.png"
-    fig.savefig(outpng, bbox_inches="tight")
-    plt.close(fig)
+    fig2.savefig(outpng, bbox_inches="tight")
+    plt.close(fig2)
