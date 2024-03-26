@@ -7,9 +7,6 @@ abundance patterns as a function of metallicity, alpha enhancement, etc.
 The main current use of this code is in the creation cloudy input models when
 processing SPS incident grids to model nebular emission.
 
-This script is a modified version of
-https://github.com/stephenmwilkins/SPS_tools/blob/master/SPS_tools/cloudy/abundances.py
-
 Some notes on (standard) notation:
 - [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
 """
@@ -22,168 +19,32 @@ import synthesizer.exceptions as exceptions
 from synthesizer.abundances import (
     abundance_scalings,
     depletion_models,
-    solar_abundance_patterns,
+    elements,
+    reference_abundance_patterns,
 )
 
 
-class ElementDefinitions:
-    """
-    A simple class containing various useful lists and dictionaries.
-
-    Attributes:
-        non_metals (list, string)
-            A list of elements classified as non-metals.
-        metals (list, string)
-            A list of elements classified as metals.
-        all_elements (list, string)
-            A list of all elements, functionally the concatenation of metals
-            and non-metals.
-        alpha_elements (list, string)
-            A list of the elements classified as alpha-elements.
-        name (dict, string)
-            A dictionary holding the full name of each element.
-        A (dict, float)
-            Atomic mass of each element (in amus).
-    """
-
-    non_metals = [
-        "H",
-        "He",
-    ]
-
-    metals = [
-        "Li",
-        "Be",
-        "B",
-        "C",
-        "N",
-        "O",
-        "F",
-        "Ne",
-        "Na",
-        "Mg",
-        "Al",
-        "Si",
-        "P",
-        "S",
-        "Cl",
-        "Ar",
-        "K",
-        "Ca",
-        "Sc",
-        "Ti",
-        "V",
-        "Cr",
-        "Mn",
-        "Fe",
-        "Co",
-        "Ni",
-        "Cu",
-        "Zn",
-    ]
-
-    all_elements = non_metals + metals
-
-    # the alpha process elements
-    alpha_elements = [
-        "O",
-        "Ne",
-        "Mg",
-        "Si",
-        "S",
-        "Ar",
-        "Ca",
-        "Ti",
-    ]
-
-    # Name
-    name = {}
-    name["H"] = "Hydrogen"
-    name["He"] = "Helium"
-    name["Li"] = "Lithium"
-    name["Be"] = "Beryllium"
-    name["B"] = "Boron"
-    name["C"] = "Carbon"
-    name["N"] = "Nitrogen"
-    name["O"] = "Oxygen"
-    name["F"] = "Fluorine"
-    name["Ne"] = "Neon"
-    name["Na"] = "Sodium"
-    name["Mg"] = "Magnesium"
-    name["Al"] = "Aluminium"
-    name["Si"] = "Silicon"
-    name["P"] = "Phosphorus"
-    name["S"] = "Sulphur"
-    name["Cl"] = "Chlorine"
-    name["Ar"] = "Argon"
-    name["K"] = "Potassium"
-    name["Ca"] = "Calcium"
-    name["Sc"] = "Scandium"
-    name["Ti"] = "Titanium"
-    name["V"] = "Vanadium"
-    name["Cr"] = "Chromium"
-    name["Mn"] = "Manganese"
-    name["Fe"] = "Iron"
-    name["Co"] = "Cobalt"
-    name["Ni"] = "Nickel"
-    name["Cu"] = "Copper"
-    name["Zn"] = "Zinc"
-
-    # mass of elements in amus
-    A = {}
-    A["H"] = 1.008
-    A["He"] = 4.003
-    A["Li"] = 6.940
-    A["Be"] = 9.012
-    A["B"] = 10.81
-    A["C"] = 12.011
-    A["N"] = 14.007
-    A["O"] = 15.999
-    A["F"] = 18.998
-    A["Ne"] = 20.180
-    A["Na"] = 22.990
-    A["Mg"] = 24.305
-    A["Al"] = 26.982
-    A["Si"] = 28.085
-    A["P"] = 30.973
-    A["S"] = 32.06
-    A["Cl"] = 35.45
-    A["Ar"] = 39.948
-    A["K"] = 39.0983
-    A["Ca"] = 40.078
-    A["Sc"] = 44.955
-    A["Ti"] = 47.867
-    A["V"] = 50.9415
-    A["Cr"] = 51.9961
-    A["Mn"] = 54.938
-    A["Fe"] = 55.845
-    A["Co"] = 58.933
-    A["Ni"] = 58.693
-    A["Cu"] = 63.546
-    A["Zn"] = 65.38
-
-
-class Abundances(ElementDefinitions):
+class Abundances:
     """
     A class for calculating elemental abundances including various
     scaling and depletion on to dust.
 
     Attributes:
         metallicity (float)
-            Mass fraction in metals, default is Solar metallicity.
-            Optional initialisation argument. Defaults to Solar metallicity
-            assuming Asplund (2009).
+            Mass fraction in metals, default is reference metallicity.
+            Optional initialisation argument. If not provided is calculated
+            from the provided abundance pattern.
         alpha (float)
-            Enhancement of the alpha elements relative to the solar
+            Enhancement of the alpha elements relative to the reference
             abundance pattern. Optional initialisation argument. Defaults to
             0.0 (no alpha-enhancement).
         abundances (dict, float/str)
             A dictionary containing the abundances for specific elements or
             functions to calculate them for the specified metallicity. Optional
             initialisation argument. Defaults to None.
-        solar (object)
-            Solar abundance pattern. Optional initialisation argument.
-            Defaults to Asplund (2009) pattern.
+        reference (object)
+            reference abundance pattern. Optional initialisation argument.
+            Defaults to the GalacticConcordance pattern.
         depletion (dict, float)
             The depletion pattern to use. Should not be provided with
             depletion_model. Optional initialisation argument. Defaults to
@@ -220,7 +81,7 @@ class Abundances(ElementDefinitions):
         metallicity=None,
         alpha=0.0,
         abundances=None,
-        solar=solar_abundance_patterns.Asplund2009,
+        reference=reference_abundance_patterns.GalacticConcordance,
         depletion=None,
         depletion_model=None,
         depletion_scale=None,
@@ -230,15 +91,15 @@ class Abundances(ElementDefinitions):
 
         Args:
             metallicity (float)
-                Mass fraction in metals, default is Solar metallicity.
+                Mass fraction in metals, default is reference metallicity.
             alpha (float)
-                Enhancement of the alpha elements relative to the solar
+                Enhancement of the alpha elements relative to the reference
                 abundance pattern.
             abundances (dict, float/str)
                 A dictionary containing the abundances for specific elements or
                 functions to calculate them for the specified metallicity.
-            solar (class or str)
-                Solar abundance pattern object or str defining the class.
+            reference (class or str)
+                Reference abundance pattern object or str defining the class.
             depletion (dict, float)
                 The depletion pattern to use. Should not be provided with
                 depletion_model.
@@ -251,10 +112,23 @@ class Abundances(ElementDefinitions):
 
         """
 
+        # basic element info
+        self.metals = elements.Elements().metals
+        self.non_metals = elements.Elements().non_metals
+        self.all_elements = elements.Elements().all_elements
+        self.alpha_elements = elements.Elements().alpha_elements
+        self.element_name = elements.Elements().name
+        self.atomic_mass = elements.Elements().atomic_mass
+
+        # define dictionary for element_name to element_id
+        self.element_name_to_id = {
+            name: id for id, name in self.element_name.items()
+        }
+
         # save all arguments to object
         self.metallicity = metallicity  # mass fraction in metals
         self.alpha = alpha
-        self.solar = solar
+        self.reference = reference
         # depletion on to dust
         self.depletion = depletion
         self.depletion_model = depletion_model
@@ -262,17 +136,25 @@ class Abundances(ElementDefinitions):
 
         # If depletion model is provided as a string use this to extract the
         # class.
-        if isinstance(solar, str):
-            if solar in solar_abundance_patterns.available_patterns:
-                self.solar = getattr(solar_abundance_patterns, solar)
+        if isinstance(reference, str):
+            if reference in reference_abundance_patterns.available_patterns:
+                self.reference = getattr(
+                    reference_abundance_patterns, reference
+                )
             else:
-                raise exceptions.UnrecognisedOption("""Solar abundance pattern
-                not recognised!""")
+                raise exceptions.UnrecognisedOption(
+                    """Reference abundance
+                pattern not recognised!"""
+                )
+
+        # check if self.reference is instantiated and if not initialise class
+        if isinstance(self.reference, type):
+            self.reference = self.reference()
 
         # If a metallicity is not provided use the metallicity assumed by the
-        # Solar abundance pattern.
+        # Reference abundance pattern.
         if self.metallicity is None:
-            self.metallicity = self.solar.metallicity
+            self.metallicity = self.reference.metallicity
 
         # Set helium mass fraction following Bressan et al. (2012)
         # 10.1111/j.1365-2966.2012.21948.x
@@ -292,17 +174,17 @@ class Abundances(ElementDefinitions):
         total["He"] = np.log10(
             self.helium_mass_fraction
             / self.hydrogen_mass_fraction
-            / self.A["He"]
+            / self.atomic_mass["He"]
         )
 
-        # Scale elemental abundances from solar abundances based on given
+        # Scale elemental abundances from reference abundances based on given
         # metallicity
         for e in self.metals:
-            total[e] = self.solar.abundance[e] + np.log10(
-                self.metallicity / self.solar.metallicity
+            total[e] = self.reference.abundance[e] + np.log10(
+                self.metallicity / self.reference.metallicity
             )
 
-        # Scale alpha-element abundances from solar abundances
+        # Scale alpha-element abundances from reference abundances
         if alpha != 0.0:
             # unscaled_metals = self.alpha_elements
             for e in self.alpha_elements:
@@ -313,29 +195,105 @@ class Abundances(ElementDefinitions):
 
         # If abundances argument is provided go ahead and set the abundances.
         if abundances is not None:
-            # loop over each element in the dictionary
-            for element, value in abundances.items():
-                # Setting alpha, nitrogen_abundance, or carbon_abundance will
-                # result in the metallicity no longer being correct. To account
-                # for this we need to rescale the abundances to recover the
-                # correct metallicity. However, we don't want to rescale the
-                # things we've changed. For this reason, here we record the
-                # elements which have changed. See below for the rescaling.
-                unscaled_metals.add(element)
+            # if abundances are given as a single string, then use that model
+            # to scale every available element.
+            if isinstance(abundances, str):
+                # get the scaling study
+                scaling_study = getattr(abundance_scalings, abundances)()
 
-                # if value is a float simply set the abundance to this value.
-                if isinstance(value, float):
-                    total[element] = value
-
-                # if value is a str use this to call the specific function to
-                # calculate the abundance from the metallicity.
-                elif isinstance(value, str):
-                    # get the class holding functions for this element
-                    study_functions = getattr(abundance_scalings, value)
+                # loop over each element in the dictionary
+                for element in scaling_study.available_elements:
+                    # get the full element name since scaling methods are
+                    # labelled with the full name PEP8 reasons.
+                    element_name = self.element_name[element]
 
                     # get the specific function request by value
-                    scaling_function = getattr(study_functions, element)
+                    scaling_function = getattr(scaling_study, element_name)
                     total[element] = scaling_function(metallicity)
+
+                    # Setting alpha or abundances will result in the
+                    # metallicity no longer being correct. To account for
+                    # this we need to rescale the abundances to recover
+                    # the correct metallicity. However, we don't want to
+                    # rescale the things we've changed. For this reason,
+                    # here we record the elements which have changed. See
+                    # below for the rescaling.
+                    unscaled_metals.add(element)
+
+            if isinstance(abundances, dict):
+                # loop over each element in the dictionary
+                for element_key, value in abundances.items():
+                    # Let's check whether we're specifying an absolute value or
+                    # a relative ratio.
+
+                    # If it's a ratio, labelled as e.g. "N/H". This is less
+                    # readable than the below.
+                    if len(element_key.split("/")) > 1:
+                        element, ratio_element = element_key.split("/")
+                        total[element] = total[ratio_element] + value
+
+                    # If it's a ratio, labelled as e.g. "nitrogen_to_oxygen".
+                    elif len(element_key.split("_to_")) > 1:
+                        # get element name and ration element name
+                        element_name, ratio_element_name = element_key.split(
+                            "_to_"
+                        )
+                        # convert these names to element ids instead
+                        element = self.element_name_to_id[element_name]
+                        ratio_element = self.element_name_to_id[
+                            ratio_element_name
+                        ]
+
+                        total[element] = total[ratio_element] + value
+
+                    # Else, if it's not a ratio simply set the abundance to
+                    # this value.
+                    else:
+                        # Check the element key to see whether it's an ID or
+                        # name.
+                        if element_key in self.all_elements:
+                            element = element_key
+                        elif element_key in list(self.element_name.values()):
+                            element = self.element_name_to_id[element_key]
+                        else:
+                            raise exceptions.InconsistentArguments(
+                                """Element key not recognised. Use either an
+                                element ID (e.g. 'N') or element name (e.g.
+                                'nitrogen')."""
+                            )
+
+                        # If it's just a value just set the value.
+                        if isinstance(value, float):
+                            total[element] = value
+
+                        # if value is a str use this to call the specific
+                        # function to calculate the abundance from the
+                        # metallicity.
+                        elif isinstance(value, str):
+                            # get the class holding functions for this element
+                            scaling_study = getattr(
+                                abundance_scalings, value
+                            )()
+
+                            # get the full element name since scaling methods
+                            # are labelled with the full name PEP8 reasons.
+                            element_name = self.element_name[element]
+
+                            # get the specific function request by value
+                            scaling_function = getattr(
+                                scaling_study, element_name
+                            )
+
+                            total[element] = scaling_function(metallicity)
+
+                        # Setting alpha or abundances will result in the
+                        # metallicity no longer being correct. To account for
+                        # this we need to rescale the abundances to recover
+                        # the correct metallicity. However, we don't want to
+                        # rescale the things we've changed. For this reason,
+                        # here we record the elements which have changed. See
+                        # below for the rescaling.
+                        unscaled_metals.add(element)
 
         # Set of the metals to be scaled, see above.
         scaled_metals = set(self.metals) - unscaled_metals
@@ -420,8 +378,10 @@ class Abundances(ElementDefinitions):
             if depletion_model in depletion_models.available_patterns:
                 depletion_model = getattr(depletion_models, depletion_model)
             else:
-                raise exceptions.UnrecognisedOption("""Depletion model not
-                recognised!""")
+                raise exceptions.UnrecognisedOption(
+                    """Depletion model not
+                recognised!"""
+                )
 
         # Raise exception if both a depletion pattern and depletion_model is
         # provided.
@@ -508,7 +468,7 @@ class Abundances(ElementDefinitions):
     def __getitem__(self, arg):
         """
         A method to return the logarithmic abundance for a particular element
-        relative to H or relative solar.
+        relative to H or relative reference.
 
         Arguments:
             arg (str)
@@ -517,7 +477,7 @@ class Abundances(ElementDefinitions):
 
         Returns:
             (float)
-                The abundance relevant to H or relative to Solar when a
+                The abundance relevant to H or relative to reference when a
                 reference element is also provided.
         """
 
@@ -525,10 +485,10 @@ class Abundances(ElementDefinitions):
         if arg in self.all_elements:
             return self.total[arg]
 
-        # alternative case, return solar relative abundance [X/Y]
+        # alternative case, return reference relative abundance [X/Y]
         elif arg[0] == "[":
             element, ref_element = arg[1:-1].split("/")
-            return self.solar_relative_abundance(
+            return self.reference_relative_abundance(
                 element, ref_element=ref_element
             )
 
@@ -550,7 +510,8 @@ class Abundances(ElementDefinitions):
         summary += f"X: {self.hydrogen_mass_fraction:.3f}\n"
         summary += f"Y: {self.helium_mass_fraction:.3f}\n"
         summary += f"Z: {self.metallicity:.3f}\n"
-        summary += f"Z/Z_sol: {self.metallicity/self.solar.metallicity:.2g}\n"
+        ratio = self.metallicity / self.reference.metallicity
+        summary += f"Z/Z_ref: {ratio:.2g}\n"
         summary += f"alpha: {self.alpha:.3f}\n"
         summary += f"dust mass fraction: {self.dust_mass_fraction}\n"
         summary += f"dust-to-metal ratio: {self.dust_to_metal_ratio}\n"
@@ -572,10 +533,10 @@ class Abundances(ElementDefinitions):
 
         for ele in self.all_elements:
             quantities = (
-                f"{self.name[ele]}",
+                f"{self.element_name[ele]}",
                 f"{self.total[ele]:.2f}",
                 f"{self.total[ele]+12:.2f}",
-                f"{self.total[ele]-self.solar.abundance[ele]:.2f}",
+                f"{self.total[ele]-self.reference.abundance[ele]:.2f}",
                 f"{self.depletion[ele]:.2f}",
                 f"{self.gas[ele]:.2f}",
                 f"{self.dust[ele]:.2f}",
@@ -627,7 +588,7 @@ class Abundances(ElementDefinitions):
         if not a:
             a = self.total
 
-        return np.sum([self.A[i] * 10 ** (a[i]) for i in elements])
+        return np.sum([self.atomic_mass[i] * 10 ** (a[i]) for i in elements])
 
     def calculate_mass_fraction(self, elements, a=None):
         """
@@ -650,7 +611,7 @@ class Abundances(ElementDefinitions):
 
         return self.calculate_mass(elements, a=a) / total_mass
 
-    def solar_relative_abundance(self, element, ref_element="H"):
+    def reference_relative_abundance(self, element, ref_element="H"):
         """
         A method to return an element's abundance relative to that in the Sun,
         i.e. [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
@@ -668,7 +629,8 @@ class Abundances(ElementDefinitions):
 
         """
         return (self.total[element] - self.total[ref_element]) - (
-            self.solar.abundance[element] - self.solar.abundance[ref_element]
+            self.reference.abundance[element]
+            - self.reference.abundance[ref_element]
         )
 
 
@@ -722,7 +684,7 @@ def plot_abundance_pattern(a, show=False, ylim=None, components=["total"]):
 
     ax.legend()
     ax.set_xticks(
-        range(len(a.all_elements)), a.name, rotation=90, fontsize=6.0
+        range(len(a.all_elements)), a.element_name, rotation=90, fontsize=6.0
     )
 
     ax.set_ylabel(r"$\rm log_{10}(X/H)$")
@@ -796,7 +758,7 @@ def plot_multiple_abundance_patterns(
 
     ax.legend()
     ax.set_xticks(
-        range(len(a.all_elements)), a.name, rotation=90, fontsize=6.0
+        range(len(a.all_elements)), a.element_name, rotation=90, fontsize=6.0
     )
 
     ax.set_ylabel(r"$\rm log_{10}(X/H)$")
