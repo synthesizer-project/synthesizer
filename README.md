@@ -32,7 +32,7 @@ To install, enter the `synthesizer` directory and install with pip.
     
 We also provide optional dependency sets for development (``dev``), testing (``test``), and building the documentation (``docs``) should you ever needed them. To install all dependancies simply run the following (or delete as appropriate to get a specific subset):
 
-    pip install .[dev, test, docs]
+    pip install .[dev,test,docs]
 
 Make sure you stay up to date with the latest versions through git:
 
