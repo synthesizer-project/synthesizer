@@ -75,7 +75,7 @@ classifiers = [  # Optional
   "Programming Language :: Python :: 3 :: Only",
 ]
 
-# Dependancies
+# Dependencies
 dependencies = [
   "setuptools",
   "astropy",
@@ -92,7 +92,7 @@ dependencies = [
   "requests",
 ]
 
-# Optional dependancies for specific use cases
+# Optional dependencies for specific use cases
 [project.optional-dependencies]
 # Development
 dev = [
