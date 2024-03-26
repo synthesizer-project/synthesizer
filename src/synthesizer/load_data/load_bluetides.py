@@ -1,11 +1,10 @@
 import numpy as np
-from unyt import Msun, kpc, yr, c
+import scipy.interpolate as interpolate
+from bigfile import BigFile
+from scipy import integrate
+from unyt import Msun, c, kpc, yr
 
 from ..particle.galaxy import Galaxy
-
-from bigfile import BigFile
-import scipy.interpolate as interpolate
-from scipy import integrate
 
 
 class BlueTidesDataHolder:
@@ -149,9 +148,7 @@ class BlueTidesDataHolder:
             self.bhar[self.sorting_indices] * self.acrtolum
         )  # transfer from accretion rate to AGN luminosity
         self.bh_mass = (
-            pig.open("5/BlackholeMass")[0:length_of_bhar][
-                self.sorting_indices
-            ]
+            pig.open("5/BlackholeMass")[0:length_of_bhar][self.sorting_indices]
             * 1e10
             / self.hh
         )  # masses of BHs with largest accretion rate
@@ -288,9 +285,7 @@ def load_BlueTides(
             dataholder.gen_SFT_to_age(star_time) / 1e6
         )  # translate galaxy star formation time to ages in years
 
-        initial_gas_particle_mass = (
-            np.full(ages.shape, 2.36e6) / dataholder.hh
-        )
+        initial_gas_particle_mass = np.full(ages.shape, 2.36e6) / dataholder.hh
         imasses = initial_gas_particle_mass / 4
         masses = (
             np.ones(ages.shape) * 1e10 * 5.90556119e-05 / 0.697

@@ -1,4 +1,4 @@
-""" A module for working with photometry derived from an Sed.
+"""A module for working with photometry derived from an Sed.
 
 This module contains a single class definition which acts as a container
 for photometry data. It should never be directly instantiated, instead
@@ -6,9 +6,11 @@ internal methods that calculate photometry
 (e.g. Sed.get_photo_luminosities)
 return an instance of this class.
 """
+
 import re
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 from synthesizer.units import Quantity, default_units
 
@@ -163,7 +165,7 @@ class PhotometryCollection:
         # Define the filter code column
         filters_col = [
             (
-                f"{f.filter_code} (\u03BB = {f.pivwv().value:.2e} "
+                f"{f.filter_code} (\u03bb = {f.pivwv().value:.2e} "
                 f"{str(f.lam.units)})"
             )
             for f in self.filters
