@@ -1,11 +1,12 @@
-""" A module for particle and parametric stars.
+"""A module for particle and parametric stars.
 
 This should never be directly instantiated. Instead it is the parent class for
 particle.Stars and parametric.Stars and contains attributes
 and methods common between them.
 """
+
 import numpy as np
-from unyt import Myr, unyt_quantity, Lsun
+from unyt import Lsun, Myr, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.dust.attenuation import PowerLaw
@@ -927,6 +928,11 @@ class StarsComponent:
                     self.spectra["old_escaped"]._lnu
                     + self.spectra["old_attenuated"]._lnu
                 )
+
+            # Combine emergent spectra for young and old stars
+            self.spectra["emergent"] = (
+                self.spectra["young_emergent"] + self.spectra["old_emergent"]
+            )
 
             # Force updating of the bolometric luminosity attribute. I don't
             # know why this is necessary.
