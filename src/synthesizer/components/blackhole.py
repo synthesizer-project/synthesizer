@@ -1,10 +1,11 @@
-""" A module for holding blackhole emission models.
+"""A module for holding blackhole emission models.
 
 The class defined here should never be instantiated directly, there are only
 ever instantiated by the parametric/particle child classes.
 """
+
 import numpy as np
-from unyt import c, rad, deg
+from unyt import c, deg, rad
 
 from synthesizer import exceptions
 from synthesizer.blackhole_emission_models import Template
@@ -317,9 +318,7 @@ class BlackholesComponent:
                 The black hole bolometric luminosity
         """
 
-        self.bolometric_luminosity = (
-            self.epsilon * self.accretion_rate * c**2
-        )
+        self.bolometric_luminosity = self.epsilon * self.accretion_rate * c**2
 
         return self.bolometric_luminosity
 

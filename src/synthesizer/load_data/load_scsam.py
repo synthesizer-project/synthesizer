@@ -1,19 +1,19 @@
-""" A module for interfacing with the outputs of Semi Analytic Models.
+"""A module for interfacing with the outputs of Semi Analytic Models.
 
 Currently implemented are loading methods for
 - SC-SAM (using a parametric method)
 - SC-SAM (using a particle method)
 """
-import numpy as np
-from scipy.interpolate import RegularGridInterpolator as RGI
-from scipy.interpolate import NearestNDInterpolator as NNI
 
+import numpy as np
+from scipy.interpolate import NearestNDInterpolator as NNI
+from scipy.interpolate import RegularGridInterpolator as RGI
 from unyt import Msun, yr
 
-from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
-from synthesizer.particle.stars import Stars as ParticleStars
+from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
+from synthesizer.particle.stars import Stars as ParticleStars
 
 
 def load_SCSAM(fname, method, grid=None, verbose=False):

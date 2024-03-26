@@ -25,23 +25,22 @@ Example usage:
 """
 
 from unyt import (
-    nJy,
-    erg,
-    s,
-    Hz,
     Angstrom,
-    cm,
-    Mpc,
-    yr,
-    km,
-    Msun,
+    Hz,
     K,
+    Mpc,
+    Msun,
+    cm,
     deg,
-    unyt_quantity,
-    unyt_array,
     dimensionless,
+    erg,
+    km,
+    nJy,
+    s,
+    unyt_array,
+    unyt_quantity,
+    yr,
 )
-
 
 # Define an importable dictionary with the default unit system
 default_units = {
@@ -69,7 +68,7 @@ default_units = {
     "flux": erg / s / cm**2,
     "fnu": nJy,
     "flam": erg / s / Angstrom / cm**2,
-    "ew": Angstrom,
+    "equivalent_width": Angstrom,
     "coordinates": Mpc,
     "smoothing_lengths": Mpc,
     "softening_length": Mpc,
@@ -93,7 +92,6 @@ default_units = {
     "centre": Mpc,
     "photo_luminosities": erg / s / Hz,
     "photo_fluxes": erg / s / cm**2 / Hz,
-    "centre": Mpc,
 }
 
 
@@ -317,7 +315,7 @@ class Units(metaclass=UnitSingleton):
         self.photo_fluxes = erg / s / cm**2 / Hz  # observer frame photometry
 
         # Equivalent width
-        self.ew = Angstrom
+        self.equivalent_width = Angstrom
 
         # Spatial quantities
         self.coordinates = Mpc

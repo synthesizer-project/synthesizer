@@ -16,6 +16,7 @@ Example Usage:
 """
 
 import argparse
+
 import requests
 from tqdm import tqdm
 
