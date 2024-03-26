@@ -1,8 +1,16 @@
+
+"""
+Module containing various elemental abundance scalings. These provide methods
+to scale various elements with metallicity instead of simply linearly.
+"""
+
+
 import numpy as np
 from synthesizer.abundances import (
     elements,
 )
 
+# list of available scalings
 available_scalings = ["Dopita2006", "GalacticConcordance"]
 
 
@@ -27,7 +35,7 @@ class Dopita2006:
 
     def nitrogen(self, metallicity):
         """
-        Scaling functions for Nitrogen.
+        Scaling function for Nitrogen.
 
         Args:
             metallicity (float)
@@ -161,6 +169,7 @@ class GalacticConcordance:
             "Zn": -0.30,
         }
 
+        # elements that have a predefined method
         self.available_elements = ["N", "C"]
         self.available_elements_names = ["nitrogen", "carbon"]
 
@@ -203,6 +212,31 @@ class GalacticConcordance:
             reference_metallicity=0.015,
             reference_abundances={},
         ):
+
+            """
+            Initialiation for a specific element.
+
+            Arguments:
+                element (str)
+                    The element
+                scaling_parameter (float)
+                    The scaling parameter, the slope of of the scaling
+                    relation.
+                lower_break (float)
+                    The lower-break (O/H) below which the abundance simply
+                    scales with metallicity. By default -0.25.
+                upper_break (float)
+                    The upper-break (O/H) above which the abundance simply
+                    scales with metallicity. By default 0.5.
+                reference_metallicity (float)
+                    The reference metallicity.
+                reference_abundances (dict, float)
+                    Dictionary of reference abundances.
+
+            Returns:
+                abundance (float)
+                    The abundance of the specific element.
+            """
             self.element = element
             self.lower_break = lower_break
             self.upper_break = upper_break
@@ -213,6 +247,18 @@ class GalacticConcordance:
             self.reference_abundances = reference_abundances
 
         def __call__(self, metallicity):
+            """
+            Calculate the abundance for a given metallicity.
+
+            Arguments:
+                metallicity (float)
+                    The metallicity.
+
+            Returns:
+                abundance (float)
+                    The abundance of the specific element.
+            """
+
             # calculate log10(oxygen to hydrogen) for a given metallicity
             log10xi = np.log10(metallicity / self.reference_metallicity)
 

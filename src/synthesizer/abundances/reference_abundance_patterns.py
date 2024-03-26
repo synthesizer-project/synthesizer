@@ -1,5 +1,10 @@
+"""
+Module containing various reference abundance patterns.
+"""
+
 from dataclasses import dataclass
 
+# list of available reference patterns
 available_patterns = ["Asplund2009", "GalacticConcordance", "Gutkin2016"]
 
 

@@ -1,10 +1,11 @@
 """
-Module containing various depletion models. Depletion models relate he gas
+Module containing various depletion models. Depletion models relate the gas
 phase depleted abundances to the total abundances, i.e.:
     (X/H)_{gas,dep} = D_{x}\times (X/H)_{total}
     (X/H)_{dust} = (1-D_{x})\times (X/H)_{total}
 """
 
+# list of available models included in this module
 available_patterns = ["Jenkins2009", "CloudyClassic", "Gutkin2016"]
 
 
