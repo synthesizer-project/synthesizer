@@ -4,7 +4,12 @@ from dataclasses import dataclass, field
 @dataclass
 class Elements:
     """
-    A simple class containing various useful lists and dictionaries.
+    This is a data class containing a various useful information about atomic
+    elements. These include lists of elements classified as non-metals, metals
+    , alpha elements, as well as all elements. Also contains a dictionary
+    mapping the element identification (e.g. "Fe") to the full name (e.g.
+    "iron") and a dictionary containing the atomic mass. These are used in the
+    creation of custom abundance patterns.
 
     Attributes:
         non_metals (list, string)
