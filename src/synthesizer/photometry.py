@@ -11,8 +11,9 @@ import re
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import unyt_array
+from unyt import unyt_array, unyt_quantity
 
+from synthesizer import exceptions
 from synthesizer.units import Quantity, default_units
 
 
@@ -72,6 +73,12 @@ class PhotometryCollection:
 
         # Get the photometry
         photometry = list(kwargs.values())
+
+        # Ensure we have units, if not something terrible has happened
+        if not isinstance(photometry[0], (unyt_quantity, unyt_array)):
+            raise exceptions.InconsistentArguments(
+                "Photometry must be passed as a dict of unyt_quantities."
+            )
 
         # Convert it from a list of unyt_quantities to a unyt_array
         photometry = unyt_array(photometry, units=photometry[0].units)
