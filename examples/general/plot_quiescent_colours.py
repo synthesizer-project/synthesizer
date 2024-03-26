@@ -4,14 +4,12 @@ Plot quiescent UVJ diagram
 
 """
 
-import numpy as np
 import cmasher as cmr
 import matplotlib.pyplot as plt
-
+import numpy as np
+from astropy.table import Table
 from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
-
-from astropy.table import Table
 
 
 def simple_UVJ(grid, target_metallicity=0.01):

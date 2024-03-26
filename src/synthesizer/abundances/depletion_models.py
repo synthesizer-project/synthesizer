@@ -1,14 +1,14 @@
 import numpy as np
 
 """
-Module containing various depletion models. Depletion models relate he gas
+Module containing various depletion models. Depletion models relate the gas
 phase depleted abundances to the total abundances, i.e.:
     (X/H)_{gas,dep} = D_{x}\times (X/H)_{total}
     (X/H)_{dust} = (1-D_{x})\times (X/H)_{total}
 """
 
-available_patterns = ['Jenkins2009_Gunasekera2021', 
-                      'CloudyClassic', 
+available_patterns = ['Jenkins2009_Gunasekera2021',
+                      'CloudyClassic',
                       'Gutkin2016']
 
 
@@ -16,7 +16,7 @@ class Jenkins2009_Gunasekera2021:
 
     """
     Implemention of the Jenkins (2009) depletion pattern that is built into
-    cloudy23 as described by Gunasekera (2021). This modification adds in 
+    cloudy23 as described by Gunasekera (2021). This modification adds in
     additional elements that were not considered by Jenkins (2009).
 
     In this model the depletion (D_x) is written as:
@@ -81,7 +81,6 @@ class Jenkins2009_Gunasekera2021:
 
 
 class CloudyClassic:
-
     """
     Implemention of the 'cloudy classic' depletion pattern that is built into
     cloudy23.
@@ -121,18 +120,18 @@ class CloudyClassic:
     }
 
     def __init__(self, scale=1.0):
-
         """
         Args:
             scale (float)
                 Scale factor for the depletion.
         """
-        self.depletion = {element: scale * depletion for element, depletion
-                          in self.depletion_.items()}
+        self.depletion = {
+            element: scale * depletion
+            for element, depletion in self.depletion_.items()
+        }
 
 
 class Gutkin2016:
-
     """
     Depletion pattern created for Synthesizer 2024.
 
@@ -181,11 +180,12 @@ class Gutkin2016:
     }
 
     def __init__(self, scale=1.0):
-
         """
         Args:
             scale (float)
                 Scale factor for the depletion.
         """
-        self.depletion = {element: scale * depletion for element, depletion in
-                          self.depletion_.items()}
+        self.depletion = {
+            element: scale * depletion
+            for element, depletion in self.depletion_.items()
+        }
