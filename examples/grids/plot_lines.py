@@ -11,6 +11,7 @@ This example demonstrates how to:
 
 import matplotlib.pyplot as plt
 from synthesizer.grid import Grid
+from synthesizer.line import get_diagram_labels, get_ratio_label
 
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this
@@ -75,7 +76,7 @@ if __name__ == "__main__":
     plt.xscale("log")
     plt.yscale("log")
     plt.xlabel(r"$Z/Z_{\odot}$")
-    plt.ylabel(lines.get_ratio_label(ratio_id))
+    plt.ylabel(rf"${get_ratio_label(ratio_id)}$")
     plt.show()
 
     # we can also generate "diagrams" pairs of line ratios like the BPT diagram
@@ -97,8 +98,8 @@ if __name__ == "__main__":
     plt.yscale("log")
 
     # grab x and y labels, this time use "fancy" label ids
-    xlabel, ylabel = lines.get_diagram_label(diagram_id, fancy=True)
+    xlabel, ylabel = get_diagram_labels(diagram_id)
 
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    plt.xlabel(rf"${xlabel}$")
+    plt.ylabel(rf"${ylabel}$")
     plt.show()
