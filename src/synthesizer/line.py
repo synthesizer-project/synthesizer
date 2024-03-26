@@ -1,8 +1,18 @@
 """A module containing functionality for working with spectral lines.
 
-TODO: Complete doc string.
+The primary class is Line which holds information about an individual or
+blended emission line, including its identification, wavelength, luminosity,
+and the strength of the continuum. From these the equivalent width is 
+automatically calculated. Combined with a redshift and cosmology the flux can
+also be calcualted.
 
-Example usage:
+A second class is LineCollection which holds a collection of Line objects and
+provides additional functionality such as calcualting line ratios and diagrams
+(e.g. BPT-NII, OHNO).
+
+Several functions exist for obtaining line, ratio, and diagram labels for use
+in plots etc.
+
 """
 
 import numpy as np
@@ -135,10 +145,13 @@ def get_roman_numeral(number):
 
     Used for renaming emission lines from the cloudy defaults.
 
-    Returns
-    ---------
-    str
-        string reprensentation of the roman numeral
+    Arguments:
+        number (int)
+            The number to convert into a roman numeral.
+
+    Returns:
+        number_representation (str)
+            String reprensentation of the roman numeral.
     """
 
     num = [1, 4, 5, 9, 10, 40, 50, 90, 100, 400, 500, 900, 1000]
@@ -178,7 +191,7 @@ def get_bpt_kewley01(logNII_Ha):
     Demarcation defined by:
         log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19
 
-    Args:
+    Arguments:
         logNII_Ha (array)
             Array of log([NII]/Halpha) values to give the
             SF-AGN demarcation line
@@ -213,7 +226,7 @@ def get_bpt_kauffman03(logNII_Ha):
 
 class LineRatios:
     """
-    A dataclass holding useful line ratios (e.g. R23) and
+    A class holding useful line ratios (e.g. R23) and
     diagrams (pairs of ratios), e.g. BPT.
     """
 
@@ -387,15 +400,13 @@ class LineCollection:
         """
         Measure (and return) a line ratio
 
-        Arguments
-        -------
-        ab
-            a list of lists of lines, e.g. [[l1,l2], [l3]]
+        Arguments:
+            ab
+                a list of lists of lines, e.g. [[l1,l2], [l3]]
 
-        Returns
-        -------
-        float
-            a line ratio
+        Returns:
+            float
+                a line ratio
         """
 
         a, b = ab
@@ -408,15 +419,13 @@ class LineCollection:
         """
         Measure (and return) a line ratio
 
-        Arguments
-        -------
-        ratio_id
-            a ratio_id where the ratio lines are defined in LineRatios
+        Arguments:
+            ratio_id
+                a ratio_id where the ratio lines are defined in LineRatios
 
-        Returns
-        -------
-        float
-            a line ratio
+        Returns:
+            float
+                a line ratio
         """
 
         ab = self.lineratios.ratios[ratio_id]
@@ -427,16 +436,14 @@ class LineCollection:
         """
         Return a pair of line ratios for a given diagram_id (E.g. BPT)
 
-        Arguments
-        -------
-        ratdiagram_idio_id
-            a diagram_id where the pairs of ratio lines are
-            defined in LineRatios
+        Arguments:
+            diagram_id
+                a diagram_id where the pairs of ratio lines are
+                defined in LineRatios
 
-        Returns
-        -------
-        tuple (float)
-            a pair of line ratios
+        Returns:
+            tuple (float)
+                a pair of line ratios
         """
         ab, cd = self.lineratios.diagrams[diagram_id]
 
