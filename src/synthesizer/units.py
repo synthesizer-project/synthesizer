@@ -24,6 +24,8 @@ Example usage:
 
 """
 
+from typing import Any, Dict, Optional, Type, Union
+
 from unyt import (
     Angstrom,
     Hz,
@@ -41,9 +43,10 @@ from unyt import (
     unyt_quantity,
     yr,
 )
+from unyt.unit_object import Unit
 
 # Define an importable dictionary with the default unit system
-default_units = {
+default_units: Dict[str, Unit] = {
     "lam": Angstrom,
     "obslam": Angstrom,
     "wavelength": Angstrom,
@@ -106,9 +109,13 @@ class UnitSingleton(type):
     """
 
     # Define a private dictionary to store instances of UnitSingleton
-    _instances = {}
+    _instances: Dict[Type, "Units"] = {}
 
-    def __call__(cls, new_units=None, force=False):
+    def __call__(
+        cls,
+        new_units: Optional[Dict[str, Unit]] = None,
+        force: bool = False,
+    ) -> "Units":
         """
         When a new instance is made (calling class), this method is called.
 
@@ -120,9 +127,8 @@ class UnitSingleton(type):
         printed and the original is returned.
 
         Returns:
-            Units
-                A new instance of Units if one does not exist (or a new one
-                is forced), or the first instance of Units if one does exist.
+            A new instance of Units if one does not exist (or a new one
+            is forced), or the first instance of Units if one does exist.
         """
 
         # Are we forcing an update?... I hope not
@@ -169,109 +175,122 @@ class Units(metaclass=UnitSingleton):
     dangerous and should be avoided.
 
     Attributes:
-        lam (unyt.unit_object.Unit)
-            Rest frame wavelength unit.
-        obslam (unyt.unit_object.Unit)
-            Observer frame wavelength unit.
-        wavelength (unyt.unit_object.Unit)
-            Alias for rest frame wavelength unit.
+        lam: Rest frame wavelength.
+        obslam: Observer frame wavelength.
+        wavelength: Alias for rest frame wavelength.
 
-        nu (unyt.unit_object.Unit)
-            Rest frame frequency unit.
-        obsnu (unyt.unit_object.Unit)
-            Observer frame frequency unit.
-        nuz (unyt.unit_object.Unit)
-            Observer frame frequency unit.
+        nu: Rest frame frequency.
+        obsnu: Observer frame frequency.
+        nuz: Observer frame frequency.
 
-        luminosity (unyt.unit_object.Unit)
-            Luminosity unit.
-        lnu (unyt.unit_object.Unit)
-            Rest frame spectral luminosity density (in terms of frequency)
-            unit.
-        llam (unyt.unit_object.Unit)
-            Rest frame spectral luminosity density (in terms of wavelength)
-            unit.
-        continuum (unyt.unit_object.Unit)
-            Continuum level of an emission line unit.
+        luminosity: Luminosity.
+        lnu: Rest frame spectral luminosity density (in terms of frequency).
+        llam: Rest frame spectral luminosity density (in terms of wavelength).
+        continuum: Continuum level of an emission line.
 
-        fnu (unyt.unit_object.Unit)
-            Spectral flux density (in terms of frequency) unit.
-        flam (unyt.unit_object.Unit)
-            Spectral flux density (in terms of wavelength) unit.
-        flux (unyt.unit_object.Unit)
-            "Rest frame" Spectral flux density (at 10 pc) unit.
+        fnu: Spectral flux density (in terms of frequency).
+        flam: Spectral flux density (in terms of wavelength).
+        flux: "Rest frame" Spectral flux density (at 10 pc).
 
-        photo_luminosities (unyt.unit_object.Unit)
-            Rest frame photometry unit.
-        photo_fluxes (unyt.unit_object.Unit)
-            Observer frame photometry unit.
+        photo_luminosities: Rest frame photometry.
+        photo_fluxes: Observer frame photometry.
 
-        ew (unyt.unit_object.Unit)
-            Equivalent width unit.
+        ew: Equivalent width.
 
-        coordinates (unyt.unit_object.Unit)
-            Particle coordinate unit.
-        smoothing_lengths (unyt.unit_object.Unit)
-            Particle smoothing length unit.
-        softening_length (unyt.unit_object.Unit)
-            Particle gravitational softening length unit.
+        coordinates: Particle coordinate.
+        smoothing_lengths: Particle smoothing length.
+        softening_length: Particle gravitational softening length.
 
-        velocities (unyt.unit_object.Unit)
-            Particle velocity unit.
+        velocities: Particle velocity.
 
-        masses (unyt.unit_object.Unit)
-            Particle masses unit.
-        initial_masses (unyt.unit_object.Unit)
-            Stellar particle initial mass unit.
-        initial_mass (unyt.unit_object.Unit)
-            Stellar population initial mass unit.
-        current_masses (unyt.unit_object.Unit)
-            Stellar particle current mass unit.
-        dust_masses (unyt.unit_object.Unit)
-            Gas particle dust masses unit.
+        masses: Particle masses.
+        initial_masses: Stellar particle initial mass.
+        initial_mass: Stellar population initial mass.
+        current_masses: Stellar particle current mass.
+        dust_masses: Gas particle dust masses.
 
-        ages (unyt.unit_object.Unit)
-            Stellar particle age unit.
+        ages: Stellar particle age.
 
-        accretion_rate (unyt.unit_object.Unit)
-            Black hole accretion rate unit.
-        bolometric_luminosity (unyt.unit_object.Unit)
-            Bolometric luminositiy unit.
-        bolometric_luminosities (unyt.unit_object.Unit)
-            Bolometric luminositiy unit.
-        bb_temperature (unyt.unit_object.Unit)
-            Black hole big bump temperature unit.
-        bb_temperatures (unyt.unit_object.Unit)
-            Black hole big bump temperature unit.
-        inclination (unyt.unit_object.Unit)
-            Black hole inclination unit.
-        inclinations (unyt.unit_object.Unit)
-            Black hole inclination unit.
+        accretion_rate: Black hole accretion rate.
+        bolometric_luminosity: Bolometric luminositiy.
+        bolometric_luminosities: Bolometric luminositiy.
+        bb_temperature: Black hole big bump temperature.
+        bb_temperatures: Black hole big bump temperature.
+        inclination: Black hole inclination.
+        inclinations: Black hole inclination.
 
-        resolution (unyt.unit_object.Unit)
-            Image resolution unit.
-        fov (unyt.unit_object.Unit)
-            Field of View unit.
-        orig_resolution (unyt.unit_object.Unit)
-            Original resolution (for resampling) unit.
-        centre (unyt.unit_object.Unit)
-            Centre of the image unit.
+        resolution: Image resolution.
+        fov: Field of View.
+        orig_resolution: Original resolution (for resampling).
+        centre: Centre of the image.
     """
 
-    def __init__(self, units=None, force=False):
+    lam: Unit
+    obslam: Unit
+    wavelength: Unit
+    original_lam: Unit
+    lam_min: Unit
+    lam_max: Unit
+    lam_eff: Unit
+    lam_fwhm: Unit
+    mean_lams: Unit
+    pivot_lams: Unit
+    nu: Unit
+    obsnu: Unit
+    nuz: Unit
+    original_nu: Unit
+    luminosity: Unit
+    luminosities: Unit
+    bolometric_luminosity: Unit
+    bolometric_luminosities: Unit
+    lnu: Unit
+    llam: Unit
+    continuum: Unit
+    flux: Unit
+    fnu: Unit
+    flam: Unit
+    equivalent_width: Unit
+    coordinates: Unit
+    smoothing_lengths: Unit
+    softening_length: Unit
+    velocities: Unit
+    mass: Unit
+    masses: Unit
+    initial_masses: Unit
+    initial_mass: Unit
+    current_masses: Unit
+    dust_masses: Unit
+    ages: Unit
+    accretion_rate: Unit
+    accretion_rates: Unit
+    bb_temperature: Unit
+    bb_temperatures: Unit
+    inclination: Unit
+    inclinations: Unit
+    resolution: Unit
+    fov: Unit
+    orig_resolution: Unit
+    centre: Unit
+    photo_luminosities: Unit
+    photo_fluxes: Unit
+
+    def __init__(
+        self,
+        units: Optional[Dict[str, Unit]] = None,
+        force: bool = False,
+    ) -> None:
         """
         Intialise the Units object.
 
         Args:
-            units (dict)
-                A dictionary containing any modifications to the default unit
-                system. This dictionary must be of the form:
+            units: A dictionary containing any modifications to the default
+                   unit system. This dictionary must be of the form:
 
-                    units = {"coordinates": kpc,
-                             "smoothing_lengths": kpc,
-                             "lam": m}
-            force (bool)
-                A flag for whether to force an update of the Units object.
+                       units = {"coordinates": kpc,
+                                "smoothing_lengths": kpc,
+                                "lam": m}
+
+            force: A flag for whether to force an update of the Units object.
         """
 
         # First define all possible units with their defaults
@@ -365,11 +384,11 @@ class Units(metaclass=UnitSingleton):
                 print("%s:" % key, units[key])
                 setattr(self, key, units[key])
 
-    def __str__(self):
+    def __str__(self) -> str:
         """
         Enables the printing of the current unit system.
         """
-        out_str = "Unit System: \n"
+        out_str: str = "Unit System: \n"
         for key in default_units:
             out_str += (
                 "%s: ".ljust(22 - len(key)) % key
@@ -386,18 +405,19 @@ class Quantity:
     units defined in the global unit system held in (Units).
 
     Attributes:
-        units (Units)
-            The global unit system.
-        public_name (str)
-            The name of the class variable containing Quantity. Used the user
-            wants values with a unit returned.
-        private_name (str)
-            The name of the class variable with a leading underscore. Used the
-            mostly internally for (or when the user wants) values without a
-            unit returned.
+        units: The global unit system.
+        public_name: The name of the class variable containing Quantity. Used
+                     when the user wants values with a unit returned.
+        private_name: The name of the class variable with a leading underscore.
+                      Used mostly internally for (or when the user wants)
+                      values without a unit returned.
     """
 
-    def __init__(self):
+    units: Units
+    public_name: str
+    private_name: str
+
+    def __init__(self) -> None:
         """
         Initialise the Quantity. This gets the unit system and then perfroms
         any necessary conversions if handed a unyt_array/unyt_quantity. If a n
@@ -408,7 +428,7 @@ class Quantity:
         # Attach the unit system
         self.units = Units()
 
-    def __set_name__(self, owner, name):
+    def __set_name__(self, owner: Type, name: str) -> None:
         """
         When a class variable is assigned a Quantity() this method is called
         extracting the name of the class variable, assigning it to attributes
@@ -417,7 +437,11 @@ class Quantity:
         self.public_name = name
         self.private_name = "_" + name
 
-    def __get__(self, obj, type=None):
+    def __get__(
+        self,
+        obj: Any,
+        type: Optional[Type] = None,
+    ) -> Union[unyt_array, unyt_quantity, None]:
         """
         When referencing an attribute with its public_name this method is
         called. It handles the returning of the values stored in the
@@ -425,12 +449,16 @@ class Quantity:
 
         If the value is None then None is returned regardless.
 
+        Args:
+            obj: The object containing the Quantity attribute that we are
+                 returning the value of.
+            type: The type of the object containing the Quantity attribute.
+
         Returns:
-            unyt_array/unyt_quantity/None
-                The value with units attached or None if value is None.
+            The value with units attached or None if value is None.
         """
-        value = getattr(obj, self.private_name)
-        unit = getattr(self.units, self.public_name)
+        value: Any = getattr(obj, self.private_name)
+        unit: Unit = getattr(self.units, self.public_name)
 
         # If we have an uninitialised attribute avoid the multiplying NoneType
         # error and just return None
@@ -439,18 +467,20 @@ class Quantity:
 
         return value * unit
 
-    def __set__(self, obj, value):
+    def __set__(
+        self,
+        obj: Any,
+        value: Union[unyt_quantity, unyt_array, Any],
+    ) -> None:
         """
         When setting a Quantity variable this method is called, firstly hiding
         the private name that stores the value array itself and secondily
         applying any necessary unit conversions.
 
         Args:
-            obj (arbitrary)
-                The object contain the Quantity attribute that we are storing
-                value in.
-            value (array-like/float/int)
-                The value to store in the attribute.
+            obj: The object contain the Quantity attribute that we are storing
+                 value in.
+            value: The value to store in the attribute.
         """
 
         # Do we need to perform a unit conversion? If not we assume value
