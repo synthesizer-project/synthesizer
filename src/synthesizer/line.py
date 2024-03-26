@@ -15,15 +15,13 @@ in plots etc.
 
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
-
 import numpy as np
 from unyt import Angstrom
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.units import Quantity
+from synthesizer import line_ratios
 
 
 def get_line_id(id):
@@ -53,9 +51,9 @@ def get_line_label(line_id):
     # dictionary of common line labels to use by default
     special_line_labels = {
         "O 2 3726.03A,O 2 3728.81A": "[OII]3726,3729",
-        "H 1 4862.69A": r"H\beta",
+        "H 1 4861.32A": r"H\beta",
         "O 3 4958.91A,O 3 5006.84A": "[OIII]4959,5007",
-        "H 1 6564.62A": r"H\alpha",
+        "H 1 6562.80A": r"H\alpha",
         "O 3 5006.84A": "[OIII]5007",
         "N 2 6583.45A": "[NII]6583",
     }
@@ -106,9 +104,9 @@ def get_ratio_label(ratio_id):
 
     # get the list of lines for a given ratio_id
 
-    # if the id is a string get the lines from the LineRatios class
+    # if the id is a string get the lines from the line_ratios sub-module
     if isinstance(ratio_id, str):
-        ratio_line_ids = LineRatios().ratios[ratio_id]
+        ratio_line_ids = line_ratios.ratios[ratio_id]
     if isinstance(ratio_id, list):
         ratio_line_ids = ratio_id
 
@@ -135,7 +133,7 @@ def get_diagram_labels(diagram_id):
     """
 
     # get the list of lines for a given ratio_id
-    diagram_line_ids = LineRatios().diagrams[diagram_id]
+    diagram_line_ids = line_ratios.diagrams[diagram_id]
     xlabel = get_ratio_label(diagram_line_ids[0])
     ylabel = get_ratio_label(diagram_line_ids[1])
 
@@ -227,70 +225,6 @@ def get_bpt_kauffman03(logNII_Ha):
     return 0.61 / (logNII_Ha - 0.05) + 1.3
 
 
-@dataclass
-class LineRatios:
-    """
-    A class holding useful line ratios (e.g. R23) and
-    diagrams (pairs of ratios), e.g. BPT.
-    """
-
-    # Shorthand for common lines
-    O3b: str = "O 3 4958.91A"
-    O3r: str = "O 3 5006.84A"
-    O3: List[str] = field(
-        default_factory=lambda: ["O 3 4958.91A", "O 3 5006.84A"]
-    )
-    O2b: str = "O 2 3726.03A"
-    O2r: str = "O 2 3728.81A"
-    O2: List[str] = field(
-        default_factory=lambda: ["O 2 3726.03A", "O 2 3728.81A"]
-    )
-    Hb: str = "H 1 4862.69A"
-    Ha: str = "H 1 6564.62A"
-
-    # Balmer decrement, should be [2.79--2.86] (Te, ne, dependent)
-    # for dust free
-    ratios: Dict[str, List[List[str]]] = field(
-        default_factory=lambda: {
-            "BalmerDecrement": [["H 1 6564.62A"], ["H 1 4862.69A"]],
-            "N2": [["N 2 6583.45A"], ["H 1 6564.62A"]],
-            "S2": [["S 2 6730.82A", "S 2 6716.44A"], ["H 1 6564.62A"]],
-            "O1": [["O 1 6300.30A"], ["H 1 6564.62A"]],
-            "R2": [["O 2 3726.03A"], ["H 1 4862.69A"]],
-            "R3": [["O 3 5006.84A"], ["H 1 4862.69A"]],
-            "R23": [
-                [
-                    "O 3 4958.91A",
-                    "O 3 5006.84A",
-                    "O 2 3726.03A",
-                    "O 2 3728.81A",
-                ],
-                ["H 1 4862.69A"],
-            ],
-            "O32": [["O 3 5006.84A"], ["O 2 3726.03A"]],
-            "Ne3O2": [["NE 3 3868.76A"], ["O 2 3726.03A"]],
-        }
-    )
-
-    diagrams: Dict[str, List[List[List[str]]]] = field(
-        default_factory=lambda: {
-            "OHNO": [
-                [["O 3 5006.84A"], ["H 1 4862.69A"]],
-                [["NE 3 3868.76A"], ["O 2 3726.03A", "O 2 3728.81A"]],
-            ],
-            "BPT-NII": [
-                [["N 2 6583.45A"], ["H 1 6564.62A"]],
-                [["O 3 5006.84A"], ["H 1 4862.69A"]],
-            ],
-        }
-    )
-
-    def __post_init__(self):
-        # Provide lists of what is included
-        self.available_ratios: Tuple[str, ...] = tuple(self.ratios.keys())
-        self.available_diagrams: Tuple[str, ...] = tuple(self.diagrams.keys())
-
-
 class LineCollection:
     """
     A class holding a collection of emission lines
@@ -332,11 +266,11 @@ class LineCollection:
         self.wavelengths = self.wavelengths[sorted_arguments]
 
         # include line ratio and diagram definitions dataclass
-        self.lineratios = LineRatios()
+        self.line_ratios = line_ratios
 
         # create list of available line ratios
         self.available_ratios = []
-        for ratio_id, ratio in self.lineratios.ratios.items():
+        for ratio_id, ratio in self.line_ratios.ratios.items():
             # flatten line ratio list
             ratio_line_ids = [x for xs in ratio for x in xs]
 
@@ -346,7 +280,7 @@ class LineCollection:
 
         # create list of available line diagnostics
         self.available_diagrams = []
-        for diagram_id, diagram in self.lineratios.diagrams.items():
+        for diagram_id, diagram in self.line_ratios.diagrams.items():
             # flatten line ratio list
             diagram_line_ids = [x for xs in diagram[0] for x in xs] + [
                 x for xs in diagram[1] for x in xs
@@ -434,14 +368,14 @@ class LineCollection:
 
         Arguments:
             ratio_id
-                a ratio_id where the ratio lines are defined in LineRatios
+                a ratio_id where the ratio lines are defined in line_ratios
 
         Returns:
             float
                 a line ratio
         """
 
-        ab = self.lineratios.ratios[ratio_id]
+        ab = self.line_ratios.ratios[ratio_id]
 
         return self.get_ratio_(ab)
 
@@ -452,13 +386,13 @@ class LineCollection:
         Arguments:
             diagram_id
                 a diagram_id where the pairs of ratio lines are
-                defined in LineRatios
+                defined in line_ratios
 
         Returns:
             tuple (float)
                 a pair of line ratios
         """
-        ab, cd = self.lineratios.diagrams[diagram_id]
+        ab, cd = self.line_ratios.diagrams[diagram_id]
 
         return self.get_ratio_(ab), self.get_ratio_(cd)
 
