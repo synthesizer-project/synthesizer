@@ -28,7 +28,7 @@ ratios["R2"] = [[O2b], [Hb]]
 ratios["R3"] = R3 = [[O3r], [Hb]]
 ratios["R23"] = [O3 + O2, [Hb]]
 ratios["O32"] = [[O3r], [O2b]]
-ratios["Ne3O2"] = [["NE 3 3868.76A"], [O2b]]
+ratios["Ne3O2"] = [["Ne 3 3868.76A"], [O2b]]
 
 # tuple of available ratios
 available_ratios = tuple(ratios.keys())
@@ -37,7 +37,7 @@ available_ratios = tuple(ratios.keys())
 diagrams = {}
 
 # add reference
-diagrams["OHNO"] = [R3, [["NE 3 3868.76A"], O2]]
+diagrams["OHNO"] = [R3, [["Ne 3 3868.76A"], O2]]
 
 # add reference
 diagrams["BPT-NII"] = [[["N 2 6583.45A"], [Ha]], R3]
