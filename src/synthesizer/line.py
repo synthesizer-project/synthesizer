@@ -18,10 +18,9 @@ in plots etc.
 import numpy as np
 from unyt import Angstrom
 
-from synthesizer import exceptions
+from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.units import Quantity
-from synthesizer import line_ratios
 
 
 def get_line_id(id):
