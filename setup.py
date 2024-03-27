@@ -6,6 +6,7 @@ we use the legacy setup.py. This is ONLY used for the C extensions.
 """
 
 import tempfile
+from typing import Any, Dict, List
 
 import numpy as np
 from setuptools import Extension, setup
@@ -13,21 +14,18 @@ from setuptools.command.build_ext import build_ext
 from setuptools.errors import CompileError
 
 
-def has_flags(compiler, flags):
+def has_flags(compiler: Any, flags: List[str]) -> bool:
     """
     A function to check whether the C compiler allows for a flag to be passed.
 
     This is tested by compiling a small temporary test program.
 
     Args:
-        compiler
-            The loaded C compiler.
-        flags (list)
-            A list of compiler flags to test the compiler with.
+        compiler: The loaded C compiler.
+        flags: A list of compiler flags to test the compiler with.
 
     Returns
-        bool
-            Success/Failure
+        Success/Failure
     """
 
     # Attempt to compile a temporary C file
@@ -50,7 +48,7 @@ class BuildExt(build_ext):
 
     # Never check these; they're always added.
     # Note that we don't support MSVC here.
-    compile_flags = {
+    compile_flags: Dict[str, List[str]] = {
         "unix": [
             "-std=c99",
             "-w",
@@ -60,17 +58,17 @@ class BuildExt(build_ext):
         ]
     }
 
-    def build_extensions(self):
+    def build_extensions(self) -> None:
         """
         A method to set up the build extensions with the correct compiler
         flags.
         """
         # Get local useful variables
-        ct = self.compiler.compiler_type
+        ct: str = self.compiler.compiler_type
 
         # Set up the flags and links for compilation
-        opts = self.compile_flags.get(ct, [])
-        links = []
+        opts: List[str] = self.compile_flags.get(ct, [])
+        links: List[str] = []
 
         # Uncomment below if we use openMP and find a nice way to demonstrate
         # the user how to install it.
@@ -132,7 +130,7 @@ class BuildExt(build_ext):
 
 
 # Define the extension source files
-src_files = {
+src_files: Dict[str, str] = {
     "synthesizer.extensions.integrated_spectra": (
         "src/synthesizer/extensions/integrated_spectra.c"
     ),
@@ -150,7 +148,7 @@ src_files = {
 }
 
 # Create the extension objects
-extensions = [
+extensions: List[Extension] = [
     Extension(
         path,
         sources=[source],
