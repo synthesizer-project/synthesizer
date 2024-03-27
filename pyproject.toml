@@ -101,6 +101,7 @@ dev = [
     "ruff>=0.3.0",
 ]
 test = [
+    "mypy",
     "nbmake",
     "pytest",
     "ruff>=0.3.0",
