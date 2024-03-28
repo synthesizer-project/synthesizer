@@ -223,8 +223,28 @@ line-ending = "auto"
 
 # Configure mypy
 [tool.mypy]
-python_version = "3.8"
+# Specify the Python version to simulate type checking against.
+python_version = "3.9"
+# Check the bodies of functions without type annotations.
 check_untyped_defs = true
+# Ignore type checking errors from missing type hints in third-party libraries.
 ignore_missing_imports = true
+# Disallow defining functions without type annotations.
 disallow_untyped_defs = true
-warn_return_any = true
+
+# Options below will be enabled once the repo is typed
+
+# # Warn about functions that end up returning 'Any' because of insufficient typing.
+# warn_return_any = true
+# # Treat None and non-Optional types as incompatible (e.g., str is not Optional[str]).
+# strict_optional = true
+# # Require explicit Optional[] for arguments that default to None.
+# no_implicit_optional = true
+# # Warn about unnecessary 'cast' operations that don't actually change the type.
+# warn_redundant_casts = true
+# # Disallow calling functions without type annotations from functions with type annotations.
+# disallow_untyped_calls = true
+# # Disallow the use of generic types without explicit type parameters.
+# disallow_any_generics = true
+# # Enforce strict equality checks by disallowing comparisons between incompatible types.
+# strict_equality = true
