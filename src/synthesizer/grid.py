@@ -1,3 +1,5 @@
+"""TODO: Add module docstring"""
+
 import os
 
 import cmasher as cmr
