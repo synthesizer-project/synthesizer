@@ -13,5 +13,5 @@ def empty_sed() -> Sed:
 
 
 def test_sed_empty(empty_sed: Sed) -> None:
-    all_zeros: bool = not np.any(empty_sed.lnu)
+    all_zeros: np.bool_ = np.any(empty_sed.lnu != 0.0)
     assert all_zeros
