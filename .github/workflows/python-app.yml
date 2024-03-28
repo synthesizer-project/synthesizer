@@ -30,6 +30,11 @@ jobs:
         pip install wheel
         pip install -e .[test]
     - uses: chartboost/ruff-action@v1  # Lint with Ruff
+    -name: Type check with MyPy
+      run: |
+        mypy tests/
+        mypy src/
+        mypy examples/
     - name: Download test data
       run: |
         # Download test grid data
