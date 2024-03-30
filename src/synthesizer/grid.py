@@ -21,7 +21,7 @@ from synthesizer.units import Quantity
 from . import __file__ as filepath
 
 
-def check_lines_available(grid_name, grid_dir):
+def check_lines_available(grid_name: str, grid_dir: str):
     """
     Check that lines are available on this grid
 
