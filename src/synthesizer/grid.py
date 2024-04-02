@@ -452,6 +452,16 @@ class Grid:
 
         return self._lines_available
 
+    @property
+    def has_spectra(self):
+        """Return whether the Grid has spectra."""
+        return len(self.spectra) > 0
+
+    @property
+    def has_lines(self):
+        """Return whether the Grid has lines."""
+        return len(self.lines) > 0
+
     def get_grid_spectra_ids(self):
         """
         Get a list of the spectra available to a grid.
