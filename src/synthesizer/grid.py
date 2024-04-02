@@ -168,7 +168,7 @@ class Grid:
         grid_name,
         grid_dir=None,
         read_spectra=True,
-        read_lines=[],
+        read_lines=True,
         new_lam=None,
         filters=None,
         lam_lims=(),
@@ -184,9 +184,11 @@ class Grid:
             grid_dir (str)
                 The file path to the directory containing the grid file.
             read_spectra (bool)
-                Should we read the spectra?
+                Should we read the spectra? If a list then a subset of spectra
+                will be read.
             read_lines (bool)
-                Should we read a subset of lines? If False all lines are read.
+                Should we read lines? If a list then a subset of lines will be
+                read.
             new_lam (array-like, float)
                 An optional user defined wavelength array the spectra will be
                 interpolated onto, see Grid.interp_spectra.
@@ -205,22 +207,19 @@ class Grid:
         self.grid_ext = "hdf5"  # can be updated if grid_name has an extension
         self._parse_grid_path(grid_dir, grid_name)
 
-        # Flags for reading behaviour
-        self.read_lines = read_lines
-        self.read_spectra = read_spectra
+        # Prepare lists of available lines and spectra
+        self.available_lines = []
+        self.available_spectra = []
 
         # Set up property flags. These will be set when their property methods
         # are first called to avoid reading the file too often.
         self._reprocessed = None
         self._lines_available = None
 
-        # Set up attributes we will set later
-        self.spectra = None
-        self.lines = None
-
-        # Prepare lists of available lines and spectra
-        self.available_lines = []
-        self.available_spectra = []
+        # Set up spectra and lines dictionaries (if we don't read them they'll
+        # just stay as empty dicts)
+        self.spectra = {}
+        self.lines = {}
 
         # Get the axes of the grid from the HDF5 file
         self._get_axes()
@@ -229,11 +228,11 @@ class Grid:
         self._get_ionising_luminosity()
 
         # Read in spectra
-        if read_spectra:
-            self._get_spectra_grid()
+        if read_spectra:  # also True if read_spectra is a list
+            self._get_spectra_grid(read_spectra)
 
         # Read in lines
-        if read_lines:
+        if read_lines:  # also True if read_lines is a list
             self._get_lines_grid(read_lines)
 
         # Prepare the wavelength axis (if new_lam, lam_lims and filters are
@@ -242,8 +241,7 @@ class Grid:
         self._prepare_lam_axis(new_lam, filters, lam_lims)
 
     def _parse_grid_path(self, grid_dir, grid_name):
-        """ """
-
+        """Parse the grid path and set the grid directory and filename."""
         # If we haven't been given a grid directory, assume the grid is in
         # the package's "data/grids" directory.
         if grid_dir is None:
@@ -276,6 +274,7 @@ class Grid:
             self.axes = list(hf.attrs["axes"])
 
             # Put the values of each axis in a dictionary
+            # TODO: no point double storing this!
             self.axes_values = {
                 axis: hf["axes"][axis][:] for axis in self.axes
             }
@@ -306,38 +305,52 @@ class Grid:
                 for ion in hf["log10Q"].keys():
                     self.log10Q[ion] = hf["log10Q"][ion][:]
 
-    def _get_spectra_grid(self):
-        """Get the spectra grid from the HDF5 file."""
-        self.spectra = {}
+    def _get_spectra_grid(self, read_spectra):
+        """
+        Get the spectra grid from the HDF5 file.
 
+        If using a cloudy reprocessed grid this method will automatically
+        calculate 2 spectra not native to the grid file:
+            total = transmitted + nebular
+            nebular_continuum = nebular + linecont
+
+        Args:
+            read_spectra (bool/list)
+                Flag for whether to read all available spectra or subset of
+                spectra to read.
+        """
         with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as hf:
-            # Get list of available spectra
-            spectra_ids = list(hf["spectra"].keys())
+            # Are we only reading a subset?
+            if isinstance(read_spectra, list):
+                self.available_spectra = read_spectra
+            else:
+                # If not, read all available spectra
+                self.available_spectra = self.get_grid_spectra_ids()
 
             # Remove wavelength dataset
-            spectra_ids.remove("wavelength")
+            self.available_spectra.remove("wavelength")
 
             # Remove normalisation dataset
-            if "normalisation" in spectra_ids:
-                spectra_ids.remove("normalisation")
+            if "normalisation" in self.available_spectra:
+                self.available_spectra.remove("normalisation")
 
-            for spectra_id in spectra_ids:
+            # Get all our spectra
+            for spectra_id in self.available_spectra:
                 self.lam = hf["spectra/wavelength"][:]
                 self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
-        if "linecont" in self.spectra.keys():
+        if self.reprocessed:
             self.spectra["total"] = (
                 self.spectra["transmitted"] + self.spectra["nebular"]
             )
+            self.available_spectra.append("total")
 
             self.spectra["nebular_continuum"] = (
                 self.spectra["nebular"] - self.spectra["linecont"]
             )
-
-        # Save list of available spectra
-        self.available_spectra = list(self.spectra.keys())
+            self.available_spectra.append("nebular_continuum")
 
     def _get_lines_grid(self, read_lines):
         """
@@ -345,10 +358,11 @@ class Grid:
 
         Args:
             read_lines (bool/list)
-                Flag for whether to read lines or a list of which lines to
-                read.
+                Flag for whether to read all available lines or subset of
+                lines to read.
         """
-        if not self._lines_available:
+        # Double check we actually have lines to read
+        if not self.lines_available:
             raise Exception(
                 (
                     "No lines available on this grid object. "
@@ -357,24 +371,16 @@ class Grid:
                 )
             )
 
-        # If read_lines is True read all available lines in the grid,
-        # otherwise if read_lines is a list just read the lines
-        # in the list.
-
-        self.lines = {}
-
-        # If a list of lines is provided then only read lines in this list
-        if isinstance(read_lines, list):
-            read_lines = flatten_linelist(read_lines)
-
-        # If a list isn't provided then use all available lines to the grid
-        else:
-            read_lines, _ = self.get_available_lines(
-                self.grid_name, self.grid_dir
-            )
-
         with h5py.File(self.grid_filename, "r") as hf:
-            for line in read_lines:
+            # Are we only reading a subset?
+            if isinstance(read_lines, list):
+                self.available_lines = flatten_linelist(read_lines)
+            else:
+                # If not, read all available lines
+                self.available_lines, _ = self.get_grid_line_ids()
+
+            # Read in the lines
+            for line in self.available_lines:
                 self.lines[line] = {}
                 self.lines[line]["wavelength"] = hf["lines"][line].attrs[
                     "wavelength"
@@ -385,9 +391,6 @@ class Grid:
                 self.lines[line]["continuum"] = hf["lines"][line]["continuum"][
                     :
                 ]
-
-        # Save list of available lines
-        self.available_lines = list(self.lines.keys())
 
     def _prepare_lam_axis(
         self,
@@ -474,7 +477,18 @@ class Grid:
 
         return self._lines_available
 
-    def get_available_lines(self):
+    def get_grid_spectra_ids(self):
+        """
+        Get a list of the spectra available to a grid.
+
+        Returns:
+            lines (list):
+                List of available lines
+        """
+        with h5py.File(self.grid_filename, "r") as hf:
+            return list(hf["spectra"].keys())
+
+    def get_grid_line_ids(self):
         """
         Get a list of the lines available to a grid.
 
