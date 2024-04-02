@@ -369,7 +369,7 @@ class Grid:
 
         # If a list isn't provided then use all available lines to the grid
         else:
-            read_lines = self.get_available_lines(
+            read_lines, _ = self.get_available_lines(
                 self.grid_name, self.grid_dir
             )
 
@@ -474,17 +474,9 @@ class Grid:
 
         return self._lines_available
 
-    def get_available_lines(
-        self, grid_name, grid_dir, include_wavelengths=False
-    ):
+    def get_available_lines(self):
         """
-        Get a list of the lines available to a grid
-
-        Args:
-            grid_name (str):
-                The name of the grid file.
-            grid_dir (str):
-                The directory to the grid file.
+        Get a list of the lines available to a grid.
 
         Returns:
             lines (list):
@@ -495,13 +487,10 @@ class Grid:
         with h5py.File(self.grid_filename, "r") as hf:
             lines = list(hf["lines"].keys())
 
-            if include_wavelengths:
-                wavelengths = np.array(
-                    [hf["lines"][line].attrs["wavelength"] for line in lines]
-                )
-                return lines, wavelengths
-            else:
-                return lines
+            wavelengths = np.array(
+                [hf["lines"][line].attrs["wavelength"] for line in lines]
+            )
+        return lines, wavelengths
 
     def interp_spectra(self, new_lam, loop_grid=False):
         """
