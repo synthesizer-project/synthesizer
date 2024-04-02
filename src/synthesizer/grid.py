@@ -310,7 +310,7 @@ class Grid:
                 )
 
             else:
-                raise Exception(
+                raise exceptions.GridError(
                     (
                         "No lines available on this grid object. "
                         "Either set `read_lines=False`, or load a grid "
