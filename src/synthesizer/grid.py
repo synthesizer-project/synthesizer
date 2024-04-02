@@ -62,14 +62,16 @@ class Grid:
             grid_name has no extension then ".hdf5" is assumed.
         grid_filename (str)
             The full path to the grid file.
-        read_lines (bool/list)
-            Flag for whether to read lines. If False they are not read, if True
-            all lines are read, otherwise, this is a list of the requested
-            lines.
-        read_spectra (bool/list)
-            Flag for whether to read spectra. If False they are not read, if
-            True all spectra are read, otherwise, this is a list of the
-            requested spectra.
+        available_lines (bool/list)
+            A list of lines on the Grid.
+        available_spectra (bool/list)
+            A list of spectra on the Grid.
+        reprocessed (bool)
+            Flag for whether the grid has been reprocessed through cloudy.
+        lines_available (bool)
+            Flag for whether lines are available on this grid.
+        lam (Quantity, float)
+            The wavelengths at which the spectra are defined.
         spectra (dict, array-like, float)
             The spectra array from the grid. This is an N-dimensional
             grid where N is the number of axes of the SPS grid. The final
