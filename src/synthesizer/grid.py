@@ -86,7 +86,9 @@ class Grid:
         naxes
             The number of axes the spectral grid has.
         logQ10 (dict)
-            A dictionary of ionisation Q parameters.
+            A dictionary of ionisation Q parameters. (DEPRECATED)
+        log10_specific_ionising_luminosity (dict)
+            A dictionary of log10 specific ionising luminosities.
         <grid_axis> (array-like, float)
             A Grid will always contain 1D arrays corresponding to the axes
             of the spectral grid. These are read dynamically from the HDF5
