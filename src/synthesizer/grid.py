@@ -48,8 +48,8 @@ class Grid:
     The Grid class containing tabulated spectral and line data.
 
     This object contains attributes and methods for reading and
-    manipulating the spectral grids which under pin all spectra/line
-    generation in the synthesizer.
+    manipulating the spectral grids which underpin all spectra/line
+    generation in synthesizer.
 
     Attributes:
         grid_dir (str)
@@ -114,7 +114,7 @@ class Grid:
         lam_lims=(),
     ):
         """
-        Initailise the grid object.
+        Initialise the grid object.
 
         This will open the grid file and extract the axes, spectra (if
         requested), and lines (if requested) and any other relevant data.
@@ -440,7 +440,11 @@ class Grid:
     @property
     def lines_available(self):
         """
-        Check that lines are available on this grid.
+        Flag for whether line emission information is available 
+        on this grid.
+
+        This will only access the file the first time this property is
+        accessed.
 
         Returns:
             bool:
@@ -464,7 +468,7 @@ class Grid:
 
     def get_grid_spectra_ids(self):
         """
-        Get a list of the spectra available to a grid.
+        Get a list of the spectra available on a grid.
 
         Returns:
             list:
@@ -475,7 +479,7 @@ class Grid:
 
     def get_grid_line_ids(self):
         """
-        Get a list of the lines available to a grid.
+        Get a list of the lines available on a grid.
 
         Returns:
             list:
@@ -629,14 +633,14 @@ class Grid:
         # Throw exception if the spectra_id not in list of available spectra
         if spectra_id not in self.available_spectra:
             raise exceptions.InconsistentParameter(
-                "Provided spectra_id is not in list of available spectra."
+                "Provided spectra_id is not in the list of available spectra."
             )
 
         # Throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
             raise exceptions.InconsistentParameter(
                 "The grid_point tuple provided"
-                "as an argument should have same shape as the grid."
+                "as an argument should have the same shape as the grid."
             )
 
         # Throw an exception if grid point is outside grid bounds
@@ -667,7 +671,7 @@ class Grid:
         if len(grid_point) != self.naxes:
             raise exceptions.InconsistentParameter(
                 "The grid_point tuple provided"
-                "as an argument should have same shape as the grid."
+                "as an argument should have the same shape as the grid."
             )
 
         if isinstance(line_id, str):
@@ -681,7 +685,7 @@ class Grid:
             # Throw exception if tline_id not in list of available lines
             if line_id_ not in self.available_lines:
                 raise exceptions.InconsistentParameter(
-                    "Provided line_id is not in list of available lines."
+                    "Provided line_id is not in the list of available lines."
                 )
 
             line_ = self.lines[line_id_]
@@ -731,16 +735,16 @@ class Grid:
         max_log10age=None,
     ):
         """
-        Make a simple plot of the specific ionsing photon luminosity.
+        Make a simple plot of the specific ionising photon luminosity.
 
-        The resulting plot will plot the logged specific ionsing photon
-        luminosity as a function of log10age and metallicity for a given grid
+        The resulting figure will show the (log) specific ionsing photon
+        luminosity as a function of (log) age and metallicity for a given grid
         and ion.
 
         Args:
            ion (str)
-                The desired ion, most grids only have HI and HII calculated by
-                default at present.
+                The desired ion. Most grids only have HI and HII calculated by
+                default.
 
             hsize (float)
                 The horizontal size of the figure
