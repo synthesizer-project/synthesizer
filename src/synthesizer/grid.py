@@ -302,13 +302,21 @@ class Grid:
         """
         # Double check we actually have lines to read
         if not self.lines_available:
-            raise Exception(
-                (
-                    "No lines available on this grid object. "
-                    "Either set `read_lines=False`, or load a grid "
-                    "containing line information"
+            if not self.reprocessed:
+                raise exceptions.GridError(
+                    "Grid hasn't been reprocessed with cloudy and has no"
+                    "lines. Either pass `read_lines=False` or load a grid"
+                    "which has been run through cloudy."
                 )
-            )
+
+            else:
+                raise Exception(
+                    (
+                        "No lines available on this grid object. "
+                        "Either set `read_lines=False`, or load a grid "
+                        "containing line information"
+                    )
+                )
 
         with h5py.File(self.grid_filename, "r") as hf:
             # Are we only reading a subset?
