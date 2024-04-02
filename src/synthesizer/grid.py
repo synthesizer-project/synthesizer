@@ -44,11 +44,11 @@ from . import __file__ as filepath
 
 
 class Grid:
-    r"""
+    """
     The Grid class containing tabulated spectral and line data.
 
     This object contains attributes and methods for reading and
-    manipulating the spectral grids which under pin all spectra\line
+    manipulating the spectral grids which under pin all spectra/line
     generation in the synthesizer.
 
     Attributes:
