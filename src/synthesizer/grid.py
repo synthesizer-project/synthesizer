@@ -440,7 +440,7 @@ class Grid:
     @property
     def lines_available(self):
         """
-        Flag for whether line emission information is available 
+        Flag for whether line emission information is available
         on this grid.
 
         This will only access the file the first time this property is
