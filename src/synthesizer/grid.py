@@ -245,16 +245,10 @@ class Grid:
             # Get list of axes
             self.axes = list(hf.attrs["axes"])
 
-            # Put the values of each axis in a dictionary
-            # TODO: no point double storing this!
-            self.axes_values = {
-                axis: hf["axes"][axis][:] for axis in self.axes
-            }
-
             # Set the values of each axis as an attribute
             # e.g. self.log10age == self.axes_values['log10age']
             for axis in self.axes:
-                setattr(self, axis, self.axes_values[axis])
+                setattr(self, axis, hf["axes"][axis][:])
 
             # Number of axes
             self.naxes = len(self.axes)
