@@ -219,7 +219,7 @@ class Grid:
             self.axes = list(hf.attrs["axes"])
 
             # Set the values of each axis as an attribute
-            # e.g. self.log10age == self.axes_values['log10age']
+            # e.g. self.log10age == hdf["axes"]["log10age"]
             for axis in self.axes:
                 setattr(self, axis, hf["axes"][axis][:])
 
