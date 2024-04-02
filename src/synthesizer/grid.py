@@ -1,3 +1,27 @@
+"""The Grid class containing tabulated spectral and line data.
+
+This object underpins all of Synthesizer function which generates synthetic
+spectra and line luminosities from models or simulation outputs. The Grid
+object contains attributes and methods for interfacing with spectral and line
+grids.
+
+The grids themselves use a standardised HDF5 format which can be generated
+using the synthesizer-grids sister package.
+
+Example usage:
+
+    from synthesizer import Grid
+
+    # Load a grid
+    grid = Grid("bc03_salpeter")
+
+    # Get the axes of the grid
+    print(grid.axes)
+
+    # Get the spectra grid
+    print(grid.spectra)
+"""
+
 import os
 
 import cmasher as cmr
