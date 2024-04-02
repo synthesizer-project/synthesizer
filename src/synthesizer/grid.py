@@ -36,50 +36,11 @@ from spectres import spectres
 from unyt import angstrom, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.line import Line, LineCollection
+from synthesizer.line import Line, LineCollection, flatten_linelist
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 
 from . import __file__ as filepath
-
-
-def flatten_linelist(list_to_flatten):
-    """
-    Flatten a mixed list of lists and strings and remove duplicates. Used when
-    converting a desired line list which may contain single lines and doublets.
-
-    Args:
-        list_to_flatten (list)
-            list containing lists and/or strings and integers
-
-    Returns:
-        (list)
-            flattened list
-    """
-
-    flattened_list = []
-    for lst in list_to_flatten:
-        if isinstance(lst, list) or isinstance(lst, tuple):
-            for ll in lst:
-                flattened_list.append(ll)
-
-        elif isinstance(lst, str):
-            # If the line is a doublet, resolve it and add each line
-            # individually
-            if len(lst.split(",")) > 1:
-                flattened_list += lst.split(",")
-            else:
-                flattened_list.append(lst)
-
-        else:
-            raise Exception(
-                (
-                    "Unrecognised type provided. Please provide"
-                    "a list of lists and strings"
-                )
-            )
-
-    return list(set(flattened_list))
 
 
 class Grid:
