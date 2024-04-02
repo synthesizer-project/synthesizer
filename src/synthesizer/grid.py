@@ -174,8 +174,10 @@ class Grid:
         lam_lims=(),
     ):
         """
-        Initailise the grid object, open the grid file and extracting the
-        relevant data.
+        Initailise the grid object.
+
+        This will open the grid file and extract the axes, spectra (if
+        requested), and lines (if requested) and any other relevant data.
 
         Args:
             grid_name (str)
@@ -398,6 +400,34 @@ class Grid:
         filters,
         lam_lims,
     ):
+        """
+        Modify the grid wavelength axis to adhere to user defined wavelengths.
+
+        This method will do nothing if the user has not provided new_lam,
+        filters, or lam_lims.
+
+        If the user has passed any of these the wavelength array will be
+        limited and/or interpolated to match the user's input.
+
+        - If new_lam is provided, the spectra will be interpolated onto this
+          array.
+        - If filters are provided, the spectra will be limited wavelengths
+          with non-zero transmission and the filters will be interpolated
+          onto the grid's wavelength array in this non-zero range.
+        - If lam_lims are provided, the grid will be truncated to these
+          limits.
+
+        Args:
+            new_lam (array-like, float)
+                An optional user defined wavelength array the spectra will be
+                interpolated onto.
+            filters (FilterCollection)
+                An optional FilterCollection object to unify the grids
+                wavelength grid with.
+            lam_lims (tuple, float)
+                A tuple of the lower and upper wavelength limits to truncate
+                the grid to (i.e. (lower_lam, upper_lam)).
+        """
         # If we have both new_lam (or filters) and wavelength limits
         # the limits become meaningless tell the user so.
         if len(lam_lims) > 0 and (new_lam is not None or filters is not None):
@@ -482,8 +512,8 @@ class Grid:
         Get a list of the spectra available to a grid.
 
         Returns:
-            lines (list):
-                List of available lines
+            list:
+                List of available spectra
         """
         with h5py.File(self.grid_filename, "r") as hf:
             return list(hf["spectra"].keys())
@@ -493,9 +523,9 @@ class Grid:
         Get a list of the lines available to a grid.
 
         Returns:
-            lines (list):
+            list:
                 List of available lines
-            wavelengths (list)
+            list:
                 List of associated wavelengths.
         """
         with h5py.File(self.grid_filename, "r") as hf:
@@ -580,10 +610,7 @@ class Grid:
     @staticmethod
     def get_nearest_index(value, array):
         """
-        Function for calculating the closest index in an array for a
-        given value.
-
-        TODO: This could be moved to utils?
+        Calculate the closest index in an array for a given value.
 
         Args:
             value (float/unyt_quantity)
@@ -596,7 +623,6 @@ class Grid:
             int
                 The index of the closet point in the grid (array)
         """
-
         # Handle units on both value and array
         # First do we need a conversion?
         if isinstance(array, unyt_array) and isinstance(value, unyt_quantity):
@@ -613,7 +639,7 @@ class Grid:
 
     def get_grid_point(self, values):
         """
-        Function to identify the nearest grid point for a tuple of values.
+        Identify the nearest grid point for a tuple of values.
 
         Args:
             values (tuple)
@@ -621,10 +647,9 @@ class Grid:
                 in the same order as the axes.
 
         Returns:
-            (tuple)
+            tuple
                 A tuple of integers specifying the closest grid point.
         """
-
         return tuple(
             [
                 self.get_nearest_index(value, getattr(self, axis))
@@ -634,7 +659,7 @@ class Grid:
 
     def get_spectra(self, grid_point, spectra_id="incident"):
         """
-        Function for creating an Sed object for a specific grid point.
+        Create an Sed object for a specific grid point.
 
         Args:
             grid_point (tuple)
@@ -643,14 +668,13 @@ class Grid:
                 The name of the spectra (in the grid) that is desired.
 
         Returns:
-            sed (synthesizer.sed.Sed)
+            synthesizer.sed.Sed
                 A synthesizer Sed object
         """
-
-        # Throw exception if the line_id not in list of available lines
+        # Throw exception if the spectra_id not in list of available spectra
         if spectra_id not in self.available_spectra:
             raise exceptions.InconsistentParameter(
-                "Provided spectra_id is not in" "list of available spectra."
+                "Provided spectra_id is not in list of available spectra."
             )
 
         # Throw exception if the grid_point has a different shape from the grid
@@ -660,13 +684,19 @@ class Grid:
                 "as an argument should have same shape as the grid."
             )
 
-        # TODO: throw an exception if grid point is outside grid bounds
-
-        return Sed(self.lam, lnu=self.spectra[spectra_id][grid_point])
+        # Throw an exception if grid point is outside grid bounds
+        try:
+            return Sed(self.lam, lnu=self.spectra[spectra_id][grid_point])
+        except IndexError:
+            # Modify the error message for clarity
+            raise IndexError(
+                f"grid_point is outside of the grid (grid.shape={self.shape}, "
+                f"grid_point={grid_point})"
+            )
 
     def get_line(self, grid_point, line_id):
         """
-        Function for creating a Line object for a given line_id and grid_point.
+        Create a Line object for a given line_id and grid_point.
 
         Args:
             grid_point (tuple)
@@ -678,7 +708,6 @@ class Grid:
             line (synthesizer.line.Line)
                 A synthesizer Line object.
         """
-
         # Throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
             raise exceptions.InconsistentParameter(
@@ -697,7 +726,7 @@ class Grid:
             # Throw exception if tline_id not in list of available lines
             if line_id_ not in self.available_lines:
                 raise exceptions.InconsistentParameter(
-                    "Provided line_id is" "not in list of available lines."
+                    "Provided line_id is not in list of available lines."
                 )
 
             line_ = self.lines[line_id_]
@@ -709,7 +738,7 @@ class Grid:
 
     def get_lines(self, grid_point, line_ids=None):
         """
-        Function a LineCollection of multiple lines.
+        Create a LineCollection for multiple lines.
 
         Args:
             grid_point (tuple)
@@ -720,7 +749,6 @@ class Grid:
         Returns:
             lines (lines.LineCollection)
         """
-
         # If no line ids are provided calculate all lines
         if line_ids is None:
             line_ids = self.available_lines
@@ -748,8 +776,11 @@ class Grid:
         max_log10age=None,
     ):
         """
-        Make a simple plot of the specific ionsing photon luminosity (logged)
-        as a function of log10age and metallicity for a given grid and ion.
+        Make a simple plot of the specific ionsing photon luminosity.
+
+        The resulting plot will plot the logged specific ionsing photon
+        luminosity as a function of log10age and metallicity for a given grid
+        and ion.
 
         Args:
            ion (str)
@@ -780,7 +811,6 @@ class Grid:
             matplotlib.Axis
                 The axis on which to plot.
         """
-
         # Define the axis coordinates
         left = 0.2
         height = 0.65
@@ -871,7 +901,7 @@ class Grid:
 
     def get_delta_lambda(self, spectra_id="incident"):
         """
-        Calculates the delta lambda for the given spectra.
+        Calculate the delta lambda for the given spectra.
 
         Args:
             spectra_id (str)
@@ -881,7 +911,6 @@ class Grid:
             tuple
                 A tuple containing the list of wavelengths and delta lambda.
         """
-
         # Calculate delta lambda for each wavelength
         delta_lambda = np.log10(self.lam[1:]) - np.log10(self.lam[:-1])
 
@@ -890,9 +919,10 @@ class Grid:
 
     def get_sed(self, spectra_type):
         """
-        Get the spectra grid as an Sed object enabling grid wide
-        use of Sed methods for flux, photometry, indices, ionising photons
-        etc.
+        Get the spectra grid as an Sed object.
+
+        This enables grid wide use of Sed methods for flux, photometry,
+        indices, ionising photons, etc.
 
         Args:
             spectra_type (string)
@@ -918,7 +948,6 @@ class Grid:
             max_lam (unyt_quantity)
                 The maximum wavelength to truncate the grid to.
         """
-
         # Get the indices of the wavelengths to keep
         okinds = np.logical_and(self.lam >= min_lam, self.lam <= max_lam)
 
