@@ -97,3 +97,5 @@ html_theme: str = "furo"
 html_theme_options: Dict[str, Any] = {
     "sidebar_hide_name": True,
 }
+
+html_title = "Synthesizer"
