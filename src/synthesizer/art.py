@@ -6,19 +6,19 @@ Example usage:
     print(Art.galaxy)
 """
 
+from typing import List
+
 
 class Art:
-    """
-    A class containing art.
-    """
+    """A class containing art."""
 
-    synthesizer = (
+    synthesizer: str = (
         "+-+-+-+-+-+-+-+-+-+-+-+\n"
         "|S|Y|N|T|H|E|S|I|Z|E|R|\n"
         "+-+-+-+-+-+-+-+-+-+-+-+\n"
     )
 
-    galaxy2 = (
+    galaxy2: str = (
         "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⡀⠒⠒⠦⣄⡀⠀⠀⠀⠀⠀⠀⠀\n"
         "⠀⠀⠀⠀⠀⢀⣤⣶⡾⠿⠿⠿⠿⣿⣿⣶⣦⣄⠙⠷⣤⡀⠀⠀⠀⠀\n"
         "⠀⠀⠀⣠⡾⠛⠉⠀⠀⠀⠀⠀⠀⠀⠈⠙⠻⣿⣷⣄⠘⢿⡄⠀⠀⠀\n"
@@ -35,7 +35,7 @@ class Art:
         "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n"
     )
 
-    galaxy = (
+    galaxy: str = (
         "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⡀⠒⠒⠦⣄⡀⠀⠀⠀⠀⠀⠀⠀\n"
         "⠀⠀⠀⠀⠀⢀⣤⣶⡾⠿⠿⠿⠿⣿⣿⣶⣦⣄⠙⠷⣤⡀⠀⠀⠀⠀\n"
         "⠀⠀⠀⣠⡾⠛⠉⠀⠀⠀⠀⠀⠀⠀⠈⠙⠻⣿⣷⣄⠘⢿⡄⠀⠀⠀\n"
@@ -52,7 +52,7 @@ class Art:
         "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀\n"
     )
 
-    blackhole = (
+    blackhole: str = (
         "                                                               \n"
         "                     ´```´``````````````´                      \n"
         "               `´```````````´´`´´¨´´```````````                \n"
@@ -78,26 +78,22 @@ class Art:
     )
 
 
-def get_centred_art(art, width):
+def get_centred_art(art: str, width: int) -> str:
     """
-    A function to print the art centred in a width.
+    Centre art in a width.
 
     Args:
-        art (str)
-            The art to be centred.
-        width (int)
-            The number of characters in the region to centre within.
+        art: The art to be centred.
+        width: The number of characters in the region to centre within.
 
     Returns:
-        string
-            The Art.galaxy art centred within width.
+        The art centred within width.
     """
-
     # Split the line into individual lines
-    split_art = art.split("\n")
+    split_art: List[str] = art.split("\n")
 
     # Initialise the centred string
-    new_string = ""
+    new_string: str = ""
 
     # Loop over the art string centring each line
     for line in split_art:
@@ -109,19 +105,17 @@ def get_centred_art(art, width):
     return new_string
 
 
-def print_centred_art(art, width):
+def print_centred_art(art: str, width: int) -> None:
     """
-    A function to print the art centred in a width.
+    Print the art centred in a width.
 
     Args:
-        width (int)
-            The number of characters in the region to centre within.
+        width: The number of characters in the region to centre within.
     """
-
     # Get the centred art
-    art = get_centred_art(art, width)
+    cent_art: str = get_centred_art(art, width)
 
-    print(art)
+    print(cent_art)
 
 
 ""
