@@ -4,6 +4,9 @@ Example usage:
 
     planck(frequency, temperature=10000 * K)
     rebin_1d(arr, 10, func=np.sum)
+    value_to_array(1.0)
+    has_units(1.0 * K)
+    parse_grid_id("bc03_chab")
 """
 
 import numpy as np
@@ -17,17 +20,13 @@ def planck(nu, temperature):
     Planck's law.
 
     Args:
-        nu (unyt_array/array-like, float)
-            The frequencies at which to calculate the distribution.
-        temperature  (float/array-like, float)
-            The dust temperature. Either a single value or the same size
-            as nu.
+        nu: The frequencies at which to calculate the distribution.
+        temperature: The dust temperature. Either a single value or the same
+                     size as nu.
 
     Returns:
-        array-like, float
-            The values of the distribution at nu.
+        The values of the distribution at nu.
     """
-
     return (2.0 * h * (nu**3) * (c**-2)) * (
         1.0 / (np.exp(h * nu / (kb * temperature)) - 1.0)
     )
@@ -35,18 +34,16 @@ def planck(nu, temperature):
 
 def has_units(x):
     """
-    Check whether the passed variable has units, i.e. is a unyt_quanity or
-    unyt_array.
+    Check whether the passed variable has units.
+
+    i.e. Ensure the passed variable is a unyt_quanity or unyt_array.
 
     Args:
-        x (generic variable)
-            The variables to check.
+        x: The variables to check.
 
     Returns:
-        bool
-            True if the variable has units, False otherwise.
+        True if the variable has units, False otherwise.
     """
-
     # Do the check
     if isinstance(x, (unyt_array, unyt_quantity)):
         return True
@@ -56,22 +53,19 @@ def has_units(x):
 
 def rebin_1d(arr, resample_factor, func=np.sum):
     """
-    A simple function for rebinning a 1D array using a specificed
-    function (e.g. sum or mean).
+    Rebin a 1D array.
+
+    The rebinning can be done using a specificed function (e.g. sum or mean).
 
     Args:
-        arr (array-like)
-            The input 1D array.
-        resample_factor (int)
-            The integer rebinning factor, i.e. how many bins to rebin by.
-        func (func)
-            The function to use (e.g. mean or sum).
+        arr: The input 1D array.
+        resample_factor: The integer rebinning factor, i.e. how many bins to
+                         rebin by.
+        func: The function to use (e.g. mean or sum).
 
     Returns:
-        array-like
-            The input array resampled by i.
+        The input array resampled by i.
     """
-
     # Ensure the array is 1D
     if arr.ndim != 1:
         raise exceptions.InconsistentArguments(
@@ -104,22 +98,18 @@ def rebin_1d(arr, resample_factor, func=np.sum):
 
 def value_to_array(value):
     """
-    A helper functions for converting a single value to an array holding
-    a single value.
+    Convert a single value to an array holding a single value.
 
     Args:
-        value (float/unyt_quantity)
-            The value to wrapped into an array.
+        value: The value to wrapped into an array.
 
     Returns:
-        array-like/unyt_array
-            An array containing the single value
+        An array containing the single value
 
     Raises:
         InconsistentArguments
             If the argument is not a float or unyt_quantity.
     """
-
     # Just return it if we have been handed an array already or None
     # NOTE: unyt_arrays and quantities are by definition arrays and thus
     # return True for the isinstance below.
@@ -159,8 +149,7 @@ def parse_grid_id(grid_id):
     version, and IMF
 
     Args:
-        grid_id (str)
-            string grid identifier
+        grid_id: The string grid identifier.
     """
     if len(grid_id.split("_")) == 2:
         sps_model_, imf_ = grid_id.split("_")
