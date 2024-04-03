@@ -155,6 +155,11 @@ class Kernel:
 
     NOTE: the resulting kernel is integrated along the z-axis resulting in a
     2D projection of the 3D kernel.
+
+    Attributes:
+        name: The name of the kernel function.
+        binsize: The number of bins for the kernel.
+        f: The kernel function.
     """
 
     name: str
