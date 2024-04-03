@@ -25,7 +25,7 @@ def single(size: float = 3.5) -> Tuple[Figure, Axes]:
         The axis on which to plot.
     """
     # Create the figure
-    fig: Figure = plt.figure(figsize=size)
+    fig: Figure = plt.figure(figsize=(size, size))
 
     # Define the coordinates of the axis
     left: float = 0.15
@@ -62,7 +62,7 @@ def single_wcbar_right(hsize: float = 3.5) -> Tuple[Figure, Axes, Axes]:
 
     # Create the single set of axes and colorbar axes
     ax: Axes = fig.add_axes((left, bottom, width, height))
-    cax: Axes = fig.add_axes([left + width, bottom, 0.03, height])
+    cax: Axes = fig.add_axes((left + width, bottom, 0.03, height))
 
     return fig, ax, cax
 
