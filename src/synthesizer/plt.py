@@ -6,128 +6,100 @@ Example usage:
     fig, ax, haxx, haxy = single_histxy(size=3.5, set_axis_off=True)
 """
 
+from typing import Tuple
+
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
 
-def single(size=3.5):
+def single(size: float = 3.5) -> Tuple[Figure, Axes]:
     """
     Set up a matplotlib figure containing a single axis.
 
     Args:
-        size (float)
-            The size of the plot along both axes in inches.
+        size: The size of the plot along both axes in inches.
 
     Returns:
-        matplotlib.Figure
-            The created figure containing the axes.
-        matplotlib.Axis
-            The axis on which to plot.
+        The created figure containing the axes.
+        The axis on which to plot.
     """
-
     # Create the figure
-    fig = plt.figure(figsize=size)
+    fig: Figure = plt.figure(figsize=size)
 
     # Define the coordinates of the axis
-    left = 0.15
-    height = 0.8
-    bottom = 0.15
-    width = 0.8
+    left: float = 0.15
+    height: float = 0.8
+    bottom: float = 0.15
+    width: float = 0.8
 
     # Create the single set of axes
-    ax = fig.add_axes((left, bottom, width, height))
+    ax: Axes = fig.add_axes((left, bottom, width, height))
 
     return fig, ax
 
 
-def single_wcbar_right(hsize=3.5):
+def single_wcbar_right(hsize: float = 3.5) -> Tuple[Figure, Axes, Axes]:
     """
     Set up a matplotlib figure containing a single axis and a colorbar.
 
     Args:
-        hsize (float)
-            The horizontal size of the plot in inches.
+        hsize: The horizontal size of the plot in inches.
 
     Returns:
-        matplotlib.Figure
-            The created figure containing the axes.
-        ax (matplotlib.Axis)
-            The axis on which to plot.
-        cax (matplotlib.Axis)
-            The axis for the colorbar.
+        The created figure containing the axes.
+        The axis on which to plot.
+        The axis for the colorbar.
     """
-
     # Define the coordinates of the axis
-    left = 0.15
-    height = 0.8
-    bottom = 0.15
-    width = 0.65
+    left: float = 0.15
+    height: float = 0.8
+    bottom: float = 0.15
+    width: float = 0.65
 
     # Create the figure
-    fig = plt.figure(figsize=(hsize, hsize * width / height))
+    fig: Figure = plt.figure(figsize=(hsize, hsize * width / height))
 
     # Create the single set of axes and colorbar axes
-    ax = fig.add_axes((left, bottom, width, height))
-    cax = fig.add_axes([left + width, bottom, 0.03, height])
+    ax: Axes = fig.add_axes((left, bottom, width, height))
+    cax: Axes = fig.add_axes([left + width, bottom, 0.03, height])
 
     return fig, ax, cax
 
 
-def single_histxy(size=3.5, set_axis_off=True):
+def single_histxy(
+    size: float = 3.5,
+    set_axis_off: bool = True,
+) -> Tuple[Figure, Axes, Axes, Axes]:
     """
-    Set up a matplotlib figure containing a single axis, and a
-    histogram on each axis.
+    Set up a matplotlib figure with a single axis, and a hist on each axis.
 
     Args:
-        size (float)
-            The size of the plot along both axes in inches.
-        set_axis_off (bool)
-            Should the histograms have their axes removed?
+        size: The size of the plot along both axes in inches.
+        set_axis_off: Should the histograms have their axes removed?
 
     Returns:
-        matplotlib.Figure
-            The created figure containing the axes.
-        ax (matplotlib.Axis)
-            The axis on which to plot.
-        haxx (matplotlib.Axis)
-            The axis for the x histogram.
-        haxy (matplotlib.Axis)
-            The axis for the y histogram.
+        The created figure containing the axes.
+        The axis on which to plot.
+        The axis for the x histogram.
+        The axis for the y histogram.
     """
-
     # Create the figure
-    fig = plt.figure(figsize=(size, size))
+    fig: Figure = plt.figure(figsize=(size, size))
 
     # Define the coordinates of the axis
-    left = 0.15
-    height = 0.65
-    bottom = 0.15
-    width = 0.65
+    left: float = 0.15
+    height: float = 0.65
+    bottom: float = 0.15
+    width: float = 0.65
 
     # Set up each axis
-    ax = fig.add_axes(
-        (
-            left,
-            bottom,
-            width,
-            height,
-        )
-    )  # main panel
-    haxx = fig.add_axes(
-        (
-            left,
-            bottom + height,
-            width,
-            0.15,
-        )
+    ax: Axes = fig.add_axes((left, bottom, width, height))  # main panel
+    haxx: Axes = fig.add_axes(
+        (left, bottom + height, width, 0.15)
     )  # x-axis hist panel
-
-    haxy = fig.add_axes(
-        (
-            left + width,
-            bottom,
-            0.15,
-            height,
-        )
+    haxy: Axes = fig.add_axes(
+        (left + width, bottom, 0.15, height)
     )  # y-axis hist panel
 
     if set_axis_off:
