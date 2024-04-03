@@ -11,7 +11,6 @@ Some notes on (standard) notation:
 - [X/H] = log10(N_X/N_H) - log10(N_X/N_H)_sol
 """
 
-import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -659,7 +658,8 @@ def plot_abundance_pattern(a, show=False, ylim=None, components=["total"]):
 
     ax = fig.add_axes((left, bottom, width, height))
 
-    colors = cmr.take_cmap_colors("cmr.bubblegum", len(a.all_elements))
+    cmap = plt.get_cmap("plasma")
+    colors = [cmap(i) for i in np.linspace(0, 1, len(a.all_elements))]
 
     for line, ls, ms in zip(
         components, ["-", "--", "-.", ":"], ["o", "s", "D", "d", "^"]
@@ -726,7 +726,8 @@ def plot_multiple_abundance_patterns(
 
     a = abundance_patterns[0]
 
-    colors = cmr.take_cmap_colors("cmr.bubblegum", len(a.all_elements))
+    cmap = plt.get_cmap("plasma")
+    colors = [cmap(i) for i in np.linspace(0, 1, len(a.all_elements))]
 
     if not labels:
         labels = range(len(abundance_patterns))

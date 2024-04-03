@@ -21,7 +21,6 @@ Example usages:
 
 import warnings
 
-import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from unyt import kpc
@@ -1861,7 +1860,7 @@ class Stars(Particles, StarsComponent):
             log10ages,
             log10metallicities,
             self.sfzh.T,
-            cmap=cmr.sunburst,
+            cmap="plasma",
         )
 
         # Add binned Z to right of the plot

@@ -9,7 +9,6 @@ import argparse
 import glob
 import os
 
-import cmasher as cmr
 import matplotlib as mpl
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
@@ -17,7 +16,7 @@ import numpy as np
 from synthesizer.grid import Grid
 
 # colourmap to use
-cmap = cmr.bubblegum
+cmap = "plasma"
 
 # mapping of age to colour
 norm = mpl.colors.Normalize(vmin=5.0, vmax=11.0)

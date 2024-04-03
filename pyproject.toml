@@ -84,7 +84,6 @@ dependencies = [
   "packaging",
   "scipy",
   "unyt",
-  "cmasher",
   "dust_extinction",
   "matplotlib",
   "spectres",

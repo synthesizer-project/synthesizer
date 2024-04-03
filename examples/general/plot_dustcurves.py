@@ -5,7 +5,6 @@ Dust curves example
 Plot dust curves
 """
 
-import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from synthesizer.dust import attenuation
@@ -37,7 +36,8 @@ params = [
     {"model": "Calzetti"},
 ]
 
-colors = cmr.take_cmap_colors("cmr.guppy", len(models))
+cmap = plt.get_cmap("plasma")
+colors = [cmap(i) for i in np.linspace(0, 1, len(models))]
 
 lam = np.arange(1000, 10000, 10) * Angstrom
 

@@ -4,7 +4,6 @@ Plot quiescent UVJ diagram
 
 """
 
-import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
@@ -81,7 +80,8 @@ def UVJ_metallicity(grid):
         left=0.15, top=0.975, bottom=0.1, right=0.95, wspace=0.0, hspace=0.0
     )
 
-    colors = cmr.take_cmap_colors("cmr.bubblegum", len(grid.metallicity))
+    cmap = plt.get_cmap("plasma")
+    colors = [cmap(i) for i in np.linspace(0, 1, len(grid.metallicity))]
 
     for Z, c in zip(grid.metallicity, colors):
         x = table["log10ages"] - 6.0

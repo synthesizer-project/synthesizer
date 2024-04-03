@@ -12,7 +12,6 @@ Example usage:
     stars.plot_spectra()
 """
 
-import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
@@ -747,7 +746,7 @@ class Stars(StarsComponent):
             self.log10ages,
             self.log10metallicities,
             self.sfzh.T,
-            cmap=cmr.sunburst,
+            cmap="plasma",
         )
 
         # Add binned Z to right of the plot

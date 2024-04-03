@@ -5,7 +5,6 @@ IGM transmission example
 Plot IGM transmission curves (Inoue+14 & Madau+96
 """
 
-import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from synthesizer.igm import Inoue14, Madau96
@@ -14,7 +13,8 @@ lam = np.arange(0, 20000)
 
 
 redshifts = [3.0, 5.0, 7.0]
-colors = cmr.take_cmap_colors("cmr.guppy", len(redshifts))
+cmap = plt.get_cmap("plasma")
+colors = [cmap(i) for i in np.linspace(0, 1, len(redshifts))]
 
 for IGM, ls in zip([Inoue14, Madau96], ["-", ":"]):
     igm = IGM()
