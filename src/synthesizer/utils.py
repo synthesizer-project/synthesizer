@@ -149,3 +149,58 @@ def value_to_array(value):
         )
 
     return arr
+
+
+def parse_grid_id(grid_id):
+    """
+    Parse a grid name for the properties of the grid.
+
+    This is used for parsing a grid ID to return the SPS model,
+    version, and IMF
+
+    Args:
+        grid_id (str)
+            string grid identifier
+    """
+    if len(grid_id.split("_")) == 2:
+        sps_model_, imf_ = grid_id.split("_")
+        cloudy = cloudy_model = ""
+
+    if len(grid_id.split("_")) == 4:
+        sps_model_, imf_, cloudy, cloudy_model = grid_id.split("_")
+
+    if len(sps_model_.split("-")) == 1:
+        sps_model = sps_model_.split("-")[0]
+        sps_model_version = ""
+
+    if len(sps_model_.split("-")) == 2:
+        sps_model = sps_model_.split("-")[0]
+        sps_model_version = sps_model_.split("-")[1]
+
+    if len(sps_model_.split("-")) > 2:
+        sps_model = sps_model_.split("-")[0]
+        sps_model_version = "-".join(sps_model_.split("-")[1:])
+
+    if len(imf_.split("-")) == 1:
+        imf = imf_.split("-")[0]
+        imf_hmc = ""
+
+    if len(imf_.split("-")) == 2:
+        imf = imf_.split("-")[0]
+        imf_hmc = imf_.split("-")[1]
+
+    if imf in ["chab", "chabrier03", "Chabrier03"]:
+        imf = "Chabrier (2003)"
+    if imf in ["kroupa"]:
+        imf = "Kroupa (2003)"
+    if imf in ["salpeter", "135all"]:
+        imf = "Salpeter (1955)"
+    if imf.isnumeric():
+        imf = rf"$\alpha={float(imf)/100}$"
+
+    return {
+        "sps_model": sps_model,
+        "sps_model_version": sps_model_version,
+        "imf": imf,
+        "imf_hmc": imf_hmc,
+    }
