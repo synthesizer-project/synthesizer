@@ -47,6 +47,9 @@ from synthesizer.exceptions import (
 )
 from synthesizer.units import Quantity
 
+# To avoid circular imports while having the classes available for type
+# checking we need to hide classes the reference each other within the
+# TYPE_CHECKING flag which is set by mypy
 if TYPE_CHECKING:
     from synthesizer.grid import Grid
 
