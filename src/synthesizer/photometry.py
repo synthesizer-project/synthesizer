@@ -8,12 +8,27 @@ return an instance of this class.
 """
 
 import re
+from typing import (
+    Dict,
+    ItemsView,
+    Iterator,
+    KeysView,
+    List,
+    Optional,
+    Tuple,
+    Union,
+    ValuesView,
+    cast,
+)
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+from numpy.typing import NDArray
 from unyt import unyt_array, unyt_quantity
 
-from synthesizer import exceptions
+from synthesizer.filters import FilterCollection
 from synthesizer.units import Quantity, default_units
 
 
@@ -28,27 +43,35 @@ class PhotometryCollection:
     an issue if it is this should never really be directly instantiated.
 
     Attributes:
-        photometry (Quantity):
-            Quantity instance representing photometry data.
-        photo_luminosities (Quantity):
-            Quantity instance representing photometry data in the rest frame.
-        photo_fluxes (Quantity):
-            Quantity instance representing photometry data in the
-            observer frame.
-        filters (FilterCollection):
-            The FilterCollection used to produce the photometry.
-        filter_codes (list):
-            List of filter codes.
-        _look_up (dict):
-            A dictionary for easy access to photometry values using
-            filter codes.
+        photometry: Quantity instance representing photometry data.
+        photo_luminosities: Quantity instance representing photometry data in
+                            the rest frame.
+        photo_fluxes: Quantity instance representing photometry data in the
+                      observer frame.
+        filters: The FilterCollection used to produce the photometry.
+        filter_codes: List of filter codes.
+        _look_up: A dictionary for easy access to photometry values using
+                  filter codes.
     """
 
+    filters: FilterCollection
+    filter_codes: List[str]
+    photometry: unyt_array
+    _look_up: Dict[str, unyt_quantity]
+
     # Define quantities (there has to be one for rest and observer frame)
+    _photo_luminosities: NDArray[np.float64]
+    photo_luminosities: unyt_array
     photo_luminosities = Quantity()
+    _photo_fluxes: NDArray[np.float64]
+    photo_fluxes: unyt_array
     photo_fluxes = Quantity()
 
-    def __init__(self, filters, **kwargs):
+    def __init__(
+        self,
+        filters: FilterCollection,
+        **kwargs: Dict[str, unyt_quantity],
+    ) -> None:
         """
         Instantiate the photometry collection.
 
@@ -59,11 +82,9 @@ class PhotometryCollection:
         units of the photometry passed.
 
         Args:
-            filters (FilterCollection)
-                The FilterCollection used to produce the photometry.
-            kwargs (dict)
-                A dictionary of keyword arguments containing all the photometry
-                of the form {"filter_code": photometry}.
+            filters: The FilterCollection used to produce the photometry.
+            kwargs: A dictionary of keyword arguments containing all the
+                    photometry of the form {"filter_code": photometry}.
         """
         # Store the filter collection
         self.filters = filters
@@ -72,16 +93,12 @@ class PhotometryCollection:
         self.filter_codes = list(kwargs.keys())
 
         # Get the photometry
-        photometry = list(kwargs.values())
-
-        # Ensure we have units, if not something terrible has happened
-        if not isinstance(photometry[0], (unyt_quantity, unyt_array)):
-            raise exceptions.InconsistentArguments(
-                "Photometry must be passed as a dict of unyt_quantities."
-            )
+        photometry_lst: List[unyt_quantity] = list(kwargs.values())
 
         # Convert it from a list of unyt_quantities to a unyt_array
-        photometry = unyt_array(photometry, units=photometry[0].units)
+        photometry: unyt_array = unyt_array(
+            photometry_lst, units=photometry_lst[0].units
+        )
 
         # Get the dimensions of a flux for testing
         flux_dimensions = default_units["photo_fluxes"].units.dimensions
@@ -106,7 +123,7 @@ class PhotometryCollection:
             )
         }
 
-    def __getitem__(self, filter_code):
+    def __getitem__(self, filter_code: str) -> unyt_quantity:
         """
         Enable dictionary key look up syntax to extract specific photometry.
 
@@ -119,62 +136,56 @@ class PhotometryCollection:
         would be used) should always return with units.
 
         Args:
-            filter_code (str)
-                The filter code of the desired photometry.
+            filter_code: The filter code of the desired photometry.
         """
         # Perform the look up
         return self._look_up[filter_code]
 
-    def keys(self):
+    def keys(self) -> KeysView:
         """
-        Enable dict.keys() behaviour.
+        Enable dict.keys behaviour.
 
         Returns:
-            list
-                A list of filter codes.
+             A list of filter codes.
         """
         return self._look_up.keys()
 
-    def values(self):
+    def values(self) -> ValuesView:
         """
-        Enable dict.values() behaviour.
+        Enable dict.values behaviour.
 
         Returns:
-            dict_values
-                A dict_values object containing the photometry.
+            A dict_values object containing the photometry.
         """
         return self._look_up.values()
 
-    def items(self):
+    def items(self) -> ItemsView:
         """
-        Enable dict.items() behaviour.
+        Enable dict.items behaviour.
 
         Returns:
-            dict_items
-                A dict_items object containing the filter codes and
-                photometry.
+            A dict_items object containing the filter codes and photometry.
         """
         return self._look_up.items()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[str, unyt_quantity]]:
         """
         Enable dict iter behaviour.
 
         Returns:
-            iter
-                An iterator over the filter codes and photometry.
+            An iterator over the filter codes and photometry.
         """
         return iter(self._look_up.items())
 
-    def __str__(self):
+    def __str__(self) -> str:
         """
         Allow for a summary to be printed.
 
         Returns:
-            str: A formatted string representation of the PhotometryCollection.
+            A formatted string representation of the PhotometryCollection.
         """
         # Define the filter code column
-        filters_col = [
+        filters_col: List[str] = [
             (
                 f"{f.filter_code} (\u03bb = {f.pivwv().value:.2e} "
                 f"{str(f.lam.units)})"
@@ -183,26 +194,27 @@ class PhotometryCollection:
         ]
 
         # Define the photometry value column
-        value_col = [
+        value_col: List[str] = [
             f"{str(format(self[key].value, '.2e'))} {str(self[key].units)}"
             for key in self.filter_codes
         ]
 
         # Determine the width of each column
-        filter_width = max([len(s) for s in filters_col]) + 2
-        phot_width = max([len(s) for s in value_col]) + 2
-        widths = [filter_width, phot_width]
+        filter_width: int = max([len(s) for s in filters_col]) + 2
+        phot_width: int = max([len(s) for s in value_col]) + 2
+        widths: List[int] = [filter_width, phot_width]
 
         # How many characters across is the table?
-        tot_width = filter_width + phot_width + 1
+        tot_width: int = filter_width + phot_width + 1
 
         # Create the separator row
-        sep = "|".join("-" * width for width in widths)
+        sep: str = "|".join("-" * width for width in widths)
 
         # Initialise the table
-        table = f"-{sep.replace('|', '-')}-\n"
+        table: str = f"-{sep.replace('|', '-')}-\n"
 
         # Create the centered title
+        title: str
         if self.photo_luminosities is not None:
             title = f"|{'PHOTOMETRY (LUMINOSITY)'.center(tot_width)}|"
         else:
@@ -224,52 +236,50 @@ class PhotometryCollection:
 
     def plot_photometry(
         self,
-        fig=None,
-        ax=None,
-        show=False,
-        ylimits=(),
-        xlimits=(),
-        marker="+",
-        figsize=(3.5, 5),
-    ):
+        fig: Optional[Figure] = None,
+        ax: Optional[Axes] = None,
+        show: bool = False,
+        ylimits: Union[Tuple[()], Tuple[float, float]] = (),
+        xlimits: Union[Tuple[()], Tuple[float, float]] = (),
+        marker: str = "+",
+        figsize: Tuple[float, float] = (3.5, 5.0),
+    ) -> Tuple[Figure, Axes]:
         """
         Plot the photometry alongside the filter curves.
 
         Args:
-            fig (matplotlib.figure.Figure, optional):
-                A pre-existing Matplotlib figure. If None, a new figure will
-                be created.
-            ax (matplotlib.axes._axes.Axes, optional):
-                A pre-existing Matplotlib axes. If None, new axes will be
+            fig: A pre-existing Matplotlib figure. If None, a new figure will
+                 be created.
+            ax: A pre-existing Matplotlib axes. If None, new axes will be
                 created.
-            show (bool, optional):
-                If True, the plot will be displayed.
-            ylimits (tuple, optional):
-                Tuple specifying the y-axis limits for the plot.
-            xlimits (tuple, optional):
-                Tuple specifying the x-axis limits for the plot.
-            marker (str, optional):
-                Marker style for the photometry data points.
-            figsize (tuple, optional):
-                Tuple specifying the size of the figure.
+            show: If True, the plot will be displayed.
+            ylimits: Tuple specifying the y-axis limits for the plot.
+            xlimits: Tuple specifying the x-axis limits for the plot.
+            marker: Marker style for the photometry data points.
+            figsize: Tuple specifying the size of the figure.
 
         Returns:
-            tuple:
-                The Matplotlib figure and axes used for the plot.
+            The Matplotlib figure and axes used for the plot.
         """
         # If we don't already have a figure, make one
+        _fig: Figure
         if fig is None:
             # Set up the figure
-            fig = plt.figure(figsize=figsize)
+            _fig = plt.figure(figsize=figsize)
+        else:
+            _fig = fig
 
+        # If we don't already have an axes, make one
+        _ax: Axes
+        if ax is None:
             # Define the axes geometry
-            left = 0.15
-            height = 0.6
-            bottom = 0.1
-            width = 0.8
+            left: float = 0.15
+            height: float = 0.6
+            bottom: float = 0.1
+            width: float = 0.8
 
             # Create the axes
-            ax = fig.add_axes((left, bottom, width, height))
+            ax = _fig.add_axes((left, bottom, width, height))
 
             # Set the scale to log log
             ax.semilogy()
@@ -277,25 +287,28 @@ class PhotometryCollection:
             # Grid it... as all things should be
             ax.grid(True)
 
+        else:
+            _ax = ax
+
         # Add a filter axis
-        filter_ax = ax.twinx()
+        filter_ax: Axes = cast(Axes, _ax.twinx())
         filter_ax.set_ylim(0, None)
 
         # PLot each filter curve
-        max_t = 0
+        max_t: float = 0.0
         for f in self.filters:
             filter_ax.plot(f.lam, f.t)
             if np.max(f.t) > max_t:
-                max_t = np.max(f.t)
+                max_t = max(f.t)
 
         # Get the photometry
-        photometry = self.photometry
+        photometry: unyt_array = self.photometry
 
         # Plot the photometry
         for f, phot in zip(self.filters, photometry.value):
-            pivwv = f.pivwv()
-            fwhm = f.fwhm()
-            ax.errorbar(
+            pivwv: unyt_quantity = f.pivwv()
+            fwhm: unyt_quantity = f.fwhm()
+            _ax.errorbar(
                 pivwv,
                 phot,
                 marker=marker,
@@ -306,7 +319,7 @@ class PhotometryCollection:
 
         # Do we not have y limtis?
         if len(ylimits) == 0:
-            max_phot = np.max(photometry)
+            max_phot: np.float64 = np.max(photometry)
             ylimits = (
                 10 ** (np.log10(max_phot) - 5),
                 10 ** (np.log10(max_phot) * 1.1),
@@ -315,59 +328,61 @@ class PhotometryCollection:
         # Do we not have x limits?
         if len(xlimits) == 0:
             # Define initial xlimits
-            xlimits = [np.inf, -np.inf]
+            xlimits = (np.inf, -np.inf)
 
             # Loop over spectra and get the total required limits
             for f in self.filters:
                 # Derive the x limits from data above the ylimits
-                trans_mask = f.t > 0
-                lams_above = f.lam[trans_mask]
+                trans_mask: NDArray[np.bool_] = f.t > 0
+                lams_above: NDArray[np.float64] = f._lam[trans_mask]
 
                 # Saftey skip if no values are above the limit
                 if lams_above.size == 0:
                     continue
 
                 # Derive the x limits
-                x_low = 10 ** (np.log10(np.min(lams_above)) * 0.95)
-                x_up = 10 ** (np.log10(np.max(lams_above)) * 1.05)
+                xlimits = (
+                    min(xlimits[0], lams_above.min()),
+                    max(xlimits[1], lams_above.max()),
+                )
 
-                # Update limits
-                if x_low < xlimits[0]:
-                    xlimits[0] = x_low
-                if x_up > xlimits[1]:
-                    xlimits[1] = x_up
+            # Add some padding around the limits of the data
+            xlimits = (
+                10 ** (np.log10(xlimits[0]) * 0.95),
+                10 ** (np.log10(xlimits[1]) * 1.05),
+            )
 
         # Set the x and y lims
-        ax.set_xlim(*xlimits)
-        ax.set_ylim(*ylimits)
+        _ax.set_xlim(*xlimits)
+        _ax.set_ylim(*ylimits)
         filter_ax.set_ylim(0, 2 * max_t)
-        filter_ax.set_xlim(*ax.get_xlim())
+        filter_ax.set_xlim(*_ax.get_xlim())
 
         # Parse the units for the labels and make them pretty
-        x_units = self.filters[self.filter_codes[0]].lam.units.latex_repr
-        y_units = photometry.units.latex_repr
+        x_units: str = self.filters[self.filter_codes[0]].lam.units.latex_repr
+        y_units: str = photometry.units.latex_repr
 
         # Replace any \frac with a \ division
-        pattern = r"\{(.*?)\}\{(.*?)\}"
-        replacement = r"\1 \ / \ \2"
+        pattern: str = r"\{(.*?)\}\{(.*?)\}"
+        replacement: str = r"\1 \ / \ \2"
         x_units = re.sub(pattern, replacement, x_units).replace(r"\frac", "")
         y_units = re.sub(pattern, replacement, y_units).replace(r"\frac", "")
 
         # Label the x axis
         if self.photo_luminosities is not None:
-            ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
+            _ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
         else:
-            ax.set_xlabel(
+            _ax.set_xlabel(
                 r"$\lambda_\mathrm{obs}/[\mathrm{" + x_units + r"}]$"
             )
 
         # Label the y axis handling all possibilities
         if self.photo_luminosities is not None:
-            ax.set_ylabel(r"$L/[\mathrm{" + y_units + r"}]$")
+            _ax.set_ylabel(r"$L/[\mathrm{" + y_units + r"}]$")
         else:
-            ax.set_ylabel(r"$F/[\mathrm{" + y_units + r"}]$")
+            _ax.set_ylabel(r"$F/[\mathrm{" + y_units + r"}]$")
 
         # Filter axis label
         filter_ax.set_ylabel("$T$")
 
-        return fig, ax
+        return _fig, _ax
