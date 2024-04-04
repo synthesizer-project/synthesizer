@@ -1,7 +1,7 @@
 """Module containing dust emission functionality"""
 
 from functools import partial
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -57,7 +57,9 @@ class EmissionBase:
 
         self.temperature = temperature
 
-    def _lnu(self, *args: Any) -> Any:
+    def _lnu(
+        self, *args: Optional[Union[unyt_array, NDArray[np.float64]]]
+    ) -> Optional[Union[unyt_array, NDArray[np.float64]]]:
         """
         A prototype private method used during integration. This should be
         overloaded by child classes!
