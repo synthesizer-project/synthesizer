@@ -135,19 +135,26 @@ class Blackbody(EmissionBase):
                 Redshift of the galaxy
 
         """
+        # emmissivity of true blackbody is 1
+        emissivity = 1.0
+        _temperature: unyt_quantity
         if cmb_heating:
-            # emmissivity of true blackbody is 1
-            _temperature: unyt_quantity = (
+            _temperature = (
                 apply_cmb_heating(
                     temperature=temperature.value,  # type: ignore
-                    emissivity=1,
+                    emissivity=emissivity,
                     z=z,
                 )
                 * K
             )
+            cmb_factor = (_temperature / temperature) ** (4 + emissivity)  # type: ignore
         else:
-            _temperature: unyt_quantity = temperature
-        EmissionBase.__init__(self, _temperature)
+            _temperature = temperature
+            cmb_factor = 1.0
+
+        self.temperature_z: unyt_quantity = _temperature
+        self.cmb_factor: float = cmb_factor  # type: ignore
+        EmissionBase.__init__(self, temperature)
 
     def _lnu(self, nu: unyt_array) -> unyt_array:  # type: ignore[override]
         """
@@ -163,7 +170,7 @@ class Blackbody(EmissionBase):
 
         """
 
-        return planck(nu, self.temperature)
+        return planck(nu, self.temperature) * self.cmb_factor
 
 
 class Greybody(EmissionBase):
@@ -213,8 +220,9 @@ class Greybody(EmissionBase):
 
         """
 
+        _temperature: unyt_quantity
         if cmb_heating:
-            _temperature: unyt_quantity = (
+            _temperature = (
                 apply_cmb_heating(
                     temperature=temperature.to("K").value,  # type: ignore
                     emissivity=emissivity,
@@ -222,9 +230,14 @@ class Greybody(EmissionBase):
                 )
                 * K
             )
+            cmb_factor = (_temperature / temperature) ** (4 + emissivity)  # type: ignore
         else:
-            _temperature: unyt_quantity = temperature
-        EmissionBase.__init__(self, _temperature)
+            _temperature = temperature
+            cmb_factor = 1.0
+
+        self.temperature_z: unyt_quantity = _temperature
+        self.cmb_factor: float = cmb_factor  # type: ignore
+        EmissionBase.__init__(self, temperature)
         self.emissivity = emissivity
 
     def _lnu(self, nu: unyt_array) -> unyt_array:  # type: ignore[override]
@@ -242,7 +255,11 @@ class Greybody(EmissionBase):
 
         """
 
-        return nu**self.emissivity * planck(nu, self.temperature)
+        return (
+            nu**self.emissivity
+            * planck(nu, self.temperature)
+            * self.cmb_factor
+        )
 
 
 class Casey12(EmissionBase):
@@ -324,8 +341,9 @@ class Casey12(EmissionBase):
 
         """
 
+        _temperature: unyt_quantity
         if cmb_heating:
-            _temperature: unyt_quantity = (
+            _temperature = (
                 apply_cmb_heating(
                     temperature=temperature.to("K").value,  # type: ignore
                     emissivity=emissivity,
@@ -333,9 +351,14 @@ class Casey12(EmissionBase):
                 )
                 * K
             )
+            cmb_factor = (_temperature / temperature) ** (4 + emissivity)  # type: ignore
         else:
-            _temperature: unyt_quantity = temperature
-        EmissionBase.__init__(self, _temperature)
+            _temperature = temperature
+            cmb_factor = 1.0
+
+        self.temperature_z: unyt_quantity = _temperature
+        self.cmb_factor: float = cmb_factor  # type: ignore
+        EmissionBase.__init__(self, temperature)
         self.emissivity = emissivity
         self.alpha = alpha
         self.N_bb = N_bb
@@ -417,7 +440,7 @@ class Casey12(EmissionBase):
                 / (np.exp((h * c) / (lam * kb * self.temperature)) - 1.0)
             )
 
-        return _power_law(c / nu) + _blackbody(c / nu)
+        return (_power_law(c / nu) + _blackbody(c / nu)) * self.cmb_factor
 
 
 class IR_templates:
