@@ -32,7 +32,7 @@ from synthesizer.sed import Sed
 from synthesizer.utils import planck
 
 
-class EmissionBase():
+class EmissionBase:
     """
     Dust emission base class for holding common methods.
 
@@ -364,9 +364,8 @@ class Casey12(EmissionBase):
         )
 
     def _lnu(  # type: ignore[override]
-            self,
-            nu: unyt_array
-            ) -> Union[NDArray[np.float64], unyt_array]:
+        self, nu: unyt_array
+    ) -> Union[NDArray[np.float64], unyt_array]:
         """
         Generate unnormalised spectrum for given frequency (nu) grid.
 
