@@ -24,7 +24,7 @@ transmission curves:
 """
 
 import urllib.request
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 from urllib.error import URLError
 
 import h5py
@@ -45,8 +45,10 @@ from synthesizer.exceptions import (
     SVOInaccessible,
     WavelengthOutOfRange,
 )
-from synthesizer.grid import Grid
 from synthesizer.units import Quantity
+
+if TYPE_CHECKING:
+    from synthesizer.grid import Grid
 
 
 class Filter:
@@ -1403,7 +1405,11 @@ class FilterCollection:
             f: Filter = self.filters[fcode]
             f._interpolate_wavelength(self.lam)
 
-    def unify_with_grid(self, grid: Grid, loop_spectra: bool = False) -> None:
+    def unify_with_grid(
+        self,
+        grid: "Grid",
+        loop_spectra: bool = False,
+    ) -> None:
         """
         Unify a grid with this FilterCollection.
 
