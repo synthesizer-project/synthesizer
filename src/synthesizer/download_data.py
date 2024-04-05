@@ -37,7 +37,10 @@ def _download(url, save_dir):
     filename = url.split("/")[-1]
 
     # Define the save path
-    save_path = f"{save_dir}/{filename}"
+    if "bpass" in filename:
+        save_path = f"{save_dir}/test_grid.hdf5"
+    else:
+        save_path = f"{save_dir}/{filename}"
 
     # Download the file
     response = requests.get(url, stream=True)
@@ -68,7 +71,7 @@ def download_test_grids(destination):
 
     # Define the files to get
     files = [
-        "test_grid.hdf5",
+        "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5",
         "test_grid_agn-blr.hdf5",
         "test_grid_agn-nlr.hdf5",
     ]
