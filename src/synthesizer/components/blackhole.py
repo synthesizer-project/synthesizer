@@ -247,9 +247,9 @@ class BlackholesComponent:
         # If the mask is False (parametric case) or contains only
         # 0 (particle case) just return an array of zeros
         if isinstance(mask, bool) and not mask:
-            return np.zeros(grid.lam)
+            return np.zeros(len(grid.lam))
         if mask is not None and np.sum(mask) == 0:
-            return np.zeros(grid.lam)
+            return np.zeros(len(grid.lam))
 
         from ..extensions.integrated_spectra import compute_integrated_sed
 
@@ -421,6 +421,9 @@ class BlackholesComponent:
         # Calculate the incident spectra. It doesn't matter which spectra we
         # use here since we're just using the incident. Note: this assumes the
         # NLR and BLR are not overlapping.
+
+        # Mask should be None here since this is meant to be before any
+        # reprocessing by either the torus.
         self.spectra["disc_incident"] = Sed(
             lam,
             self.generate_lnu(
@@ -429,7 +432,7 @@ class BlackholesComponent:
                 spectra_name="incident",
                 line_region="nlr",
                 fesc=0.0,
-                mask=mask,
+                mask=None,
                 verbose=verbose,
                 grid_assignment_method=grid_assignment_method,
             ),
@@ -463,7 +466,7 @@ class BlackholesComponent:
             1
             - emission_model.covering_fraction_blr
             - emission_model.covering_fraction_nlr
-        ) * self.spectra["disc_incident"]
+        ) * (self.spectra["disc_incident"] * mask)
 
         # calculate the total spectra, the sum of escaping and transmitted
         self.spectra["disc"] = (
@@ -563,6 +566,10 @@ class BlackholesComponent:
         torus_bolometric_luminosity = (
             emission_model.theta_torus / (90 * deg)
         ) * disc_spectra.measure_bolometric_luminosity()
+
+        print(disc_spectra.measure_bolometric_luminosity())
+        print(torus_bolometric_luminosity)
+        print(emission_model.theta_torus / (90 * deg))
 
         # create torus spectra
         sed = emission_model.torus_emission_model.get_spectra(disc_spectra.lam)
