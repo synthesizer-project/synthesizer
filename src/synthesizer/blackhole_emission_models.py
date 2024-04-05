@@ -553,10 +553,12 @@ class UnifiedAGN:
         )
 
         # calculate the bolometric dust lunminosity as the difference between
-        # the intrinsic and attenuated
+        # the intrinsic and attenuated where the attenuated is zero
         torus_bolometric_luminosity = (
             self.theta_torus / (90 * deg)
         ) * disc_spectra.measure_bolometric_luminosity()
+
+        print(torus_bolometric_luminosity)
 
         # create torus spectra
         sed = self.torus_emission_model.get_spectra(disc_spectra.lam)
@@ -565,6 +567,8 @@ class UnifiedAGN:
         # scale by the bolometric luminosity.
 
         sed._lnu *= torus_bolometric_luminosity.value
+
+        print(sed)
 
         # Reset the previously held inclination
         self.cosine_inclination = prev_cosine_inclincation
@@ -622,6 +626,8 @@ class UnifiedAGN:
             raise exceptions.MissingArgument(
                 f"Values not set for these parameters: {missing_params}"
             )
+
+        print("hi")
 
         # Generate the spectra of the nlr and torus
         spectra["nlr"] = self._get_spectra_lr("nlr")
