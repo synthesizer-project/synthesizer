@@ -389,9 +389,9 @@ class IR_templates:
         """
 
         # Define the models parameters
-        qpahs = grid.axes_values["qpah"]
-        umins = grid.axes_values["umin"]
-        alphas = grid.axes_values["alpha"]
+        qpahs = grid.qpah
+        umins = grid.umin
+        alphas = grid.alpha
 
         # default Umax=1e7
         umax = 1e7
