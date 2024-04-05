@@ -39,12 +39,18 @@ class EmissionBase:
     Attributes:
         temperature (float)
             The temperature of the dust.
+        cmb_factor (float)
+            The multiplicative factor to account for
+            CMB heating at high-redshift
     """
 
     temperature: Optional[Union[unyt_quantity, float]]
+    cmb_factor: float
 
     def __init__(
-        self, temperature: Optional[Union[unyt_quantity, float]] = None
+        self,
+        temperature: Optional[Union[unyt_quantity, float]] = None,
+        cmb_factor: float = 1,
     ) -> None:
         """
         Initialises the base class for dust emission models.
@@ -52,9 +58,13 @@ class EmissionBase:
         Args:
             temperature (float)
                 The temperature of the dust.
+            cmb_factor (float)
+                The multiplicative factor to account for
+                CMB heating at high-redshift
         """
 
         self.temperature = temperature
+        self.cmb_factor = cmb_factor
 
     def _lnu(
         self, *args: Optional[Union[unyt_array, NDArray[np.float64]]]
@@ -102,6 +112,9 @@ class EmissionBase:
         # normalise the spectrum
         sed._lnu /= sed.measure_bolometric_luminosity().value  # type: ignore
 
+        # apply heating due to CMB, if applicable
+        sed._lnu *= self.cmb_factor
+
         return sed
 
 
@@ -138,6 +151,7 @@ class Blackbody(EmissionBase):
         # emmissivity of true blackbody is 1
         emissivity = 1.0
         _temperature: unyt_quantity
+        cmb_factor: float
         if cmb_heating:
             _temperature = (
                 apply_cmb_heating(
@@ -153,8 +167,8 @@ class Blackbody(EmissionBase):
             cmb_factor = 1.0
 
         self.temperature_z: unyt_quantity = _temperature
-        self.cmb_factor: float = cmb_factor  # type: ignore
-        EmissionBase.__init__(self, temperature)
+        self.cmb_factor: float = cmb_factor
+        EmissionBase.__init__(self, temperature, cmb_factor)
 
     def _lnu(self, nu: unyt_array) -> unyt_array:  # type: ignore[override]
         """
@@ -170,7 +184,7 @@ class Blackbody(EmissionBase):
 
         """
 
-        return planck(nu, self.temperature) * self.cmb_factor
+        return planck(nu, self.temperature)
 
 
 class Greybody(EmissionBase):
@@ -221,6 +235,7 @@ class Greybody(EmissionBase):
         """
 
         _temperature: unyt_quantity
+        cmb_factor: float
         if cmb_heating:
             _temperature = (
                 apply_cmb_heating(
@@ -236,8 +251,8 @@ class Greybody(EmissionBase):
             cmb_factor = 1.0
 
         self.temperature_z: unyt_quantity = _temperature
-        self.cmb_factor: float = cmb_factor  # type: ignore
-        EmissionBase.__init__(self, temperature)
+        self.cmb_factor: float = cmb_factor
+        EmissionBase.__init__(self, temperature, cmb_factor)
         self.emissivity = emissivity
 
     def _lnu(self, nu: unyt_array) -> unyt_array:  # type: ignore[override]
@@ -255,11 +270,7 @@ class Greybody(EmissionBase):
 
         """
 
-        return (
-            nu**self.emissivity
-            * planck(nu, self.temperature)
-            * self.cmb_factor
-        )
+        return nu**self.emissivity * planck(nu, self.temperature)
 
 
 class Casey12(EmissionBase):
@@ -342,6 +353,7 @@ class Casey12(EmissionBase):
         """
 
         _temperature: unyt_quantity
+        cmb_factor: float
         if cmb_heating:
             _temperature = (
                 apply_cmb_heating(
@@ -357,8 +369,8 @@ class Casey12(EmissionBase):
             cmb_factor = 1.0
 
         self.temperature_z: unyt_quantity = _temperature
-        self.cmb_factor: float = cmb_factor  # type: ignore
-        EmissionBase.__init__(self, temperature)
+        self.cmb_factor: float = cmb_factor
+        EmissionBase.__init__(self, temperature, cmb_factor)
         self.emissivity = emissivity
         self.alpha = alpha
         self.N_bb = N_bb
@@ -440,7 +452,7 @@ class Casey12(EmissionBase):
                 / (np.exp((h * c) / (lam * kb * self.temperature)) - 1.0)
             )
 
-        return (_power_law(c / nu) + _blackbody(c / nu)) * self.cmb_factor
+        return _power_law(c / nu) + _blackbody(c / nu)
 
 
 class IR_templates:
