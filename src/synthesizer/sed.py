@@ -14,18 +14,27 @@ Example usage:
 """
 
 import re
+from typing import Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.typing import NDArray
 from scipy import integrate
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from spectres import spectres
 from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 
-from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.exceptions import (
+    InconsistentAddition,
+    InconsistentArguments,
+    IncorrectUnits,
+    MissingSpectraType,
+    UnimplementedFunctionality,
+    UnrecognisedOption,
+)
 from synthesizer.igm import Inoue14
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
@@ -63,32 +72,51 @@ class Sed:
             (filter_code: photometry).
     """
 
+    description: Optional[str]
+    redshift: float
+    photo_luminosities: Optional[PhotometryCollection]
+    photo_fluxes: Optional[PhotometryCollection]
+
     # Define Quantities, for details see units.py
+    _lam: NDArray[np.float64]
+    lam: unyt_array
     lam = Quantity()
+    _nu: NDArray[np.float64]
+    nu: unyt_array
     nu = Quantity()
+    _lnu: NDArray[np.float64]
+    lnu: unyt_array
     lnu = Quantity()
+    _fnu: NDArray[np.float64]
+    fnu: unyt_array
     fnu = Quantity()
+    _obsnu: NDArray[np.float64]
+    obsnu: unyt_array
     obsnu = Quantity()
+    _obslam: NDArray[np.float64]
+    obslam: unyt_array
     obslam = Quantity()
-    luminosity = Quantity()
-    llam = Quantity()
+    _bolometric_luminosity: NDArray[np.float64]
+    bolometric_luminosity: unyt_array
     bolometric_luminosity = Quantity()
 
-    def __init__(self, lam, lnu=None, description=None):
+    def __init__(
+        self,
+        lam: unyt_array,
+        lnu: Optional[unyt_array] = None,
+        description: Optional[str] = None,
+        redshift: float = 0.0,
+    ) -> None:
         """
         Initialise a new spectral energy distribution object.
 
         Args:
-            lam (array-like, float)
-                The rest frame wavelength array. Default units are defined
-                in `synthesizer.units`. If unmodified these will be Angstroms.
-            lnu (array-like, float)
-                The spectral luminosity density. Default units are defined in
-                `synthesizer.units`. If unmodified these will be erg/s/Hz
-            description (string)
-                An optional descriptive string defining the Sed.
+            lam: The rest frame wavelength array. Default units are defined
+                 in `synthesizer.units`. If unmodified these will be Angstroms.
+            lnu: The spectral luminosity density. Default units are defined in
+                 `synthesizer.units`. If unmodified these will be erg/s/Hz
+            description: An optional descriptive string defining the Sed.
         """
-
         # Set the description
         self.description = description
 
@@ -130,7 +158,7 @@ class Sed:
         self.bolometric_luminosity = self.measure_bolometric_luminosity()
 
         # Redshift of the SED
-        self.redshift = 0
+        self.redshift = redshift
 
         # The wavelengths and frequencies in the observer frame
         self.obslam = None
@@ -141,20 +169,23 @@ class Sed:
         self.photo_luminosities = None
         self.photo_fluxes = None
 
-    def sum(self):
+    def sum(self) -> "Sed":
         """
-        For multidimensional `sed`'s, sum the luminosity to provide a 1D
-        integrated SED.
+        Sum multidimensional SEDs giving a 1D integrated SED.
+
+        For example, if the SED has shape (10, 1000) this will sum the 10
+        spectra to give a single 1D SED with shape (1000,).
+
+        For 1D SEDs this will just return the original SED.
 
         Returns:
             sed (object, Sed)
                 Summed 1D SED.
         """
-
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
             # Create a new sed object with the first Lnu dimension collapsed
-            new_sed = Sed(self.lam, np.sum(self._lnu, axis=0))
+            new_sed: "Sed" = Sed(self.lam, np.sum(self._lnu, axis=0))
 
             # If fnu exists, sum that too
             if self.fnu is not None:
@@ -166,9 +197,10 @@ class Sed:
             return new_sed
         else:
             # If 1D, just return the original array
+            print("Nothing to sum, Sed is already 1D. Returning original Sed.")
             return self
 
-    def concat(self, *other_seds):
+    def concat(self, *other_seds: "Sed") -> "Sed":
         """
         Concatenate the spectra arrays of multiple Sed objects.
 
@@ -193,9 +225,8 @@ class Sed:
             InconsistentAddition
                 If wavelength arrays are incompatible an error is raised.
         """
-
         # Define the new lnu to accumalate in
-        new_lnu = self._lnu
+        new_lnu: NDArray[np.float64] = self._lnu
 
         # Loop over the other seds
         for other_sed in other_seds:
@@ -204,12 +235,12 @@ class Sed:
             # could instead check the first and last entry and the shape.
             # In rare instances this could fail though.
             if not np.array_equal(self._lam, other_sed._lam):
-                raise exceptions.InconsistentAddition(
+                raise InconsistentAddition(
                     "Wavelength grids must be identical"
                 )
 
             # Get the other lnu array
-            other_lnu = other_sed._lnu
+            other_lnu: NDArray[np.float64] = other_sed._lnu
 
             # If the the number of dimensions differ between the lnu arrays we
             # need to promote the smaller one
@@ -226,10 +257,9 @@ class Sed:
 
         return Sed(self._lam, new_lnu)
 
-    def __add__(self, second_sed):
+    def __add__(self, second_sed: "Sed") -> "Sed":
         """
-        Overide addition operator to allow two Sed objects to be added
-        together.
+        Overide addition operator to add two Sed objects together.
 
         Args:
             second_sed (object, Sed)
@@ -244,26 +274,21 @@ class Sed:
                 If wavelength arrays or lnu arrays are incompatible an error
                 is raised.
         """
-
         # Ensure the wavelength arrays are compatible
         # # NOTE: this is probably overkill and too costly. We
         # could instead check the first and last entry and the shape.
         # In rare instances this could fail though.
         if not np.array_equal(self._lam, second_sed._lam):
-            raise exceptions.InconsistentAddition(
-                "Wavelength grids must be identical"
-            )
+            raise InconsistentAddition("Wavelength grids must be identical")
 
         # Ensure the lnu arrays are compatible
         # This check is redudant for Sed.lnu.shape = (nlam, ) spectra but will
         # not erroneously error. Nor is it expensive.
         if self._lnu.shape[0] != second_sed._lnu.shape[0]:
-            raise exceptions.InconsistentAddition(
-                "SEDs must have same dimensions"
-            )
+            raise InconsistentAddition("SEDs must have same dimensions")
 
         # They're compatible, add them and make a new Sed
-        new_sed = Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+        new_sed: "Sed" = Sed(self._lam, lnu=self._lnu + second_sed._lnu)
 
         # If fnu exists on both then we need to add those too
         if (self.fnu is not None) and (second_sed.fnu is not None):
@@ -274,10 +299,12 @@ class Sed:
 
         return new_sed
 
-    def __radd__(self, second_sed):
+    def __radd__(self, second_sed: "Sed") -> "Sed":
         """
-        Overloads "reflected" addition to allow sed objects to be added
-        together when in reverse order, i.e. second_sed + self.
+        Overload "reflected" addition.
+
+        This allows sed objects to be added together when in reverse order,
+        i.e. second_sed + self.
 
         This may seem superfluous, but it is needed to enable the use of sum()
         on lists of Seds.
@@ -296,53 +323,57 @@ class Sed:
             return self
         return self.__add__(second_sed)
 
-    def __mul__(self, scaling):
+    def __mul__(
+        self,
+        scaling: Union[float, np.float_, int, np.int_],
+    ) -> "Sed":
         """
-        Overide multiplication operator to allow lnu to be scaled.
-        This only works scaling * x.
-
-        Note: only acts on the rest frame spectra. To get the
-        scaled fnu get_fnu must be called on the newly scaled
-        Sed object.
+        Overide multiplication operator to multiply Seds by a number.
 
         Args:
             scaling (float)
-                The scaling to apply to lnu.
+                The scaling to apply to Sed.
 
         Returns:
             Sed
-                A new instance of Sed with scaled lnu.
+                A new instance of Sed with scaled lnu (and fnu if present).
         """
+        # Ensure the scaling is a float or int
+        if not isinstance(scaling, (float, np.float_, int, np.int_)):
+            raise InconsistentArguments(
+                f"Variable multiplyind an Sed must be a number not {scaling}"
+            )
 
-        return Sed(self._lam, lnu=scaling * self._lnu)
+        # Create the new Sed
+        sed: "Sed" = Sed(self._lam, lnu=scaling * self._lnu)
 
-    def __rmul__(self, scaling):
+        # If we have flux scale that too
+        if self.fnu is not None:
+            sed._fnu *= scaling
+
+        return sed
+
+    def __rmul__(
+        self,
+        scaling: Union[float, np.float_, int, np.int_],
+    ) -> "Sed":
         """
-        As above but for x * scaling.
-
-        Note: only acts on the rest frame spectra. To get the
-        scaled fnu get_fnu must be called on the newly
-        scaled Sed object.
+        Overide reflected multiplication operator to multiply Seds by a number.
 
         Args:
             scaling (float)
-                The scaling to apply to lnu.
+                The scaling to apply to Sed.
 
         Returns:
             Sed
-                A new instance of Sed with scaled lnu.
+                A new instance of Sed with scaled lnu (and fnu if present).
         """
+        return self.__mul__(scaling)
 
-        return Sed(self._lam, lnu=scaling * self._lnu)
-
-    def __str__(self):
-        """
-        Overloads the __str__ operator. A summary can be achieved by
-        print(sed) where sed is an instance of Sed.
-        """
-
+    def __str__(self) -> str:
+        """Return a string summarising the Sed."""
         # Set up string for printing
-        pstr = ""
+        pstr: str = ""
 
         # Add the content of the summary to the string to be printed
         pstr += "-" * 10 + "\n"
@@ -367,7 +398,7 @@ class Sed:
         return pstr
 
     @property
-    def luminosity(self):
+    def luminosity(self) -> unyt_array:
         """
         Get the spectra in terms of luminosity.
 
@@ -378,9 +409,9 @@ class Sed:
         return self.lnu * self.nu
 
     @property
-    def flux(self):
+    def flux(self) -> unyt_array:
         """
-        Get the spectra in terms fo flux
+        Get the spectra in terms fo flux.
 
         Returns:
             flux (unyt_array)
@@ -389,7 +420,7 @@ class Sed:
         return self.fnu * self.obsnu
 
     @property
-    def llam(self):
+    def llam(self) -> unyt_array:
         """
         Get the spectral luminosity density per Angstrom.
 
@@ -400,7 +431,7 @@ class Sed:
         return self.nu * self.lnu / self.lam
 
     @property
-    def luminosity_nu(self):
+    def luminosity_nu(self) -> unyt_array:
         """
         Alias to lnu.
 
@@ -411,7 +442,7 @@ class Sed:
         return self.lnu
 
     @property
-    def luminosity_lambda(self):
+    def luminosity_lambda(self) -> unyt_array:
         """
         Alias to llam.
 
@@ -422,7 +453,7 @@ class Sed:
         return self.llam
 
     @property
-    def wavelength(self):
+    def wavelength(self) -> unyt_array:
         """
         Alias to lam (wavelength array).
 
@@ -433,15 +464,26 @@ class Sed:
         return self.lam
 
     @property
-    def _spec_dims(self):
+    def _spec_dims(self) -> int:
         """
-        Get the dimensions of the spectra array.
+        Get the number of dimensions of the spectra array.
 
         Returns
             Tuple
                 The shape of self.lnu
         """
         return np.ndim(self.lnu)
+
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        """
+        Get the shape of the spectra array.
+
+        Returns
+            Tuple
+                The shape of self.lnu
+        """
+        return self._lnu.shape
 
     def _get_lnu_at_nu(self, nu, kind=False, ind=None):
         """
@@ -585,7 +627,7 @@ class Sed:
                         * Hz
                     )
             else:
-                raise exceptions.UnimplementedFunctionality(
+                raise UnimplementedFunctionality(
                     "Measuring bolometric luminosities for Sed.lnu.ndim > 2"
                     " not yet implemented! Feel free to implement and raise "
                     "a pull request. Guidance for contributing can be found "
@@ -594,7 +636,7 @@ class Sed:
                     "docs/CONTRIBUTING.md"
                 )
         else:
-            raise exceptions.UnrecognisedOption(
+            raise UnrecognisedOption(
                 f"Unrecognised integration method ({method}). "
                 "Options are 'trapz' or 'quad'"
             )
@@ -641,7 +683,7 @@ class Sed:
                 self.lnu[::-1] * transmission[::-1], x=self.nu[::-1]
             )
         else:
-            raise exceptions.UnrecognisedOption(
+            raise UnrecognisedOption(
                 f"Unrecognised integration method ({method}). "
                 "Options are 'trapz' or 'quad'"
             )
@@ -736,7 +778,7 @@ class Sed:
             Lnu = Lnu * self.lnu.units
 
         else:
-            raise exceptions.UnrecognisedOption(
+            raise UnrecognisedOption(
                 f"Unrecognised integration method ({method}). "
                 "Options are 'average', 'trapz' or 'quad'"
             )
@@ -802,7 +844,7 @@ class Sed:
             blue = (3850, 3950) * angstrom
             red = (4000, 4100) * angstrom
         else:
-            raise exceptions.UnrecognisedOption(
+            raise UnrecognisedOption(
                 f"Unrecognised definition ({definition}). "
                 "Options are 'Bruzual83' or 'Balogh'"
             )
@@ -867,7 +909,7 @@ class Sed:
             )
 
         else:
-            raise exceptions.InconsistentArguments(
+            raise InconsistentArguments(
                 "A window of len 2 or 4 must be provided"
             )
 
@@ -1172,7 +1214,7 @@ class Sed:
 
         # Ensure we have what we need
         if resample_factor is None and new_lam is None:
-            raise exceptions.InconsistentArguments(
+            raise InconsistentArguments(
                 "Either resample_factor or new_lam must be specified"
             )
 
@@ -1229,12 +1271,12 @@ class Sed:
         # Ensure the mask is compatible with the spectra
         if mask is not None:
             if self._lnu.ndim < 2:
-                raise exceptions.InconsistentArguments(
+                raise InconsistentArguments(
                     "Masks are only applicable for Seds containing "
                     "multiple spectra"
                 )
             if self._lnu.shape[0] != mask.size:
-                raise exceptions.InconsistentArguments(
+                raise InconsistentArguments(
                     "Mask and spectra are incompatible shapes "
                     f"({mask.shape}, {self._lnu.shape})"
                 )
@@ -1242,12 +1284,12 @@ class Sed:
         # If tau_v is an array it needs to match the spectra shape
         if isinstance(tau_v, np.ndarray):
             if self._lnu.ndim < 2:
-                raise exceptions.InconsistentArguments(
+                raise InconsistentArguments(
                     "Arrays of tau_v values are only applicable for Seds"
                     " containing multiple spectra"
                 )
             if self._lnu.shape[0] != tau_v.size:
-                raise exceptions.InconsistentArguments(
+                raise InconsistentArguments(
                     "tau_v and spectra are incompatible shapes "
                     f"({tau_v.shape}, {self._lnu.shape})"
                 )
@@ -1386,7 +1428,7 @@ def plot_spectra(
         "flam",
         "flux",
     ):
-        raise exceptions.InconsistentArguments(
+        raise InconsistentArguments(
             f"{quantity_to_plot} is not a valid quantity_to_plot"
             "(can be 'fnu' or 'flam')"
         )
@@ -1430,7 +1472,7 @@ def plot_spectra(
         else:
             # Ensure we have fluxes
             if sed.fnu is None:
-                raise exceptions.MissingSpectraType(
+                raise MissingSpectraType(
                     f"This Sed has no fluxes ({key})! Have you called "
                     "Sed.get_fnu()?"
                 )
@@ -1632,7 +1674,7 @@ def plot_observed_spectra(
 
     # Check we have been given a valid quantity_to_plot
     if quantity_to_plot not in ("fnu", "flam"):
-        raise exceptions.InconsistentArguments(
+        raise InconsistentArguments(
             f"{quantity_to_plot} is not a valid quantity_to_plot"
             "(can be 'fnu' or 'flam')"
         )
@@ -1707,7 +1749,7 @@ def get_transmission(intrinsic_sed, attenuated_sed):
 
     # Ensure wavelength arrays are equal
     if not np.array_equal(attenuated_sed._lam, intrinsic_sed._lam):
-        raise exceptions.InconsistentArguments(
+        raise InconsistentArguments(
             "Wavelength arrays of input spectra must be the same!"
         )
 
@@ -1755,7 +1797,7 @@ def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
 
     # Enusre we have units
     if not has_units(lam):
-        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
+        raise IncorrectUnits("lam must be given with unyt units.")
 
     # Ensure lam is in the same units as the sed
     if lam.units != intrinsic_sed.lam.units:
