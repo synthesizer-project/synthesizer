@@ -5,11 +5,11 @@ ever instantiated by the parametric/particle child classes.
 """
 
 import numpy as np
-from unyt import c, deg, rad
+from unyt import c, deg, rad, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.blackhole_emission_models import Template
-from synthesizer.sed import plot_spectra
+from synthesizer.sed import Sed, plot_spectra
 from synthesizer.units import Quantity
 
 
@@ -97,6 +97,7 @@ class BlackholesComponent:
         """
 
         # Initialise spectra
+        self.particle_spectra = {}
         self.spectra = {}
 
         # Intialise the photometry dictionaries
@@ -183,21 +184,6 @@ class BlackholesComponent:
             self.cosine_inclination = np.cos(
                 self.inclination.to("radian").value
             )
-
-    def _prepare_sed_args(self, *args, **kwargs):
-        """
-        This method is a prototype for generating the arguments for spectra
-        generation from AGN grids. It is redefined on the child classes to
-        handle the different attributes of parametric and particle cases.
-        """
-        raise Warning(
-            (
-                "_prepare_sed_args should be overloaded by child classes:\n"
-                "`particle.BlackHoles`\n"
-                "`parametric.BlackHole`\n"
-                "You should not be seeing this!!!"
-            )
-        )
 
     def generate_lnu(
         self,
@@ -384,18 +370,470 @@ class BlackholesComponent:
 
         return self.accretion_rate_eddington
 
-    def get_spectra_intrinsic(
+    def _prepare_sed_args(
+        self,
+        emission_model,
+        grid,
+        fesc,
+        spectra_type,
+        line_region,
+        mask,
+        grid_assignment_method,
+    ):
+        """
+        A method to prepare the arguments for SED computation with the C
+        functions.
+
+        Args:
+            emission_model (blackhole_emission_models.*)
+                Any instance of a blackhole emission model (e.g. Template
+                or UnifiedAGN).
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            fesc (float)
+                The escape fraction.
+            spectra_type (str)
+                The type of spectra to extract from the Grid. This must match a
+                type of spectra stored in the Grid.
+            line_region (str)
+                The specific line region, i.e. 'nlr' or 'blr'.
+            mask (array-like, bool)
+                If not None this mask will be applied to the inputs to the
+                spectra creation.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+
+        # Handle the case where mask is None
+        if mask is None:
+            mask = np.ones(self.nbh, dtype=bool)
+
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(getattr(grid, axis), dtype=np.float64)
+            for axis in grid.axes
+        ]
+        props = []
+        for axis in grid.axes:
+            # Source parameters from the appropriate place
+            if axis in emission_model.required_parameters:
+                # Parameters that need to be provided from the black hole
+                # (these already exclude any parameters fixed on the
+                # emission model)
+                props.append(getattr(self, axis))
+
+            elif (
+                axis in emission_model.variable_parameters
+                and getattr(self, axis, None) is not None
+            ):
+                # Variable parameters defined on the black hole (not including
+                # line region parameters)
+                props.append(getattr(self, axis))
+
+            elif (
+                f"{axis} {line_region}" in emission_model.variable_parameters
+                and getattr(self, axis + "_" + line_region, None) is not None
+            ):
+                # Variable line region parameters defined on the black hole
+                props.append(getattr(self, axis + "_" + line_region))
+
+            elif getattr(emission_model, axis, None) is not None:
+                # Parameters required from the emission_model (not including
+                # line region parameters)
+                props.append(getattr(emission_model, axis))
+
+            elif (
+                getattr(emission_model, axis + "_" + line_region, None)
+                is not None
+            ):
+                # Line region parameters required from the emission_model
+                props.append(getattr(emission_model, axis + "_" + line_region))
+
+            else:
+                raise exceptions.MissingArgument(
+                    f"{axis} can't be sourced from emission_model or self."
+                )
+
+        # Calculate npart from the mask
+        npart = np.sum(mask)
+
+        # Remove units from any unyt_arrays
+        props = [
+            prop.value if isinstance(prop, unyt_array) else prop
+            for prop in props
+        ]
+
+        # Ensure any parameters inherited from the emission model have
+        # as many values as particles
+        for ind, prop in enumerate(props):
+            if isinstance(prop, float):
+                props[ind] = np.full(self.nbh, prop)
+            elif prop.size == 1:
+                props[ind] = np.full(self.nbh, prop)
+
+        # Apply the mask to each property and make contiguous
+        props = [
+            np.ascontiguousarray(prop[mask], dtype=np.float64)
+            for prop in props
+        ]
+
+        # For black holes mass is a grid parameter but we still need to
+        # multiply by mass in the extensions so just multiply by 1
+        mass = np.ones(npart, dtype=np.float64)
+
+        # Make sure we get the wavelength index of the grid array
+        nlam = np.int32(grid.spectra[spectra_type].shape[-1])
+
+        # Get the grid spctra
+        grid_spectra = np.ascontiguousarray(
+            grid.spectra[spectra_type],
+            dtype=np.float64,
+        )
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+        grid_dims[ind + 1] = nlam
+
+        # If fesc isn't an array make it one
+        if not isinstance(fesc, np.ndarray):
+            fesc = np.ascontiguousarray(np.full(npart, fesc))
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        props = tuple(props)
+
+        return (
+            grid_spectra,
+            grid_props,
+            props,
+            mass,
+            fesc,
+            grid_dims,
+            len(grid_props),
+            np.int32(npart),
+            nlam,
+            grid_assignment_method,
+        )
+
+    def generate_particle_lnu(
+        self,
+        emission_model,
+        grid,
+        spectra_name,
+        line_region,
+        fesc=0.0,
+        mask=None,
+        verbose=False,
+        grid_assignment_method="cic",
+    ):
+        """
+        Generate the integrated rest frame spectra for a given grid key
+        spectra.
+
+        Args:
+            emission_model (synthesizer.blackhole_emission_models.*)
+                An instance of a blackhole emission model.
+            grid (obj):
+                Spectral grid object.
+            fesc (float):
+                Fraction of emission that escapes unattenuated from
+                the birth cloud (defaults to 0.0).
+            spectra_name (string)
+                The name of the target spectra inside the grid file
+                (e.g. "incident", "transmitted", "nebular").
+            line_region (str)
+                The specific line region, i.e. 'nlr' or 'blr'.
+            mask (array-like, bool)
+                If not None this mask will be applied to the inputs to the
+                spectra creation.
+            verbose (bool)
+                Are we talking?
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+        """
+        # Ensure we have a key in the grid. If not error.
+        if spectra_name not in list(grid.spectra.keys()):
+            raise exceptions.MissingSpectraType(
+                f"The Grid does not contain the key '{spectra_name}'"
+            )
+
+        from ..extensions.particle_spectra import compute_particle_seds
+
+        # Prepare the arguments for the C function.
+        args = self._prepare_sed_args(
+            emission_model,
+            grid,
+            fesc=fesc,
+            spectra_type=spectra_name,
+            line_region=line_region,
+            mask=mask,
+            grid_assignment_method=grid_assignment_method.lower(),
+        )
+
+        # Get the integrated spectra in grid units (erg / s / Hz)
+        masked_spec = compute_particle_seds(*args)
+
+        # If there's no mask we're done
+        if mask is None:
+            return masked_spec
+
+        # If we have a mask we need to account for the zeroed spectra
+        spec = np.zeros((self.nbh, masked_spec.shape[-1]))
+        spec[mask] = masked_spec
+        return spec
+
+    def _get_particle_spectra_disc(
+        self,
+        emission_model,
+        mask,
+        verbose,
+        grid_assignment_method,
+    ):
+        """
+        Generate the disc spectra, updating the parameters if required
+        for each particle.
+
+        Args:
+            emission_model (blackhole_emission_models.*)
+                Any instance of a blackhole emission model (e.g. Template
+                or UnifiedAGN).
+            mask (array-like, bool)
+                If not None this mask will be applied to the inputs to the
+                spectra creation.
+            verbose (bool)
+                Are we talking?
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            dict, Sed
+                A dictionary of Sed instances including the escaping and
+                transmitted disc emission of each particle.
+        """
+
+        # Get the wavelength array
+        lam = emission_model.grid["nlr"].lam
+
+        # Calculate the incident spectra. It doesn't matter which spectra we
+        # use here since we're just using the incident. Note: this assumes the
+        # NLR and BLR are not overlapping.
+
+        # The istropic incident disc emission, which is used for the torus,
+        # uses the isotropic incident emission so let's calculate that first.
+        # To do this we want to temporarily set the cosine_inclination to 0.5
+        # and ignore the mask.
+        prev_cosine_inclincation = self.cosine_inclination
+        self.cosine_inclination = 0.5
+
+        self.particle_spectra["disc_incident_isotropic"] = Sed(
+            lam,
+            self.generate_particle_lnu(
+                emission_model,
+                emission_model.grid["nlr"],
+                spectra_name="incident",
+                line_region="nlr",
+                fesc=0.0,
+                mask=None,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
+            ),
+        )
+
+        # Reset the cosine_inclination to the original value.
+        self.cosine_inclination = prev_cosine_inclincation
+
+        self.particle_spectra["disc_incident_masked"] = Sed(
+            lam,
+            self.generate_particle_lnu(
+                emission_model,
+                emission_model.grid["nlr"],
+                spectra_name="incident",
+                line_region="nlr",
+                fesc=0.0,
+                mask=mask,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
+            ),
+        )
+
+        self.particle_spectra["disc_incident"] = Sed(
+            lam,
+            self.generate_particle_lnu(
+                emission_model,
+                emission_model.grid["nlr"],
+                spectra_name="incident",
+                line_region="nlr",
+                fesc=0.0,
+                mask=None,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
+            ),
+        )
+
+        # calculate the transmitted spectra
+        nlr_spectra = self.generate_particle_lnu(
+            emission_model,
+            emission_model.grid["nlr"],
+            spectra_name="transmitted",
+            line_region="nlr",
+            fesc=(1 - emission_model.covering_fraction_nlr),
+            mask=mask,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+        )
+        blr_spectra = self.generate_particle_lnu(
+            emission_model,
+            emission_model.grid["blr"],
+            spectra_name="transmitted",
+            line_region="blr",
+            fesc=(1 - emission_model.covering_fraction_blr),
+            mask=mask,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+        )
+        self.particle_spectra["disc_transmitted"] = Sed(
+            lam, nlr_spectra + blr_spectra
+        )
+
+        # calculate the escaping spectra.
+        self.particle_spectra["disc_escaped"] = (
+            1
+            - emission_model.covering_fraction_blr
+            - emission_model.covering_fraction_nlr
+        ) * self.particle_spectra["disc_incident_masked"]
+
+        # calculate the total spectra, the sum of escaping and transmitted
+        self.particle_spectra["disc"] = (
+            self.particle_spectra["disc_transmitted"]
+            + self.particle_spectra["disc_escaped"]
+        )
+
+        return self.particle_spectra["disc"]
+
+    def _get_particle_spectra_lr(
+        self,
+        emission_model,
+        mask,
+        line_region,
+        verbose,
+        grid_assignment_method,
+    ):
+        """
+        Generate the spectra of a generic line region for each particle.
+
+        Args
+            emission_model (blackhole_emission_models.*)
+                Any instance of a blackhole emission model (e.g. Template
+                or UnifiedAGN).
+            mask (array-like, bool)
+                If not None this mask will be applied to the inputs to the
+                spectra creation.
+            line_region (str)
+                The specific line region, i.e. 'nlr' or 'blr'.
+            verbose (bool)
+                Are we talking?
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            Sed
+                The NLR spectra
+        """
+
+        # In the Unified AGN model the NLR/BLR is illuminated by the isotropic
+        # disc emisison hence the need to replace this parameter if it exists.
+        # Not all models require an inclination though.
+        prev_cosine_inclincation = self.cosine_inclination
+        self.cosine_inclination = np.full(self.nbh, 0.5)
+
+        # Get the nebular spectra of the line region
+        spec = self.generate_particle_lnu(
+            emission_model,
+            emission_model.grid[line_region],
+            spectra_name="nebular",
+            line_region=line_region,
+            fesc=0.0,
+            mask=mask,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+        )
+        sed = Sed(
+            emission_model.grid[line_region].lam,
+            getattr(emission_model, f"covering_fraction_{line_region}") * spec,
+        )
+
+        # Reset the previously held inclination
+        self.cosine_inclination = prev_cosine_inclincation
+
+        return sed
+
+    def _get_particle_spectra_torus(
+        self,
+        emission_model,
+    ):
+        """
+        Generate the torus emission Sed for each particle.
+
+        Args:
+            emission_model (blackhole_emission_models.*)
+                Any instance of a blackhole emission model (e.g. Template
+                or UnifiedAGN).
+
+        Returns:
+            Sed
+                The torus spectra of each particle.
+        """
+
+        # Get the disc emission
+        disc_spectra = self.particle_spectra["disc_incident_isotropic"]
+
+        # Calculate the bolometric dust lunminosity as the difference between
+        # the intrinsic and attenuated
+        torus_bolometric_luminosity = (
+            emission_model.theta_torus / (90 * deg)
+        ) * disc_spectra.measure_bolometric_luminosity()
+
+        # Create torus spectra
+        torus_sed = emission_model.torus_emission_model.get_spectra(
+            disc_spectra.lam
+        )
+
+        # This is normalised to a bolometric luminosity of 1 so we need to
+        # scale by the bolometric luminosity and create a spectra per particle.
+        spec = np.zeros((self.nbh, torus_sed.lam.size))
+        for i in range(self.nbh):
+            spec[i, :] = torus_sed._lnu * torus_bolometric_luminosity[i].value
+        torus_sed.lnu = spec
+
+        return torus_sed
+
+    def get_particle_spectra_intrinsic(
         self,
         emission_model,
         verbose=False,
         grid_assignment_method="cic",
     ):
         """
-        Generate intrinsic blackhole spectra for a given emission_model.
-
-        NOTE: any emission model parameters (excluding those fixed on
-              the emission model) will be temporaily inherited from this
-              object and reset after spectra creation.
+        Generate intrinsic blackhole spectra for a given emission_model
+        for all particles.
 
         Args:
             emission_model (blackhole_emission_models.*)
@@ -411,16 +849,18 @@ class BlackholesComponent:
 
         Returns:
             dict, Sed
-                A dictionary of Sed instances including the intrinsic emission.
+                A dictionary of Sed instances including the intrinsic emission
+                of each particle.
         """
 
         # Early exit if the emission model is a Template, for this we just
         # return the template scaled by bolometric luminosity
         if isinstance(emission_model, Template):
-            self.spectra["intrinsic"] = emission_model.get_spectra(
-                self.bolometric_luminosity
+            self.particle_spectra["intrinsic"] = np.full(
+                self.nbh,
+                emission_model.get_spectra(self.bolometric_luminosity),
             )
-            return self.spectra
+            return self.particle_spectra
 
         # Temporarily have the emission model adopt any vairable parameters
         # from this BlackHole/BlackHoles
@@ -465,13 +905,13 @@ class BlackholesComponent:
         mask = inclination < ((90 * deg) - emission_model.theta_torus)
 
         # Get the disc and BLR spectra
-        self._get_spectra_disc(
+        self._get_particle_spectra_disc(
             emission_model=emission_model,
             mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
         )
-        self.spectra["blr"] = self._get_spectra_lr(
+        self.particle_spectra["blr"] = self._get_particle_spectra_lr(
             emission_model=emission_model,
             mask=mask,
             verbose=verbose,
@@ -479,57 +919,91 @@ class BlackholesComponent:
             line_region="blr",
         )
 
-        # Generate the spectra of the nlr and torus
-        self.spectra["nlr"] = self._get_spectra_lr(
+        self.particle_spectra["nlr"] = self._get_particle_spectra_lr(
             emission_model=emission_model,
             verbose=verbose,
             mask=None,
             grid_assignment_method=grid_assignment_method,
             line_region="nlr",
         )
-        self.spectra["torus"] = self._get_spectra_torus(
+        self.particle_spectra["torus"] = self._get_particle_spectra_torus(
             emission_model=emission_model,
         )
 
         # Calculate the emergent spectra as the sum of the components.
         # Note: the choice of "intrinsic" is to align with the Pacman model
         # which reserves "total" and "emergent" to include dust.
-        self.spectra["intrinsic"] = (
-            self.spectra["disc"]
-            + self.spectra["blr"]
-            + self.spectra["nlr"]
-            + self.spectra["torus"]
+        self.particle_spectra["intrinsic"] = (
+            self.particle_spectra["disc"]
+            + self.particle_spectra["blr"]
+            + self.particle_spectra["nlr"]
+            + self.particle_spectra["torus"]
         )
 
         # Since we're using a coarse grid it might be necessary to rescale
         # the spectra to the bolometric luminosity. This is requested when
         # the emission model is called from a parametric or particle blackhole.
-        if isinstance(self.bolometric_luminosity, float):
+        if self.bolometric_luminosity is not None:
             scaling = (
                 self.bolometric_luminosity
-                / self.spectra[
-                    "disc_incident_isotropic"
+                / self.particle_spectra[
+                    "intrinsic"
                 ].measure_bolometric_luminosity()
             )
-            for spectra_id, spectra in self.spectra.items():
-                self.spectra[spectra_id] = spectra * scaling
-        elif self.bolometric_luminosity is not None:
-            scaling = (
-                np.sum(self.bolometric_luminosity)
-                / self.spectra[
-                    "disc_incident_isotropic"
-                ].measure_bolometric_luminosity()
-            )
-            for spectra_id, spectra in self.spectra.items():
-                self.spectra[spectra_id] = spectra * scaling
+            for spectra_id, spectra in self.particle_spectra.items():
+                for i in range(self.nbh):
+                    self.particle_spectra[spectra_id]._lnu[i] = (
+                        scaling[i] * spectra._lnu[i, :]
+                    )
 
         # Reset any values the emission model inherited
         for param, val in used_varaibles:
             setattr(emission_model, param, val)
 
+        return self.particle_spectra
+
+    def get_spectra_intrinsic(
+        self,
+        emission_model,
+        verbose=False,
+        grid_assignment_method="cic",
+    ):
+        """
+        Generate integrated (summed) intrinsic blackhole spectra for a given
+        emission_model over all particles.
+
+        Args:
+            emission_model (blackhole_emission_models.*)
+                Any instance of a blackhole emission model (e.g. Template
+                or UnifiedAGN)
+            verbose (bool)
+                Are we talking?
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            dict, Sed
+                A dictionary of Sed instances including the integrated
+                intrinsic emission.
+        """
+
+        particle_spectra = self.get_particle_spectra_intrinsic(
+            emission_model,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+        )
+
+        self.spectra = {
+            spectra_id: sed.sum()
+            for spectra_id, sed in particle_spectra.items()
+        }
+
         return self.spectra
 
-    def get_spectra_attenuated(
+    def get_particle_spectra_attenuated(
         self,
         emission_model,
         verbose=False,
@@ -540,7 +1014,7 @@ class BlackholesComponent:
     ):
         """
         Generate blackhole spectra for a given emission_model including
-        dust attenuation and potentially emission.
+        dust attenuation and potentially emission for all particles.
 
         Args:
             emission_model (blackhole_emission_models.*)
@@ -563,11 +1037,11 @@ class BlackholesComponent:
         Returns:
             dict, Sed
                 A dictionary of Sed instances including the intrinsic and
-                attenuated emission.
+                attenuated emission of each particle.
         """
 
         # Generate the intrinsic spectra
-        self.get_spectra_intrinsic(
+        self.get_particle_spectra_intrinsic(
             emission_model=emission_model,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
@@ -575,8 +1049,8 @@ class BlackholesComponent:
 
         # If dust attenuation is provided then calcualate additional spectra
         if dust_curve is not None and tau_v is not None:
-            intrinsic = self.spectra["intrinsic"]
-            self.spectra["emergent"] = intrinsic.apply_attenuation(
+            intrinsic = self.particle_spectra["intrinsic"]
+            self.particle_spectra["emergent"] = intrinsic.apply_attenuation(
                 tau_v, dust_curve=dust_curve
             )
 
@@ -585,21 +1059,35 @@ class BlackholesComponent:
             if dust_emission_model is not None:
                 # ISM dust heated by old stars.
                 dust_bolometric_luminosity = (
-                    self.spectra["intrinsic"].bolometric_luminosity
-                    - self.spectra["emergent"].bolometric_luminosity
+                    self.particle_spectra["intrinsic"].bolometric_luminosity
+                    - self.particle_spectra["emergent"].bolometric_luminosity
+                )
+
+                # expand dimensions
+                dust_bolometric_luminosity = np.expand_dims(
+                    dust_bolometric_luminosity, self.nbh
                 )
 
                 # Calculate normalised dust emission spectrum
-                self.spectra["dust"] = dust_emission_model.get_spectra(
-                    self.spectra["emergent"].lam
+                dust_lnu = dust_emission_model.get_spectra(
+                    self.particle_spectra["emergent"].lam
+                )._lnu
+
+                # tile and repeat this spectra
+                dust_lnu = np.tile(dust_lnu, self.nbh).reshape(
+                    self.nbh, len(self.particle_spectra["emergent"].lam)
                 )
 
-                # Scale the dust spectra by the dust_bolometric_luminosity.
-                self.spectra["dust"]._lnu *= dust_bolometric_luminosity.value
+                # define dust spectra
+                self.particle_spectra["dust"] = Sed(
+                    self.particle_spectra["emergent"]._lam,
+                    lnu=dust_bolometric_luminosity.value * dust_lnu,
+                )
 
-                # Calculate total spectrum
-                self.spectra["total"] = (
-                    self.spectra["emergent"] + self.spectra["dust"]
+                # define total spectra
+                self.particle_spectra["total"] = (
+                    self.particle_spectra["emergent"]
+                    + self.particle_spectra["dust"]
                 )
 
         elif (dust_curve is not None) or (tau_v is not None):
@@ -607,6 +1095,31 @@ class BlackholesComponent:
                 "To enable dust attenuation both 'dust_curve' and "
                 "'tau_v' need to be provided."
             )
+
+        return self.particle_spectra
+
+    def get_spectra_attenuated(
+        self,
+        emission_model,
+        verbose=False,
+        grid_assignment_method="cic",
+        tau_v=None,
+        dust_curve=None,
+        dust_emission_model=None,
+    ):
+        particle_spectra = self.get_particle_spectra_attenuated(
+            emission_model,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+            tau_v=tau_v,
+            dust_curve=dust_curve,
+            dust_emission_model=dust_emission_model,
+        )
+
+        self.spectra = {
+            spectra_id: sed.sum()
+            for spectra_id, sed in particle_spectra.items()
+        }
 
         return self.spectra
 
