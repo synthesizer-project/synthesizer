@@ -8,7 +8,10 @@ import numpy as np
 from unyt import c, deg, rad
 
 from synthesizer import exceptions
-from synthesizer.blackhole_emission_models import Template
+from synthesizer.blackhole_emission_models import (
+    Template,
+    UnifiedAGN,
+)
 from synthesizer.sed import Sed, plot_spectra
 from synthesizer.units import Quantity
 
@@ -384,7 +387,7 @@ class BlackholesComponent:
 
         return self.accretion_rate_eddington
 
-    def _get_spectra_disc(
+    def _get_spectra_unifiedagn_disc(
         self,
         emission_model,
         mask,
@@ -396,8 +399,7 @@ class BlackholesComponent:
 
         Args:
             emission_model (blackhole_emission_models.*)
-                Any instance of a blackhole emission model (e.g. Template
-                or UnifiedAGN).
+                An instance of the UnifiedAGN blackhole_emission model.
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
@@ -520,7 +522,7 @@ class BlackholesComponent:
 
         return self.spectra["disc"]
 
-    def _get_spectra_lr(
+    def _get_spectra_unifiedagn_lr(
         self,
         emission_model,
         mask,
@@ -533,8 +535,7 @@ class BlackholesComponent:
 
         Args
             emission_model (blackhole_emission_models.*)
-                Any instance of a blackhole emission model (e.g. Template
-                or UnifiedAGN).
+                An instance of the UnifiedAGN model.
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
@@ -580,17 +581,16 @@ class BlackholesComponent:
 
         return sed
 
-    def _get_spectra_torus(
+    def _get_spectra_unifiedagn_torus(
         self,
         emission_model,
     ):
         """
-        Generate the torus emission Sed.
+        Generate the torus emission Sed for the UnifiedAGN model.
 
         Args:
             emission_model (blackhole_emission_models.*)
-                Any instance of a blackhole emission model (e.g. Template
-                or UnifiedAGN).
+                An instance of the UnifiedAGN model.
 
         Returns:
             Sed
@@ -697,78 +697,82 @@ class BlackholesComponent:
                 f"Values not set for these parameters: {missing_params}"
             )
 
-        # Determine the inclination from the cosine_inclination
-        inclination = np.arccos(self.cosine_inclination) * rad
+        # If the emission model is the UnifiedAGN model call the methods
+        # relevant for that model and combine them as needed.
+        if isinstance(emission_model, UnifiedAGN):
+            # Determine the inclination from the cosine_inclination
+            inclination = np.arccos(self.cosine_inclination) * rad
 
-        # If the inclination is too high (edge) on we don't see the disc, only
-        # the NLR and the torus. Create a mask to pass to the generation
-        # method
-        mask = inclination < ((90 * deg) - emission_model.theta_torus)
+            # If the inclination is too high (edge) on we don't see the disc,
+            # only the NLR and the torus. Create a mask to pass to the
+            # generation method
+            mask = inclination < ((90 * deg) - emission_model.theta_torus)
 
-        # Get the disc and BLR spectra
-        self._get_spectra_disc(
-            emission_model=emission_model,
-            mask=mask,
-            verbose=verbose,
-            grid_assignment_method=grid_assignment_method,
-        )
-        self.spectra["blr"] = self._get_spectra_lr(
-            emission_model=emission_model,
-            mask=mask,
-            verbose=verbose,
-            grid_assignment_method=grid_assignment_method,
-            line_region="blr",
-        )
-
-        # Generate the spectra of the nlr and torus
-        self.spectra["nlr"] = self._get_spectra_lr(
-            emission_model=emission_model,
-            verbose=verbose,
-            mask=None,
-            grid_assignment_method=grid_assignment_method,
-            line_region="nlr",
-        )
-        self.spectra["torus"] = self._get_spectra_torus(
-            emission_model=emission_model,
-        )
-
-        # Calculate the emergent spectra as the sum of the components.
-        # Note: the choice of "intrinsic" is to align with the Pacman model
-        # which reserves "total" and "emergent" to include dust.
-        self.spectra["intrinsic"] = (
-            self.spectra["disc"]
-            + self.spectra["blr"]
-            + self.spectra["nlr"]
-            + self.spectra["torus"]
-        )
-
-        # Since we're using a coarse grid it might be necessary to rescale
-        # the spectra to the bolometric luminosity. This is requested when
-        # the emission model is called from a parametric or particle blackhole.
-        if isinstance(self.bolometric_luminosity, float):
-            scaling = (
-                self.bolometric_luminosity
-                / self.spectra[
-                    "disc_incident_isotropic"
-                ].measure_bolometric_luminosity()
+            # Get the disc and BLR spectra
+            self._get_spectra_unifiedagn_disc(
+                emission_model=emission_model,
+                mask=mask,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
             )
-            for spectra_id, spectra in self.spectra.items():
-                self.spectra[spectra_id] = spectra * scaling
-        elif self.bolometric_luminosity is not None:
-            scaling = (
-                np.sum(self.bolometric_luminosity)
-                / self.spectra[
-                    "disc_incident_isotropic"
-                ].measure_bolometric_luminosity()
+            self.spectra["blr"] = self._get_spectra_unifiedagn_lr(
+                emission_model=emission_model,
+                mask=mask,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
+                line_region="blr",
             )
-            for spectra_id, spectra in self.spectra.items():
-                self.spectra[spectra_id] = spectra * scaling
 
-        # Reset any values the emission model inherited
-        for param, val in used_varaibles:
-            setattr(emission_model, param, val)
+            # Generate the spectra of the nlr and torus
+            self.spectra["nlr"] = self._get_spectra_unifiedagn_lr(
+                emission_model=emission_model,
+                verbose=verbose,
+                mask=None,
+                grid_assignment_method=grid_assignment_method,
+                line_region="nlr",
+            )
+            self.spectra["torus"] = self._get_spectra_unifiedagn_torus(
+                emission_model=emission_model,
+            )
 
-        return self.spectra
+            # Calculate the emergent spectra as the sum of the components.
+            # Note: the choice of "intrinsic" is to align with the Pacman model
+            # which reserves "total" and "emergent" to include dust.
+            self.spectra["intrinsic"] = (
+                self.spectra["disc"]
+                + self.spectra["blr"]
+                + self.spectra["nlr"]
+                + self.spectra["torus"]
+            )
+
+            # Since we're using a coarse grid it might be necessary to rescale
+            # the spectra to the bolometric luminosity. This is requested when
+            # the emission model is called from a parametric or particle
+            # blackhole.
+            if isinstance(self.bolometric_luminosity, float):
+                scaling = (
+                    self.bolometric_luminosity
+                    / self.spectra[
+                        "disc_incident_isotropic"
+                    ].measure_bolometric_luminosity()
+                )
+                for spectra_id, spectra in self.spectra.items():
+                    self.spectra[spectra_id] = spectra * scaling
+            elif self.bolometric_luminosity is not None:
+                scaling = (
+                    np.sum(self.bolometric_luminosity)
+                    / self.spectra[
+                        "disc_incident_isotropic"
+                    ].measure_bolometric_luminosity()
+                )
+                for spectra_id, spectra in self.spectra.items():
+                    self.spectra[spectra_id] = spectra * scaling
+
+            # Reset any values the emission model inherited
+            for param, val in used_varaibles:
+                setattr(emission_model, param, val)
+
+            return self.spectra
 
     def get_spectra_attenuated(
         self,
