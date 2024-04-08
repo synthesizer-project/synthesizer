@@ -471,6 +471,31 @@ class BlackHoles(Particles, BlackholesComponent):
         # Calculate the incident spectra. It doesn't matter which spectra we
         # use here since we're just using the incident. Note: this assumes the
         # NLR and BLR are not overlapping.
+
+        # The istropic incident disc emission, which is used for the torus,
+        # uses the isotropic incident emission so let's calculate that first.
+        # To do this we want to temporarily set the cosine_inclination to 0.5
+        # and ignore the mask.
+        prev_cosine_inclincation = self.cosine_inclination
+        self.cosine_inclination = 0.5
+
+        self.spectra["disc_incident_isotropic"] = Sed(
+            lam,
+            self.generate_particle_lnu(
+                emission_model,
+                emission_model.grid["nlr"],
+                spectra_name="incident",
+                line_region="nlr",
+                fesc=0.0,
+                mask=None,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
+            ),
+        )
+
+        # Reset the cosine_inclination to the original value.
+        self.cosine_inclination = prev_cosine_inclincation
+
         self.particle_spectra["disc_incident"] = Sed(
             lam,
             self.generate_particle_lnu(
@@ -512,10 +537,14 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # calculate the escaping spectra.
         self.particle_spectra["disc_escaped"] = (
-            1
-            - emission_model.covering_fraction_blr
-            - emission_model.covering_fraction_nlr
-        ) * self.particle_spectra["disc_incident"]
+            (
+                1
+                - emission_model.covering_fraction_blr
+                - emission_model.covering_fraction_nlr
+            )
+            * self.particle_spectra["disc_incident"]
+            * mask
+        )
 
         # calculate the total spectra, the sum of escaping and transmitted
         self.particle_spectra["disc"] = (
@@ -603,7 +632,7 @@ class BlackHoles(Particles, BlackholesComponent):
         """
 
         # Get the disc emission
-        disc_spectra = self.particle_spectra["disc_incident"]
+        disc_spectra = self.particle_spectra["disc_incident_isotropic"]
 
         # Calculate the bolometric dust lunminosity as the difference between
         # the intrinsic and attenuated
