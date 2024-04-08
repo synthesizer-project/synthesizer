@@ -18,7 +18,7 @@ Example usages:
 """
 
 import numpy as np
-from unyt import kpc
+from unyt import kpc, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.components import BlackholesComponent
@@ -78,16 +78,31 @@ class BlackHole(BlackholesComponent):
                 here to override the defaults of the emission models.
         """
 
+        if bolometric_luminosity is not None:
+            bolometric_luminosity = unyt_array([bolometric_luminosity])
+        if mass is not None:
+            mass = unyt_array([mass])
+        if accretion_rate is not None:
+            accretion_rate = unyt_array([accretion_rate])
+        if epsilon is not None:
+            epsilon = unyt_array([epsilon])
+        if inclination is not None:
+            inclination = unyt_array([inclination])
+        if spin is not None:
+            spin = unyt_array([spin])
+        if metallicity is not None:
+            metallicity = unyt_array([metallicity])
+
         # Initialise base class
         BlackholesComponent.__init__(
             self,
-            bolometric_luminosity=np.array([bolometric_luminosity]),
-            mass=np.array([mass]),
-            accretion_rate=np.array([accretion_rate]),
-            epsilon=np.array([epsilon]),
-            inclination=np.array([inclination]),
-            spin=np.array([spin]),
-            metallicity=np.array([metallicity]),
+            bolometric_luminosity=bolometric_luminosity,
+            mass=mass,
+            accretion_rate=accretion_rate,
+            epsilon=epsilon,
+            inclination=inclination,
+            spin=spin,
+            metallicity=metallicity,
             **kwargs,
         )
 
@@ -99,3 +114,7 @@ class BlackHole(BlackholesComponent):
 
         # Initialise morphology using the in-built point-source class
         self.morphology = PointSource(offset=offset)
+
+        # Set a frontfacing clone of the number of particles with clearer
+        # naming
+        self.nbh = 1
