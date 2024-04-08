@@ -415,8 +415,6 @@ class BlackholesComponent:
                 transmitted disc emission.
         """
 
-        print(mask)
-
         # Get the wavelength array
         lam = emission_model.grid["nlr"].lam
 
@@ -593,10 +591,6 @@ class BlackholesComponent:
         torus_bolometric_luminosity = (
             emission_model.theta_torus / (90 * deg)
         ) * disc_spectra.measure_bolometric_luminosity()
-
-        print(disc_spectra.measure_bolometric_luminosity())
-        print(torus_bolometric_luminosity)
-        print(emission_model.theta_torus / (90 * deg))
 
         # create torus spectra
         sed = emission_model.torus_emission_model.get_spectra(disc_spectra.lam)
