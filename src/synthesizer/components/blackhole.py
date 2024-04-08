@@ -415,6 +415,8 @@ class BlackholesComponent:
                 transmitted disc emission.
         """
 
+        print(mask)
+
         # Get the wavelength array
         lam = emission_model.grid["nlr"].lam
 
@@ -422,9 +424,14 @@ class BlackholesComponent:
         # use here since we're just using the incident. Note: this assumes the
         # NLR and BLR are not overlapping.
 
-        # Mask should be None here since this is meant to be before any
-        # reprocessing by either the torus.
-        self.spectra["disc_incident"] = Sed(
+        # The istropic incident disc emission, which is used for the torus,
+        # uses the isotropic incident emission so let's calculate that first.
+        # To do this we want to temporarily set the cosine_inclination to 0.5
+        # and ignore the mask.
+        prev_cosine_inclincation = self.cosine_inclination
+        self.cosine_inclination = 0.5
+
+        self.spectra["disc_incident_isotropic"] = Sed(
             lam,
             self.generate_lnu(
                 emission_model,
@@ -438,7 +445,24 @@ class BlackholesComponent:
             ),
         )
 
-        # calculate the transmitted spectra
+        # Reset the cosine_inclination to the original value.
+        self.cosine_inclination = prev_cosine_inclincation
+
+        self.spectra["disc_incident"] = Sed(
+            lam,
+            self.generate_lnu(
+                emission_model,
+                emission_model.grid["nlr"],
+                spectra_name="incident",
+                line_region="nlr",
+                fesc=0.0,
+                mask=mask,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
+            ),
+        )
+
+        # calculate the transmitted spectra through the nlr and blr.
         nlr_spectra = self.generate_lnu(
             emission_model,
             emission_model.grid["nlr"],
@@ -459,6 +483,9 @@ class BlackholesComponent:
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
         )
+
+        # The transmitted spectra is the sum of the spectra transmitted
+        # through the blr and nlr.
         self.spectra["disc_transmitted"] = Sed(lam, nlr_spectra + blr_spectra)
 
         # calculate the escaping spectra.
@@ -466,7 +493,7 @@ class BlackholesComponent:
             1
             - emission_model.covering_fraction_blr
             - emission_model.covering_fraction_nlr
-        ) * (self.spectra["disc_incident"] * mask)
+        ) * (self.spectra["disc_incident"])
 
         # calculate the total spectra, the sum of escaping and transmitted
         self.spectra["disc"] = (
@@ -559,7 +586,7 @@ class BlackholesComponent:
         self.cosine_inclination = 0.5
 
         # Get the disc emission
-        disc_spectra = self.spectra["disc_incident"]
+        disc_spectra = self.spectra["disc_incident_isotropic"]
 
         # calculate the bolometric dust lunminosity as the difference between
         # the intrinsic and attenuated
@@ -707,14 +734,18 @@ class BlackholesComponent:
         if isinstance(self.bolometric_luminosity, float):
             scaling = (
                 self.bolometric_luminosity
-                / self.spectra["intrinsic"].measure_bolometric_luminosity()
+                / self.spectra[
+                    "disc_incident_isotropic"
+                ].measure_bolometric_luminosity()
             )
             for spectra_id, spectra in self.spectra.items():
                 self.spectra[spectra_id] = spectra * scaling
         elif self.bolometric_luminosity is not None:
             scaling = (
                 np.sum(self.bolometric_luminosity)
-                / self.spectra["intrinsic"].measure_bolometric_luminosity()
+                / self.spectra[
+                    "disc_incident_isotropic"
+                ].measure_bolometric_luminosity()
             )
             for spectra_id, spectra in self.spectra.items():
                 self.spectra[spectra_id] = spectra * scaling
