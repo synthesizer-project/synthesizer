@@ -446,7 +446,26 @@ class BlackholesComponent:
         # Reset the cosine_inclination to the original value.
         self.cosine_inclination = prev_cosine_inclincation
 
+        # This is the true incident disc emission, i.e. not including the
+        # mask.
         self.spectra["disc_incident"] = Sed(
+            lam,
+            self.generate_lnu(
+                emission_model,
+                emission_model.grid["nlr"],
+                spectra_name="incident",
+                line_region="nlr",
+                fesc=0.0,
+                mask=None,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
+            ),
+        )
+
+        # This includes the mask, i.e. it is zeroed at high-inclination where
+        # the disc is blocked by the torus. This is used to generate the
+        # transmitted spectra.
+        self.spectra["disc_incident_masked"] = Sed(
             lam,
             self.generate_lnu(
                 emission_model,
@@ -486,12 +505,13 @@ class BlackholesComponent:
         # through the blr and nlr.
         self.spectra["disc_transmitted"] = Sed(lam, nlr_spectra + blr_spectra)
 
-        # calculate the escaping spectra.
+        # calculate the escaping spectra, accounting for both the line regions
+        # and torus.
         self.spectra["disc_escaped"] = (
             1
             - emission_model.covering_fraction_blr
             - emission_model.covering_fraction_nlr
-        ) * (self.spectra["disc_incident"])
+        ) * (self.spectra["disc_incident_masked"])
 
         # calculate the total spectra, the sum of escaping and transmitted
         self.spectra["disc"] = (
