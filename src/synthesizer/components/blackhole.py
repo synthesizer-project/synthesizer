@@ -774,6 +774,9 @@ class BlackholesComponent:
 
             return self.spectra
 
+        raise exceptions.UnrecognisedOption("""AGN emission model not
+                                                recognised""")
+
     def get_spectra_attenuated(
         self,
         emission_model,
