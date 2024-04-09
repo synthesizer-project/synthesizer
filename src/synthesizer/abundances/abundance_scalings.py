@@ -1,9 +1,7 @@
-
 """
 Module containing various elemental abundance scalings. These provide methods
 to scale various elements with metallicity instead of simply linearly.
 """
-
 
 import numpy as np
 
@@ -212,7 +210,6 @@ class GalacticConcordance:
             reference_metallicity=0.015,
             reference_abundances={},
         ):
-
             """
             Initialiation for a specific element.
 

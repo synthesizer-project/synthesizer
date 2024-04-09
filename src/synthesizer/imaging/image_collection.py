@@ -357,7 +357,7 @@ class ImageCollection:
 
         Returns:
             composite_img (ImageCollection)
-                A new Image object contain the composite image of self and
+                A new Image object containing the composite image of self and
                 other_img.
 
         Raises:
@@ -391,6 +391,7 @@ class ImageCollection:
 
         # Combine any common filters
         for f in filters:
+            composite_img.filter_codes.append(f)
             composite_img.imgs[f] = self.imgs[f] + other_img.imgs[f]
 
         return composite_img
