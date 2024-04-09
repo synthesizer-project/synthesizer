@@ -2,7 +2,7 @@
 
 The primary class is Line which holds information about an individual or
 blended emission line, including its identification, wavelength, luminosity,
-and the strength of the continuum. From these the equivalent width is 
+and the strength of the continuum. From these the equivalent width is
 automatically calculated. Combined with a redshift and cosmology the flux can
 also be calcualted.
 
