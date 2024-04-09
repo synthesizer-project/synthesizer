@@ -2,7 +2,7 @@
 
 The primary class is Line which holds information about an individual or
 blended emission line, including its identification, wavelength, luminosity,
-and the strength of the continuum. From these the equivalent width is 
+and the strength of the continuum. From these the equivalent width is
 automatically calculated. Combined with a redshift and cosmology the flux can
 also be calcualted.
 
@@ -89,6 +89,46 @@ def get_line_label(line_id):
         line_label = "+".join(line_labels)
 
     return line_label
+
+
+def flatten_linelist(list_to_flatten):
+    """
+    Flatten a mixed list of lists and strings and remove duplicates.
+
+    Used when converting a line list which may contain single lines
+    and doublets.
+
+    Args:
+        list_to_flatten (list)
+            list containing lists and/or strings and integers
+
+    Returns:
+        (list)
+            flattened list
+    """
+    flattened_list = []
+    for lst in list_to_flatten:
+        if isinstance(lst, list) or isinstance(lst, tuple):
+            for ll in lst:
+                flattened_list.append(ll)
+
+        elif isinstance(lst, str):
+            # If the line is a doublet, resolve it and add each line
+            # individually
+            if len(lst.split(",")) > 1:
+                flattened_list += lst.split(",")
+            else:
+                flattened_list.append(lst)
+
+        else:
+            raise Exception(
+                (
+                    "Unrecognised type provided. Please provide"
+                    "a list of lists and strings"
+                )
+            )
+
+    return list(set(flattened_list))
 
 
 def get_ratio_label(ratio_id):
