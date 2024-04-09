@@ -8,10 +8,11 @@ import shutil
 import numpy as np
 from unyt import angstrom, c, h, unyt_array
 
-from synthesizer.photoionisation import calculate_Q_from_U
 from synthesizer.exceptions import (
+    InconsistentArguments,
     UnimplementedFunctionality,
-    InconsistentArguments)
+)
+from synthesizer.photoionisation import calculate_Q_from_U
 
 
 class ShapeCommands:
@@ -258,14 +259,15 @@ def create_cloudy_input(
             f_graphite, f_Si, f_pah = 0, 0, 0
 
         else:
-
             if params["no_grain_scaling"] is False:
-
-                delta_C = 10**abundances.total["C"] - 10**abundances.gas["C"]
+                delta_C = (
+                    10 ** abundances.total["C"] - 10 ** abundances.gas["C"]
+                )
                 delta_PAH = 0.01 * (10 ** abundances.total["C"])
                 delta_graphite = delta_C - delta_PAH
-                delta_Si = (10**abundances.total["Si"]
-                            - 10**abundances.gas["Si"])
+                delta_Si = (
+                    10 ** abundances.total["Si"] - 10 ** abundances.gas["Si"]
+                )
 
                 # define the reference abundances for the different grain types
                 # this should be the dust-phase abundance in the particular
@@ -275,7 +277,8 @@ def create_cloudy_input(
                     reference_Si_abund = -4.5547
                 else:
                     raise UnimplementedFunctionality(
-                        'Only Orion grains are currently implemented')
+                        "Only Orion grains are currently implemented"
+                    )
 
                 PAH_abund = -4.446
                 f_graphite = delta_graphite / (10 ** (reference_C_abund))
@@ -283,7 +286,6 @@ def create_cloudy_input(
                 f_pah = delta_PAH / (10 ** (PAH_abund))
 
             else:
-
                 f_graphite = 1.0
                 f_Si = 1.0
                 f_pah = 1.0
@@ -292,7 +294,7 @@ def create_cloudy_input(
                 f"grains {params['grains']} graphite {f_graphite} \n"
                 f"grains {params['grains']} silicate {f_Si} \n"
                 f"grains PAH {f_pah}"
-                )
+            )
 
             cinput.append(command + "\n")
 
@@ -355,7 +357,7 @@ def create_cloudy_input(
     #             cinput.append(f"grains {params['grains']} {ratio}\n")
 
     else:
-        print('WARNING: No depletion (or unrecognised depletion) specified')
+        print("WARNING: No depletion (or unrecognised depletion) specified")
 
         for ele in ["He"] + abundances.metals:
             cinput.append(
@@ -409,10 +411,12 @@ def create_cloudy_input(
     if params["constant_pressure"] is not None:
         cinput.append("constant pressure\n")
 
-    if ((params["constant_density"] is not None) and
-        (params["constant_pressure"] is not None)):
+    if (params["constant_density"] is not None) and (
+        params["constant_pressure"] is not None
+    ):
         raise InconsistentArguments(
-            """Cannot specify both constant pressure and density""")
+            """Cannot specify both constant pressure and density"""
+        )
 
     # covering factor
     if params["covering_factor"] is not None:
@@ -473,7 +477,7 @@ def create_cloudy_input(
 
     # save input file
     if output_dir is not None:
-        print(f'created input file: {output_dir}/{model_name}.in')
+        print(f"created input file: {output_dir}/{model_name}.in")
         open(f"{output_dir}/{model_name}.in", "w").writelines(cinput)
 
     return cinput
@@ -598,7 +602,7 @@ def read_linelist(filename, extension="elin"):
             lum = float(lum)
 
             # change the units of luminosity
-            lum /= 1E7
+            lum /= 1e7
 
             line_ids.append(id)
             wavelengths.append(wavelength)
