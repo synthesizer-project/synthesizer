@@ -8,7 +8,7 @@ import numpy as np
 from unyt import c, deg, rad, unyt_array
 
 from synthesizer import exceptions
-from synthesizer.blackhole_emission_models import Template
+from synthesizer.blackhole_emission_models import Template, UnifiedAGN
 from synthesizer.sed import Sed, plot_spectra
 from synthesizer.units import Quantity
 
@@ -594,7 +594,7 @@ class BlackholesComponent:
         spec[mask] = masked_spec
         return spec
 
-    def _get_particle_spectra_disc(
+    def _get_particle_spectra_unifiedagn_disc(
         self,
         emission_model,
         mask,
@@ -602,13 +602,12 @@ class BlackholesComponent:
         grid_assignment_method,
     ):
         """
-        Generate the disc spectra, updating the parameters if required
-        for each particle.
+        Generate the disc spectra for the UnifiedAGN model, updating the
+        parameters if required for each particle.
 
         Args:
-            emission_model (blackhole_emission_models.*)
-                Any instance of a blackhole emission model (e.g. Template
-                or UnifiedAGN).
+            emission_model (blackhole_emission_models.UnifiedAGN)
+                An instance of UnifiedAGN.
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
@@ -725,7 +724,7 @@ class BlackholesComponent:
 
         return self.particle_spectra["disc"]
 
-    def _get_particle_spectra_lr(
+    def _get_particle_spectra_unifiedagn_lr(
         self,
         emission_model,
         mask,
@@ -737,9 +736,8 @@ class BlackholesComponent:
         Generate the spectra of a generic line region for each particle.
 
         Args
-            emission_model (blackhole_emission_models.*)
-                Any instance of a blackhole emission model (e.g. Template
-                or UnifiedAGN).
+            emission_model (blackhole_emission_models.UnifiedAGN)
+                An instance of UnifiedAGN.
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
@@ -785,7 +783,7 @@ class BlackholesComponent:
 
         return sed
 
-    def _get_particle_spectra_torus(
+    def _get_particle_spectra_unifiedagn_torus(
         self,
         emission_model,
     ):
@@ -793,9 +791,8 @@ class BlackholesComponent:
         Generate the torus emission Sed for each particle.
 
         Args:
-            emission_model (blackhole_emission_models.*)
-                Any instance of a blackhole emission model (e.g. Template
-                or UnifiedAGN).
+            emission_model (blackhole_emission_models.UnifiedAGN)
+                An instance of UnifiedAGN.
 
         Returns:
             Sed
@@ -824,6 +821,110 @@ class BlackholesComponent:
         torus_sed.lnu = spec
 
         return torus_sed
+
+    def _get_particle_spectra_unifiedagn_intrinsic(
+        self,
+        emission_model,
+        verbose=False,
+        grid_assignment_method="cic",
+    ):
+        """
+        Generate intrinsic blackhole spectra for the UnifiedAGN emission
+        model.
+
+        Args:
+            emission_model (blackhole_emission_models.*)
+                An instance of UnifiedAGN.
+            verbose (bool)
+                Are we talking?
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            dict, Sed
+                A dictionary of Sed instances including the intrinsic emission
+                of each particle.
+        """
+
+        # Determine the inclination from the cosine_inclination
+        inclination = np.arccos(self.cosine_inclination) * rad
+
+        # If the inclination is too high (edge) on we don't see the disc, only
+        # the NLR and the torus. Create a mask to pass to the generation
+        # method
+        mask = inclination < ((90 * deg) - emission_model.theta_torus)
+
+        # Get the disc spectra
+        self._get_particle_spectra_unifiedagn_disc(
+            emission_model=emission_model,
+            mask=mask,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+        )
+
+        # Get the BLR spectra
+        self.particle_spectra["blr"] = (
+            self._get_particle_spectra_unifiedagn_lr(
+                emission_model=emission_model,
+                mask=mask,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
+                line_region="blr",
+            )
+        )
+
+        # Get the NLR spectra
+        self.particle_spectra["nlr"] = (
+            self._get_particle_spectra_unifiedagn_lr(
+                emission_model=emission_model,
+                verbose=verbose,
+                mask=None,
+                grid_assignment_method=grid_assignment_method,
+                line_region="nlr",
+            )
+        )
+
+        # Get the BLR spectra
+        self.particle_spectra["torus"] = (
+            self._get_particle_spectra_unifiedagn_torus(
+                emission_model=emission_model,
+            )
+        )
+
+        # Calculate the intrinsic spectra as the sum of the components.
+        # Note: the choice of "intrinsic" is to align with the Pacman model
+        # which reserves "total" and "emergent" to include dust.
+        self.particle_spectra["intrinsic"] = (
+            self.particle_spectra["disc"]
+            + self.particle_spectra["blr"]
+            + self.particle_spectra["nlr"]
+            + self.particle_spectra["torus"]
+        )
+
+        # Since we're using a coarse grid it might be necessary to rescale
+        # the spectra to the bolometric luminosity. To do this we should use
+        # the disc_incident_isotropic since that should scale with bolometric
+        # luminosity of the entire blackhole.
+
+        # We also want to save this scaling since it needs to be used to scale
+        # emission lines properly.
+        if self.bolometric_luminosity is not None:
+            self.scaling = (
+                self.bolometric_luminosity
+                / self.particle_spectra[
+                    "disc_incident_isotropic"
+                ].measure_bolometric_luminosity()
+            )
+            for spectra_id, spectra in self.particle_spectra.items():
+                for i in range(self.nbh):
+                    self.particle_spectra[spectra_id]._lnu[i] = (
+                        self.scaling[i] * spectra._lnu[i, :]
+                    )
+
+        return self.particle_spectra
 
     def get_particle_spectra_intrinsic(
         self,
@@ -862,6 +963,8 @@ class BlackholesComponent:
             )
             return self.particle_spectra
 
+        # Otherwise we must use a more complex model, e.g. UnifiedAGN.
+
         # Temporarily have the emission model adopt any vairable parameters
         # from this BlackHole/BlackHoles
         used_varaibles = []
@@ -896,71 +999,22 @@ class BlackholesComponent:
                 f"Values not set for these parameters: {missing_params}"
             )
 
-        # Determine the inclination from the cosine_inclination
-        inclination = np.arccos(self.cosine_inclination) * rad
-
-        # If the inclination is too high (edge) on we don't see the disc, only
-        # the NLR and the torus. Create a mask to pass to the generation
-        # method
-        mask = inclination < ((90 * deg) - emission_model.theta_torus)
-
-        # Get the disc and BLR spectra
-        self._get_particle_spectra_disc(
-            emission_model=emission_model,
-            mask=mask,
-            verbose=verbose,
-            grid_assignment_method=grid_assignment_method,
-        )
-        self.particle_spectra["blr"] = self._get_particle_spectra_lr(
-            emission_model=emission_model,
-            mask=mask,
-            verbose=verbose,
-            grid_assignment_method=grid_assignment_method,
-            line_region="blr",
-        )
-
-        self.particle_spectra["nlr"] = self._get_particle_spectra_lr(
-            emission_model=emission_model,
-            verbose=verbose,
-            mask=None,
-            grid_assignment_method=grid_assignment_method,
-            line_region="nlr",
-        )
-        self.particle_spectra["torus"] = self._get_particle_spectra_torus(
-            emission_model=emission_model,
-        )
-
-        # Calculate the emergent spectra as the sum of the components.
-        # Note: the choice of "intrinsic" is to align with the Pacman model
-        # which reserves "total" and "emergent" to include dust.
-        self.particle_spectra["intrinsic"] = (
-            self.particle_spectra["disc"]
-            + self.particle_spectra["blr"]
-            + self.particle_spectra["nlr"]
-            + self.particle_spectra["torus"]
-        )
-
-        # Since we're using a coarse grid it might be necessary to rescale
-        # the spectra to the bolometric luminosity. This is requested when
-        # the emission model is called from a parametric or particle blackhole.
-        if self.bolometric_luminosity is not None:
-            scaling = (
-                self.bolometric_luminosity
-                / self.particle_spectra[
-                    "intrinsic"
-                ].measure_bolometric_luminosity()
+        if isinstance(emission_model, UnifiedAGN):
+            particle_spectra = self._get_particle_spectra_unifiedagn_intrinsic(
+                emission_model,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
             )
-            for spectra_id, spectra in self.particle_spectra.items():
-                for i in range(self.nbh):
-                    self.particle_spectra[spectra_id]._lnu[i] = (
-                        scaling[i] * spectra._lnu[i, :]
-                    )
+
+        else:
+            raise exceptions.UnimplementedFunctionality("""emission model not
+            recognised or not implemented.""")
 
         # Reset any values the emission model inherited
         for param, val in used_varaibles:
             setattr(emission_model, param, val)
 
-        return self.particle_spectra
+        return particle_spectra
 
     def get_spectra_intrinsic(
         self,
