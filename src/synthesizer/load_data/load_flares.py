@@ -37,6 +37,7 @@ def load_FLARES(master_file, region, tag):
         )  # Mpc (physical)
         masses = hf[f"{region}/{tag}/Particle/S_Mass"][:]  # 1e10 Msol
         imasses = hf[f"{region}/{tag}/Particle/S_MassInitial"][:]  # 1e10 Msol
+        s_hsml = hf[f"{region}/{tag}/Particle/S_sml"][:]  # Mpc (physical)
 
         metals = hf[f"{region}/{tag}/Particle/S_Z_smooth"][:]
         s_oxygen = hf[f"{region}/{tag}/Particle/S_Abundance_Oxygen"][:]
@@ -72,6 +73,7 @@ def load_FLARES(master_file, region, tag):
             s_hydrogen=s_hydrogen[b:e],
             coordinates=coods[b:e, :] * Mpc,
             current_masses=masses[b:e] * Msun,
+            smoothing_lengths=s_hsml[b:e] * Mpc,
         )
 
     # Get the gas particle begin / end indices
