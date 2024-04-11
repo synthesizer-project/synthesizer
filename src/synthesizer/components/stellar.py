@@ -88,6 +88,65 @@ class StarsComponent:
                 "You should not be seeing this!!!"
             )
         )
+    
+    def get_spectra_nebular_continuum(
+        self,
+        grid,
+        fesc=0.0,
+        fesc_LyA=1.0,
+        young=None,
+        old=None,
+        **kwargs,
+    ):
+        """
+        Generate the nebular continuum spectra. This is only invoked if
+        fesc_LyA < 1.
+
+        Args:
+            grid (obj):
+                Spectral grid object.
+            fesc (float):
+                Fraction of stellar emission that escapeds unattenuated from
+                the birth cloud (defaults to 0.0).
+            fesc_LyA (float)
+                Fraction of Lyman-alpha emission that can escape unimpeded
+                by the ISM/IGM.
+            young (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
+                for young star particles.
+            old (unyt_quantity):
+                If not None, specifies age in Myr at which to filter
+                for old star particles.
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_lnu.
+
+        Returns:
+            numpy.ndarray
+                The line contribution spectra.
+        """
+
+        # Make sure young and old in Myr, if provided
+        young, old = self._check_young_old_units(young, old)
+
+        # Generate contribution of line emission alone and reduce the
+        # contribution of Lyman-alpha
+        nebcont = self.generate_lnu(
+            grid,
+            spectra_name="nebular_continuum",
+            old=old,
+            young=young,
+            **kwargs,
+        )
+
+        # Multiply by the Lyamn-continuum escape fraction
+        nebcont *= 1 - fesc
+
+        # Get index of Lyman-alpha
+        idx = grid.get_nearest_index(1216.0, grid.lam)
+        nebcont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
+
+        return nebcont
 
     def get_spectra_linecont(
         self,
