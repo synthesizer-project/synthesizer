@@ -103,9 +103,9 @@ def load_Simba(
         galaxies[i] = Galaxy()
 
         galaxies[i].load_stars(
-            imasses[b:e] * Msun,
-            ages[b:e] * yr,
-            metallicity[b:e],
+            initial_masses=imasses[b:e] * Msun,
+            ages=ages[b:e] * yr,
+            metallicities=metallicity[b:e],
             s_oxygen=s_oxygen[b:e],
             s_hydrogen=s_hydrogen[b:e],
             coordinates=coods[b:e, :] * kpc,
@@ -131,7 +131,7 @@ def load_Simba(
         galaxies[i].load_gas(
             coordinates=g_coods[b:e] * kpc,
             masses=g_masses[b:e] * Msun,
-            metals=g_metals[b:e],
+            metallicities=g_metals[b:e],
             smoothing_lengths=g_hsml[b:e] * kpc,
             dust_masses=g_dustmass[b:e] * Msun,
         )
