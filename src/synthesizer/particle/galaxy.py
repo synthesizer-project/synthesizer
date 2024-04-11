@@ -170,7 +170,12 @@ class Galaxy(BaseGalaxy):
                 )
 
     def load_stars(
-        self, initial_masses=None, ages=None, metals=None, stars=None, **kwargs
+        self,
+        initial_masses=None,
+        ages=None,
+        metallicities=None,
+        stars=None,
+        **kwargs,
     ):
         """
         Load arrays for star properties into a `Stars`  object,
@@ -181,7 +186,7 @@ class Galaxy(BaseGalaxy):
                 Initial stellar particle masses (mass at birth), Msol
             ages (array_like, float)
                 Star particle age, Myr
-            metals (array_like, float)
+            metallicities (array_like, float)
                 Star particle metallicity (total metal fraction)
             stars (stars particle object)
                 A pre-existing stars particle object to use. Defaults to None.
@@ -196,12 +201,18 @@ class Galaxy(BaseGalaxy):
             self.stars = stars
         else:
             # If nothing has been provided, just set to None and return
-            if (initial_masses is None) | (ages is None) | (metals is None):
+            if (
+                (initial_masses is None)
+                | (ages is None)
+                | (metallicities is None)
+            ):
                 self.stars = None
                 return None
             else:
                 # Create a new Stars object from particle arrays
-                self.stars = Stars(initial_masses, ages, metals, **kwargs)
+                self.stars = Stars(
+                    initial_masses, ages, metallicities, **kwargs
+                )
 
         self.calculate_integrated_stellar_properties()
 
@@ -209,7 +220,7 @@ class Galaxy(BaseGalaxy):
         self.stars.redshift = self.redshift
         self.stars.centre = self.centre
 
-    def load_gas(self, masses=None, metals=None, gas=None, **kwargs):
+    def load_gas(self, masses=None, metallicities=None, gas=None, **kwargs):
         """
         Load arrays for gas particle properties into a `Gas` object,
         and attach to this galaxy object
@@ -217,7 +228,7 @@ class Galaxy(BaseGalaxy):
         Args:
             masses : array_like (float)
                 gas particle masses, Msol
-            metals : array_like (float)
+            metallicities : array_like (float)
                 gas particle metallicity (total metal fraction)
             gas (gas particle object)
                 A pre-existing gas particle object to use. Defaults to None.
@@ -231,10 +242,10 @@ class Galaxy(BaseGalaxy):
             self.gas = gas
         else:
             # If nothing has been provided, just set to None and return
-            if (masses is None) | (metals is None):
+            if (masses is None) | (metallicities is None):
                 self.gas = None
                 return None
-            self.gas = Gas(masses, metals, **kwargs)
+            self.gas = Gas(masses, metallicities, **kwargs)
 
         self.calculate_integrated_gas_properties()
 
@@ -278,11 +289,11 @@ class Galaxy(BaseGalaxy):
         )
 
         # Loop over black holes
-        metals = np.zeros(self.black_holes.nbh)
+        metallicities = np.zeros(self.black_holes.nbh)
         for ind, gas_in_range in enumerate(inds):
             # Handle black holes with no neighbouring gas
             if len(gas_in_range) == 0:
-                metals[ind] = default_metallicity
+                metallicities[ind] = default_metallicity
 
             # Calculate the separation between the black hole and gas particles
             sep = (
@@ -298,17 +309,17 @@ class Galaxy(BaseGalaxy):
 
             # The above operation can remove all gas neighbours...
             if len(gas_in_range) == 0:
-                metals[ind] = default_metallicity
+                metallicities[ind] = default_metallicity
                 continue
 
             # Calculate the mass weight metallicity of this black holes region
-            metals[ind] = np.average(
+            metallicities[ind] = np.average(
                 self.gas.metallicities[gas_in_range],
                 weights=self.gas._masses[gas_in_range],
             )
 
         # Assign the metallicity we have found
-        self.black_holes.metallicities = metals
+        self.black_holes.metallicities = metallicities
 
     def _prepare_los_args(self, kernel, mask, threshold, force_loop):
         """
