@@ -146,8 +146,10 @@ def create_cloudy_input(
         "stop_T": None,
         # if not provided the command is not used
         "stop_efrac": None,
+        # log10(N_H/cm^2), if not provided the command is not used
+        "stop_column_density": None,
         # K, if not provided the command is not used
-        "T_floor": False,
+        "T_floor": None,
         # Hydrogen density
         "hydrogen_density": None,
         # redshift, only necessary if CMB heating included
@@ -173,7 +175,7 @@ def create_cloudy_input(
         # output full list of all available lines
         "output_lines": None,
         # output linelist
-        "output_linelist": "linelist.dat",
+        "output_linelist": None,
     }
 
     # update default_params with kwargs
