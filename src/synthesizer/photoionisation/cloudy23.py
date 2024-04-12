@@ -277,6 +277,11 @@ def create_cloudy_input(
                 if params["grains"] == "Orion":
                     reference_C_abund = -3.6259
                     reference_Si_abund = -4.5547
+                # this is incorrect since the abundance in the ISM is probably
+                # different.
+                if params["grains"] == "ISM":
+                    reference_C_abund = -3.6259
+                    reference_Si_abund = -4.5547
                 else:
                     raise UnimplementedFunctionality(
                         "Only Orion grains are currently implemented"
