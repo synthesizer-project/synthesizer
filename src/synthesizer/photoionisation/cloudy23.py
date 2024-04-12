@@ -279,7 +279,7 @@ def create_cloudy_input(
                     reference_Si_abund = -4.5547
                 # this is incorrect since the abundance in the ISM is probably
                 # different.
-                if params["grains"] == "ISM":
+                elif params["grains"] == "ISM":
                     reference_C_abund = -3.6259
                     reference_Si_abund = -4.5547
                 else:
