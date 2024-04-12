@@ -423,7 +423,9 @@ def create_cloudy_input(
         cinput.append(f'covering factor {params["covering_factor"]} linear\n')
 
     # Processing commands
-    # cinput.append("iterate to convergence\n")
+    if params["iterate_to_convergence"] is not None:
+        cinput.append("iterate to convergence\n")
+
     if params["T_floor"] is not None:
         cinput.append(f'set temperature floor {params["T_floor"]} linear\n')
 
@@ -432,6 +434,12 @@ def create_cloudy_input(
 
     if params["stop_efrac"] is not None:
         cinput.append(f'stop efrac {params["stop_efrac"]}\n')
+
+    if params["stop_column_density"] is not None:
+        cinput.append(f'stop column density {params["stop_column_density"]}\n')
+        # For some horrible reason the above is ignored in favour of a
+        # built in temperature stop (4000K) unless that is turned off.
+        cinput.append("stop temperature off\n")
 
     # --- output commands
 
