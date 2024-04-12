@@ -134,7 +134,7 @@ def create_cloudy_input(
     """
 
     default_params = {
-        "no_grain_scaling": None,
+        "no_grain_scaling": False,
         # ionisation parameter
         "ionisation_parameter": None,
         # radius in log10 parsecs, only important for spherical geometry
