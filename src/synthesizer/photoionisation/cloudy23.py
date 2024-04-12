@@ -472,9 +472,16 @@ def create_cloudy_input(
 
     # output linelist
     if params["output_linelist"]:
+        # save intrinsic lines
         cinput.append(
             f'save line list column absolute last units angstroms \
-                  "{model_name}.elin" "linelist.dat"\n'
+                  "{model_name}.intrinsic_elin" "linelist.dat"\n'
+        )
+
+        # save emergent lines
+        cinput.append(
+            f'save line list emergent column absolute last units angstroms \
+                  "{model_name}.emergent_elin" "linelist.dat"\n'
         )
 
         # make copy of linelist
