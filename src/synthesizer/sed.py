@@ -1735,6 +1735,9 @@ def plot_spectra_as_rainbow(
             Flag whether to use logged luminosity.
         min_log_lnu (float)
             Minium luminosity to plot relative to the maximum.
+        use_fnu (bool)
+            Whether to plot fluxes or luminosities. If True
+            fluxes are plotted, otherwise luminosities.
 
     Returns:
         fig (matplotlib.pyplot.figure)
