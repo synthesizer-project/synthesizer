@@ -37,14 +37,15 @@ def load_FLARES(master_file, region, tag):
         )  # Mpc (physical)
         masses = hf[f"{region}/{tag}/Particle/S_Mass"][:]  # 1e10 Msol
         imasses = hf[f"{region}/{tag}/Particle/S_MassInitial"][:]  # 1e10 Msol
+        s_hsml = hf[f"{region}/{tag}/Particle/S_sml"][:]  # Mpc (physical)
 
-        metals = hf[f"{region}/{tag}/Particle/S_Z_smooth"][:]
+        metallicities = hf[f"{region}/{tag}/Particle/S_Z_smooth"][:]
         s_oxygen = hf[f"{region}/{tag}/Particle/S_Abundance_Oxygen"][:]
         s_hydrogen = hf[f"{region}/{tag}/Particle/S_Abundance_Hydrogen"][:]
 
         g_sfr = hf[f"{region}/{tag}/Particle/G_SFR"][:]  # Msol / yr
         g_masses = hf[f"{region}/{tag}/Particle/G_Mass"][:]  # 1e10 Msol
-        g_metals = hf[f"{region}/{tag}/Particle/G_Z_smooth"][:]
+        g_metallicities = hf[f"{region}/{tag}/Particle/G_Z_smooth"][:]
         g_coods = (
             hf[f"{region}/{tag}/Particle/G_Coordinates"][:].T * scale_factor
         )  # Mpc (physical)
@@ -67,11 +68,12 @@ def load_FLARES(master_file, region, tag):
         galaxies[i].load_stars(
             imasses[b:e] * Msun,
             ages[b:e] * yr,
-            metals[b:e],
+            metallicities[b:e],
             s_oxygen=s_oxygen[b:e],
             s_hydrogen=s_hydrogen[b:e],
             coordinates=coods[b:e, :] * Mpc,
             current_masses=masses[b:e] * Msun,
+            smoothing_lengths=s_hsml[b:e] * Mpc,
         )
 
     # Get the gas particle begin / end indices
@@ -83,14 +85,14 @@ def load_FLARES(master_file, region, tag):
         galaxies[i].sf_gas_mass = np.sum(g_masses[b:e][sf_mask]) * Msun
 
         galaxies[i].sf_gas_metallicity = (
-            np.sum(g_masses[b:e][sf_mask] * g_metals[b:e][sf_mask])
+            np.sum(g_masses[b:e][sf_mask] * g_metallicities[b:e][sf_mask])
             / galaxies[i].sf_gas_mass.value
         )
 
         galaxies[i].load_gas(
             coordinates=g_coods[b:e] * Mpc,
             masses=g_masses[b:e] * Msun,
-            metals=g_metals[b:e],
+            metallicities=g_metallicities[b:e],
             smoothing_lengths=g_hsml[b:e] * Mpc,
         )
 
