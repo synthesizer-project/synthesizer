@@ -197,7 +197,7 @@ class StarsComponent:
         sed = Sed(grid.lam, lnu)
 
         # Store the Sed object
-        self.spectra[label + "incident"] = sed
+        self.spectra[f"{label}_incident"] = sed
 
         return sed
 
@@ -255,7 +255,7 @@ class StarsComponent:
         sed = Sed(grid.lam, lnu)
 
         # Store the Sed object
-        self.spectra[label + "transmitted"] = sed
+        self.spectra[f"{label}_transmitted"] = sed
 
         return sed
 
@@ -315,7 +315,7 @@ class StarsComponent:
         sed = Sed(grid.lam, lnu)
 
         # Store the Sed object
-        self.spectra[label + "nebular"] = sed
+        self.spectra[f"{label}_nebular"] = sed
 
         return sed
 
@@ -403,8 +403,8 @@ class StarsComponent:
                 **kwargs,
             )
 
-            self.spectra[f"{label}intrinsic"] = self.spectra[
-                f"{label}incident"
+            self.spectra[f"{label}_intrinsic"] = self.spectra[
+                f"{label}_incident"
             ]
             return spec
 
@@ -475,9 +475,9 @@ class StarsComponent:
             intrinsic = reprocessed
 
         if fesc > 0:
-            self.spectra[f"{label}escaped"] = escaped
-        self.spectra[f"{label}reprocessed"] = reprocessed
-        self.spectra[f"{label}intrinsic"] = intrinsic
+            self.spectra[f"{label}_escaped"] = escaped
+        self.spectra[f"{label}_reprocessed"] = reprocessed
+        self.spectra[f"{label}_intrinsic"] = intrinsic
 
         return reprocessed
 
@@ -543,12 +543,12 @@ class StarsComponent:
         )
 
         # Apply the dust screen
-        emergent = self.spectra["intrinsic"].apply_attenuation(
+        emergent = self.spectra[f"{label}_intrinsic"].apply_attenuation(
             tau_v, dust_curve=dust_curve
         )
 
         # Store the Sed object
-        self.spectra["emergent"] = emergent
+        self.spectra[f"{label}_emergent"] = emergent
 
         return emergent
 
@@ -712,7 +712,7 @@ class StarsComponent:
                 fesc_LyA=fesc_LyA,
                 young=young_old_thresh,
                 old=None,
-                label="young_",
+                label="young",
                 **kwargs,
             )
 
@@ -724,7 +724,7 @@ class StarsComponent:
                 fesc_LyA=fesc_LyA,
                 young=None,
                 old=young_old_thresh,
-                label="old_",
+                label="old",
                 **kwargs,
             )
 
@@ -1098,7 +1098,6 @@ class StarsComponent:
             grid,
             fesc=0,
             fesc_LyA=1,
-            dust_curve=PowerLaw(),
             tau_v=[tau_v_ISM, tau_v_BC],
             alpha=[alpha_ISM, alpha_BC],
             young_old_thresh=young_old_thresh,
