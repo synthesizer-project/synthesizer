@@ -338,8 +338,8 @@ class StarsComponent:
         spectra this saves the incident, nebular, and escaped spectra.
 
         Note, if a grid that has not been post-processed through a
-        photoionisation code is provided (i.e. read_lines=False) this will
-        just call `get_spectra_incident`.
+        photoionisation code is provided (i.e. grid.reprocessed=False) this
+        will just call `get_spectra_incident`.
 
         Args:
             grid (obj):
@@ -384,7 +384,7 @@ class StarsComponent:
         young, old = self._check_young_old_units(young, old)
 
         # Check if grid has been run through a photoionisation code
-        if grid.read_lines is False:
+        if not grid.reprocessed:
             if verbose:
                 print(
                     (
@@ -675,7 +675,7 @@ class StarsComponent:
                 )
 
         # If grid has photoinoisation outputs, use the reprocessed outputs
-        if grid.read_lines:
+        if grid.reprocessed:
             reprocessed_name = "reprocessed"
         else:  # otherwise just use the intrinsic stellar spectra
             reprocessed_name = "intrinsic"
@@ -728,8 +728,9 @@ class StarsComponent:
                 **kwargs,
             )
 
-            # Combine young and old spectra
-            if grid.read_lines:
+            # Combine young and old spectra (only if the grid has been
+            # reprocessed through photoionisation code)
+            if grid.reprocessed:
                 self.spectra["incident"] = (
                     self.spectra["young_incident"]
                     + self.spectra["old_incident"]
@@ -928,6 +929,11 @@ class StarsComponent:
                     self.spectra["old_escaped"]._lnu
                     + self.spectra["old_attenuated"]._lnu
                 )
+
+            # Combine emergent spectra for young and old stars
+            self.spectra["emergent"] = (
+                self.spectra["young_emergent"] + self.spectra["old_emergent"]
+            )
 
             # Force updating of the bolometric luminosity attribute. I don't
             # know why this is necessary.
