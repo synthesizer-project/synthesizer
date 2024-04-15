@@ -1715,11 +1715,11 @@ def plot_spectra_as_rainbow(
     """
 
     # define filter for spectra
-    s = (sed._lam < lam_max) & (sed._lam > lam_min)
+    wavelength_indices = np.logical_and(sed._lam < lam_max, sed._lam > lam_min)
 
     # apply filter to wavelength and spectra
-    lam = sed.lam[s].to("nm").value
-    lnu = sed._lnu[s]
+    lam = sed.lam[wavelength_indices].to("nm").value
+    lnu = sed._lnu[wavelength_indices]
 
     # normalise spectrum
     lnu /= np.max(lnu)
