@@ -1724,6 +1724,9 @@ def plot_spectra_as_rainbow(
             The matplotlib axes object containing the plotted data.
     """
 
+    # take sum of Seds if two dimensional
+    sed = sed.sed()
+
     # define filter for spectra
     wavelength_indices = np.logical_and(sed._lam < lam_max, sed._lam > lam_min)
 
