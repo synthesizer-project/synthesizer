@@ -88,7 +88,7 @@ class StarsComponent:
                 "You should not be seeing this!!!"
             )
         )
-    
+
     def get_spectra_nebular_continuum(
         self,
         grid,
