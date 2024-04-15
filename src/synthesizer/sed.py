@@ -29,7 +29,7 @@ from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.igm import Inoue14
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
-from synthesizer.utils import has_units, rebin_1d
+from synthesizer.utils import has_units, rebin_1d, wavelength_to_rgba
 
 
 class Sed:
@@ -1685,6 +1685,72 @@ def plot_observed_spectra(
 
     if show:
         plt.show()
+
+    return fig, ax
+
+
+def plot_spectra_as_rainbow(
+    sed, figsize=(5, 0.5), lam_min=3000, lam_max=8000, include_xaxis=True
+):
+    """
+    Create a plot of the spectrum as a rainbow.
+
+    Arguments:
+        sed (synthesizer.sed.Sed)
+            A synthesizer Sed object.
+        figsize (tuple)
+            Fig-size tuple (width, height).
+        lam_min (float)
+            The min wavelength to plot in Angstroms.
+        lam_max (float)
+            The max wavelength to plot in Angstroms.
+        include_xaxis (bool)
+            Flag whther to include x-axis ticks and label.
+
+    Returns:
+        fig (matplotlib.pyplot.figure)
+            The matplotlib figure object for the plot.
+        ax (matplotlib.axes)
+            The matplotlib axes object containing the plotted data.
+    """
+
+    # define filter for spectra
+    s = (sed._lam < lam_max) & (sed._lam > lam_min)
+
+    # apply filter to wavelength and spectra
+    lam = sed.lam[s].to("nm").value
+    lnu = sed._lnu[s]
+
+    # normalise spectrum
+    lnu /= np.max(lnu)
+
+    # initialise figure
+    fig = plt.figure(figsize=figsize)
+
+    # initialise axes
+    if include_xaxis:
+        ax = fig.add_axes((0, 0.3, 1, 1))
+        ax.set_xlabel(r"$\lambda/\AA$")
+    else:
+        ax = fig.add_axes((0, 0.0, 1, 1))
+        ax.set_xticks([])
+
+    # set background
+    ax.set_facecolor("black")
+
+    # always turn off y-ticks
+    ax.set_yticks([])
+
+    # get an array of colours
+    colours = np.array(
+        [wavelength_to_rgba(lam_, alpha=lnu_) for lam_, lnu_ in zip(lam, lnu)]
+    )
+
+    # expand dimensions to get an image array
+    im = np.expand_dims(colours, axis=0)
+
+    # show image
+    ax.imshow(im, aspect="auto", extent=[lam_min, lam_max, 0, 1])
 
     return fig, ax
 
