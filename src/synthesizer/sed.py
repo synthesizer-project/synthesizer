@@ -1697,6 +1697,7 @@ def plot_spectra_as_rainbow(
     include_xaxis=True,
     logged=False,
     min_log_lnu=-2.0,
+    use_fnu=False,
 ):
     """
     Create a plot of the spectrum as a rainbow.
@@ -1727,20 +1728,28 @@ def plot_spectra_as_rainbow(
     # take sum of Seds if two dimensional
     sed = sed.sum()
 
-    # define filter for spectra
-    wavelength_indices = np.logical_and(sed._lam < lam_max, sed._lam > lam_min)
-
-    # apply filter to wavelength and spectra
-    lam = sed.lam[wavelength_indices].to("nm").value
-    lnu = sed._lnu[wavelength_indices]
+    if use_fnu:
+        # define filter for spectra
+        wavelength_indices = np.logical_and(
+            sed._obslam < lam_max, sed._obslam > lam_min
+        )
+        lam = sed.obslam[wavelength_indices].to("nm").value
+        spectra = sed._fnu[wavelength_indices]
+    else:
+        # define filter for spectra
+        wavelength_indices = np.logical_and(
+            sed._lam < lam_max, sed._lam > lam_min
+        )
+        lam = sed.lam[wavelength_indices].to("nm").value
+        spectra = sed._lnu[wavelength_indices]
 
     # normalise spectrum
-    lnu /= np.max(lnu)
+    spectra /= np.max(spectra)
 
     # if logged rescale to between 0 and 1 using min_log_lnu
     if logged:
-        lnu = (np.log10(lnu) - min_log_lnu) / (-min_log_lnu)
-        lnu[lnu < min_log_lnu] = 0
+        spectra = (np.log10(spectra) - min_log_lnu) / (-min_log_lnu)
+        spectra[spectra < min_log_lnu] = 0
 
     # initialise figure
     fig = plt.figure(figsize=figsize)
@@ -1761,7 +1770,10 @@ def plot_spectra_as_rainbow(
 
     # get an array of colours
     colours = np.array(
-        [wavelength_to_rgba(lam_, alpha=lnu_) for lam_, lnu_ in zip(lam, lnu)]
+        [
+            wavelength_to_rgba(lam_, alpha=spectra_)
+            for lam_, spectra_ in zip(lam, spectra)
+        ]
     )
 
     # expand dimensions to get an image array
