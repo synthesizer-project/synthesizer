@@ -1725,7 +1725,7 @@ def plot_spectra_as_rainbow(
     """
 
     # take sum of Seds if two dimensional
-    sed = sed.sed()
+    sed = sed.sum()
 
     # define filter for spectra
     wavelength_indices = np.logical_and(sed._lam < lam_max, sed._lam > lam_min)
@@ -1768,7 +1768,7 @@ def plot_spectra_as_rainbow(
     im = np.expand_dims(colours, axis=0)
 
     # show image
-    ax.imshow(im, aspect="auto", extent=[lam_min, lam_max, 0, 1])
+    ax.imshow(im, aspect="auto", extent=(lam_min, lam_max, 0, 1))
 
     return fig, ax
 
