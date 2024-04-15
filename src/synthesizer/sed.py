@@ -1305,6 +1305,24 @@ class Sed:
             limit=limit,
         )[0]
 
+    def plot_spectra(self, **kwargs):
+        """
+        A wrapper for synthesizer.sed.plot_spectra()
+        """
+        return plot_spectra(self, **kwargs)
+
+    def plot_observed_spectra(self, **kwargs):
+        """
+        A wrapper for synthesizer.sed.plot_observed_spectra()
+        """
+        return plot_observed_spectra(self, **kwargs)
+
+    def plot_spectra_as_rainbow(self, **kwargs):
+        """
+        A wrapper for synthesizer.sed.plot_spectra_as_rainbow()
+        """
+        return plot_spectra_as_rainbow(self, **kwargs)
+
 
 def plot_spectra(
     spectra,
