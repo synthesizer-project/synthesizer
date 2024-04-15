@@ -1,3 +1,27 @@
+"""The Grid class containing tabulated spectral and line data.
+
+This object underpins all of Synthesizer function which generates synthetic
+spectra and line luminosities from models or simulation outputs. The Grid
+object contains attributes and methods for interfacing with spectral and line
+grids.
+
+The grids themselves use a standardised HDF5 format which can be generated
+using the synthesizer-grids sister package.
+
+Example usage:
+
+    from synthesizer import Grid
+
+    # Load a grid
+    grid = Grid("bc03_salpeter")
+
+    # Get the axes of the grid
+    print(grid.axes)
+
+    # Get the spectra grid
+    print(grid.spectra)
+"""
+
 import os
 
 import cmasher as cmr
@@ -12,159 +36,20 @@ from spectres import spectres
 from unyt import angstrom, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.line import Line, LineCollection
+from synthesizer.line import Line, LineCollection, flatten_linelist
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 
 from . import __file__ as filepath
 
 
-def check_lines_available(grid_name, grid_dir):
-    """
-    Check that lines are available on this grid
-
-    Args:
-        grid_name (str):
-            The name of the grid file.
-        grid_dir (str):
-            The directory to the grid file.
-    """
-
-    grid_filename = f"{grid_dir}/{grid_name}.hdf5"
-    with h5py.File(grid_filename, "r") as hf:
-        if "lines" in hf.keys():
-            return True
-        else:
-            return False
-
-
-def get_available_lines(grid_name, grid_dir, include_wavelengths=False):
-    """
-    Get a list of the lines available to a grid
-
-    Args:
-        grid_name (str):
-            The name of the grid file.
-        grid_dir (str):
-            The directory to the grid file.
-
-    Returns:
-        lines (list):
-            List of available lines
-        wavelengths (list)
-            List of associated wavelengths (if `include_wavelengths` is True)
-    """
-
-    grid_filename = f"{grid_dir}/{grid_name}.hdf5"
-    with h5py.File(grid_filename, "r") as hf:
-        lines = list(hf["lines"].keys())
-
-        if include_wavelengths:
-            wavelengths = np.array(
-                [hf["lines"][line].attrs["wavelength"] for line in lines]
-            )
-            return lines, wavelengths
-        else:
-            return lines
-
-
-def flatten_linelist(list_to_flatten):
-    """
-    Flatten a mixed list of lists and strings and remove duplicates. Used when
-    converting a desired line list which may contain single lines and doublets.
-
-    Args:
-        list_to_flatten (list)
-            list containing lists and/or strings and integers
-
-    Returns:
-        (list)
-            flattened list
-    """
-
-    flattened_list = []
-    for lst in list_to_flatten:
-        if isinstance(lst, list) or isinstance(lst, tuple):
-            for ll in lst:
-                flattened_list.append(ll)
-
-        elif isinstance(lst, str):
-            # If the line is a doublet, resolve it and add each line
-            # individually
-            if len(lst.split(",")) > 1:
-                flattened_list += lst.split(",")
-            else:
-                flattened_list.append(lst)
-
-        else:
-            raise Exception(
-                (
-                    "Unrecognised type provided. Please provide"
-                    "a list of lists and strings"
-                )
-            )
-
-    return list(set(flattened_list))
-
-
-def parse_grid_id(grid_id):
-    """
-    This is used for parsing a grid ID to return the SPS model,
-    version, and IMF
-
-    Args:
-        grid_id (str)
-            string grid identifier
-    """
-
-    if len(grid_id.split("_")) == 2:
-        sps_model_, imf_ = grid_id.split("_")
-        cloudy = cloudy_model = ""
-
-    if len(grid_id.split("_")) == 4:
-        sps_model_, imf_, cloudy, cloudy_model = grid_id.split("_")
-
-    if len(sps_model_.split("-")) == 1:
-        sps_model = sps_model_.split("-")[0]
-        sps_model_version = ""
-
-    if len(sps_model_.split("-")) == 2:
-        sps_model = sps_model_.split("-")[0]
-        sps_model_version = sps_model_.split("-")[1]
-
-    if len(sps_model_.split("-")) > 2:
-        sps_model = sps_model_.split("-")[0]
-        sps_model_version = "-".join(sps_model_.split("-")[1:])
-
-    if len(imf_.split("-")) == 1:
-        imf = imf_.split("-")[0]
-        imf_hmc = ""
-
-    if len(imf_.split("-")) == 2:
-        imf = imf_.split("-")[0]
-        imf_hmc = imf_.split("-")[1]
-
-    if imf in ["chab", "chabrier03", "Chabrier03"]:
-        imf = "Chabrier (2003)"
-    if imf in ["kroupa"]:
-        imf = "Kroupa (2003)"
-    if imf in ["salpeter", "135all"]:
-        imf = "Salpeter (1955)"
-    if imf.isnumeric():
-        imf = rf"$\alpha={float(imf)/100}$"
-
-    return {
-        "sps_model": sps_model,
-        "sps_model_version": sps_model_version,
-        "imf": imf,
-        "imf_hmc": imf_hmc,
-    }
-
-
 class Grid:
     """
-    The Grid class, containing attributes and methods for reading and
-    manipulating spectral grids.
+    The Grid class containing tabulated spectral and line data.
+
+    This object contains attributes and methods for reading and
+    manipulating the spectral grids which underpin all spectra/line
+    generation in synthesizer.
 
     Attributes:
         grid_dir (str)
@@ -175,11 +60,18 @@ class Grid:
         grid_ext (str)
             The grid extension. Either ".hdf5" or ".h5". If the passed
             grid_name has no extension then ".hdf5" is assumed.
-        read_lines (bool/list)
-            Flag for whether to read lines. If False they are not read,
-            otherwise, this is a list of the requested lines.
-        read_spectra (bool/list)
-            Flag for whether to read spectra.
+        grid_filename (str)
+            The full path to the grid file.
+        available_lines (bool/list)
+            A list of lines on the Grid.
+        available_spectra (bool/list)
+            A list of spectra on the Grid.
+        reprocessed (bool)
+            Flag for whether the grid has been reprocessed through cloudy.
+        lines_available (bool)
+            Flag for whether lines are available on this grid.
+        lam (Quantity, float)
+            The wavelengths at which the spectra are defined.
         spectra (dict, array-like, float)
             The spectra array from the grid. This is an N-dimensional
             grid where N is the number of axes of the SPS grid. The final
@@ -196,7 +88,9 @@ class Grid:
         naxes
             The number of axes the spectral grid has.
         logQ10 (dict)
-            A dictionary of ionisation Q parameters.
+            A dictionary of ionisation Q parameters. (DEPRECATED)
+        log10_specific_ionising_luminosity (dict)
+            A dictionary of log10 specific ionising luminosities.
         <grid_axis> (array-like, float)
             A Grid will always contain 1D arrays corresponding to the axes
             of the spectral grid. These are read dynamically from the HDF5
@@ -220,8 +114,10 @@ class Grid:
         lam_lims=(),
     ):
         """
-        Initailise the grid object, open the grid file and extracting the
-        relevant data.
+        Initialise the grid object.
+
+        This will open the grid file and extract the axes, spectra (if
+        requested), and lines (if requested) and any other relevant data.
 
         Args:
             grid_name (str)
@@ -230,9 +126,11 @@ class Grid:
             grid_dir (str)
                 The file path to the directory containing the grid file.
             read_spectra (bool)
-                Should we read the spectra?
+                Should we read the spectra? If a list then a subset of spectra
+                will be read.
             read_lines (bool)
-                Should we read the lines?
+                Should we read lines? If a list then a subset of lines will be
+                read.
             new_lam (array-like, float)
                 An optional user defined wavelength array the spectra will be
                 interpolated onto, see Grid.interp_spectra.
@@ -245,41 +143,74 @@ class Grid:
                 the grid to (i.e. (lower_lam, upper_lam)). If new_lam or
                 filters are provided these limits will be ignored.
         """
+        # Get the grid file path data
+        self.grid_dir = ""
+        self.grid_name = ""
+        self.grid_ext = "hdf5"  # can be updated if grid_name has an extension
+        self._parse_grid_path(grid_dir, grid_name)
+
+        # Prepare lists of available lines and spectra
+        self.available_lines = []
+        self.available_spectra = []
+
+        # Set up property flags. These will be set when their property methods
+        # are first called to avoid reading the file too often.
+        self._reprocessed = None
+        self._lines_available = None
+
+        # Set up spectra and lines dictionaries (if we don't read them they'll
+        # just stay as empty dicts)
+        self.spectra = {}
+        self.lines = {}
+
+        # Set up dictionary to hold parameters used in grid generation
+        self.parameters = {}
+
+        # Get the axes of the grid from the HDF5 file
+        self._get_axes()
+
+        # Get the ionising luminosity (if available)
+        self._get_ionising_luminosity()
+
+        # Read in spectra
+        if read_spectra:  # also True if read_spectra is a list
+            self._get_spectra_grid(read_spectra)
+
+        # Read in lines
+        if read_lines:  # also True if read_lines is a list
+            self._get_lines_grid(read_lines)
+
+        # Prepare the wavelength axis (if new_lam, lam_lims and filters are
+        # all None, this will do nothing, leaving the grid's wavelength array
+        # as it is in the HDF5 file)
+        self._prepare_lam_axis(new_lam, filters, lam_lims)
+
+    def _parse_grid_path(self, grid_dir, grid_name):
+        """Parse the grid path and set the grid directory and filename."""
+        # If we haven't been given a grid directory, assume the grid is in
+        # the package's "data/grids" directory.
         if grid_dir is None:
             grid_dir = os.path.join(os.path.dirname(filepath), "data/grids")
 
-        # The grid directory
+        # Store the grid directory
         self.grid_dir = grid_dir
 
         # Have we been passed an extension?
-        if (
-            grid_name.split(".")[-1] == "hdf5"
-            or grid_name.split(".")[-1] == "h5"
-        ):
-            self.grid_ext = grid_name.split(".")[-1]
-        else:
-            self.grid_ext = "hdf5"
+        grid_name_split = grid_name.split(".")[-1]
+        ext = grid_name_split[-1]
+        if ext == "hdf5" or ext == "h5":
+            self.grid_ext = ext
 
         # Strip the extension off the name (harmless if no extension)
-        self.grid_name = grid_name.replace(".hdf5", "").replace(".h5", "")
+        self.grid_name = grid_name.replace(f".{self.grid_ext}", "")
 
         # Construct the full path
         self.grid_filename = (
             f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
         )
 
-        # Flags for reading behaviour
-        self.read_lines = read_lines
-        self.read_spectra = read_spectra  # not used
-
-        # Set up attributes we will set later
-        self.spectra = None
-        self.lines = None
-
-        # Convert line list into a flattened list and remove duplicates
-        if isinstance(read_lines, list):
-            read_lines = flatten_linelist(read_lines)
-
+    def _get_axes(self):
+        """Get the grid axes from the HDF5 file."""
         # Get basic info of the grid
         with h5py.File(self.grid_filename, "r") as hf:
             self.parameters = {k: v for k, v in hf.attrs.items()}
@@ -287,21 +218,19 @@ class Grid:
             # Get list of axes
             self.axes = list(hf.attrs["axes"])
 
-            # Put the values of each axis in a dictionary
-            self.axes_values = {
-                axis: hf["axes"][axis][:] for axis in self.axes
-            }
-
             # Set the values of each axis as an attribute
-            # e.g. self.log10age == self.axes_values['log10age']
+            # e.g. self.log10age == hdf["axes"]["log10age"]
             for axis in self.axes:
-                setattr(self, axis, self.axes_values[axis])
+                setattr(self, axis, hf["axes"][axis][:])
 
             # Number of axes
             self.naxes = len(self.axes)
 
-            # If specific ionising photon luminosity is available set this
-            # as an attribute as well
+    def _get_ionising_luminosity(self):
+        """Get the ionising luminosity from the HDF5 file."""
+        # Get basic info of the grid
+        with h5py.File(self.grid_filename, "r") as hf:
+            # Extract any ionising luminosities
             if "log10_specific_ionising_luminosity" in hf.keys():
                 self.log10_specific_ionising_lum = {}
                 for ion in hf["log10_specific_ionising_luminosity"].keys():
@@ -309,53 +238,79 @@ class Grid:
                         "log10_specific_ionising_luminosity"
                     ][ion][:]
 
-            # If log10Q is available set this as an attribute as well
-            # TODO: This needs to die
+            # Old name for backwards compatibility (DEPRECATED)
             if "log10Q" in hf.keys():
                 self.log10Q = {}
                 for ion in hf["log10Q"].keys():
                     self.log10Q[ion] = hf["log10Q"][ion][:]
 
-        # Read in spectra
-        if read_spectra:
-            self.spectra = {}
+    def _get_spectra_grid(self, read_spectra):
+        """
+        Get the spectra grid from the HDF5 file.
 
-            with h5py.File(
-                f"{self.grid_dir}/{self.grid_name}.hdf5", "r"
-            ) as hf:
-                # Get list of available spectra
-                spectra_ids = list(hf["spectra"].keys())
+        If using a cloudy reprocessed grid this method will automatically
+        calculate 2 spectra not native to the grid file:
+            total = transmitted + nebular
+            nebular_continuum = nebular + linecont
 
-                # Remove wavelength dataset
-                spectra_ids.remove("wavelength")
-
-                # Remove normalisation dataset
-                if "normalisation" in spectra_ids:
-                    spectra_ids.remove("normalisation")
-
-                for spectra_id in spectra_ids:
-                    self.lam = hf["spectra/wavelength"][:]
-                    self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
-
-            # If a full cloudy grid is available calculate some
-            # other spectra for convenience.
-            if "linecont" in self.spectra.keys():
-                self.spectra["total"] = (
-                    self.spectra["transmitted"] + self.spectra["nebular"]
-                )
-
-                self.spectra["nebular_continuum"] = (
-                    self.spectra["nebular"] - self.spectra["linecont"]
-                )
-
-            # Save list of available spectra
-            self.available_spectra = list(self.spectra.keys())
-
-        if read_lines is not False:
-            if check_lines_available(self.grid_name, self.grid_dir):
-                pass
+        Args:
+            read_spectra (bool/list)
+                Flag for whether to read all available spectra or subset of
+                spectra to read.
+        """
+        with h5py.File(self.grid_filename, "r") as hf:
+            # Are we only reading a subset?
+            if isinstance(read_spectra, list):
+                self.available_spectra = read_spectra
             else:
-                raise Exception(
+                # If not, read all available spectra
+                self.available_spectra = self.get_grid_spectra_ids()
+
+            # Remove wavelength dataset
+            self.available_spectra.remove("wavelength")
+
+            # Remove normalisation dataset
+            if "normalisation" in self.available_spectra:
+                self.available_spectra.remove("normalisation")
+
+            # Get all our spectra
+            for spectra_id in self.available_spectra:
+                self.lam = hf["spectra/wavelength"][:]
+                self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
+
+        # If a full cloudy grid is available calculate some
+        # other spectra for convenience.
+        if self.reprocessed:
+            self.spectra["total"] = (
+                self.spectra["transmitted"] + self.spectra["nebular"]
+            )
+            self.available_spectra.append("total")
+
+            self.spectra["nebular_continuum"] = (
+                self.spectra["nebular"] - self.spectra["linecont"]
+            )
+            self.available_spectra.append("nebular_continuum")
+
+    def _get_lines_grid(self, read_lines):
+        """
+        Get the lines grid from the HDF5 file.
+
+        Args:
+            read_lines (bool/list)
+                Flag for whether to read all available lines or subset of
+                lines to read.
+        """
+        # Double check we actually have lines to read
+        if not self.lines_available:
+            if not self.reprocessed:
+                raise exceptions.GridError(
+                    "Grid hasn't been reprocessed with cloudy and has no"
+                    "lines. Either pass `read_lines=False` or load a grid"
+                    "which has been run through cloudy."
+                )
+
+            else:
+                raise exceptions.GridError(
                     (
                         "No lines available on this grid object. "
                         "Either set `read_lines=False`, or load a grid "
@@ -363,38 +318,61 @@ class Grid:
                     )
                 )
 
-            # If read_lines is True read all available lines in the grid,
-            # otherwise if read_lines is a list just read the lines
-            # in the list.
-
-            self.lines = {}
-
-            # If a list of lines is provided then only read lines in this list
+        with h5py.File(self.grid_filename, "r") as hf:
+            # Are we only reading a subset?
             if isinstance(read_lines, list):
-                read_lines = flatten_linelist(read_lines)
-
-            # If a list isn't provided then use all available lines to the grid
+                self.available_lines = flatten_linelist(read_lines)
             else:
-                read_lines = get_available_lines(self.grid_name, self.grid_dir)
+                # If not, read all available lines
+                self.available_lines, _ = self.get_grid_line_ids()
 
-            with h5py.File(
-                f"{self.grid_dir}/{self.grid_name}.hdf5", "r"
-            ) as hf:
-                for line in read_lines:
-                    self.lines[line] = {}
-                    self.lines[line]["wavelength"] = hf["lines"][line].attrs[
-                        "wavelength"
-                    ]
-                    self.lines[line]["luminosity"] = hf["lines"][line][
-                        "luminosity"
-                    ][:]
-                    self.lines[line]["continuum"] = hf["lines"][line][
-                        "continuum"
-                    ][:]
+            # Read in the lines
+            for line in self.available_lines:
+                self.lines[line] = {}
+                self.lines[line]["wavelength"] = hf["lines"][line].attrs[
+                    "wavelength"
+                ]
+                self.lines[line]["luminosity"] = hf["lines"][line][
+                    "luminosity"
+                ][:]
+                self.lines[line]["continuum"] = hf["lines"][line]["continuum"][
+                    :
+                ]
 
-            # Save list of available lines
-            self.available_lines = list(self.lines.keys())
+    def _prepare_lam_axis(
+        self,
+        new_lam,
+        filters,
+        lam_lims,
+    ):
+        """
+        Modify the grid wavelength axis to adhere to user defined wavelengths.
 
+        This method will do nothing if the user has not provided new_lam,
+        filters, or lam_lims.
+
+        If the user has passed any of these the wavelength array will be
+        limited and/or interpolated to match the user's input.
+
+        - If new_lam is provided, the spectra will be interpolated onto this
+          array.
+        - If filters are provided, the spectra will be limited wavelengths
+          with non-zero transmission and the filters will be interpolated
+          onto the grid's wavelength array in this non-zero range.
+        - If lam_lims are provided, the grid will be truncated to these
+          limits.
+
+        Args:
+            new_lam (array-like, float)
+                An optional user defined wavelength array the spectra will be
+                interpolated onto.
+            filters (FilterCollection)
+                An optional FilterCollection object to unify the grids
+                wavelength grid with.
+            lam_lims (tuple, float)
+                A tuple of the lower and upper wavelength limits to truncate
+                the grid to (i.e. (lower_lam, upper_lam)).
+        """
         # If we have both new_lam (or filters) and wavelength limits
         # the limits become meaningless tell the user so.
         if len(lam_lims) > 0 and (new_lam is not None or filters is not None):
@@ -407,7 +385,7 @@ class Grid:
         # the spectra onto?
         if new_lam is not None and filters is None:
             # Double check we aren't being asked to do something impossible.
-            if not read_spectra:
+            if self.spectra is None:
                 raise exceptions.InconsistentArguments(
                     "Can't interpolate spectra onto a new wavelength array if"
                     " no spectra have been read in! Set read_spectra=True."
@@ -419,7 +397,7 @@ class Grid:
         # Are we unifying with a filter collection?
         if filters is not None:
             # Double check we aren't being asked to do something impossible.
-            if not read_spectra:
+            if self.spectra is None:
                 raise exceptions.InconsistentArguments(
                     "Can't interpolate spectra onto a FilterCollection "
                     "wavelength array if no spectra have been read in! "
@@ -440,6 +418,83 @@ class Grid:
         if len(lam_lims) > 0 and filters is None and new_lam is None:
             self.truncate_grid_lam(*lam_lims)
 
+    @property
+    def reprocessed(self):
+        """
+        Flag for whether grid has been reprocessed through cloudy.
+
+        This will only access the file the first time this property is
+        accessed.
+
+        Returns:
+            True if reprocessed, False otherwise.
+        """
+        if self._reprocessed is None:
+            with h5py.File(self.grid_filename, "r") as hf:
+                self._reprocessed = (
+                    True if "cloudy_version" in hf.attrs.keys() else False
+                )
+
+        return self._reprocessed
+
+    @property
+    def lines_available(self):
+        """
+        Flag for whether line emission information is available
+        on this grid.
+
+        This will only access the file the first time this property is
+        accessed.
+
+        Returns:
+            bool:
+                True if lines are available, False otherwise.
+        """
+        if self._lines_available is None:
+            with h5py.File(self.grid_filename, "r") as hf:
+                self._lines_available = True if "lines" in hf.keys() else False
+
+        return self._lines_available
+
+    @property
+    def has_spectra(self):
+        """Return whether the Grid has spectra."""
+        return len(self.spectra) > 0
+
+    @property
+    def has_lines(self):
+        """Return whether the Grid has lines."""
+        return len(self.lines) > 0
+
+    def get_grid_spectra_ids(self):
+        """
+        Get a list of the spectra available on a grid.
+
+        Returns:
+            list:
+                List of available spectra
+        """
+        with h5py.File(self.grid_filename, "r") as hf:
+            return list(hf["spectra"].keys())
+
+    def get_grid_line_ids(self):
+        """
+        Get a list of the lines available on a grid.
+
+        Returns:
+            list:
+                List of available lines
+            list:
+                List of associated wavelengths.
+        """
+        with h5py.File(self.grid_filename, "r") as hf:
+            lines = list(hf["lines"].keys())
+
+            wavelengths = np.array(
+                [hf["lines"][line].attrs["wavelength"] for line in lines]
+            )
+        return lines, wavelengths
+
     def interp_spectra(self, new_lam, loop_grid=False):
         """
         Interpolates the spectra grid onto the provided wavelength grid.
@@ -456,7 +511,6 @@ class Grid:
                 grid, or loop over the first axes. The latter is less memory
                 intensive, but slower. Defaults to False.
         """
-
         # Handle and remove the units from the passed wavelengths if needed
         if isinstance(new_lam, unyt_array):
             if new_lam.units != self.lam.units:
@@ -488,10 +542,7 @@ class Grid:
         self.lam = new_lam
 
     def __str__(self):
-        """
-        Function to print a basic summary of the Grid object.
-        """
-
+        """Return a basic summary of the Grid object."""
         # Set up the string for printing
         pstr = ""
 
@@ -515,12 +566,10 @@ class Grid:
         """Return the shape of the grid."""
         return self.spectra[self.available_spectra[0]].shape
 
-    def get_nearest_index(self, value, array):
+    @staticmethod
+    def get_nearest_index(value, array):
         """
-        Function for calculating the closest index in an array for a
-        given value.
-
-        TODO: This could be moved to utils?
+        Calculate the closest index in an array for a given value.
 
         Args:
             value (float/unyt_quantity)
@@ -533,7 +582,6 @@ class Grid:
             int
                 The index of the closet point in the grid (array)
         """
-
         # Handle units on both value and array
         # First do we need a conversion?
         if isinstance(array, unyt_array) and isinstance(value, unyt_quantity):
@@ -550,7 +598,7 @@ class Grid:
 
     def get_grid_point(self, values):
         """
-        Function to identify the nearest grid point for a tuple of values.
+        Identify the nearest grid point for a tuple of values.
 
         Args:
             values (tuple)
@@ -558,10 +606,9 @@ class Grid:
                 in the same order as the axes.
 
         Returns:
-            (tuple)
+            tuple
                 A tuple of integers specifying the closest grid point.
         """
-
         return tuple(
             [
                 self.get_nearest_index(value, getattr(self, axis))
@@ -571,7 +618,7 @@ class Grid:
 
     def get_spectra(self, grid_point, spectra_id="incident"):
         """
-        Function for creating an Sed object for a specific grid point.
+        Create an Sed object for a specific grid point.
 
         Args:
             grid_point (tuple)
@@ -580,30 +627,35 @@ class Grid:
                 The name of the spectra (in the grid) that is desired.
 
         Returns:
-            sed (synthesizer.sed.Sed)
+            synthesizer.sed.Sed
                 A synthesizer Sed object
         """
-
-        # Throw exception if the line_id not in list of available lines
+        # Throw exception if the spectra_id not in list of available spectra
         if spectra_id not in self.available_spectra:
             raise exceptions.InconsistentParameter(
-                "Provided spectra_id is not in" "list of available spectra."
+                "Provided spectra_id is not in the list of available spectra."
             )
 
         # Throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
             raise exceptions.InconsistentParameter(
                 "The grid_point tuple provided"
-                "as an argument should have same shape as the grid."
+                "as an argument should have the same shape as the grid."
             )
 
-        # TODO: throw an exception if grid point is outside grid bounds
-
-        return Sed(self.lam, lnu=self.spectra[spectra_id][grid_point])
+        # Throw an exception if grid point is outside grid bounds
+        try:
+            return Sed(self.lam, lnu=self.spectra[spectra_id][grid_point])
+        except IndexError:
+            # Modify the error message for clarity
+            raise IndexError(
+                f"grid_point is outside of the grid (grid.shape={self.shape}, "
+                f"grid_point={grid_point})"
+            )
 
     def get_line(self, grid_point, line_id):
         """
-        Function for creating a Line object for a given line_id and grid_point.
+        Create a Line object for a given line_id and grid_point.
 
         Args:
             grid_point (tuple)
@@ -615,12 +667,11 @@ class Grid:
             line (synthesizer.line.Line)
                 A synthesizer Line object.
         """
-
         # Throw exception if the grid_point has a different shape from the grid
         if len(grid_point) != self.naxes:
             raise exceptions.InconsistentParameter(
                 "The grid_point tuple provided"
-                "as an argument should have same shape as the grid."
+                "as an argument should have the same shape as the grid."
             )
 
         if isinstance(line_id, str):
@@ -634,7 +685,7 @@ class Grid:
             # Throw exception if tline_id not in list of available lines
             if line_id_ not in self.available_lines:
                 raise exceptions.InconsistentParameter(
-                    "Provided line_id is" "not in list of available lines."
+                    "Provided line_id is not in the list of available lines."
                 )
 
             line_ = self.lines[line_id_]
@@ -646,7 +697,7 @@ class Grid:
 
     def get_lines(self, grid_point, line_ids=None):
         """
-        Function a LineCollection of multiple lines.
+        Create a LineCollection for multiple lines.
 
         Args:
             grid_point (tuple)
@@ -657,7 +708,6 @@ class Grid:
         Returns:
             lines (lines.LineCollection)
         """
-
         # If no line ids are provided calculate all lines
         if line_ids is None:
             line_ids = self.available_lines
@@ -685,13 +735,16 @@ class Grid:
         max_log10age=None,
     ):
         """
-        Make a simple plot of the specific ionsing photon luminosity (logged)
-        as a function of log10age and metallicity for a given grid and ion.
+        Make a simple plot of the specific ionising photon luminosity.
+
+        The resulting figure will show the (log) specific ionsing photon
+        luminosity as a function of (log) age and metallicity for a given grid
+        and ion.
 
         Args:
            ion (str)
-                The desired ion, most grids only have HI and HII calculated by
-                default at present.
+                The desired ion. Most grids only have HI and HII calculated by
+                default.
 
             hsize (float)
                 The horizontal size of the figure
@@ -717,7 +770,6 @@ class Grid:
             matplotlib.Axis
                 The axis on which to plot.
         """
-
         # Define the axis coordinates
         left = 0.2
         height = 0.65
@@ -808,7 +860,7 @@ class Grid:
 
     def get_delta_lambda(self, spectra_id="incident"):
         """
-        Calculates the delta lambda for the given spectra.
+        Calculate the delta lambda for the given spectra.
 
         Args:
             spectra_id (str)
@@ -818,7 +870,6 @@ class Grid:
             tuple
                 A tuple containing the list of wavelengths and delta lambda.
         """
-
         # Calculate delta lambda for each wavelength
         delta_lambda = np.log10(self.lam[1:]) - np.log10(self.lam[:-1])
 
@@ -827,9 +878,10 @@ class Grid:
 
     def get_sed(self, spectra_type):
         """
-        Get the spectra grid as an Sed object enabling grid wide
-        use of Sed methods for flux, photometry, indices, ionising photons
-        etc.
+        Get the spectra grid as an Sed object.
+
+        This enables grid wide use of Sed methods for flux, photometry,
+        indices, ionising photons, etc.
 
         Args:
             spectra_type (string)
@@ -855,7 +907,6 @@ class Grid:
             max_lam (unyt_quantity)
                 The maximum wavelength to truncate the grid to.
         """
-
         # Get the indices of the wavelengths to keep
         okinds = np.logical_and(self.lam >= min_lam, self.lam <= max_lam)
 

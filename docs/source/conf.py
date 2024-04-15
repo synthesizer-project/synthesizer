@@ -91,3 +91,5 @@ html_theme = "furo"
 html_theme_options = {
     "sidebar_hide_name": True,
 }
+
+html_title = "Synthesizer"

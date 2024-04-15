@@ -12,7 +12,7 @@ def _load_CAMELS(
     lens,
     imasses,
     ages,
-    metals,
+    metallicities,
     s_oxygen,
     s_hydrogen,
     coods,
@@ -39,7 +39,7 @@ def _load_CAMELS(
             initial masses particle array
         ages (array):
             particle ages array
-        metals (array):
+        metallicities (array):
             particle summed metallicities array
         s_oxygen (array):
             particle oxygen abundance array
@@ -88,9 +88,9 @@ def _load_CAMELS(
             smoothing_lengths = s_hsml[b:e] * kpc
 
         galaxies[i].load_stars(
-            imasses[b:e] * Msun,
-            ages[b:e] * yr,
-            metals[b:e],
+            initial_masses=imasses[b:e] * Msun,
+            ages=ages[b:e] * yr,
+            metallicities=metallicities[b:e],
             s_oxygen=s_oxygen[b:e],
             s_hydrogen=s_hydrogen[b:e],
             coordinates=coods[b:e, :] * kpc,
@@ -103,7 +103,7 @@ def _load_CAMELS(
         galaxies[i].load_gas(
             coordinates=g_coods[b:e] * kpc,
             masses=g_masses[b:e] * Msun,
-            metals=g_metallicities[b:e],
+            metallicities=g_metallicities[b:e],
             star_forming=star_forming[b:e],
             smoothing_lengths=g_hsml[b:e] * kpc,
             dust_to_metal_ratio=dtm,
@@ -229,7 +229,7 @@ def load_CAMELS_IllustrisTNG(
         lens=lens,
         imasses=imasses,
         ages=ages,
-        metals=metallicity,
+        metallicities=metallicity,
         s_oxygen=s_oxygen,
         s_hydrogen=s_hydrogen,
         s_hsml=hsml,
@@ -330,7 +330,7 @@ def load_CAMELS_Astrid(
         lens=lens,
         imasses=imasses,
         ages=ages,
-        metals=metallicity,
+        metallicities=metallicity,
         s_oxygen=s_oxygen,
         s_hydrogen=s_hydrogen,
         coods=coods,
@@ -428,7 +428,7 @@ def load_CAMELS_Simba(
         lens=lens,
         imasses=imasses,
         ages=ages,
-        metals=metallicity,
+        metallicities=metallicity,
         s_oxygen=s_oxygen,
         s_hydrogen=s_hydrogen,
         coods=coods,
