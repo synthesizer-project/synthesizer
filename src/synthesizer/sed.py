@@ -1690,7 +1690,13 @@ def plot_observed_spectra(
 
 
 def plot_spectra_as_rainbow(
-    sed, figsize=(5, 0.5), lam_min=3000, lam_max=8000, include_xaxis=True
+    sed,
+    figsize=(5, 0.5),
+    lam_min=3000,
+    lam_max=8000,
+    include_xaxis=True,
+    logged=False,
+    min_log_lnu=-2.0,
 ):
     """
     Create a plot of the spectrum as a rainbow.
@@ -1706,6 +1712,10 @@ def plot_spectra_as_rainbow(
             The max wavelength to plot in Angstroms.
         include_xaxis (bool)
             Flag whther to include x-axis ticks and label.
+        logged (bool)
+            Flag whether to use logged luminosity.
+        min_log_lnu (float)
+            Minium luminosity to plot relative to the maximum.
 
     Returns:
         fig (matplotlib.pyplot.figure)
@@ -1723,6 +1733,11 @@ def plot_spectra_as_rainbow(
 
     # normalise spectrum
     lnu /= np.max(lnu)
+
+    # if logged rescale to between 0 and 1 using min_log_lnu
+    if logged:
+        lnu = (np.log10(lnu) - min_log_lnu) / (-min_log_lnu)
+        lnu[lnu < min_log_lnu] = 0
 
     # initialise figure
     fig = plt.figure(figsize=figsize)
