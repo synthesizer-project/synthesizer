@@ -23,7 +23,7 @@ from tqdm import tqdm
 from synthesizer import exceptions
 
 
-def _download(url, save_dir):
+def _download(url, save_dir, filename=None):
     """
     Download the file at the given URL to the given path.
 
@@ -33,8 +33,9 @@ def _download(url, save_dir):
         save_dir (str)
             The directory in which to save the file.
     """
-    # Get the file name
-    filename = url.split("/")[-1]
+    if filename is None:
+        # Get the file name
+        filename = url.split("/")[-1]
 
     # Define the save path
     save_path = f"{save_dir}/{filename}"
@@ -68,14 +69,21 @@ def download_test_grids(destination):
 
     # Define the files to get
     files = [
+        "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5",
+        "agnsed-limited_cloudy-c23.01-blr.hdf5",
+        "agnsed-limited_cloudy-c23.01-nlr.hdf5",
+    ]
+
+    # Define the file names the downloads will be saved as
+    out_files = [
         "test_grid.hdf5",
         "test_grid_agn-blr.hdf5",
         "test_grid_agn-nlr.hdf5",
     ]
 
     # Download each file
-    for f in files:
-        _download(base_url + f, destination)
+    for f, outf in zip(files, out_files):
+        _download(base_url + f, destination, outf)
 
 
 def download_dust_grid(destination):
