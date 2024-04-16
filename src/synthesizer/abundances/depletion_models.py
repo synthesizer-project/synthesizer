@@ -7,13 +7,14 @@ phase depleted abundances to the total abundances, i.e.:
     (X/H)_{dust} = (1-D_{x})\times (X/H)_{total}
 """
 
-available_patterns = ['Jenkins2009_Gunasekera2021',
-                      'CloudyClassic',
-                      'Gutkin2016']
+available_patterns = [
+    "Jenkins2009_Gunasekera2021",
+    "CloudyClassic",
+    "Gutkin2016",
+]
 
 
 class Jenkins2009_Gunasekera2021:
-
     """
     Implemention of the Jenkins (2009) depletion pattern that is built into
     cloudy23 as described by Gunasekera (2021). This modification adds in
@@ -61,7 +62,6 @@ class Jenkins2009_Gunasekera2021:
     }
 
     def __init__(self, fstar=0.5, limit=1.0):
-
         """
         Initialise the class.
 
@@ -76,7 +76,7 @@ class Jenkins2009_Gunasekera2021:
             a_x, b_x, z_x = parameters
             # calculate depletion, including limit
 
-            depletion = np.min([limit, 10**(b_x + a_x * (fstar - z_x))])
+            depletion = np.min([limit, 10 ** (b_x + a_x * (fstar - z_x))])
             self.depletion[element] = depletion
 
 
