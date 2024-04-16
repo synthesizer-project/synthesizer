@@ -11,7 +11,8 @@ Example Usage:
 )
 """
 
-from unyt import Hz, K, cm, deg, km, s, unyt_array
+import numpy as np
+from unyt import Hz, K, cm, deg, km, rad, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.dust.emission import Greybody
@@ -193,7 +194,7 @@ class UnifiedAGN:
         "covering_fraction_nlr": 0.1,
         "velocity_dispersion_nlr": 500 * km / s,
         "theta_torus": 10 * deg,
-        "torus_emission_model": Greybody(1000 * K, 1.5),
+        "torus_emission_model": Greybody(100 * K, 1.5),
         "bolometric_luminosity": None,  # this is only used for scaling
     }
 
@@ -420,3 +421,341 @@ class UnifiedAGN:
             "torus",
             "intrinsic",
         ]
+
+        self.spectra = {}
+
+    def _generate_spectra_disc(
+        self,
+        component,
+        mask,
+        verbose,
+        grid_assignment_method,
+    ):
+        """
+        Generate the disc spectra, updating the parameters if required
+        for each particle.
+
+        Args:
+            emission_model (blackhole_emission_models.*)
+                Any instance of a blackhole emission model (e.g. Template
+                or UnifiedAGN).
+            mask (array-like, bool)
+                If not None this mask will be applied to the inputs to the
+                spectra creation.
+            verbose (bool)
+                Are we talking?
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            dict, Sed
+                A dictionary of Sed instances including the escaping and
+                transmitted disc emission of each particle.
+        """
+
+        # Get the wavelength array
+        lam = self.grid["nlr"].lam
+
+        # Calculate the incident spectra. It doesn't matter which spectra we
+        # use here since we're just using the incident. Note: this assumes the
+        # NLR and BLR are not overlapping.
+
+        # The istropic incident disc emission, which is used for the torus,
+        # uses the isotropic incident emission so let's calculate that first.
+        # To do this we want to temporarily set the cosine_inclination to 0.5
+        # and ignore the mask.
+        prev_cosine_inclincation = self.cosine_inclination
+        self.cosine_inclination = 0.5
+
+        self.spectra["disc_incident_isotropic"] = Sed(
+            lam,
+            component.generate_particle_lnu(
+                self,
+                self.grid["nlr"],
+                spectra_name="incident",
+                line_region="nlr",
+                fesc=0.0,
+                mask=None,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
+            ),
+        )
+
+        # Reset the cosine_inclination to the original value.
+        self.cosine_inclination = prev_cosine_inclincation
+
+        self.spectra["disc_incident_masked"] = Sed(
+            lam,
+            component.generate_particle_lnu(
+                self,
+                self.grid["nlr"],
+                spectra_name="incident",
+                line_region="nlr",
+                fesc=0.0,
+                mask=mask,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
+            ),
+        )
+
+        self.spectra["disc_incident"] = Sed(
+            lam,
+            component.generate_particle_lnu(
+                self,
+                self.grid["nlr"],
+                spectra_name="incident",
+                line_region="nlr",
+                fesc=0.0,
+                mask=None,
+                verbose=verbose,
+                grid_assignment_method=grid_assignment_method,
+            ),
+        )
+
+        # calculate the transmitted spectra
+        nlr_spectra = component.generate_particle_lnu(
+            self,
+            self.grid["nlr"],
+            spectra_name="transmitted",
+            line_region="nlr",
+            fesc=(1 - self.covering_fraction_nlr),
+            mask=mask,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+        )
+        blr_spectra = component.generate_particle_lnu(
+            self,
+            self.grid["blr"],
+            spectra_name="transmitted",
+            line_region="blr",
+            fesc=(1 - self.covering_fraction_blr),
+            mask=mask,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+        )
+        self.spectra["disc_transmitted"] = Sed(lam, nlr_spectra + blr_spectra)
+
+        # calculate the escaping spectra.
+        self.spectra["disc_escaped"] = (
+            1 - self.covering_fraction_blr - self.covering_fraction_nlr
+        ) * self.spectra["disc_incident_masked"]
+
+        # calculate the total spectra, the sum of escaping and transmitted
+        self.spectra["disc"] = (
+            self.spectra["disc_transmitted"] + self.spectra["disc_escaped"]
+        )
+
+        return self.spectra["disc"]
+
+    def _generate_spectra_lr(
+        self,
+        component,
+        mask,
+        line_region,
+        verbose,
+        grid_assignment_method,
+    ):
+        """
+        Generate the spectra of a generic line region for each particle.
+
+        Args
+            emission_model (blackhole_emission_models.*)
+                Any instance of a blackhole emission model (e.g. Template
+                or UnifiedAGN).
+            mask (array-like, bool)
+                If not None this mask will be applied to the inputs to the
+                spectra creation.
+            line_region (str)
+                The specific line region, i.e. 'nlr' or 'blr'.
+            verbose (bool)
+                Are we talking?
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            Sed
+                The NLR spectra
+        """
+
+        # In the Unified AGN model the NLR/BLR is illuminated by the isotropic
+        # disc emisison hence the need to replace this parameter if it exists.
+        # Not all models require an inclination though.
+        prev_cosine_inclincation = self.cosine_inclination
+        self.cosine_inclination = np.full(component.nbh, 0.5)
+
+        # Get the nebular spectra of the line region
+        spec = component.generate_particle_lnu(
+            self,
+            self.grid[line_region],
+            spectra_name="nebular",
+            line_region=line_region,
+            fesc=0.0,
+            mask=mask,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+        )
+        sed = Sed(
+            self.grid[line_region].lam,
+            getattr(self, f"covering_fraction_{line_region}") * spec,
+        )
+
+        # Reset the previously held inclination
+        self.cosine_inclination = prev_cosine_inclincation
+
+        return sed
+
+    def _generate_spectra_torus(
+        self,
+        component,
+        verbose=True,
+    ):
+        """
+        Generate the torus emission Sed for each particle.
+
+        Args:
+            emission_model (blackhole_emission_models.*)
+                Any instance of a blackhole emission model (e.g. Template
+                or UnifiedAGN).
+
+        Returns:
+            Sed
+                The torus spectra of each particle.
+        """
+
+        # Get the disc emission
+        disc_spectra = self.spectra["disc_incident_isotropic"]
+
+        # Calculate the bolometric dust lunminosity as the difference between
+        # the intrinsic and attenuated
+        torus_bolometric_luminosity = (
+            self.theta_torus / (90 * deg)
+        ) * disc_spectra.measure_bolometric_luminosity()
+
+        # Create torus spectra
+        torus_sed = self.torus_emission_model.get_spectra(disc_spectra.lam)
+
+        # This is normalised to a bolometric luminosity of 1 so we need to
+        # scale by the bolometric luminosity and create a spectra per particle.
+        spec = np.zeros((component.nbh, torus_sed.lam.size))
+        for i in range(component.nbh):
+            spec[i, :] = torus_sed._lnu * torus_bolometric_luminosity[i].value
+        torus_sed.lnu = spec
+
+        return torus_sed
+
+    def get_spectra(
+        self, component, verbose=False, grid_assignment_method="cic"
+    ):
+        # Temporarily have the emission model adopt any vairable parameters
+        # from this BlackHole/BlackHoles
+        used_variables = []
+        for param in self.variable_parameters:
+            # Skip any parameters that don't exist on the black hole component
+            if getattr(component, param, None) is None:
+                continue
+
+            # Remember the previous values to be returned after getting the
+            # spectra
+            used_variables.append((param, getattr(self, param, None)))
+
+            # Set the passed value
+            setattr(self, param, getattr(component, param, None))
+
+        # Check if we have all the required parameters, if not raise an
+        # exception and tell the user which are missing. Bolometric luminosity
+        # is not strictly required.
+        missing_params = []
+        for param in self.parameters:
+            print(param, getattr(self, param, None))
+
+            if (
+                param == "bolometric_luminosity"
+                or param in self.required_parameters
+            ):
+                continue
+            if getattr(self, param, None) is None:
+                missing_params.append(param)
+        if len(missing_params) > 0:
+            raise exceptions.MissingArgument(
+                f"Values not set for these parameters: {missing_params}"
+            )
+
+        # Determine the inclination from the cosine_inclination
+        inclination = np.arccos(component.cosine_inclination) * rad
+
+        # If the inclination is too high (edge) on we don't see the disc, only
+        # the NLR and the torus. Create a mask to pass to the generation
+        # method
+        mask = inclination < ((90 * deg) - self.theta_torus)
+
+        # Get the disc and BLR spectra
+        self._generate_spectra_disc(
+            component,
+            mask=mask,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+        )
+
+        self.spectra["blr"] = self._generate_spectra_lr(
+            component,
+            mask=mask,
+            verbose=verbose,
+            grid_assignment_method=grid_assignment_method,
+            line_region="blr",
+        )
+
+        # mask is None, because we always see the NLR
+        self.spectra["nlr"] = self._generate_spectra_lr(
+            component,
+            verbose=verbose,
+            mask=None,
+            grid_assignment_method=grid_assignment_method,
+            line_region="nlr",
+        )
+
+        self.spectra["torus"] = self._generate_spectra_torus(
+            component,
+        )
+
+        # Calculate the emergent spectra as the sum of the components.
+        # Note: the choice of "intrinsic" is to align with the Pacman model
+        # which reserves "total" and "emergent" to include dust.
+        self.spectra["intrinsic"] = (
+            self.spectra["disc"]
+            + self.spectra["blr"]
+            + self.spectra["nlr"]
+            + self.spectra["torus"]
+        )
+
+        # Since we're using a coarse grid it might be necessary to rescale
+        # the spectra to the bolometric luminosity. The only SED that tracks
+        # bolometric luminosity is the disc_incident_isotropic so this is used
+        # for normalisation.
+        if self.bolometric_luminosity is not None:
+            scaling = (
+                component.bolometric_luminosity
+                / self.spectra[
+                    "disc_incident_isotropic"
+                ].measure_bolometric_luminosity()
+            )
+
+            print(scaling)
+
+            for spectra_id, spectra in self.spectra.items():
+                for i in range(component.nbh):
+                    print(scaling[i])
+                    self.spectra[spectra_id]._lnu[i] = (
+                        scaling[i] * spectra._lnu[i, :]
+                    )
+
+        # Reset any values the emission model inherited
+        for param, val in used_variables:
+            setattr(self, param, val)
+
+        return self.spectra
