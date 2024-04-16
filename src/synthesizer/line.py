@@ -474,7 +474,7 @@ class LineCollection:
         lnu = (np.zeros(len(lam)) + 1) * default_units["lnu"]
 
         # loop over the lines in the collection and add them to the spectra
-        for line in self.lines:
+        for line in self.lines.values():
             # identify the element to place the line's luminosity
             lam_index = (np.abs(lam - line.wavelength)).argmin()
 
