@@ -19,11 +19,12 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
 import numpy as np
-from unyt import Angstrom
+from unyt import Angstrom, c, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
-from synthesizer.units import Quantity
+from synthesizer.sed import Sed
+from synthesizer.units import Quantity, default_units
 
 
 def get_line_id(id):
@@ -344,6 +345,7 @@ class LineCollection:
     """
 
     def __init__(self, lines):
+        # dictionary of synthesizer.line.Line objects
         self.lines = lines
 
         # create an array of line_ids
@@ -515,6 +517,48 @@ class LineCollection:
         """
 
         return get_diagram_labels(diagram_id)
+
+    def create_sed(self, lam):
+        """
+        Create a synthesizer.sed.Sed object from the LineCollection.
+
+        Arguments:
+            lam (unyt_array)
+                Wavelength grid.
+
+        Returns:
+            sed (synthesizer.sed.Sed)
+                synthesizer.sed.Sed object.
+
+        """
+
+        if not isinstance(lam, unyt_array):
+            raise exceptions.MissingUnits(
+                """The wavelength must be a unyt_array with units length."""
+            )
+
+        # create empty spectra
+        lnu = (np.zeros(len(lam)) + 1) * default_units["lnu"]
+
+        # loop over the lines in the collection and add them to the spectra
+        for line in self.lines:
+            # identify the element to place the line's luminosity
+            lam_index = (np.abs(lam - line.wavelength)).argmin()
+
+            # the wavelength resolution at this wavelength
+            delta_lambda = 0.5 * (lam[lam_index + 1] - lam[lam_index - 1])
+
+            # frequency of the line
+            nu = c / line.wavelength
+
+            # calculate the luminosity of the line in units of lnu
+            lnu_ = line.wavelength * (line.luminosity / nu) / delta_lambda
+
+            # add into the spectrum
+            lnu[lam_index] += lnu_
+
+        # Return synthesizer.sed.Sed object
+        return Sed(lam=lam, lnu=lnu)
 
 
 class Line:
