@@ -305,63 +305,12 @@ def create_cloudy_input(
 
             cinput.append(command + "\n")
 
-    # NOTE FROM SW (01/03/24): WHILE THIS IS DESIRABLE I AM NOT CONVINCED IT
-    # WORKS AS ADVERTISED AS LOW METALLICITY APPEARS TO HAVE A STRONG IMPACT
-    # FROM GRAINS ON LINE LUMINOSITIES
-    # Jenkins 2009 depletion model as implemented by cloudy.
-    # See 2023 release paper section 5
-    # elif params["depletion_model"] == 'Jenkins2009':
-
-    #     # Define the chemical composition, because Jenkins2009 applies
-    #     # depletion as a cloudy command we use total abundances and there
-    #     # is no need to use the "no grains" command.
-    #     for ele in ["He"] + abundances.metals:
-    #         cinput.append(
-    #             (
-    #                 f"element abundance {abundances.element_name[ele]} "
-    #                 f"{abundances.total[ele]}\n"
-    #             )
-    #         )
-
-    #     # The Jenkins2009 depletion assumes a default scale (fstar) of 0.5.
-    #     if params["depletion_scale"] == 0.5:
-    #         cinput.append("metals deplete Jenkins 2009\n")
-
-    #         # turn on grains
-    #         if params["grains"] is not None:
-    #             cinput.append(f"grains {params['grains']}\n")
-
-    #     else:
-    #         value = params["depletion_scale"]
-    #         cinput.append(f"metals depletion jenkins 2009 fstar {value}\n")
-
-    #         # turn on grains
-    #         if params["grains"] is not None:
-
-    #             # Tor non-default (!= 0.5) fstar values, grains needs to be
-    #             # scaled.
-
-    #             # To do this, we first calculate the dust mass fraction for
-    #             # the default parameter choice. For the Jenkins2009 model
-    #             # this
-    #             # is 0.5. This recalcualtes everything for a new depletion
-    #             # model. This is not actually ideal.
-    #             abundances.add_depletion(
-    #                 depletion_model='Jenkins2009',
-    #                 depletion_scale=0.5)
-    #             default_dust_mass_fraction = abundances.dust_abundance
-
-    #             # Now recalculate depletion for the actual parameter.
-    #             abundances.add_depletion(
-    #                 depletion_model='Jenkins2009',
-    #                 depletion_scale=params["depletion_scale"])
-    #             dust_mass_fraction = abundances.dust_abundance
-
-    #             # Calculate the ratio...
-    #             ratio = dust_mass_fraction / default_dust_mass_fraction
-
-    #             # and use this to scale the grain command.
-    #             cinput.append(f"grains {params['grains']} {ratio}\n")
+    # cloudy c23.01 now has the Jenkins depletion model built in which could
+    # in theory replace the above. However, after testing I wasn't not
+    # convinced it works as advertised since grains continue to have a strong
+    # impact at low metallicity. A query has been raised on the cloudy forum
+    # but no reply as yet. A working implementation is available on the
+    # cloudy_builtin_Jenkins_depletion branch.
 
     else:
         print("WARNING: No depletion (or unrecognised depletion) specified")
