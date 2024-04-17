@@ -1098,7 +1098,6 @@ class StarsComponent:
             grid,
             fesc=0,
             fesc_LyA=1,
-            dust_curve=PowerLaw(),
             tau_v=[tau_v_ISM, tau_v_BC],
             alpha=[alpha_ISM, alpha_BC],
             young_old_thresh=young_old_thresh,
