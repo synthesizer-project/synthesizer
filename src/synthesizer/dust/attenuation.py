@@ -548,13 +548,13 @@ class ParametricLI08(AttenuationLaw):
         self.bump = bump
 
         # Get the correct model string
-        if "MW" in model:
+        if model == "MW":
             self.model = "MW"
-        elif "LMC" in model:
+        elif model == "LMC":
             self.model = "LMC"
-        elif "SMC" in model:
+        elif model == "SMC":
             self.model = "SMC"
-        elif "Calzetti" in model:
+        elif model == "Calzetti":
             self.model = "Calzetti"
         else:
             self.model = "Custom"
