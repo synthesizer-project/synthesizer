@@ -204,3 +204,100 @@ def parse_grid_id(grid_id):
         "imf": imf,
         "imf_hmc": imf_hmc,
     }
+
+
+def wavelength_to_rgba(
+    wavelength,
+    gamma=0.8,
+    fill_red=(0, 0, 0, 0.5),
+    fill_blue=(0, 0, 0, 0.5),
+    alpha=1.0,
+):
+    """
+    Convert wavelength float to RGBA tuple.
+
+    Taken from https://stackoverflow.com/questions/44959955/\
+        matplotlib-color-under-curve-based-on-spectral-color
+
+    Who originally took it from http://www.noah.org/wiki/\
+        Wavelength_to_RGB_in_Python
+
+    Arguments:
+        wavelength (float)
+            Wavelength in nm.
+        gamma (float)
+            Gamma value.
+        fill_red (bool or tuple)
+            The colour (RGBA) to use for wavelengths red of the visible. If
+            None use final nearest visible colour.
+        fill_blue (bool or tuple)
+            The colour (RGBA) to use for wavelengths red of the visible. If
+            None use final nearest visible colour.
+        alpha (float)
+            The value of the alpha channel (between 0 and 1).
+
+
+    Returns:
+        rgba (tuple)
+            RGBA tuple.
+    """
+
+    if wavelength < 380:
+        return fill_blue
+    if wavelength > 750:
+        return fill_red
+    if wavelength >= 380 and wavelength <= 440:
+        attenuation = 0.3 + 0.7 * (wavelength - 380) / (440 - 380)
+        R = ((-(wavelength - 440) / (440 - 380)) * attenuation) ** gamma
+        G = 0.0
+        B = (1.0 * attenuation) ** gamma
+    elif wavelength >= 440 and wavelength <= 490:
+        R = 0.0
+        G = ((wavelength - 440) / (490 - 440)) ** gamma
+        B = 1.0
+    elif wavelength >= 490 and wavelength <= 510:
+        R = 0.0
+        G = 1.0
+        B = (-(wavelength - 510) / (510 - 490)) ** gamma
+    elif wavelength >= 510 and wavelength <= 580:
+        R = ((wavelength - 510) / (580 - 510)) ** gamma
+        G = 1.0
+        B = 0.0
+    elif wavelength >= 580 and wavelength <= 645:
+        R = 1.0
+        G = (-(wavelength - 645) / (645 - 580)) ** gamma
+        B = 0.0
+    elif wavelength >= 645 and wavelength <= 750:
+        attenuation = 0.3 + 0.7 * (750 - wavelength) / (750 - 645)
+        R = (1.0 * attenuation) ** gamma
+        G = 0.0
+        B = 0.0
+
+    return (R, G, B, alpha)
+
+
+def wavelengths_to_rgba(wavelengths, gamma=0.8):
+    """
+    Convert wavelength array to RGBA list.
+
+    Arguments:
+        wavelength (unyt_array)
+            Wavelength in nm.
+
+    Returns:
+        rgba (list)
+            list of RGBA tuples.
+    """
+
+    # If wavelengths provided as a unyt_array convert to nm otherwise assume
+    # in Angstrom and convert.
+    if isinstance(wavelengths, unyt_array):
+        wavelengths_ = wavelengths.to("nm").value
+    else:
+        wavelengths_ = wavelengths / 10.0
+
+    rgba = []
+    for wavelength in wavelengths_:
+        rgba.append(wavelength_to_rgba(wavelength, gamma=gamma))
+
+    return rgba
