@@ -543,12 +543,12 @@ class StarsComponent:
         )
 
         # Apply the dust screen
-        emergent = self.spectra["{label}intrinsic"].apply_attenuation(
+        emergent = self.spectra[f"{label}intrinsic"].apply_attenuation(
             tau_v, dust_curve=dust_curve
         )
 
         # Store the Sed object
-        self.spectra["{label}emergent"] = emergent
+        self.spectra[f"{label}emergent"] = emergent
 
         return emergent
 
