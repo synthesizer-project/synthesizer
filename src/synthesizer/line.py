@@ -342,46 +342,6 @@ def get_roman_numeral(number):
     return roman
 
 
-def get_bpt_kewley01(logNII_Ha):
-    """BPT-NII demarcations from Kewley+2001
-
-    Kewley+03: https://arxiv.org/abs/astro-ph/0106324
-    Demarcation defined by:
-        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19
-
-    Arguments:
-        logNII_Ha (array)
-            Array of log([NII]/Halpha) values to give the
-            SF-AGN demarcation line
-
-    Returns:
-        array
-            Corresponding log([OIII]/Hb) ratio array
-    """
-
-    return 0.61 / (logNII_Ha - 0.47) + 1.19
-
-
-def get_bpt_kauffman03(logNII_Ha):
-    """BPT-NII demarcations from Kauffman+2003
-
-    Kauffman+03: https://arxiv.org/abs/astro-ph/0304239
-    Demarcation defined by:
-        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3
-
-    Args:
-        logNII_Ha (array)
-            Array of log([NII]/Halpha) values to give the
-            SF-AGN demarcation line
-
-    Returns:
-        array
-            Corresponding log([OIII]/Hb) ratio array
-    """
-
-    return 0.61 / (logNII_Ha - 0.05) + 1.3
-
-
 class LineCollection:
     """
     A class holding a collection of emission lines. This enables additional

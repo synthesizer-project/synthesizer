@@ -26,6 +26,18 @@ Ne3 = ["Ne 3 3868.76A"]
 N2 = ["N 2 6583.45A"]
 S2 = ["S 2 6730.82A", "S 2 6716.44A"]
 
+
+# dictionary of common line labels to use by default
+line_labels = {
+    "O 2 3726.03A,O 2 3728.81A": "[OII]3726,3729",
+    "H 1 4861.32A": r"H\beta",
+    "O 3 4958.91A,O 3 5006.84A": "[OIII]4959,5007",
+    "H 1 6562.80A": r"H\alpha",
+    "O 3 5006.84A": "[OIII]5007",
+    "N 2 6583.45A": "[NII]6583",
+}
+
+
 ratios = {}
 
 # Balmer decrement, should be [2.79--2.86] (Te, ne, dependent)
@@ -62,3 +74,43 @@ diagrams["BPT-NII"] = [[N2, [Ha]], ratios["R3"]]
 # diagrams["VO78-OI"] = [[O1, [Ha]], R3]
 
 available_diagrams = tuple(diagrams.keys())
+
+
+def get_bpt_kewley01(logNII_Ha):
+    """BPT-NII demarcations from Kewley+2001
+
+    Kewley+03: https://arxiv.org/abs/astro-ph/0106324
+    Demarcation defined by:
+        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19
+
+    Arguments:
+        logNII_Ha (array)
+            Array of log([NII]/Halpha) values to give the
+            SF-AGN demarcation line
+
+    Returns:
+        array
+            Corresponding log([OIII]/Hb) ratio array
+    """
+
+    return 0.61 / (logNII_Ha - 0.47) + 1.19
+
+
+def get_bpt_kauffman03(logNII_Ha):
+    """BPT-NII demarcations from Kauffman+2003
+
+    Kauffman+03: https://arxiv.org/abs/astro-ph/0304239
+    Demarcation defined by:
+        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3
+
+    Args:
+        logNII_Ha (array)
+            Array of log([NII]/Halpha) values to give the
+            SF-AGN demarcation line
+
+    Returns:
+        array
+            Corresponding log([OIII]/Hb) ratio array
+    """
+
+    return 0.61 / (logNII_Ha - 0.05) + 1.3
