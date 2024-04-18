@@ -36,6 +36,7 @@ def vacuum_to_air(wavelength):
             A wavelength in vacuum.
     """
 
+    # calculate wavelenegth squared for simplicty
     wave2 = wavelength**2.0
 
     fact = 1.0 + 2.735182e-4 + 131.4182 / wave2 + 2.76249e8 / (wave2**2.0)
@@ -60,10 +61,10 @@ def air_to_vacuum(wavelength):
             A wavelength in vacuum.
     """
 
-    sigma2 = (1.0e4 / wavelength) ** 2.0  # Convert to wavenumber squared
+    # Convert to wavenumber squared
+    sigma2 = (1.0e4 / wavelength) ** 2.0
 
     # Compute conversion factor
-
     fact = (
         1.0
         + 6.4328e-5
@@ -324,7 +325,8 @@ def get_bpt_kauffman03(logNII_Ha):
 
 class LineCollection:
     """
-    A class holding a collection of emission lines
+    A class holding a collection of emission lines. This enables additional
+    functionality such as quickly calculating line ratios or line diagrams.
 
     Arguments
         lines (dictionary of Line objects)
@@ -335,6 +337,15 @@ class LineCollection:
     """
 
     def __init__(self, lines):
+        """
+        Initialise LineCollection.
+
+        Arguments:
+            lines (dict)
+                A dictionary of synthesizer.line.Line objects.
+        """
+
+        # dictionary of synthesizer.line.Line objects.
         self.lines = lines
 
         # create an array of line_ids
@@ -388,33 +399,42 @@ class LineCollection:
                 self.available_diagrams.append(diagram_id)
 
     def __getitem__(self, line_id):
+        """
+        Simply returns one particular line from the collection.
+
+        Returns:
+            line (synthesizer.line.Line)
+                A synthesizer.line.Line object.
+        """
+
         return self.lines[line_id]
 
     def __str__(self):
-        """Function to print a basic summary of the LineCollection object.
+        """
+        Function to print a basic summary of the LineCollection object.
 
         Returns a string containing the id, wavelength, luminosity,
         equivalent width, and flux if generated.
 
-        Returns
-        -------
-        str
-            Summary string containing the total mass formed and
-            lists of the available SEDs, lines, and images.
+        Returns:
+            summary (str)
+                Summary string containing the total mass formed and
+                lists of the available SEDs, lines, and images.
         """
 
         # Set up string for printing
-        pstr = ""
+        summary = ""
 
         # Add the content of the summary to the string to be printed
-        pstr += "-" * 10 + "\n"
-        pstr += "LINE COLLECTION\n"
-        pstr += f"lines: {self.line_ids}\n"
-        pstr += f"available ratios: {self.available_ratios}\n"
-        pstr += f"available diagrams: {self.available_diagrams}\n"
-        pstr += "-" * 10
+        summary += "-" * 10 + "\n"
+        summary += "LINE COLLECTION\n"
+        summary += f"number of lines: {len(self.line_ids)}\n"
+        summary += f"lines: {self.line_ids}\n"
+        summary += f"available ratios: {self.available_ratios}\n"
+        summary += f"available diagrams: {self.available_diagrams}\n"
+        summary += "-" * 10
 
-        return pstr
+        return summary
 
     def __iter__(self):
         """
@@ -513,11 +533,10 @@ class Line:
     A class representing a spectral line or set of lines (e.g. a doublet)
 
     Attributes
-    ----------
-    lam : wavelength of the line
+        lam
+            wavelength of the line
 
     Methods
-    -------
 
     """
 
@@ -530,13 +549,32 @@ class Line:
     def __init__(self, id_, wavelength_, luminosity_, continuum_):
         self.id_ = id_
 
+        """
+        Initialise the Line object.
+
+        Arguments:
+            id_ (str or list)
+                The id of the line or collection of lines. For doublets this
+                can be a list with an entry for each contributing line, e.g.
+                "S 2 6730.82A", "S 2 6716.44A".
+            wavelength_ (float or list)
+                The standard (not vacuum) wavelength of the line. For doublets
+                this is a list with an entry for each contributing line.
+            luminosity_ (float or list)
+                The luminosity the line. For doublets this is a list with an
+                entry for each contributing line.
+            continuum_ (float or list)
+                The continuum at the line. For doublets this is a list with an
+                entry for each contributing line.
+        """
+
         """ these are maintained because we may want to hold on
         to the individual lines of a doublet"""
         self.wavelength_ = wavelength_
         self.luminosity_ = luminosity_
         self.continuum_ = continuum_
 
-        # get string line_id
+        # get line_id as a single string instead of e.g. a list
         self.id = get_line_id(id_)
 
         # mean continuum value in units of erg/s/Hz
@@ -544,6 +582,9 @@ class Line:
 
         # mean wavelength of the line in units of AA
         self.wavelength = np.mean(wavelength_)
+
+        # mean wavelength of the line in units of AA
+        self.vacuum_wavelength = np.mean(wavelength_)
 
         # total luminosity of the line in units of erg/s/Hz
         self.luminosity = np.sum(luminosity_)
@@ -564,11 +605,10 @@ class Line:
         Returns a string containing the id, wavelength, luminosity,
         equivalent width, and flux if generated.
 
-        Returns
-        -------
-        str
-            Summary string containing the total mass formed and
-            lists of the available SEDs, lines, and images.
+        Returns:
+            summary (str)
+                Summary string containing the total mass formed and
+                lists of the available SEDs, lines, and images.
         """
 
         # Set up string for printing
@@ -595,9 +635,8 @@ class Line:
         NOT be used to add different lines together.
 
         Returns
-        -------
-        obj (Line)
-            New instance of Line
+            (synthesizer.line.Line)
+                New instance of synthesizer.line.Line
         """
 
         if second_line.id == self.id:
@@ -614,22 +653,21 @@ class Line:
             )
 
     def get_flux(self, cosmo, z):
-        """Calculate the line flux in units of erg/s/cm2
+        """
+        Calculate the line flux in units of erg/s/cm2
 
         Returns the line flux and (optionally) updates the line object.
 
-        Parameters
-        -------
-        cosmo: obj
-            Astropy cosmology object
+        Arguments:
+            cosmo (astropy.cosmology.)
+                Astropy cosmology object.
 
-        z: float
-            Redshift
+            z (float)
+                The redshift.
 
-        Returns
-        -------
-        flux: float
-            Flux of the line in units of erg/s/cm2
+        Returns:
+            flux (float)
+                Flux of the line in units of erg/s/cm2 by default.
         """
 
         luminosity_distance = (
