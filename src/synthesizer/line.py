@@ -16,7 +16,7 @@ in plots etc.
 """
 
 import numpy as np
-from unyt import Angstrom
+from unyt import Angstrom, unyt_array
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam
@@ -27,56 +27,115 @@ def vacuum_to_air(wavelength):
     """
     A function for converting a vacuum wavelength into an air wavelength.
 
-    Arguments
-        wavelength (float)
+    Arguments:
+        wavelength (float or unyt_array)
             A wavelength in air.
 
-    Returns
-        wavelength (float)
+    Returns:
+        wavelength (unyt_array)
             A wavelength in vacuum.
     """
 
+    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
+    if not isinstance(wavelength, unyt_array):
+        wavelength *= Angstrom
+
     # calculate wavelenegth squared for simplicty
-    wave2 = wavelength**2.0
+    wave2 = wavelength.to("Angstrom").value ** 2.0
 
-    fact = 1.0 + 2.735182e-4 + 131.4182 / wave2 + 2.76249e8 / (wave2**2.0)
+    # calcualte conversion factor
+    conversion = (
+        1.0 + 2.735182e-4 + 131.4182 / wave2 + 2.76249e8 / (wave2**2.0)
+    )
 
-    fact = fact * (wavelength >= 2000.0) + 1.0 * (wavelength < 2000.0)
-
-    wavelength /= fact
-
-    return wavelength
+    return wavelength / conversion
 
 
 def air_to_vacuum(wavelength):
     """
-    A function for converting air wavelength into a vacuum wavelength.
+    A function for converting an air wavelength into a vacuum wavelength.
 
     Arguments
-        wavelength (float)
-            A wavelength in air.
+        wavelength (float or unyt_array)
+            A standard wavelength.
 
     Returns
-        wavelength (float)
+        wavelength (unyt_array)
             A wavelength in vacuum.
     """
 
+    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
+    if not isinstance(wavelength, unyt_array):
+        wavelength *= Angstrom
+
     # Convert to wavenumber squared
-    sigma2 = (1.0e4 / wavelength) ** 2.0
+    sigma2 = (1.0e4 / wavelength.to("Angstrom").value) ** 2.0
 
     # Compute conversion factor
-    fact = (
+    conversion = (
         1.0
         + 6.4328e-5
         + 2.94981e-2 / (146.0 - sigma2)
         + 2.5540e-4 / (41.0 - sigma2)
     )
 
-    fact = fact * (wavelength >= 2000.0) + 1.0 * (wavelength < 2000.0)
+    return wavelength * conversion
 
-    wavelength *= fact  # Convert Wavelength
 
-    return wavelength
+def standard_to_vacuum(wavelength):
+    """
+    A function for converting a standard wavelength into a vacuum wavelength.
+
+    Standard wavelengths are defined in vacuum at <2000A and air at >= 2000A.
+
+    Arguments
+        wavelength (float or unyt_array)
+            A standard wavelength.
+
+    Returns
+        wavelength (unyt_array)
+            A wavelength in vacuum.
+    """
+
+    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
+    if not isinstance(wavelength, unyt_array):
+        wavelength *= Angstrom
+
+    # if wavelength is < 2000A simply return since no change required.
+    if wavelength <= 2000.0 * Angstrom:
+        return wavelength
+
+    # otherwise conver to vacuum
+    else:
+        return air_to_vacuum(wavelength)
+
+
+def vacuum_to_standard(wavelength):
+    """
+    A function for converting a vacuum wavelength into a standard wavelength.
+
+    Standard wavelengths are defined in vacuum at <2000A and air at >= 2000A.
+
+    Arguments
+        wavelength (float or unyt_array)
+            A vacuum wavelength.
+
+    Returns
+        wavelength (unyt_array)
+            A standard wavelength.
+    """
+
+    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
+    if not isinstance(wavelength, unyt_array):
+        wavelength *= Angstrom
+
+    # if wavelength is < 2000A simply return since no change required.
+    if wavelength <= 2000.0 * Angstrom:
+        return wavelength
+
+    # otherwise conver to vacuum
+    else:
+        return vacuum_to_air(wavelength)
 
 
 def get_line_id(id):
@@ -541,6 +600,7 @@ class Line:
     """
 
     wavelength = Quantity()
+    vacuum_wavelength = Quantity()
     continuum = Quantity()
     luminosity = Quantity()
     flux = Quantity()
@@ -583,8 +643,8 @@ class Line:
         # mean wavelength of the line in units of AA
         self.wavelength = np.mean(wavelength_)
 
-        # mean wavelength of the line in units of AA
-        self.vacuum_wavelength = np.mean(wavelength_)
+        # calculate the vacuum wavelength.
+        self.vacuum_wavelength = air_to_vacuum(self.wavelength)
 
         # total luminosity of the line in units of erg/s/Hz
         self.luminosity = np.sum(luminosity_)
