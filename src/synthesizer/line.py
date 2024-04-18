@@ -604,7 +604,7 @@ class Line:
     continuum = Quantity()
     luminosity = Quantity()
     flux = Quantity()
-    ew = Quantity()
+    equivalent_width = Quantity()
 
     def __init__(self, id_, wavelength_, luminosity_, continuum_):
         self.id_ = id_
