@@ -195,6 +195,7 @@ class FilterCollection:
             # Do we have an wavelength array? If so we will resample the
             # transmissions.
             self.lam = new_lam
+            self.resample_filters(new_lam=self.lam)
 
             # Let's make the filters
             if filter_codes is not None:
