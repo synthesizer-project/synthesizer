@@ -2,7 +2,7 @@ import numpy as np
 import scipy.interpolate as interpolate
 from bigfile import BigFile
 from scipy import integrate
-from unyt import Msun, c, kpc, Myr, yr
+from unyt import Msun, Myr, c, kpc, yr
 
 from ..particle.galaxy import Galaxy
 
