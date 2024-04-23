@@ -214,6 +214,12 @@ class FilterCollection:
             if self.lam is None:
                 self.resample_filters(fill_gaps=fill_gaps)
 
+        # If we were passed a wavelength array we need to resample on to
+        # it. NOTE: this can also be done for a loaded FilterCollection
+        # so we just do it here outside the logic
+        if new_lam is not None:
+            self.resample_filters(new_lam)
+
         # Calculate mean and pivot wavelengths for each filter
         self.mean_lams = self.calc_mean_lams()
         self.pivot_lams = self.calc_pivot_lams()
