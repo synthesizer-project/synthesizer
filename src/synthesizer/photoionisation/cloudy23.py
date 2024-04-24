@@ -8,6 +8,10 @@ import shutil
 import numpy as np
 from unyt import angstrom, c, h, unyt_array
 
+from synthesizer.exceptions import (
+    InconsistentArguments,
+    UnimplementedFunctionality,
+)
 from synthesizer.photoionisation import calculate_Q_from_U
 
 
@@ -102,7 +106,12 @@ class ShapeCommands:
 
 
 def create_cloudy_input(
-    model_name, shape_commands, abundances, output_dir="./", **kwargs
+    model_name,
+    shape_commands,
+    abundances,
+    output_dir="./",
+    copy_linelist=True,
+    **kwargs,
 ):
     """
     A generic function for creating a cloudy input file
@@ -125,41 +134,48 @@ def create_cloudy_input(
     """
 
     default_params = {
+        "no_grain_scaling": False,
         # ionisation parameter
-        "ionisation_parameter": 0.01,
+        "ionisation_parameter": None,
         # radius in log10 parsecs, only important for spherical geometry
-        "radius": 0.01,
+        "radius": None,
         # covering factor. Keep as 1 as it is more efficient to simply combine
         # SEDs to get != 1.0 values
-        "covering_factor": False,
+        "covering_factor": None,
         # K, if not provided the command is not used
-        "stop_T": False,
+        "stop_T": None,
         # if not provided the command is not used
-        "stop_efrac": False,
+        "stop_efrac": None,
+        # log10(N_H/cm^2), if not provided the command is not used
+        "stop_column_density": None,
         # K, if not provided the command is not used
-        "T_floor": False,
+        "T_floor": None,
         # Hydrogen density
-        "hydrogen_density": 10 ** (2.5),
+        "hydrogen_density": None,
         # redshift, only necessary if CMB heating included
         "z": 0.0,
         # include CMB heating
-        "CMB": False,
+        "CMB": None,
         # include cosmic rays
-        "cosmic_rays": False,
+        "cosmic_rays": None,
         # include dust grains
-        "grains": False,
+        "grains": None,
         # the geometry
-        "geometry": "planeparallel",
+        "geometry": None,
+        # constant density flag
+        "constant_density": None,
+        # constant pressure flag
+        "constant_pressure": None,
         # relative resolution the saved continuum spectra
         "resolution": 1.0,
         # output abundances
-        "output_abundances": True,
+        "output_abundances": None,
         # output continuum
-        "output_cont": True,
+        "output_cont": None,
         # output full list of all available lines
-        "output_lines": False,
+        "output_lines": None,
         # output linelist
-        "output_linelist": "linelist.dat",
+        "output_linelist": None,
     }
 
     # update default_params with kwargs
@@ -175,14 +191,18 @@ def create_cloudy_input(
     # add spectral shape commands
     cinput += shape_commands
 
+    # Check on depletion model and grains
+    if (params["depletion_model"] is None) and (params["grains"] is not None):
+        raise InconsistentArguments("Can not use grains without depletion ")
+
     # The original method of handling depletion and grain
-    if params["depletion_model"] in ["CloudyClassic", "Gutkin2016"]:
+    if params["depletion_model"] is not None:
         # Define the chemical composition, here we use the depleted (gas-phase)
         # abundances and set "no grains".
         for ele in ["He"] + abundances.metals:
             cinput.append(
                 (
-                    f"element abundance {abundances.name[ele]} "
+                    f"element abundance {abundances.element_name[ele]} "
                     f"{abundances.gas[ele]} no grains\n"
                 )
             )
@@ -237,76 +257,75 @@ def create_cloudy_input(
         """
 
         # If grain physics are required, add this self-consistently
-        if (abundances.dust_to_metal_ratio > 0) & params["grains"]:
-            delta_C = 10 ** abundances.total["C"] - 10 ** abundances.gas["C"]
-            delta_PAH = 0.01 * (10 ** abundances.total["C"])
-            delta_graphite = delta_C - delta_PAH
-            delta_Si = (
-                10 ** abundances.total["Si"] - 10 ** abundances.gas["Si"]
-            )
-            orion_C_abund = -3.6259
-            orion_Si_abund = -4.5547
-            PAH_abund = -4.446
-            f_graphite = delta_graphite / (10 ** (orion_C_abund))
-            f_Si = delta_Si / (10 ** (orion_Si_abund))
-            f_pah = delta_PAH / (10 ** (PAH_abund))
-            command = (
-                f"grains Orion graphite {f_graphite} "
-                f"\ngrains Orion silicate {f_Si} \ngrains "
-                f"PAH {f_pah}"
-            )
-            cinput.append(command + "\n")
-        else:
+        if params["grains"] is None:
             f_graphite, f_Si, f_pah = 0, 0, 0
 
-    # Jenkins 2009 depletion model as implemented by cloudy.
-    # See 2023 release paper section 5
-    elif params["depletion_model"] == "Jenkins2009":
-        # Define the chemical composition, because Jenkins2009 applies
-        # depletion as a cloudy command we use total abundances and there
-        # is no need to use the "no grains" command.
+        else:
+            if params["no_grain_scaling"] is False:
+                delta_C = (
+                    10 ** abundances.total["C"] - 10 ** abundances.gas["C"]
+                )
+                delta_PAH = 0.01 * (10 ** abundances.total["C"])
+                delta_graphite = delta_C - delta_PAH
+                delta_Si = (
+                    10 ** abundances.total["Si"] - 10 ** abundances.gas["Si"]
+                )
+
+                # define the reference abundances for the different grain types
+                # this should be the dust-phase abundance in the particular
+                # reference environment.
+                if params["grains"] == "Orion":
+                    reference_C_abund = -3.6259
+                    reference_Si_abund = -4.5547
+                # this is incorrect since the abundance in the ISM is probably
+                # different.
+                elif params["grains"] == "ISM":
+                    reference_C_abund = -3.6259
+                    reference_Si_abund = -4.5547
+                else:
+                    raise UnimplementedFunctionality(
+                        "Only Orion grains are currently implemented"
+                    )
+
+                PAH_abund = -4.446
+                f_graphite = delta_graphite / (10 ** (reference_C_abund))
+                f_Si = delta_Si / (10 ** (reference_Si_abund))
+                f_pah = delta_PAH / (10 ** (PAH_abund))
+
+            else:
+                f_graphite = 1.0
+                f_Si = 1.0
+                f_pah = 1.0
+
+            command = (
+                f"grains {params['grains']} graphite {f_graphite} \n"
+                f"grains {params['grains']} silicate {f_Si} \n"
+                f"grains PAH {f_pah}"
+            )
+
+            cinput.append(command + "\n")
+
+    # cloudy c23.01 now has the Jenkins depletion model built in which could
+    # in theory replace the above. However, after testing I wasn't not
+    # convinced it works as advertised since grains continue to have a strong
+    # impact at low metallicity. A query has been raised on the cloudy forum
+    # but no reply as yet. A working implementation is available on the
+    # cloudy_builtin_Jenkins_depletion branch.
+
+    else:
+        print("WARNING: No depletion (or unrecognised depletion) specified")
+
         for ele in ["He"] + abundances.metals:
             cinput.append(
                 (
-                    f"element abundance {abundances.name[ele]} "
+                    f"element abundance {abundances.element_name[ele]} "
                     f"{abundances.total[ele]}\n"
                 )
             )
 
-        if params["fstar"] == 0.5:
-            cinput.append("metals deplete Jenkins 2009")
-
-            # turn on grains
-            if params["grains"]:
-                cinput.append("grains")
-
-        else:
-            value = params["fstar"]
-            cinput.append(f"metals depletion jenkins 2009 fstar {value}")
-
-            # turn on grains
-            if params["grains"]:
-                # for non-default (!= 0.5) fstar values, grains needs to be
-                # scaled.
-
-                # calculate the dust mass fraction for the default parameter
-                # choice.
-                default_dust_mass_fraction = abundances.apply_depletion(
-                    depletion_model="Jenkins2009"
-                ).dust_abundance
-
-                # calculate the dust mass fraction for the provided value of
-                # fstar.
-                dust_mass_fraction = abundances.apply_depletion(
-                    depletion_model="Jenkins2009",
-                    depletion_scaling=params["fstar"],
-                ).dust_abundance
-                ratio = dust_mass_fraction / default_dust_mass_fraction
-                cinput.append(f"grains {ratio}")
+        # In this case it would be inconsistent to turn on grains, so don't.
 
     ionisation_parameter = params["ionisation_parameter"]
-
-    # print('ionisisation parameter:', ionisation_parameter)
 
     log10ionisation_parameter = np.log10(ionisation_parameter)
 
@@ -330,36 +349,53 @@ def create_cloudy_input(
         cinput.append("sphere\n")
 
     # add background continuum
-    if params["cosmic_rays"]:
+    if params["cosmic_rays"] is not None:
         cinput.append("cosmic rays, background\n")
 
-    if params["CMB"]:
+    if params["CMB"] is not None:
         cinput.append(f'CMB {params["z"]}\n')
 
-    # define hydrogend density
-    if params["hydrogen_density"]:
-        cinput.append(
-            (
-                f"hden {np.log10(params['hydrogen_density'])}"
-                " log constant "
-                "density\n"
-            )
+    # define hydrogen density
+    if params["hydrogen_density"] is not None:
+        cinput.append(f"hden {np.log10(params['hydrogen_density'])} log\n")
+
+    # constant density flag
+    if params["constant_density"] is not None:
+        cinput.append("constant density\n")
+
+    # constant pressure flag
+    if params["constant_pressure"] is not None:
+        cinput.append("constant pressure\n")
+
+    if (params["constant_density"] is not None) and (
+        params["constant_pressure"] is not None
+    ):
+        raise InconsistentArguments(
+            """Cannot specify both constant pressure and density"""
         )
 
     # covering factor
-    if params["covering_factor"]:
+    if params["covering_factor"] is not None:
         cinput.append(f'covering factor {params["covering_factor"]} linear\n')
 
     # Processing commands
-    cinput.append("iterate to convergence\n")
-    if params["T_floor"]:
+    if params["iterate_to_convergence"] is not None:
+        cinput.append("iterate to convergence\n")
+
+    if params["T_floor"] is not None:
         cinput.append(f'set temperature floor {params["T_floor"]} linear\n')
 
-    if params["stop_T"]:
+    if params["stop_T"] is not None:
         cinput.append(f'stop temperature {params["stop_T"]}K\n')
 
-    if params["stop_efrac"]:
+    if params["stop_efrac"] is not None:
         cinput.append(f'stop efrac {params["stop_efrac"]}\n')
+
+    if params["stop_column_density"] is not None:
+        cinput.append(f'stop column density {params["stop_column_density"]}\n')
+        # For some horrible reason the above is ignored in favour of a
+        # built in temperature stop (4000K) unless that is turned off.
+        cinput.append("stop temperature off\n")
 
     # --- output commands
 
@@ -392,18 +428,27 @@ def create_cloudy_input(
 
     # output linelist
     if params["output_linelist"]:
+        # save intrinsic lines
         cinput.append(
-            f'save linelist column emergent absolute last units angstroms \
-                  "{model_name}.elin" "linelist.dat"\n'
+            f'save line list column absolute last units angstroms \
+                  "{model_name}.intrinsic_elin" "linelist.dat"\n'
+        )
+
+        # save emergent lines
+        cinput.append(
+            f'save line list emergent column absolute last units angstroms \
+                  "{model_name}.emergent_elin" "linelist.dat"\n'
         )
 
         # make copy of linelist
-        shutil.copyfile(
-            params["output_linelist"], f"{output_dir}/linelist.dat"
-        )
+        if copy_linelist:
+            shutil.copyfile(
+                params["output_linelist"], f"{output_dir}/linelist.dat"
+            )
 
     # save input file
     if output_dir is not None:
+        print(f"created input file: {output_dir}/{model_name}.in")
         open(f"{output_dir}/{model_name}.in", "w").writelines(cinput)
 
     return cinput
@@ -526,6 +571,9 @@ def read_linelist(filename, extension="elin"):
 
             # convert luminosity to float
             lum = float(lum)
+
+            # change the units of luminosity
+            lum /= 1e7
 
             line_ids.append(id)
             wavelengths.append(wavelength)
