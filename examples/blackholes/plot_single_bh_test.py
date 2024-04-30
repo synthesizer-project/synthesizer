@@ -1,6 +1,6 @@
 """
 Compare single black hole particle, parametric and grid spectra
-===========================
+===============================================================
 
 A sanity check example for a single blackhole, comparing the spectra generated
 from the parametric, particle and grid method. These should give

@@ -66,7 +66,8 @@ All the photoionisation modelling in `synthesizer` currently uses the `cloudy <h
 
 * `log10(U)=-2`
 
-Our photoionisation modelling is described in more detail in :ref:`grids-photoionisation`.
+..
+  Our photoionisation modelling is described in more detail in :ref:`grids-photoionisation`.
 
 
 Common variants
