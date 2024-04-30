@@ -116,6 +116,7 @@ docs = [
     "pillow",
     "sphinx-toolbox",
     "nbsphinx",
+    "bigfile",
 ]
 
 
