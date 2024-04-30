@@ -107,8 +107,9 @@ test = [
 ]
 # Documentation building
 docs = [
+    "nbmake",
     "sphinx==7.1.1",
-    "pandoc==2.2",
+    "pandoc",
     "furo",
     "sphinx_autodoc_typehints",
     "ipython",
