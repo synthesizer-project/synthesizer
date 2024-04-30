@@ -1,8 +1,16 @@
 import numpy as np
 import scipy.interpolate as interpolate
-from bigfile import BigFile
+
+try:
+    from bigfile import BigFile
+except ImportError:
+    print(
+        "bigfile.BigFile not found. Please install it using "
+        "'pip install bigfile'"
+    )
+    exit()
 from scipy import integrate
-from unyt import Msun, c, kpc, yr
+from unyt import Msun, Myr, c, kpc, yr
 
 from ..particle.galaxy import Galaxy
 
@@ -283,7 +291,7 @@ def load_BlueTides(
         ]
         ages = (
             dataholder.gen_SFT_to_age(star_time) / 1e6
-        )  # translate galaxy star formation time to ages in years
+        )  # translate galaxy star formation time to ages in MEGAyears
 
         initial_gas_particle_mass = np.full(ages.shape, 2.36e6) / dataholder.hh
         imasses = initial_gas_particle_mass / 4
@@ -313,8 +321,8 @@ def load_BlueTides(
         coords = np.transpose([x, y, z])
         galaxies[ii].load_stars(
             initial_masses=imasses * Msun,
-            ages=ages * yr,
-            metallicities=metallicities,
+            ages=ages * Myr,
+            metals=metallicities,
             coordinates=coords * kpc,
             current_masses=masses * Msun,
             smoothing_lengths=smoothing_lengths,
