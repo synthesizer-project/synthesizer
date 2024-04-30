@@ -449,7 +449,7 @@ class LineCollection:
                 )
 
             # check if ratio_id exists
-            elif diagram_id not in self.available_ratios:
+            elif diagram_id not in self.available_diagrams:
                 raise exceptions.UnrecognisedOption(
                     """LineCollection is missing the lines required for
                     this diagram"""
