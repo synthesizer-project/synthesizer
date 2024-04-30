@@ -525,7 +525,7 @@ class ParametricLI08(AttenuationLaw):
         OPT_NIR_slope=1.0,
         FUV_slope=1.0,
         bump=0.0,
-        model="MW",
+        model=None,
     ):
         """
         Initialise the dust curve.
@@ -548,16 +548,16 @@ class ParametricLI08(AttenuationLaw):
         self.bump = bump
 
         # Get the correct model string
-        if "MW" in model:
+        if model == "MW":
             self.model = "MW"
-        elif "LMC" in model:
+        elif model == "LMC":
             self.model = "LMC"
-        elif "SMC" in model:
+        elif model == "SMC":
             self.model = "SMC"
-        elif "Calzetti" in model:
+        elif model == "Calzetti":
             self.model = "Calzetti"
         else:
-            self.model = "None"
+            self.model = "Custom"
 
     def get_tau(self, lam):
         """
