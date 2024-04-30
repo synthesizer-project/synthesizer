@@ -379,6 +379,12 @@ class LineCollection:
 
         a, b = ab
 
+        # if a single value is given convert this into a list
+        if isinstance(a, str):
+            a = [a]
+        if isinstance(b, str):
+            b = [b]
+
         return np.sum([self.lines[_line].luminosity for _line in a]) / np.sum(
             [self.lines[_line].luminosity for _line in b]
         )
@@ -388,15 +394,34 @@ class LineCollection:
         Measure (and return) a line ratio
 
         Arguments:
-            ratio_id
-                a ratio_id where the ratio lines are defined in line_ratios
+            ratio_id (str, list)
+                Either a ratio_id where the ratio lines are defined in
+                line_ratios or a list of lines.
 
         Returns:
             float
                 a line ratio
         """
 
-        ab = self.line_ratios.ratios[ratio_id]
+        # if ratio_id is a string interpret as a ratio_id for the ratios
+        # defined in the line_ratios module...
+        if isinstance(ratio_id, str):
+            # check if ratio_id exists
+            if ratio_id not in self.line_ratios.available_ratios:
+                raise exceptions.UnrecognisedOption("ratio_id not recognised")
+
+            # check if ratio_id exists
+            elif ratio_id not in self.available_ratios:
+                raise exceptions.UnrecognisedOption(
+                    """LineCollection is missing the lines required for
+                    this ratio"""
+                )
+
+            ab = self.line_ratios.ratios[ratio_id]
+
+        # otherwise interpret as a list
+        elif isinstance(ratio_id, list):
+            ab = ratio_id
 
         return self.get_ratio_(ab)
 
@@ -405,15 +430,36 @@ class LineCollection:
         Return a pair of line ratios for a given diagram_id (E.g. BPT)
 
         Arguments:
-            diagram_id
-                a diagram_id where the pairs of ratio lines are
-                defined in line_ratios
+            diagram_id (str, list)
+                Either a diagram_id where the pairs of ratio lines are defined
+                in line_ratios or a list of lists defining the ratios.
 
         Returns:
             tuple (float)
                 a pair of line ratios
         """
-        ab, cd = self.line_ratios.diagrams[diagram_id]
+
+        # if ratio_id is a string interpret as a ratio_id for the ratios
+        # defined in the line_ratios module...
+        if isinstance(diagram_id, str):
+            # check if ratio_id exists
+            if diagram_id not in self.line_ratios.available_diagrams:
+                raise exceptions.UnrecognisedOption(
+                    "diagram_id not recognised"
+                )
+
+            # check if ratio_id exists
+            elif diagram_id not in self.available_ratios:
+                raise exceptions.UnrecognisedOption(
+                    """LineCollection is missing the lines required for
+                    this diagram"""
+                )
+
+            ab, cd = self.line_ratios.diagrams[diagram_id]
+
+        # otherwise interpret as a list
+        elif isinstance(diagram_id, list):
+            ab, cd = diagram_id
 
         return self.get_ratio_(ab), self.get_ratio_(cd)
 
