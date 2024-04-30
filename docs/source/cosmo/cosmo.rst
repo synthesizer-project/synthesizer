@@ -10,4 +10,3 @@ TODO: semi-analytic model with a binned star formation and metal enrichment hist
    :maxdepth: 2
 
    cosmo_example
-   survey_example
