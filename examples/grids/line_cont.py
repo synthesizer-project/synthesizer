@@ -1,4 +1,7 @@
 """
+Plot the line continuum for a given grid point
+==============================================
+
 Demonstrate how to create spectra using a collection of line luminosities
 instead of the default approach. Mostly for testing purposes.
 """
