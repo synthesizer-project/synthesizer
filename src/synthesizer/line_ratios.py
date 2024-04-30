@@ -5,8 +5,6 @@ e.g. BPT-NII.
 Line ids and specifically the wavelength part here are defined using the cloudy
 standard, i.e. using vacuum wavelengths at <200nm and air wavelengths at
 >200nm.
-
-There is a parallel module that vacuum
 """
 
 # shorthand for common lines
