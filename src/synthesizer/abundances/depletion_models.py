@@ -135,14 +135,11 @@ class Gutkin2016:
     """
     Depletion pattern created for Synthesizer 2024.
 
-    Gutkin+2016:
-        https://ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract
+    Gutkin+2016 (ui.adsabs.harvard.edu/abs/2016MNRAS.462.1757G/abstract)
 
-    Note: in previous version we adjusted N ("N": 0.89) following:
-    Dopita+2013:
-        https://ui.adsabs.harvard.edu/abs/2013ApJS..208...10D/abstract
-    Dopita+2006:
-        https://ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract
+    Note: in previous version we adjusted N ("N": 0.89) following Dopita+2006
+    (ui.adsabs.harvard.edu/abs/2013ApJS..208...10D/abstrac) and Dopita+2013
+    (ui.adsabs.harvard.edu/abs/2006ApJS..167..177D/abstract)
     """
 
     # This is the inverse depletion
