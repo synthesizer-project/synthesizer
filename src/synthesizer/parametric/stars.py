@@ -473,17 +473,6 @@ class Stars(StarsComponent):
             # Continuum at line wavelength, erg/s/Hz
             continuum = np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
 
-            # NOTE: this is currently incorrect and should be made of the
-            # separated nebular and stellar continuum emission
-            #
-            # proposed alternative
-            # stellar_continuum = np.sum(
-            #     grid_line['stellar_continuum'] * self.sfzh.sfzh,
-            #               axis=(0, 1))  # not affected by fesc
-            # nebular_continuum = np.sum(
-            #     (1-fesc)*grid_line['nebular_continuum'] * self.sfzh.sfzh,
-            #               axis=(0, 1))  # affected by fesc
-
         # Else if the line is list or tuple denoting a doublet (or higher)
         elif isinstance(line_id, (list, tuple)):
             # Set up containers for the line information
