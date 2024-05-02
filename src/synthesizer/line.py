@@ -399,6 +399,39 @@ class LineCollection:
     def __getitem__(self, line_id):
         return self.lines[line_id]
 
+    def concatenate(self, other):
+        """
+        Concatenate two LineCollection objects together.
+
+        Note that any duplicate lines will be taken from self (i.e. the
+        LineCollection from which concatenate was called).
+
+        Args:
+            other (LineCollection)
+                A LineCollection object to concatenate with the current
+                LineCollection object.
+
+        Returns:
+            LineCollection
+                A new LineCollection object containing the lines from
+                both LineCollection objects.
+        """
+        # Ensure other is a line collection
+        if not isinstance(other, LineCollection):
+            raise TypeError(
+                "Can only concatenate LineCollection objects together"
+            )
+        # Extract the lines from each LineCollection object
+        my_lines = self.lines
+        other_lines = {
+            line.id: line
+            for line in other.lines.values()
+            if line.id not in my_lines
+        }
+        my_lines.update(other_lines)
+
+        return LineCollection(my_lines)
+
     def __str__(self):
         """Function to print a basic summary of the LineCollection object.
 
