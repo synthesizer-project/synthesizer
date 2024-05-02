@@ -1193,7 +1193,6 @@ class StarsComponent:
 
         # Dictionary holding Line objects
         lines = {}
-        print(line_ids)
 
         # Loop over the lines
         for line_id in line_ids:
@@ -1207,6 +1206,7 @@ class StarsComponent:
             line = self.generate_line(grid=grid, line_id=line_id, fesc=fesc)
 
             # Store this line
+            print(line.id)
             lines[line.id] = line
 
         # Create a line collection
@@ -1271,6 +1271,8 @@ class StarsComponent:
 
             # Ok, well are all the requested lines in it?
             for line_id in line_ids:
+                if not isinstance(line_id, str):
+                    line_id = ",".join(line_id)
                 if line_id not in intrinsic_lines.line_ids:
                     intrinsic_lines.concatenate(
                         self.get_line_intrinsic(grid, line_id, fesc)
