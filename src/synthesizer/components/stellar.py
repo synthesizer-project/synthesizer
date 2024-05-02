@@ -1201,7 +1201,7 @@ class StarsComponent:
             # (e.g. 'O 3 4959, O 3 5007') convert it to a list
             if isinstance(line_id, str):
                 if len(line_id.split(",")) > 1:
-                    line_id = line_id.split(",")
+                    line_id = [li.strip() for li in line_id.split(",")]
 
             # Compute the line object
             line = self.generate_line(grid=grid, line_id=line_id, fesc=fesc)
