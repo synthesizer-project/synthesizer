@@ -1165,8 +1165,7 @@ class StarsComponent:
 
     def get_line_intrinsic(self, grid, line_ids, fesc=0.0):
         """
-        Calculates the intrinsic properties (luminosity, continuum, EW)
-        for a set of lines.
+        Get a LineCollection containing intrinsic lines.
 
         Args:
             grid (Grid):
@@ -1183,7 +1182,6 @@ class StarsComponent:
             LineCollection
                 A dictionary like object containing line objects.
         """
-
         # If only one line specified convert to a list to avoid writing a
         # longer if statement
         if isinstance(line_ids, str):
@@ -1228,6 +1226,8 @@ class StarsComponent:
         dust_curve_stellar=PowerLaw(slope=-1.0),
     ):
         """
+        Get a LineCollection containing attenuated lines.
+
         Calculates attenuated properties (luminosity, continuum, EW) for a
         set of lines. Allows the nebular and stellar attenuation to be set
         separately.
@@ -1257,7 +1257,6 @@ class StarsComponent:
             LineCollection
                 A dictionary like object containing line objects.
         """
-
         # If the intrinsic lines haven't already been calculated and saved
         # then generate them
         if "intrinsic" not in self.lines:
@@ -1325,6 +1324,8 @@ class StarsComponent:
         dust_curve=PowerLaw(slope=-1.0),
     ):
         """
+        Get a LineCollection containing lines attenuated by a simple screen.
+
         Calculates attenuated properties (luminosity, continuum, EW) for a set
         of lines assuming a simple dust screen (i.e. both nebular and stellar
         emission feels the same dust attenuation). This is a wrapper around
@@ -1349,7 +1350,6 @@ class StarsComponent:
             LineCollection
                 A dictionary like object containing line objects.
         """
-
         return self.get_line_attenuated(
             grid,
             line_ids,
