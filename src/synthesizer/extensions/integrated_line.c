@@ -35,7 +35,7 @@
 PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   const int ndim;
-  const int npart, nlam;
+  const int npart;
   const PyObject *grid_tuple, *part_tuple;
   const PyArrayObject *np_grid_lines, *np_grid_continuum;
   const PyArrayObject *np_fesc;
@@ -49,11 +49,13 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Quick check to make sure our inputs are valid. */
   if (ndim == 0)
-    return NULL;
+    PyErr_SetString(
+        PyExc_ValueError,
+        "Grid appears to be dimensionless! Something awful has happened!");
+  return NULL;
   if (npart == 0)
-    return NULL;
-  if (nlam == 0)
-    return NULL;
+    PyErr_SetString(PyExc_ValueError, "No particles to process!");
+  return NULL;
 
   /* Extract a pointer to the lines grids */
   const double *grid_lines = PyArray_DATA(np_grid_lines);
@@ -169,7 +171,7 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef LineMethods[] = {
-    {"compute_integrated_line", compute_integrated_sed, METH_VARARGS,
+    {"compute_integrated_line", compute_integrated_line, METH_VARARGS,
      "Method for calculating integrated intrinsic lines."},
     {NULL, NULL, 0, NULL}};
 
