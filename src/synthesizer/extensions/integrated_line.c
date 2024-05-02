@@ -19,10 +19,10 @@
 #include "weights.h"
 
 /**
- * @brief Computes an integrated SED for a collection of particles.
+ * @brief Computes an integrated line emission for a collection of particles.
  *
- * @param np_grid_spectra: The SPS spectra array.
- * o
+ * @param np_grid_line: The SPS line emission array.
+ * @param np_grid_continuum: The SPS continuum emission array.
  * @param grid_tuple: The tuple containing arrays of grid axis properties.
  * @param part_tuple: The tuple of particle property arrays (in the same order
  *                    as grid_tuple).
@@ -31,6 +31,7 @@
  * @param np_ndims: The size of each grid axis.
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
+ * @param method: The method to use for assigning weights.
  */
 PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
@@ -48,14 +49,16 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
     return NULL;
 
   /* Quick check to make sure our inputs are valid. */
-  if (ndim == 0)
+  if (ndim == 0) {
     PyErr_SetString(
         PyExc_ValueError,
         "Grid appears to be dimensionless! Something awful has happened!");
-  return NULL;
-  if (npart == 0)
+    return NULL;
+  }
+  if (npart == 0) {
     PyErr_SetString(PyExc_ValueError, "No particles to process!");
-  return NULL;
+    return NULL;
+  }
 
   /* Extract a pointer to the lines grids */
   const double *grid_lines = PyArray_DATA(np_grid_lines);
