@@ -210,8 +210,8 @@ void line_loop_ngp(const double **grid_props, const double **part_props,
   const int grid_ind = get_flat_index(part_indices, dims, ndim);
 
   /* Add the contribution to this particle. */
-  line_lum[p] += grid_lines[grid_ind] * (1 - fesc) * weight;
-  line_cont[p] += grid_continuum[grid_ind] * (1 - fesc) * weight;
+  line_lum[p] += grid_lines[grid_ind] * (1 - fesc) * mass;
+  line_cont[p] += grid_continuum[grid_ind] * (1 - fesc) * mass;
 }
 
 /**
@@ -234,7 +234,7 @@ PyObject *compute_particle_line(PyObject *self, PyObject *args) {
   const int ndim;
   const int npart, nlam;
   const PyObject *grid_tuple, *part_tuple;
-  const PyArrayObject *np_grid_line, *np_grid_continuum;
+  const PyArrayObject *np_grid_lines, *np_grid_continuum;
   const PyArrayObject *np_fesc;
   const PyArrayObject *np_part_mass, *np_ndims;
   const char *method;
@@ -338,8 +338,8 @@ PyObject *compute_particle_line(PyObject *self, PyObject *args) {
         printf(
             "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
             method);
-      line_loop_cic(grid_props, part_props, mass, grid_lines, dims, ndim,
-                    line_lum, fesc[p], p);
+      line_loop_cic(grid_props, part_props, mass, grid_lines, grid_continuum,
+                    dims, ndim, line_lum, line_cont, fesc[p], p);
     }
   }
 
@@ -349,7 +349,7 @@ PyObject *compute_particle_line(PyObject *self, PyObject *args) {
   free(grid_props);
 
   /* Reconstruct the python array to return. */
-  npy_intp np_dims_line[1] = {
+  npy_intp np_dims[1] = {
       npart,
   };
   PyArrayObject *out_line = (PyArrayObject *)PyArray_SimpleNewFromData(
