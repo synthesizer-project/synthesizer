@@ -649,6 +649,66 @@ class Stars(Particles, StarsComponent):
         # Get the spectra for this parametric form
         return stars.generate_lnu(grid=grid, spectra_name=spectra_name)
 
+    def _prepare_line_args(
+        self,
+        grid,
+        line_id,
+        fesc,
+        mask,
+        grid_assignment_method,
+    ):
+        # Make a dummy mask if none has been passed
+        if mask is None:
+            mask = np.ones(self.nparticles, dtype=bool)
+
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(grid.log10age, dtype=np.float64),
+            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
+        ]
+        part_props = [
+            np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
+            np.ascontiguousarray(self.metallicities[mask], dtype=np.float64),
+        ]
+        part_mass = np.ascontiguousarray(
+            self._initial_masses[mask],
+            dtype=np.float64,
+        )
+
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(np.sum(mask))
+
+        # Slice the spectral grids and pad them with copies of the edges.
+        grid_line = np.ascontiguousarray(
+            grid.lines[line_id]["luminosity"],
+            np.float64,
+        )
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+
+        # If fesc isn't an array make it one
+        if not isinstance(fesc, np.ndarray):
+            fesc = np.ascontiguousarray(np.full(npart, fesc))
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        return (
+            grid_line,
+            grid_props,
+            part_props,
+            part_mass,
+            fesc,
+            grid_dims,
+            len(grid_props),
+            npart,
+            grid_assignment_method,
+        )
+
     def generate_line(self, grid, line_id, fesc):
         """
         Calculate rest frame line luminosity and continuum from an SPS Grid.
@@ -674,7 +734,6 @@ class Stars(Particles, StarsComponent):
                 An instance of Line contain this lines wavelenth, luminosity,
                 and continuum.
         """
-
         # If the line_id is a str denoting a single line
         if isinstance(line_id, str):
             # Get the grid information we need
