@@ -769,7 +769,7 @@ class Stars(Particles, StarsComponent):
 
             # Get the luminosity and continuum
             lum, cont = compute_integrated_line(
-                self._prepare_line_args(
+                *self._prepare_line_args(
                     grid,
                     line_id,
                     fesc,
