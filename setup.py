@@ -150,6 +150,9 @@ src_files = {
     "synthesizer.extensions.integrated_line": (
         "src/synthesizer/extensions/integrated_line.c"
     ),
+    "synthesizer.extensions.particle_line": (
+        "src/synthesizer/extensions/particle_line.c"
+    ),
 }
 
 # Create the extension objects
