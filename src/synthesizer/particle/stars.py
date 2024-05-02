@@ -678,9 +678,13 @@ class Stars(Particles, StarsComponent):
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
 
-        # Slice the spectral grids and pad them with copies of the edges.
+        # Get the line grid and continuum
         grid_line = np.ascontiguousarray(
             grid.lines[line_id]["luminosity"],
+            np.float64,
+        )
+        grid_continuum = np.ascontiguousarray(
+            grid.lines[line_id]["continuum"],
             np.float64,
         )
 
@@ -699,6 +703,7 @@ class Stars(Particles, StarsComponent):
 
         return (
             grid_line,
+            grid_continuum,
             grid_props,
             part_props,
             part_mass,
@@ -734,61 +739,49 @@ class Stars(Particles, StarsComponent):
                 An instance of Line contain this lines wavelenth, luminosity,
                 and continuum.
         """
-        # If the line_id is a str denoting a single line
+        from synthesizer.extensions.integrated_line import (
+            compute_integrated_line,
+        )
+
+        # If the line_id is a str it denotes a single line, wrap it in a list
+        # so we can treat the same as a doublet(/triplet etc) below
         if isinstance(line_id, str):
-            # Get the grid information we need
-            grid_line = grid.lines[line_id]
-            wavelength = grid_line["wavelength"]
-
-            # Line luminosity erg/s
-            luminosity = (1 - fesc) * np.sum(
-                grid_line["luminosity"] * self.initial_masses
-            )
-
-            # Continuum at line wavelength, erg/s/Hz
-            continuum = np.sum(grid_line["continuum"] * self.initial_masses)
-
-            # NOTE: this is currently incorrect and should be made of the
-            # separated nebular and stellar continuum emission
-            #
-            # proposed alternative
-            # stellar_continuum = np.sum(
-            #     grid_line['stellar_continuum'] * self.sfzh.sfzh,
-            #               axis=(0, 1))  # not affected by fesc
-            # nebular_continuum = np.sum(
-            #     (1-fesc)*grid_line['nebular_continuum'] * self.sfzh.sfzh,
-            #               axis=(0, 1))  # affected by fesc
-
-        # Else if the line is list or tuple denoting a doublet (or higher)
-        elif isinstance(line_id, (list, tuple)):
-            # Set up containers for the line information
-            luminosity = []
-            continuum = []
-            wavelength = []
-
-            # Loop over the ids in this container
-            for line_id_ in line_id:
-                grid_line = grid.lines[line_id_]
-
-                # Wavelength [\AA]
-                wavelength.append(grid_line["wavelength"])
-
-                # Line luminosity erg/s
-                luminosity.append(
-                    (1 - fesc)
-                    * np.sum(grid_line["luminosity"] * self.initial_masses)
-                )
-
-                # Continuum at line wavelength, erg/s/Hz
-                continuum.append(
-                    np.sum(grid_line["continuum"] * self.initial_masses)
-                )
-
+            line_ids = [line_id]
         else:
-            raise exceptions.InconsistentArguments(
-                "Unrecognised line_id! line_ids should contain strings"
-                " or lists/tuples for doublets"
+            line_ids = line_id
+
+            # Ensure the line_id is a list of strings
+            if not all(isinstance(line_id, str) for line_id in line_ids):
+                raise exceptions.InconsistentArguments(
+                    "Unrecognised line_id! line_id should either be a list "
+                    "of strings or a single string."
+                )
+
+        # Set up containers for the line information
+        luminosity = []
+        continuum = []
+        wavelength = []
+
+        # Loop over the ids in this container
+        for line_id in line_ids:
+            # Get this line's wavelength
+            lam = grid.lines[line_id]["wavelength"]
+
+            # Get the luminosity and continuum
+            lum, cont = compute_integrated_line(
+                self._prepare_line_args(
+                    grid,
+                    line_id,
+                    fesc,
+                    mask=None,
+                    grid_assignment_method="cic",
+                )
             )
+
+            # Append this lines values to the containers
+            wavelength.append(lam)
+            luminosity.append(lum)
+            continuum.append(cont)
 
         return Line(line_id, wavelength, luminosity, continuum)
 
