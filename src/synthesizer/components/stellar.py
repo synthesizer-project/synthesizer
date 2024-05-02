@@ -1193,11 +1193,12 @@ class StarsComponent:
 
         # Dictionary holding Line objects
         lines = {}
+        print(line_ids)
 
         # Loop over the lines
         for line_id in line_ids:
             # If the line id a doublet in string form
-            # (e.g. 'OIII4959,OIII5007') convert it to a list
+            # (e.g. 'O 3 4959, O 3 5007') convert it to a list
             if isinstance(line_id, str):
                 if len(line_id.split(",")) > 1:
                     line_id = line_id.split(",")
@@ -1221,10 +1222,10 @@ class StarsComponent:
         grid,
         line_ids,
         fesc=0.0,
-        tau_v_BC=None,
-        tau_v_ISM=None,
-        dust_curve_BC=PowerLaw(slope=-1.0),
-        dust_curve_ISM=PowerLaw(slope=-1.0),
+        tau_v_nebular=None,
+        tau_v_stellar=None,
+        dust_curve_nebular=PowerLaw(slope=-1.0),
+        dust_curve_stellar=PowerLaw(slope=-1.0),
     ):
         """
         Calculates attenuated properties (luminosity, continuum, EW) for a
@@ -1243,12 +1244,12 @@ class StarsComponent:
                 ionising photons that entirely escaped.
             tau_v_BS (float)
                 V-band optical depth of the nebular emission.
-            tau_v_ISM (float)
+            tau_v_stellar (float)
                 V-band optical depth of the stellar emission.
-            dust_curve_BC (dust_curve)
+            dust_curve_nebular (dust_curve)
                 A dust_curve object specifying the dust curve.
                 for the nebular emission
-            dust_curve_ISM (dust_curve)
+            dust_curve_stellar (dust_curve)
                 A dust_curve object specifying the dust curve
                 for the stellar emission.
 
@@ -1268,22 +1269,32 @@ class StarsComponent:
         else:
             intrinsic_lines = self.lines["intrinsic"]
 
+            # Ok, well are all the requested lines in it?
+            for line_id in line_ids:
+                if line_id not in intrinsic_lines.line_ids:
+                    intrinsic_lines.concatenate(
+                        self.get_line_intrinsic(grid, line_id, fesc)
+                    )
+
+            # Ensure the lines attribute holds all the intrinsic lines
+            self.lines["intrinsic"] = intrinsic_lines
+
         # Dictionary holding lines
         lines = {}
 
         # Loop over the intrinsic lines
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
             # Calculate attenuation
-            T_BC = dust_curve_BC.get_transmission(
-                tau_v_BC, intrinsic_line._wavelength
+            T_nebular = dust_curve_nebular.get_transmission(
+                tau_v_nebular, intrinsic_line._wavelength
             )
-            T_ISM = dust_curve_ISM.get_transmission(
-                tau_v_ISM, intrinsic_line._wavelength
+            T_stellar = dust_curve_stellar.get_transmission(
+                tau_v_stellar, intrinsic_line._wavelength
             )
 
             # Apply attenuation
-            luminosity = intrinsic_line._luminosity * T_BC * T_ISM
-            continuum = intrinsic_line._continuum * T_ISM
+            luminosity = intrinsic_line._luminosity * T_nebular * T_stellar
+            continuum = intrinsic_line._continuum * T_stellar
 
             # Create the line object
             line = Line(
@@ -1292,13 +1303,6 @@ class StarsComponent:
                 luminosity,
                 continuum,
             )
-
-            # NOTE: the above is wrong and should be separated into stellar
-            # and nebular continuum components:
-            # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
-            # stellar_continuum = intrinsic_line._stellar_continuum * T_stellar
-            # line = Line(intrinsic_line.id, intrinsic_line._wavelength,
-            # luminosity, nebular_continuum, stellar_continuum)
 
             lines[line_id] = line
 
@@ -1348,8 +1352,8 @@ class StarsComponent:
             grid,
             line_ids,
             fesc=fesc,
-            tau_v_BC=0,
-            tau_v_ISM=tau_v,
+            tau_v_nebular=0,
+            tau_v_stellar=tau_v,
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve,
         )
