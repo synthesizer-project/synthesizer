@@ -42,7 +42,7 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
   const PyArrayObject *np_part_mass, *np_ndims;
   const char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOiiis", &np_grid_lines, &np_grid_continuum,
+  if (!PyArg_ParseTuple(args, "OOOOOOOiis", &np_grid_lines, &np_grid_continuum,
                         &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,
                         &np_ndims, &ndim, &npart, &method))
     return NULL;
