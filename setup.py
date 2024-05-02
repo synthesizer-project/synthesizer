@@ -147,6 +147,9 @@ src_files = {
     ),
     "synthesizer.extensions.sfzh": "src/synthesizer/extensions/sfzh.c",
     "synthesizer.extensions.los": "src/synthesizer/extensions/los.c",
+    "synthesizer.estensions.integrated_line": (
+        "src/synthesizer/extensions/integrated_line.c"
+    ),
 }
 
 # Create the extension objects
