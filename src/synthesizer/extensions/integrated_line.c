@@ -85,7 +85,7 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
     nprops += dims[dim];
   const double **grid_props = malloc(nprops * sizeof(double *));
 
-  /* How many grid elements are there? (excluding wavelength axis)*/
+  /* How many grid elements are there? */
   int grid_size = 1;
   for (int dim = 0; dim < ndim; dim++)
     grid_size *= dims[dim];
