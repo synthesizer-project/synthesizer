@@ -15,21 +15,19 @@ in plots etc.
 
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
-
 import numpy as np
 from unyt import Angstrom
 
-from synthesizer import exceptions
-from synthesizer.conversions import lnu_to_llam
+from synthesizer import exceptions, line_ratios
+from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
 from synthesizer.units import Quantity
 from synthesizer.warnings import deprecation
 
 
 def get_line_id(id):
     """
-    A class representing a spectral line or set of lines (e.g. a doublet)
+    A function for converting a line id possibly represented as a list to
+    a single string.
 
     Arguments
         id (str, list, tuple)
@@ -48,25 +46,27 @@ def get_line_id(id):
 
 def get_line_label(line_id):
     """
-    Get a line label for a given line_id, ratio, or diagram.
-    """
+    Get a line label for a given line_id, ratio, or diagram. Where the line_id
+    is one of several predifined lines in line_ratios.line_labels this label
+    is used, otherwise the label is constructed from the line_id.
 
-    # dictionary of common line labels to use by default
-    special_line_labels = {
-        "O 2 3726.03A,O 2 3728.81A": "[OII]3726,3729",
-        "H 1 4862.69A": r"H\beta",
-        "O 3 4958.91A,O 3 5006.84A": "[OIII]4959,5007",
-        "H 1 6564.62A": r"H\alpha",
-        "O 3 5006.84A": "[OIII]5007",
-        "N 2 6583.45A": "[NII]6583",
-    }
+    Argumnents
+        line_id (str or list)
+            The line_id either as a list of individual lines or a string. If
+            provided as a list this is automatically converted to a single
+            string so it can be used as a key.
+
+    Returns
+        line_label (str)
+            A nicely formatted line label.
+    """
 
     # if the line_id is a list (denoting a doublet or higher)
     if isinstance(line_id, list):
         line_id = ",".join(line_id)
 
-    if line_id in special_line_labels.keys():
-        line_label = special_line_labels[line_id]
+    if line_id in line_ratios.line_labels.keys():
+        line_label = line_ratios.line_labels[line_id]
     else:
         line_id = line_id.split(",")
         line_labels = []
@@ -147,9 +147,9 @@ def get_ratio_label(ratio_id):
 
     # get the list of lines for a given ratio_id
 
-    # if the id is a string get the lines from the LineRatios class
+    # if the id is a string get the lines from the line_ratios sub-module
     if isinstance(ratio_id, str):
-        ratio_line_ids = LineRatios().ratios[ratio_id]
+        ratio_line_ids = line_ratios.ratios[ratio_id]
     if isinstance(ratio_id, list):
         ratio_line_ids = ratio_id
 
@@ -176,7 +176,7 @@ def get_diagram_labels(diagram_id):
     """
 
     # get the list of lines for a given ratio_id
-    diagram_line_ids = LineRatios().diagrams[diagram_id]
+    diagram_line_ids = line_ratios.diagrams[diagram_id]
     xlabel = get_ratio_label(diagram_line_ids[0])
     ylabel = get_ratio_label(diagram_line_ids[1])
 
@@ -228,113 +228,10 @@ def get_roman_numeral(number):
     return roman
 
 
-def get_bpt_kewley01(logNII_Ha):
-    """BPT-NII demarcations from Kewley+2001
-
-    Kewley+03: https://arxiv.org/abs/astro-ph/0106324
-    Demarcation defined by:
-        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.47) + 1.19
-
-    Arguments:
-        logNII_Ha (array)
-            Array of log([NII]/Halpha) values to give the
-            SF-AGN demarcation line
-
-    Returns:
-        array
-            Corresponding log([OIII]/Hb) ratio array
-    """
-
-    return 0.61 / (logNII_Ha - 0.47) + 1.19
-
-
-def get_bpt_kauffman03(logNII_Ha):
-    """BPT-NII demarcations from Kauffman+2003
-
-    Kauffman+03: https://arxiv.org/abs/astro-ph/0304239
-    Demarcation defined by:
-        log([OIII]/Hb) = 0.61 / (log([NII]/Ha) - 0.05) + 1.3
-
-    Args:
-        logNII_Ha (array)
-            Array of log([NII]/Halpha) values to give the
-            SF-AGN demarcation line
-
-    Returns:
-        array
-            Corresponding log([OIII]/Hb) ratio array
-    """
-
-    return 0.61 / (logNII_Ha - 0.05) + 1.3
-
-
-@dataclass
-class LineRatios:
-    """
-    A class holding useful line ratios (e.g. R23) and
-    diagrams (pairs of ratios), e.g. BPT.
-    """
-
-    # Shorthand for common lines
-    O3b: str = "O 3 4958.91A"
-    O3r: str = "O 3 5006.84A"
-    O3: List[str] = field(
-        default_factory=lambda: ["O 3 4958.91A", "O 3 5006.84A"]
-    )
-    O2b: str = "O 2 3726.03A"
-    O2r: str = "O 2 3728.81A"
-    O2: List[str] = field(
-        default_factory=lambda: ["O 2 3726.03A", "O 2 3728.81A"]
-    )
-    Hb: str = "H 1 4862.69A"
-    Ha: str = "H 1 6564.62A"
-
-    # Balmer decrement, should be [2.79--2.86] (Te, ne, dependent)
-    # for dust free
-    ratios: Dict[str, List[List[str]]] = field(
-        default_factory=lambda: {
-            "BalmerDecrement": [["H 1 6564.62A"], ["H 1 4862.69A"]],
-            "N2": [["N 2 6583.45A"], ["H 1 6564.62A"]],
-            "S2": [["S 2 6730.82A", "S 2 6716.44A"], ["H 1 6564.62A"]],
-            "O1": [["O 1 6300.30A"], ["H 1 6564.62A"]],
-            "R2": [["O 2 3726.03A"], ["H 1 4862.69A"]],
-            "R3": [["O 3 5006.84A"], ["H 1 4862.69A"]],
-            "R23": [
-                [
-                    "O 3 4958.91A",
-                    "O 3 5006.84A",
-                    "O 2 3726.03A",
-                    "O 2 3728.81A",
-                ],
-                ["H 1 4862.69A"],
-            ],
-            "O32": [["O 3 5006.84A"], ["O 2 3726.03A"]],
-            "Ne3O2": [["NE 3 3868.76A"], ["O 2 3726.03A"]],
-        }
-    )
-
-    diagrams: Dict[str, List[List[List[str]]]] = field(
-        default_factory=lambda: {
-            "OHNO": [
-                [["O 3 5006.84A"], ["H 1 4862.69A"]],
-                [["NE 3 3868.76A"], ["O 2 3726.03A", "O 2 3728.81A"]],
-            ],
-            "BPT-NII": [
-                [["N 2 6583.45A"], ["H 1 6564.62A"]],
-                [["O 3 5006.84A"], ["H 1 4862.69A"]],
-            ],
-        }
-    )
-
-    def __post_init__(self):
-        # Provide lists of what is included
-        self.available_ratios: Tuple[str, ...] = tuple(self.ratios.keys())
-        self.available_diagrams: Tuple[str, ...] = tuple(self.diagrams.keys())
-
-
 class LineCollection:
     """
-    A class holding a collection of emission lines
+    A class holding a collection of emission lines. This enables additional
+    functionality such as quickly calculating line ratios or line diagrams.
 
     Arguments
         lines (dictionary of Line objects)
@@ -345,6 +242,15 @@ class LineCollection:
     """
 
     def __init__(self, lines):
+        """
+        Initialise LineCollection.
+
+        Arguments:
+            lines (dict)
+                A dictionary of synthesizer.line.Line objects.
+        """
+
+        # dictionary of synthesizer.line.Line objects.
         self.lines = lines
 
         # create an array of line_ids
@@ -373,11 +279,11 @@ class LineCollection:
         self.wavelengths = self.wavelengths[sorted_arguments]
 
         # include line ratio and diagram definitions dataclass
-        self.lineratios = LineRatios()
+        self.line_ratios = line_ratios
 
         # create list of available line ratios
         self.available_ratios = []
-        for ratio_id, ratio in self.lineratios.ratios.items():
+        for ratio_id, ratio in self.line_ratios.ratios.items():
             # flatten line ratio list
             ratio_line_ids = [x for xs in ratio for x in xs]
 
@@ -387,7 +293,7 @@ class LineCollection:
 
         # create list of available line diagnostics
         self.available_diagrams = []
-        for diagram_id, diagram in self.lineratios.diagrams.items():
+        for diagram_id, diagram in self.line_ratios.diagrams.items():
             # flatten line ratio list
             diagram_line_ids = [x for xs in diagram[0] for x in xs] + [
                 x for xs in diagram[1] for x in xs
@@ -398,6 +304,14 @@ class LineCollection:
                 self.available_diagrams.append(diagram_id)
 
     def __getitem__(self, line_id):
+        """
+        Simply returns one particular line from the collection.
+
+        Returns:
+            line (synthesizer.line.Line)
+                A synthesizer.line.Line object.
+        """
+
         return self.lines[line_id]
 
     def concatenate(self, other):
@@ -434,30 +348,31 @@ class LineCollection:
         return LineCollection(my_lines)
 
     def __str__(self):
-        """Function to print a basic summary of the LineCollection object.
+        """
+        Function to print a basic summary of the LineCollection object.
 
         Returns a string containing the id, wavelength, luminosity,
         equivalent width, and flux if generated.
 
-        Returns
-        -------
-        str
-            Summary string containing the total mass formed and
-            lists of the available SEDs, lines, and images.
+        Returns:
+            summary (str)
+                Summary string containing the total mass formed and
+                lists of the available SEDs, lines, and images.
         """
 
         # Set up string for printing
-        pstr = ""
+        summary = ""
 
         # Add the content of the summary to the string to be printed
-        pstr += "-" * 10 + "\n"
-        pstr += "LINE COLLECTION\n"
-        pstr += f"lines: {self.line_ids}\n"
-        pstr += f"available ratios: {self.available_ratios}\n"
-        pstr += f"available diagrams: {self.available_diagrams}\n"
-        pstr += "-" * 10
+        summary += "-" * 10 + "\n"
+        summary += "LINE COLLECTION\n"
+        summary += f"number of lines: {len(self.line_ids)}\n"
+        summary += f"lines: {self.line_ids}\n"
+        summary += f"available ratios: {self.available_ratios}\n"
+        summary += f"available diagrams: {self.available_diagrams}\n"
+        summary += "-" * 10
 
-        return pstr
+        return summary
 
     def __iter__(self):
         """
@@ -498,6 +413,12 @@ class LineCollection:
 
         a, b = ab
 
+        # if a single value is given convert this into a list
+        if isinstance(a, str):
+            a = [a]
+        if isinstance(b, str):
+            b = [b]
+
         return np.sum([self.lines[_line].luminosity for _line in a]) / np.sum(
             [self.lines[_line].luminosity for _line in b]
         )
@@ -507,15 +428,34 @@ class LineCollection:
         Measure (and return) a line ratio
 
         Arguments:
-            ratio_id
-                a ratio_id where the ratio lines are defined in LineRatios
+            ratio_id (str, list)
+                Either a ratio_id where the ratio lines are defined in
+                line_ratios or a list of lines.
 
         Returns:
             float
                 a line ratio
         """
 
-        ab = self.lineratios.ratios[ratio_id]
+        # if ratio_id is a string interpret as a ratio_id for the ratios
+        # defined in the line_ratios module...
+        if isinstance(ratio_id, str):
+            # check if ratio_id exists
+            if ratio_id not in self.line_ratios.available_ratios:
+                raise exceptions.UnrecognisedOption("ratio_id not recognised")
+
+            # check if ratio_id exists
+            elif ratio_id not in self.available_ratios:
+                raise exceptions.UnrecognisedOption(
+                    """LineCollection is missing the lines required for
+                    this ratio"""
+                )
+
+            ab = self.line_ratios.ratios[ratio_id]
+
+        # otherwise interpret as a list
+        elif isinstance(ratio_id, list):
+            ab = ratio_id
 
         return self.get_ratio_(ab)
 
@@ -524,15 +464,36 @@ class LineCollection:
         Return a pair of line ratios for a given diagram_id (E.g. BPT)
 
         Arguments:
-            diagram_id
-                a diagram_id where the pairs of ratio lines are
-                defined in LineRatios
+            diagram_id (str, list)
+                Either a diagram_id where the pairs of ratio lines are defined
+                in line_ratios or a list of lists defining the ratios.
 
         Returns:
             tuple (float)
                 a pair of line ratios
         """
-        ab, cd = self.lineratios.diagrams[diagram_id]
+
+        # if ratio_id is a string interpret as a ratio_id for the ratios
+        # defined in the line_ratios module...
+        if isinstance(diagram_id, str):
+            # check if ratio_id exists
+            if diagram_id not in self.line_ratios.available_diagrams:
+                raise exceptions.UnrecognisedOption(
+                    "diagram_id not recognised"
+                )
+
+            # check if ratio_id exists
+            elif diagram_id not in self.available_diagrams:
+                raise exceptions.UnrecognisedOption(
+                    """LineCollection is missing the lines required for
+                    this diagram"""
+                )
+
+            ab, cd = self.line_ratios.diagrams[diagram_id]
+
+        # otherwise interpret as a list
+        elif isinstance(diagram_id, list):
+            ab, cd = diagram_id
 
         return self.get_ratio_(ab), self.get_ratio_(cd)
 
@@ -556,21 +517,39 @@ class Line:
     A class representing a spectral line or set of lines (e.g. a doublet)
 
     Attributes
-    ----------
-    lam : wavelength of the line
+        lam
+            wavelength of the line
 
     Methods
-    -------
 
     """
 
     wavelength = Quantity()
+    vacuum_wavelength = Quantity()
     continuum = Quantity()
     luminosity = Quantity()
     flux = Quantity()
-    ew = Quantity()
+    equivalent_width = Quantity()
 
     def __init__(self, id_, wavelength_, luminosity_, continuum_):
+        """
+        Initialise the Line object.
+
+        Arguments:
+            id_ (str or list)
+                The id of the line or collection of lines. For doublets this
+                can be a list with an entry for each contributing line, e.g.
+                "S 2 6730.82A", "S 2 6716.44A".
+            wavelength_ (float or list)
+                The standard (not vacuum) wavelength of the line. For doublets
+                this is a list with an entry for each contributing line.
+            luminosity_ (float or list)
+                The luminosity the line. For doublets this is a list with an
+                entry for each contributing line.
+            continuum_ (float or list)
+                The continuum at the line. For doublets this is a list with an
+                entry for each contributing line.
+        """
         # TODO: these should be replaced with standalone line objects for any
         # individual lines making up a multiline object
         self.wavelength_ = wavelength_
@@ -611,6 +590,9 @@ class Line:
         # Initialise the flux (populated by get_flux when called)
         self.flux = None
 
+        # Calculate the vacuum wavelength.
+        self.vacuum_wavelength = standard_to_vacuum(self.wavelength)
+
         # Continuum at line wavelength
         self.continuum_lam = lnu_to_llam(self.wavelength, self.continuum)
         self.equivalent_width = self.luminosity / self.continuum_lam
@@ -624,11 +606,10 @@ class Line:
         Returns a string containing the id, wavelength, luminosity,
         equivalent width, and flux if generated.
 
-        Returns
-        -------
-        str
-            Summary string containing the total mass formed and
-            lists of the available SEDs, lines, and images.
+        Returns:
+            summary (str)
+                Summary string containing the total mass formed and
+                lists of the available SEDs, lines, and images.
         """
 
         # Set up string for printing
@@ -655,9 +636,8 @@ class Line:
         NOT be used to add different lines together.
 
         Returns
-        -------
-        obj (Line)
-            New instance of Line
+            (synthesizer.line.Line)
+                New instance of synthesizer.line.Line
         """
 
         if second_line.id == self.id:
@@ -674,22 +654,21 @@ class Line:
             )
 
     def get_flux(self, cosmo, z):
-        """Calculate the line flux in units of erg/s/cm2
+        """
+        Calculate the line flux in units of erg/s/cm2
 
         Returns the line flux and (optionally) updates the line object.
 
-        Parameters
-        -------
-        cosmo: obj
-            Astropy cosmology object
+        Arguments:
+            cosmo (astropy.cosmology.)
+                Astropy cosmology object.
 
-        z: float
-            Redshift
+            z (float)
+                The redshift.
 
-        Returns
-        -------
-        flux: float
-            Flux of the line in units of erg/s/cm2
+        Returns:
+            flux (float)
+                Flux of the line in units of erg/s/cm2 by default.
         """
 
         luminosity_distance = (
