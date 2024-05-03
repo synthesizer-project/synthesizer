@@ -578,14 +578,22 @@ class Line:
         else:
             # Here we need to handle whether we have been given any array
             # of continuum values or a single value
-            if isinstance(continuum_, (list, tuple, np.ndarray)):
-                self.continuum = continuum_[0]
-                self.wavelength = wavelength_[0]
-                self.luminosity = luminosity_[0]
-            else:
-                self.continuum = self.continuum_
-                self.wavelength = self.wavelength_
-                self.luminosity = self.luminosity_
+            print(self.id, id_, continuum_, wavelength_)
+            self.continuum = (
+                continuum_[0]
+                if isinstance(continuum_, (list, tuple))
+                else continuum_
+            )
+            self.wavelength = (
+                wavelength_[0]
+                if isinstance(wavelength_, (list, tuple))
+                else wavelength_
+            )
+            self.luminosity = (
+                luminosity_[0]
+                if isinstance(luminosity_, (list, tuple))
+                else luminosity_
+            )
 
         # Initialise the flux (populated by get_flux when called)
         self.flux = None
@@ -618,13 +626,32 @@ class Line:
         pstr += "-" * 10 + "\n"
         pstr += f"SUMMARY OF {self.id}" + "\n"
         pstr += f"wavelength: {self.wavelength:.1f}" + "\n"
-        pstr += (
-            f"log10(luminosity/{self.luminosity.units}): "
-            f"{np.log10(self.luminosity):.2f}\n"
-        )
-        pstr += f"equivalent width: {self.equivalent_width:.0f}" + "\n"
-        if self._flux:
-            pstr += f"log10(flux/{self.flux.units}): {np.log10(self.flux):.2f}"
+        if isinstance(self.luminosity, np.ndarray):
+            mean_lum = np.mean(self._luminosity)
+            pstr += f"Npart: {self.luminosity.size}\n"
+            pstr += (
+                f"<log10(luminosity/{self.luminosity.units})>: "
+                f"{np.log10(mean_lum):.2f}\n"
+            )
+            mean_eq = np.mean(self.equivalent_width)
+            pstr += f"<equivalent width>: {mean_eq:.0f}" + "\n"
+            mean_flux = np.mean(self.flux) if self.flux is not None else None
+            pstr += (
+                f"<log10(flux/{self.flux.units}): {np.log10(mean_flux):.2f}"
+                if self.flux is not None
+                else ""
+            )
+        else:
+            pstr += (
+                f"log10(luminosity/{self.luminosity.units}): "
+                f"{np.log10(self.luminosity):.2f}\n"
+            )
+            pstr += f"equivalent width: {self.equivalent_width:.0f}" + "\n"
+            pstr += (
+                f"log10(flux/{self.flux.units}): {np.log10(self.flux):.2f}"
+                if self.flux is not None
+                else ""
+            )
         pstr += "-" * 10
 
         return pstr
