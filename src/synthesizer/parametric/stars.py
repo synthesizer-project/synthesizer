@@ -468,7 +468,10 @@ class Stars(StarsComponent):
 
         # Loop over the ids in this container
         for line_id_ in line_id.split(","):
+            # Strip off any whitespace (can be left by split)
             line_id_ = line_id_.strip()
+
+            # Get the line from the grid
             grid_line = grid.lines[line_id_]
 
             # Wavelength [\AA]
