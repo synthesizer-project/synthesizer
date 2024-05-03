@@ -47,6 +47,7 @@ default_units = {
     "lam": Angstrom,
     "obslam": Angstrom,
     "wavelength": Angstrom,
+    "vacuum_wavelength": Angstrom,
     "original_lam": Angstrom,
     "lam_min": Angstrom,
     "lam_max": Angstrom,
@@ -279,7 +280,9 @@ class Units(metaclass=UnitSingleton):
         # Wavelengths
         self.lam = Angstrom  # rest frame wavelengths
         self.obslam = Angstrom  # observer frame wavelengths
-        self.wavelength = Angstrom  # rest frame wavelengths alais
+        # vacuum rest frame wavelengths alias
+        self.vacuum_wavelength = Angstrom
+        self.wavelength = Angstrom  # rest frame wavelengths alias
         self.original_lam = Angstrom  # SVO filter wavelengths
         self.lam_min = Angstrom  # filter minimum wavelength
         self.lam_max = Angstrom  # filter maximum wavelength
