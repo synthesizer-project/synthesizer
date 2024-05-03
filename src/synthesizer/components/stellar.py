@@ -1182,29 +1182,34 @@ class StarsComponent:
             LineCollection
                 A dictionary like object containing line objects.
         """
-        # If only one line specified convert to a list to avoid writing a
-        # longer if statement
+        # Handle the line ids
         if isinstance(line_ids, str):
+            # If only one line specified convert to a list
             line_ids = [
                 line_ids,
             ]
+        elif isinstance(line_ids, (list, tuple)):
+            # Convert all tuple or list line_ids to strings
+            line_ids = [
+                ",".join(line_id)
+                if isinstance(line_id, (list, tuple))
+                else line_id
+                for line_id in line_ids
+            ]
+        else:
+            raise exceptions.InconsistentArguments(
+                "line_ids must be a list, tuple or string"
+            )
 
         # Dictionary holding Line objects
         lines = {}
 
         # Loop over the lines
         for line_id in line_ids:
-            # If the line id a doublet in string form
-            # (e.g. 'O 3 4959, O 3 5007') convert it to a list
-            if isinstance(line_id, str):
-                if len(line_id.split(",")) > 1:
-                    line_id = [li.strip() for li in line_id.split(",")]
-
             # Compute the line object
             line = self.generate_line(grid=grid, line_id=line_id, fesc=fesc)
 
             # Store this line
-            print(line.id)
             lines[line.id] = line
 
         # Create a line collection
