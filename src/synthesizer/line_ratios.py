@@ -40,18 +40,17 @@ ratios = {}
 
 # Balmer decrement, should be [2.79--2.86] (Te, ne, dependent)
 # for dust free
-ratios["BalmerDecrement"] = [[Ha], [Hb]]
+ratios["BalmerDecrement"] = [Ha, Hb]
 
 # add reference
-ratios["N2"] = [N2, [Ha]]
-# add reference
-ratios["S2"] = [[S2], [Ha]]
-ratios["O1"] = [[O1], [Ha]]
-ratios["R2"] = [[O2b], [Hb]]
-ratios["R3"] = [[O3r], [Hb]]
-ratios["R23"] = [[O3] + [O2], [Hb]]
-ratios["O32"] = [[O3r], [O2b]]
-ratios["Ne3O2"] = [Ne3, [O2b]]
+ratios["N2"] = [N2, Ha]
+ratios["S2"] = [S2, Ha]
+ratios["O1"] = [O1, Ha]
+ratios["R2"] = [O2b, Hb]
+ratios["R3"] = [O3r, Hb]
+ratios["R23"] = [O3 + "," + O2, Hb]
+ratios["O32"] = [O3r, O2b]
+ratios["Ne3O2"] = [Ne3, O2b]
 
 # tuple of available ratios
 available_ratios = tuple(ratios.keys())
@@ -63,7 +62,7 @@ diagrams = {}
 diagrams["OHNO"] = [ratios["R3"], [Ne3, O2]]
 
 # add reference
-diagrams["BPT-NII"] = [[N2, [Ha]], ratios["R3"]]
+diagrams["BPT-NII"] = [[N2, Ha], ratios["R3"]]
 
 # add reference
 # diagrams["VO78-SII"] = [[S2, [Ha]], R3]

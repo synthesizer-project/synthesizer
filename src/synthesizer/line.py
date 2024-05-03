@@ -250,17 +250,20 @@ class LineCollection:
                 A dictionary of synthesizer.line.Line objects.
         """
 
-        # dictionary of synthesizer.line.Line objects.
+        # Dictionary of synthesizer.line.Line objects.
         self.lines = lines
 
-        # create an array of line_ids
+        # Create an array of line_ids
         self.line_ids = np.array(list(self.lines.keys()))
+        self._individual_line_ids = np.array(
+            [li for lis in self.line_ids for li in lis.split(",")]
+        )
 
         # Atrributes to enable looping
         self._current_ind = 0
         self.nlines = len(self.line_ids)
 
-        # create list of line wavelengths
+        # Create list of line wavelengths
         self.wavelengths = (
             np.array(
                 [
@@ -271,35 +274,42 @@ class LineCollection:
             * Angstrom
         )
 
-        # get the arguments that would sort wavelength
+        # Get the arguments that would sort wavelength
         sorted_arguments = np.argsort(self.wavelengths)
 
-        # sort the line_ids and wavelengths
+        # Sort the line_ids and wavelengths
         self.line_ids = self.line_ids[sorted_arguments]
         self.wavelengths = self.wavelengths[sorted_arguments]
 
-        # include line ratio and diagram definitions dataclass
+        # Include line ratio and diagram definitions
         self.line_ratios = line_ratios
 
-        # create list of available line ratios
+        # Create list of available line ratios
         self.available_ratios = []
         for ratio_id, ratio in self.line_ratios.ratios.items():
-            # flatten line ratio list
-            ratio_line_ids = [x for xs in ratio for x in xs]
+            # Create a set from the ratio line ids while also unpacking
+            # any comma separated lines
+            ratio_line_ids = set()
+            for lis in ratio:
+                ratio_line_ids.update({li.strip() for li in lis.split(",")})
 
-            # check if line ratio is available
-            if set(ratio_line_ids).issubset(self.line_ids):
+            # Check if line ratio is available
+            if ratio_line_ids.issubset(self._individual_line_ids):
                 self.available_ratios.append(ratio_id)
 
-        # create list of available line diagnostics
+        # Create list of available line diagnostics
         self.available_diagrams = []
         for diagram_id, diagram in self.line_ratios.diagrams.items():
-            # flatten line ratio list
-            diagram_line_ids = [x for xs in diagram[0] for x in xs] + [
-                x for xs in diagram[1] for x in xs
-            ]
+            # Create a set from the diagram line ids while also unpacking
+            # any comma separated lines
+            diagram_line_ids = set()
+            for ratio in diagram:
+                for lis in ratio:
+                    diagram_line_ids.update(
+                        {li.strip() for li in lis.split(",")}
+                    )
 
-            # check if line ratio is available
+            # Check if line ratio is available
             if set(diagram_line_ids).issubset(self.line_ids):
                 self.available_diagrams.append(diagram_id)
 
@@ -393,29 +403,33 @@ class LineCollection:
             # Return the filter
             return self.lines[self.line_ids[self._current_ind - 1]]
 
-    def _get_ratio(self, ab):
+    def _get_ratio(self, line1, line2):
         """
         Measure (and return) a line ratio.
 
-        Arguments:
-            ab
-                a list of lists of lines, e.g. [[l1,l2], [l3]]
+        Args:
+            line1 (str)
+                The line or lines in the numerator.
+            line2 (str)
+                The line or lines in the denominator.
 
         Returns:
             float
                 a line ratio
         """
-        a, b = ab
+        # If either line is a combination of lines check if we need to split
+        if line1 in self.lines:
+            line1 = [line1]
+        else:
+            line1 = [li.strip() for li in line1.split(",")]
+        if line2 in self.lines:
+            line2 = [line2]
+        else:
+            line2 = [li.strip() for li in line2.split(",")]
 
-        # if a single value is given convert this into a list
-        if isinstance(a, str):
-            a = [a]
-        if isinstance(b, str):
-            b = [b]
-
-        return np.sum([self.lines[_line].luminosity for _line in a]) / np.sum(
-            [self.lines[_line].luminosity for _line in b]
-        )
+        return np.sum(
+            [self.lines[_line].luminosity for _line in line1]
+        ) / np.sum([self.lines[_line].luminosity for _line in line2])
 
     def get_ratio(self, ratio_id):
         """
@@ -433,26 +447,26 @@ class LineCollection:
         # If ratio_id is a string interpret as a ratio_id for the ratios
         # defined in the line_ratios module...
         if isinstance(ratio_id, str):
-            # check if ratio_id exists
+            # Check if ratio_id exists
             if ratio_id not in self.line_ratios.available_ratios:
                 raise exceptions.UnrecognisedOption(
                     f"ratio_id not recognised ({ratio_id})"
                 )
 
-            # check if ratio_id exists
+            # Check if ratio_id exists
             elif ratio_id not in self.available_ratios:
                 raise exceptions.UnrecognisedOption(
-                    "LineCollection is missing the lines required for"
+                    "LineCollection is missing the lines required for "
                     f"this ratio ({ratio_id})"
                 )
 
-            ab = self.line_ratios.ratios[ratio_id]
+            line1, line2 = self.line_ratios.ratios[ratio_id]
 
         # Otherwise interpret as a list
         elif isinstance(ratio_id, list):
-            ab = ratio_id
+            line1, line2 = ratio_id
 
-        return self._get_ratio_(ab)
+        return self._get_ratio(line1, line2)
 
     def get_diagram(self, diagram_id):
         """
@@ -479,7 +493,7 @@ class LineCollection:
             # check if ratio_id exists
             elif diagram_id not in self.available_diagrams:
                 raise exceptions.UnrecognisedOption(
-                    "LineCollection is missing the lines required for"
+                    "LineCollection is missing the lines required for "
                     f"this diagram ({diagram_id})"
                 )
 
@@ -489,7 +503,7 @@ class LineCollection:
         elif isinstance(diagram_id, list):
             ab, cd = diagram_id
 
-        return self._get_ratio(ab), self._get_ratio(cd)
+        return self._get_ratio(*ab), self._get_ratio(*cd)
 
     def get_ratio_label(self, ratio_id):
         """
