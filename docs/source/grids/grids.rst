@@ -29,6 +29,8 @@ Available Grids
 
 A goal of `synthesizer` is to be **flexible**. With this in mind we have generated a variety of grids for different stellar population synthesis (SPS) models, initial mass functions (IMFs), and photoionisation modelling assumptions.
 
+.. _grid-naming:
+
 Grid naming
 -----------
 
@@ -220,8 +222,4 @@ Grid list
 Loading and using Grids
 =======================
 
-.. toctree::
-   :maxdepth: 2
-
-   grids_example
-   
+On the next page we demonstrate how to load and explore a grid in `synthesizer`.

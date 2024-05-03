@@ -1,20 +1,21 @@
-.. synthesizer documentation master file, created by
-   sphinx-quickstart on Wed Oct 12 11:36:20 2022.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 Synthesizer
 ===========
 
-Synthesizer is a python package for generating synthetic astrophysical spectra. It is intended to be modular, flexible and fast.
+.. image:: img/synthesizer_banner.png
+   :scale: 50%
+
+Synthesizer is a python package for generating synthetic astrophysical spectra. It is modular, flexible and fast.
 
 Here are just some examples of what synthesizer can do:
 
-- generate spectra for parametric star formation and metal enrichment
+- generate spectra for parametric star formation and metal enrichment histories
 - generate spectra for galaxies from particle-based cosmological hydrodynamic simulations
 - measure spectral diagnostics for given spectra
 - easily compare stellar population synthesis models
 - apply screen dust models to intrinsic spectra
+
+This documentation provides a broad overview of the various components in synthesizer and how they interact.
+For detailed examples please see the `examples page <auto_examples/index>`_.
 
 Contents
 --------
@@ -24,7 +25,6 @@ Contents
    
    installation
    grids/grids
-   abundances
    galaxies/galaxies
    spectra
    units
@@ -35,6 +35,7 @@ Contents
    parametric/parametric
    cosmo/cosmo
    imaging/imaging
+   creating_grids/creating_grids
    auto_examples/index
    API
 
