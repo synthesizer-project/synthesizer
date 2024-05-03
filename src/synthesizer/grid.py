@@ -685,7 +685,8 @@ class Grid:
             # Throw exception if tline_id not in list of available lines
             if line_id_ not in self.available_lines:
                 raise exceptions.InconsistentParameter(
-                    "Provided line_id is not in the list of available lines."
+                    f"Provided line_id ({line_id_}) is not in the list "
+                    "of available lines."
                 )
 
             line_ = self.lines[line_id_]
