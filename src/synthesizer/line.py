@@ -566,7 +566,7 @@ class Line:
         # to do some combination
         multi_line = (
             "," in id_
-            and isinstance(continuum_, (list, tuple, np.ndarray))
+            and isinstance(continuum_, (list, tuple))
             and len(continuum_) > 1
         )
 
@@ -578,7 +578,6 @@ class Line:
         else:
             # Here we need to handle whether we have been given any array
             # of continuum values or a single value
-            print(self.id, id_, continuum_, wavelength_)
             self.continuum = (
                 continuum_[0]
                 if isinstance(continuum_, (list, tuple))
