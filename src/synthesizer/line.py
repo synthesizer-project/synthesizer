@@ -442,8 +442,8 @@ class LineCollection:
             # check if ratio_id exists
             elif ratio_id not in self.available_ratios:
                 raise exceptions.UnrecognisedOption(
-                    """LineCollection is missing the lines required for
-                    this ratio"""
+                    "LineCollection is missing the lines required for"
+                    f"this ratio {ratio_id}"
                 )
 
             ab = self.line_ratios.ratios[ratio_id]
