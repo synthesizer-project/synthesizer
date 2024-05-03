@@ -393,7 +393,7 @@ class LineCollection:
             # Return the filter
             return self.lines[self.line_ids[self._current_ind - 1]]
 
-    def get_ratio_(self, ab):
+    def _get_ratio(self, ab):
         """
         Measure (and return) a line ratio
 
@@ -452,7 +452,7 @@ class LineCollection:
         elif isinstance(ratio_id, list):
             ab = ratio_id
 
-        return self.get_ratio_(ab)
+        return self._get_ratio_(ab)
 
     def get_diagram(self, diagram_id):
         """
@@ -490,7 +490,7 @@ class LineCollection:
         elif isinstance(diagram_id, list):
             ab, cd = diagram_id
 
-        return self.get_ratio_(ab), self.get_ratio_(cd)
+        return self._get_ratio(ab), self._get_ratio(cd)
 
     def get_ratio_label(self, ratio_id):
         """
