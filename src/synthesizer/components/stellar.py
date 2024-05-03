@@ -1163,7 +1163,14 @@ class StarsComponent:
             **kwargs,
         )
 
-    def get_line_intrinsic(self, grid, line_ids, fesc=0.0):
+    def get_line_intrinsic(
+        self,
+        grid,
+        line_ids,
+        fesc=0.0,
+        mask=None,
+        method="cic",
+    ):
         """
         Get a LineCollection containing intrinsic lines.
 
@@ -1177,6 +1184,12 @@ class StarsComponent:
             fesc (float):
                 The Lyman continuum escaped fraction, the fraction of
                 ionising photons that entirely escaped.
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
 
         Returns:
             LineCollection
@@ -1207,7 +1220,13 @@ class StarsComponent:
         # Loop over the lines
         for line_id in line_ids:
             # Compute the line object
-            line = self.generate_line(grid=grid, line_id=line_id, fesc=fesc)
+            line = self.generate_line(
+                grid=grid,
+                line_id=line_id,
+                fesc=fesc,
+                mask=mask,
+                method=method,
+            )
 
             # Store this line
             lines[line.id] = line
@@ -1234,6 +1253,8 @@ class StarsComponent:
         tau_v_stellar=None,
         dust_curve_nebular=PowerLaw(slope=-1.0),
         dust_curve_stellar=PowerLaw(slope=-1.0),
+        mask=None,
+        method="cic",
     ):
         """
         Get a LineCollection containing attenuated lines.
@@ -1262,6 +1283,12 @@ class StarsComponent:
             dust_curve_stellar (dust_curve)
                 A dust_curve object specifying the dust curve
                 for the stellar emission.
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
 
         Returns:
             LineCollection
@@ -1274,6 +1301,8 @@ class StarsComponent:
                 grid,
                 line_ids,
                 fesc=fesc,
+                mask=mask,
+                method=method,
             )
         else:
             old_lines = self.lines["intrinsic"]
@@ -1286,7 +1315,13 @@ class StarsComponent:
                 new_line_ids = set(line_ids) - old_line_ids
 
             # Combine the old collection with the newly requested lines
-            self.get_line_intrinsic(grid, list(new_line_ids), fesc)
+            self.get_line_intrinsic(
+                grid,
+                list(new_line_ids),
+                fesc,
+                mask=mask,
+                method=method,
+            )
 
         # Get the intrinsic lines now we're sure they are there
         intrinsic_lines = self.lines["intrinsic"]
@@ -1342,6 +1377,8 @@ class StarsComponent:
         fesc=0.0,
         tau_v=None,
         dust_curve=PowerLaw(slope=-1.0),
+        mask=None,
+        method="cic",
     ):
         """
         Get a LineCollection containing lines attenuated by a simple screen.
@@ -1365,6 +1402,12 @@ class StarsComponent:
                 V-band optical depth.
             dust_curve (dust_curve)
                 A dust_curve object specifying the dust curve.
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
 
         Returns:
             LineCollection
@@ -1378,6 +1421,8 @@ class StarsComponent:
             tau_v_stellar=tau_v,
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve,
+            mask=mask,
+            method=method,
         )
 
     def _check_young_old_units(self, young, old):

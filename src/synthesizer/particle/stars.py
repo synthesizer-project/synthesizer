@@ -714,7 +714,7 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method,
         )
 
-    def generate_line(self, grid, line_id, fesc):
+    def generate_line(self, grid, line_id, fesc, mask=None, method="cic"):
         """
         Calculate rest frame line luminosity and continuum from an SPS Grid.
 
@@ -733,6 +733,12 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
 
         Returns:
             Line
@@ -766,8 +772,8 @@ class Stars(Particles, StarsComponent):
                     grid,
                     line_id_,
                     fesc,
-                    mask=None,
-                    grid_assignment_method="cic",
+                    mask=mask,
+                    grid_assignment_method=method,
                 )
             )
 
@@ -931,7 +937,14 @@ class Stars(Particles, StarsComponent):
         spec[mask] = masked_spec
         return spec
 
-    def generate_particle_line(self, grid, line_id, fesc):
+    def generate_particle_line(
+        self,
+        grid,
+        line_id,
+        fesc,
+        mask=None,
+        method="cic",
+    ):
         """
         Calculate rest frame line luminosity and continuum from an SPS Grid.
 
@@ -951,6 +964,12 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
 
         Returns:
             Line
@@ -984,8 +1003,8 @@ class Stars(Particles, StarsComponent):
                     grid,
                     line_id_,
                     fesc,
-                    mask=None,
-                    grid_assignment_method="cic",
+                    mask=mask,
+                    grid_assignment_method=method,
                 )
             )
 
@@ -1568,7 +1587,14 @@ class Stars(Particles, StarsComponent):
 
         return reprocessed
 
-    def get_particle_line_intrinsic(self, grid, line_ids, fesc=0.0):
+    def get_particle_line_intrinsic(
+        self,
+        grid,
+        line_ids,
+        fesc=0.0,
+        mask=None,
+        method="cic",
+    ):
         """
         Get a LineCollection containing intrinsic lines for each particle.
 
@@ -1585,6 +1611,12 @@ class Stars(Particles, StarsComponent):
             fesc (float):
                 The Lyman continuum escaped fraction, the fraction of
                 ionising photons that entirely escaped.
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
 
         Returns:
             LineCollection
@@ -1616,7 +1648,11 @@ class Stars(Particles, StarsComponent):
         for line_id in line_ids:
             # Compute the line object
             line = self.generate_particle_line(
-                grid=grid, line_id=line_id, fesc=fesc
+                grid=grid,
+                line_id=line_id,
+                fesc=fesc,
+                mask=mask,
+                method=method,
             )
 
             # Store this line
@@ -1644,6 +1680,8 @@ class Stars(Particles, StarsComponent):
         tau_v_stellar=None,
         dust_curve_nebular=PowerLaw(slope=-1.0),
         dust_curve_stellar=PowerLaw(slope=-1.0),
+        mask=None,
+        method="cic",
     ):
         """
         Get a LineCollection containing attenuated lines for each particle.
@@ -1672,6 +1710,12 @@ class Stars(Particles, StarsComponent):
             dust_curve_stellar (dust_curve)
                 A dust_curve object specifying the dust curve
                 for the stellar emission.
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
 
         Returns:
             LineCollection
@@ -1684,6 +1728,8 @@ class Stars(Particles, StarsComponent):
                 grid,
                 line_ids,
                 fesc=fesc,
+                mask=mask,
+                method=method,
             )
         else:
             old_lines = self.particle_lines["intrinsic"]
@@ -1696,7 +1742,13 @@ class Stars(Particles, StarsComponent):
                 new_line_ids = set(line_ids) - old_line_ids
 
             # Combine the old collection with the newly requested lines
-            self.get_particle_line_intrinsic(grid, list(new_line_ids), fesc)
+            self.get_particle_line_intrinsic(
+                grid,
+                list(new_line_ids),
+                fesc,
+                mask=mask,
+                method=method,
+            )
 
         # Get the intrinsic lines now we're sure they are there
         intrinsic_lines = self.particle_lines["intrinsic"]
@@ -1752,6 +1804,8 @@ class Stars(Particles, StarsComponent):
         fesc=0.0,
         tau_v=None,
         dust_curve=PowerLaw(slope=-1.0),
+        mask=None,
+        method="cic",
     ):
         """
         Get a LineCollection with screen attenuated lines for each particle.
@@ -1775,6 +1829,12 @@ class Stars(Particles, StarsComponent):
                 V-band optical depth.
             dust_curve (dust_curve)
                 A dust_curve object specifying the dust curve.
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
 
         Returns:
             LineCollection
@@ -1788,6 +1848,8 @@ class Stars(Particles, StarsComponent):
             tau_v_stellar=tau_v,
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve,
+            mask=mask,
+            method=method,
         )
 
     def _prepare_sfzh_args(

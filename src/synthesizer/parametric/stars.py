@@ -434,7 +434,7 @@ class Stars(StarsComponent):
 
         return spectra
 
-    def generate_line(self, grid, line_id, fesc):
+    def generate_line(self, grid, line_id, fesc, **kwargs):
         """
         Calculate rest frame line luminosity and continuum from an SPS Grid.
 
