@@ -1216,7 +1216,12 @@ class StarsComponent:
         line_collection = LineCollection(lines)
 
         # Associate that line collection with the Stars object
-        self.lines["intrinsic"] = line_collection
+        if "intrinsic" not in self.lines:
+            self.lines["intrinsic"] = line_collection
+        else:
+            self.lines["intrinsic"] = self.lines["intrinsic"].concatenate(
+                line_collection
+            )
 
         return line_collection
 
@@ -1265,31 +1270,36 @@ class StarsComponent:
         # If the intrinsic lines haven't already been calculated and saved
         # then generate them
         if "intrinsic" not in self.lines:
-            intrinsic_lines = self.get_line_intrinsic(
+            self.get_line_intrinsic(
                 grid,
                 line_ids,
                 fesc=fesc,
             )
         else:
-            intrinsic_lines = self.lines["intrinsic"]
+            old_lines = self.lines["intrinsic"]
 
             # Ok, well are all the requested lines in it?
-            for line_id in line_ids:
-                if not isinstance(line_id, str):
-                    line_id = ",".join(line_id)
-                if line_id not in intrinsic_lines.line_ids:
-                    intrinsic_lines.concatenate(
-                        self.get_line_intrinsic(grid, line_id, fesc)
-                    )
+            old_line_ids = set(old_lines.line_ids)
+            if isinstance(line_ids, str):
+                new_line_ids = set([line_ids]) - old_line_ids
+            else:
+                new_line_ids = set(line_ids) - old_line_ids
 
-            # Ensure the lines attribute holds all the intrinsic lines
-            self.lines["intrinsic"] = intrinsic_lines
+            # Combine the old collection with the newly requested lines
+            self.get_line_intrinsic(grid, list(new_line_ids), fesc)
+
+        # Get the intrinsic lines now we're sure they are there
+        intrinsic_lines = self.lines["intrinsic"]
 
         # Dictionary holding lines
         lines = {}
 
         # Loop over the intrinsic lines
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
+            # Skip lines we haven't been asked for
+            if line_id not in line_ids:
+                continue
+
             # Calculate attenuation
             T_nebular = dust_curve_nebular.get_transmission(
                 tau_v_nebular, intrinsic_line._wavelength
@@ -1316,7 +1326,12 @@ class StarsComponent:
         line_collection = LineCollection(lines)
 
         # Associate that line collection with the Stars object
-        self.lines["intrinsic"] = line_collection
+        if "attenuated" not in self.lines:
+            self.lines["attenuated"] = line_collection
+        else:
+            self.lines["attenuated"] = self.lines["attenuated"].concatenate(
+                line_collection
+            )
 
         return line_collection
 

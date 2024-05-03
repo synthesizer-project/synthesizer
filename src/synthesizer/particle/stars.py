@@ -961,19 +961,9 @@ class Stars(Particles, StarsComponent):
             compute_particle_line,
         )
 
-        # If the line_id is a str it denotes a single line, wrap it in a list
-        # so we can treat the same as a doublet(/triplet etc) below
-        if isinstance(line_id, str):
-            line_ids = [line_id]
-        else:
-            line_ids = line_id
-
-            # Ensure the line_id is a list of strings
-            if not all(isinstance(line_id, str) for line_id in line_ids):
-                raise exceptions.InconsistentArguments(
-                    "Unrecognised line_id! line_id should either be a list "
-                    "of strings or a single string."
-                )
+        # Ensure line_id is a string
+        if not isinstance(line_id, str):
+            raise exceptions.InconsistentArguments("line_id must be a string")
 
         # Set up containers for the line information
         luminosity = []
@@ -981,15 +971,18 @@ class Stars(Particles, StarsComponent):
         wavelength = []
 
         # Loop over the ids in this container
-        for line_id in line_ids:
+        for line_id_ in line_id.split(","):
+            # Strip off any whitespace (can be left by split)
+            line_id_ = line_id_.strip()
+
             # Get this line's wavelength
-            lam = grid.lines[line_id]["wavelength"]
+            lam = grid.lines[line_id_]["wavelength"]
 
             # Get the luminosity and continuum
             lum, cont = compute_particle_line(
                 *self._prepare_line_args(
                     grid,
-                    line_id,
+                    line_id_,
                     fesc,
                     mask=None,
                     grid_assignment_method="cic",
@@ -1597,38 +1590,48 @@ class Stars(Particles, StarsComponent):
             LineCollection
                 A dictionary like object containing line objects.
         """
-        # If only one line specified convert to a list to avoid writing a
-        # longer if statement
+        # Handle the line ids
         if isinstance(line_ids, str):
+            # If only one line specified convert to a list
             line_ids = [
                 line_ids,
             ]
+        elif isinstance(line_ids, (list, tuple)):
+            # Convert all tuple or list line_ids to strings
+            line_ids = [
+                ",".join(line_id)
+                if isinstance(line_id, (list, tuple))
+                else line_id
+                for line_id in line_ids
+            ]
+        else:
+            raise exceptions.InconsistentArguments(
+                "line_ids must be a list, tuple or string"
+            )
 
         # Dictionary holding Line objects
         lines = {}
 
         # Loop over the lines
         for line_id in line_ids:
-            # If the line id a doublet in string form
-            # (e.g. 'O 3 4959, O 3 5007') convert it to a list
-            if isinstance(line_id, str):
-                if len(line_id.split(",")) > 1:
-                    line_id = [li.strip() for li in line_id.split(",")]
-
             # Compute the line object
             line = self.generate_particle_line(
                 grid=grid, line_id=line_id, fesc=fesc
             )
 
             # Store this line
-            print(line.id)
             lines[line.id] = line
 
         # Create a line collection
         line_collection = LineCollection(lines)
 
         # Associate that line collection with the Stars object
-        self.lines["intrinsic"] = line_collection
+        if "intrinsic" not in self.particle_lines:
+            self.particle_lines["intrinsic"] = line_collection
+        else:
+            self.particle_lines["intrinsic"] = self.particle_lines[
+                "intrinsic"
+            ].concatenate(line_collection)
 
         return line_collection
 
@@ -1676,32 +1679,37 @@ class Stars(Particles, StarsComponent):
         """
         # If the intrinsic lines haven't already been calculated and saved
         # then generate them
-        if "intrinsic" not in self.lines:
-            intrinsic_lines = self.get_particle_line_intrinsic(
+        if "intrinsic" not in self.particle_lines:
+            self.get_particle_line_intrinsic(
                 grid,
                 line_ids,
                 fesc=fesc,
             )
         else:
-            intrinsic_lines = self.lines["intrinsic"]
+            old_lines = self.particle_lines["intrinsic"]
 
             # Ok, well are all the requested lines in it?
-            for line_id in line_ids:
-                if not isinstance(line_id, str):
-                    line_id = ",".join(line_id)
-                if line_id not in intrinsic_lines.line_ids:
-                    intrinsic_lines.concatenate(
-                        self.get_particle_line_intrinsic(grid, line_id, fesc)
-                    )
+            old_line_ids = set(old_lines.line_ids)
+            if isinstance(line_ids, str):
+                new_line_ids = set([line_ids]) - old_line_ids
+            else:
+                new_line_ids = set(line_ids) - old_line_ids
 
-            # Ensure the lines attribute holds all the intrinsic lines
-            self.lines["intrinsic"] = intrinsic_lines
+            # Combine the old collection with the newly requested lines
+            self.get_particle_line_intrinsic(grid, list(new_line_ids), fesc)
+
+        # Get the intrinsic lines now we're sure they are there
+        intrinsic_lines = self.particle_lines["intrinsic"]
 
         # Dictionary holding lines
         lines = {}
 
         # Loop over the intrinsic lines
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
+            # Skip lines we haven't been asked for
+            if line_id not in line_ids:
+                continue
+
             # Calculate attenuation
             T_nebular = dust_curve_nebular.get_transmission(
                 tau_v_nebular, intrinsic_line._wavelength
@@ -1728,7 +1736,12 @@ class Stars(Particles, StarsComponent):
         line_collection = LineCollection(lines)
 
         # Associate that line collection with the Stars object
-        self.lines["intrinsic"] = line_collection
+        if "attenuated" not in self.particle_lines:
+            self.particle_lines["attenuated"] = line_collection
+        else:
+            self.particle_lines["attenuated"] = self.particle_lines[
+                "attenuated"
+            ].concatenate(line_collection)
 
         return line_collection
 
@@ -1783,8 +1796,7 @@ class Stars(Particles, StarsComponent):
         grid_assignment_method,
     ):
         """
-        A method to prepare the arguments for SFZH computation with the C
-        functions.
+        Prepare the arguments for SFZH computation with the C functions.
 
         Args:
             grid (Grid)
@@ -1799,7 +1811,6 @@ class Stars(Particles, StarsComponent):
             tuple
                 A tuple of all the arguments required by the C extension.
         """
-
         # Set up the inputs to the C function.
         grid_props = [
             np.ascontiguousarray(grid.log10age, dtype=np.float64),
