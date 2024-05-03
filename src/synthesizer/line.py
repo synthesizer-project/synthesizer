@@ -318,8 +318,8 @@ class LineCollection:
         """
         Concatenate two LineCollection objects together.
 
-        Note that any duplicate lines will be taken from self (i.e. the
-        LineCollection from which concatenate was called).
+        Note that any duplicate lines will be taken from other (i.e. the
+        LineCollection passed to concatenate).
 
         Args:
             other (LineCollection)
@@ -336,14 +336,9 @@ class LineCollection:
             raise TypeError(
                 "Can only concatenate LineCollection objects together"
             )
-        # Extract the lines from each LineCollection object
-        my_lines = self.lines
-        other_lines = {
-            line.id: line
-            for line in other.lines.values()
-            if line.id not in my_lines
-        }
-        my_lines.update(other_lines)
+        # Combine the lines from each LineCollection object
+        my_lines = self.lines.copy()
+        my_lines.update(other.lines)
 
         return LineCollection(my_lines)
 
@@ -524,6 +519,7 @@ class Line:
 
     """
 
+    # Define quantities
     wavelength = Quantity()
     vacuum_wavelength = Quantity()
     continuum = Quantity()
@@ -568,7 +564,11 @@ class Line:
 
         # If we have multiple lines (i.e. the id contains a comma) we have
         # to do some combination
-        multi_line = "," in id_
+        multi_line = (
+            "," in id_
+            and isinstance(continuum_, (list, tuple, np.ndarray))
+            and len(continuum_) > 1
+        )
 
         # Combine lines if we need to
         if multi_line:
@@ -611,7 +611,6 @@ class Line:
                 Summary string containing the total mass formed and
                 lists of the available SEDs, lines, and images.
         """
-
         # Set up string for printing
         pstr = ""
 
@@ -639,7 +638,6 @@ class Line:
             (synthesizer.line.Line)
                 New instance of synthesizer.line.Line
         """
-
         if second_line.id == self.id:
             return Line(
                 self.id,
@@ -670,7 +668,6 @@ class Line:
             flux (float)
                 Flux of the line in units of erg/s/cm2 by default.
         """
-
         luminosity_distance = (
             cosmo.luminosity_distance(z).to("cm").value
         )  # the luminosity distance in cm
