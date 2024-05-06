@@ -39,7 +39,7 @@ def get_line_id(id):
     """
 
     if isinstance(id, list):
-        return ",".join(id)
+        return ", ".join(id)
     else:
         return id
 
@@ -63,7 +63,7 @@ def get_line_label(line_id):
 
     # if the line_id is a list (denoting a doublet or higher)
     if isinstance(line_id, list):
-        line_id = ",".join(line_id)
+        line_id = ", ".join(line_id)
 
     if line_id in line_ratios.line_labels.keys():
         line_label = line_ratios.line_labels[line_id]
@@ -636,8 +636,6 @@ class Line:
 
         # Element
         self.element = [li.strip().split(" ")[0] for li in self.id.split(",")]
-
-        print("ID after init", self.id)
 
     def _make_line_from_values(
         self, line_id, wavelength, luminosity, continuum

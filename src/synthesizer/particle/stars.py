@@ -1649,7 +1649,7 @@ class Stars(Particles, StarsComponent):
         elif isinstance(line_ids, (list, tuple)):
             # Convert all tuple or list line_ids to strings
             line_ids = [
-                ",".join(line_id)
+                ", ".join(line_id)
                 if isinstance(line_id, (list, tuple))
                 else line_id
                 for line_id in line_ids
@@ -1664,7 +1664,6 @@ class Stars(Particles, StarsComponent):
 
         # Loop over the lines
         for line_id in line_ids:
-            print(line_id)
             # Compute the line object
             line = self.generate_particle_line(
                 grid=grid,
