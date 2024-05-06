@@ -16,7 +16,7 @@ in plots etc.
 """
 
 import numpy as np
-from unyt import Angstrom, unyt_quantity
+from unyt import Angstrom, cm, unyt_quantity
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
@@ -29,7 +29,7 @@ def get_line_id(id):
     A function for converting a line id possibly represented as a list to
     a single string.
 
-    Arguments
+    Args
         id (str, list, tuple)
             a str, list, or tuple containing the id(s) of the lines
 
@@ -136,7 +136,7 @@ def get_ratio_label(ratio_id):
     """
     Get a label for a given ratio_id.
 
-    Arguments:
+    Args:
         ratio_id (str)
             The ratio identificantion, e.g. R23.
 
@@ -164,7 +164,7 @@ def get_diagram_labels(diagram_id):
     """
     Get a x and y labels for a given diagram_id
 
-    Arguments:
+    Args:
         diagram_id (str)
             The diagram identificantion, e.g. OHNO.
 
@@ -189,7 +189,7 @@ def get_roman_numeral(number):
 
     Used for renaming emission lines from the cloudy defaults.
 
-    Arguments:
+    Args:
         number (int)
             The number to convert into a roman numeral.
 
@@ -233,7 +233,7 @@ class LineCollection:
     A class holding a collection of emission lines. This enables additional
     functionality such as quickly calculating line ratios or line diagrams.
 
-    Arguments
+    Args
         lines (dictionary of Line objects)
             A dictionary of line objects.
 
@@ -245,7 +245,7 @@ class LineCollection:
         """
         Initialise LineCollection.
 
-        Arguments:
+        Args:
             lines (dict)
                 A dictionary of synthesizer.line.Line objects.
         """
@@ -435,7 +435,7 @@ class LineCollection:
         """
         Measure (and return) a line ratio.
 
-        Arguments:
+        Args:
             ratio_id (str, list)
                 Either a ratio_id where the ratio lines are defined in
                 line_ratios or a list of lines.
@@ -472,7 +472,7 @@ class LineCollection:
         """
         Return a pair of line ratios for a given diagram_id (E.g. BPT).
 
-        Arguments:
+        Args:
             diagram_id (str, list)
                 Either a diagram_id where the pairs of ratio lines are defined
                 in line_ratios or a list of lists defining the ratios.
@@ -551,7 +551,7 @@ class Line:
         """
         Initialise the Line object.
 
-        Arguments:
+        Args:
             lines (Line)
                 Any number of Line objects to combine into a single Line. If
                 these are passed all other kwargs are ignored.
@@ -743,14 +743,11 @@ class Line:
 
     def get_flux(self, cosmo, z):
         """
-        Calculate the line flux in units of erg/s/cm2
+        Calculate the line flux.
 
-        Returns the line flux and (optionally) updates the line object.
-
-        Arguments:
+        Args:
             cosmo (astropy.cosmology.)
                 Astropy cosmology object.
-
             z (float)
                 The redshift.
 
@@ -758,10 +755,12 @@ class Line:
             flux (float)
                 Flux of the line in units of erg/s/cm2 by default.
         """
+        # Get the luminosity distance
         luminosity_distance = (
             cosmo.luminosity_distance(z).to("cm").value
-        )  # the luminosity distance in cm
+        ) * cm
 
-        self.flux = self._luminosity / (4 * np.pi * luminosity_distance**2)
+        # Compute flux
+        self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
 
         return self.flux
