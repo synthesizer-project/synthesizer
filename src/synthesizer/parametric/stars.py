@@ -495,7 +495,11 @@ class Stars(StarsComponent):
                 )
             )
 
-        return Line(*lines)
+        # Don't init another line if there was only 1 in the first place
+        if len(lines) == 1:
+            return lines[0]
+        else:
+            return Line(*lines)
 
     def calculate_median_age(self):
         """
