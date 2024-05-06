@@ -637,6 +637,8 @@ class Line:
         # Element
         self.element = [li.strip().split(" ")[0] for li in self.id.split(",")]
 
+        print("ID after init", self.id)
+
     def _make_line_from_values(
         self, line_id, wavelength, luminosity, continuum
     ):

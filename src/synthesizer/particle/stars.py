@@ -787,7 +787,11 @@ class Stars(Particles, StarsComponent):
                 )
             )
 
-        return Line(*lines)
+        # Don't init another line if there was only 1 in the first place
+        if len(lines) == 1:
+            return lines[0]
+        else:
+            return Line(*lines)
 
     def generate_particle_lnu(
         self,
@@ -1023,7 +1027,11 @@ class Stars(Particles, StarsComponent):
                 )
             )
 
-        return Line(*lines)
+        # Don't init another line if there was only 1 in the first place
+        if len(lines) == 1:
+            return lines[0]
+        else:
+            return Line(*lines)
 
     def _get_masks(self, young=None, old=None):
         """
@@ -1656,6 +1664,7 @@ class Stars(Particles, StarsComponent):
 
         # Loop over the lines
         for line_id in line_ids:
+            print(line_id)
             # Compute the line object
             line = self.generate_particle_line(
                 grid=grid,
@@ -1791,7 +1800,6 @@ class Stars(Particles, StarsComponent):
                 luminosity=luminosity,
                 continuum=continuum,
             )
-
             lines[line_id] = line
 
         # Create a line collection
