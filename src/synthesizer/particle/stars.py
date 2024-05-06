@@ -24,7 +24,7 @@ import warnings
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import angstrom, erg, kpc, s
+from unyt import Hz, angstrom, erg, kpc, s
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
@@ -783,7 +783,7 @@ class Stars(Particles, StarsComponent):
                     line_id=line_id_,
                     wavelength=lam,
                     luminosity=lum * erg / s,
-                    continuum=cont * erg / s,
+                    continuum=cont * erg / s / Hz,
                 )
             )
 
@@ -1019,7 +1019,7 @@ class Stars(Particles, StarsComponent):
                     line_id=line_id_,
                     wavelength=lam,
                     luminosity=lum * erg / s,
-                    continuum=cont * erg / s,
+                    continuum=cont * erg / s / Hz,
                 )
             )
 
@@ -1781,15 +1781,15 @@ class Stars(Particles, StarsComponent):
             )
 
             # Apply attenuation
-            luminosity = intrinsic_line._luminosity * T_nebular * T_stellar
-            continuum = intrinsic_line._continuum * T_stellar
+            luminosity = intrinsic_line.luminosity * T_nebular * T_stellar
+            continuum = intrinsic_line.continuum * T_stellar
 
             # Create the line object
             line = Line(
-                line_id,
-                intrinsic_line._wavelength,
-                luminosity,
-                continuum,
+                line_id=line_id,
+                wavelength=intrinsic_line.wavelength,
+                luminosity=luminosity,
+                continuum=continuum,
             )
 
             lines[line_id] = line
