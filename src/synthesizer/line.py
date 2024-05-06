@@ -790,6 +790,10 @@ class Line:
         """
         Combine this line with an arbitrary number of other lines.
 
+        This is important for combing >2 lines together since the simple
+        line1 + line2 + line3 addition of multiple lines will not correctly
+        average over all lines.
+
         Args:
             lines (Line)
                 Any number of Line objects to combine into a single line.
