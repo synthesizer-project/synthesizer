@@ -16,7 +16,7 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
-from unyt import angstrom, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
@@ -491,7 +491,7 @@ class Stars(StarsComponent):
                     line_id=line_id_,
                     wavelength=lam,
                     luminosity=lum * erg / s,
-                    continuum=cont * erg / s,
+                    continuum=cont * erg / s / Hz,
                 )
             )
 

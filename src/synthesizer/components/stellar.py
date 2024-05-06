@@ -1344,15 +1344,15 @@ class StarsComponent:
             )
 
             # Apply attenuation
-            luminosity = intrinsic_line._luminosity * T_nebular * T_stellar
-            continuum = intrinsic_line._continuum * T_stellar
+            luminosity = intrinsic_line.luminosity * T_nebular * T_stellar
+            continuum = intrinsic_line.continuum * T_stellar
 
             # Create the line object
             line = Line(
-                line_id,
-                intrinsic_line._wavelength,
-                luminosity,
-                continuum,
+                line_id=line_id,
+                wavelength=intrinsic_line.wavelength,
+                luminosity=luminosity,
+                continuum=continuum,
             )
 
             lines[line_id] = line

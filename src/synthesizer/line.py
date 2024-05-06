@@ -16,7 +16,7 @@ in plots etc.
 """
 
 import numpy as np
-from unyt import Angstrom, cm, unyt_quantity
+from unyt import Angstrom, cm, unyt_array, unyt_quantity
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
@@ -654,17 +654,17 @@ class Line:
                 The continuum of the line.
         """
         # Ensure we have units
-        if not isinstance(wavelength, unyt_quantity):
+        if not isinstance(wavelength, (unyt_quantity, unyt_array)):
             raise exceptions.MissingUnits(
                 "Wavelength, luminosity, and continuum must all have units. "
                 "Wavelength units missing..."
             )
-        if not isinstance(luminosity, unyt_quantity):
+        if not isinstance(luminosity, (unyt_quantity, unyt_array)):
             raise exceptions.MissingUnits(
                 "Wavelength, luminosity, and continuum must all have units. "
                 "Luminosity units missing..."
             )
-        if not isinstance(continuum, unyt_quantity):
+        if not isinstance(continuum, (unyt_quantity, unyt_array)):
             raise exceptions.MissingUnits(
                 "Wavelength, luminosity, and continuum must all have units. "
                 "Continuum units missing..."
@@ -674,7 +674,7 @@ class Line:
         self.wavelength = wavelength
         self.luminosity = luminosity
         self.continuum = continuum
-        self.line_id = line_id
+        self.id = get_line_id(line_id)
 
     def _make_line_from_lines(self, *lines):
         """
@@ -689,14 +689,14 @@ class Line:
             raise exceptions.InconsistentArguments(
                 "args passed to a Line must all be Lines. Did you mean to "
                 "pass keyword arguments for wavelength, luminosity and "
-                "continuum"
+                f"continuum? (Got: {[*lines]})"
             )
 
         # Combine the Line attributes (units are guaranteed here since the
         # quantities are coming directly from a Line)
-        self.wavelength = np.mean([line._wavelength for line in lines])
-        self.luminosity = np.sum([line._luminosity for line in lines])
-        self.continuum = np.sum([line._continuum for line in lines])
+        self.wavelength = np.mean([line._wavelength for line in lines], axis=0)
+        self.luminosity = np.sum([line._luminosity for line in lines], axis=0)
+        self.continuum = np.sum([line._continuum for line in lines], axis=0)
 
         # Derive the line id
         self.id = get_line_id([line.id for line in lines])
