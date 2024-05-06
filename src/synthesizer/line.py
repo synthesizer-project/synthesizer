@@ -785,3 +785,25 @@ class Line:
         self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
 
         return self.flux
+
+    def combine(self, lines):
+        """
+        Combine this line with an arbitrary number of other lines.
+
+        Args:
+            lines (Line)
+                Any number of Line objects to combine into a single line.
+
+        Returns:
+            (Line)
+                A new Line object containing the combined lines.
+        """
+        # Ensure we've been handed lines
+        if any([not isinstance(line, Line) for line in lines]):
+            raise exceptions.InconsistentArguments(
+                "args passed to a Line must all be Lines. Did you mean to "
+                "pass keyword arguments for wavelength, luminosity and "
+                "continuum"
+            )
+
+        return Line(self, *lines)
