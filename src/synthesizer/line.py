@@ -522,14 +522,35 @@ class LineCollection:
 
 class Line:
     """
-    A class representing a spectral line or set of lines (e.g. a doublet)
+    A class representing a spectral line or set of lines (e.g. a doublet).
 
-    Attributes
-        lam
-            wavelength of the line
+    Although a Line can be instatiated directly most users should generate
+    them using the various different "get_line" methods implemented across
+    Synthesizer.
 
-    Methods
+    A Line object can either be a single line or a combination of multiple,
+    individually unresolved lines.
 
+    A collection of Line objects are stored within a LineCollection which
+    provides an interface to interact with multiple lines at once.
+
+    Attributes:
+        wavelength (Quantity)
+            The standard (not vacuum) wavelength of the line.
+        vacuum_wavelength (Quantity)
+            The vacuum wavelength of the line.
+        continuum (Quantity)
+            The continuum at the line.
+        luminosity (Quantity)
+            The luminosity of the line.
+        flux (Quantity)
+            The flux of the line.
+        equivalent_width (Quantity)
+            The equivalent width of the line.
+        individual_lines (list)
+            A list of individual lines that make up this line.
+        element (list)
+            A list of the elements that make up this line.
     """
 
     # Define quantities
