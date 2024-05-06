@@ -16,7 +16,7 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
-from unyt import unyt_array, unyt_quantity
+from unyt import angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
@@ -461,10 +461,8 @@ class Stars(StarsComponent):
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
-        # Set up containers for the line information
-        luminosity = []
-        continuum = []
-        wavelength = []
+        # Set up a list to hold each individual Line
+        lines = []
 
         # Loop over the ids in this container
         for line_id_ in line_id.split(","):
@@ -474,21 +472,30 @@ class Stars(StarsComponent):
             # Get the line from the grid
             grid_line = grid.lines[line_id_]
 
-            # Wavelength [\AA]
-            wavelength.append(grid_line["wavelength"])
+            # Get this line's wavelength
+            # TODO: The units here should be extracted from the grid but aren't
+            # yet stored.
+            lam = grid.lines[line_id_]["wavelength"] * angstrom
 
             # Line luminosity erg/s
-            luminosity.append(
-                (1 - fesc)
-                * np.sum(grid_line["luminosity"] * self.sfzh, axis=(0, 1))
+            lum = (1 - fesc) * np.sum(
+                grid_line["luminosity"] * self.sfzh, axis=(0, 1)
             )
 
             # Continuum at line wavelength, erg/s/Hz
-            continuum.append(
-                np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
+            cont = np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
+
+            # Append this lines values to the containers
+            lines.append(
+                Line(
+                    line_id=line_id_,
+                    wavelength=lam,
+                    luminosity=lum * erg / s,
+                    continuum=cont * erg / s,
+                )
             )
 
-        return Line(line_id, wavelength, luminosity, continuum)
+        return Line(*lines)
 
     def calculate_median_age(self):
         """
