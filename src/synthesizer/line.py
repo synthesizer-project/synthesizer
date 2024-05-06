@@ -681,7 +681,8 @@ class Line:
         self.id = get_line_id([line.id for line in lines])
 
     def __str__(self):
-        """Function to print a basic summary of the Line object.
+        """
+        Return a basic summary of the Line object.
 
         Returns a string containing the id, wavelength, luminosity,
         equivalent width, and flux if generated.
@@ -730,25 +731,15 @@ class Line:
 
     def __add__(self, second_line):
         """
-        Function allowing adding of two Line objects together. This should
-        NOT be used to add different lines together.
+        Add another line to self.
+
+        Overloads + operator to allow direct addition of Line objects.
 
         Returns
-            (synthesizer.line.Line)
-                New instance of synthesizer.line.Line
+            (Line)
+                New instance of Line containing both lines.
         """
-        if second_line.id == self.id:
-            return Line(
-                self.id,
-                self._wavelength,
-                self._luminosity + second_line._luminosity,
-                self._continuum + second_line._continuum,
-            )
-
-        else:
-            raise exceptions.InconsistentAddition(
-                "Wavelength grids must be identical"
-            )
+        return Line(self, second_line)
 
     def get_flux(self, cosmo, z):
         """
