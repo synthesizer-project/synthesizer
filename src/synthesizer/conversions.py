@@ -13,7 +13,7 @@ Example usage:
 """
 
 import numpy as np
-from unyt import Hz, c, cm, erg, nJy, pc, s
+from unyt import Angstrom, Hz, c, cm, erg, nJy, pc, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.utils import has_units
@@ -301,3 +301,118 @@ def lnu_to_absolute_mag(lnu):
     lnu = lnu.to(erg / s / Hz)
 
     return -2.5 * np.log10(lnu / dist_mod / (erg / s / Hz)) - 48.6
+
+
+def vacuum_to_air(wavelength):
+    """
+    A function for converting a vacuum wavelength into an air wavelength.
+
+    Arguments:
+        wavelength (float or unyt_array)
+            A wavelength in air.
+
+    Returns:
+        wavelength (unyt_array)
+            A wavelength in vacuum.
+    """
+
+    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
+    if not isinstance(wavelength, unyt_array):
+        wavelength *= Angstrom
+
+    # calculate wavelenegth squared for simplicty
+    wave2 = wavelength.to("Angstrom").value ** 2.0
+
+    # calcualte conversion factor
+    conversion = (
+        1.0 + 2.735182e-4 + 131.4182 / wave2 + 2.76249e8 / (wave2**2.0)
+    )
+
+    return wavelength / conversion
+
+
+def air_to_vacuum(wavelength):
+    """
+    A function for converting an air wavelength into a vacuum wavelength.
+
+    Arguments
+        wavelength (float or unyt_array)
+            A standard wavelength.
+
+    Returns
+        wavelength (unyt_array)
+            A wavelength in vacuum.
+    """
+
+    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
+    if not isinstance(wavelength, unyt_array):
+        wavelength *= Angstrom
+
+    # Convert to wavenumber squared
+    sigma2 = (1.0e4 / wavelength.to("Angstrom").value) ** 2.0
+
+    # Compute conversion factor
+    conversion = (
+        1.0
+        + 6.4328e-5
+        + 2.94981e-2 / (146.0 - sigma2)
+        + 2.5540e-4 / (41.0 - sigma2)
+    )
+
+    return wavelength * conversion
+
+
+def standard_to_vacuum(wavelength):
+    """
+    A function for converting a standard wavelength into a vacuum wavelength.
+
+    Standard wavelengths are defined in vacuum at <2000A and air at >= 2000A.
+
+    Arguments
+        wavelength (float or unyt_array)
+            A standard wavelength.
+
+    Returns
+        wavelength (unyt_array)
+            A wavelength in vacuum.
+    """
+
+    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
+    if not isinstance(wavelength, unyt_array):
+        wavelength *= Angstrom
+
+    # if wavelength is < 2000A simply return since no change required.
+    if wavelength <= 2000.0 * Angstrom:
+        return wavelength
+
+    # otherwise conver to vacuum
+    else:
+        return air_to_vacuum(wavelength)
+
+
+def vacuum_to_standard(wavelength):
+    """
+    A function for converting a vacuum wavelength into a standard wavelength.
+
+    Standard wavelengths are defined in vacuum at <2000A and air at >= 2000A.
+
+    Arguments
+        wavelength (float or unyt_array)
+            A vacuum wavelength.
+
+    Returns
+        wavelength (unyt_array)
+            A standard wavelength.
+    """
+
+    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
+    if not isinstance(wavelength, unyt_array):
+        wavelength *= Angstrom
+
+    # if wavelength is < 2000A simply return since no change required.
+    if wavelength <= 2000.0 * Angstrom:
+        return wavelength
+
+    # otherwise conver to vacuum
+    else:
+        return vacuum_to_air(wavelength)
