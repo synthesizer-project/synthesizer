@@ -1,8 +1,5 @@
-Synthesizer
-===========
-
-.. image:: img/synthesizer_banner.png
-   :scale: 50%
+.. image:: img/synthesizer_text.png
+    :alt: Synthesizer
 
 Synthesizer is a python package for generating synthetic astrophysical spectra. It is modular, flexible and fast.
 
