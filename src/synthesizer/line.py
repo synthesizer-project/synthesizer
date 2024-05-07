@@ -428,8 +428,8 @@ class LineCollection:
             line2 = [li.strip() for li in line2.split(",")]
 
         return np.sum(
-            [self.lines[_line].luminosity for _line in line1]
-        ) / np.sum([self.lines[_line].luminosity for _line in line2])
+            [self.lines[_line].luminosity for _line in line1], axis=0
+        ) / np.sum([self.lines[_line].luminosity for _line in line2], axis=0)
 
     def get_ratio(self, ratio_id):
         """
