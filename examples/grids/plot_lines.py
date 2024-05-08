@@ -36,12 +36,12 @@ if __name__ == "__main__":
     grid_point = grid.get_grid_point((log10age, metallicity))
 
     # get information on one line
-    line = grid.get_line(grid_point, "H 1 4862.69A")
+    line = grid.get_line(grid_point, "H 1 4861.32A")
     print(line)
 
     # or a combination of lines, e.g. a doublet
     line = grid.get_lines(
-        grid_point, ["H 1 4862.69A", "O 3 4958.91A", "O 3 5006.84A"]
+        grid_point, ["H 1 4861.32A", "O 3 4958.91A", "O 3 5006.84A"]
     )
     print(line)
 
