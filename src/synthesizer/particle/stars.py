@@ -24,7 +24,7 @@ import warnings
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import kpc
+from unyt import Hz, angstrom, erg, kpc, s
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
@@ -753,10 +753,8 @@ class Stars(Particles, StarsComponent):
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
-        # Set up containers for the line information
-        luminosity = []
-        continuum = []
-        wavelength = []
+        # Set up a list to hold each individual Line
+        lines = []
 
         # Loop over the ids in this container
         for line_id_ in line_id.split(","):
@@ -764,7 +762,9 @@ class Stars(Particles, StarsComponent):
             line_id_ = line_id_.strip()
 
             # Get this line's wavelength
-            lam = grid.lines[line_id_]["wavelength"]
+            # TODO: The units here should be extracted from the grid but aren't
+            # yet stored.
+            lam = grid.lines[line_id_]["wavelength"] * angstrom
 
             # Get the luminosity and continuum
             lum, cont = compute_integrated_line(
@@ -778,11 +778,20 @@ class Stars(Particles, StarsComponent):
             )
 
             # Append this lines values to the containers
-            wavelength.append(lam)
-            luminosity.append(lum)
-            continuum.append(cont)
+            lines.append(
+                Line(
+                    line_id=line_id_,
+                    wavelength=lam,
+                    luminosity=lum * erg / s,
+                    continuum=cont * erg / s / Hz,
+                )
+            )
 
-        return Line(line_id, wavelength, luminosity, continuum)
+        # Don't init another line if there was only 1 in the first place
+        if len(lines) == 1:
+            return lines[0]
+        else:
+            return Line(*lines)
 
     def generate_particle_lnu(
         self,
@@ -984,10 +993,8 @@ class Stars(Particles, StarsComponent):
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
-        # Set up containers for the line information
-        luminosity = []
-        continuum = []
-        wavelength = []
+        # Set up a list to hold each individual Line
+        lines = []
 
         # Loop over the ids in this container
         for line_id_ in line_id.split(","):
@@ -995,7 +1002,9 @@ class Stars(Particles, StarsComponent):
             line_id_ = line_id_.strip()
 
             # Get this line's wavelength
-            lam = grid.lines[line_id_]["wavelength"]
+            # TODO: The units here should be extracted from the grid but aren't
+            # yet stored.
+            lam = grid.lines[line_id_]["wavelength"] * angstrom
 
             # Get the luminosity and continuum
             lum, cont = compute_particle_line(
@@ -1009,11 +1018,20 @@ class Stars(Particles, StarsComponent):
             )
 
             # Append this lines values to the containers
-            wavelength.append(lam)
-            luminosity.append(lum)
-            continuum.append(cont)
+            lines.append(
+                Line(
+                    line_id=line_id_,
+                    wavelength=lam,
+                    luminosity=lum * erg / s,
+                    continuum=cont * erg / s / Hz,
+                )
+            )
 
-        return Line(line_id, wavelength, luminosity, continuum)
+        # Don't init another line if there was only 1 in the first place
+        if len(lines) == 1:
+            return lines[0]
+        else:
+            return Line(*lines)
 
     def _get_masks(self, young=None, old=None):
         """
@@ -1631,7 +1649,7 @@ class Stars(Particles, StarsComponent):
         elif isinstance(line_ids, (list, tuple)):
             # Convert all tuple or list line_ids to strings
             line_ids = [
-                ",".join(line_id)
+                ", ".join(line_id)
                 if isinstance(line_id, (list, tuple))
                 else line_id
                 for line_id in line_ids
@@ -1771,17 +1789,16 @@ class Stars(Particles, StarsComponent):
             )
 
             # Apply attenuation
-            luminosity = intrinsic_line._luminosity * T_nebular * T_stellar
-            continuum = intrinsic_line._continuum * T_stellar
+            luminosity = intrinsic_line.luminosity * T_nebular * T_stellar
+            continuum = intrinsic_line.continuum * T_stellar
 
             # Create the line object
             line = Line(
-                line_id,
-                intrinsic_line._wavelength,
-                luminosity,
-                continuum,
+                line_id=line_id,
+                wavelength=intrinsic_line.wavelength,
+                luminosity=luminosity,
+                continuum=continuum,
             )
-
             lines[line_id] = line
 
         # Create a line collection

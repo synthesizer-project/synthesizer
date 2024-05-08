@@ -16,7 +16,7 @@ in plots etc.
 """
 
 import numpy as np
-from unyt import Angstrom
+from unyt import Angstrom, cm, unyt_array, unyt_quantity
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
@@ -29,7 +29,7 @@ def get_line_id(id):
     A function for converting a line id possibly represented as a list to
     a single string.
 
-    Arguments
+    Args
         id (str, list, tuple)
             a str, list, or tuple containing the id(s) of the lines
 
@@ -39,7 +39,7 @@ def get_line_id(id):
     """
 
     if isinstance(id, list):
-        return ",".join(id)
+        return ", ".join(id)
     else:
         return id
 
@@ -63,7 +63,7 @@ def get_line_label(line_id):
 
     # if the line_id is a list (denoting a doublet or higher)
     if isinstance(line_id, list):
-        line_id = ",".join(line_id)
+        line_id = ", ".join(line_id)
 
     if line_id in line_ratios.line_labels.keys():
         line_label = line_ratios.line_labels[line_id]
@@ -136,7 +136,7 @@ def get_ratio_label(ratio_id):
     """
     Get a label for a given ratio_id.
 
-    Arguments:
+    Args:
         ratio_id (str)
             The ratio identificantion, e.g. R23.
 
@@ -164,7 +164,7 @@ def get_diagram_labels(diagram_id):
     """
     Get a x and y labels for a given diagram_id
 
-    Arguments:
+    Args:
         diagram_id (str)
             The diagram identificantion, e.g. OHNO.
 
@@ -189,7 +189,7 @@ def get_roman_numeral(number):
 
     Used for renaming emission lines from the cloudy defaults.
 
-    Arguments:
+    Args:
         number (int)
             The number to convert into a roman numeral.
 
@@ -233,7 +233,7 @@ class LineCollection:
     A class holding a collection of emission lines. This enables additional
     functionality such as quickly calculating line ratios or line diagrams.
 
-    Arguments
+    Args
         lines (dictionary of Line objects)
             A dictionary of line objects.
 
@@ -245,7 +245,7 @@ class LineCollection:
         """
         Initialise LineCollection.
 
-        Arguments:
+        Args:
             lines (dict)
                 A dictionary of synthesizer.line.Line objects.
         """
@@ -435,7 +435,7 @@ class LineCollection:
         """
         Measure (and return) a line ratio.
 
-        Arguments:
+        Args:
             ratio_id (str, list)
                 Either a ratio_id where the ratio lines are defined in
                 line_ratios or a list of lines.
@@ -472,7 +472,7 @@ class LineCollection:
         """
         Return a pair of line ratios for a given diagram_id (E.g. BPT).
 
-        Arguments:
+        Args:
             diagram_id (str, list)
                 Either a diagram_id where the pairs of ratio lines are defined
                 in line_ratios or a list of lists defining the ratios.
@@ -522,14 +522,35 @@ class LineCollection:
 
 class Line:
     """
-    A class representing a spectral line or set of lines (e.g. a doublet)
+    A class representing a spectral line or set of lines (e.g. a doublet).
 
-    Attributes
-        lam
-            wavelength of the line
+    Although a Line can be instatiated directly most users should generate
+    them using the various different "get_line" methods implemented across
+    Synthesizer.
 
-    Methods
+    A Line object can either be a single line or a combination of multiple,
+    individually unresolved lines.
 
+    A collection of Line objects are stored within a LineCollection which
+    provides an interface to interact with multiple lines at once.
+
+    Attributes:
+        wavelength (Quantity)
+            The standard (not vacuum) wavelength of the line.
+        vacuum_wavelength (Quantity)
+            The vacuum wavelength of the line.
+        continuum (Quantity)
+            The continuum at the line.
+        luminosity (Quantity)
+            The luminosity of the line.
+        flux (Quantity)
+            The flux of the line.
+        equivalent_width (Quantity)
+            The equivalent width of the line.
+        individual_lines (list)
+            A list of individual lines that make up this line.
+        element (list)
+            A list of the elements that make up this line.
     """
 
     # Define quantities
@@ -540,72 +561,68 @@ class Line:
     flux = Quantity()
     equivalent_width = Quantity()
 
-    def __init__(self, id_, wavelength_, luminosity_, continuum_):
+    def __init__(
+        self,
+        *lines,
+        line_id=None,
+        wavelength=None,
+        luminosity=None,
+        continuum=None,
+    ):
         """
         Initialise the Line object.
 
-        Arguments:
-            id_ (str or list)
-                The id of the line or collection of lines. For doublets this
-                can be a list with an entry for each contributing line, e.g.
-                "S 2 6730.82A", "S 2 6716.44A".
-            wavelength_ (float or list)
-                The standard (not vacuum) wavelength of the line. For doublets
-                this is a list with an entry for each contributing line.
-            luminosity_ (float or list)
-                The luminosity the line. For doublets this is a list with an
-                entry for each contributing line.
-            continuum_ (float or list)
-                The continuum at the line. For doublets this is a list with an
-                entry for each contributing line.
+        Args:
+            lines (Line)
+                Any number of Line objects to combine into a single Line. If
+                these are passed all other kwargs are ignored.
+            line_id (str)
+                The id of the line. If creating a >=doublet the line id will be
+                derived while combining lines. This will not be used if lines
+                are passed.
+            wavelength (unyt_quantity)
+                The standard (not vacuum) wavelength of the line. This
+                will not be used if lines are passed.
+            luminosity (unyt_quantity)
+                The luminosity the line. This will not be used if
+                lines are passed.
+            continuum (unyt_quantity)
+                The continuum at the line. This will not be used if
+                lines are passed.
         """
-        # TODO: these should be replaced with standalone line objects for any
-        # individual lines making up a multiline object
-        self.wavelength_ = wavelength_
-        self.luminosity_ = luminosity_
-        self.continuum_ = continuum_
-
         # Flag deprecation of list and tuple ids
-        if isinstance(id_, (list, tuple)):
+        if isinstance(line_id, (list, tuple)):
             deprecation(
                 "Line objects should be created with a string id, not a list"
                 " or tuple. This will be removed in a future version."
             )
 
-        # Get a string representation of the id
-        self.id = get_line_id(id_)
-
-        # If we have multiple lines (i.e. the id contains a comma) we have
-        # to do some combination
-        multi_line = (
-            "," in id_
-            and isinstance(continuum_, (list, tuple))
-            and len(continuum_) > 1
-        )
-
-        # Combine lines if we need to
-        if multi_line:
-            self.continuum = np.mean(continuum_, axis=0)
-            self.wavelength = np.mean(wavelength_, axis=0)
-            self.luminosity = np.sum(luminosity_, axis=0)
+        # We need to check which version of the inputs we've been given, 3
+        # values describing a single line or a set of lines to combine?
+        if (
+            len(lines) == 0
+            and line_id is not None
+            and wavelength is not None
+            and luminosity is not None
+            and continuum is not None
+        ):
+            self._make_line_from_values(
+                line_id,
+                wavelength,
+                luminosity,
+                continuum,
+            )
+        elif len(lines) > 0:
+            self._make_line_from_lines(*lines)
         else:
-            # Here we need to handle whether we have been given any array
-            # of continuum values or a single value
-            self.continuum = (
-                continuum_[0]
-                if isinstance(continuum_, (list, tuple))
-                else continuum_
+            raise exceptions.InconsistentArguments(
+                "A Line needs either its wavelength, luminosity, and continuum"
+                " passed, or an arbitrary number of Lines to combine"
             )
-            self.wavelength = (
-                wavelength_[0]
-                if isinstance(wavelength_, (list, tuple))
-                else wavelength_
-            )
-            self.luminosity = (
-                luminosity_[0]
-                if isinstance(luminosity_, (list, tuple))
-                else luminosity_
-            )
+
+        # Initialise an attribute to hold any individual lines used to make
+        # this one.
+        self.individual_lines = lines if len(lines) > 0 else [self]
 
         # Initialise the flux (populated by get_flux when called)
         self.flux = None
@@ -620,8 +637,73 @@ class Line:
         # Element
         self.element = [li.strip().split(" ")[0] for li in self.id.split(",")]
 
+    def _make_line_from_values(
+        self, line_id, wavelength, luminosity, continuum
+    ):
+        """
+        Create line from explicit values.
+
+        Args:
+            line_id (str)
+                The identifier for the line.
+            wavelength (unyt_quantity)
+                The standard (not vacuum) wavelength of the line.
+            luminoisty (unyt_quantity)
+                The luminoisty of the line.
+            continuum (unyt_quantity)
+                The continuum of the line.
+        """
+        # Ensure we have units
+        if not isinstance(wavelength, (unyt_quantity, unyt_array)):
+            raise exceptions.MissingUnits(
+                "Wavelength, luminosity, and continuum must all have units. "
+                "Wavelength units missing..."
+            )
+        if not isinstance(luminosity, (unyt_quantity, unyt_array)):
+            raise exceptions.MissingUnits(
+                "Wavelength, luminosity, and continuum must all have units. "
+                "Luminosity units missing..."
+            )
+        if not isinstance(continuum, (unyt_quantity, unyt_array)):
+            raise exceptions.MissingUnits(
+                "Wavelength, luminosity, and continuum must all have units. "
+                "Continuum units missing..."
+            )
+
+        # Set the line attributes
+        self.wavelength = wavelength
+        self.luminosity = luminosity
+        self.continuum = continuum
+        self.id = get_line_id(line_id)
+
+    def _make_line_from_lines(self, *lines):
+        """
+        Create a line by combining other lines.
+
+        Args:
+            lines (Line)
+                Any number of Line objects to combine into a single line.
+        """
+        # Ensure we've been handed lines
+        if any([not isinstance(line, Line) for line in lines]):
+            raise exceptions.InconsistentArguments(
+                "args passed to a Line must all be Lines. Did you mean to "
+                "pass keyword arguments for wavelength, luminosity and "
+                f"continuum? (Got: {[*lines]})"
+            )
+
+        # Combine the Line attributes (units are guaranteed here since the
+        # quantities are coming directly from a Line)
+        self.wavelength = np.mean([line._wavelength for line in lines], axis=0)
+        self.luminosity = np.sum([line._luminosity for line in lines], axis=0)
+        self.continuum = np.sum([line._continuum for line in lines], axis=0)
+
+        # Derive the line id
+        self.id = get_line_id([line.id for line in lines])
+
     def __str__(self):
-        """Function to print a basic summary of the Line object.
+        """
+        Return a basic summary of the Line object.
 
         Returns a string containing the id, wavelength, luminosity,
         equivalent width, and flux if generated.
@@ -670,36 +752,23 @@ class Line:
 
     def __add__(self, second_line):
         """
-        Function allowing adding of two Line objects together. This should
-        NOT be used to add different lines together.
+        Add another line to self.
+
+        Overloads + operator to allow direct addition of Line objects.
 
         Returns
-            (synthesizer.line.Line)
-                New instance of synthesizer.line.Line
+            (Line)
+                New instance of Line containing both lines.
         """
-        if second_line.id == self.id:
-            return Line(
-                self.id,
-                self._wavelength,
-                self._luminosity + second_line._luminosity,
-                self._continuum + second_line._continuum,
-            )
-
-        else:
-            raise exceptions.InconsistentAddition(
-                "Wavelength grids must be identical"
-            )
+        return Line(self, second_line)
 
     def get_flux(self, cosmo, z):
         """
-        Calculate the line flux in units of erg/s/cm2
+        Calculate the line flux.
 
-        Returns the line flux and (optionally) updates the line object.
-
-        Arguments:
+        Args:
             cosmo (astropy.cosmology.)
                 Astropy cosmology object.
-
             z (float)
                 The redshift.
 
@@ -707,10 +776,38 @@ class Line:
             flux (float)
                 Flux of the line in units of erg/s/cm2 by default.
         """
+        # Get the luminosity distance
         luminosity_distance = (
             cosmo.luminosity_distance(z).to("cm").value
-        )  # the luminosity distance in cm
+        ) * cm
 
-        self.flux = self._luminosity / (4 * np.pi * luminosity_distance**2)
+        # Compute flux
+        self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
 
         return self.flux
+
+    def combine(self, lines):
+        """
+        Combine this line with an arbitrary number of other lines.
+
+        This is important for combing >2 lines together since the simple
+        line1 + line2 + line3 addition of multiple lines will not correctly
+        average over all lines.
+
+        Args:
+            lines (Line)
+                Any number of Line objects to combine into a single line.
+
+        Returns:
+            (Line)
+                A new Line object containing the combined lines.
+        """
+        # Ensure we've been handed lines
+        if any([not isinstance(line, Line) for line in lines]):
+            raise exceptions.InconsistentArguments(
+                "args passed to a Line must all be Lines. Did you mean to "
+                "pass keyword arguments for wavelength, luminosity and "
+                "continuum"
+            )
+
+        return Line(self, *lines)
