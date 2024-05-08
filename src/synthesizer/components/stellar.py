@@ -1204,7 +1204,7 @@ class StarsComponent:
         elif isinstance(line_ids, (list, tuple)):
             # Convert all tuple or list line_ids to strings
             line_ids = [
-                ",".join(line_id)
+                ", ".join(line_id)
                 if isinstance(line_id, (list, tuple))
                 else line_id
                 for line_id in line_ids
@@ -1344,15 +1344,15 @@ class StarsComponent:
             )
 
             # Apply attenuation
-            luminosity = intrinsic_line._luminosity * T_nebular * T_stellar
-            continuum = intrinsic_line._continuum * T_stellar
+            luminosity = intrinsic_line.luminosity * T_nebular * T_stellar
+            continuum = intrinsic_line.continuum * T_stellar
 
             # Create the line object
             line = Line(
-                line_id,
-                intrinsic_line._wavelength,
-                luminosity,
-                continuum,
+                line_id=line_id,
+                wavelength=intrinsic_line.wavelength,
+                luminosity=luminosity,
+                continuum=continuum,
             )
 
             lines[line_id] = line
