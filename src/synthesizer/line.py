@@ -21,6 +21,7 @@ from unyt import Angstrom
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
 from synthesizer.units import Quantity
+from synthesizer.warnings import deprecation
 
 
 def get_line_id(id):
@@ -249,17 +250,20 @@ class LineCollection:
                 A dictionary of synthesizer.line.Line objects.
         """
 
-        # dictionary of synthesizer.line.Line objects.
+        # Dictionary of synthesizer.line.Line objects.
         self.lines = lines
 
-        # create an array of line_ids
+        # Create an array of line_ids
         self.line_ids = np.array(list(self.lines.keys()))
+        self._individual_line_ids = np.array(
+            [li for lis in self.line_ids for li in lis.split(",")]
+        )
 
         # Atrributes to enable looping
         self._current_ind = 0
         self.nlines = len(self.line_ids)
 
-        # create list of line wavelengths
+        # Create list of line wavelengths
         self.wavelengths = (
             np.array(
                 [
@@ -270,35 +274,42 @@ class LineCollection:
             * Angstrom
         )
 
-        # get the arguments that would sort wavelength
+        # Get the arguments that would sort wavelength
         sorted_arguments = np.argsort(self.wavelengths)
 
-        # sort the line_ids and wavelengths
+        # Sort the line_ids and wavelengths
         self.line_ids = self.line_ids[sorted_arguments]
         self.wavelengths = self.wavelengths[sorted_arguments]
 
-        # include line ratio and diagram definitions dataclass
+        # Include line ratio and diagram definitions
         self.line_ratios = line_ratios
 
-        # create list of available line ratios
+        # Create list of available line ratios
         self.available_ratios = []
         for ratio_id, ratio in self.line_ratios.ratios.items():
-            # flatten line ratio list
-            ratio_line_ids = [x for xs in ratio for x in xs]
+            # Create a set from the ratio line ids while also unpacking
+            # any comma separated lines
+            ratio_line_ids = set()
+            for lis in ratio:
+                ratio_line_ids.update({li.strip() for li in lis.split(",")})
 
-            # check if line ratio is available
-            if set(ratio_line_ids).issubset(self.line_ids):
+            # Check if line ratio is available
+            if ratio_line_ids.issubset(self._individual_line_ids):
                 self.available_ratios.append(ratio_id)
 
-        # create list of available line diagnostics
+        # Create list of available line diagnostics
         self.available_diagrams = []
         for diagram_id, diagram in self.line_ratios.diagrams.items():
-            # flatten line ratio list
-            diagram_line_ids = [x for xs in diagram[0] for x in xs] + [
-                x for xs in diagram[1] for x in xs
-            ]
+            # Create a set from the diagram line ids while also unpacking
+            # any comma separated lines
+            diagram_line_ids = set()
+            for ratio in diagram:
+                for lis in ratio:
+                    diagram_line_ids.update(
+                        {li.strip() for li in lis.split(",")}
+                    )
 
-            # check if line ratio is available
+            # Check if line ratio is available
             if set(diagram_line_ids).issubset(self.line_ids):
                 self.available_diagrams.append(diagram_id)
 
@@ -312,6 +323,34 @@ class LineCollection:
         """
 
         return self.lines[line_id]
+
+    def concatenate(self, other):
+        """
+        Concatenate two LineCollection objects together.
+
+        Note that any duplicate lines will be taken from other (i.e. the
+        LineCollection passed to concatenate).
+
+        Args:
+            other (LineCollection)
+                A LineCollection object to concatenate with the current
+                LineCollection object.
+
+        Returns:
+            LineCollection
+                A new LineCollection object containing the lines from
+                both LineCollection objects.
+        """
+        # Ensure other is a line collection
+        if not isinstance(other, LineCollection):
+            raise TypeError(
+                "Can only concatenate LineCollection objects together"
+            )
+        # Combine the lines from each LineCollection object
+        my_lines = self.lines.copy()
+        my_lines.update(other.lines)
+
+        return LineCollection(my_lines)
 
     def __str__(self):
         """
@@ -364,34 +403,37 @@ class LineCollection:
             # Return the filter
             return self.lines[self.line_ids[self._current_ind - 1]]
 
-    def get_ratio_(self, ab):
+    def _get_ratio(self, line1, line2):
         """
-        Measure (and return) a line ratio
+        Measure (and return) a line ratio.
 
-        Arguments:
-            ab
-                a list of lists of lines, e.g. [[l1,l2], [l3]]
+        Args:
+            line1 (str)
+                The line or lines in the numerator.
+            line2 (str)
+                The line or lines in the denominator.
 
         Returns:
             float
                 a line ratio
         """
+        # If either line is a combination of lines check if we need to split
+        if line1 in self.lines:
+            line1 = [line1]
+        else:
+            line1 = [li.strip() for li in line1.split(",")]
+        if line2 in self.lines:
+            line2 = [line2]
+        else:
+            line2 = [li.strip() for li in line2.split(",")]
 
-        a, b = ab
-
-        # if a single value is given convert this into a list
-        if isinstance(a, str):
-            a = [a]
-        if isinstance(b, str):
-            b = [b]
-
-        return np.sum([self.lines[_line].luminosity for _line in a]) / np.sum(
-            [self.lines[_line].luminosity for _line in b]
-        )
+        return np.sum(
+            [self.lines[_line].luminosity for _line in line1], axis=0
+        ) / np.sum([self.lines[_line].luminosity for _line in line2], axis=0)
 
     def get_ratio(self, ratio_id):
         """
-        Measure (and return) a line ratio
+        Measure (and return) a line ratio.
 
         Arguments:
             ratio_id (str, list)
@@ -402,32 +444,33 @@ class LineCollection:
             float
                 a line ratio
         """
-
-        # if ratio_id is a string interpret as a ratio_id for the ratios
+        # If ratio_id is a string interpret as a ratio_id for the ratios
         # defined in the line_ratios module...
         if isinstance(ratio_id, str):
-            # check if ratio_id exists
+            # Check if ratio_id exists
             if ratio_id not in self.line_ratios.available_ratios:
-                raise exceptions.UnrecognisedOption("ratio_id not recognised")
-
-            # check if ratio_id exists
-            elif ratio_id not in self.available_ratios:
                 raise exceptions.UnrecognisedOption(
-                    """LineCollection is missing the lines required for
-                    this ratio"""
+                    f"ratio_id not recognised ({ratio_id})"
                 )
 
-            ab = self.line_ratios.ratios[ratio_id]
+            # Check if ratio_id exists
+            elif ratio_id not in self.available_ratios:
+                raise exceptions.UnrecognisedOption(
+                    "LineCollection is missing the lines required for "
+                    f"this ratio ({ratio_id})"
+                )
 
-        # otherwise interpret as a list
+            line1, line2 = self.line_ratios.ratios[ratio_id]
+
+        # Otherwise interpret as a list
         elif isinstance(ratio_id, list):
-            ab = ratio_id
+            line1, line2 = ratio_id
 
-        return self.get_ratio_(ab)
+        return self._get_ratio(line1, line2)
 
     def get_diagram(self, diagram_id):
         """
-        Return a pair of line ratios for a given diagram_id (E.g. BPT)
+        Return a pair of line ratios for a given diagram_id (E.g. BPT).
 
         Arguments:
             diagram_id (str, list)
@@ -438,30 +481,29 @@ class LineCollection:
             tuple (float)
                 a pair of line ratios
         """
-
-        # if ratio_id is a string interpret as a ratio_id for the ratios
+        # If ratio_id is a string interpret as a ratio_id for the ratios
         # defined in the line_ratios module...
         if isinstance(diagram_id, str):
             # check if ratio_id exists
             if diagram_id not in self.line_ratios.available_diagrams:
                 raise exceptions.UnrecognisedOption(
-                    "diagram_id not recognised"
+                    f"diagram_id not recognised ({diagram_id})"
                 )
 
             # check if ratio_id exists
             elif diagram_id not in self.available_diagrams:
                 raise exceptions.UnrecognisedOption(
-                    """LineCollection is missing the lines required for
-                    this diagram"""
+                    "LineCollection is missing the lines required for "
+                    f"this diagram ({diagram_id})"
                 )
 
             ab, cd = self.line_ratios.diagrams[diagram_id]
 
-        # otherwise interpret as a list
+        # Otherwise interpret as a list
         elif isinstance(diagram_id, list):
             ab, cd = diagram_id
 
-        return self.get_ratio_(ab), self.get_ratio_(cd)
+        return self._get_ratio(*ab), self._get_ratio(*cd)
 
     def get_ratio_label(self, ratio_id):
         """
@@ -490,6 +532,7 @@ class Line:
 
     """
 
+    # Define quantities
     wavelength = Quantity()
     vacuum_wavelength = Quantity()
     continuum = Quantity()
@@ -498,8 +541,6 @@ class Line:
     equivalent_width = Quantity()
 
     def __init__(self, id_, wavelength_, luminosity_, continuum_):
-        self.id_ = id_
-
         """
         Initialise the Line object.
 
@@ -518,37 +559,66 @@ class Line:
                 The continuum at the line. For doublets this is a list with an
                 entry for each contributing line.
         """
-
-        """ these are maintained because we may want to hold on
-        to the individual lines of a doublet"""
+        # TODO: these should be replaced with standalone line objects for any
+        # individual lines making up a multiline object
         self.wavelength_ = wavelength_
         self.luminosity_ = luminosity_
         self.continuum_ = continuum_
 
-        # get line_id as a single string instead of e.g. a list
+        # Flag deprecation of list and tuple ids
+        if isinstance(id_, (list, tuple)):
+            deprecation(
+                "Line objects should be created with a string id, not a list"
+                " or tuple. This will be removed in a future version."
+            )
+
+        # Get a string representation of the id
         self.id = get_line_id(id_)
 
-        # mean continuum value in units of erg/s/Hz
-        self.continuum = np.mean(continuum_)
+        # If we have multiple lines (i.e. the id contains a comma) we have
+        # to do some combination
+        multi_line = (
+            "," in id_
+            and isinstance(continuum_, (list, tuple))
+            and len(continuum_) > 1
+        )
 
-        # mean wavelength of the line in units of AA
-        self.wavelength = np.mean(wavelength_)
+        # Combine lines if we need to
+        if multi_line:
+            self.continuum = np.mean(continuum_, axis=0)
+            self.wavelength = np.mean(wavelength_, axis=0)
+            self.luminosity = np.sum(luminosity_, axis=0)
+        else:
+            # Here we need to handle whether we have been given any array
+            # of continuum values or a single value
+            self.continuum = (
+                continuum_[0]
+                if isinstance(continuum_, (list, tuple))
+                else continuum_
+            )
+            self.wavelength = (
+                wavelength_[0]
+                if isinstance(wavelength_, (list, tuple))
+                else wavelength_
+            )
+            self.luminosity = (
+                luminosity_[0]
+                if isinstance(luminosity_, (list, tuple))
+                else luminosity_
+            )
 
-        # calculate the vacuum wavelength.
-        self.vacuum_wavelength = standard_to_vacuum(self.wavelength)
-
-        # total luminosity of the line in units of erg/s/Hz
-        self.luminosity = np.sum(luminosity_)
-
-        # line flux in erg/s/cm2, generated by method
+        # Initialise the flux (populated by get_flux when called)
         self.flux = None
 
-        # continuum at line wavelength, erg/s/AA
-        self.continuum_lam = lnu_to_llam(self.wavelength, self.continuum)
-        self.equivalent_width = self.luminosity / self.continuum_lam  # AA
+        # Calculate the vacuum wavelength.
+        self.vacuum_wavelength = standard_to_vacuum(self.wavelength)
 
-        # element
-        self.element = self.id.split(" ")[0]
+        # Continuum at line wavelength
+        self.continuum_lam = lnu_to_llam(self.wavelength, self.continuum)
+        self.equivalent_width = self.luminosity / self.continuum_lam
+
+        # Element
+        self.element = [li.strip().split(" ")[0] for li in self.id.split(",")]
 
     def __str__(self):
         """Function to print a basic summary of the Line object.
@@ -561,7 +631,6 @@ class Line:
                 Summary string containing the total mass formed and
                 lists of the available SEDs, lines, and images.
         """
-
         # Set up string for printing
         pstr = ""
 
@@ -569,13 +638,32 @@ class Line:
         pstr += "-" * 10 + "\n"
         pstr += f"SUMMARY OF {self.id}" + "\n"
         pstr += f"wavelength: {self.wavelength:.1f}" + "\n"
-        pstr += (
-            f"log10(luminosity/{self.luminosity.units}): "
-            f"{np.log10(self.luminosity):.2f}\n"
-        )
-        pstr += f"equivalent width: {self.equivalent_width:.0f}" + "\n"
-        if self._flux:
-            pstr += f"log10(flux/{self.flux.units}): {np.log10(self.flux):.2f}"
+        if isinstance(self.luminosity, np.ndarray):
+            mean_lum = np.mean(self._luminosity)
+            pstr += f"Npart: {self.luminosity.size}\n"
+            pstr += (
+                f"<log10(luminosity/{self.luminosity.units})>: "
+                f"{np.log10(mean_lum):.2f}\n"
+            )
+            mean_eq = np.mean(self.equivalent_width)
+            pstr += f"<equivalent width>: {mean_eq:.0f}" + "\n"
+            mean_flux = np.mean(self.flux) if self.flux is not None else None
+            pstr += (
+                f"<log10(flux/{self.flux.units}): {np.log10(mean_flux):.2f}"
+                if self.flux is not None
+                else ""
+            )
+        else:
+            pstr += (
+                f"log10(luminosity/{self.luminosity.units}): "
+                f"{np.log10(self.luminosity):.2f}\n"
+            )
+            pstr += f"equivalent width: {self.equivalent_width:.0f}" + "\n"
+            pstr += (
+                f"log10(flux/{self.flux.units}): {np.log10(self.flux):.2f}"
+                if self.flux is not None
+                else ""
+            )
         pstr += "-" * 10
 
         return pstr
@@ -589,7 +677,6 @@ class Line:
             (synthesizer.line.Line)
                 New instance of synthesizer.line.Line
         """
-
         if second_line.id == self.id:
             return Line(
                 self.id,
@@ -620,7 +707,6 @@ class Line:
             flux (float)
                 Flux of the line in units of erg/s/cm2 by default.
         """
-
         luminosity_distance = (
             cosmo.luminosity_distance(z).to("cm").value
         )  # the luminosity distance in cm
