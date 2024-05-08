@@ -12,11 +12,14 @@ import glob
 import re
 import sys
 import timeit
+from collections import namedtuple
 from functools import partial
+from typing import Any, Dict
 
 import h5py
 import numpy as np
-from astropy.cosmology import Planck13 as cosmo
+from astropy.cosmology import LambdaCDM
+from numpy.typing import NDArray
 
 from synthesizer import exceptions
 
@@ -34,14 +37,22 @@ from unyt import Mpc, Msun, yr
 
 from ..particle.galaxy import Galaxy
 
+# define EAGLE cosmology
+cosmo = LambdaCDM(Om0=0.307, Ode0=0.693, H0=67.77, Ob0=0.04825)
+
 
 def load_EAGLE(
-    fileloc, tag, numThreads=1, chunk=1, tot_chunks=256, mshared=False
-):
+    fileloc: str,
+    tag: str,
+    numThreads: int = 1,
+    chunk: int = 0,
+    tot_chunks: int = 1535,
+) -> Dict[int, Galaxy]:
     """
     Load EAGLE required EAGLE galaxy properties
     for generating their SEDs
-    Most useful for running on high-z snaps
+    Most useful for running on high-z snaps or
+    individual chunks
 
     Args:
         fileloc (string):
@@ -54,10 +65,12 @@ def load_EAGLE(
             file number to process
         tot_chunks (int)
             total number of files to process
-        mshared (bool)
-            if memory is shared across cpus/nodes
 
+    Returns:
+        a dictionary of Galaxy objects with stars and gas components
     """
+
+    # get the redshift from the given eagle tag
     zed = float(tag[5:].replace("p", "."))
     if chunk > tot_chunks:
         exceptions.InconsistentArguments(
@@ -66,201 +79,348 @@ def load_EAGLE(
         )
 
     with h5py.File(
-        f"{fileloc}/groups_{tag}/eagle_subfind_tab_{tag}.{chunk-1}.hdf5", "r"
+        f"{fileloc}/groups_{tag}/eagle_subfind_tab_{tag}.{chunk}.hdf5", "r"
     ) as hf:
         sgrpno = np.array(hf.get("/Subhalo/SubGroupNumber"))
         grpno = np.array(hf.get("/Subhalo/GroupNumber"))
 
-    if mshared:
-        print("Not implemented yet!")
+    # Get required star particle properties
+    s_sgrpno = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/SubGroupNumber",
+        numThreads=numThreads,
+    )
+    s_grpno = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/GroupNumber",
+        numThreads=numThreads,
+    )
+    # Create mask for particles in the current chunk
+    ok = np.in1d(s_sgrpno, sgrpno) * np.in1d(s_grpno, grpno)
+    s_sgrpno = s_sgrpno[ok]
+    s_grpno = s_grpno[ok]
 
-    else:
-        # Get required star particle properties
-        s_sgrpno = read_array(
+    s_coords = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/Coordinates",
+        noH=True,
+        physicalUnits=True,
+        numThreads=numThreads,
+    )[ok]  # physical Mpc
+    s_imasses = (
+        read_array(
             "PARTDATA",
             fileloc,
             tag,
-            "/PartType4/SubGroupNumber",
-            numThreads=numThreads,
-        )
-        s_grpno = read_array(
-            "PARTDATA",
-            fileloc,
-            tag,
-            "/PartType4/GroupNumber",
-            numThreads=numThreads,
-        )
-        # Create mask for particles in the current chunk
-        ok = np.in1d(s_sgrpno, sgrpno) * np.in1d(s_grpno, grpno)
-        s_sgrpno = s_sgrpno[ok]
-        s_grpno = s_grpno[ok]
-
-        s_coords = read_array(
-            "PARTDATA",
-            fileloc,
-            tag,
-            "/PartType4/Coordinates",
+            "/PartType4/InitialMass",
             noH=True,
             physicalUnits=True,
             numThreads=numThreads,
-        )[ok]  # physical Mpc
-        s_imasses = (
-            read_array(
-                "PARTDATA",
-                fileloc,
-                tag,
-                "/PartType4/InitialMass",
-                noH=True,
-                physicalUnits=True,
-                numThreads=numThreads,
-            )[ok]
-            * 1e10
-        )  #  Msun
-        S_ages = read_array(
-            "PARTDATA",
-            fileloc,
-            tag,
-            "/PartType4/StellarFormationTime",
-            numThreads=numThreads,
         )[ok]
-        S_ages = get_age(S_ages, zed, numThreads=numThreads)  # Gyr
-        s_Zsmooth = read_array(
-            "PARTDATA",
-            fileloc,
-            tag,
-            "/PartType4/SmoothedMetallicity",
-            numThreads=numThreads,
-        )[ok]
-        s_oxygen = read_array(
-            "PARTDATA",
-            fileloc,
-            tag,
-            "/PartType4/ElementAbundance/Oxygen",
-            numThreads=numThreads,
-        )[ok]
-        s_hydrogen = read_array(
-            "PARTDATA",
-            fileloc,
-            tag,
-            "/PartType4/ElementAbundance/Hydrogen",
-            numThreads=numThreads,
-        )[ok]
+        * 1e10
+    )  #  Msun
+    s_ages = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/StellarFormationTime",
+        numThreads=numThreads,
+    )[ok]
+    s_ages = get_age(s_ages, zed, numThreads=numThreads)  # Gyr
+    s_Zsmooth = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/SmoothedMetallicity",
+        numThreads=numThreads,
+    )[ok]
+    s_oxygen = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/ElementAbundance/Oxygen",
+        numThreads=numThreads,
+    )[ok]
+    s_hydrogen = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/ElementAbundance/Hydrogen",
+        numThreads=numThreads,
+    )[ok]
 
-        # Get gas particle properties
-        g_sgrpno = read_array(
-            "PARTDATA",
-            fileloc,
-            tag,
-            "/PartType0/SubGroupNumber",
-            numThreads=numThreads,
-        )
-        g_grpno = read_array(
-            "PARTDATA",
-            fileloc,
-            tag,
-            "/PartType0/GroupNumber",
-            numThreads=numThreads,
-        )
-        # Create mask for particles in the current chunk
-        ok = np.in1d(g_sgrpno, sgrpno) * np.in1d(g_grpno, grpno)
-        g_sgrpno = g_sgrpno[ok]
-        g_grpno = g_grpno[ok]
+    # Get gas particle properties
+    g_sgrpno = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType0/SubGroupNumber",
+        numThreads=numThreads,
+    )
+    g_grpno = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType0/GroupNumber",
+        numThreads=numThreads,
+    )
+    # Create mask for particles in the current chunk
+    ok = np.in1d(g_sgrpno, sgrpno) * np.in1d(g_grpno, grpno)
+    g_sgrpno = g_sgrpno[ok]
+    g_grpno = g_grpno[ok]
 
-        g_coords = read_array(
+    g_coords = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType0/Coordinates",
+        noH=True,
+        physicalUnits=True,
+        numThreads=numThreads,
+    )[ok]  # physical Mpc
+    g_masses = (
+        read_array(
             "PARTDATA",
             fileloc,
             tag,
-            "/PartType0/Coordinates",
+            "/PartType0/Mass",
             noH=True,
             physicalUnits=True,
             numThreads=numThreads,
-        )[ok]  # physical Mpc
-        g_masses = (
-            read_array(
-                "PARTDATA",
-                fileloc,
-                tag,
-                "/PartType0/Mass",
-                noH=True,
-                physicalUnits=True,
-                numThreads=numThreads,
-            )[ok]
-            * 1e10
-        )  # Msun
-        g_sfr = read_array(
-            "PARTDATA",
-            fileloc,
-            tag,
-            "/PartType0/StarFormationRate",
-            numThreads=numThreads,
-        )[ok]  # Msol / yr
-        g_Zsmooth = read_array(
-            "PARTDATA",
-            fileloc,
-            tag,
-            "/PartType0/SmoothedMetallicity",
-            numThreads=numThreads,
         )[ok]
-        g_hsml = read_array(
-            "PARTDATA",
-            fileloc,
-            tag,
-            "/PartType0/SmoothingLength",
-            noH=True,
-            physicalUnits=True,
-            numThreads=numThreads,
-        )[ok]  # physical Mpc
+        * 1e10
+    )  # Msun
+    g_sfr = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType0/StarFormationRate",
+        numThreads=numThreads,
+    )[ok]  # Msol / yr
+    g_Zsmooth = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType0/SmoothedMetallicity",
+        numThreads=numThreads,
+    )[ok]
+    g_hsml = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType0/SmoothingLength",
+        noH=True,
+        physicalUnits=True,
+        numThreads=numThreads,
+    )[ok]  # physical Mpc
 
-    galaxies = [None] * len(sgrpno)
+    _f = partial(
+        assign_galaxy_prop,
+        zed=zed,
+        grpno=grpno,
+        sgrpno=sgrpno,
+        s_grpno=s_grpno,
+        s_sgrpno=s_sgrpno,
+        s_imasses=s_imasses,
+        s_ages=s_ages,
+        s_Zsmooth=s_Zsmooth,
+        s_coords=s_coords,
+        s_oxygen=s_oxygen,
+        s_hydrogen=s_hydrogen,
+        g_grpno=g_grpno,
+        g_sgrpno=g_sgrpno,
+        g_masses=g_masses,
+        g_Zsmooth=g_Zsmooth,
+        g_sfr=g_sfr,
+        g_coords=g_coords,
+        g_hsml=g_hsml,
+    )
 
-    for ii in range(len(sgrpno)):
-        # Create the individual galaxy objects
-        galaxies[ii] = Galaxy(redshift=zed)
-
-        # Fill individual galaxy objects with star particles
-        # mask for current galaxy
-        ok = (s_grpno == grpno[ii]) * (s_sgrpno == sgrpno[ii])
-        galaxies[ii].load_stars(
-            initial_masses=s_imasses[ok] * Msun,
-            ages=S_ages[ok] * 1e9 * yr,
-            metallicities=s_Zsmooth[ok],
-            coordinates=s_coords[ok],
-            s_oxygen=s_oxygen[ok],
-            s_hydrogen=s_hydrogen[ok],
-        )
-
-        # Fill individual galaxy objects with gas particles
-        sfr_flag = g_sfr > 0
-        # mask for current galaxy
-        ok = (g_grpno == grpno[ii]) * (g_sgrpno == sgrpno[ii])
-        galaxies[ii].load_gas(
-            masses=g_masses[ok] * Msun,
-            metallicities=g_Zsmooth[ok],
-            star_forming=sfr_flag[ok],
-            coordinates=g_coords[ok] * Mpc,
-            smoothing_lengths=g_hsml[ok] * Mpc,
-        )
+    with schwimmbad.MultiPool(numThreads) as pool:
+        galaxies = pool.map(_f, np.arange(len(grpno)))
 
     return galaxies
 
 
-def read_hdf5(f, dataset):
-    with h5py.File(f, "r") as hf:
-        dat = np.array(hf.get(dataset))
-        if dat.ndim == 0:
-            return np.array([])
-
-    return dat
-
-
-def get_files(fileType, directory, tag):
+def load_EAGLE_shm(
+    fileloc: str,
+    tag: str,
+    s_len: int,
+    g_len: int,
+    args: namedtuple,
+    numThreads: int = 1,
+    dtype: str = "float32",
+    chunk: int = 0,
+    tot_chunks: int = 1535,
+) -> Dict[int, Galaxy]:
     """
-    Fetch filename
+    Load EAGLE required EAGLE galaxy properties
+    for generating their SEDs using numpy memmap.
+    Most useful for running on high-z snaps
 
     Args:
-        fileType (str)
-        directory (str)
-        tag (str)
+        fileloc (string):
+            eagle data file location
+        tag (string):
+            snapshot tag to load
+        s_len (int):
+            total number of star particles
+        g_len (int):
+            total number of gas particles
+        args (namedtuple):
+            parser arguments passed on to this job
+        numThreads (int)
+            number of threads to use
+        dtype (numpy object):
+            data type of the array in memory
+        chunk (int)
+            file number to process
+        tot_chunks (int)
+            total number of files to process
+
+    Returns:
+        a dictionary of Galaxy objects with stars and gas components
+    """
+
+    # get the redshift from the given eagle tag
+    zed = float(tag[5:].replace("p", "."))
+    if chunk > tot_chunks:
+        exceptions.InconsistentArguments(
+            "Value specified by 'chunk' should be lower"
+            "than the total chunks (tot_chunks)"
+        )
+
+    with h5py.File(
+        f"{fileloc}/groups_{tag}/eagle_subfind_tab_{tag}.{chunk}.hdf5", "r"
+    ) as hf:
+        sgrpno = np.array(hf.get("/Subhalo/SubGroupNumber"))
+        grpno = np.array(hf.get("/Subhalo/GroupNumber"))
+
+    # read in required star particle shared memory arrays
+    s_grpno = np_shm_read(
+        f"{args.shm_prefix}s_grpno{args.shm_suffix}", (s_len,), "int32"
+    )
+    s_sgrpno = np_shm_read(
+        f"{args.shm_prefix}s_sgrpno{args.shm_suffix}", (s_len,), "int32"
+    )
+
+    # Create mask for particles in the current chunk
+    ok = np.in1d(s_sgrpno, sgrpno) * np.in1d(s_grpno, grpno)
+    s_sgrpno = s_sgrpno[ok]
+    s_grpno = s_grpno[ok]
+
+    s_imasses = np_shm_read(
+        f"{args.shm_prefix}s_imasses{args.shm_suffix}", (s_len,), dtype
+    )[ok]
+    s_ages = np_shm_read(
+        f"{args.shm_prefix}s_ages{args.shm_suffix}", (s_len,), dtype
+    )[ok]
+    s_Zsmooth = np_shm_read(
+        f"{args.shm_prefix}s_Zsmooth{args.shm_suffix}", (s_len,), dtype
+    )[ok]
+    s_coords = np_shm_read(
+        f"{args.shm_prefix}s_coords{args.shm_suffix}", (s_len, 3), dtype
+    )[ok]
+    s_oxygen = np_shm_read(
+        f"{args.shm_prefix}s_oxygen{args.shm_suffix}", (s_len,), dtype
+    )[ok]
+    s_hydrogen = np_shm_read(
+        f"{args.shm_prefix}s_hydrogen{args.shm_suffix}", (s_len,), dtype
+    )[ok]
+
+    # read in required gas particle shared memory arrays
+    g_grpno = np_shm_read(
+        f"{args.shm_prefix}g_grpno{args.shm_suffix}", (g_len,), "int32"
+    )
+    g_sgrpno = np_shm_read(
+        f"{args.shm_prefix}g_sgrpno{args.shm_suffix}", (g_len,), "int32"
+    )
+
+    # Create mask for particles in the current chunk
+    ok = np.in1d(g_sgrpno, sgrpno) * np.in1d(g_grpno, grpno)
+    g_sgrpno = g_sgrpno[ok]
+    g_grpno = g_grpno[ok]
+
+    g_masses = np_shm_read(
+        f"{args.shm_prefix}g_masses{args.shm_suffix}", (g_len,), dtype
+    )[ok]
+    g_sfr = np_shm_read(
+        f"{args.shm_prefix}g_sfr{args.shm_suffix}", (g_len,), dtype
+    )[ok]
+    g_Zsmooth = np_shm_read(
+        f"{args.shm_prefix}g_Zsmooth{args.shm_suffix}", (g_len,), dtype
+    )[ok]
+    g_coords = np_shm_read(
+        f"{args.shm_prefix}g_coords{args.shm_suffix}", (g_len, 3), dtype
+    )[ok]
+    g_hsml = np_shm_read(
+        f"{args.shm_prefix}g_hsml{args.shm_suffix}", (g_len,), dtype
+    )[ok]
+
+    _f = partial(
+        assign_galaxy_prop,
+        zed=zed,
+        grpno=grpno,
+        sgrpno=sgrpno,
+        s_grpno=s_grpno,
+        s_sgrpno=s_sgrpno,
+        s_imasses=s_imasses,
+        s_ages=s_ages,
+        s_Zsmooth=s_Zsmooth,
+        s_coords=s_coords,
+        s_oxygen=s_oxygen,
+        s_hydrogen=s_hydrogen,
+        g_grpno=g_grpno,
+        g_sgrpno=g_sgrpno,
+        g_masses=g_masses,
+        g_Zsmooth=g_Zsmooth,
+        g_sfr=g_sfr,
+        g_coords=g_coords,
+        g_hsml=g_hsml,
+    )
+
+    with schwimmbad.MultiPool(numThreads) as pool:
+        galaxies = pool.map(_f, np.arange(len(grpno)))
+
+    return galaxies
+
+
+def np_shm_read(name: str, array_shape: tuple, dtype: str) -> NDArray[Any]:
+    """
+    Read the required numpy memmap array
+
+    Arguments:
+        name (str)
+            location of the memmap
+        array_shape (tuple)
+            shape of the memmap array
+        dtype (str)
+            data type of the memmap array
+    """
+    tmp = np.memmap(name, dtype=dtype, mode="r", shape=array_shape)
+    return tmp
+
+
+def get_files(fileType: str, directory: str, tag: str) -> NDArray[Any]:
+    """
+    Fetch filename for the different eagle outputs for reading
+
+    Arguments:
+        fileType (string)
+            type of file in the eagle outputs
+        directory (string)
+            eagle data file location
+        tag (string):
+            snapshot tag to load
+
+    Returns:
+        array of files to read
     """
 
     if fileType in ["FOF", "FOF_PARTICLES"]:
@@ -308,102 +468,57 @@ def get_files(fileType, directory, tag):
     return sorted(files, key=lambda x: int(re.findall(r"(\d+)", x)[-2]))
 
 
-def apply_physicalUnits_conversion(f, dataset, dat, verbose=True):
+def read_hdf5(filename: str, dataset: str) -> NDArray[Any]:
     """
+    Read the required dataset from the eagle hdf5 file
 
-    Args:
-        f (str)
-        dat (array)
+    Arguments:
+        filename (str)
+            name of the hdf5 file
+        dataset (str)
+            name of the dataset to extract
     """
-    with h5py.File(f, "r") as hf:
-        exponent = hf[dataset].attrs["aexp-scale-exponent"]
-        a = hf["Header"].attrs["ExpansionFactor"]
+    with h5py.File(filename, "r") as hf:
+        dat = np.array(hf.get(dataset))
+        # return empty array if empty dataset
+        if dat.ndim == 0:
+            return np.array([])
 
-    if exponent != 0.0:
-        if verbose:
-            print(
-                "Converting to physical units."
-                "(Multiplication by a^%f, a=%f)" % (exponent, a)
-            )
-        return dat * pow(a, exponent)
-    else:
-        if verbose:
-            print("Converting to physical units. No conversion needed!")
-        return dat
-
-
-def apply_hfreeUnits_conversion(f, dataset, dat, verbose=True):
-    """
-
-    Args:
-        f (str)
-        dat (array)
-    """
-    with h5py.File(f, "r") as hf:
-        exponent = hf[dataset].attrs["h-scale-exponent"]
-        h = hf["Header"].attrs["HubbleParam"]
-
-    if exponent != 0.0:
-        if verbose:
-            print(
-                "Converting to h-free units."
-                "(Multiplication by h^%f, h=%f)" % (exponent, h)
-            )
-        return dat * pow(h, exponent)
-    else:
-        if verbose:
-            print("Converting to h-free units. No conversion needed!")
-        return dat
-
-
-def apply_CGSUnits_conversion(f, dataset, dat, verbose=True):
-    """
-    A function to convert to CGS units.
-
-    :param f:
-    :param dataset:
-    :param dat:
-    :param verbose:
-    :return:
-    """
-
-    with h5py.File(f, "r") as hf:
-        cgs = hf[dataset].attrs["CGSConversionFactor"]
-
-    if cgs != 1.0:
-        if verbose:
-            print(
-                "Converting to CGS units."
-                "(Multiplication by CGS conversion factor = %f)" % cgs
-            )
-        return dat * cgs
-    else:
-        if verbose:
-            print("Converting to CGS units. No conversion needed!")
-        return dat
+    return dat
 
 
 def read_array(
-    ftype,
-    directory,
-    tag,
-    dataset,
-    numThreads=1,
-    noH=False,
-    physicalUnits=False,
-    CGS=False,
-    verbose=True,
-):
+    ftype: str,
+    directory: str,
+    tag: str,
+    dataset: str,
+    numThreads: int = 1,
+    noH: bool = False,
+    physicalUnits: bool = False,
+    CGS: bool = False,
+    verbose: bool = True,
+) -> NDArray[Any]:
     """
 
-    Args:
+    Arguments:
         ftype (str)
+            eagle file type to read
         directory (str)
+            location of the eagle simulation directory
         tag (str)
+            snapshot tag to read
         dataset (str)
+            name of the dataset to read
         numThreads (int)
+            number threads to use
         noH (bool)
+            remove any reduced Hubble factors
         physicalUnits (bool)
+            return in physical units
+        CGS (bool)
+            return in CGS units
+        verbose (bool)
+            verbose condition
     """
     start = timeit.default_timer()
 
@@ -458,13 +573,21 @@ def read_array(
     return dat
 
 
-def read_header(ftype, directory, tag, dataset):
+def read_header(
+    ftype: str,
+    directory: str,
+    tag: str,
+    dataset: str,
+) -> NDArray[Any]:
     """
-    Args:
-        ftype (str)
-        directory (str)
-        tag (str)
-        dataset (str)
+    ftype (str)
+        eagle file type to read
+    directory (str)
+        location of the eagle simulation directory
+    tag (str)
+        snapshot tag to read
+    dataset (str)
+        name of the dataset to read
     """
 
     files = get_files(ftype, directory, tag)
@@ -474,12 +597,125 @@ def read_header(ftype, directory, tag, dataset):
     return hdr
 
 
-def get_star_formation_time(scale_factor):
-    SFz = (1 / scale_factor) - 1.0  # convert scale factor to z
+def apply_physicalUnits_conversion(
+    filename: str, dataset: str, dat: NDArray[Any], verbose: bool = True
+) -> NDArray[Any]:
+    """
+    Arguments:
+        filename (str)
+            filename to read from
+        dataset (str)
+            dataset to read attribute
+        dat (array)
+            dataset array to apply conversion
+    """
+    with h5py.File(filename, "r") as hf:
+        exponent = hf[dataset].attrs["aexp-scale-exponent"]
+        a = hf["Header"].attrs["ExpansionFactor"]
+
+    if exponent != 0.0:
+        if verbose:
+            print(
+                "Converting to physical units."
+                "(Multiplication by a^%f, a=%f)" % (exponent, a)
+            )
+        return dat * pow(a, exponent)
+    else:
+        if verbose:
+            print("Converting to physical units. No conversion needed!")
+        return dat
+
+
+def apply_hfreeUnits_conversion(
+    filename: str, dataset: str, dat: NDArray[Any], verbose: bool = True
+) -> NDArray[Any]:
+    """
+    Arguments:
+        filename (str)
+            filename to read from
+        dataset (str)
+            dataset to read attribute
+        dat (array)
+            dataset array to apply conversion
+    """
+    with h5py.File(filename, "r") as hf:
+        exponent = hf[dataset].attrs["h-scale-exponent"]
+        h = hf["Header"].attrs["HubbleParam"]
+
+    if exponent != 0.0:
+        if verbose:
+            print(
+                "Converting to h-free units."
+                "(Multiplication by h^%f, h=%f)" % (exponent, h)
+            )
+        return dat * pow(h, exponent)
+    else:
+        if verbose:
+            print("Converting to h-free units. No conversion needed!")
+        return dat
+
+
+def apply_CGSUnits_conversion(
+    filename: str, dataset: str, dat: NDArray[Any], verbose: bool = True
+) -> NDArray[Any]:
+    """
+    Arguments:
+        filename (str)
+            filename to read from
+        dataset (str)
+            dataset to read attribute
+        dat (array)
+            dataset array to apply conversion
+    """
+
+    with h5py.File(filename, "r") as hf:
+        cgs = hf[dataset].attrs["CGSConversionFactor"]
+
+    if cgs != 1.0:
+        if verbose:
+            print(
+                "Converting to CGS units."
+                "(Multiplication by CGS conversion factor = %f)" % cgs
+            )
+        return dat * cgs
+    else:
+        if verbose:
+            print("Converting to CGS units. No conversion needed!")
+        return dat
+
+
+def get_star_formation_time(scale_factor: float) -> float:
+    """
+    Function to convert scale factor to z
+
+    Arguments:
+        scale_factor (float)
+            scale factor of the star particle
+
+    Returns:
+        age of the star particle in years
+    """
+    SFz = (1 / scale_factor) - 1.0
     return cosmo.age(SFz).value
 
 
-def get_age(scale_factors, z, numThreads=4):
+def get_age(
+    scale_factors: NDArray[Any], z: float, numThreads: int = 4
+) -> NDArray[Any]:
+    """
+    Function to convert scale factor to z
+
+    Arguments:
+        scale_factors (array)
+            scale factor of the star particle
+        z (float)
+            redshift
+        numThreads (int)
+            number of threads to use
+
+    Returns:
+        array of ages of the star particles in years
+    """
     if numThreads == 1:
         pool = schwimmbad.SerialPool()
     elif numThreads == -1:
@@ -493,3 +729,55 @@ def get_age(scale_factors, z, numThreads=4):
     pool.close()
 
     return Age
+
+
+def assign_galaxy_prop(
+    ii: int,
+    zed: float,
+    grpno: NDArray[np.int32],
+    sgrpno: NDArray[np.int32],
+    s_grpno: NDArray[np.int32],
+    s_sgrpno: NDArray[np.int32],
+    s_imasses: NDArray[np.float32],
+    s_ages: NDArray[np.float32],
+    s_Zsmooth: NDArray[np.float32],
+    s_coords: NDArray[np.float32],
+    s_oxygen: NDArray[np.float32],
+    s_hydrogen: NDArray[np.float32],
+    g_grpno: NDArray[np.int32],
+    g_sgrpno: NDArray[np.int32],
+    g_masses: NDArray[np.float32],
+    g_Zsmooth: NDArray[np.float32],
+    g_sfr: NDArray[np.float32],
+    g_coords: NDArray[np.float32],
+    g_hsml: NDArray[np.float32],
+) -> Galaxy:
+    galaxy = Galaxy(redshift=zed)
+
+    # Fill individual galaxy objects with star particles
+    # mask for current galaxy
+    ok = (s_grpno == grpno[ii]) * (s_sgrpno == sgrpno[ii])
+    # Assign stellar properties
+    galaxy.load_stars(
+        initial_masses=s_imasses[ok] * Msun,
+        ages=s_ages[ok] * 1e9 * yr,
+        metallicities=s_Zsmooth[ok],
+        coordinates=s_coords[ok],
+        s_oxygen=s_oxygen[ok],
+        s_hydrogen=s_hydrogen[ok],
+    )
+
+    # Fill individual galaxy objects with gas particles
+    sfr_flag = g_sfr > 0
+    # mask for current galaxy
+    ok = (g_grpno == grpno[ii]) * (g_sgrpno == sgrpno[ii])
+    # Assign gas particle properties
+    galaxy.load_gas(
+        masses=g_masses[ok] * Msun,
+        metallicities=g_Zsmooth[ok],
+        star_forming=sfr_flag[ok],
+        coordinates=g_coords[ok] * Mpc,
+        smoothing_lengths=g_hsml[ok] * Mpc,
+    )
+
+    return galaxy
