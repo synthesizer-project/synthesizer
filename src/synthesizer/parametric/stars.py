@@ -434,7 +434,7 @@ class Stars(StarsComponent):
 
         return spectra
 
-    def generate_line(self, grid, line_id, fesc):
+    def generate_line(self, grid, line_id, fesc, **kwargs):
         """
         Calculate rest frame line luminosity and continuum from an SPS Grid.
 
@@ -445,9 +445,8 @@ class Stars(StarsComponent):
         Args:
             grid (Grid):
                 A Grid object.
-            line_id (list/str):
-                A list of line_ids or a str denoting a single line.
-                Doublets can be specified as a nested list or using a
+            line_id (str):
+                A str denoting a line. Doublets can be specified using a
                 comma (e.g. 'OIII4363,OIII4959').
             fesc (float):
                 The Lyman continuum escaped fraction, the fraction of
@@ -458,61 +457,35 @@ class Stars(StarsComponent):
                 An instance of Line contain this lines wavelenth, luminosity,
                 and continuum.
         """
+        # Ensure line_id is a string
+        if not isinstance(line_id, str):
+            raise exceptions.InconsistentArguments("line_id must be a string")
 
-        # If the line_id is a str denoting a single line
-        if isinstance(line_id, str):
-            # Get the grid information we need
-            grid_line = grid.lines[line_id]
-            wavelength = grid_line["wavelength"]
+        # Set up containers for the line information
+        luminosity = []
+        continuum = []
+        wavelength = []
+
+        # Loop over the ids in this container
+        for line_id_ in line_id.split(","):
+            # Strip off any whitespace (can be left by split)
+            line_id_ = line_id_.strip()
+
+            # Get the line from the grid
+            grid_line = grid.lines[line_id_]
+
+            # Wavelength [\AA]
+            wavelength.append(grid_line["wavelength"])
 
             # Line luminosity erg/s
-            luminosity = (1 - fesc) * np.sum(
-                grid_line["luminosity"] * self.sfzh, axis=(0, 1)
+            luminosity.append(
+                (1 - fesc)
+                * np.sum(grid_line["luminosity"] * self.sfzh, axis=(0, 1))
             )
 
             # Continuum at line wavelength, erg/s/Hz
-            continuum = np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
-
-            # NOTE: this is currently incorrect and should be made of the
-            # separated nebular and stellar continuum emission
-            #
-            # proposed alternative
-            # stellar_continuum = np.sum(
-            #     grid_line['stellar_continuum'] * self.sfzh.sfzh,
-            #               axis=(0, 1))  # not affected by fesc
-            # nebular_continuum = np.sum(
-            #     (1-fesc)*grid_line['nebular_continuum'] * self.sfzh.sfzh,
-            #               axis=(0, 1))  # affected by fesc
-
-        # Else if the line is list or tuple denoting a doublet (or higher)
-        elif isinstance(line_id, (list, tuple)):
-            # Set up containers for the line information
-            luminosity = []
-            continuum = []
-            wavelength = []
-
-            # Loop over the ids in this container
-            for line_id_ in line_id:
-                grid_line = grid.lines[line_id_]
-
-                # Wavelength [\AA]
-                wavelength.append(grid_line["wavelength"])
-
-                # Line luminosity erg/s
-                luminosity.append(
-                    (1 - fesc)
-                    * np.sum(grid_line["luminosity"] * self.sfzh, axis=(0, 1))
-                )
-
-                # Continuum at line wavelength, erg/s/Hz
-                continuum.append(
-                    np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
-                )
-
-        else:
-            raise exceptions.InconsistentArguments(
-                "Unrecognised line_id! line_ids should contain strings"
-                " or lists/tuples for doublets"
+            continuum.append(
+                np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
             )
 
         return Line(line_id, wavelength, luminosity, continuum)

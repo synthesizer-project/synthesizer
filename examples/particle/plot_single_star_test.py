@@ -1,6 +1,6 @@
 """
 Compare Single star particle to instantaneous SFZH
-===========================
+==================================================
 
 A sanity check example for a single star in both parametric and particle
 objects. These should give indistinguishable results.
