@@ -1789,8 +1789,8 @@ class Stars(Particles, StarsComponent):
             )
 
             # Apply attenuation
-            luminosity = intrinsic_line.luminosity * T_nebular
-            continuum = intrinsic_line.continuum * T_stellar
+            luminosity = intrinsic_line.luminosity * T_nebular[:, 0]
+            continuum = intrinsic_line.continuum * T_stellar[:, 0]
 
             # Create the line object
             line = Line(
