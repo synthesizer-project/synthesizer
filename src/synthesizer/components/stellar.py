@@ -1343,8 +1343,15 @@ class StarsComponent:
                 tau_v_stellar, intrinsic_line._wavelength
             )
 
+            # get the correct array shape
+            if not np.isscalar(T_nebular):
+                T_nebular = T_nebular[:, 0]
+
+            if not np.isscalar(T_stellar):
+                T_stellar = T_stellar[:, 0]
+
             # Apply attenuation
-            luminosity = intrinsic_line.luminosity * T_nebular * T_stellar
+            luminosity = intrinsic_line.luminosity * T_nebular
             continuum = intrinsic_line.continuum * T_stellar
 
             # Create the line object
@@ -1417,7 +1424,7 @@ class StarsComponent:
             grid,
             line_ids,
             fesc=fesc,
-            tau_v_nebular=0,
+            tau_v_nebular=tau_v,
             tau_v_stellar=tau_v,
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve,
