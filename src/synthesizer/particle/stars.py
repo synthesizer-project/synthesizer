@@ -1775,6 +1775,7 @@ class Stars(Particles, StarsComponent):
         dust_curve_stellar=PowerLaw(slope=-1.0),
         mask=None,
         method="cic",
+        label="",
     ):
         """
         Get a LineCollection containing attenuated lines for each particle.
@@ -1814,6 +1815,11 @@ class Stars(Particles, StarsComponent):
             LineCollection
                 A dictionary like object containing line objects.
         """
+
+        # Make a dummy mask if none has been passed
+        if mask is None:
+            mask = np.ones(self.nparticles, dtype=bool)
+
         # If the intrinsic lines haven't already been calculated and saved
         # then generate them
         if "intrinsic" not in self.particle_lines:
