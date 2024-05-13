@@ -1537,6 +1537,10 @@ class Stars(Particles, StarsComponent):
                 An Sed object containing the intrinsic spectra.
         """
 
+        # add underscore to label if it doesn't have one
+        if len(label) > 0 and label[-1] != "_":
+            label = f"{label}_"
+
         # The incident emission
         incident = self.get_particle_spectra_incident(
             grid,
@@ -1646,6 +1650,10 @@ class Stars(Particles, StarsComponent):
                 An Sed object containing the attenuated spectra.
         """
 
+        # add underscore to label if it doesn't have one
+        if len(label) > 0 and label[-1] != "_":
+            label = f"{label}_"
+
         # If the reprocessed spectra haven't already been calculated and saved
         # then generate them.
 
@@ -1687,6 +1695,7 @@ class Stars(Particles, StarsComponent):
         fesc=0.0,
         mask=None,
         method="cic",
+        label="",
     ):
         """
         Get a LineCollection containing intrinsic lines for each particle.
@@ -1715,6 +1724,11 @@ class Stars(Particles, StarsComponent):
             LineCollection
                 A dictionary like object containing line objects.
         """
+
+        # add underscore to label if it doesn't have one
+        if len(label) > 0 and label[-1] != "_":
+            label = f"{label}_"
+
         # Handle the line ids
         if isinstance(line_ids, str):
             # If only one line specified convert to a list
@@ -1816,6 +1830,10 @@ class Stars(Particles, StarsComponent):
                 A dictionary like object containing line objects.
         """
 
+        # add underscore to label if it doesn't have one
+        if len(label) > 0 and label[-1] != "_":
+            label = f"{label}_"
+
         # Make a dummy mask if none has been passed
         if mask is None:
             mask = np.ones(self.nparticles, dtype=bool)
@@ -1904,6 +1922,7 @@ class Stars(Particles, StarsComponent):
         dust_curve=PowerLaw(slope=-1.0),
         mask=None,
         method="cic",
+        label="",
     ):
         """
         Get a LineCollection with screen attenuated lines for each particle.
@@ -1948,6 +1967,7 @@ class Stars(Particles, StarsComponent):
             dust_curve_stellar=dust_curve,
             mask=mask,
             method=method,
+            label=label,
         )
 
     def _prepare_sfzh_args(
