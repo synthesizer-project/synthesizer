@@ -1273,7 +1273,7 @@ class StarsComponent:
             fesc (float)
                 The Lyman continuum escaped fraction, the fraction of
                 ionising photons that entirely escaped.
-            tau_v_BS (float)
+            tau_v_nebular (float)
                 V-band optical depth of the nebular emission.
             tau_v_stellar (float)
                 V-band optical depth of the stellar emission.
@@ -1323,6 +1323,18 @@ class StarsComponent:
                 method=method,
             )
 
+        # Check that tau_v_nebular and tau_v_stellar are floats and raise
+        # an exception otherwise.
+        if not isinstance(tau_v_nebular, float):
+            raise exceptions.InconsistentArguments(
+                """ tau_v_* must be a float (i.e. single value)."""
+            )
+
+        if not isinstance(tau_v_stellar, float):
+            raise exceptions.InconsistentArguments(
+                """ tau_v_* must be a float (i.e. single value)."""
+            )
+
         # Get the intrinsic lines now we're sure they are there
         intrinsic_lines = self.lines["intrinsic"]
 
@@ -1342,13 +1354,6 @@ class StarsComponent:
             T_stellar = dust_curve_stellar.get_transmission(
                 tau_v_stellar, intrinsic_line._wavelength
             )
-
-            # get the correct array shape
-            if not np.isscalar(T_nebular):
-                T_nebular = T_nebular[:, 0]
-
-            if not np.isscalar(T_stellar):
-                T_stellar = T_stellar[:, 0]
 
             # Apply attenuation
             luminosity = intrinsic_line.luminosity * T_nebular
