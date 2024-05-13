@@ -403,6 +403,18 @@ class LineCollection:
             # Return the filter
             return self.lines[self.line_ids[self._current_ind - 1]]
 
+    def sum(self):
+        """
+        For collections containing lines from multiple particles calculate the
+        integrated line properties and create a new LineCollection object.
+        """
+
+        summed_lines = {}
+        for line_id, line in self.lines.items():
+            summed_lines[line_id] = line.sum()
+
+        return LineCollection(summed_lines)
+
     def _get_ratio(self, line1, line2):
         """
         Measure (and return) a line ratio.
@@ -620,6 +632,9 @@ class Line:
                 " passed, or an arbitrary number of Lines to combine"
             )
 
+        # save line_id
+        self.line_id = line_id
+
         # Initialise an attribute to hold any individual lines used to make
         # this one.
         self.individual_lines = lines if len(lines) > 0 else [self]
@@ -761,6 +776,19 @@ class Line:
                 New instance of Line containing both lines.
         """
         return Line(self, second_line)
+
+    def sum(self):
+        """
+        For objects containing lines of multiple particles sum them to produce
+        the integrated quantities.
+        """
+
+        return Line(
+            line_id=self.line_id,
+            wavelength=self.wavelength,
+            luminosity=np.sum(self.luminosity),
+            continuum=np.sum(self.continuum),
+        )
 
     def get_flux(self, cosmo, z):
         """
