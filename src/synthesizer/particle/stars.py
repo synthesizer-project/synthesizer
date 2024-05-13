@@ -1613,6 +1613,7 @@ class Stars(Particles, StarsComponent):
         dust_curve=PowerLaw(slope=-1.0),
         mask=None,
         method="cic",
+        label="",
     ):
         """
         Generates the dust attenuated spectra. First generates the intrinsic
@@ -1647,37 +1648,37 @@ class Stars(Particles, StarsComponent):
 
         # If the reprocessed spectra haven't already been calculated and saved
         # then generate them.
-        if "intrinsic" not in self.particle_spectra:
+
+        if label + "intrinsic" not in self.particle_spectra:
             self.get_particle_spectra_reprocessed(
                 grid,
                 fesc=fesc,
                 mask=mask,
                 method=method,
+                label=label,
             )
 
         # If tau_v is None use the tau_v on stars otherwise raise exception.
-        if not tau_v:
+        if tau_v is not None:
             if hasattr(self, "tau_v"):
-                tau_v = self.tau_v
+                tau_v = self.tau_v[mask]
             else:
                 raise exceptions.InconsistentArguments(
-                    """
-                    tau_v must either be provided or exist on stars for
-                    attenuated spectra to be calculated.
-                    """
+                    "tau_v must either be provided or exist on stars for"
+                    "attenuated spectra to be calculated."
                 )
 
-        intrinsic_spectra = self.particle_spectra["intrinsic"]
+        intrinsic_spectra = self.particle_spectra[label + "intrinsic"]
 
         # apply attenuated and save Sed object
-        self.particle_spectra["attenuated"] = (
+        self.particle_spectra[label + "attenuated"] = (
             intrinsic_spectra.apply_attenuation(
                 tau_v=tau_v,
                 dust_curve=dust_curve,
             )
         )
 
-        return self.particle_spectra["attenuated"]
+        return self.particle_spectra[label + "attenuated"]
 
     def get_particle_line_intrinsic(
         self,
