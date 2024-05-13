@@ -149,7 +149,10 @@ class AttenuationLaw:
         if np.isscalar(tau_v):
             exponent = tau_v * tau_x_v
         else:
-            exponent = tau_v[:, None] * tau_x_v
+            if np.ndim(lam) == 0:
+                exponent = tau_v[:] * tau_x_v
+            else:
+                exponent = tau_v[:, None] * tau_x_v
 
         return np.exp(-exponent)
 
