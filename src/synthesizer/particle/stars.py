@@ -1605,6 +1605,80 @@ class Stars(Particles, StarsComponent):
 
         return reprocessed
 
+    def get_particle_spectra_screen(
+        self,
+        grid=None,
+        fesc=0.0,
+        tau_v=None,
+        dust_curve=PowerLaw(slope=-1.0),
+        mask=None,
+        method="cic",
+    ):
+        """
+        Generates the dust attenuated spectra. First generates the intrinsic
+        spectra if this hasn't already been calculated.
+
+        Args:
+            grid (obj):
+                Spectral grid object.
+            fesc (float/array-like, float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
+
+        Updates:
+            incident:
+            transmitted
+            nebular
+            reprocessed
+            intrinsic
+            attenuated
+
+            if fesc>0:
+                escaped
+
+        Returns:
+            Sed
+                An Sed object containing the attenuated spectra.
+        """
+
+        # If the reprocessed spectra haven't already been calculated and saved
+        # then generate them.
+        if "intrinsic" not in self.particle_spectra:
+            self.get_particle_spectra_reprocessed(
+                grid,
+                fesc=fesc,
+                mask=mask,
+                method=method,
+            )
+
+        # If tau_v is None use the tau_v on stars otherwise raise exception.
+        if not tau_v:
+            if hasattr(self, "tau_v"):
+                tau_v = self.tau_v
+            else:
+                raise exceptions.InconsistentArguments(
+                    """
+                    tau_v must either be provided or exist on stars for
+                    attenuated spectra to be calculated.
+                    """
+                )
+
+        intrinsic_spectra = self.particle_spectra["intrinsic"]
+
+        # apply attenuated and save Sed object
+        self.particle_spectra["attenuated"] = (
+            intrinsic_spectra.apply_attenuation(
+                tau_v=tau_v,
+                dust_curve=dust_curve,
+            )
+        )
+
+        return self.particle_spectra["attenuated"]
+
     def get_particle_line_intrinsic(
         self,
         grid,
