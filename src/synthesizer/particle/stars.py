@@ -1788,12 +1788,6 @@ class Stars(Particles, StarsComponent):
                 tau_v_stellar, intrinsic_line._wavelength
             )
 
-            if not np.isscalar(T_nebular):
-                T_nebular = T_nebular[:, 0]
-
-            if not np.isscalar(T_stellar):
-                T_stellar = T_stellar[:, 0]
-
             # Apply attenuation
             luminosity = intrinsic_line.luminosity * T_nebular
             continuum = intrinsic_line.continuum * T_stellar

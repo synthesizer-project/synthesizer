@@ -1327,12 +1327,12 @@ class StarsComponent:
         # an exception otherwise.
         if not isinstance(tau_v_nebular, float):
             raise exceptions.InconsistentArguments(
-                """ tau_v_* must be a float (i.e. single value)."""
+                "tau_v_* must be a float (i.e. single value)."
             )
 
         if not isinstance(tau_v_stellar, float):
             raise exceptions.InconsistentArguments(
-                """ tau_v_* must be a float (i.e. single value)."""
+                "tau_v_* must be a float (i.e. single value)."
             )
 
         # Get the intrinsic lines now we're sure they are there
