@@ -18,6 +18,7 @@ Example Usage:
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import Normalize
 from scipy import signal
 from scipy.ndimage import zoom
 from unyt import unyt_array, unyt_quantity
@@ -706,3 +707,100 @@ class Image:
             ascii_img += "\n"
 
         print(ascii_img)
+
+    def plot_unknown_pleasures(
+        self,
+        constrast=100,
+        target_lines=50,
+        figsize=(8, 8),
+        title="SYNTHESIZER",
+    ):
+        """
+        Create a representation of an image similar in style to Joy Division's
+        seminal 1979 album Unknown Pleasures.
+
+        Borrows some code from this matplotlib examples:
+        https://matplotlib.org/stable/gallery/animation/unchained.html
+
+        Arguments
+            constrast (float)
+                The contrast.
+            target_lines (int)
+                The target number of individual lines to use.
+        """
+
+        # extract data
+        data = 1 * self.arr
+
+        # normalise to the maximum
+        data /= np.max(data)
+
+        # log10
+        data = np.log10(data)
+
+        # set any -np.inf values to zero (once renormalised)
+        data[data == -np.inf] = -np.log10(constrast)
+
+        # define normalising function
+        norm = Normalize(vmin=-np.log10(constrast), vmax=0.0)
+
+        # normalise data
+        data = norm(data) * 5
+
+        # set any data <0.0 to zero
+        data[data < 0.0] = 0.0
+
+        # Unknown Pleasures works best with about 50 lines so reshape the data
+        # to have approximately 50 lines.
+
+        # Calcualate the eventual number of lines.
+        nlines = int(data.shape[0] / (data.shape[0] // target_lines))
+
+        # Reshape data to keep the x-axis resolution but reduced number of
+        # lines.
+        new_shape = nlines, data.shape[0] // nlines, data.shape[1], 1
+        data = data.reshape(new_shape).mean(-1).mean(1)
+
+        # Create new Figure with black background
+        fig = plt.figure(figsize=figsize, facecolor="black")
+
+        # Add a subplot with no frame
+        ax = plt.subplot(111, frameon=False)
+
+        X = np.linspace(-1, 1, data.shape[-1])
+
+        # Generate line plots
+        lines = []
+        for i in range(data.shape[0]):
+            # Small reduction of the X extents to get a cheap perspective
+            # effect.
+            xscale = 1 - i / 100.0
+            # Same for linewidth (thicker strokes on bottom)
+            lw = 1.5 - i / 100.0
+
+            (line,) = ax.plot(xscale * X, i + data[i], color="w", lw=lw)
+            lines.append(line)
+
+        # Set y limit (or first line is cropped because of thickness)
+        ax.set_ylim(-20, nlines + 20)
+
+        # No ticks
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        # Add title
+        if title:
+            ax.text(
+                0.5,
+                0.8,
+                title,
+                transform=ax.transAxes,
+                ha="center",
+                va="bottom",
+                color="w",
+                family="sans-serif",
+                fontweight="light",
+                fontsize=16,
+            )
+
+        return fig, ax
