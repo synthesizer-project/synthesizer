@@ -632,9 +632,6 @@ class Line:
                 " passed, or an arbitrary number of Lines to combine"
             )
 
-        # save line_id
-        self.line_id = line_id
-
         # Initialise an attribute to hold any individual lines used to make
         # this one.
         self.individual_lines = lines if len(lines) > 0 else [self]
@@ -784,7 +781,7 @@ class Line:
         """
 
         return Line(
-            line_id=self.line_id,
+            line_id=self.id,
             wavelength=self.wavelength,
             luminosity=np.sum(self.luminosity),
             continuum=np.sum(self.continuum),
