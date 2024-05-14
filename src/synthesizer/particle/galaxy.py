@@ -175,6 +175,7 @@ class Galaxy(BaseGalaxy):
         ages=None,
         metallicities=None,
         stars=None,
+        verbose=True,
         **kwargs,
     ):
         """
@@ -206,6 +207,12 @@ class Galaxy(BaseGalaxy):
                 | (ages is None)
                 | (metallicities is None)
             ):
+                if verbose:
+                    print(
+                        ("In `load_stars`: one of either `initial_masses`"
+                        ", `ages` or `metallicities` is not provided, setting "
+                        "`stars` object to `None`")
+                    )
                 self.stars = None
                 return None
             else:
@@ -243,9 +250,17 @@ class Galaxy(BaseGalaxy):
         else:
             # If nothing has been provided, just set to None and return
             if (masses is None) | (metallicities is None):
+                if verbose:
+                    print(
+                        ("In `load_stars`: one of either `masses`"
+                        " or `metallicities` is not provided, setting "
+                        "`gas` object to `None`")
+                    )
                 self.gas = None
                 return None
-            self.gas = Gas(masses, metallicities, **kwargs)
+            else:
+                # Create a new `gas` object from particle arrays
+                self.gas = Gas(masses, metallicities, **kwargs)
 
         self.calculate_integrated_gas_properties()
 
