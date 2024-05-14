@@ -146,6 +146,7 @@ class AttenuationLaw:
         # Include the V band optical depth in the exponent
         # For a scalar we can just multiply but for an array we need to
         # broadcast
+
         if np.isscalar(tau_v):
             exponent = tau_v * tau_x_v
         else:
