@@ -798,6 +798,7 @@ class Stars(Particles, StarsComponent):
         grid,
         spectra_name,
         fesc=0.0,
+        mask=None,
         young=None,
         old=None,
         verbose=False,
@@ -914,7 +915,8 @@ class Stars(Particles, StarsComponent):
                 )
 
         # Get particle age masks
-        mask = self._get_masks(young, old)
+        if mask is None:
+            mask = self._get_masks(young, old)
 
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
@@ -952,7 +954,7 @@ class Stars(Particles, StarsComponent):
         line_id,
         fesc,
         mask=None,
-        method="cic",
+        grid_assignment_method="cic",
     ):
         """
         Calculate rest frame line luminosity and continuum from an SPS Grid.
@@ -1013,7 +1015,7 @@ class Stars(Particles, StarsComponent):
                     line_id_,
                     fesc,
                     mask=mask,
-                    grid_assignment_method=method,
+                    grid_assignment_method=grid_assignment_method,
                 )
             )
 
@@ -1616,7 +1618,6 @@ class Stars(Particles, StarsComponent):
         tau_v=None,
         dust_curve=PowerLaw(slope=-1.0),
         mask=None,
-        method="cic",
         label="",
     ):
         """
@@ -1654,6 +1655,10 @@ class Stars(Particles, StarsComponent):
         if len(label) > 0 and label[-1] != "_":
             label = f"{label}_"
 
+        # Make a dummy mask if none has been passed
+        if mask is None:
+            mask = np.ones(self.nparticles, dtype=bool)
+
         # If the reprocessed spectra haven't already been calculated and saved
         # then generate them.
 
@@ -1662,7 +1667,6 @@ class Stars(Particles, StarsComponent):
                 grid,
                 fesc=fesc,
                 mask=mask,
-                method=method,
                 label=label,
             )
 
