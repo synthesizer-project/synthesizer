@@ -1973,16 +1973,30 @@ class Stars(Particles, StarsComponent):
             label=label,
         )
 
-    def calculate_integrated_spectra(self):
+    def calculate_integrated_spectra(self, update=True):
         """
-        Calculates all the integrated spectra available.
+        Calculates integrated spectra for the available particle spectra.
+
+        Arguments
+            update (bool)
+                Whether to update self.spectra or simply return the spectra.
+
+        Returns
+            spectra (dict)
+                Dictionary of integrated spectra.
+
         """
 
         # loop over available particle spectra and calculate integrated spectra
+        spectra = {}
         for spectra_type, particle_spectra in self.particle_spectra.items():
-            self.spectra[spectra_type] = particle_spectra.sum()
+            spectra[spectra_type] = particle_spectra.sum()
 
-        return self.spectra
+        # update self.spectra with spectra
+        if update:
+            self.spectra = spectra
+
+        return spectra
 
     def _prepare_sfzh_args(
         self,
