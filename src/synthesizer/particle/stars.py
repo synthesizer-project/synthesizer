@@ -1615,8 +1615,8 @@ class Stars(Particles, StarsComponent):
         fesc=0.0,
         tau_v=None,
         dust_curve=PowerLaw(slope=-1.0),
-        mask=None,
-        method="cic",
+        young=None,
+        old=None,
         label="",
     ):
         """
@@ -1661,10 +1661,13 @@ class Stars(Particles, StarsComponent):
             self.get_particle_spectra_reprocessed(
                 grid,
                 fesc=fesc,
-                mask=mask,
-                method=method,
+                young=young,
+                old=old,
                 label=label,
             )
+
+        # we need the mask based on young old arguments for this to work
+        mask = self._get_masks(young, old)
 
         # If tau_v is None use the tau_v on stars otherwise raise exception.
         if tau_v is not None:
