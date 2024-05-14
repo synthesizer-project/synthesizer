@@ -379,8 +379,7 @@ class Stars(Particles, StarsComponent):
         grid,
         spectra_name,
         fesc=0.0,
-        young=None,
-        old=None,
+        mask=None,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -401,12 +400,6 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (bool/float)
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (bool/float)
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
             verbose (bool)
                 Flag for verbose output.
             do_grid_check (bool)
@@ -505,9 +498,6 @@ class Stars(Particles, StarsComponent):
                     f"  {n_above_metal / self.nparticles * 100:.2f}%"
                     f" have metallicities > {grid.metallicity[-1]}"
                 )
-
-        # Get particle age masks
-        mask = self._get_masks(young, old)
 
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
@@ -798,8 +788,7 @@ class Stars(Particles, StarsComponent):
         grid,
         spectra_name,
         fesc=0.0,
-        young=None,
-        old=None,
+        mask=None,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -817,12 +806,6 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (bool/float)
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (bool/float)
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
             verbose (bool)
                 Flag for verbose output. By default False.
             do_grid_check (bool)
@@ -912,9 +895,6 @@ class Stars(Particles, StarsComponent):
                     f"  {n_above_metal / self.nparticles * 100:.2f}% "
                     f"have metallicities > {grid.metallicity[-1]}"
                 )
-
-        # Get particle age masks
-        mask = self._get_masks(young, old)
 
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
@@ -1268,8 +1248,7 @@ class Stars(Particles, StarsComponent):
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=None,
-        old=None,
+        mask=None,
         **kwargs,
     ):
         """
@@ -1286,12 +1265,6 @@ class Stars(Particles, StarsComponent):
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
             kwargs
                 Any keyword arguments which can be passed to
                 generate_particle_lnu.
@@ -1306,8 +1279,7 @@ class Stars(Particles, StarsComponent):
         linecont = self.generate_particle_lnu(
             grid,
             spectra_name="linecont",
-            old=old,
-            young=young,
+            mask=mask,
             **kwargs,
         )
 
@@ -1323,8 +1295,7 @@ class Stars(Particles, StarsComponent):
     def get_particle_spectra_incident(
         self,
         grid,
-        young=None,
-        old=None,
+        mask=None,
         label="",
         **kwargs,
     ):
@@ -1335,12 +1306,6 @@ class Stars(Particles, StarsComponent):
         Args:
             grid (obj):
                 Spectral grid object.
-            young (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_incident".
@@ -1358,8 +1323,7 @@ class Stars(Particles, StarsComponent):
         lnu = self.generate_particle_lnu(
             grid,
             "incident",
-            young=young,
-            old=old,
+            mask=mask,
             **kwargs,
         )
 
@@ -1375,8 +1339,7 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         fesc=0.0,
-        young=None,
-        old=None,
+        mask=None,
         label="",
         **kwargs,
     ):
@@ -1392,12 +1355,6 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_transmitted".
@@ -1414,8 +1371,7 @@ class Stars(Particles, StarsComponent):
         lnu = (1.0 - fesc) * self.generate_particle_lnu(
             grid,
             "transmitted",
-            young=young,
-            old=old,
+            mask=mask,
             **kwargs,
         )
 
@@ -1431,8 +1387,7 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         fesc=0.0,
-        young=None,
-        old=None,
+        mask=None,
         label="",
         **kwargs,
     ):
@@ -1447,12 +1402,6 @@ class Stars(Particles, StarsComponent):
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
                 or an value per star (defaults to 0.0).
-            young (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_nebular".
@@ -1466,9 +1415,7 @@ class Stars(Particles, StarsComponent):
         """
 
         # Get the nebular emission spectra
-        lnu = self.generate_particle_lnu(
-            grid, "nebular", young=young, old=old, **kwargs
-        )
+        lnu = self.generate_particle_lnu(grid, "nebular", mask=mask, **kwargs)
 
         # Apply the escape fraction
         lnu *= 1 - fesc
@@ -1486,8 +1433,7 @@ class Stars(Particles, StarsComponent):
         grid,
         fesc=0.0,
         fesc_LyA=1.0,
-        young=None,
-        old=None,
+        mask=None,
         label="",
         **kwargs,
     ):
@@ -1509,12 +1455,6 @@ class Stars(Particles, StarsComponent):
             fesc_LyA (float)
                 Fraction of Lyman-alpha emission that can escape unimpeded
                 by the ISM/IGM.
-            young (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
             label (string)
                 A modifier for the spectra dictionary key such that the
                 key is label + "_transmitted".
@@ -1544,8 +1484,7 @@ class Stars(Particles, StarsComponent):
         # The incident emission
         incident = self.get_particle_spectra_incident(
             grid,
-            young=young,
-            old=old,
+            mask=mask,
             label=label,
             **kwargs,
         )
@@ -1558,15 +1497,14 @@ class Stars(Particles, StarsComponent):
         transmitted = self.get_particle_spectra_transmitted(
             grid,
             fesc,
-            young=young,
-            old=old,
+            mask=mask,
             label=label,
             **kwargs,
         )
 
         # The nebular emission
         nebular = self.get_particle_spectra_nebular(
-            grid, fesc, young=young, old=old, label=label, **kwargs
+            grid, fesc, mask=mask, label=label, **kwargs
         )
 
         # If the Lyman-alpha escape fraction is <1.0 suppress it.
@@ -1583,8 +1521,7 @@ class Stars(Particles, StarsComponent):
             nebular_continuum = self.generate_particle_lnu(
                 grid,
                 "nebular_continuum",
-                young=young,
-                old=old,
+                mask=mask,
                 **kwargs,
             )
             nebular_continuum *= 1 - fesc
@@ -1616,7 +1553,6 @@ class Stars(Particles, StarsComponent):
         tau_v=None,
         dust_curve=PowerLaw(slope=-1.0),
         mask=None,
-        method="cic",
         label="",
     ):
         """
@@ -1650,6 +1586,11 @@ class Stars(Particles, StarsComponent):
                 An Sed object containing the attenuated spectra.
         """
 
+        # Make a dummy mask if none has been passed. We have to do this here
+        # because the mask is used to set the optical depth.
+        if mask is None:
+            mask = np.ones(self.nparticles, dtype=bool)
+
         # add underscore to label if it doesn't have one
         if len(label) > 0 and label[-1] != "_":
             label = f"{label}_"
@@ -1662,7 +1603,6 @@ class Stars(Particles, StarsComponent):
                 grid,
                 fesc=fesc,
                 mask=mask,
-                method=method,
                 label=label,
             )
 
