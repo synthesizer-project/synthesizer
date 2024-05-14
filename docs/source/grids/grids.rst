@@ -218,6 +218,14 @@ Grid list
         - maraston-rhb_bpl-0.1,100-2.35 
 
 
+How to create your own grids
+============================
+
+.. toctree::
+   :maxdepth: 2
+
+   creating_grids
+
 
 Loading and using Grids
 =======================
