@@ -1163,10 +1163,16 @@ class StarsComponent:
             **kwargs,
         )
 
-    def get_line_intrinsic(self, grid, line_ids, fesc=0.0):
+    def get_line_intrinsic(
+        self,
+        grid,
+        line_ids,
+        fesc=0.0,
+        mask=None,
+        method="cic",
+    ):
         """
-        Calculates the intrinsic properties (luminosity, continuum, EW)
-        for a set of lines.
+        Get a LineCollection containing intrinsic lines.
 
         Args:
             grid (Grid):
@@ -1178,32 +1184,49 @@ class StarsComponent:
             fesc (float):
                 The Lyman continuum escaped fraction, the fraction of
                 ionising photons that entirely escaped.
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
 
         Returns:
             LineCollection
                 A dictionary like object containing line objects.
         """
-
-        # If only one line specified convert to a list to avoid writing a
-        # longer if statement
+        # Handle the line ids
         if isinstance(line_ids, str):
+            # If only one line specified convert to a list
             line_ids = [
                 line_ids,
             ]
+        elif isinstance(line_ids, (list, tuple)):
+            # Convert all tuple or list line_ids to strings
+            line_ids = [
+                ", ".join(line_id)
+                if isinstance(line_id, (list, tuple))
+                else line_id
+                for line_id in line_ids
+            ]
+        else:
+            raise exceptions.InconsistentArguments(
+                "line_ids must be a list, tuple or string"
+            )
 
         # Dictionary holding Line objects
         lines = {}
 
         # Loop over the lines
         for line_id in line_ids:
-            # If the line id a doublet in string form
-            # (e.g. 'OIII4959,OIII5007') convert it to a list
-            if isinstance(line_id, str):
-                if len(line_id.split(",")) > 1:
-                    line_id = line_id.split(",")
-
             # Compute the line object
-            line = self.generate_line(grid=grid, line_id=line_id, fesc=fesc)
+            line = self.generate_line(
+                grid=grid,
+                line_id=line_id,
+                fesc=fesc,
+                mask=mask,
+                method=method,
+            )
 
             # Store this line
             lines[line.id] = line
@@ -1212,7 +1235,12 @@ class StarsComponent:
         line_collection = LineCollection(lines)
 
         # Associate that line collection with the Stars object
-        self.lines["intrinsic"] = line_collection
+        if "intrinsic" not in self.lines:
+            self.lines["intrinsic"] = line_collection
+        else:
+            self.lines["intrinsic"] = self.lines["intrinsic"].concatenate(
+                line_collection
+            )
 
         return line_collection
 
@@ -1221,12 +1249,16 @@ class StarsComponent:
         grid,
         line_ids,
         fesc=0.0,
-        tau_v_BC=None,
-        tau_v_ISM=None,
-        dust_curve_BC=PowerLaw(slope=-1.0),
-        dust_curve_ISM=PowerLaw(slope=-1.0),
+        tau_v_nebular=None,
+        tau_v_stellar=None,
+        dust_curve_nebular=PowerLaw(slope=-1.0),
+        dust_curve_stellar=PowerLaw(slope=-1.0),
+        mask=None,
+        method="cic",
     ):
         """
+        Get a LineCollection containing attenuated lines.
+
         Calculates attenuated properties (luminosity, continuum, EW) for a
         set of lines. Allows the nebular and stellar attenuation to be set
         separately.
@@ -1241,64 +1273,99 @@ class StarsComponent:
             fesc (float)
                 The Lyman continuum escaped fraction, the fraction of
                 ionising photons that entirely escaped.
-            tau_v_BS (float)
+            tau_v_nebular (float)
                 V-band optical depth of the nebular emission.
-            tau_v_ISM (float)
+            tau_v_stellar (float)
                 V-band optical depth of the stellar emission.
-            dust_curve_BC (dust_curve)
+            dust_curve_nebular (dust_curve)
                 A dust_curve object specifying the dust curve.
                 for the nebular emission
-            dust_curve_ISM (dust_curve)
+            dust_curve_stellar (dust_curve)
                 A dust_curve object specifying the dust curve
                 for the stellar emission.
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
 
         Returns:
             LineCollection
                 A dictionary like object containing line objects.
         """
-
         # If the intrinsic lines haven't already been calculated and saved
         # then generate them
         if "intrinsic" not in self.lines:
-            intrinsic_lines = self.get_line_intrinsic(
+            self.get_line_intrinsic(
                 grid,
                 line_ids,
                 fesc=fesc,
+                mask=mask,
+                method=method,
             )
         else:
-            intrinsic_lines = self.lines["intrinsic"]
+            old_lines = self.lines["intrinsic"]
+
+            # Ok, well are all the requested lines in it?
+            old_line_ids = set(old_lines.line_ids)
+            if isinstance(line_ids, str):
+                new_line_ids = set([line_ids]) - old_line_ids
+            else:
+                new_line_ids = set(line_ids) - old_line_ids
+
+            # Combine the old collection with the newly requested lines
+            self.get_line_intrinsic(
+                grid,
+                list(new_line_ids),
+                fesc,
+                mask=mask,
+                method=method,
+            )
+
+        # Check that tau_v_nebular and tau_v_stellar are floats and raise
+        # an exception otherwise.
+        if not isinstance(tau_v_nebular, float):
+            raise exceptions.InconsistentArguments(
+                "tau_v_* must be a float (i.e. single value)."
+            )
+
+        if not isinstance(tau_v_stellar, float):
+            raise exceptions.InconsistentArguments(
+                "tau_v_* must be a float (i.e. single value)."
+            )
+
+        # Get the intrinsic lines now we're sure they are there
+        intrinsic_lines = self.lines["intrinsic"]
 
         # Dictionary holding lines
         lines = {}
 
         # Loop over the intrinsic lines
         for line_id, intrinsic_line in intrinsic_lines.lines.items():
+            # Skip lines we haven't been asked for
+            if line_id not in line_ids:
+                continue
+
             # Calculate attenuation
-            T_BC = dust_curve_BC.get_transmission(
-                tau_v_BC, intrinsic_line._wavelength
+            T_nebular = dust_curve_nebular.get_transmission(
+                tau_v_nebular, intrinsic_line._wavelength
             )
-            T_ISM = dust_curve_ISM.get_transmission(
-                tau_v_ISM, intrinsic_line._wavelength
+            T_stellar = dust_curve_stellar.get_transmission(
+                tau_v_stellar, intrinsic_line._wavelength
             )
 
             # Apply attenuation
-            luminosity = intrinsic_line._luminosity * T_BC * T_ISM
-            continuum = intrinsic_line._continuum * T_ISM
+            luminosity = intrinsic_line.luminosity * T_nebular
+            continuum = intrinsic_line.continuum * T_stellar
 
             # Create the line object
             line = Line(
-                line_id,
-                intrinsic_line._wavelength,
-                luminosity,
-                continuum,
+                line_id=line_id,
+                wavelength=intrinsic_line.wavelength,
+                luminosity=luminosity,
+                continuum=continuum,
             )
-
-            # NOTE: the above is wrong and should be separated into stellar
-            # and nebular continuum components:
-            # nebular_continuum = intrinsic_line._nebular_continuum * T_nebular
-            # stellar_continuum = intrinsic_line._stellar_continuum * T_stellar
-            # line = Line(intrinsic_line.id, intrinsic_line._wavelength,
-            # luminosity, nebular_continuum, stellar_continuum)
 
             lines[line_id] = line
 
@@ -1306,7 +1373,12 @@ class StarsComponent:
         line_collection = LineCollection(lines)
 
         # Associate that line collection with the Stars object
-        self.lines["intrinsic"] = line_collection
+        if "attenuated" not in self.lines:
+            self.lines["attenuated"] = line_collection
+        else:
+            self.lines["attenuated"] = self.lines["attenuated"].concatenate(
+                line_collection
+            )
 
         return line_collection
 
@@ -1317,8 +1389,12 @@ class StarsComponent:
         fesc=0.0,
         tau_v=None,
         dust_curve=PowerLaw(slope=-1.0),
+        mask=None,
+        method="cic",
     ):
         """
+        Get a LineCollection containing lines attenuated by a simple screen.
+
         Calculates attenuated properties (luminosity, continuum, EW) for a set
         of lines assuming a simple dust screen (i.e. both nebular and stellar
         emission feels the same dust attenuation). This is a wrapper around
@@ -1338,20 +1414,27 @@ class StarsComponent:
                 V-band optical depth.
             dust_curve (dust_curve)
                 A dust_curve object specifying the dust curve.
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
 
         Returns:
             LineCollection
                 A dictionary like object containing line objects.
         """
-
         return self.get_line_attenuated(
             grid,
             line_ids,
             fesc=fesc,
-            tau_v_BC=0,
-            tau_v_ISM=tau_v,
+            tau_v_nebular=tau_v,
+            tau_v_stellar=tau_v,
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve,
+            mask=mask,
+            method=method,
         )
 
     def _check_young_old_units(self, young, old):

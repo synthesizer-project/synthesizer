@@ -33,7 +33,7 @@ from matplotlib import cm
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import LogNorm
 from spectres import spectres
-from unyt import angstrom, unyt_array, unyt_quantity
+from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.line import Line, LineCollection, flatten_linelist
@@ -677,23 +677,31 @@ class Grid:
         if isinstance(line_id, str):
             line_id = [line_id]
 
-        wavelength = []
-        luminosity = []
-        continuum = []
+        # Set up a list to hold all lines
+        lines = []
 
         for line_id_ in line_id:
             # Throw exception if tline_id not in list of available lines
             if line_id_ not in self.available_lines:
                 raise exceptions.InconsistentParameter(
-                    "Provided line_id is not in the list of available lines."
+                    f"Provided line_id ({line_id_}) is not in the list "
+                    "of available lines."
                 )
 
+            # Create the line
+            # TODO: Need to use units from the grid file but they currently
+            # aren't stored correctly.
             line_ = self.lines[line_id_]
-            wavelength.append(line_["wavelength"])
-            luminosity.append(line_["luminosity"][grid_point])
-            continuum.append(line_["continuum"][grid_point])
+            lines.append(
+                Line(
+                    line_id=line_id,
+                    wavelength=line_["wavelength"] * angstrom,
+                    luminosity=line_["luminosity"][grid_point] * erg / s,
+                    continuum=line_["continuum"][grid_point] * erg / s / Hz,
+                )
+            )
 
-        return Line(line_id, wavelength, luminosity, continuum)
+        return Line(*lines)
 
     def get_lines(self, grid_point, line_ids=None):
         """
