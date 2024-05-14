@@ -191,6 +191,8 @@ class Galaxy(BaseGalaxy):
                 Star particle metallicity (total metal fraction)
             stars (stars particle object)
                 A pre-existing stars particle object to use. Defaults to None.
+            verbose (bool)
+                If True, print warnings and information messages.
             **kwargs
                 Arbitrary keyword arguments.
 
@@ -209,9 +211,9 @@ class Galaxy(BaseGalaxy):
             ):
                 if verbose:
                     print(
-                        ("In `load_stars`: one of either `initial_masses`"
+                        "In `load_stars`: one of either `initial_masses`"
                         ", `ages` or `metallicities` is not provided, setting "
-                        "`stars` object to `None`")
+                        "`stars` object to `None`"
                     )
                 self.stars = None
                 return None
@@ -227,7 +229,14 @@ class Galaxy(BaseGalaxy):
         self.stars.redshift = self.redshift
         self.stars.centre = self.centre
 
-    def load_gas(self, masses=None, metallicities=None, gas=None, **kwargs):
+    def load_gas(
+        self,
+        masses=None,
+        metallicities=None,
+        gas=None,
+        verbose=True,
+        **kwargs,
+    ):
         """
         Load arrays for gas particle properties into a `Gas` object,
         and attach to this galaxy object
@@ -239,6 +248,8 @@ class Galaxy(BaseGalaxy):
                 gas particle metallicity (total metal fraction)
             gas (gas particle object)
                 A pre-existing gas particle object to use. Defaults to None.
+            verbose (bool)
+                If True, print warnings and information messages.
         **kwargs
 
         Returns:
@@ -252,9 +263,9 @@ class Galaxy(BaseGalaxy):
             if (masses is None) | (metallicities is None):
                 if verbose:
                     print(
-                        ("In `load_stars`: one of either `masses`"
+                        "In `load_stars`: one of either `masses`"
                         " or `metallicities` is not provided, setting "
-                        "`gas` object to `None`")
+                        "`gas` object to `None`"
                     )
                 self.gas = None
                 return None
