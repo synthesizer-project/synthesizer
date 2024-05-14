@@ -224,4 +224,12 @@ Loading and using Grids
    :maxdepth: 2
 
    grids_example
-   
+
+How to create your own grids
+============================
+
+.. toctree::
+   :maxdepth: 2
+
+   creating_grids
+
