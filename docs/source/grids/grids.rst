@@ -222,4 +222,16 @@ Grid list
 Loading and using Grids
 =======================
 
-On the next page we demonstrate how to load and explore a grid in `synthesizer`.
+.. toctree::
+   :maxdepth: 2
+
+   grids_example
+
+How to create your own grids
+============================
+
+.. toctree::
+   :maxdepth: 2
+
+   creating_grids
+
