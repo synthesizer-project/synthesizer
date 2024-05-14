@@ -13,6 +13,7 @@ Here are just some examples of what synthesizer can do:
 
 This documentation provides a broad overview of the various components in synthesizer and how they interact.
 For detailed examples please see the `examples page <auto_examples/index>`_.
+The full API is provided `here <API>`_.
 
 Contents
 --------
