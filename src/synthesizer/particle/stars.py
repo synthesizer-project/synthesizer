@@ -1970,6 +1970,17 @@ class Stars(Particles, StarsComponent):
             label=label,
         )
 
+    def calculate_integrated_spectra(self):
+        """
+        Calculates all the integrated spectra available.
+        """
+
+        # loop over available particle spectra and calculate integrated spectra
+        for spectra_type, particle_spectra in self.particle_spectra.items():
+            self.spectra[spectra_type] = particle_spectra.sum()
+
+        return self.spectra
+
     def _prepare_sfzh_args(
         self,
         grid,
