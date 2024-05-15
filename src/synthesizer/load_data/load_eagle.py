@@ -22,7 +22,7 @@ from typing import Any, Dict
 import h5py
 import numpy as np
 from astropy.cosmology import LambdaCDM
-from numpy.typing import NDArray
+from numpy.typing import NDArray, Union
 
 from synthesizer import exceptions
 
@@ -36,7 +36,7 @@ except exceptions.UnmetDependency:
     )
     sys.exit()
 
-from unyt import Mpc, Msun, yr
+from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr
 
 from ..particle.galaxy import Galaxy
 
@@ -482,6 +482,11 @@ def get_files(fileType: str, directory: str, tag: str) -> NDArray[Any]:
             "%s/particledata_snip_%s/eagle_subfind_snip_particles_%s*.hdf5"
             % (directory, tag, tag)
         )
+    elif fileType in ["SUBFIND_PHOTOMETRY", "PHOTOMETRY"]:
+        files = glob.glob(
+            "%s/photometry_%s/eagle_subfind_photometry_%s*.hdf5"
+            % (directory, tag, tag)
+        )
     else:
         raise ValueError("Type of files not supported")
 
@@ -516,8 +521,9 @@ def read_array(
     noH: bool = False,
     physicalUnits: bool = False,
     CGS: bool = False,
+    photUnits: bool = False,
     verbose: bool = True,
-) -> NDArray[Any]:
+) -> Union[NDArray[Any], unyt_array[unyt_quantity]]:
     """
 
     Arguments:
@@ -588,6 +594,10 @@ def read_array(
         )
     if CGS:
         dat = apply_CGSUnits_conversion(
+            files[non_empty_file_indices[0]], dataset, dat, verbose=verbose
+        )
+    if photUnits:
+        dat = apply_PhotUnits(
             files[non_empty_file_indices[0]], dataset, dat, verbose=verbose
         )
     return dat
@@ -702,6 +712,24 @@ def apply_CGSUnits_conversion(
         if verbose:
             print("Converting to CGS units. No conversion needed!")
         return dat
+
+
+def apply_PhotUnits(
+    filename: str, dataset: str, dat: NDArray[Any], verbose: bool = True
+) -> unyt_array[unyt_quantity]:
+    """ "
+    Arguments:
+        filename (str)
+            filename to read from
+        dataset (str)
+            dataset to read attribute
+        dat (array)
+            dataset array to apply conversion
+    """
+    with h5py.File(filename, "r") as hf:
+        unit = hf[dataset].attrs["Units"]
+
+    return unyt_array(dat, unit)
 
 
 def get_star_formation_time(scale_factor: float) -> float:
