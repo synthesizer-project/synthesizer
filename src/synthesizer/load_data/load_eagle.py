@@ -245,6 +245,13 @@ def load_EAGLE(
         g_hsml=g_hsml,
     )
 
+    if numThreads == 1:
+        pool = schwimmbad.SerialPool()
+    elif numThreads == -1:
+        pool = schwimmbad.MultiPool()
+    else:
+        pool = schwimmbad.MultiPool(processes=numThreads)
+
     with schwimmbad.MultiPool(numThreads) as pool:
         galaxies = pool.map(_f, np.arange(len(grpno)))
 
@@ -252,6 +259,7 @@ def load_EAGLE(
 
 
 def load_EAGLE_shm(
+    chunk: int,
     fileloc: str,
     tag: str,
     s_len: int,
@@ -259,7 +267,6 @@ def load_EAGLE_shm(
     args: namedtuple,
     numThreads: int = 1,
     dtype: str = "float32",
-    chunk: int = 0,
     tot_chunks: int = 1535,
 ) -> Dict[int, Galaxy]:
     """
@@ -268,6 +275,8 @@ def load_EAGLE_shm(
     Most useful for running on high-z snaps
 
     Args:
+        chunk (int)
+            file number to process
         fileloc (string):
             eagle data file location
         tag (string):
@@ -282,8 +291,6 @@ def load_EAGLE_shm(
             number of threads to use
         dtype (numpy object):
             data type of the array in memory
-        chunk (int)
-            file number to process
         tot_chunks (int)
             total number of files to process
 
@@ -304,6 +311,9 @@ def load_EAGLE_shm(
     ) as hf:
         sgrpno = np.array(hf.get("/Subhalo/SubGroupNumber"))
         grpno = np.array(hf.get("/Subhalo/GroupNumber"))
+
+    if grpno.dtype == object:
+        return []
 
     # read in required star particle shared memory arrays
     s_grpno = np_shm_read(
@@ -330,12 +340,12 @@ def load_EAGLE_shm(
     s_coords = np_shm_read(
         f"{args.shm_prefix}s_coords{args.shm_suffix}", (s_len, 3), dtype
     )[ok]
-    s_oxygen = np_shm_read(
-        f"{args.shm_prefix}s_oxygen{args.shm_suffix}", (s_len,), dtype
-    )[ok]
-    s_hydrogen = np_shm_read(
-        f"{args.shm_prefix}s_hydrogen{args.shm_suffix}", (s_len,), dtype
-    )[ok]
+    # s_oxygen = np_shm_read(
+    #     f"{args.shm_prefix}s_oxygen{args.shm_suffix}", (s_len,), dtype
+    # )[ok]
+    # s_hydrogen = np_shm_read(
+    #     f"{args.shm_prefix}s_hydrogen{args.shm_suffix}", (s_len,), dtype
+    # )[ok]
 
     # read in required gas particle shared memory arrays
     g_grpno = np_shm_read(
@@ -353,9 +363,9 @@ def load_EAGLE_shm(
     g_masses = np_shm_read(
         f"{args.shm_prefix}g_masses{args.shm_suffix}", (g_len,), dtype
     )[ok]
-    g_sfr = np_shm_read(
-        f"{args.shm_prefix}g_sfr{args.shm_suffix}", (g_len,), dtype
-    )[ok]
+    # g_sfr = np_shm_read(
+    #     f"{args.shm_prefix}g_sfr{args.shm_suffix}", (g_len,), dtype
+    # )[ok]
     g_Zsmooth = np_shm_read(
         f"{args.shm_prefix}g_Zsmooth{args.shm_suffix}", (g_len,), dtype
     )[ok]
@@ -377,19 +387,26 @@ def load_EAGLE_shm(
         s_ages=s_ages,
         s_Zsmooth=s_Zsmooth,
         s_coords=s_coords,
-        s_oxygen=s_oxygen,
-        s_hydrogen=s_hydrogen,
+        # s_oxygen=s_oxygen,
+        # s_hydrogen=s_hydrogen,
         g_grpno=g_grpno,
         g_sgrpno=g_sgrpno,
         g_masses=g_masses,
         g_Zsmooth=g_Zsmooth,
-        g_sfr=g_sfr,
+        # g_sfr=g_sfr,
         g_coords=g_coords,
         g_hsml=g_hsml,
     )
 
-    with schwimmbad.MultiPool(numThreads) as pool:
-        galaxies = pool.map(_f, np.arange(len(grpno)))
+    if numThreads == 1:
+        pool = schwimmbad.SerialPool()
+    elif numThreads == -1:
+        pool = schwimmbad.MultiPool()
+    else:
+        pool = schwimmbad.MultiPool(processes=numThreads)
+
+    galaxies = list(pool.map(_f, np.arange(len(grpno))))
+    pool.close()
 
     return galaxies
 
@@ -745,13 +762,13 @@ def assign_galaxy_prop(
     s_ages: NDArray[np.float32],
     s_Zsmooth: NDArray[np.float32],
     s_coords: NDArray[np.float32],
-    s_oxygen: NDArray[np.float32],
-    s_hydrogen: NDArray[np.float32],
+    # s_oxygen: NDArray[np.float32],
+    # s_hydrogen: NDArray[np.float32],
     g_grpno: NDArray[np.int32],
     g_sgrpno: NDArray[np.int32],
     g_masses: NDArray[np.float32],
     g_Zsmooth: NDArray[np.float32],
-    g_sfr: NDArray[np.float32],
+    # g_sfr: NDArray[np.float32],
     g_coords: NDArray[np.float32],
     g_hsml: NDArray[np.float32],
 ) -> Galaxy:
@@ -766,19 +783,19 @@ def assign_galaxy_prop(
         ages=s_ages[ok] * 1e9 * yr,
         metallicities=s_Zsmooth[ok],
         coordinates=s_coords[ok],
-        s_oxygen=s_oxygen[ok],
-        s_hydrogen=s_hydrogen[ok],
+        # s_oxygen=s_oxygen[ok],
+        # s_hydrogen=s_hydrogen[ok],
     )
 
     # Fill individual galaxy objects with gas particles
-    sfr_flag = g_sfr > 0
+    # sfr_flag = g_sfr > 0
     # mask for current galaxy
     ok = (g_grpno == grpno[ii]) * (g_sgrpno == sgrpno[ii])
     # Assign gas particle properties
     galaxy.load_gas(
         masses=g_masses[ok] * Msun,
         metallicities=g_Zsmooth[ok],
-        star_forming=sfr_flag[ok],
+        # star_forming=sfr_flag[ok],
         coordinates=g_coords[ok] * Mpc,
         smoothing_lengths=g_hsml[ok] * Mpc,
     )
