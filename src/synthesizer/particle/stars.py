@@ -24,7 +24,7 @@ import warnings
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import kpc
+from unyt import Hz, angstrom, erg, kpc, s
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
@@ -753,10 +753,8 @@ class Stars(Particles, StarsComponent):
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
-        # Set up containers for the line information
-        luminosity = []
-        continuum = []
-        wavelength = []
+        # Set up a list to hold each individual Line
+        lines = []
 
         # Loop over the ids in this container
         for line_id_ in line_id.split(","):
@@ -764,7 +762,9 @@ class Stars(Particles, StarsComponent):
             line_id_ = line_id_.strip()
 
             # Get this line's wavelength
-            lam = grid.lines[line_id_]["wavelength"]
+            # TODO: The units here should be extracted from the grid but aren't
+            # yet stored.
+            lam = grid.lines[line_id_]["wavelength"] * angstrom
 
             # Get the luminosity and continuum
             lum, cont = compute_integrated_line(
@@ -778,11 +778,20 @@ class Stars(Particles, StarsComponent):
             )
 
             # Append this lines values to the containers
-            wavelength.append(lam)
-            luminosity.append(lum)
-            continuum.append(cont)
+            lines.append(
+                Line(
+                    line_id=line_id_,
+                    wavelength=lam,
+                    luminosity=lum * erg / s,
+                    continuum=cont * erg / s / Hz,
+                )
+            )
 
-        return Line(line_id, wavelength, luminosity, continuum)
+        # Don't init another line if there was only 1 in the first place
+        if len(lines) == 1:
+            return lines[0]
+        else:
+            return Line(*lines)
 
     def generate_particle_lnu(
         self,
@@ -984,10 +993,8 @@ class Stars(Particles, StarsComponent):
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
-        # Set up containers for the line information
-        luminosity = []
-        continuum = []
-        wavelength = []
+        # Set up a list to hold each individual Line
+        lines = []
 
         # Loop over the ids in this container
         for line_id_ in line_id.split(","):
@@ -995,7 +1002,9 @@ class Stars(Particles, StarsComponent):
             line_id_ = line_id_.strip()
 
             # Get this line's wavelength
-            lam = grid.lines[line_id_]["wavelength"]
+            # TODO: The units here should be extracted from the grid but aren't
+            # yet stored.
+            lam = grid.lines[line_id_]["wavelength"] * angstrom
 
             # Get the luminosity and continuum
             lum, cont = compute_particle_line(
@@ -1009,11 +1018,20 @@ class Stars(Particles, StarsComponent):
             )
 
             # Append this lines values to the containers
-            wavelength.append(lam)
-            luminosity.append(lum)
-            continuum.append(cont)
+            lines.append(
+                Line(
+                    line_id=line_id_,
+                    wavelength=lam,
+                    luminosity=lum * erg / s,
+                    continuum=cont * erg / s / Hz,
+                )
+            )
 
-        return Line(line_id, wavelength, luminosity, continuum)
+        # Don't init another line if there was only 1 in the first place
+        if len(lines) == 1:
+            return lines[0]
+        else:
+            return Line(*lines)
 
     def _get_masks(self, young=None, old=None):
         """
@@ -1519,6 +1537,10 @@ class Stars(Particles, StarsComponent):
                 An Sed object containing the intrinsic spectra.
         """
 
+        # add underscore to label if it doesn't have one
+        if len(label) > 0 and label[-1] != "_":
+            label = f"{label}_"
+
         # The incident emission
         incident = self.get_particle_spectra_incident(
             grid,
@@ -1587,6 +1609,88 @@ class Stars(Particles, StarsComponent):
 
         return reprocessed
 
+    def get_particle_spectra_screen(
+        self,
+        grid=None,
+        fesc=0.0,
+        tau_v=None,
+        dust_curve=PowerLaw(slope=-1.0),
+        young=None,
+        old=None,
+        label="",
+    ):
+        """
+        Generates the dust attenuated spectra. First generates the intrinsic
+        spectra if this hasn't already been calculated.
+
+        Args:
+            grid (obj):
+                Spectral grid object.
+            fesc (float/array-like, float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
+            kwargs
+                Any keyword arguments which can be passed to
+                generate_particle_lnu.
+
+        Updates:
+            incident:
+            transmitted
+            nebular
+            reprocessed
+            intrinsic
+            attenuated
+
+            if fesc>0:
+                escaped
+
+        Returns:
+            Sed
+                An Sed object containing the attenuated spectra.
+        """
+
+        # add underscore to label if it doesn't have one
+        if len(label) > 0 and label[-1] != "_":
+            label = f"{label}_"
+
+        # If the reprocessed spectra haven't already been calculated and saved
+        # then generate them.
+
+        if label + "intrinsic" not in self.particle_spectra:
+            self.get_particle_spectra_reprocessed(
+                grid,
+                fesc=fesc,
+                young=young,
+                old=old,
+                label=label,
+            )
+
+        # we need the mask based on young old arguments for this to work
+        mask = self._get_masks(young, old)
+
+        # If tau_v is None use the tau_v on stars otherwise raise exception.
+        if tau_v is not None:
+            if hasattr(self, "tau_v"):
+                tau_v = self.tau_v[mask]
+            else:
+                raise exceptions.InconsistentArguments(
+                    "tau_v must either be provided or exist on stars for"
+                    "attenuated spectra to be calculated."
+                )
+
+        intrinsic_spectra = self.particle_spectra[label + "intrinsic"]
+
+        # apply attenuated and save Sed object
+        self.particle_spectra[label + "attenuated"] = (
+            intrinsic_spectra.apply_attenuation(
+                tau_v=tau_v,
+                dust_curve=dust_curve,
+            )
+        )
+
+        return self.particle_spectra[label + "attenuated"]
+
     def get_particle_line_intrinsic(
         self,
         grid,
@@ -1594,6 +1698,7 @@ class Stars(Particles, StarsComponent):
         fesc=0.0,
         mask=None,
         method="cic",
+        label="",
     ):
         """
         Get a LineCollection containing intrinsic lines for each particle.
@@ -1622,6 +1727,11 @@ class Stars(Particles, StarsComponent):
             LineCollection
                 A dictionary like object containing line objects.
         """
+
+        # add underscore to label if it doesn't have one
+        if len(label) > 0 and label[-1] != "_":
+            label = f"{label}_"
+
         # Handle the line ids
         if isinstance(line_ids, str):
             # If only one line specified convert to a list
@@ -1631,7 +1741,7 @@ class Stars(Particles, StarsComponent):
         elif isinstance(line_ids, (list, tuple)):
             # Convert all tuple or list line_ids to strings
             line_ids = [
-                ",".join(line_id)
+                ", ".join(line_id)
                 if isinstance(line_id, (list, tuple))
                 else line_id
                 for line_id in line_ids
@@ -1682,6 +1792,7 @@ class Stars(Particles, StarsComponent):
         dust_curve_stellar=PowerLaw(slope=-1.0),
         mask=None,
         method="cic",
+        label="",
     ):
         """
         Get a LineCollection containing attenuated lines for each particle.
@@ -1721,6 +1832,15 @@ class Stars(Particles, StarsComponent):
             LineCollection
                 A dictionary like object containing line objects.
         """
+
+        # add underscore to label if it doesn't have one
+        if len(label) > 0 and label[-1] != "_":
+            label = f"{label}_"
+
+        # Make a dummy mask if none has been passed
+        if mask is None:
+            mask = np.ones(self.nparticles, dtype=bool)
+
         # If the intrinsic lines haven't already been calculated and saved
         # then generate them
         if "intrinsic" not in self.particle_lines:
@@ -1771,17 +1891,16 @@ class Stars(Particles, StarsComponent):
             )
 
             # Apply attenuation
-            luminosity = intrinsic_line._luminosity * T_nebular * T_stellar
-            continuum = intrinsic_line._continuum * T_stellar
+            luminosity = intrinsic_line.luminosity * T_nebular
+            continuum = intrinsic_line.continuum * T_stellar
 
             # Create the line object
             line = Line(
-                line_id,
-                intrinsic_line._wavelength,
-                luminosity,
-                continuum,
+                line_id=line_id,
+                wavelength=intrinsic_line.wavelength,
+                luminosity=luminosity,
+                continuum=continuum,
             )
-
             lines[line_id] = line
 
         # Create a line collection
@@ -1806,6 +1925,7 @@ class Stars(Particles, StarsComponent):
         dust_curve=PowerLaw(slope=-1.0),
         mask=None,
         method="cic",
+        label="",
     ):
         """
         Get a LineCollection with screen attenuated lines for each particle.
@@ -1844,12 +1964,13 @@ class Stars(Particles, StarsComponent):
             grid,
             line_ids,
             fesc=fesc,
-            tau_v_nebular=0,
+            tau_v_nebular=tau_v,
             tau_v_stellar=tau_v,
             dust_curve_nebular=dust_curve,
             dust_curve_stellar=dust_curve,
             mask=mask,
             method=method,
+            label=label,
         )
 
     def _prepare_sfzh_args(
