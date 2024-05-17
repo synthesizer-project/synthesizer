@@ -377,7 +377,6 @@ class Stars(StarsComponent):
         old=None,
         young=None,
         mask=None,
-        mask_attr=None,
     ):
         """
         Calculate rest frame spectra from an SPS Grid.
