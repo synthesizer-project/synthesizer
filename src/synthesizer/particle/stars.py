@@ -381,6 +381,7 @@ class Stars(Particles, StarsComponent):
         fesc=0.0,
         young=None,
         old=None,
+        mask=None,
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
@@ -507,7 +508,8 @@ class Stars(Particles, StarsComponent):
                 )
 
         # Get particle age masks
-        mask = self._get_masks(young, old)
+        if mask is None:
+            mask = self._get_masks(young, old)
 
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
