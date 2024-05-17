@@ -17,12 +17,11 @@ Example usage:
 
 """
 
-import numpy as np
-from unyt import yr
-import matplotlib.pyplot as plt
-
-from scipy.integrate import cumtrapz
 import dense_basis as db
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.integrate import cumtrapz
+from unyt import yr
 
 from synthesizer import exceptions
 from synthesizer.stats import weighted_mean, weighted_median

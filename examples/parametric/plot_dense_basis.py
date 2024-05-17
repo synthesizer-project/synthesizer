@@ -1,10 +1,8 @@
-import numpy as np
 import matplotlib.pyplot as plt
-
+import numpy as np
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
-
 
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this
