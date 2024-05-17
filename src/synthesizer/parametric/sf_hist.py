@@ -194,7 +194,7 @@ class Common:
 
         plt.plot(t, sfh)
         plt.xlabel("age (yr)")
-        plt.ylabel("SFR ($\mathrm{M_{\odot} \,/\, yr}$)")
+        plt.ylabel(r"SFR ($\mathrm{M_{\odot} \,/\, yr}$)")
         plt.xlim(
             0,
         )
