@@ -413,24 +413,25 @@ class Stars(StarsComponent):
         # Get the indices of non-zero entries in the SFZH
         non_zero_inds = np.where(self.sfzh > 0)
 
-        # Make the mask for relevent SFZH bins
-        if old:
-            sfzh_mask = self.log10ages[non_zero_inds[0]] > old
-        elif young:
-            sfzh_mask = self.log10ages[non_zero_inds[0]] <= young
-        else:
-            sfzh_mask = np.ones(
-                len(self.log10ages[non_zero_inds[0]]),
-                dtype=bool,
-            )
+        # Make the mask for relevent SFZH bins if we haven't been handed one.
+        if mask is not None:
+            if old:
+                mask = self.log10ages[non_zero_inds[0]] > old
+            elif young:
+                mask = self.log10ages[non_zero_inds[0]] <= young
+            else:
+                mask = np.ones(
+                    len(self.log10ages[non_zero_inds[0]]),
+                    dtype=bool,
+                )
 
         # Add an extra dimension to enable later summation
         sfzh = np.expand_dims(self.sfzh, axis=2)
 
         # Account for the SFZH mask in the non-zero indices
         non_zero_inds = (
-            non_zero_inds[0][sfzh_mask],
-            non_zero_inds[1][sfzh_mask],
+            non_zero_inds[0][mask],
+            non_zero_inds[1][mask],
         )
 
         # Compute the spectra
