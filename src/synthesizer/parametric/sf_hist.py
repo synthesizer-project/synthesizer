@@ -20,6 +20,9 @@ Example usage:
 import numpy as np
 from unyt import yr
 
+from scipy.integrate import cumtrapz
+import dense_basis as db
+
 from synthesizer import exceptions
 from synthesizer.stats import weighted_mean, weighted_median
 
@@ -31,6 +34,7 @@ parametrisations = (
     "ExponentiallyyDeclining",
     "DelayedExponentiallyDeclining",
     "DoublePowerLaw",
+    "DenseBasis",
 )
 
 
@@ -536,3 +540,94 @@ class DoublePowerLaw(Common):
         term1 = (age / self.tau) ** self.alpha
         term2 = (age / self.tau) ** self.beta
         return (term1 + term2) ** -1
+
+
+class DenseBasis(Common):
+    """
+    Dense Basis representation of a SFZH.
+
+    See here for more details on the Dense Basis method.
+
+    https://dense-basis.readthedocs.io/en/latest/
+
+    Attributes:
+        db_tuple (tuple)
+            Dense basis parameters describing the SFH
+            1) total mass formed
+            2) SFR at the time of observation (see redshift)
+            3) number of tx parameters
+            4) times when the galaxy formed fractions of its mass,
+                units of fraction of the age of the Universe [0-1]
+        redshift (float)
+            redshift at which to scale the SFH
+    """
+
+    def __init__(self, db_tuple, redshift):
+
+        # Initialise the parent
+        Common.__init__(
+            self, name="DenseBasis", db_tuple=db_tuple, redshift=redshift
+        )
+
+        self.db_tuple = db_tuple
+        self.redshift = redshift
+
+        # convert dense basis parameters (1db_tuple`) into SFH
+        self._convert_db_to_sfh()
+
+    def _convert_db_to_sfh(
+        self, interpolator="gp_george", min_age=5, max_age=10.3
+    ):
+        """
+        Convert dense basis representation to a binned SFH
+
+        Args:
+            interpolator (string)
+                Dense basis interpolator to use. Options: [gp_george,
+                gp_sklearn, linear, and pchip]
+            min_age (float)
+                minimum age of SFH grid
+            max_age (float)
+                maximum age of SFH grid
+        """
+        tempsfh, temptime = db.tuple_to_sfh(
+            self.db_tuple, self.redshift, interpolator=interpolator, vb=False
+        )
+
+        self.finegrid = np.linspace(min_age, max_age, 1000)
+        tbw = np.mean(np.diff(self.finegrid))
+        finewidths = 10 ** (self.finegrid + tbw / 2) - 10 ** (
+            self.finegrid - tbw / 2
+        )
+
+        self.intsfh = self._interp_sfh(
+            tempsfh, temptime, 10**self.finegrid / 1e9
+        ) / (finewidths / 1e9)
+
+    def _interp_sfh(self, sfh, tax, newtax):
+        """
+        Helper method for interpolating a dense basis SFH
+
+        Args:
+            sfh (array)
+                star formation history array
+            tax (array)
+                time axis
+            newtax (array)
+                new time axis
+        """
+        sfh_cdf = cumtrapz(sfh, x=tax, initial=0)
+        cdf_interp = np.interp(newtax, tax, np.flip(sfh_cdf, 0))
+        sfh_interp = np.zeros_like(cdf_interp)
+        sfh_interp[0:-1] = -np.diff(cdf_interp)
+        return sfh_interp
+
+    def _sfr(self, age):
+        """
+        Return SFR at given `age`
+
+        Args:
+            age (float)
+                Age to query SFH, units of years
+        """
+        return np.interp(age, 10**self.finegrid, self.intsfh)

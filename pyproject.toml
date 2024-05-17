@@ -46,6 +46,8 @@ authors = [
   {name = "L. Seeyave", email = "L.Seeyave@sussex.ac.uk"},
   {name = "A. P. Vijayan", email = "apavi@space.dtu.dk" },
   {name = "S. M. Wilkins", email = "s.wilkins@sussex.ac.uk" },
+  {name = "K. Iyer", email = "kartheikiyer@gmail.com" },
+  {name = "S. Newman", email = "sophie.newman@port.ac.uk" },
 ]
 
 # Synthesizer maintainers
@@ -90,6 +92,8 @@ dependencies = [
   "spectres",
   "tqdm",
   "requests",
+  "dense_basis",
+  "statsmodels",
 ]
 
 # Optional dependencies for specific use cases
