@@ -94,6 +94,7 @@ dependencies = [
   "requests",
   "dense_basis",
   "statsmodels",
+  "scikit-learn",
 ]
 
 # Optional dependencies for specific use cases
