@@ -29,6 +29,7 @@ class EmissionModel:
         combine=None,
         apply_dust_to=None,
         dust_curve=None,
+        tau_v=None,
         dust_emission_model=None,
         mask_attr=None,
         mask_thresh=None,
@@ -63,6 +64,9 @@ class EmissionModel:
         # Attach the dust curve
         self.dust_curve = dust_curve
 
+        # Attach the optical depth
+        self.tau_v = tau_v
+
         # Attach the dust emission model
         self.dust_emission_model = dust_emission_model
 
@@ -84,7 +88,9 @@ class EmissionModel:
             and mask_thresh is not None
             and mask_op is not None
         ):
-            self.add_mask(mask_attr, mask_thresh, mask_op)
+            self.masks.append(
+                {"attr": mask_attr, "thresh": mask_thresh, "op": mask_op}
+            )
         else:
             # Ensure we haven't been given incomplete mask arguments
             if any(
@@ -120,6 +126,8 @@ class EmissionModel:
         self._dust_emission = {}
         self._combine_keys = {}
         self._mask_keys = {}
+        self._bottom_to_top = []
+        self._models = {}
         self._unpack_model_recursively(self)
 
     def _check_args(self):
@@ -170,30 +178,6 @@ class EmissionModel:
         if self.combine is None:
             self.combine = []
 
-    def add_mask(self, attr, thresh, op):
-        """
-        Add a mask.
-
-        Args:
-            attr (str): The component attribute to mask on.
-            thresh (unyt_quantity): The threshold for the mask.
-            op (str): The operation to apply. Can be "<", ">", "<=", or ">=".
-        """
-        # Ensure we have units
-        if not isinstance(thresh, unyt_quantity):
-            raise exceptions.MissingUnits(
-                "Mask threshold must be given with units."
-            )
-
-        # Ensure operation is valid
-        if op not in ["<", ">", "<=", ">=", "=="]:
-            raise exceptions.InconsistentArguments(
-                "Invalid mask operation. Must be one of: <, >, <=, >="
-            )
-
-        # Store mask
-        self.masks.append({"attr": attr, "thresh": thresh, "op": op})
-
     def _unpack_model_recursively(self, model):
         """
         Traverse the model tree and collect what we will need to do.
@@ -201,6 +185,9 @@ class EmissionModel:
         Args:
             model (EmissionModel): The model to unpack.
         """
+        # Store the model
+        self._models[model.label] = model
+
         # If we are extracting a spectra, store the key
         if model.extract is not None:
             self._extract_keys[model.label] = model.extract
@@ -228,37 +215,226 @@ class EmissionModel:
         for child in model._children:
             self._unpack_model_recursively(child)
 
-    def _recursive_change_dust_curve(self, model, dust_curve, label):
-        """Recurse through the emission model tree to modifty dust curve."""
-        # Loop over children until we find the child were looking to modify
-        for child in model._children:
-            if child.label == label:
-                child.dust_curve = dust_curve
-                return 0
+        # Populate the top to bottom list but ignoring extraction since
+        # we do the all at once
+        if (
+            model.label not in self._extract_keys
+            and model.label not in self._bottom_to_top
+        ):
+            self._bottom_to_top.append(model.label)
 
-        # Ok, we haven't found it yet keep recursing
+    def _recursive_change_attr(self, model, attr, value, label, set_all):
+        """Recurse through the emission model tree to modifty dust curve."""
+        # Are we changing this attribute on everything?
+        if set_all:
+            # Onyl set it if the model already has the attribute set
+            if getattr(model, attr, None) is not None:
+                setattr(model, attr, value)
+
+            # Recurse
+            for child in model._children:
+                self._recursive_change_dust_curve(
+                    child, attr, value, label, set_all
+                )
+
+            # We're done here
+            return 0
+
+        # Are we looking for a specific label?
+        if model.label == label:
+            setattr(model, attr, value)
+
+            # We're done here
+            return 0
+
+        # Recurse
         fail = 1
         for child in model._children:
-            fail = self._recursive_change_dust_curve(child, dust_curve, label)
+            fail = self._recursive_change_attr(
+                child, attr, value, label, set_all
+            )
             if not fail:
                 return fail
         return fail
 
-    def change_dust_curve(self, dust_curve, label=None):
+    def change_dust_curve(self, dust_curve, label=None, set_all=False):
         """Swap the dust curve on this model or a child."""
+        # Are we modifying everything?
+        if set_all:
+            if self.dust_curve is not None:
+                self.dust_curve = dust_curve
+
+            # Recurse
+            for child in self._children:
+                self._recursive_change_attr(
+                    child,
+                    "dust_curve",
+                    dust_curve,
+                    label,
+                    set_all,
+                )
+
+            # And unpack everything to update this change
+            self._unpack_model_recursively(self)
+            return
+
         # Are we just modifying the top level dust curve?
         if label is None or label == self.label:
             self.dust_curve = dust_curve
             return
 
         # Ok, in that case recurse through the children
-        if self._recursive_change_dust_curve(self, dust_curve, label):
+        if self._recursive_change_attr(
+            self, "dust_curve", dust_curve, label, set_all
+        ):
             raise exceptions.InconsistentArguments(
                 f"Could not find a model with the label: {label}"
             )
 
         # And unpack everything to update this change
-        self._unpack_model_recursively()
+        self._unpack_model_recursively(self)
+
+    def change_tau_v(self, tau_v, label=None, set_all=False):
+        """Swap the optical depth on this model or a child."""
+        # Are we modifying everything?
+        if set_all:
+            if self.tau_v is not None:
+                self.tau_v = tau_v
+
+            # Recurse
+            for child in self._children:
+                self._recursive_change_attr(
+                    child,
+                    "tau_v",
+                    tau_v,
+                    label,
+                    set_all,
+                )
+
+            # And unpack everything to update this change
+            self._unpack_model_recursively(self)
+            return
+
+        # Are we just modifying the top level dust curve?
+        if label is None or label == self.label:
+            self.tau_v = tau_v
+            return
+
+        # Ok, in that case recurse through the children
+        if self._recursive_change_attr(self, "tau_v", tau_v, label, set_all):
+            raise exceptions.InconsistentArguments(
+                f"Could not find a model with the label: {label}"
+            )
+
+        # And unpack everything to update this change
+        self._unpack_model_recursively(self)
+
+    def change_fesc(self, fesc, label=None, set_all=False):
+        """Swap the escape fraction on this model or a child."""
+        # Are we modifying everything?
+        if set_all:
+            if self.fesc is not None:
+                self.fesc = fesc
+
+            # Recurse
+            for child in self._children:
+                self._recursive_change_attr(
+                    child,
+                    "fesc",
+                    fesc,
+                    label,
+                    set_all,
+                )
+
+            # And unpack everything to update this change
+            self._unpack_model_recursively(self)
+            return
+
+        # Are we just modifying the top level dust curve?
+        if label is None or label == self.label:
+            self.fesc = fesc
+            return
+
+        # Ok, in that case recurse through the children
+        if self._recursive_change_attr(self, "fesc", fesc, label, set_all):
+            raise exceptions.InconsistentArguments(
+                f"Could not find a model with the label: {label}"
+            )
+
+        # And unpack everything to update this change
+        self._unpack_model_recursively(self)
+
+    def _add_mask_recursive(self, model, attr, thresh, op, label, set_all):
+        """Recursively add a mask to a model."""
+        # Are we adding a mask to everything?
+        if set_all:
+            model.add_mask(attr, thresh, op)
+            for child in model._children:
+                self._add_mask_recursive(
+                    child,
+                    attr,
+                    thresh,
+                    op,
+                    label,
+                    set_all,
+                )
+            return 0
+
+        # Are we adding a mask to this model?
+        if model.label == label:
+            model.add_mask(attr, thresh, op)
+            return 0
+
+        # Recurse
+        fail = 1
+        for child in model._children:
+            fail = self._add_mask_recursive(
+                child, attr, thresh, op, label, set_all
+            )
+            if not fail:
+                return fail
+        return fail
+
+    def add_mask(self, attr, thresh, op, label=None, set_all=False):
+        """
+        Add a mask.
+
+        Args:
+            attr (str): The component attribute to mask on.
+            thresh (unyt_quantity): The threshold for the mask.
+            op (str): The operation to apply. Can be "<", ">", "<=", or ">=".
+        """
+        # Ensure we have units
+        if not isinstance(thresh, unyt_quantity):
+            raise exceptions.MissingUnits(
+                "Mask threshold must be given with units."
+            )
+
+        # Ensure operation is valid
+        if op not in ["<", ">", "<=", ">=", "=="]:
+            raise exceptions.InconsistentArguments(
+                "Invalid mask operation. Must be one of: <, >, <=, >="
+            )
+
+        # If no label has been specified we're adding a mask on this object
+        if label is None:
+            self.masks.append({"attr": attr, "thresh": thresh, "op": op})
+        else:
+            # Otherwise, we need to recurse to find the requested label
+            if self._add_mask_recursive(
+                self,
+                attr,
+                thresh,
+                op,
+                label,
+                set_all,
+            ):
+                raise exceptions.InconsistentArguments(
+                    f"Could not find a model with the label: {label}"
+                )
+
+        # And unpack everything to update this change
+        self._unpack_model_recursively(self)
 
     def plot_emission_tree(self):
         """Plot the tree defining the spectra."""
@@ -286,6 +462,9 @@ class EmissionModel:
         for target_list in links.values():
             for target, _ in target_list:
                 all_nodes.add(target)
+
+        # Get all extraction keys
+        extract_labels = set(self._extract_keys)
 
         # Initialise dictionary to hold node positions and start with the
         # root
@@ -338,7 +517,9 @@ class EmissionModel:
                 bbox=dict(
                     facecolor=color,
                     edgecolor="black",
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.3"
+                    if node not in extract_labels
+                    else "square,pad=0.3",
                 ),
             )
 
@@ -365,6 +546,9 @@ class EmissionModel:
         )
         masked_patch = mpatches.Patch(color="lightgreen", label="Masked")
         unmasked_patch = mpatches.Patch(color="lightblue", label="Unmasked")
+        extraction_box = mpatches.Patch(
+            facecolor="none", edgecolor="black", label="Extraction"
+        )
 
         # Add legend to plot
         ax.legend(
@@ -373,6 +557,7 @@ class EmissionModel:
                 combine_line,
                 masked_patch,
                 unmasked_patch,
+                extraction_box,
             ],
             frameon=False,
         )
