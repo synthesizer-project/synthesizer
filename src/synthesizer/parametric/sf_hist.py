@@ -19,6 +19,7 @@ Example usage:
 
 import numpy as np
 from unyt import yr
+import matplotlib.pyplot as plt
 
 from scipy.integrate import cumtrapz
 import dense_basis as db
@@ -177,6 +178,37 @@ class Common:
             "https://github.com/flaresimulations/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
+
+    def plot(self, show=True, save=False, **kwargs):
+        """
+        Plot the star formation history, returned by `calculate_sfh`.
+
+        Args:
+            show (bool)
+                display plot to screen directly
+            save (bool, string)
+                if False, don't save. If string, save to directory
+            kwargs (dict)
+                key word arguments describing sfh
+        """
+        t, sfh = self.calculate_sfh(**kwargs)
+
+        plt.plot(t, sfh)
+        plt.xlabel("age (yr)")
+        plt.ylabel("SFR ($\mathrm{M_{\odot} \,/\, yr}$)")
+        plt.xlim(
+            0,
+        )
+        plt.ylim(
+            0,
+        )
+
+        if show:
+            plt.show()
+
+        if save:
+            plt.savefig(save, bbox_inches="tight")
+            plt.close()
 
     def __str__(self):
         """

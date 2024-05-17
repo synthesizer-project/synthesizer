@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     # define the parameters of the star formation and metal enrichment
     # histories
-    sfh_p = (9, 0, 1, 0.9)
+    sfh_p = (9.0, -3, 2, 0.3, 0.8)
     redshift = 0.1
 
     Z_p = {
@@ -31,6 +31,8 @@ if __name__ == "__main__":
     # histories
     sfh = SFH.DenseBasis(db_tuple=sfh_p, redshift=0.1)
     print(sfh)  # print sfh summary
+
+    sfh.plot()
 
     metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
 
