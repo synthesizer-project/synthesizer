@@ -17,12 +17,12 @@ import sys
 import timeit
 from collections import namedtuple
 from functools import partial
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 import h5py
 import numpy as np
 from astropy.cosmology import LambdaCDM
-from numpy.typing import NDArray, Union
+from numpy.typing import NDArray
 
 from synthesizer import exceptions
 
