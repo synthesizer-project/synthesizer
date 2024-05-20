@@ -12,3 +12,17 @@ from synthesizer.emission_models.models import (
     DustEmission,
     TotalEmission,
 )
+
+PREMADE_MODELS = [
+    "IncidentEmission",
+    "LineContinuumEmission",
+    "TransmittedEmission",
+    "EscapedEmission",
+    "NebularContinuumEmission",
+    "NebularEmission",
+    "ReprocessedEmission",
+    "AttenuatedEmission",
+    "EmergentEmission",
+    "DustEmission",
+    "TotalEmission",
+]
