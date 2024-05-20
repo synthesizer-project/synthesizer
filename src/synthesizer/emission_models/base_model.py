@@ -437,7 +437,7 @@ class EmissionModel:
         # Ensure all attenuation steps are pointing to an emission model,
         # not a string (strings can be passed to say which label to apply
         # the dust to)
-        for model in self._models:
+        for model in self._models.values():
             if model._is_dust_attenuating:
                 if not isinstance(model._apply_dust_to, EmissionModel):
                     model._apply_dust_to = self._models[model._apply_dust_to]
