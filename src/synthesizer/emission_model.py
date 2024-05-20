@@ -22,10 +22,50 @@ class EmissionModel:
     """
     A class to define the construction of a spectra from a grid.
 
+    An emission model describes the steps necessary to construct a spectra
+    from a grid. These steps can be:
+    - Extracting a spectra from a grid.
+    - Combining multiple spectra.
+    - Applying a dust curve to a spectra.
+    - Generating spectra from a dust emission model.
 
-    All attributes are accessed through properties and set via setters to
-    ensure the tree remains consistent. An attribute is either set at
-    instantiation or is set via a setter.
+    All of these stages can also have masks applied to them to remove certain
+    elements from the spectra (e.g. if you want to eliminate young stars).
+
+    By chaining together multiple emission models, complex spectra can be
+    constructed from a grid of particles.
+
+    Note: Every time a property is changed anywhere in the tree the tree must
+    be reconstructed. This is a cheap process but must happen to ensure
+    the expected properties are used when the model is used. This means most
+    attributes are accessed through properties and set via setters to
+    ensure the tree remains consistent.
+
+    Attributes:
+        label (str):
+            The key for the spectra that will be produced.
+        grid (Grid):
+            The grid to extract from.
+        extract (str):
+            The key for the spectra to extract.
+        dust_curve (dust.attenuation.*):
+            The dust curve to apply.
+        apply_dust_to (EmissionModel):
+            The model to apply the dust curve to.
+        tau_v (float/ndarray/str/tuple):
+            The optical depth to apply. Can be a float, ndarray, or a string
+            to a component attribute. Can also be a tuple combining any of
+            these.
+        dust_emission_model (EmissionModel):
+            The dust emission model to generate from.
+        combine (list):
+            A list of models to combine.
+        fesc (float):
+            The escape fraction.
+        masks (list):
+            A list of masks to apply.
+        parents (list):
+            A list of models which depend on this model.
     """
 
     def __init__(
@@ -51,12 +91,42 @@ class EmissionModel:
         - Extracting a spectra from a grid. (extract must be set)
         - Combining multiple spectra. (combine must be set with a list/tuple
           of child emission models).
-        - Applying a dust curve to the spectra. (dust_curve and apply_dust_to
+        - Applying a dust curve to the spectra. (dust_curve, apply_dust_to
+          and tau_v must be set)
+        - Generating spectra from a dust emission model. (dust_emission_model
           must be set)
 
         Within any of these steps a mask can be applied to the spectra to
         remove certain elements (e.g. if you want to eliminate particles).
 
+        Args:
+            label (str):
+                The key for the spectra that will be produced.
+            grid (Grid):
+                The grid to extract from.
+            extract (str):
+                The key for the spectra to extract.
+            combine (list):
+                A list of models to combine.
+            apply_dust_to (EmissionModel):
+                The model to apply the dust curve to.
+            dust_curve (dust.attenuation.*):
+                The dust curve to apply.
+            tau_v (float/ndarray/str/tuple):
+                The optical depth to apply. Can be a float, ndarray, or a
+                string to a component attribute. Can also be a tuple combining
+                any of these.
+            dust_emission_model (EmissionModel):
+                The dust emission model to generate from.
+            mask_attr (str):
+                The component attribute to mask on.
+            mask_thresh (unyt_quantity):
+                The threshold for the mask.
+            mask_op (str):
+                The operation to apply. Can be "<", ">", "<=", ">=", "==",
+                or "!=".
+            fesc (float):
+                The escape fraction.
         """
         # What is the key for the spectra that will be produced?
         self.label = label
@@ -439,8 +509,11 @@ class EmissionModel:
                 A dust curve instance to apply.
             apply_dust_to (EmissionModel):
                 The model to apply the dust curve to.
-            tau_v (float/ndarray):
-                The optical depth to apply.
+            tau_v (float/ndarray/str/tuple):
+                The optical depth to apply. Can be a float, ndarray, or a
+                string to a component attribute. Can also be a tuple combining
+                any of these. If a tuple then the eventual tau_v will be the
+                product of all contributors.
             label (str):
                 The label of the model to set the properties on. If
                 None, sets the properties on this model.
