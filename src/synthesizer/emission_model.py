@@ -223,7 +223,7 @@ class EmissionModel:
         ):
             self._bottom_to_top.append(model.label)
 
-    def _recursive_change_attr(self, model, attr, value, label, set_all):
+    def _change_attr_recursively(self, model, attr, value, label, set_all):
         """Recurse through the emission model tree to modifty dust curve."""
         # Are we changing this attribute on everything?
         if set_all:
@@ -250,7 +250,7 @@ class EmissionModel:
         # Recurse
         fail = 1
         for child in model._children:
-            fail = self._recursive_change_attr(
+            fail = self._change_attr_recursively(
                 child, attr, value, label, set_all
             )
             if not fail:
@@ -266,7 +266,7 @@ class EmissionModel:
 
             # Recurse
             for child in self._children:
-                self._recursive_change_attr(
+                self._change_attr_recursively(
                     child,
                     "dust_curve",
                     dust_curve,
@@ -284,7 +284,7 @@ class EmissionModel:
             return
 
         # Ok, in that case recurse through the children
-        if self._recursive_change_attr(
+        if self._change_attr_recursively(
             self, "dust_curve", dust_curve, label, set_all
         ):
             raise exceptions.InconsistentArguments(
@@ -303,7 +303,7 @@ class EmissionModel:
 
             # Recurse
             for child in self._children:
-                self._recursive_change_attr(
+                self._change_attr_recursively(
                     child,
                     "tau_v",
                     tau_v,
@@ -321,7 +321,7 @@ class EmissionModel:
             return
 
         # Ok, in that case recurse through the children
-        if self._recursive_change_attr(self, "tau_v", tau_v, label, set_all):
+        if self._change_attr_recursively(self, "tau_v", tau_v, label, set_all):
             raise exceptions.InconsistentArguments(
                 f"Could not find a model with the label: {label}"
             )
@@ -338,7 +338,7 @@ class EmissionModel:
 
             # Recurse
             for child in self._children:
-                self._recursive_change_attr(
+                self._change_attr_recursively(
                     child,
                     "fesc",
                     fesc,
@@ -356,7 +356,7 @@ class EmissionModel:
             return
 
         # Ok, in that case recurse through the children
-        if self._recursive_change_attr(self, "fesc", fesc, label, set_all):
+        if self._change_attr_recursively(self, "fesc", fesc, label, set_all):
             raise exceptions.InconsistentArguments(
                 f"Could not find a model with the label: {label}"
             )
@@ -364,7 +364,7 @@ class EmissionModel:
         # And unpack everything to update this change
         self._unpack_model_recursively(self)
 
-    def _add_mask_recursive(self, model, attr, thresh, op, label, set_all):
+    def _add_mask_recursively(self, model, attr, thresh, op, label, set_all):
         """Recursively add a mask to a model."""
         # Are we adding a mask to everything?
         if set_all:
@@ -388,7 +388,7 @@ class EmissionModel:
         # Recurse
         fail = 1
         for child in model._children:
-            fail = self._add_mask_recursive(
+            fail = self._add_mask_recursively(
                 child, attr, thresh, op, label, set_all
             )
             if not fail:
@@ -421,7 +421,7 @@ class EmissionModel:
             self.masks.append({"attr": attr, "thresh": thresh, "op": op})
         else:
             # Otherwise, we need to recurse to find the requested label
-            if self._add_mask_recursive(
+            if self._add_mask_recursively(
                 self,
                 attr,
                 thresh,
@@ -435,6 +435,15 @@ class EmissionModel:
 
         # And unpack everything to update this change
         self._unpack_model_recursively(self)
+
+    def add_model(self, model):
+        pass
+
+    def remove_model(self, label):
+        pass
+
+    def relabel_model(self, old_label, new_label):
+        pass
 
     def plot_emission_tree(self):
         """Plot the tree defining the spectra."""
@@ -565,3 +574,237 @@ class EmissionModel:
         ax.set_aspect("equal")
         ax.axis("off")
         plt.show()
+
+    def iplot_emission_tree(self):
+        pass
+
+
+class IncidentEmission(EmissionModel):
+    def __init__(
+        self,
+        grid,
+        label="incident",
+        fesc=0.0,
+    ):
+        EmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            extract="incident",
+            fesc=fesc,
+        )
+
+
+class LineContinuumEmission(EmissionModel):
+    def __init__(
+        self,
+        grid,
+        label="linecont",
+        fesc=0.0,
+    ):
+        EmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            extract="linecont",
+            fesc=fesc,
+        )
+
+
+class TransmittedEmission(EmissionModel):
+    def __init__(
+        self,
+        grid,
+        label="transmitted",
+        fesc=0.0,
+    ):
+        EmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            extract="transmitted",
+            fesc=fesc,
+        )
+
+
+class EscapedEmission(EmissionModel):
+    def __init__(
+        self,
+        grid,
+        label="escaped",
+        fesc=0.0,
+    ):
+        EmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            extract="transmitted",
+            fesc=(1 - fesc),
+        )
+
+
+class NebularContinuumEmission(EmissionModel):
+    def __init__(
+        self,
+        grid,
+        label="nebular_continuum",
+        fesc=0.0,
+    ):
+        EmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            extract="nebular_continuum",
+            fesc=fesc,
+        )
+
+
+class NebularEmission(EmissionModel):
+    def __init__(
+        self,
+        grid,
+        label="nebular",
+        fesc=0.0,
+    ):
+        EmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            combine=(
+                LineContinuumEmission(grid=grid, fesc=fesc),
+                NebularContinuumEmission(grid=grid, fesc=fesc),
+            ),
+            fesc=fesc,
+        )
+
+
+class ReprocessedEmission(EmissionModel):
+    def __init__(
+        self,
+        grid,
+        label="reprocessed",
+        fesc=0.0,
+    ):
+        EmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            combine=(
+                NebularEmission(grid=grid, fesc=fesc),
+                TransmittedEmission(grid=grid, fesc=fesc),
+            ),
+            fesc=fesc,
+        )
+
+
+class AttenuatedEmission(EmissionModel):
+    def __init__(
+        self,
+        grid,
+        dust_curve,
+        apply_dust_to,
+        tau_v,
+        label="attenuated",
+    ):
+        EmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            dust_curve=dust_curve,
+            apply_dust_to=apply_dust_to,
+            tau_v=tau_v,
+        )
+
+
+class EmergentEmission(EmissionModel):
+    def __init__(
+        self,
+        grid,
+        dust_curve,
+        apply_dust_to,
+        tau_v,
+        fesc=0.0,
+        label="emergent",
+    ):
+        EmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            combine=(
+                AttenuatedEmission(
+                    grid=grid,
+                    dust_curve=dust_curve,
+                    apply_dust_to=apply_dust_to,
+                    tau_v=tau_v,
+                ),
+                EscapedEmission(grid=grid, fesc=fesc),
+            ),
+            fesc=fesc,
+        )
+
+
+class DustEmission(EmissionModel):
+    def __init__(
+        self,
+        dust_emission_model,
+        label="dust_emission",
+    ):
+        EmissionModel.__init__(
+            self,
+            grid=None,
+            label=label,
+            dust_emission_model=dust_emission_model,
+        )
+
+
+class TotalEmission(EmissionModel):
+    def __init__(
+        self,
+        grid,
+        dust_curve,
+        tau_v,
+        dust_emission_model=None,
+        label="total",
+        fesc=0.0,
+    ):
+        # If a dust emission model has been passed then we need combine
+        if dust_emission_model is not None:
+            EmissionModel.__init__(
+                self,
+                grid=grid,
+                label=label,
+                combine=(
+                    EmergentEmission(
+                        grid=grid,
+                        dust_curve=dust_curve,
+                        tau_v=tau_v,
+                        fesc=fesc,
+                        apply_dust_to=ReprocessedEmission(
+                            grid=grid,
+                            fesc=fesc,
+                        ),
+                    ),
+                    DustEmission(dust_emission_model=dust_emission_model),
+                ),
+                fesc=fesc,
+            )
+        else:
+            # Otherwise, total == emergent
+            EmissionModel.__init__(
+                self,
+                grid=grid,
+                label=label,
+                combine=(
+                    AttenuatedEmission(
+                        grid=grid,
+                        dust_curve=dust_curve,
+                        apply_dust_to=ReprocessedEmission(
+                            grid=grid,
+                            fesc=fesc,
+                        ),
+                        tau_v=tau_v,
+                    ),
+                    EscapedEmission(grid=grid, fesc=fesc),
+                ),
+                fesc=fesc,
+            )
