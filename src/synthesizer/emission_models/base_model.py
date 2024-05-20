@@ -432,6 +432,16 @@ class EmissionModel:
         # Unpack...
         self._unpack_model_recursively(self)
 
+        # Once everything is unpacked we can do some clean up
+
+        # Ensure all attenuation steps are pointing to an emission model,
+        # not a string (strings can be passed to say which label to apply
+        # the dust to)
+        for model in self._models:
+            if model._is_dust_attenuating:
+                if not isinstance(model._apply_dust_to, EmissionModel):
+                    model._apply_dust_to = self._models[model._apply_dust_to]
+
     def set_grid(self, grid, label=None, set_all=False):
         """
         Set the grid to extract from.
@@ -743,7 +753,38 @@ class EmissionModel:
         pass
 
     def remove_model(self, label):
-        pass
+        """
+        Remove a child model from this model.
+
+        Args:
+            label (str): The label of the model to remove.
+
+        Returns:
+            EmissionModel: The model with the child removed.
+        """
+        # Ensure the label exists
+        if label not in self._models:
+            raise exceptions.InconsistentArguments(
+                f"Could not find a model with the label: {label}"
+            )
+
+        # Get the model we are removing
+        remove_model = self._models[label]
+
+        # Remove this model from the parent's combine if necessary
+        for parent in remove_model.parents:
+            if parent._is_combining:
+                parent._combine.remove(remove_model)
+
+                # If we are no longer combining anything, remove the parent
+                if len(parent._combine) == 0:
+                    self.remove_model(parent.label)
+
+        # Remove the model
+        del self._models[label]
+
+        # Unpack now that we're done
+        self.unpack_model()
 
     def relabel_model(self, old_label, new_label):
         """
