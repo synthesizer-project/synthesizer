@@ -32,8 +32,9 @@ Example usage:
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-from synthesizer import exceptions
 from unyt import unyt_quantity
+
+from synthesizer import exceptions
 
 
 class EmissionModel:
@@ -451,7 +452,7 @@ class EmissionModel:
             )
 
         # Set the grid
-        if label is not None:
+        if label is not None or set_all:
             for model in self._models.values():
                 # Only set the grid if we're setting all and the model is
                 # extracting or the label matches
@@ -468,7 +469,7 @@ class EmissionModel:
         # Unpack the model now we're done
         self.unpack_model()
 
-    def set_extract(self, extract, label=None, set_all=False):
+    def set_extract(self, extract, label=None):
         """
         Set the spectra to extract from the grid.
 
@@ -481,8 +482,6 @@ class EmissionModel:
             label (str):
                 The label of the model to set the extraction key on. If None,
                 sets the extraction key on this model.
-            set_all (bool):
-                Whether to set the extraction key on all models.
         """
         # Ensure the label exists (if not None)
         if label is not None and label not in self._models:
@@ -492,11 +491,13 @@ class EmissionModel:
 
         # Set the extraction key
         if label is not None:
-            for model in self._models.values():
-                # Only set the extraction key if we're setting all and the
-                # model is extracting or the label matches
-                if label == model.label or set_all and model._is_extracting:
-                    model._extract = extract
+            if self._models[label]._is_extracting:
+                self._models[label]._extract = extract
+            else:
+                raise exceptions.InconsistentArguments(
+                    "Cannot set an extraction key on a model that is not "
+                    "extracting."
+                )
         else:
             if self._is_extracting:
                 self._extract = extract
@@ -545,7 +546,7 @@ class EmissionModel:
             )
 
         # Set the properties
-        if label is not None:
+        if label is not None or set_all:
             for model in self._models.values():
                 # Only set the properties if we're setting all and the model is
                 # an attenuation step or the label matches
@@ -668,7 +669,7 @@ class EmissionModel:
             )
 
         # Set the escape fraction
-        if label is not None:
+        if label is not None or set_all:
             for model in self._models.values():
                 # Only set the escape fraction if setting all or the
                 # label matches
@@ -725,10 +726,15 @@ class EmissionModel:
             )
 
         # Add the mask
-        for model in self._models.values():
-            # Only add the mask if we're setting all or the label matches
-            if label == model.label or set_all:
-                model.masks.append({"attr": attr, "thresh": thresh, "op": op})
+        if label is not None or set_all:
+            for model in self._models.values():
+                # Only add the mask if we're setting all or the label matches
+                if label == model.label or set_all:
+                    model.masks.append(
+                        {"attr": attr, "thresh": thresh, "op": op}
+                    )
+        else:
+            self.masks.append({"attr": attr, "thresh": thresh, "op": op})
 
         # Unpack now that we're done
         self.unpack_model()
