@@ -171,8 +171,9 @@ class EmissionModel:
         # Attach the escape fraction
         self._fesc = fesc
 
-        # Get operation flags
-        self._get_operation_flags()
+        # Containers for children and parents
+        self._children = []
+        self.parents = []
 
         # Define the container which will hold mask information
         self.masks = []
@@ -183,6 +184,11 @@ class EmissionModel:
             and mask_thresh is not None
             and mask_op is not None
         ):
+            # Ensure mask_thresh comes with units
+            if not isinstance(mask_thresh, unyt_quantity):
+                raise exceptions.MissingUnits(
+                    "Mask threshold must be given with units."
+                )
             self.masks.append(
                 {"attr": mask_attr, "thresh": mask_thresh, "op": mask_op}
             )
@@ -195,6 +201,9 @@ class EmissionModel:
                     "For a mask mask_attr, mask_thresh, and mask_op "
                     "must be passed."
                 )
+
+        # Get operation flags
+        self._get_operation_flags()
 
         # Check everything makes sense
         self._check_args()
@@ -377,22 +386,17 @@ class EmissionModel:
     def _get_operation_flags(self):
         """Define the flags for what operation the model does."""
         # Define flags for what we're doing
-        self._is_extracting = True if self._extract is not None else False
+        self._is_extracting = self._extract is not None
         self._is_combining = (
-            True
-            if self._combine is not None and len(self._combine) > 0
-            else False
+            self._combine is not None and len(self._combine) > 0
         )
         self._is_dust_attenuating = (
-            True
-            if self._dust_curve is not None
+            self._dust_curve is not None
             or self._apply_dust_to is not None
             or self._tau_v is not None
-            else False
         )
-        self._is_dust_emitting = (
-            True if self._dust_emission_model is not None else False
-        )
+        self._is_dust_emitting = self._dust_emission_model is not None
+        self._is_masked = len(self.masks) > 0
 
     def _unpack_model_recursively(self, model):
         """
@@ -439,9 +443,12 @@ class EmissionModel:
         ):
             self._bottom_to_top.append(model.label)
 
+        # Get operation flags
+        model._get_operation_flags()
+
     def unpack_model(self):
         """Unpack the model tree to get the order of operations."""
-        # Unpack children and parents
+        # Unpack children and parents first of all
         self._set_children()
         self._set_parents()
 
@@ -460,19 +467,6 @@ class EmissionModel:
 
         # Unpack...
         self._unpack_model_recursively(self)
-
-        # Once everything is unpacked we can do some clean up
-
-        # Get operation flags
-        self._get_operation_flags()
-
-        # Ensure all attenuation steps are pointing to an emission model,
-        # not a string (strings can be passed to say which label to apply
-        # the dust to)
-        for model in self._models.values():
-            if model._is_dust_attenuating:
-                if not isinstance(model._apply_dust_to, EmissionModel):
-                    model._apply_dust_to = self._models[model._apply_dust_to]
 
     def set_grid(self, grid, label=None, set_all=False):
         """
@@ -886,36 +880,7 @@ class EmissionModel:
         self._models[new_label] = model
         del self._models[old_label]
 
-    def plot_emission_tree(self):
-        """Plot the tree defining the spectra."""
-        # Define a dictionary to hold the links (of the form
-        # {<label>: [(<linked label>, <link_type>)]})
-        links = {}
-
-        # Get the attenuation links
-        for label, (model, _) in self._dust_attenuation.items():
-            links.setdefault(label, []).append((model.label, "attenuate"))
-
-        # Get the combination links
-        for label, models in self._combine_keys.items():
-            links.setdefault(label, []).extend(
-                [(model.label, "combine") for model in models]
-            )
-
-        # Get a list of which labels were masked
-        masked_labels = []
-        for label in self._mask_keys:
-            masked_labels.append(label)
-
-        # Extract all unique nodes
-        all_nodes = set(links.keys())
-        for target_list in links.values():
-            for target, _ in target_list:
-                all_nodes.add(target)
-
-        # Get all extraction keys
-        extract_labels = set(self._extract_keys)
-
+    def _get_tree_positions(self):
         # Initialise dictionary to hold node positions and start with the
         # root
         pos = {self.label: [0.0, 0.0]}
@@ -950,7 +915,45 @@ class EmissionModel:
             return pos
 
         # Recursively get the node positions
-        pos = assign_pos(pos, self, levels, level=0, xchunk=20)
+        return assign_pos(pos, self, levels, level=0, xchunk=20)
+
+    def plot_emission_tree(self, show=True):
+        """
+        Plot the tree defining the spectra.
+
+        Args:
+            show (bool):
+                Whether to show the plot.
+        """
+        # Define a dictionary to hold the links (of the form
+        # {<label>: [(<linked label>, <link_type>)]})
+        links = {}
+
+        # Get the links, extraction and mask labels
+        extract_labels = set()
+        masked_labels = []
+        for label, model in self._models.items():
+            if model._is_dust_attenuating:
+                links.setdefault(label, []).append(
+                    (model.apply_dust_to.label, "attenuate")
+                )
+            if model._is_combining:
+                links.setdefault(label, []).extend(
+                    [(child.label, "combine") for child in model._combine]
+                )
+            if model._is_masked:
+                masked_labels.append(label)
+            if model._is_extracting:
+                extract_labels.add(label)
+
+        # Extract all unique nodes
+        all_nodes = set(links.keys())
+        for target_list in links.values():
+            for target, _ in target_list:
+                all_nodes.add(target)
+
+        # Get the postion of each node
+        pos = self._get_tree_positions()
 
         # Plot the tree using Matplotlib
         fig, ax = plt.subplots(figsize=(6, 6))
@@ -1011,12 +1014,12 @@ class EmissionModel:
             ],
             loc="upper center",
             frameon=False,
-            bbox_to_anchor=(0.5, -0.1),
+            bbox_to_anchor=(0.5, 1.1),
             ncol=5,
         )
 
         ax.axis("off")
-        plt.show()
+        if show:
+            plt.show()
 
-    def iplot_emission_tree(self):
-        pass
+        return fig, ax
