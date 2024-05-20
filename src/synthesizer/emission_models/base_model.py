@@ -171,23 +171,8 @@ class EmissionModel:
         # Attach the escape fraction
         self._fesc = fesc
 
-        # Define flags for what we're doing
-        self._is_extracting = True if extract is not None else False
-        self._is_combining = (
-            True
-            if self._combine is not None and len(self._combine) > 0
-            else False
-        )
-        self._is_dust_attenuating = (
-            True
-            if dust_curve is not None
-            or apply_dust_to is not None
-            or tau_v is not None
-            else False
-        )
-        self._is_dust_emitting = (
-            True if dust_emission_model is not None else False
-        )
+        # Get operation flags
+        self._get_operation_flags()
 
         # Define the container which will hold mask information
         self.masks = []
@@ -213,21 +198,6 @@ class EmissionModel:
 
         # Check everything makes sense
         self._check_args()
-
-        # Intialise and populate a dictionary to hold all child models for
-        # traversing the tree
-        self._children = []
-        for child in self._combine:
-            self._children.append(child)
-        if self._apply_dust_to is not None:
-            self._children.append(self._apply_dust_to)
-
-        # Initilaise a container for parent models
-        self.parents = []
-
-        # Attach the parent model to the children
-        for child in self._children:
-            child.parents.append(self)
 
         # We're done with setup, so unpack the model
         self.unpack_model()
@@ -369,6 +339,61 @@ class EmissionModel:
         if self._combine is None:
             self._combine = []
 
+    def __getitem__(self, label):
+        """
+        Enable label look up.
+
+        Lets us access the models in the tree as if an EmissionModel were a
+        dictionary.
+
+        Args:
+            label (str): The label of the model to get.
+        """
+        if label not in self._models:
+            raise KeyError(
+                f"Could not find {label}! Model has: {self._models.keys()}"
+            )
+        return self._models[label]
+
+    def _set_children(self):
+        """Set the children of this model."""
+        # Intialise and populate a dictionary to hold all child models for
+        # traversing the tree
+        self._children = []
+        for child in self._combine:
+            self._children.append(child)
+        if self._apply_dust_to is not None:
+            self._children.append(self._apply_dust_to)
+
+    def _set_parents(self):
+        """Set the parents of this model."""
+        # Initilaise a container for parent models
+        self.parents = []
+
+        # Attach the parent model to the children
+        for child in self._children:
+            child.parents.append(self)
+
+    def _get_operation_flags(self):
+        """Define the flags for what operation the model does."""
+        # Define flags for what we're doing
+        self._is_extracting = True if self._extract is not None else False
+        self._is_combining = (
+            True
+            if self._combine is not None and len(self._combine) > 0
+            else False
+        )
+        self._is_dust_attenuating = (
+            True
+            if self._dust_curve is not None
+            or self._apply_dust_to is not None
+            or self._tau_v is not None
+            else False
+        )
+        self._is_dust_emitting = (
+            True if self._dust_emission_model is not None else False
+        )
+
     def _unpack_model_recursively(self, model):
         """
         Traverse the model tree and collect what we will need to do.
@@ -416,6 +441,10 @@ class EmissionModel:
 
     def unpack_model(self):
         """Unpack the model tree to get the order of operations."""
+        # Unpack children and parents
+        self._set_children()
+        self._set_parents()
+
         # Define the private containers we'll unpack everything into. These
         # are dictionaries of the form {<result_label>: <operation props>}
         self._extract_keys = {}
@@ -433,6 +462,9 @@ class EmissionModel:
         self._unpack_model_recursively(self)
 
         # Once everything is unpacked we can do some clean up
+
+        # Get operation flags
+        self._get_operation_flags()
 
         # Ensure all attenuation steps are pointing to an emission model,
         # not a string (strings can be passed to say which label to apply
@@ -749,41 +781,79 @@ class EmissionModel:
         # Unpack now that we're done
         self.unpack_model()
 
-    def add_model(self, model):
-        pass
-
-    def remove_model(self, label):
+    def replace_model(self, replace_label, *replacements, new_label=None):
         """
         Remove a child model from this model.
 
         Args:
-            label (str): The label of the model to remove.
-
-        Returns:
-            EmissionModel: The model with the child removed.
+            replace_label (str):
+                The label of the model to replace.
+            replacements (EmissionModel):
+                The models to replace the model with.
+            new_label (str):
+                The label for the new combination step if multiple replacements
+                have been passed (ignored otherwise).
         """
         # Ensure the label exists
-        if label not in self._models:
+        if replace_label not in self._models:
             raise exceptions.InconsistentArguments(
-                f"Could not find a model with the label: {label}"
+                f"Could not find a model with the label: {replace_label}"
             )
 
-        # Get the model we are removing
-        remove_model = self._models[label]
+        # Ensure all replacements are EmissionModels
+        for model in replacements:
+            if not isinstance(model, EmissionModel):
+                raise exceptions.InconsistentArguments(
+                    "All replacements must be EmissionModels."
+                )
 
-        # Remove this model from the parent's combine if necessary
-        for parent in remove_model.parents:
+        # Get the model we are replacing
+        replace_model = self._models[replace_label]
+
+        # Get the children and parents of this model
+        parents = replace_model.parents
+        children = replace_model._children
+
+        # Remove the model we are replacing
+        self._models.pop(replace_label)
+        for parent in parents:
+            parent._children.remove(replace_model)
+            parent._combine.remove(replace_model)
+            if parent._apply_dust_to == replace_model:
+                parent._apply_dust_to = None
+        for child in children:
+            child.parents.remove(replace_model)
+
+        # Do we have more than 1 replacement?
+        if len(replacements) > 1:
+            # We'll have to include a combination model
+            new_model = EmissionModel(
+                label=replace_label if new_label is None else new_label,
+                combine=replacements,
+            )
+        else:
+            new_model = replacements[0]
+
+            # Warn the user if they passed a new label, it won't be used
+            if new_label is not None:
+                print(
+                    "Warning: new_label is only used when multiple "
+                    "replacements are passed."
+                )
+
+        # Attach the new model/s to the children
+        for child in children:
+            child.parents.extend(replacements)
+
+        # Attach the new model to the parents
+        for parent in parents:
+            parent._children.append(new_model)
             if parent._is_combining:
-                parent._combine.remove(remove_model)
+                parent._combine.append(new_model)
+            if parent._is_dust_attenuating:
+                parent._apply_dust_to = new_model
 
-                # If we are no longer combining anything, remove the parent
-                if len(parent._combine) == 0:
-                    self.remove_model(parent.label)
-
-        # Remove the model
-        del self._models[label]
-
-        # Unpack now that we're done
+        # Unpack now we're done
         self.unpack_model()
 
     def relabel_model(self, old_label, new_label):
@@ -930,7 +1000,7 @@ class EmissionModel:
             facecolor="none", edgecolor="black", label="Extraction"
         )
 
-        # Add legend to plot
+        # Add legend to the bottom of the plot
         ax.legend(
             handles=[
                 attenuate_line,
@@ -939,10 +1009,12 @@ class EmissionModel:
                 unmasked_patch,
                 extraction_box,
             ],
+            loc="upper center",
             frameon=False,
+            bbox_to_anchor=(0.5, -0.1),
+            ncol=5,
         )
 
-        ax.set_aspect("equal")
         ax.axis("off")
         plt.show()
 
