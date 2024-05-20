@@ -128,6 +128,18 @@ def load_EAGLE(
         )[ok]
         * 1e10
     )  #  Msun
+    s_masses = (
+        read_array(
+            "PARTDATA",
+            fileloc,
+            tag,
+            "/PartType4/Mass",
+            noH=True,
+            physicalUnits=True,
+            numThreads=numThreads,
+        )[ok]
+        * 1e10
+    )  #  Msun
     s_ages = read_array(
         "PARTDATA",
         fileloc,
@@ -143,20 +155,20 @@ def load_EAGLE(
         "/PartType4/SmoothedMetallicity",
         numThreads=numThreads,
     )[ok]
-    s_oxygen = read_array(
-        "PARTDATA",
-        fileloc,
-        tag,
-        "/PartType4/ElementAbundance/Oxygen",
-        numThreads=numThreads,
-    )[ok]
-    s_hydrogen = read_array(
-        "PARTDATA",
-        fileloc,
-        tag,
-        "/PartType4/ElementAbundance/Hydrogen",
-        numThreads=numThreads,
-    )[ok]
+    # s_oxygen = read_array(
+    #     "PARTDATA",
+    #     fileloc,
+    #     tag,
+    #     "/PartType4/ElementAbundance/Oxygen",
+    #     numThreads=numThreads,
+    # )[ok]
+    # s_hydrogen = read_array(
+    #     "PARTDATA",
+    #     fileloc,
+    #     tag,
+    #     "/PartType4/ElementAbundance/Hydrogen",
+    #     numThreads=numThreads,
+    # )[ok]
 
     # Get gas particle properties
     g_sgrpno = read_array(
@@ -231,11 +243,12 @@ def load_EAGLE(
         s_grpno=s_grpno,
         s_sgrpno=s_sgrpno,
         s_imasses=s_imasses,
+        s_masses=s_masses,
         s_ages=s_ages,
         s_Zsmooth=s_Zsmooth,
         s_coords=s_coords,
-        s_oxygen=s_oxygen,
-        s_hydrogen=s_hydrogen,
+        # s_oxygen=s_oxygen,
+        # s_hydrogen=s_hydrogen,
         g_grpno=g_grpno,
         g_sgrpno=g_sgrpno,
         g_masses=g_masses,
@@ -331,6 +344,9 @@ def load_EAGLE_shm(
     s_imasses = np_shm_read(
         f"{args.shm_prefix}s_imasses{args.shm_suffix}", (s_len,), dtype
     )[ok]
+    s_masses = np_shm_read(
+        f"{args.shm_prefix}s_masses{args.shm_suffix}", (s_len,), dtype
+    )[ok]
     s_ages = np_shm_read(
         f"{args.shm_prefix}s_ages{args.shm_suffix}", (s_len,), dtype
     )[ok]
@@ -363,9 +379,9 @@ def load_EAGLE_shm(
     g_masses = np_shm_read(
         f"{args.shm_prefix}g_masses{args.shm_suffix}", (g_len,), dtype
     )[ok]
-    # g_sfr = np_shm_read(
-    #     f"{args.shm_prefix}g_sfr{args.shm_suffix}", (g_len,), dtype
-    # )[ok]
+    g_sfr = np_shm_read(
+        f"{args.shm_prefix}g_sfr{args.shm_suffix}", (g_len,), dtype
+    )[ok]
     g_Zsmooth = np_shm_read(
         f"{args.shm_prefix}g_Zsmooth{args.shm_suffix}", (g_len,), dtype
     )[ok]
@@ -384,6 +400,7 @@ def load_EAGLE_shm(
         s_grpno=s_grpno,
         s_sgrpno=s_sgrpno,
         s_imasses=s_imasses,
+        s_masses=s_masses,
         s_ages=s_ages,
         s_Zsmooth=s_Zsmooth,
         s_coords=s_coords,
@@ -393,7 +410,7 @@ def load_EAGLE_shm(
         g_sgrpno=g_sgrpno,
         g_masses=g_masses,
         g_Zsmooth=g_Zsmooth,
-        # g_sfr=g_sfr,
+        g_sfr=g_sfr,
         g_coords=g_coords,
         g_hsml=g_hsml,
     )
@@ -787,6 +804,7 @@ def assign_galaxy_prop(
     s_grpno: NDArray[np.int32],
     s_sgrpno: NDArray[np.int32],
     s_imasses: NDArray[np.float32],
+    s_masses: NDArray[np.float32],
     s_ages: NDArray[np.float32],
     s_Zsmooth: NDArray[np.float32],
     s_coords: NDArray[np.float32],
@@ -796,7 +814,7 @@ def assign_galaxy_prop(
     g_sgrpno: NDArray[np.int32],
     g_masses: NDArray[np.float32],
     g_Zsmooth: NDArray[np.float32],
-    # g_sfr: NDArray[np.float32],
+    g_sfr: NDArray[np.float32],
     g_coords: NDArray[np.float32],
     g_hsml: NDArray[np.float32],
 ) -> Galaxy:
@@ -808,24 +826,27 @@ def assign_galaxy_prop(
     # Assign stellar properties
     galaxy.load_stars(
         initial_masses=s_imasses[ok] * Msun,
+        current_masses=s_masses[ok] * Msun,
         ages=s_ages[ok] * 1e9 * yr,
         metallicities=s_Zsmooth[ok],
         coordinates=s_coords[ok],
         # s_oxygen=s_oxygen[ok],
         # s_hydrogen=s_hydrogen[ok],
     )
+    galaxy.calculate_integrated_stellar_properties()
 
     # Fill individual galaxy objects with gas particles
-    # sfr_flag = g_sfr > 0
+    sfr_flag = g_sfr > 0
     # mask for current galaxy
     ok = (g_grpno == grpno[ii]) * (g_sgrpno == sgrpno[ii])
     # Assign gas particle properties
     galaxy.load_gas(
         masses=g_masses[ok] * Msun,
         metallicities=g_Zsmooth[ok],
-        # star_forming=sfr_flag[ok],
+        star_forming=sfr_flag[ok],
         coordinates=g_coords[ok] * Mpc,
         smoothing_lengths=g_hsml[ok] * Mpc,
     )
+    galaxy.calculate_integrated_gas_properties()
 
     return galaxy
