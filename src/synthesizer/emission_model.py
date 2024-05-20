@@ -19,12 +19,19 @@ from synthesizer import exceptions
 
 
 class EmissionModel:
-    """A class to define the construction of a spectra from a grid."""
+    """
+    A class to define the construction of a spectra from a grid.
+
+
+    All attributes are accessed through properties and set via setters to
+    ensure the tree remains consistent. An attribute is either set at
+    instantiation or is set via a setter.
+    """
 
     def __init__(
         self,
-        grid,
         label,
+        grid=None,
         extract=None,
         combine=None,
         apply_dust_to=None,
@@ -51,33 +58,47 @@ class EmissionModel:
         remove certain elements (e.g. if you want to eliminate particles).
 
         """
-        # Attach the grid
-        self.grid = grid
-
         # What is the key for the spectra that will be produced?
         self.label = label
 
+        # Attach the grid
+        self._grid = grid
+
         # What base key will we be extracting? (can be None if we're applying
         # a dust curve to an existing spectra)
-        self.extract = extract
+        self._extract = extract
 
-        # Attach the dust curve
-        self.dust_curve = dust_curve
-
-        # Attach the optical depth
-        self.tau_v = tau_v
+        # Attach the dust attenuation properties
+        self._dust_curve = dust_curve
+        self._apply_dust_to = apply_dust_to
+        self._tau_v = tau_v
 
         # Attach the dust emission model
-        self.dust_emission_model = dust_emission_model
+        self._dust_emission_model = dust_emission_model
 
         # Initialise the container for combined spectra we'll add together
-        self.combine = list(combine) if combine is not None else None
-
-        # If we have a dust_curve, we need to know where to apply it
-        self.apply_dust_to = apply_dust_to
+        self._combine = list(combine) if combine is not None else combine
 
         # Attach the escape fraction
-        self.fesc = fesc
+        self._fesc = fesc
+
+        # Define flags for what we're doing
+        self._is_extracting = True if extract is not None else False
+        self._is_combining = (
+            True
+            if self._combine is not None and len(self._combine) > 0
+            else False
+        )
+        self._is_dust_attenuating = (
+            True
+            if dust_curve is not None
+            or apply_dust_to is not None
+            or tau_v is not None
+            else False
+        )
+        self._is_dust_emitting = (
+            True if dust_emission_model is not None else False
+        )
 
         # Define the container which will hold mask information
         self.masks = []
@@ -107,10 +128,10 @@ class EmissionModel:
         # Intialise and populate a dictionary to hold all child models for
         # traversing the tree
         self._children = []
-        for child in self.combine:
+        for child in self._combine:
             self._children.append(child)
-        if self.apply_dust_to is not None:
-            self._children.append(self.apply_dust_to)
+        if self._apply_dust_to is not None:
+            self._children.append(self._apply_dust_to)
 
         # Initilaise a container for parent models
         self.parents = []
@@ -119,64 +140,145 @@ class EmissionModel:
         for child in self._children:
             child.parents.append(self)
 
-        # Define the private containers we'll unpack everything into. These
-        # are dictionaries of the form {<result_label>: <operation props>}
-        self._extract_keys = {}
-        self._dust_attenuation = {}
-        self._dust_emission = {}
-        self._combine_keys = {}
-        self._mask_keys = {}
-        self._bottom_to_top = []
-        self._models = {}
-        self._unpack_model_recursively(self)
+        # We're done with setup, so unpack the model
+        self.unpack_model()
+
+    @property
+    def grid(self):
+        """Get the Grid object used for extraction."""
+        return self._grid
+
+    @property
+    def extract(self):
+        """Get the key for the spectra to extract."""
+        return self._extract
+
+    @property
+    def dust_curve(self):
+        """Get the dust curve to apply."""
+        return self._dust_curve
+
+    @property
+    def apply_dust_to(self):
+        """Get the spectra to apply the dust curve to."""
+        return self._apply_dust_to
+
+    @property
+    def tau_v(self):
+        """Get the optical depth to apply."""
+        return self._tau_v
+
+    @property
+    def dust_emission_model(self):
+        """Get the dust emission model to generate from."""
+        return self._dust_emission_model
+
+    @property
+    def combine(self):
+        """Get the models that will be combined."""
+        return self._combine
+
+    @property
+    def fesc(self):
+        """Get the escape fraction."""
+        return self._fesc
 
     def _check_args(self):
         """Ensure we have a valid model."""
-        if self.extract is not None and any(
-            arg is not None
-            for arg in [self.dust_curve, self.combine, self.apply_dust_to]
+        # Ensure we have a valid operation
+        if (
+            sum(
+                [
+                    self._is_extracting,
+                    self._is_combining,
+                    self._is_dust_attenuating,
+                    self._is_dust_emitting,
+                ]
+            )
+            == 0
         ):
             raise exceptions.InconsistentArguments(
-                "Cannot extract and apply dust or combine spectra. "
-                "Can only do one operation at a time."
+                "No valid operation found from the arguments given. "
+                "Currently have:\n"
+                "\tFor extraction: "
+                f"(grid={self._grid} extract={self._extract})\n"
+                "\tFor combination: "
+                f"(combine={self._combine})\n"
+                "\tFor dust attenuation: "
+                f"(dust_curve={self._dust_curve} "
+                f"apply_dust_to={self._apply_dust_to} tau_v={self._tau_v})\n"
+                "\tFor dust emission: "
+                f"(dust_emission_model={self._dust_emission_model})"
             )
-        if self.dust_curve is not None and self.apply_dust_to is None:
+
+        # Ensure only one type of operation is being done
+        if (
+            sum(
+                [
+                    self._is_extracting,
+                    self._is_combining,
+                    self._is_dust_attenuating,
+                    self._is_dust_emitting,
+                ]
+            )
+            > 1
+        ):
             raise exceptions.InconsistentArguments(
-                "Must specify where to apply dust curve."
+                "Can only extract, combine, or apply dust to spectra in one "
+                "model. (Attempting to: "
+                f"extract: {self._is_extracting}, "
+                f"combine: {self._is_combining}, "
+                f"dust_attenuate: {self._is_dust_attenuating}, "
+                f"dust_emission: {self._is_dust_emitting})\n"
+                "Currently have:\n"
+                "\tFor extraction: "
+                f"(grid={self._grid} extract={self._extract})\n"
+                "\tFor combination: "
+                f"(combine={self._combine})\n"
+                "\tFor dust attenuation: "
+                f"(dust_curve={self._dust_curve} "
+                f"apply_dust_to={self._apply_dust_to} tau_v={self._tau_v})\n"
+                "\tFor dust emission: "
+                f"(dust_emission_model={self._dust_emission_model})"
             )
-        if self.apply_dust_to is not None and self.dust_curve is None:
+
+        # Ensure we have what we need for all operations
+        if self._is_extracting and self._grid is None:
+            raise exceptions.InconsistentArguments(
+                "Must specify a grid to extract from."
+            )
+        if self._is_dust_attenuating and self._dust_curve is None:
             raise exceptions.InconsistentArguments(
                 "Must specify a dust curve to apply."
             )
-        if self.dust_curve is not None and any(
-            arg is not None for arg in [self.extract, self.combine]
-        ):
+        if self._is_dust_attenuating and self._apply_dust_to is None:
             raise exceptions.InconsistentArguments(
-                "Cannot apply dust and extract or combine spectra. "
-                "Can only do one operation at a time."
+                "Must specify where to apply the dust curve."
             )
-        if self.combine is not None and any(
-            arg is not None
-            for arg in [self.extract, self.dust_curve, self.apply_dust_to]
-        ):
+        if self._is_dust_attenuating and self._tau_v is None:
             raise exceptions.InconsistentArguments(
-                "Cannot combine and extract or apply dust to spectra. "
-                "Can only do one operation at a time."
+                "Must specify an optical depth to apply."
             )
 
         # Ensure the grid contains any keys we want to extract
         if (
-            self.extract is not None
-            and self.extract not in self.grid.spectra.keys()
+            self._is_extracting
+            and self._extract not in self._grid.spectra.keys()
         ):
             raise exceptions.InconsistentArguments(
-                f"Grid does not contain key: {self.extract}"
+                f"Grid does not contain key: {self._extract}"
             )
+
+        # If we haven't been given an escape fraction and we're extracting
+        # ensure it's 0.0
+        if self._is_extracting:
+            if self._fesc is None:
+                self._fesc = 0.0
 
         # Now that we've checked everything is consistent we can make an empty
         # list for combine if it is None
-        if self.combine is None:
-            self.combine = []
+        if self._combine is None:
+            self._combine = []
 
     def _unpack_model_recursively(self, model):
         """
@@ -223,186 +325,295 @@ class EmissionModel:
         ):
             self._bottom_to_top.append(model.label)
 
-    def _change_attr_recursively(self, model, attr, value, label, set_all):
-        """Recurse through the emission model tree to modifty dust curve."""
-        # Are we changing this attribute on everything?
-        if set_all:
-            # Onyl set it if the model already has the attribute set
-            if getattr(model, attr, None) is not None:
-                setattr(model, attr, value)
+    def unpack_model(self):
+        """Unpack the model tree to get the order of operations."""
+        # Define the private containers we'll unpack everything into. These
+        # are dictionaries of the form {<result_label>: <operation props>}
+        self._extract_keys = {}
+        self._dust_attenuation = {}
+        self._dust_emission = {}
+        self._combine_keys = {}
+        self._mask_keys = {}
+        self._models = {}
 
-            # Recurse
-            for child in model._children:
-                self._recursive_change_dust_curve(
-                    child, attr, value, label, set_all
-                )
+        # Define the list to hold the model labels in order they need to be
+        # generated
+        self._bottom_to_top = []
 
-            # We're done here
-            return 0
+        # Unpack...
+        self._unpack_model_recursively(self)
 
-        # Are we looking for a specific label?
-        if model.label == label:
-            setattr(model, attr, value)
+    def set_grid(self, grid, label=None, set_all=False):
+        """
+        Set the grid to extract from.
 
-            # We're done here
-            return 0
-
-        # Recurse
-        fail = 1
-        for child in model._children:
-            fail = self._change_attr_recursively(
-                child, attr, value, label, set_all
-            )
-            if not fail:
-                return fail
-        return fail
-
-    def change_dust_curve(self, dust_curve, label=None, set_all=False):
-        """Swap the dust curve on this model or a child."""
-        # Are we modifying everything?
-        if set_all:
-            if self.dust_curve is not None:
-                self.dust_curve = dust_curve
-
-            # Recurse
-            for child in self._children:
-                self._change_attr_recursively(
-                    child,
-                    "dust_curve",
-                    dust_curve,
-                    label,
-                    set_all,
-                )
-
-            # And unpack everything to update this change
-            self._unpack_model_recursively(self)
-            return
-
-        # Are we just modifying the top level dust curve?
-        if label is None or label == self.label:
-            self.dust_curve = dust_curve
-            return
-
-        # Ok, in that case recurse through the children
-        if self._change_attr_recursively(
-            self, "dust_curve", dust_curve, label, set_all
-        ):
+        Args:
+            grid (Grid):
+                The grid to extract from.
+            label (str):
+                The label of the model to set the grid on. If None, sets the
+                grid on this model.
+            set_all (bool):
+                Whether to set the grid on all models.
+        """
+        # Ensure the label exists (if not None)
+        if label is not None and label not in self._models:
             raise exceptions.InconsistentArguments(
                 f"Could not find a model with the label: {label}"
             )
 
-        # And unpack everything to update this change
-        self._unpack_model_recursively(self)
-
-    def change_tau_v(self, tau_v, label=None, set_all=False):
-        """Swap the optical depth on this model or a child."""
-        # Are we modifying everything?
-        if set_all:
-            if self.tau_v is not None:
-                self.tau_v = tau_v
-
-            # Recurse
-            for child in self._children:
-                self._change_attr_recursively(
-                    child,
-                    "tau_v",
-                    tau_v,
-                    label,
-                    set_all,
+        # Set the grid
+        if label is not None:
+            for model in self._models.values():
+                # Only set the grid if we're setting all and the model is
+                # extracting or the label matches
+                if label == model.label or set_all and model._is_extracting:
+                    model._grid = grid
+        else:
+            if self._is_extracting:
+                self._grid = grid
+            else:
+                raise exceptions.InconsistentArguments(
+                    "Cannot set a grid on a model that is not extracting."
                 )
 
-            # And unpack everything to update this change
-            self._unpack_model_recursively(self)
-            return
+        # Unpack the model now we're done
+        self.unpack_model()
 
-        # Are we just modifying the top level dust curve?
-        if label is None or label == self.label:
-            self.tau_v = tau_v
-            return
+    def set_extract(self, extract, label=None, set_all=False):
+        """
+        Set the spectra to extract from the grid.
 
-        # Ok, in that case recurse through the children
-        if self._change_attr_recursively(self, "tau_v", tau_v, label, set_all):
+        Either sets the spectra to extract from a specific model or from all
+        models.
+
+        Args:
+            extract (str):
+                The key of the spectra to extract.
+            label (str):
+                The label of the model to set the extraction key on. If None,
+                sets the extraction key on this model.
+            set_all (bool):
+                Whether to set the extraction key on all models.
+        """
+        # Ensure the label exists (if not None)
+        if label is not None and label not in self._models:
             raise exceptions.InconsistentArguments(
                 f"Could not find a model with the label: {label}"
             )
 
-        # And unpack everything to update this change
-        self._unpack_model_recursively(self)
-
-    def change_fesc(self, fesc, label=None, set_all=False):
-        """Swap the escape fraction on this model or a child."""
-        # Are we modifying everything?
-        if set_all:
-            if self.fesc is not None:
-                self.fesc = fesc
-
-            # Recurse
-            for child in self._children:
-                self._change_attr_recursively(
-                    child,
-                    "fesc",
-                    fesc,
-                    label,
-                    set_all,
+        # Set the extraction key
+        if label is not None:
+            for model in self._models.values():
+                # Only set the extraction key if we're setting all and the
+                # model is extracting or the label matches
+                if label == model.label or set_all and model._is_extracting:
+                    model._extract = extract
+        else:
+            if self._is_extracting:
+                self._extract = extract
+            else:
+                raise exceptions.InconsistentArguments(
+                    "Cannot set an extraction key on a model that is "
+                    "not extracting."
                 )
 
-            # And unpack everything to update this change
-            self._unpack_model_recursively(self)
-            return
+        # Unpack the model now we're done
+        self.unpack_model()
 
-        # Are we just modifying the top level dust curve?
-        if label is None or label == self.label:
-            self.fesc = fesc
-            return
+    def set_dust_props(
+        self,
+        dust_curve,
+        apply_dust_to,
+        tau_v,
+        label=None,
+        set_all=False,
+    ):
+        """
+        Set the dust attenuation properties on this model.
 
-        # Ok, in that case recurse through the children
-        if self._change_attr_recursively(self, "fesc", fesc, label, set_all):
+        Either sets the properties on a specific model or on all models.
+
+        Args:
+            dust_curve (dust.attenuation.*):
+                A dust curve instance to apply.
+            apply_dust_to (EmissionModel):
+                The model to apply the dust curve to.
+            tau_v (float/ndarray):
+                The optical depth to apply.
+            label (str):
+                The label of the model to set the properties on. If
+                None, sets the properties on this model.
+            set_all (bool):
+                Whether to set the properties on all models.
+        """
+        # Ensure the label exists (if not None)
+        if label is not None and label not in self._models:
             raise exceptions.InconsistentArguments(
                 f"Could not find a model with the label: {label}"
             )
 
-        # And unpack everything to update this change
-        self._unpack_model_recursively(self)
-
-    def _add_mask_recursively(self, model, attr, thresh, op, label, set_all):
-        """Recursively add a mask to a model."""
-        # Are we adding a mask to everything?
-        if set_all:
-            model.add_mask(attr, thresh, op)
-            for child in model._children:
-                self._add_mask_recursive(
-                    child,
-                    attr,
-                    thresh,
-                    op,
-                    label,
-                    set_all,
+        # Set the properties
+        if label is not None:
+            for model in self._models.values():
+                # Only set the properties if we're setting all and the model is
+                # an attenuation step or the label matches
+                if (
+                    label == model.label
+                    or set_all
+                    and model._is_dust_attenuating
+                ):
+                    model._dust_curve = dust_curve
+                    model._apply_dust_to = apply_dust_to
+                    model._tau_v = tau_v
+        else:
+            if self.is_dust_attenuating:
+                self._dust_curve = dust_curve
+                self._apply_dust_to = apply_dust_to
+                self._tau_v = tau_v
+            else:
+                raise exceptions.InconsistentArguments(
+                    "Cannot set dust attenuation properties on a model that "
+                    "is not dust attenuating."
                 )
-            return 0
 
-        # Are we adding a mask to this model?
-        if model.label == label:
-            model.add_mask(attr, thresh, op)
-            return 0
+        # Unpack the model now we're done
+        self.unpack_model()
 
-        # Recurse
-        fail = 1
-        for child in model._children:
-            fail = self._add_mask_recursively(
-                child, attr, thresh, op, label, set_all
+    def set_dust_emission_model(self, dust_emission_model, label=None):
+        """
+        Set the dust emission model on this model.
+
+        Either sets the dust emission model on a specific model or on all
+        models.
+
+        Args:
+            dust_emission_model (EmissionModel):
+                The dust emission model to set.
+            label (str):
+                The label of the model to set the dust emission model on. If
+                None, sets the dust emission model on this model.
+        """
+        # Ensure the label exists (if not None)
+        if label is not None and label not in self._models:
+            raise exceptions.InconsistentArguments(
+                f"Could not find a model with the label: {label}"
             )
-            if not fail:
-                return fail
-        return fail
+
+        # Ensure model is a dust emission model and change the model
+        if label is not None and self._models[label]._is_dust_emitting:
+            self._models[label]._dust_emission_model = dust_emission_model
+        elif self._is_dust_emitting:
+            self._dust_emission_model = dust_emission_model
+        else:
+            raise exceptions.InconsistentArguments(
+                "Cannot set a dust emission model on a model that is not "
+                "dust emitting."
+            )
+
+        # Unpack the model now we're done
+        self.unpack_model()
+
+    def set_combine(self, combine, label=None):
+        """
+        Set the models to combine on this model.
+
+        Either sets the models to combine on a specific model or on all models.
+
+        Args:
+            combine (list):
+                A list of models to combine.
+            label (str):
+                The label of the model to set the models to combine on. If
+                None, sets the models to combine on this model.
+        """
+        # Ensure the label exists (if not None)
+        if label is not None and label not in self._models:
+            raise exceptions.InconsistentArguments(
+                f"Could not find a model with the label: {label}"
+            )
+
+        # Ensure all models are EmissionModels
+        for model in combine:
+            if not isinstance(model, EmissionModel):
+                raise exceptions.InconsistentArguments(
+                    "All models to combine must be EmissionModels."
+                )
+
+        # Set the models to combine ensure the model we are setting on is
+        # a combination step
+        if label is not None and self._models[label]._is_combining:
+            self._models[label]._combine = combine
+        elif self._is_combining:
+            self._combine = combine
+        else:
+            raise exceptions.InconsistentArguments(
+                "Cannot set models to combine on a model that is not "
+                "combining."
+            )
+
+        # Unpack the model now we're done
+        self.unpack_model()
+
+    def set_fesc(self, fesc, label=None, set_all=False):
+        """
+        Set the escape fraction on this model.
+
+        Either sets the escape fraction on a specific model or on all models.
+
+        Args:
+            fesc (float):
+                The escape fraction to set.
+            label (str):
+                The label of the model to set the escape fraction on. If None,
+                sets the escape fraction on this model.
+            set_all (bool):
+                Whether to set the escape fraction on all models.
+        """
+        # Ensure the label exists (if not None)
+        if label is not None and label not in self._models:
+            raise exceptions.InconsistentArguments(
+                f"Could not find a model with the label: {label}"
+            )
+
+        # Set the escape fraction
+        if label is not None:
+            for model in self._models.values():
+                # Only set the escape fraction if setting all or the
+                # label matches
+                if label == model.label or set_all and model._is_extracting:
+                    model._fesc = fesc
+        else:
+            if self._is_extracting:
+                self._fesc = fesc
+            else:
+                raise exceptions.InconsistentArguments(
+                    "Cannot set an escape fraction on a model that is not "
+                    "extracting."
+                )
+
+        # Unpack the model now we're done
+        self.unpack_model()
 
     def add_mask(self, attr, thresh, op, label=None, set_all=False):
         """
         Add a mask.
 
+        Either adds a mask to a specific model or to all models.
+
         Args:
-            attr (str): The component attribute to mask on.
-            thresh (unyt_quantity): The threshold for the mask.
-            op (str): The operation to apply. Can be "<", ">", "<=", or ">=".
+            attr (str):
+                The component attribute to mask on.
+            thresh (unyt_quantity):
+                The threshold for the mask.
+            op (str):
+                The operation to apply. Can be "<", ">", "<=", ">=", "==",
+                or "!=".
+            label (str):
+                The label of the model to add the mask to. If None, adds the
+                mask to this model.
+            set_all (bool):
+                Whether to add the mask to all models.
         """
         # Ensure we have units
         if not isinstance(thresh, unyt_quantity):
@@ -416,25 +627,20 @@ class EmissionModel:
                 "Invalid mask operation. Must be one of: <, >, <=, >="
             )
 
-        # If no label has been specified we're adding a mask on this object
-        if label is None:
-            self.masks.append({"attr": attr, "thresh": thresh, "op": op})
-        else:
-            # Otherwise, we need to recurse to find the requested label
-            if self._add_mask_recursively(
-                self,
-                attr,
-                thresh,
-                op,
-                label,
-                set_all,
-            ):
-                raise exceptions.InconsistentArguments(
-                    f"Could not find a model with the label: {label}"
-                )
+        # Ensure the label exists (if not None)
+        if label is not None and label not in self._models:
+            raise exceptions.InconsistentArguments(
+                f"Could not find a model with the label: {label}"
+            )
 
-        # And unpack everything to update this change
-        self._unpack_model_recursively(self)
+        # Add the mask
+        for model in self._models.values():
+            # Only add the mask if we're setting all or the label matches
+            if label == model.label or set_all:
+                model.masks.append({"attr": attr, "thresh": thresh, "op": op})
+
+        # Unpack now that we're done
+        self.unpack_model()
 
     def add_model(self, model):
         pass
@@ -443,7 +649,34 @@ class EmissionModel:
         pass
 
     def relabel_model(self, old_label, new_label):
-        pass
+        """
+        Change the label associated to an existing spectra.
+
+        Args:
+            old_label (str): The current label of the spectra.
+            new_label (str): The new label to assign to the spectra.
+        """
+        # Ensure the new label is not already in use
+        if new_label in self._models:
+            raise exceptions.InconsistentArguments(
+                f"Label {new_label} is already in use."
+            )
+
+        # Ensure the old label is in use
+        if old_label not in self._models:
+            raise exceptions.InconsistentArguments(
+                f"Label {old_label} is not in use."
+            )
+
+        # Get the model
+        model = self._models[old_label]
+
+        # Update the label
+        model.label = new_label
+
+        # Update the models dictionary
+        self._models[new_label] = model
+        del self._models[old_label]
 
     def plot_emission_tree(self):
         """Plot the tree defining the spectra."""
