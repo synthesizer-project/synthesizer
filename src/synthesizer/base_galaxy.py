@@ -86,19 +86,12 @@ class BaseGalaxy:
         lam = self.stars.spectra["emergent"].lam
 
         # Calculate the bolometric dust luminosity as the difference between
-        # the intrinsic and attenuated
-        dust_bolometric_luminosity = (
-            self.stars.spectra["intrinsic"].measure_bolometric_luminosity()
-            - self.stars.spectra["emergent"].measure_bolometric_luminosity()
-        )
-
-        # Get the spectrum and normalise it properly
-        lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(
-            lam
-        )
-
         # Create new Sed object containing dust emission spectra
-        sed = Sed(lam, lnu=lnu)
+        sed = emissionmodel.get_spectra(
+            lam,
+            self.stars.spectra["intrinsic"],
+            self.stars.spectra["emergent"],
+        )
 
         # Associate that with the component's spectra dictionary
         self.stars.spectra["dust"] = sed
