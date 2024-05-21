@@ -403,7 +403,7 @@ class EmergentEmission(EmissionModel):
                     apply_dust_to=apply_dust_to,
                     tau_v=tau_v,
                 ),
-                EscapedEmission(grid=grid, fesc=1 - apply_dust_to.fesc),
+                EscapedEmission(grid=grid, fesc=apply_dust_to.fesc),
             ),
             fesc=fesc,
         )
