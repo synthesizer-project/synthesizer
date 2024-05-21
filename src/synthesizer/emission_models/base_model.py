@@ -348,6 +348,75 @@ class EmissionModel:
         if self._combine is None:
             self._combine = []
 
+    def __str__(self):
+        """Return a string summarising the model."""
+        parts = []
+
+        # Get the labels in reverse order
+        labels = [*self._extract_keys, *self._bottom_to_top]
+
+        for label in labels:
+            model = self._models[label]
+            if model._is_extracting:
+                parts.append("-")
+                parts.append(f"{model.label}: Extracting")
+                parts.append("-")
+                parts.append(f"  Grid: {model._grid.grid_name}")
+                parts.append(f"  Extract key: {model._extract}")
+                parts.append(f"  Escape fraction: {model._fesc}")
+
+            if model._is_combining:
+                parts.append("-")
+                parts.append(f"{model.label}: Combining")
+                parts.append("-")
+                combine_labels = [model.label for model in model._combine]
+                parts.append(f"  Combine models: {', '.join(combine_labels)}")
+
+            if model._is_dust_attenuating:
+                parts.append("-")
+                parts.append(f"{model.label}: Dust Attenuation")
+                parts.append("-")
+                parts.append(f"  Dust curve: {model._dust_curve}")
+                parts.append(f"  Apply dust to: {model._apply_dust_to.label}")
+                parts.append(f"  Optical depth (tau_v): {model._tau_v}")
+
+            if model._is_dust_emitting:
+                parts.append("-")
+                parts.append(f"{model.label}: Dust Emission")
+                parts.append("-")
+                parts.append(
+                    f"  Dust emission model: {model._dust_emission_model}"
+                )
+
+            if model._is_masked:
+                parts.append("  Masks:")
+                for mask in model.masks:
+                    parts.append(
+                        f"    - {mask['attr']} {mask['op']} {mask['thresh']} "
+                    )
+
+        # Get the length of the longest line
+        longest = max(len(line) for line in parts) + 10
+
+        # Place divisions between each model
+        for ind, line in enumerate(parts):
+            if "-" in line:
+                parts[ind] = "-" * longest
+
+        # Pad all lines to the same length
+        for ind, line in enumerate(parts):
+            line += " " * (longest - len(line))
+            parts[ind] = line
+
+        # Attach a header and footer line
+        parts.insert(0, f" EmissionModel: {self.label} ".center(longest, "="))
+        parts.append("=" * longest)
+
+        parts[0] = "|" + parts[0]
+        parts[-1] += "|"
+
+        return "|\n|".join(parts)
+
     def __getitem__(self, label):
         """
         Enable label look up.
