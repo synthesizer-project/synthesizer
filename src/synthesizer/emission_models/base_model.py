@@ -101,6 +101,8 @@ class EmissionModel:
         dust_curve=None,
         tau_v=None,
         dust_emission_model=None,
+        dust_lum_intrinsic=None,
+        dust_lum_attenuated=None,
         mask_attr=None,
         mask_thresh=None,
         mask_op=None,
@@ -141,6 +143,12 @@ class EmissionModel:
                 any of these.
             dust_emission_model (EmissionModel):
                 The dust emission model to generate from.
+            dust_lum_intrinsic_key (EmissionModel):
+                The intrinsic model to use deriving the dust
+                luminosity when computing dust emission.
+            dust_lum_attenuated_key (EmissionModel):
+                The attenuated model to use deriving the dust
+                luminosity when computing dust emission.
             mask_attr (str):
                 The component attribute to mask on.
             mask_thresh (unyt_quantity):
@@ -172,6 +180,11 @@ class EmissionModel:
 
         # Attach the dust emission model
         self._dust_emission_model = dust_emission_model
+
+        # Attach the keys for the intrinsic and attenuated spectra to use when
+        # computing the dust luminosity
+        self._dust_lum_intrinsic = dust_lum_intrinsic
+        self._dust_lum_attenuated = dust_lum_attenuated
 
         # Initialise the container for combined spectra we'll add together
         self._combine = list(combine) if combine is not None else combine
@@ -248,6 +261,16 @@ class EmissionModel:
     def dust_emission_model(self):
         """Get the dust emission model to generate from."""
         return self._dust_emission_model
+
+    @property
+    def dust_lum_intrinsic(self):
+        """Get the intrinsic model for computing dust luminosity."""
+        return self._dust_lum_intrinsic
+
+    @property
+    def dust_lum_attenuated(self):
+        """Get the attenuated model for computing dust luminosity."""
+        return self._dust_lum_attenuated
 
     @property
     def combine(self):
@@ -390,6 +413,15 @@ class EmissionModel:
                 parts.append(
                     f"  Dust emission model: {model._dust_emission_model}"
                 )
+                if (
+                    model._dust_lum_intrinsic is not None
+                    and model._dust_lum_attenuated is not None
+                ):
+                    parts.append(
+                        f"  Dust luminosity: "
+                        f"{model._dust_lum_intrinsic.label} - "
+                        f"{model._dust_lum_attenuated.label}"
+                    )
 
             if model._is_masked:
                 parts.append("  Masks:")
@@ -445,6 +477,10 @@ class EmissionModel:
             self._children.append(child)
         if self._apply_dust_to is not None:
             self._children.append(self._apply_dust_to)
+        if self._dust_lum_intrinsic is not None:
+            self._children.append(self._dust_lum_intrinsic)
+        if self._dust_lum_attenuated is not None:
+            self._children.append(self._dust_lum_attenuated)
 
     def _set_parents(self):
         """Set the parents of this model."""
@@ -1011,12 +1047,30 @@ class EmissionModel:
         for label, model in self._models.items():
             if model._is_dust_attenuating:
                 links.setdefault(label, []).append(
-                    (model.apply_dust_to.label, "attenuate")
+                    (model.apply_dust_to.label, "--")
                 )
             if model._is_combining:
                 links.setdefault(label, []).extend(
-                    [(child.label, "combine") for child in model._combine]
+                    [(child.label, "-") for child in model._combine]
                 )
+            if model._is_dust_emitting:
+                links.setdefault(label, []).extend(
+                    [
+                        (
+                            model._dust_lum_intrinsic.label
+                            if model._dust_lum_intrinsic is not None
+                            else None,
+                            "dotted",
+                        ),
+                        (
+                            model._dust_lum_attenuated.label
+                            if model._dust_lum_attenuated is not None
+                            else None,
+                            "dotted",
+                        ),
+                    ]
+                )
+
             if model._is_masked:
                 masked_labels.append(label)
             if model._is_extracting:
@@ -1054,10 +1108,11 @@ class EmissionModel:
 
         # Draw edges with different styles based on link type
         for source, targets in links.items():
-            for target, link_type in targets:
+            for target, linestyle in targets:
+                if target is None:
+                    continue
                 sx, sy = pos[source]
                 tx, ty = pos[target]
-                linestyle = "dashed" if link_type == "attenuate" else "solid"
                 ax.plot(
                     [sx, tx],
                     [-sy, -ty],  # Invert y-axis for bottom-to-top
@@ -1073,6 +1128,9 @@ class EmissionModel:
         combine_line = mlines.Line2D(
             [], [], color="black", linestyle="solid", label="Combined"
         )
+        dust_emission_line = mlines.Line2D(
+            [], [], color="black", linestyle="dotted", label="Dust Calculation"
+        )
         masked_patch = mpatches.Patch(color="lightgreen", label="Masked")
         unmasked_patch = mpatches.Patch(color="lightblue", label="Unmasked")
         extraction_box = mpatches.Patch(
@@ -1082,8 +1140,9 @@ class EmissionModel:
         # Add legend to the bottom of the plot
         ax.legend(
             handles=[
-                attenuate_line,
                 combine_line,
+                attenuate_line,
+                dust_emission_line,
                 masked_patch,
                 unmasked_patch,
                 extraction_box,
@@ -1091,7 +1150,7 @@ class EmissionModel:
             loc="upper center",
             frameon=False,
             bbox_to_anchor=(0.5, 1.1),
-            ncol=5,
+            ncol=6,
         )
 
         ax.axis("off")
@@ -1287,9 +1346,6 @@ class EmissionModel:
                 ),
             )
 
-        for sed in spectra.values():
-            print(sed.lnu.shape)
-
         # With all base spectra extracted we can now loop from bottom to top
         # of the tree creating each spectra
         for label in emission_model._bottom_to_top:
@@ -1335,6 +1391,23 @@ class EmissionModel:
                     tau_v,
                     dust_curve=this_model.dust_curve,
                     mask=this_mask,
+                )
+
+            elif this_model._is_dust_emitting:
+                # Unpack what we need for dust emission
+                dust_emission_model = this_model.dust_emission_model
+                if this_model.dust_lum_intrinsic is not None:
+                    intrinsic = spectra[this_model.dust_lum_intrinsic.label]
+                    attenuated = spectra[this_model.dust_lum_attenuated.label]
+                else:
+                    intrinsic = None
+                    attenuated = None
+
+                # Apply the dust emission model
+                spectra[label] = dust_emission_model.get_spectra(
+                    emission_model.grid.lam,
+                    intrinsic,
+                    attenuated,
                 )
 
         return spectra
