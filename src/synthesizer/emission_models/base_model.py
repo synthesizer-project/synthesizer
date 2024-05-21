@@ -164,7 +164,11 @@ class EmissionModel:
         # Attach the dust attenuation properties
         self._dust_curve = dust_curve
         self._apply_dust_to = apply_dust_to
-        self._tau_v = tau_v if isinstance(tau_v, (tuple, list)) else [tau_v]
+        self._tau_v = (
+            tau_v
+            if isinstance(tau_v, (tuple, list)) or tau_v is None
+            else [tau_v]
+        )
 
         # Attach the dust emission model
         self._dust_emission_model = dust_emission_model
@@ -273,7 +277,7 @@ class EmissionModel:
                 "No valid operation found from the arguments given. "
                 "Currently have:\n"
                 "\tFor extraction: "
-                f"(grid={self._grid} extract={self._extract})\n"
+                f"(grid={self._grid.grid_name} extract={self._extract})\n"
                 "\tFor combination: "
                 f"(combine={self._combine})\n"
                 "\tFor dust attenuation: "
@@ -304,7 +308,7 @@ class EmissionModel:
                 f"dust_emission: {self._is_dust_emitting})\n"
                 "Currently have:\n"
                 "\tFor extraction: "
-                f"(grid={self._grid} extract={self._extract})\n"
+                f"(grid={self._grid.grid_name} extract={self._extract})\n"
                 "\tFor combination: "
                 f"(combine={self._combine})\n"
                 "\tFor dust attenuation: "
@@ -1269,21 +1273,22 @@ class EmissionModel:
                 this_mask = component.get_mask(**mask_dict, mask=this_mask)
 
             # Get this base spectra
-            spectra[label] = generator(
-                emission_model.grid,
-                spectra_key,
-                fesc=getattr(component, this_model.fesc)
-                if isinstance(this_model.fesc, str)
-                else this_model.fesc,
-                mask=this_mask,
-                verbose=verbose,
-                **kwargs,
+            spectra[label] = Sed(
+                emission_model.grid.lam,
+                generator(
+                    emission_model.grid,
+                    spectra_key,
+                    fesc=getattr(component, this_model.fesc)
+                    if isinstance(this_model.fesc, str)
+                    else this_model.fesc,
+                    mask=this_mask,
+                    verbose=verbose,
+                    **kwargs,
+                ),
             )
 
-        # Moving forward we might need a mask of ones. Define it here once to
-        # avoiding wasting time defining it multiple times (we'll use the last
-        # label in the loop above since all spectra are the same shape)
-        ones_mask = np.ones_like(spectra[label]._lnu, dtype=bool)
+        for sed in spectra.values():
+            print(sed.lnu.shape)
 
         # With all base spectra extracted we can now loop from bottom to top
         # of the tree creating each spectra
@@ -1292,7 +1297,7 @@ class EmissionModel:
             this_model = emission_model._models[label]
 
             # Do we have to define a mask?
-            this_mask = ones_mask
+            this_mask = None
             for mask_dict in this_model.masks:
                 this_mask = component.get_mask(**mask_dict, mask=this_mask)
 
@@ -1301,16 +1306,18 @@ class EmissionModel:
                 # Create an empty spectra to add to
                 spectra[label] = Sed(
                     emission_model.grid.lam,
-                    lnu=np.zeros_like(spectra[this_model.combine[0]]._lnu),
+                    lnu=np.zeros_like(
+                        spectra[this_model.combine[0].label]._lnu
+                    ),
                 )
 
                 # Combine the spectra handling the possible mask
-                for combine_label in this_model.combine:
+                for combine_model in this_model.combine:
                     spectra[label]._lnu[this_mask] += spectra[
-                        combine_label
+                        combine_model.label
                     ]._lnu[this_mask]
 
-            else:
+            elif this_model._is_dust_attenuating:
                 # Unpack the tau_v value unpacking any attributes we need
                 # to extract from the component
                 tau_v = 1
