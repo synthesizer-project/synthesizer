@@ -168,6 +168,13 @@ class Galaxy(BaseGalaxy):
                 np.sum(self.gas.masses * self.gas.metallicities)
                 / self.gas_mass
             )
+        else:
+            self.mass_weighted_gas_metallicity = None
+            if self.verbose:
+                print(
+                    "Mass of gas particles not provided, "
+                    "setting mass_weighted_gas_metallicity to `None`"
+                )
 
         if self.gas.star_forming is not None:
             mask = self.gas.star_forming
@@ -183,6 +190,14 @@ class Galaxy(BaseGalaxy):
                         self.gas.masses[mask] * self.gas.metallicities[mask]
                     )
                     / self.sf_gas_mass
+                )
+        else:
+            self.sf_gas_mass = None
+            self.sf_gas_metallicity = None
+            if self.verbose:
+                print(
+                    "Star forming gas particle mask not provided, "
+                    "setting sf_gas_mass and sf_gas_metallicity to `None`"
                 )
 
     def load_stars(
