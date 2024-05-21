@@ -29,12 +29,16 @@ Example usage:
     spectra = stars.get_spectra(emergent_emission_model)
 """
 
+import copy
+
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.sed import Sed
 
 
 class EmissionModel:
@@ -160,7 +164,7 @@ class EmissionModel:
         # Attach the dust attenuation properties
         self._dust_curve = dust_curve
         self._apply_dust_to = apply_dust_to
-        self._tau_v = tau_v
+        self._tau_v = tau_v if isinstance(tau_v, (tuple, list)) else [tau_v]
 
         # Attach the dust emission model
         self._dust_emission_model = dust_emission_model
@@ -657,12 +661,16 @@ class EmissionModel:
                 ):
                     model._dust_curve = dust_curve
                     model._apply_dust_to = apply_dust_to
-                    model._tau_v = tau_v
+                    model._tau_v = (
+                        tau_v if isinstance(tau_v, (tuple, list)) else [tau_v]
+                    )
         else:
             if self.is_dust_attenuating:
                 self._dust_curve = dust_curve
                 self._apply_dust_to = apply_dust_to
-                self._tau_v = tau_v
+                self._tau_v = (
+                    tau_v if isinstance(tau_v, (tuple, list)) else [tau_v]
+                )
             else:
                 raise exceptions.InconsistentArguments(
                     "Cannot set dust attenuation properties on a model that "
@@ -1087,3 +1095,239 @@ class EmissionModel:
             plt.show()
 
         return fig, ax
+
+    def _apply_overrides(self, emission_model, dust_curves, tau_v, fesc, mask):
+        """
+        Apply overrides to an emission model copy.
+
+        This function is used in _get_spectra to apply any emission model
+        property overrides passed to that method before generating the
+        spectra.
+
+        _get_spectra will make a copy of the emission model and then pass it
+        to this function to apply any overrides before generating the spectra.
+
+        Args:
+            emission_model (EmissionModel):
+                The emission model copy to apply the overrides to.
+            dust_curves (dict):
+                An overide to the emission model dust curves. Either:
+                    - None, indicating the dust_curves defined on the emission
+                      models should be used.
+                    - A single dust curve to apply to all emission models.
+                    - A dictionary of the form:
+                          {<label>: <dust_curve instance>}
+                      to use a specific dust curve instance with particular
+                      properties.
+            tau_v (dict):
+                An overide to the dust model optical depth. Either:
+                    - None, indicating the tau_v defined on the emission model
+                        should be used.
+                    - A float to use as the optical depth for all models.
+                    - A dictionary of the form:
+                          {<label>: float(<tau_v>)}
+                      to use a specific optical depth with a particular
+                      model or
+                          {<label>: str(<attribute>)}
+                      to use an attribute of the component as the optical
+                      depth.
+            fesc (dict):
+                An overide to the emission model escape fraction. Either:
+                    - None, indicating the fesc defined on the emission model
+                      should be used.
+                    - A float to use as the escape fraction for all models.
+                    - A dictionary of the form:
+                          {<label>: float(<fesc>)}
+                      to use a specific escape fraction with a particular
+                      model or
+                          {<label>: str(<attribute>)}
+                      to use an attribute of the component as the escape
+                      fraction.
+            mask (dict):
+                An overide to the emission model mask. Either:
+                    - None, indicating the mask defined on the emission model
+                      should be used.
+                    - A dictionary of the form:
+                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
+                      to add a specific mask to a particular model.
+        """
+        # If we have dust curves to apply, apply them
+        if dust_curves is not None:
+            for label, dust_curve in dust_curves.items():
+                emission_model.change_dust_curve(dust_curve, label)
+
+        # If we have optical depths to apply, apply them
+        if tau_v is not None:
+            for label, value in tau_v.items():
+                emission_model.change_tau_v(value, label)
+
+        # If we have escape fractions to apply, apply them
+        if fesc is not None:
+            for label, value in fesc.items():
+                emission_model.change_fesc(value, label)
+
+        # If we have masks to apply, apply them
+        if mask is not None:
+            for label, mask in mask.items():
+                emission_model.add_mask(**mask, label=label)
+
+    def _get_spectra(
+        self,
+        component,
+        generator,
+        dust_curves=None,
+        tau_v=None,
+        fesc=None,
+        mask=None,
+        verbose=True,
+        **kwargs,
+    ):
+        """
+        Generate stellar spectra as described by the emission model.
+
+        If the emission model defines a dust_curve or fesc and no overide
+        is provided in the arguments to this function
+
+        Args:
+            component (Stars/BlackHoles):
+                The component to generate the spectra for.
+            generator (function):
+                The generator function from the component (generate_lnu or
+                generate_particle_lnu).
+            dust_curves (dict):
+                An overide to the emisison model dust curves. Either:
+                    - None, indicating the dust_curves defined on the emission
+                      models should be used.
+                    - A single dust curve to apply to all emission models.
+                    - A dictionary of the form:
+                          {<label>: <dust_curve instance>}
+                      to use a specific dust curve instance with particular
+                      properties.
+            tau_v (dict):
+                An overide to the dust model optical depth. Either:
+                    - None, indicating the tau_v defined on the emission model
+                        should be used.
+                    - A float to use as the optical depth for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<tau_v>)}
+                        to use a specific optical depth with a particular
+                        model or
+                            {<label>: str(<attribute>)}
+                        to use an attribute of the component as the optical
+                        depth.
+            fesc (dict):
+                An overide to the emission model escape fraction. Either:
+                    - None, indicating the fesc defined on the emission model
+                      should be used.
+                    - A float to use as the escape fraction for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<fesc>)}
+                      to use a specific escape fraction with a particular
+                      model or
+                            {<label>: str(<attribute>)}
+                      to use an attribute of the component as the escape
+                      fraction.
+            mask (dict):
+                An overide to the emission model mask. Either:
+                    - None, indicating the mask defined on the emission model
+                      should be used.
+                    - A dictionary of the form:
+                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
+                      to add a specific mask to a particular model.
+            verbose (bool)
+                Are we talking?
+            kwargs (dict)
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            dict
+                A dictionary of spectra which can be attached to the
+                appropriate spectra attribute of the component
+                (spectra/particle_spectra)
+        """
+        # We don't want to modify the original emission model with any
+        # modifications made here so we'll make a copy of it (this is a
+        # shallow copy so very cheap and doesn't copy any pointed to objects
+        # only their reference)
+        emission_model = copy.copy(self)
+
+        # Apply overides
+        self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
+
+        # Define a dictionary to hold the spectra
+        spectra = {}
+
+        # First step we need to extract each base spectra
+        for label, spectra_key in emission_model._extract_keys.items():
+            # Get this model
+            this_model = emission_model._models[label]
+
+            # Do we have to define a mask?
+            this_mask = None
+            for mask_dict in this_model.masks:
+                this_mask = component.get_mask(**mask_dict, mask=this_mask)
+
+            # Get this base spectra
+            spectra[label] = generator(
+                emission_model.grid,
+                spectra_key,
+                fesc=getattr(component, this_model.fesc)
+                if isinstance(this_model.fesc, str)
+                else this_model.fesc,
+                mask=this_mask,
+                verbose=verbose,
+                **kwargs,
+            )
+
+        # Moving forward we might need a mask of ones. Define it here once to
+        # avoiding wasting time defining it multiple times (we'll use the last
+        # label in the loop above since all spectra are the same shape)
+        ones_mask = np.ones_like(spectra[label]._lnu, dtype=bool)
+
+        # With all base spectra extracted we can now loop from bottom to top
+        # of the tree creating each spectra
+        for label in emission_model._bottom_to_top:
+            # Get this model
+            this_model = emission_model._models[label]
+
+            # Do we have to define a mask?
+            this_mask = ones_mask
+            for mask_dict in this_model.masks:
+                this_mask = component.get_mask(**mask_dict, mask=this_mask)
+
+            # Are we doing a combination?
+            if this_model._is_combining:
+                # Create an empty spectra to add to
+                spectra[label] = Sed(
+                    emission_model.grid.lam,
+                    lnu=np.zeros_like(spectra[this_model.combine[0]]._lnu),
+                )
+
+                # Combine the spectra handling the possible mask
+                for combine_label in this_model.combine:
+                    spectra[label]._lnu[this_mask] += spectra[
+                        combine_label
+                    ]._lnu[this_mask]
+
+            else:
+                # Unpack the tau_v value unpacking any attributes we need
+                # to extract from the component
+                tau_v = 1
+                for tv in this_model.tau_v:
+                    tau_v *= (
+                        getattr(component, tv) if isinstance(tv, str) else tv
+                    )
+
+                # Get the spectra to apply dust to
+                apply_dust_to = spectra[this_model.apply_dust_to.label]
+
+                # Otherwise, we are applying a dust curve (there's no
+                # alternative)
+                spectra[label] = apply_dust_to.apply_attenuation(
+                    tau_v,
+                    dust_curve=this_model.dust_curve,
+                    mask=this_mask,
+                )
+
+        return spectra
