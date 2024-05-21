@@ -56,6 +56,7 @@ class Galaxy(BaseGalaxy):
         black_holes=None,
         redshift=None,
         centre=None,
+        verbose=True,
     ):
         """Initialise a particle based Galaxy with objects derived from
            Particles.
@@ -91,6 +92,7 @@ class Galaxy(BaseGalaxy):
 
         # Set the type of galaxy
         self.galaxy_type = "Particle"
+        self.verbose = verbose
 
         # Instantiate the parent (load stars and gas below)
         BaseGalaxy.__init__(
@@ -137,6 +139,20 @@ class Galaxy(BaseGalaxy):
                     np.sum(self.stars.ages * self.stars.current_masses)
                     / self.stellar_mass
                 )
+            else:
+                self.stellar_mass_weighted_age = None
+                if self.verbose:
+                    print(
+                        "Ages of stars not provided, "
+                        "setting stellar_mass_weighted_age to `None`"
+                    )
+        else:
+            self.stellar_mass_weighted_age = None
+            if self.verbose:
+                print(
+                    "Current mass of stars not provided, "
+                    "setting stellar_mass_weighted_age to `None`"
+                )
 
     def calculate_integrated_gas_properties(self):
         """
@@ -152,6 +168,13 @@ class Galaxy(BaseGalaxy):
                 np.sum(self.gas.masses * self.gas.metallicities)
                 / self.gas_mass
             )
+        else:
+            self.mass_weighted_gas_metallicity = None
+            if self.verbose:
+                print(
+                    "Mass of gas particles not provided, "
+                    "setting mass_weighted_gas_metallicity to `None`"
+                )
 
         if self.gas.star_forming is not None:
             mask = self.gas.star_forming
@@ -168,6 +191,14 @@ class Galaxy(BaseGalaxy):
                     )
                     / self.sf_gas_mass
                 )
+        else:
+            self.sf_gas_mass = None
+            self.sf_gas_metallicity = None
+            if self.verbose:
+                print(
+                    "Star forming gas particle mask not provided, "
+                    "setting sf_gas_mass and sf_gas_metallicity to `None`"
+                )
 
     def load_stars(
         self,
@@ -175,7 +206,6 @@ class Galaxy(BaseGalaxy):
         ages=None,
         metallicities=None,
         stars=None,
-        verbose=True,
         **kwargs,
     ):
         """
@@ -191,8 +221,6 @@ class Galaxy(BaseGalaxy):
                 Star particle metallicity (total metal fraction)
             stars (stars particle object)
                 A pre-existing stars particle object to use. Defaults to None.
-            verbose (bool)
-                If True, print warnings and information messages.
             **kwargs
                 Arbitrary keyword arguments.
 
@@ -209,7 +237,7 @@ class Galaxy(BaseGalaxy):
                 | (ages is None)
                 | (metallicities is None)
             ):
-                if verbose:
+                if self.verbose:
                     print(
                         "In `load_stars`: one of either `initial_masses`"
                         ", `ages` or `metallicities` is not provided, setting "
@@ -234,7 +262,6 @@ class Galaxy(BaseGalaxy):
         masses=None,
         metallicities=None,
         gas=None,
-        verbose=True,
         **kwargs,
     ):
         """
@@ -248,8 +275,6 @@ class Galaxy(BaseGalaxy):
                 gas particle metallicity (total metal fraction)
             gas (gas particle object)
                 A pre-existing gas particle object to use. Defaults to None.
-            verbose (bool)
-                If True, print warnings and information messages.
         **kwargs
 
         Returns:
@@ -261,7 +286,7 @@ class Galaxy(BaseGalaxy):
         else:
             # If nothing has been provided, just set to None and return
             if (masses is None) | (metallicities is None):
-                if verbose:
+                if self.verbose:
                     print(
                         "In `load_stars`: one of either `masses`"
                         " or `metallicities` is not provided, setting "
