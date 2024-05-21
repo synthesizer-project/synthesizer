@@ -38,12 +38,7 @@ class IncidentEmission(EmissionModel):
         fesc (float): The escape fraction of the emission.
     """
 
-    def __init__(
-        self,
-        grid,
-        label="incident",
-        fesc=0.0,
-    ):
+    def __init__(self, grid, label="incident", fesc=0.0, **kwargs):
         """
         Initialise the IncidentEmission object.
 
@@ -58,6 +53,7 @@ class IncidentEmission(EmissionModel):
             label=label,
             extract="incident",
             fesc=fesc,
+            **kwargs,
         )
 
 
@@ -116,12 +112,7 @@ class TransmittedEmission(EmissionModel):
         fesc (float): The escape fraction of the emission.
     """
 
-    def __init__(
-        self,
-        grid,
-        label="transmitted",
-        fesc=0.0,
-    ):
+    def __init__(self, grid, label="transmitted", fesc=0.0, **kwargs):
         """
         Initialise the TransmittedEmission object.
 
@@ -136,6 +127,7 @@ class TransmittedEmission(EmissionModel):
             label=label,
             extract="transmitted",
             fesc=fesc,
+            **kwargs,
         )
 
 
@@ -245,6 +237,7 @@ class NebularEmission(EmissionModel):
         grid,
         label="nebular",
         fesc=0.0,
+        fesc_ly_alpha=1.0,
     ):
         """
         Initialise the NebularEmission object.
@@ -253,17 +246,31 @@ class NebularEmission(EmissionModel):
             grid (synthesizer.grid.Grid): The grid object to extract from.
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
+            feac_ly_alpha (float): The escape fraction of Lyman-alpha.
         """
-        EmissionModel.__init__(
-            self,
-            grid=grid,
-            label=label,
-            combine=(
-                LineContinuumEmission(grid=grid, fesc=fesc),
-                NebularContinuumEmission(grid=grid, fesc=fesc),
-            ),
-            fesc=fesc,
-        )
+        # If we have a Lyman-alpha escape fraction then we need to combine
+        # the Lyman-alpha line emission with the nebular continuum emission
+        # and the rest of the line emission
+        if fesc_ly_alpha < 1.0:
+            EmissionModel.__init__(
+                self,
+                grid=grid,
+                label=label,
+                combine=(
+                    LineContinuumEmission(grid=grid, fesc=fesc),
+                    NebularContinuumEmission(grid=grid, fesc=fesc),
+                ),
+                fesc=fesc,
+            )
+        else:
+            # Otherwise, we just need the nebular emission from the grid
+            EmissionModel.__init__(
+                self,
+                grid=grid,
+                label=label,
+                extract="nebular",
+                fesc=fesc,
+            )
 
 
 class ReprocessedEmission(EmissionModel):
