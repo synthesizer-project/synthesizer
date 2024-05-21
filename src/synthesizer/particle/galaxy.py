@@ -56,7 +56,7 @@ class Galaxy(BaseGalaxy):
         black_holes=None,
         redshift=None,
         centre=None,
-        verbose=True
+        verbose=True,
     ):
         """Initialise a particle based Galaxy with objects derived from
            Particles.
