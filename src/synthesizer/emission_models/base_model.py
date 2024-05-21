@@ -356,34 +356,29 @@ class EmissionModel:
         labels = [*self._extract_keys, *self._bottom_to_top]
 
         for label in labels:
+            # Get the model
             model = self._models[label]
+
+            # Make the model title
+            parts.append("-")
+            parts.append(f"  {model.label}".upper())
+            parts.append("-")
+
             if model._is_extracting:
-                parts.append("-")
-                parts.append(f"{model.label}: Extracting")
-                parts.append("-")
                 parts.append(f"  Grid: {model._grid.grid_name}")
                 parts.append(f"  Extract key: {model._extract}")
                 parts.append(f"  Escape fraction: {model._fesc}")
 
             if model._is_combining:
-                parts.append("-")
-                parts.append(f"{model.label}: Combining")
-                parts.append("-")
                 combine_labels = [model.label for model in model._combine]
                 parts.append(f"  Combine models: {', '.join(combine_labels)}")
 
             if model._is_dust_attenuating:
-                parts.append("-")
-                parts.append(f"{model.label}: Dust Attenuation")
-                parts.append("-")
                 parts.append(f"  Dust curve: {model._dust_curve}")
                 parts.append(f"  Apply dust to: {model._apply_dust_to.label}")
                 parts.append(f"  Optical depth (tau_v): {model._tau_v}")
 
             if model._is_dust_emitting:
-                parts.append("-")
-                parts.append(f"{model.label}: Dust Emission")
-                parts.append("-")
                 parts.append(
                     f"  Dust emission model: {model._dust_emission_model}"
                 )
@@ -400,7 +395,7 @@ class EmissionModel:
 
         # Place divisions between each model
         for ind, line in enumerate(parts):
-            if "-" in line:
+            if line == "-":
                 parts[ind] = "-" * longest
 
         # Pad all lines to the same length
