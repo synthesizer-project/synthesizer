@@ -1225,7 +1225,6 @@ class Sed:
                 A new Sed containing the rest frame spectra of self attenuated
                 by the transmission defined from tau_v and the dust curve.
         """
-
         # Ensure the mask is compatible with the spectra
         if mask is not None:
             if self._lnu.ndim < 2:
