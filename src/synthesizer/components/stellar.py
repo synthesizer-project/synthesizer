@@ -1587,50 +1587,17 @@ class StarsComponent:
 
     def get_mask(self, attr, thresh, op, mask=None):
         """
-        Create a mask using a threshold and attribute on which to mask.
-
-        Args:
-            attr (str)
-                The attribute to derive the mask from.
-            thresh (float)
-                The threshold value.
-            op (str)
-                The operation to apply. Can be '<', '>', '<=', '>=', "==",
-                or "!=".
-            mask (array)
-                Optionally, a mask to combine with the new mask.
-
-        Returns:
-            mask (array)
-                The mask array.
+        This method is a prototype for generating masks for a stellar
+        component. It is redefined on the child classes.
         """
-        # Get the attribute
-        attr = getattr(self, attr)
-
-        # Apply the operator
-        if op == ">":
-            new_mask = attr > thresh
-        elif op == "<":
-            new_mask = attr < thresh
-        elif op == ">=":
-            new_mask = attr >= thresh
-        elif op == "<=":
-            new_mask = attr <= thresh
-        elif op == "==":
-            new_mask = attr == thresh
-        elif op == "!=":
-            new_mask = attr != thresh
-        else:
-            raise exceptions.InconsistentArguments(
-                "Masking operation must be '<', '>', '<=', '>=', '==', or "
-                f"'!=', not {op}"
+        raise Warning(
+            (
+                "get_masks should be overloaded by child classes:\n"
+                "`particle.Particles`\n"
+                "`parametric.Stars`\n"
+                "You should not be seeing this!!!"
             )
-
-        # Combine with the existing mask
-        if mask is not None:
-            new_mask = np.logical_and(new_mask, mask)
-
-        return new_mask
+        )
 
     def get_spectra(
         self,
