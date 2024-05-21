@@ -105,9 +105,13 @@ class EmissionBase:
             )
 
             # Get the spectrum and normalise it properly
-            lnu = dust_bolometric_luminosity.to(
-                "erg/s"
-            ).value * self._get_spectra(_lam)
+            lnu = (
+                dust_bolometric_luminosity.to("erg/s").value
+                * self._get_spectra(_lam)._lnu
+                * erg
+                / s
+                / Hz
+            )
 
             # Create new Sed object containing dust emission spectra
             return Sed(_lam, lnu=lnu)
