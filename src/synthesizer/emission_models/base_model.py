@@ -1154,17 +1154,17 @@ class EmissionModel:
         # If we have dust curves to apply, apply them
         if dust_curves is not None:
             for label, dust_curve in dust_curves.items():
-                emission_model.change_dust_curve(dust_curve, label)
+                emission_model._models[label]._dust_curve = dust_curve
 
         # If we have optical depths to apply, apply them
         if tau_v is not None:
             for label, value in tau_v.items():
-                emission_model.change_tau_v(value, label)
+                emission_model._models[label]._tau_v = value
 
         # If we have escape fractions to apply, apply them
         if fesc is not None:
             for label, value in fesc.items():
-                emission_model.change_fesc(value, label)
+                emission_model._models[label]._fesc = value
 
         # If we have masks to apply, apply them
         if mask is not None:
@@ -1252,7 +1252,7 @@ class EmissionModel:
         # only their reference)
         emission_model = copy.copy(self)
 
-        # Apply overides
+        # Apply any overides we have
         self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
 
         # Define a dictionary to hold the spectra
