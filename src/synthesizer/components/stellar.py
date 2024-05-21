@@ -5,8 +5,6 @@ particle.Stars and parametric.Stars and contains attributes
 and methods common between them.
 """
 
-import copy
-
 import numpy as np
 from unyt import Lsun, Myr, unyt_quantity
 
@@ -1634,10 +1632,9 @@ class StarsComponent:
 
         return new_mask
 
-    def _get_spectra(
+    def get_spectra(
         self,
         emission_model,
-        generator,
         dust_curves=None,
         tau_v=None,
         fesc=None,
@@ -1654,9 +1651,6 @@ class StarsComponent:
         Args:
             emission_model (EmissionModel):
                 The emission model to use.
-            generator (function):
-                The generator function from the component (generate_lnu or
-                generate_particle_lnu).
             dust_curves (dict):
                 An overide to the emisison model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
@@ -1709,100 +1703,16 @@ class StarsComponent:
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
-        # We don't want to modify the original emission model with any
-        # modifications made here so we'll make a copy of it (this is a
-        # shallow copy so very cheap and doesn't copy any pointed to objects
-        # only their reference)
-        emission_model = copy.copy(emission_model)
+        # Get the spectra
+        self.spectra = emission_model._get_spectra(
+            component=self,
+            generator=self.generate_lnu,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            fesc=fesc,
+            mask=mask,
+            verbose=verbose,
+            **kwargs,
+        )
 
-        # If we have dust curves to apply, apply them
-        if dust_curves is not None:
-            for label, dust_curve in dust_curves.items():
-                emission_model.change_dust_curve(dust_curve, label)
-
-        # If we have optical depths to apply, apply them
-        if tau_v is not None:
-            for label, value in tau_v.items():
-                emission_model.change_tau_v(value, label)
-
-        # If we have escape fractions to apply, apply them
-        if fesc is not None:
-            for label, value in fesc.items():
-                emission_model.change_fesc(value, label)
-
-        # If we have masks to apply, apply them
-        if mask is not None:
-            for label, mask in mask.items():
-                emission_model.add_mask(**mask, label=label)
-
-        # Define a dictionary to hold the spectra
-        spectra = {}
-
-        # First step we need to extract each base spectra
-        for label, spectra_key in emission_model._extract_keys.items():
-            # Get this model
-            this_model = emission_model._models[label]
-
-            # Do we have to define a mask?
-            this_mask = None
-            for mask_dict in this_model.masks:
-                this_mask = self.get_mask(**mask_dict, mask=this_mask)
-
-            # Get this base spectra
-            spectra[label] = generator(
-                emission_model.grid,
-                spectra_key,
-                fesc=getattr(self, this_model.fesc)
-                if isinstance(this_model.fesc, str)
-                else this_model.fesc,
-                mask=this_mask,
-                verbose=verbose,
-                **kwargs,
-            )
-
-        # Moving forward we might need a mask of ones. Define it here once to
-        # avoiding wasting time defining it multiple times (we'll use the last
-        # label in the loop above since all spectra are the same shape)
-        ones_mask = np.ones_like(spectra[label]._lnu, dtype=bool)
-
-        # With all base spectra extracted we can now loop from bottom to top
-        # of the tree creating each spectra
-        for label in emission_model._bottom_to_top:
-            # Get this model
-            this_model = emission_model._models[label]
-
-            # Do we have to define a mask?
-            this_mask = None
-            for mask_dict in this_model.masks:
-                this_mask = self.get_mask(**mask_dict, mask=this_mask)
-
-            # Are we doing a combination?
-            if len(this_model.combine) > 0:
-                # Create an empty spectra to add to
-                spectra[label] = Sed(
-                    emission_model.grid.lam,
-                    lnu=np.zeros_like(spectra[this_model.combine[0]]._lnu),
-                )
-
-                # Handle a None mask
-                if this_mask is None:
-                    this_mask = ones_mask
-
-                # Combine the spectra handling the possible mask
-                for combine_label in this_model.combine:
-                    spectra[label]._lnu[this_mask] += spectra[
-                        combine_label
-                    ]._lnu[this_mask]
-
-            else:
-                # Otherwise, we are applying a dust curve (there's no
-                # alternative)
-                spectra[label] = spectra[
-                    this_model.apply_dust_curve
-                ].apply_attenuation(
-                    this_model.tau_v,
-                    dust_curve=this_model.dust_curve,
-                    mask=this_mask,
-                )
-
-        return spectra
+        return self.spectra[emission_model.label]
