@@ -838,7 +838,7 @@ def assign_galaxy_prop(
     g_hsml: NDArray[np.float32],
     verbose: bool,
 ) -> Galaxy:
-    galaxy = Galaxy(redshift=zed)
+    galaxy = Galaxy(redshift=zed, verbose=verbose)
 
     # Fill individual galaxy objects with star particles
     # mask for current galaxy
