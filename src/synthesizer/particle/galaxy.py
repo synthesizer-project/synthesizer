@@ -77,6 +77,8 @@ class Galaxy(BaseGalaxy):
             centre (float)
                 Centre of the galaxy particles. Can be defined in a number
                 of ways (e.g. centre of mass)
+            verbose (float)
+                Are we talking?
 
         Raises:
             InconsistentArguments

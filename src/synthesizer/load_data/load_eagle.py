@@ -69,6 +69,8 @@ def load_EAGLE(
             file number to process
         tot_chunks (int)
             total number of files to process
+        verbose (bool)
+            Are we talking?
 
     Returns:
         a dictionary of Galaxy objects with stars and gas components
@@ -324,6 +326,8 @@ def load_EAGLE_shm(
             data type of the array in memory
         tot_chunks (int)
             total number of files to process
+        verbose (bool)
+            Are we talking?
 
     Returns:
         a dictionary of Galaxy objects with stars and gas components
@@ -837,7 +841,61 @@ def assign_galaxy_prop(
     g_coords: NDArray[np.float32],
     g_hsml: NDArray[np.float32],
     verbose: bool,
+    s_kwargs: Dict = {},
+    g_kwargs: Dict = {}
 ) -> Galaxy:
+
+    """
+    A function to load stellar and gas particle data
+    into synthesizer galaxy object
+    Arguments:
+        ii (int)
+            galaxy number
+        zed (float)
+            redshift
+        grpno (array)
+            Group numbers in this chunk
+        sgrpno (array)
+            Subgroup numbers in this chunk
+        s_grpno (array)
+            Stellar particle group numbers
+        s_sgrpno (array)
+            Stellar particle subgroup numbers
+        s_imasses (array)
+            Stellar particle initial masses in Msun
+        s_masses (array)
+            Stellar particle current masses in Msun
+        s_ages (array)
+            Stellar particle ages in Gyr
+        s_Zsmooth (array)
+            Stellar particle smoothed metallicity
+        s_coords (array)
+            Stellar particle coordinates in pMpc
+        g_grpno (array)
+            Gas particle group number
+        g_sgrpno (array)
+            Gas particle subgroup number
+        g_masses (array)
+            Gas particle masses in Msun
+        g_Zsmooth (array)
+            Gas particle smoothed metallicity
+        g_sfr (array)
+            Gas particle instantaneous SFR in Msun/yr
+        g_coords: (array)
+            Gas particle coordinates in pMpc
+        g_hsml(array)
+            Gas particle smoothing length in pMpc
+        verbose (bool)
+            Are we talking?
+        s_kwargs (dictionary)
+            kwargs for stars
+        g_kwargs (dictionary)
+            kwargs for gas
+    
+    Returns:
+        synthesizer galaxy object
+    """
+
     galaxy = Galaxy(redshift=zed, verbose=verbose)
 
     # Fill individual galaxy objects with star particles
@@ -852,6 +910,7 @@ def assign_galaxy_prop(
         coordinates=s_coords[ok],
         # s_oxygen=s_oxygen[ok],
         # s_hydrogen=s_hydrogen[ok],
+        **s_kwargs
     )
 
     # Fill individual galaxy objects with gas particles
@@ -865,6 +924,7 @@ def assign_galaxy_prop(
         star_forming=sfr_flag[ok],
         coordinates=g_coords[ok] * Mpc,
         smoothing_lengths=g_hsml[ok] * Mpc,
+        **g_kwargs
     )
 
     return galaxy
