@@ -17,7 +17,7 @@ import sys
 import timeit
 from collections import namedtuple
 from functools import partial
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Union
 
 import h5py
 import numpy as np
@@ -50,6 +50,7 @@ def load_EAGLE(
     numThreads: int = 1,
     chunk: int = 0,
     tot_chunks: int = 1535,
+    verbose: bool = False,
 ) -> Dict[int, Galaxy]:
     """
     Load EAGLE required EAGLE galaxy properties
@@ -94,6 +95,7 @@ def load_EAGLE(
         tag,
         "/PartType4/SubGroupNumber",
         numThreads=numThreads,
+        verbose=verbose,
     )
     s_grpno = read_array(
         "PARTDATA",
@@ -115,6 +117,7 @@ def load_EAGLE(
         noH=True,
         physicalUnits=True,
         numThreads=numThreads,
+        verbose=verbose,
     )[ok]  # physical Mpc
     s_imasses = (
         read_array(
@@ -125,6 +128,7 @@ def load_EAGLE(
             noH=True,
             physicalUnits=True,
             numThreads=numThreads,
+            verbose=verbose,
         )[ok]
         * 1e10
     )  #  Msun
@@ -137,6 +141,7 @@ def load_EAGLE(
             noH=True,
             physicalUnits=True,
             numThreads=numThreads,
+            verbose=verbose,
         )[ok]
         * 1e10
     )  #  Msun
@@ -146,6 +151,7 @@ def load_EAGLE(
         tag,
         "/PartType4/StellarFormationTime",
         numThreads=numThreads,
+        verbose=verbose,
     )[ok]
     s_ages = get_age(s_ages, zed, numThreads=numThreads)  # Gyr
     s_Zsmooth = read_array(
@@ -154,6 +160,7 @@ def load_EAGLE(
         tag,
         "/PartType4/SmoothedMetallicity",
         numThreads=numThreads,
+        verbose=verbose,
     )[ok]
     # s_oxygen = read_array(
     #     "PARTDATA",
@@ -161,6 +168,7 @@ def load_EAGLE(
     #     tag,
     #     "/PartType4/ElementAbundance/Oxygen",
     #     numThreads=numThreads,
+    #     verbose=verbose
     # )[ok]
     # s_hydrogen = read_array(
     #     "PARTDATA",
@@ -168,6 +176,7 @@ def load_EAGLE(
     #     tag,
     #     "/PartType4/ElementAbundance/Hydrogen",
     #     numThreads=numThreads,
+    #     verbose=verbose
     # )[ok]
 
     # Get gas particle properties
@@ -177,6 +186,7 @@ def load_EAGLE(
         tag,
         "/PartType0/SubGroupNumber",
         numThreads=numThreads,
+        verbose=verbose,
     )
     g_grpno = read_array(
         "PARTDATA",
@@ -184,6 +194,7 @@ def load_EAGLE(
         tag,
         "/PartType0/GroupNumber",
         numThreads=numThreads,
+        verbose=verbose,
     )
     # Create mask for particles in the current chunk
     ok = np.in1d(g_sgrpno, sgrpno) * np.in1d(g_grpno, grpno)
@@ -198,6 +209,7 @@ def load_EAGLE(
         noH=True,
         physicalUnits=True,
         numThreads=numThreads,
+        verbose=verbose,
     )[ok]  # physical Mpc
     g_masses = (
         read_array(
@@ -208,6 +220,7 @@ def load_EAGLE(
             noH=True,
             physicalUnits=True,
             numThreads=numThreads,
+            verbose=verbose,
         )[ok]
         * 1e10
     )  # Msun
@@ -217,6 +230,7 @@ def load_EAGLE(
         tag,
         "/PartType0/StarFormationRate",
         numThreads=numThreads,
+        verbose=verbose,
     )[ok]  # Msol / yr
     g_Zsmooth = read_array(
         "PARTDATA",
@@ -224,6 +238,7 @@ def load_EAGLE(
         tag,
         "/PartType0/SmoothedMetallicity",
         numThreads=numThreads,
+        verbose=verbose,
     )[ok]
     g_hsml = read_array(
         "PARTDATA",
@@ -233,6 +248,7 @@ def load_EAGLE(
         noH=True,
         physicalUnits=True,
         numThreads=numThreads,
+        verbose=verbose,
     )[ok]  # physical Mpc
 
     _f = partial(
@@ -256,6 +272,7 @@ def load_EAGLE(
         g_sfr=g_sfr,
         g_coords=g_coords,
         g_hsml=g_hsml,
+        verbose=verbose,
     )
 
     if numThreads == 1:
@@ -281,6 +298,7 @@ def load_EAGLE_shm(
     numThreads: int = 1,
     dtype: str = "float32",
     tot_chunks: int = 1535,
+    verbose: bool = False,
 ) -> Dict[int, Galaxy]:
     """
     Load EAGLE required EAGLE galaxy properties
@@ -413,6 +431,7 @@ def load_EAGLE_shm(
         g_sfr=g_sfr,
         g_coords=g_coords,
         g_hsml=g_hsml,
+        verbose=verbose,
     )
 
     if numThreads == 1:
@@ -444,7 +463,7 @@ def np_shm_read(name: str, array_shape: tuple, dtype: str) -> NDArray[Any]:
     return tmp
 
 
-def get_files(fileType: str, directory: str, tag: str) -> NDArray[Any]:
+def get_files(fileType: str, directory: str, tag: str) -> List[str]:
     """
     Fetch filename for the different eagle outputs for reading
 
@@ -817,6 +836,7 @@ def assign_galaxy_prop(
     g_sfr: NDArray[np.float32],
     g_coords: NDArray[np.float32],
     g_hsml: NDArray[np.float32],
+    verbose: bool,
 ) -> Galaxy:
     galaxy = Galaxy(redshift=zed)
 
@@ -833,7 +853,6 @@ def assign_galaxy_prop(
         # s_oxygen=s_oxygen[ok],
         # s_hydrogen=s_hydrogen[ok],
     )
-    galaxy.calculate_integrated_stellar_properties()
 
     # Fill individual galaxy objects with gas particles
     sfr_flag = g_sfr > 0
@@ -847,6 +866,5 @@ def assign_galaxy_prop(
         coordinates=g_coords[ok] * Mpc,
         smoothing_lengths=g_hsml[ok] * Mpc,
     )
-    galaxy.calculate_integrated_gas_properties()
 
     return galaxy
