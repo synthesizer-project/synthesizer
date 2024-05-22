@@ -842,9 +842,8 @@ def assign_galaxy_prop(
     g_hsml: NDArray[np.float32],
     verbose: bool,
     s_kwargs: Dict = {},
-    g_kwargs: Dict = {}
+    g_kwargs: Dict = {},
 ) -> Galaxy:
-
     """
     A function to load stellar and gas particle data
     into synthesizer galaxy object
@@ -891,7 +890,7 @@ def assign_galaxy_prop(
             kwargs for stars
         g_kwargs (dictionary)
             kwargs for gas
-    
+
     Returns:
         synthesizer galaxy object
     """
@@ -910,7 +909,7 @@ def assign_galaxy_prop(
         coordinates=s_coords[ok],
         # s_oxygen=s_oxygen[ok],
         # s_hydrogen=s_hydrogen[ok],
-        **s_kwargs
+        **s_kwargs,
     )
 
     # Fill individual galaxy objects with gas particles
@@ -924,7 +923,7 @@ def assign_galaxy_prop(
         star_forming=sfr_flag[ok],
         coordinates=g_coords[ok] * Mpc,
         smoothing_lengths=g_hsml[ok] * Mpc,
-        **g_kwargs
+        **g_kwargs,
     )
 
     return galaxy
