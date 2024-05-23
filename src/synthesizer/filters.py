@@ -1517,6 +1517,13 @@ class Filter:
         )
         t = func(xs)
 
+        # Ensure the xs array and arr are a compatible shape
+        if arr.shape[-1] != t.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "The shape of the transmission curve and the final axis of "
+                "the array to be convolved do not match."
+            )
+
         # Store this observed frame transmission
         self._shifted_t = t
 
