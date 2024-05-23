@@ -1430,6 +1430,9 @@ class Filter:
         If no wavelength or frequency array is provided then the filters rest
         frame frequency is assumed.
 
+        To apply to llam of flam wavelengths must be provided. To apply to
+        lnu or fnu frequencies must be provided.
+
         Args:
             arr (array-like, float)
                 The array to convolve with the filter's transmission curve. Can
@@ -1455,9 +1458,34 @@ class Filter:
                 If the shape of the transmission and wavelength array differ
                 the convolution cannot be done.
         """
-        # Warn the user that frequencies take precedence over wavelengths
-        # if both are provided
-        if lam is not None and nu is not None:
+        # Initialise the xs were about to set and use
+        xs = None
+        original_xs = None
+
+        # If we haven't been handed anything we'll use the filter's frequencies
+        if lam is None and nu is None:
+            # Use the filters frequency array
+            xs = self._nu
+            original_xs = self._original_nu
+
+        elif lam is not None:
+            # Ensure the passed wavelengths have units
+            if not isinstance(lam, unyt_array):
+                lam *= Angstrom
+
+            # Use the passed wavelength and original lam
+            xs = lam.to(Angstrom).value
+            original_xs = self._original_lam
+        elif nu is not None:
+            # Ensure the passed frequencies have units
+            if not isinstance(nu, unyt_array):
+                nu *= Hz
+
+            # Use the passed frequency and original frequency
+            xs = nu.to(Hz).value
+            original_xs = self._original_nu
+        else:
+            # If both have been handed then frequencies take precedence
             if verbose:
                 print(
                     (
@@ -1466,29 +1494,17 @@ class Filter:
                         " for filter convolution."
                     )
                 )
-
-        # We will be applying the filter to lnu so need to integrate over
-        # frequencies, if we have wavelengths we need to convert them to
-        # frequencies
-        if lam is not None:
-            # Ensure the passed wavelengths have units
-            if not isinstance(lam, unyt_array):
-                lam *= Angstrom
-
-            # Calculate the frequencies
-            nu = (c / lam).to(Hz).value
-        elif nu is None and lam is None:
-            # We haven't been handed anything, use the filters frequency array
-            nu = self._nu
+            xs = self._nu.to(Hz).value
+            original_xs = self._original_nu
 
         # Interpolate the transmission curve onto the provided frequencies
         func = interp1d(
-            self._original_nu,
+            original_xs,
             self.original_t,
             kind="linear",
             bounds_error=False,
         )
-        t = func(nu)
+        t = func(xs)
 
         # Store this observed frame transmission
         self._shifted_t = t
@@ -1498,7 +1514,7 @@ class Filter:
 
         # Mask out wavelengths that don't contribute to this band
         arr_in_band = arr.compress(in_band, axis=-1)
-        nu_in_band = nu[in_band]
+        xs_in_band = xs[in_band]
         t_in_band = t[in_band]
 
         # Multiply the IFU by the filter transmission curve
@@ -1506,10 +1522,10 @@ class Filter:
 
         # Sum over the final axis to "collect" transmission in this filer
         sum_per_x = integrate.trapezoid(
-            transmission / nu_in_band, nu_in_band, axis=-1
+            transmission / xs_in_band, xs_in_band, axis=-1
         )
         sum_den = integrate.trapezoid(
-            t_in_band / nu_in_band, nu_in_band, axis=-1
+            t_in_band / xs_in_band, xs_in_band, axis=-1
         )
         sum_in_band = sum_per_x / sum_den
 
