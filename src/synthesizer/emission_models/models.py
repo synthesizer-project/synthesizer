@@ -78,6 +78,7 @@ class LineContinuumEmission(EmissionModel):
         grid,
         label="linecont",
         fesc=0.0,
+        **kwargs,
     ):
         """
         Initialise the LineContinuumEmission object.
@@ -93,6 +94,7 @@ class LineContinuumEmission(EmissionModel):
             label=label,
             extract="linecont",
             fesc=fesc,
+            **kwargs,
         )
 
 
@@ -157,6 +159,7 @@ class EscapedEmission(EmissionModel):
         grid,
         label="escaped",
         fesc=0.0,
+        **kwargs,
     ):
         """
         Initialise the EscapedEmission object.
@@ -173,6 +176,7 @@ class EscapedEmission(EmissionModel):
             label=label,
             extract="transmitted",
             fesc=(1 - fesc),
+            **kwargs,
         )
 
 
@@ -197,6 +201,7 @@ class NebularContinuumEmission(EmissionModel):
         grid,
         label="nebular_continuum",
         fesc=0.0,
+        **kwargs,
     ):
         """
         Initialise the NebularContinuumEmission object.
@@ -212,6 +217,7 @@ class NebularContinuumEmission(EmissionModel):
             label=label,
             extract="nebular_continuum",
             fesc=fesc,
+            **kwargs,
         )
 
 
@@ -238,6 +244,7 @@ class NebularEmission(EmissionModel):
         label="nebular",
         fesc=0.0,
         fesc_ly_alpha=1.0,
+        **kwargs,
     ):
         """
         Initialise the NebularEmission object.
@@ -261,6 +268,7 @@ class NebularEmission(EmissionModel):
                     NebularContinuumEmission(grid=grid, fesc=fesc),
                 ),
                 fesc=fesc,
+                **kwargs,
             )
         else:
             # Otherwise, we just need the nebular emission from the grid
@@ -270,6 +278,7 @@ class NebularEmission(EmissionModel):
                 label=label,
                 extract="nebular",
                 fesc=fesc,
+                **kwargs,
             )
 
 
@@ -294,6 +303,7 @@ class ReprocessedEmission(EmissionModel):
         grid,
         label="reprocessed",
         fesc=0.0,
+        **kwargs,
     ):
         """
         Initialise the ReprocessedEmission object.
@@ -312,6 +322,7 @@ class ReprocessedEmission(EmissionModel):
                 TransmittedEmission(grid=grid, fesc=fesc),
             ),
             fesc=fesc,
+            **kwargs,
         )
 
 
@@ -334,11 +345,11 @@ class AttenuatedEmission(EmissionModel):
 
     def __init__(
         self,
-        grid,
         dust_curve,
         apply_dust_to,
         tau_v,
         label="attenuated",
+        **kwargs,
     ):
         """
         Initialise the AttenuatedEmission object.
@@ -352,11 +363,11 @@ class AttenuatedEmission(EmissionModel):
         """
         EmissionModel.__init__(
             self,
-            grid=grid,
             label=label,
             dust_curve=dust_curve,
             apply_dust_to=apply_dust_to,
             tau_v=tau_v,
+            **kwargs,
         )
 
 
@@ -387,6 +398,7 @@ class EmergentEmission(EmissionModel):
         tau_v,
         fesc=0.0,
         label="emergent",
+        **kwargs,
     ):
         """
         Initialise the EmergentEmission object.
@@ -413,6 +425,7 @@ class EmergentEmission(EmissionModel):
                 EscapedEmission(grid=grid, fesc=apply_dust_to.fesc),
             ),
             fesc=fesc,
+            **kwargs,
         )
 
 
@@ -437,6 +450,7 @@ class DustEmission(EmissionModel):
         dust_lum_intrinsic=None,
         dust_lum_attenuated=None,
         label="dust_emission",
+        **kwargs,
     ):
         """
         Initialise the DustEmission object.
@@ -456,6 +470,7 @@ class DustEmission(EmissionModel):
             dust_emission_model=dust_emission_model,
             dust_lum_intrinsic=dust_lum_intrinsic,
             dust_lum_attenuated=dust_lum_attenuated,
+            **kwargs,
         )
 
 
@@ -487,6 +502,7 @@ class TotalEmission(EmissionModel):
         dust_emission_model=None,
         label="total",
         fesc=0.0,
+        **kwargs,
     ):
         """
         Initialise the TotalEmission object.
@@ -506,6 +522,7 @@ class TotalEmission(EmissionModel):
             reprocessed = ReprocessedEmission(
                 grid=grid,
                 fesc=fesc,
+                **kwargs,
             )
             emergent = EmergentEmission(
                 grid=grid,
@@ -513,17 +530,20 @@ class TotalEmission(EmissionModel):
                 tau_v=tau_v,
                 fesc=fesc,
                 apply_dust_to=reprocessed,
+                **kwargs,
             )
             attenuated = AttenuatedEmission(
                 grid=grid,
                 dust_curve=dust_curve,
                 apply_dust_to=reprocessed,
                 tau_v=tau_v,
+                **kwargs,
             )
             dust_emission = DustEmission(
                 dust_emission_model=dust_emission_model,
                 dust_lum_intrinsic=reprocessed,
                 dust_lum_attenuated=attenuated,
+                **kwargs,
             )
 
             # Make the total emission model
@@ -536,6 +556,7 @@ class TotalEmission(EmissionModel):
                     dust_emission,
                 ),
                 fesc=fesc,
+                **kwargs,
             )
         else:
             # Otherwise, total == emergent
@@ -550,10 +571,13 @@ class TotalEmission(EmissionModel):
                         apply_dust_to=ReprocessedEmission(
                             grid=grid,
                             fesc=fesc,
+                            **kwargs,
                         ),
                         tau_v=tau_v,
+                        **kwargs,
                     ),
-                    EscapedEmission(grid=grid, fesc=fesc),
+                    EscapedEmission(grid=grid, fesc=fesc, **kwargs),
                 ),
                 fesc=fesc,
+                **kwargs,
             )
