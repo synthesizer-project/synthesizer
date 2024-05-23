@@ -1521,7 +1521,8 @@ class Filter:
         if arr.shape[-1] != t.shape[0]:
             raise exceptions.InconsistentArguments(
                 "The shape of the transmission curve and the final axis of "
-                "the array to be convolved do not match."
+                "the array to be convolved do not match. "
+                f"(arr.shape={arr.shape}, transmission.shape={t.shape})"
             )
 
         # Store this observed frame transmission
