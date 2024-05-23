@@ -1432,7 +1432,7 @@ class Filter:
         If no wavelength or frequency array is provided then the filters rest
         frame frequency is assumed.
 
-        To apply to llam of flam wavelengths must be provided. To apply to
+        To apply to llam or flam, wavelengths must be provided. To apply to
         lnu or fnu frequencies must be provided.
 
         Args:
