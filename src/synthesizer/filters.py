@@ -30,6 +30,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
+from scipy.interpolate import interp1d
 from unyt import Angstrom, Hz, c, unyt_array, unyt_quantity
 
 import synthesizer.exceptions as exceptions
@@ -1414,7 +1415,13 @@ class Filter:
         # And ensure transmission is in expected range
         self.clip_transmission()
 
-    def apply_filter(self, arr, lam=None, nu=None, verbose=True):
+    def apply_filter(
+        self,
+        arr,
+        lam=None,
+        nu=None,
+        verbose=True,
+    ):
         """
         Apply this filter's transmission curve to an arbitrary dimensioned
         array returning the sum of the array convolved with the filter
@@ -1448,7 +1455,6 @@ class Filter:
                 If the shape of the transmission and wavelength array differ
                 the convolution cannot be done.
         """
-
         # Warn the user that frequencies take precedence over wavelengths
         # if both are provided
         if lam is not None and nu is not None:
@@ -1461,61 +1467,42 @@ class Filter:
                     )
                 )
 
-        # Get the correct x array to integrate w.r.t and work out if we need
-        # to shift the transmission curve.
-        if nu is not None:
-            # Ensure the passed frequencies have units
-            if not isinstance(nu, unyt_array):
-                nu *= Hz
+        # We will be applying the filter to lnu so need to integrate over
+        # frequencies, if we have wavelengths we need to convert them to
+        # frequencies
+        if lam is not None:
+            # Ensure the passed wavelengths have units
+            if not isinstance(lam, unyt_array):
+                lam *= Angstrom
 
-            # Define the integration xs
-            xs = nu
+            # Calculate the frequencies
+            nu = (c / lam).to(Hz).value
+        elif nu is None and lam is None:
+            # We haven't been handed anything, use the filters frequency array
+            nu = self._nu
 
-            # Do we need to shift?
-            need_shift = not nu.value[0] == self._nu[0]
+        # Ok, we have frequencies but they might be shifted. Calculate the
+        # redshift from the filter frequencies which are by definition in the
+        # rest frame.
+        # (This assumes the wavelength arrays match which SHOULD be guaranteed)
+        redshift = self._nu / nu - 1
 
-            # To shift the transmission we need the corresponding wavelength
-            # with the units stripped off
-            if need_shift:
-                lam = (c / nu).to(Angstrom).value
-
-        elif lam is not None:
-            # Ensure the passed wavelengths have no units
-            if isinstance(lam, unyt_array):
-                lam = lam.value
-
-            # Define the integration xs
-            xs = lam
-
-            # Do we need to shift?
-            need_shift = not lam[0] == self._lam[0]
-
-        else:
-            # Define the integration xs
-            xs = self._nu
-
-            # No shift needed
-            need_shift = False
-
-        # Do we need to shift?
-        if need_shift:
-            # Ok, shift the tranmission curve by interpolating onto the
-            # provided wavelengths
-            t = np.interp(
-                lam, self._original_lam, self.original_t, left=0.0, right=0.0
+        # Be safe, if redshift is negative something horrid happened
+        if redshift < 0:
+            raise exceptions.InconsistentWavelengths(
+                "The provided wavelength array does not match the filter "
+                "wavelength array (we found a negative redshift)."
             )
 
-        else:
-            # We can use the standard transmission array
-            t = self.t
-
-        # Check dimensions are ok
-        if xs.size != arr.shape[-1]:
-            raise ValueError(
-                "Final dimension of array did not match "
-                "x array shape (arr.shape[-1]=%d, "
-                "xs.size=%d)" % (arr.shape[-1], xs.size)
-            )
+        # Interpolate the transmission curve onto the provided frequencies
+        # including any redshift
+        func = interp1d(
+            self._nu * (1 + redshift),
+            self.t,
+            kind="linear",
+            bounds_error=False,
+        )
+        t = func(nu)
 
         # Store this observed frame transmission
         self._shifted_t = t
@@ -1525,7 +1512,7 @@ class Filter:
 
         # Mask out wavelengths that don't contribute to this band
         arr_in_band = arr.compress(in_band, axis=-1)
-        xs_in_band = xs[in_band]
+        nu_in_band = nu[in_band]
         t_in_band = t[in_band]
 
         # Multiply the IFU by the filter transmission curve
@@ -1533,10 +1520,10 @@ class Filter:
 
         # Sum over the final axis to "collect" transmission in this filer
         sum_per_x = integrate.trapezoid(
-            transmission / xs_in_band, xs_in_band, axis=-1
+            transmission / nu_in_band, nu_in_band, axis=-1
         )
         sum_den = integrate.trapezoid(
-            t_in_band / xs_in_band, xs_in_band, axis=-1
+            t_in_band / nu_in_band, nu_in_band, axis=-1
         )
         sum_in_band = sum_per_x / sum_den
 
