@@ -1462,13 +1462,18 @@ class Filter:
         xs = None
         original_xs = None
 
-        # If we haven't been handed anything we'll use the filter's frequencies
+        # Get the right x array to integrate over
         if lam is None and nu is None:
+            # If we haven't been handed anything we'll use the filter's
+            # frequencies
+            #
             # Use the filters frequency array
             xs = self._nu
             original_xs = self._original_nu
 
         elif lam is not None:
+            # If we have lams we are intergrating over llam or flam
+
             # Ensure the passed wavelengths have units
             if not isinstance(lam, unyt_array):
                 lam *= Angstrom
@@ -1476,7 +1481,10 @@ class Filter:
             # Use the passed wavelength and original lam
             xs = lam.to(Angstrom).value
             original_xs = self._original_lam
+
         elif nu is not None:
+            # If we've been handed nu we are integrating over lnu or fnu
+
             # Ensure the passed frequencies have units
             if not isinstance(nu, unyt_array):
                 nu *= Hz
@@ -1484,6 +1492,7 @@ class Filter:
             # Use the passed frequency and original frequency
             xs = nu.to(Hz).value
             original_xs = self._original_nu
+
         else:
             # If both have been handed then frequencies take precedence
             if verbose:
@@ -1517,7 +1526,7 @@ class Filter:
         xs_in_band = xs[in_band]
         t_in_band = t[in_band]
 
-        # Multiply the IFU by the filter transmission curve
+        # Multiply the array by the filter transmission curve
         transmission = arr_in_band * t_in_band
 
         # Sum over the final axis to "collect" transmission in this filer
