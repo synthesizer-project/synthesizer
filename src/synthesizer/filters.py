@@ -1423,7 +1423,9 @@ class Filter:
         verbose=True,
     ):
         """
-        Apply this filter's transmission curve to an arbitrary dimensioned
+        Apply the transmission curve to any array.
+
+        Applies this filter's transmission curve to an arbitrary dimensioned
         array returning the sum of the array convolved with the filter
         transmission curve along the wavelength axis (final axis).
 
@@ -1466,7 +1468,7 @@ class Filter:
         if lam is None and nu is None:
             # If we haven't been handed anything we'll use the filter's
             # frequencies
-            #
+
             # Use the filters frequency array
             xs = self._nu
             original_xs = self._original_nu
