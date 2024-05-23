@@ -107,6 +107,7 @@ class EmissionModel:
         mask_thresh=None,
         mask_op=None,
         fesc=None,
+        related_models=None,
     ):
         """
         Initialise the emission model.
@@ -158,6 +159,11 @@ class EmissionModel:
                 or "!=".
             fesc (float):
                 The escape fraction.
+            related_models (list):
+                A list of related models to this model. A related model is
+                a model that is connected somwhere within the model tree but
+                is required in the construction of the "root" model
+                encapulated by self.
         """
         # What is the key for the spectra that will be produced?
         self.label = label
@@ -222,6 +228,11 @@ class EmissionModel:
                     "For a mask mask_attr, mask_thresh, and mask_op "
                     "must be passed."
                 )
+
+        # Attach the related models
+        self.related_models = (
+            related_models if related_models is not None else []
+        )
 
         # Get operation flags
         self._get_operation_flags()
@@ -575,6 +586,10 @@ class EmissionModel:
 
         # Unpack...
         self._unpack_model_recursively(self)
+
+        # Also unpack any related models
+        for model in self.related_models:
+            self._unpack_model_recursively(model)
 
     def set_grid(self, grid, label=None, set_all=False):
         """
@@ -992,42 +1007,64 @@ class EmissionModel:
         self._models[new_label] = model
         del self._models[old_label]
 
-    def _get_tree_positions(self):
-        # Initialise dictionary to hold node positions and start with the
-        # root
-        pos = {self.label: [0.0, 0.0]}
-        levels = {0: [self.label]}
+    def _force_directed_layout(
+        self, graph, iterations=1000, k=1, damping=0.01, max_step=0.05
+    ):
+        """
+        Compute force-directed layout for a graph with improved stability.
 
-        # Recursively assign positions for nodes
-        def assign_pos(pos, model, levels, level, xchunk):
-            # Get current position
-            x, y = pos[model.label]
+        """
+        nodes = list(graph.keys())
+        for node, edges in graph.items():
+            for edge in edges:
+                if edge[0] not in nodes:
+                    nodes.append(edge[0])
 
-            # Increment y for this new layer
-            new_y = y + 10
+        n = len(nodes)
+        if k is None:
+            k = 1 / np.sqrt(n)
+        pos = {node: np.random.rand(2) for node in nodes}
+        v = {node: np.zeros(2) for node in nodes}
 
-            # Compute the x width
-            width = (len(model._children) - 1) * xchunk
-            start_x = x - width / 2
+        def apply_repulsive_forces():
+            for i in range(n):
+                for j in range(i + 1, n):
+                    delta = pos[nodes[i]] - pos[nodes[j]]
+                    distance = (
+                        np.linalg.norm(delta) + 1e-9
+                    )  # avoid division by zero
+                    force = k**2 / distance
+                    v[nodes[i]] += (delta / distance) * force
+                    v[nodes[j]] -= (delta / distance) * force
 
-            # Loop over children setting their position
-            for i, child in enumerate(model._children):
-                if child.label not in pos:
-                    pos[child.label] = [start_x + i * xchunk, new_y]
-                    levels.setdefault(level + 1, []).append(child.label)
-                else:
-                    pos[child.label][0] += xchunk / 2
+        def apply_attractive_forces():
+            for node, edges in graph.items():
+                for edge in edges:
+                    delta = pos[node] - pos[edge[0]]
+                    distance = (
+                        np.linalg.norm(delta) + 1e-9
+                    )  # avoid division by zero
+                    force = distance**2 / k
+                    v[node] -= (delta / distance) * force
+                    v[edge[0]] += (delta / distance) * force
 
-            for i, child in enumerate(model._children):
-                pos = assign_pos(pos, child, levels, level + 1, xchunk)
+        def update_positions():
+            for node in nodes:
+                displacement = v[node]
+                displacement_magnitude = np.linalg.norm(displacement)
+                if displacement_magnitude > max_step:
+                    displacement = (
+                        displacement / displacement_magnitude
+                    ) * max_step
+                pos[node] += displacement
+                v[node] *= 0.5  # Damping velocity for stability
 
-            # Remove any duplicates we found along the way
-            levels[level] = list(set(levels[level]))
+        for _ in range(iterations):
+            apply_repulsive_forces()
+            apply_attractive_forces()
+            update_positions()
 
-            return pos
-
-        # Recursively get the node positions
-        return assign_pos(pos, self, levels, level=0, xchunk=20)
+        return pos
 
     def plot_emission_tree(self, show=True):
         """
@@ -1075,6 +1112,7 @@ class EmissionModel:
                 masked_labels.append(label)
             if model._is_extracting:
                 extract_labels.add(label)
+                links[label] = []
 
         # Extract all unique nodes
         all_nodes = set(links.keys())
@@ -1082,11 +1120,13 @@ class EmissionModel:
             for target, _ in target_list:
                 all_nodes.add(target)
 
+        print(links)
+
         # Get the postion of each node
-        pos = self._get_tree_positions()
+        pos = self._force_directed_layout(links)
 
         # Plot the tree using Matplotlib
-        fig, ax = plt.subplots(figsize=(6, 6))
+        fig, ax = plt.subplots(figsize=(10, 10))
 
         # Draw nodes with different styles if they are masked
         for node, (x, y) in pos.items():
@@ -1378,6 +1418,9 @@ class EmissionModel:
                 # to extract from the component
                 tau_v = 1
                 for tv in this_model.tau_v:
+                    tau_v *= (
+                        getattr(component, tv) if isinstance(tv, str) else tv
+                    )
                     tau_v *= (
                         getattr(component, tv) if isinstance(tv, str) else tv
                     )
