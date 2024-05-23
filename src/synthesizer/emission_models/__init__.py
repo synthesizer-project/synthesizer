@@ -12,6 +12,7 @@ from synthesizer.emission_models.models import (
     DustEmission,
     TotalEmission,
 )
+from synthesizer.emission_models.charlot_fall_model import CharlotFall2000
 
 PREMADE_MODELS = [
     "IncidentEmission",
@@ -25,4 +26,5 @@ PREMADE_MODELS = [
     "EmergentEmission",
     "DustEmission",
     "TotalEmission",
+    "CharlotFall2000",
 ]
