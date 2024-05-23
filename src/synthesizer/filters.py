@@ -1481,24 +1481,10 @@ class Filter:
             # We haven't been handed anything, use the filters frequency array
             nu = self._nu
 
-        # Ok, we have frequencies but they might be shifted. Calculate the
-        # redshift from the filter frequencies which are by definition in the
-        # rest frame.
-        # (This assumes the wavelength arrays match which SHOULD be guaranteed)
-        redshift = self._nu / nu - 1
-
-        # Be safe, if redshift is negative something horrid happened
-        if redshift < 0:
-            raise exceptions.InconsistentWavelengths(
-                "The provided wavelength array does not match the filter "
-                "wavelength array (we found a negative redshift)."
-            )
-
         # Interpolate the transmission curve onto the provided frequencies
-        # including any redshift
         func = interp1d(
-            self._nu * (1 + redshift),
-            self.t,
+            self._original_nu,
+            self.original_t,
             kind="linear",
             bounds_error=False,
         )
