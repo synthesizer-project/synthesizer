@@ -1036,7 +1036,25 @@ class EmissionModel:
         self._models[new_label] = model
         del self._models[old_label]
 
-    def _get_tree_levels(self):
+    def _get_tree_levels(self, root):
+        """
+        Get the levels of the tree.
+
+        Args:
+            root (str):
+                The root of the tree to get the levels for.
+
+        Returns:
+            levels (dict):
+                The levels of the models in the tree.
+            links (dict):
+                The links between models.
+            extract_labels (set):
+                The labels of models that are extracting.
+            masked_labels (list):
+                The labels of models that are masked.
+        """
+
         def _assign_levels(
             levels,
             links,
@@ -1045,6 +1063,33 @@ class EmissionModel:
             model,
             level,
         ):
+            """
+            Recursively assign levels to the models.
+
+            Args:
+                levels (dict):
+                    The levels of the models.
+                links (dict):
+                    The links between models.
+                extract_labels (set):
+                    The labels of models that are extracting.
+                masked_labels (list):
+                    The labels of models that are masked.
+                model (EmissionModel):
+                    The model to assign the level to.
+                level (int):
+                    The level to assign to the model.
+
+            Returns:
+                levels (dict):
+                    The levels of the models.
+                links (dict):
+                    The links between models.
+                extract_labels (set):
+                    The labels of models that are extracting.
+                masked_labels (list):
+                    The labels of models that are masked.
+            """
             # Get the model label
             label = model.label
 
@@ -1096,9 +1141,12 @@ class EmissionModel:
 
             return levels, links, extract_labels, masked_labels
 
+        # Get the root model
+        root_model = self._models[root]
+
         # Recursively assign levels
         model_levels, links, extract_labels, masked_labels = _assign_levels(
-            {}, {}, set(), [], self, 0
+            {}, {}, set(), [], root_model, 0
         )
 
         # Unpack the levels
@@ -1109,8 +1157,37 @@ class EmissionModel:
 
         return levels, links, extract_labels, masked_labels
 
-    def _get_model_positions(self, levels, ychunk=10.0, xchunk=20.0):
+    def _get_model_positions(self, levels, root, ychunk=10.0, xchunk=20.0):
+        """
+        Get the position of each model in the tree.
+
+        Args:
+            levels (dict):
+                The levels of the models in the tree.
+            ychunk (float):
+                The vertical spacing between levels.
+            xchunk (float):
+                The horizontal spacing between models.
+
+        Returns:
+            pos (dict):
+                The position of each model in the tree.
+        """
+
         def _get_parent_pos(pos, model):
+            """
+            Get the position of the parent/s of a model.
+
+            Args:
+                pos (dict):
+                    The position of each model in the tree.
+                model (EmissionModel):
+                    The model to get the parent position for.
+
+            Returns:
+                x (float):
+                    The x position of the parent.
+            """
             # Get the parents
             parents = [
                 parent.label for parent in model.parents if parent.label in pos
@@ -1123,13 +1200,52 @@ class EmissionModel:
             return np.mean([pos[parent][0] for parent in set(parents)])
 
         def _get_child_pos(x, pos, children, level, xchunk):
+            """
+            Get the position of the children of a model.
+
+            Args:
+                x (float):
+                    The x position of the parent.
+                pos (dict):
+                    The position of each model in the tree.
+                children (list):
+                    The children of the model.
+                level (int):
+                    The level of the children.
+                xchunk (float):
+                    The horizontal spacing between models.
+
+            Returns:
+                pos (dict):
+                    The position of each model in the tree.
+            """
             # Get the start x
             start_x = x - (xchunk * (len(children) - 1) / 2.0)
             for child in children:
                 pos[child] = (start_x, level * ychunk)
                 start_x += xchunk
+            return pos
 
         def _get_level_pos(pos, level, levels, xchunk, ychunk):
+            """
+            Get the position of the models in a level.
+
+            Args:
+                pos (dict):
+                    The position of each model in the tree.
+                level (int):
+                    The level to get the position for.
+                levels (dict):
+                    The levels of the models in the tree.
+                xchunk (float):
+                    The horizontal spacing between models.
+                ychunk (float):
+                    The vertical spacing between levels.
+
+            Returns:
+                pos (dict):
+                    The position of each model in the tree.
+            """
             # Get the models in this level
             models = levels.get(level, [])
 
@@ -1161,7 +1277,7 @@ class EmissionModel:
             # the position based on the parent
             if len(set(parents)) == 1:
                 x = _get_parent_pos(pos, self._models[models[0]])
-                _get_child_pos(x, pos, models, level, xchunk)
+                pos = _get_child_pos(x, pos, models, level, xchunk)
             else:
                 # Get the position of the first model
                 x = -xchunk * (len(models) - 1) / 2.0
@@ -1179,12 +1295,11 @@ class EmissionModel:
 
             return pos
 
-        return _get_level_pos(
-            {self.label: (0.0, 0.0)}, 1, levels, xchunk, ychunk
-        )
+        return _get_level_pos({root: (0.0, 0.0)}, 1, levels, xchunk, ychunk)
 
     def plot_emission_tree(
         self,
+        root=None,
         show=True,
         fontsize=10,
     ):
@@ -1192,18 +1307,22 @@ class EmissionModel:
         Plot the tree defining the spectra.
 
         Args:
+            root (str):
+                If not None this defines the root of a sub tree to plot.
             show (bool):
                 Whether to show the plot.
+            fontsize (int):
+                The fontsize to use for the labels.
         """
-        # Define a dictionary to hold the links (of the form
-        # {<label>: [(<linked label>, <link_type>)]})
-        links = {}
-
         # Get the tree levels
-        levels, links, extract_labels, masked_labels = self._get_tree_levels()
+        levels, links, extract_labels, masked_labels = self._get_tree_levels(
+            root if root is not None else self.label
+        )
 
         # Get the postion of each node
-        pos = self._get_model_positions(levels)
+        pos = self._get_model_positions(
+            levels, root=root if root is not None else self.label
+        )
 
         # Plot the tree using Matplotlib
         fig, ax = plt.subplots(figsize=(6, 6))

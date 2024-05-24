@@ -4,6 +4,7 @@ from synthesizer.emission_models import (
     AttenuatedEmission,
     DustEmission,
     EmissionModel,
+    IncidentEmission,
     NebularEmission,
     TransmittedEmission,
 )
@@ -24,25 +25,25 @@ class CharlotFall2000(EmissionModel):
         """TODO"""
         # We need to start by making all the child models we'll need
 
-        # # Incident (split by age)
-        # young_incident = IncidentEmission(
-        #     grid=grid,
-        #     label="young_incident",
-        #     mask_attr="log10ages",
-        #     mask_thresh=age_pivot,
-        #     mask_op="<",
-        # )
-        # old_incident = IncidentEmission(
-        #     grid=grid,
-        #     label="old_incident",
-        #     mask_attr="log10ages",
-        #     mask_thresh=age_pivot,
-        #     mask_op=">=",
-        # )
-        # incident = EmissionModel(
-        #     label="incident",
-        #     combine=(young_incident, old_incident),
-        # )
+        # Incident (split by age)
+        young_incident = IncidentEmission(
+            grid=grid,
+            label="young_incident",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op="<",
+        )
+        old_incident = IncidentEmission(
+            grid=grid,
+            label="old_incident",
+            mask_attr="log10ages",
+            mask_thresh=age_pivot,
+            mask_op=">=",
+        )
+        incident = EmissionModel(
+            label="incident",
+            combine=(young_incident, old_incident),
+        )
 
         # Transmitted (split by age)
         young_transmitted = TransmittedEmission(
@@ -217,7 +218,7 @@ class CharlotFall2000(EmissionModel):
                 label="total",
                 combine=(young_total, old_total),
                 related_models=(
-                    # incident,
+                    incident,
                     transmitted,
                     nebular,
                     intrinsic,
@@ -236,7 +237,7 @@ class CharlotFall2000(EmissionModel):
                 label="emergent",
                 combine=(young_emergent, old_emergent),
                 related_models=(
-                    # incident,
+                    incident,
                     transmitted,
                     nebular,
                     reprocessed,
