@@ -244,6 +244,8 @@ class NebularEmission(EmissionModel):
         label="nebular",
         fesc=0.0,
         fesc_ly_alpha=1.0,
+        linecont=None,
+        nebular_continuum=None,
         **kwargs,
     ):
         """
@@ -254,19 +256,31 @@ class NebularEmission(EmissionModel):
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
             feac_ly_alpha (float): The escape fraction of Lyman-alpha.
+            linecont (EmissionModel): The line continuum model to use, if None
+                then one will be created. Only used if fesc_ly_alpha < 1.0.
+            nebular_continuum (EmissionModel): The nebular continuum model to
+                use, if None then one will be created. Only used if
+                fesc_ly_alpha < 1.0.
         """
         # If we have a Lyman-alpha escape fraction then we need to combine
         # the Lyman-alpha line emission with the nebular continuum emission
         # and the rest of the line emission
         if fesc_ly_alpha < 1.0:
+            # Make a line continuum model if we need one
+            if linecont is None:
+                linecont = LineContinuumEmission(grid=grid, fesc=fesc_ly_alpha)
+
+            # Make a nebular continuum model if we need one
+            if nebular_continuum is None:
+                nebular_continuum = NebularContinuumEmission(
+                    grid=grid, fesc=fesc
+                )
+
             EmissionModel.__init__(
                 self,
                 grid=grid,
                 label=label,
-                combine=(
-                    LineContinuumEmission(grid=grid, fesc=fesc),
-                    NebularContinuumEmission(grid=grid, fesc=fesc),
-                ),
+                combine=(linecont, nebular_continuum),
                 fesc=fesc,
                 **kwargs,
             )
@@ -303,6 +317,9 @@ class ReprocessedEmission(EmissionModel):
         grid,
         label="reprocessed",
         fesc=0.0,
+        fesc_ly_alpha=1.0,
+        nebular=None,
+        transmitted=None,
         **kwargs,
     ):
         """
@@ -312,15 +329,28 @@ class ReprocessedEmission(EmissionModel):
             grid (synthesizer.grid.Grid): The grid object to extract from.
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
+            nebular (EmissionModel): The nebular model to use, if None then one
+                will be created.
+            transmitted (EmissionModel): The transmitted model to use, if None
+                then one will be created.
         """
+        # Make a nebular model if we need one
+        if nebular is None:
+            nebular = NebularEmission(
+                grid=grid,
+                fesc=fesc,
+                fesc_ly_alpha=fesc_ly_alpha,
+            )
+
+        # Make a transmitted model if we need one
+        if transmitted is None:
+            transmitted = TransmittedEmission(grid=grid, fesc=fesc)
+
         EmissionModel.__init__(
             self,
             grid=grid,
             label=label,
-            combine=(
-                NebularEmission(grid=grid, fesc=fesc),
-                TransmittedEmission(grid=grid, fesc=fesc),
-            ),
+            combine=(nebular, transmitted),
             fesc=fesc,
             **kwargs,
         )
@@ -393,11 +423,13 @@ class EmergentEmission(EmissionModel):
     def __init__(
         self,
         grid,
-        dust_curve,
-        apply_dust_to,
-        tau_v,
+        dust_curve=None,
+        apply_dust_to=None,
+        tau_v=None,
         fesc=0.0,
         label="emergent",
+        attenuated=None,
+        escaped=None,
         **kwargs,
     ):
         """
@@ -410,20 +442,29 @@ class EmergentEmission(EmissionModel):
             tau_v (float): The optical depth of the dust.
             fesc (float): The escape fraction of the emission.
             label (str): The label for this emission model.
+            attenuated (EmissionModel): The attenuated model to use, if None
+                then one will be created.
+            escaped (EmissionModel): The escaped model to use, if None then one
+                will be created.
         """
+        # Make an attenuated model if we need one
+        if attenuated is None:
+            attenuated = AttenuatedEmission(
+                grid=grid,
+                dust_curve=dust_curve,
+                apply_dust_to=apply_dust_to,
+                tau_v=tau_v,
+            )
+
+        # Make an escaped model if we need one
+        if escaped is None:
+            escaped = EscapedEmission(grid=grid, fesc=fesc)
+
         EmissionModel.__init__(
             self,
             grid=grid,
             label=label,
-            combine=(
-                AttenuatedEmission(
-                    grid=grid,
-                    dust_curve=dust_curve,
-                    apply_dust_to=apply_dust_to,
-                    tau_v=tau_v,
-                ),
-                EscapedEmission(grid=grid, fesc=apply_dust_to.fesc),
-            ),
+            combine=(attenuated, escaped),
             fesc=fesc,
             **kwargs,
         )
@@ -502,6 +543,7 @@ class TotalEmission(EmissionModel):
         dust_emission_model=None,
         label="total",
         fesc=0.0,
+        fesc_ly_alpha=1.0,
         **kwargs,
     ):
         """
@@ -516,27 +558,37 @@ class TotalEmission(EmissionModel):
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
         """
+        # Set up models we need to link
+        escaped = EscapedEmission(grid=grid, fesc=fesc, **kwargs)
+        nebular = NebularEmission(
+            grid=grid,
+            fesc=fesc,
+            fesc_ly_alpha=fesc_ly_alpha,
+            **kwargs,
+        )
+        transmitted = TransmittedEmission(grid=grid, fesc=fesc, **kwargs)
+        reprocessed = ReprocessedEmission(
+            grid=grid,
+            fesc=fesc,
+            nebular=nebular,
+            transmitted=transmitted,
+            **kwargs,
+        )
+        attenuated = AttenuatedEmission(
+            grid=grid,
+            dust_curve=dust_curve,
+            apply_dust_to=reprocessed,
+            tau_v=tau_v,
+            **kwargs,
+        )
+
         # If a dust emission model has been passed then we need combine
         if dust_emission_model is not None:
-            # Set up models we need to link
-            reprocessed = ReprocessedEmission(
-                grid=grid,
-                fesc=fesc,
-                **kwargs,
-            )
             emergent = EmergentEmission(
                 grid=grid,
-                dust_curve=dust_curve,
-                tau_v=tau_v,
                 fesc=fesc,
-                apply_dust_to=reprocessed,
-                **kwargs,
-            )
-            attenuated = AttenuatedEmission(
-                grid=grid,
-                dust_curve=dust_curve,
-                apply_dust_to=reprocessed,
-                tau_v=tau_v,
+                attenuated=attenuated,
+                escaped=escaped,
                 **kwargs,
             )
             dust_emission = DustEmission(
@@ -564,20 +616,7 @@ class TotalEmission(EmissionModel):
                 self,
                 grid=grid,
                 label=label,
-                combine=(
-                    AttenuatedEmission(
-                        grid=grid,
-                        dust_curve=dust_curve,
-                        apply_dust_to=ReprocessedEmission(
-                            grid=grid,
-                            fesc=fesc,
-                            **kwargs,
-                        ),
-                        tau_v=tau_v,
-                        **kwargs,
-                    ),
-                    EscapedEmission(grid=grid, fesc=fesc, **kwargs),
-                ),
+                combine=(attenuated, escaped),
                 fesc=fesc,
                 **kwargs,
             )

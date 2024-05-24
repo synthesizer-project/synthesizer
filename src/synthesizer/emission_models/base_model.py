@@ -108,6 +108,7 @@ class EmissionModel:
         mask_op=None,
         fesc=None,
         related_models=None,
+        **kwargs,
     ):
         """
         Initialise the emission model.
@@ -199,8 +200,8 @@ class EmissionModel:
         self._fesc = fesc
 
         # Containers for children and parents
-        self._children = []
-        self.parents = []
+        self._children = set()
+        self.parents = set()
 
         # Define the container which will hold mask information
         self.masks = []
@@ -434,6 +435,15 @@ class EmissionModel:
                         f"{model._dust_lum_attenuated.label}"
                     )
 
+            if len(model.parents) > 0:
+                parts.append(
+                    f"  Parents: {[parent.label for parent in model.parents]}"
+                )
+            if len(model._children) > 0:
+                parts.append(
+                    f"  Children: {[child.label for child in model._children]}"
+                )
+
             if model._is_masked:
                 parts.append("  Masks:")
                 for mask in model.masks:
@@ -479,29 +489,6 @@ class EmissionModel:
             )
         return self._models[label]
 
-    def _set_children(self):
-        """Set the children of this model."""
-        # Intialise and populate a dictionary to hold all child models for
-        # traversing the tree
-        self._children = []
-        for child in self._combine:
-            self._children.append(child)
-        if self._apply_dust_to is not None:
-            self._children.append(self._apply_dust_to)
-        if self._dust_lum_intrinsic is not None:
-            self._children.append(self._dust_lum_intrinsic)
-        if self._dust_lum_attenuated is not None:
-            self._children.append(self._dust_lum_attenuated)
-
-    def _set_parents(self):
-        """Set the parents of this model."""
-        # Initilaise a container for parent models
-        self.parents = []
-
-        # Attach the parent model to the children
-        for child in self._children:
-            child.parents.append(self)
-
     def _get_operation_flags(self):
         """Define the flags for what operation the model does."""
         # Define flags for what we're doing
@@ -537,10 +524,18 @@ class EmissionModel:
                 model.apply_dust_to,
                 model.dust_curve,
             )
+            model._children.add(model.apply_dust_to)
+            model.apply_dust_to.parents.add(model)
 
         # If we are applying a dust emission model, store the key
         if model.dust_emission_model is not None:
             self._dust_emission[model.label] = model.dust_emission_model
+            if model._dust_lum_attenuated is not None:
+                model._children.add(model._dust_lum_attenuated)
+                model._dust_lum_attenuated.parents.add(model)
+            if model._dust_lum_intrinsic is not None:
+                model._children.add(model._dust_lum_intrinsic)
+                model._dust_lum_intrinsic.parents.add(model)
 
         # If we are masking, store the key
         if len(model.masks):
@@ -549,6 +544,9 @@ class EmissionModel:
         # If we are combining spectra, store the key
         if len(model.combine) > 0:
             self._combine_keys[model.label] = model.combine
+            for child in model.combine:
+                model._children.add(child)
+                child.parents.add(model)
 
         # Recurse over children
         for child in model._children:
@@ -567,10 +565,6 @@ class EmissionModel:
 
     def unpack_model(self):
         """Unpack the model tree to get the order of operations."""
-        # Unpack children and parents first of all
-        self._set_children()
-        self._set_parents()
-
         # Define the private containers we'll unpack everything into. These
         # are dictionaries of the form {<result_label>: <operation props>}
         self._extract_keys = {}
@@ -590,6 +584,11 @@ class EmissionModel:
         # Also unpack any related models
         for model in self.related_models:
             self._unpack_model_recursively(model)
+
+        # Now we've worked the full tree we can set parent pointers
+        for model in self._models.values():
+            for child in model._children:
+                child.parents.add(model)
 
     def set_grid(self, grid, label=None, set_all=False):
         """
@@ -935,13 +934,39 @@ class EmissionModel:
         parents = replace_model.parents
         children = replace_model._children
 
+        # Define the relation to all parents and children
+        relations = {}
+        for parent in parents:
+            if replace_model in parent._combine:
+                relations[parent.label] = "combine"
+            if parent._apply_dust_to == replace_model:
+                relations[parent.label] = "dust_attenuate"
+            if parent._dust_lum_intrinsic == replace_model:
+                relations[parent.label] = "dust_intrinsic"
+            if parent._dust_lum_attenuated == replace_model:
+                relations[parent.label] = "dust_attenuated"
+        for child in children:
+            if child in replace_model._combine:
+                relations[child.label] = "combine"
+            if child._apply_dust_to == replace_model:
+                relations[child.label] = "dust_attenuate"
+            if child._dust_lum_intrinsic == replace_model:
+                relations[child.label] = "dust_intrinsic"
+            if child._dust_lum_attenuated == replace_model:
+                relations[child.label] = "dust_attenuated"
+
         # Remove the model we are replacing
         self._models.pop(replace_label)
         for parent in parents:
             parent._children.remove(replace_model)
-            parent._combine.remove(replace_model)
-            if parent._apply_dust_to == replace_model:
+            if relations[parent.label] == "combine":
+                parent._combine.remove(replace_model)
+            if relations[parent.label] == "dust_attenuate":
                 parent._apply_dust_to = None
+            if relations[parent.label] == "dust_intrinsic":
+                parent._dust_lum_intrinsic = None
+            if relations[parent.label] == "dust_attenuated":
+                parent._dust_lum_attenuated = None
         for child in children:
             child.parents.remove(replace_model)
 
@@ -964,15 +989,19 @@ class EmissionModel:
 
         # Attach the new model/s to the children
         for child in children:
-            child.parents.extend(replacements)
+            child.parents.update(set(replacements))
 
         # Attach the new model to the parents
         for parent in parents:
-            parent._children.append(new_model)
-            if parent._is_combining:
+            parent._children.add(new_model)
+            if relations[parent.label] == "combine":
                 parent._combine.append(new_model)
-            if parent._is_dust_attenuating:
+            if relations[parent.label] == "dust_attenuate":
                 parent._apply_dust_to = new_model
+            if relations[parent.label] == "dust_intrinsic":
+                parent._dust_lum_intrinsic = new_model
+            if relations[parent.label] == "dust_attenuated":
+                parent._dust_lum_attenuated = new_model
 
         # Unpack now we're done
         self.unpack_model()
@@ -1007,81 +1036,22 @@ class EmissionModel:
         self._models[new_label] = model
         del self._models[old_label]
 
-    def _force_directed_layout(
-        self, graph, iterations=1000, k=1, damping=0.01, max_step=0.05
-    ):
-        """
-        Compute force-directed layout for a graph with improved stability.
+    def _get_tree_levels(self):
+        def _assign_levels(
+            levels,
+            links,
+            extract_labels,
+            masked_labels,
+            model,
+            level,
+        ):
+            # Get the model label
+            label = model.label
 
-        """
-        nodes = list(graph.keys())
-        for node, edges in graph.items():
-            for edge in edges:
-                if edge[0] not in nodes:
-                    nodes.append(edge[0])
+            # Assign the level
+            levels[model.label] = max(levels.get(model.label, level), level)
 
-        n = len(nodes)
-        if k is None:
-            k = 1 / np.sqrt(n)
-        pos = {node: np.random.rand(2) for node in nodes}
-        v = {node: np.zeros(2) for node in nodes}
-
-        def apply_repulsive_forces():
-            for i in range(n):
-                for j in range(i + 1, n):
-                    delta = pos[nodes[i]] - pos[nodes[j]]
-                    distance = (
-                        np.linalg.norm(delta) + 1e-9
-                    )  # avoid division by zero
-                    force = k**2 / distance
-                    v[nodes[i]] += (delta / distance) * force
-                    v[nodes[j]] -= (delta / distance) * force
-
-        def apply_attractive_forces():
-            for node, edges in graph.items():
-                for edge in edges:
-                    delta = pos[node] - pos[edge[0]]
-                    distance = (
-                        np.linalg.norm(delta) + 1e-9
-                    )  # avoid division by zero
-                    force = distance**2 / k
-                    v[node] -= (delta / distance) * force
-                    v[edge[0]] += (delta / distance) * force
-
-        def update_positions():
-            for node in nodes:
-                displacement = v[node]
-                displacement_magnitude = np.linalg.norm(displacement)
-                if displacement_magnitude > max_step:
-                    displacement = (
-                        displacement / displacement_magnitude
-                    ) * max_step
-                pos[node] += displacement
-                v[node] *= 0.5  # Damping velocity for stability
-
-        for _ in range(iterations):
-            apply_repulsive_forces()
-            apply_attractive_forces()
-            update_positions()
-
-        return pos
-
-    def plot_emission_tree(self, show=True):
-        """
-        Plot the tree defining the spectra.
-
-        Args:
-            show (bool):
-                Whether to show the plot.
-        """
-        # Define a dictionary to hold the links (of the form
-        # {<label>: [(<linked label>, <link_type>)]})
-        links = {}
-
-        # Get the links, extraction and mask labels
-        extract_labels = set()
-        masked_labels = []
-        for label, model in self._models.items():
+            # Define the links
             if model._is_dust_attenuating:
                 links.setdefault(label, []).append(
                     (model.apply_dust_to.label, "--")
@@ -1112,21 +1082,131 @@ class EmissionModel:
                 masked_labels.append(label)
             if model._is_extracting:
                 extract_labels.add(label)
-                links[label] = []
 
-        # Extract all unique nodes
-        all_nodes = set(links.keys())
-        for target_list in links.values():
-            for target, _ in target_list:
-                all_nodes.add(target)
+            # Recurse
+            for child in model._children:
+                levels, links, extract_labels, masked_labels = _assign_levels(
+                    levels,
+                    links,
+                    extract_labels,
+                    masked_labels,
+                    child,
+                    level + 1,
+                )
 
-        print(links)
+            return levels, links, extract_labels, masked_labels
+
+        # Recursively assign levels
+        model_levels, links, extract_labels, masked_labels = _assign_levels(
+            {}, {}, set(), [], self, 0
+        )
+
+        # Unpack the levels
+        levels = {}
+
+        for label, level in model_levels.items():
+            levels.setdefault(level, []).append(label)
+
+        return levels, links, extract_labels, masked_labels
+
+    def _get_model_positions(self, levels, ychunk=10.0, xchunk=20.0):
+        def _get_parent_pos(pos, model):
+            # Get the parents
+            parents = [
+                parent.label for parent in model.parents if parent.label in pos
+            ]
+            if len(set(parents)) == 0:
+                return 0.0
+            elif len(set(parents)) == 1:
+                return pos[parents[0]][0]
+
+            return np.mean([pos[parent][0] for parent in set(parents)])
+
+        def _get_child_pos(x, pos, children, level, xchunk):
+            # Get the start x
+            start_x = x - (xchunk * (len(children) - 1) / 2.0)
+            for child in children:
+                pos[child] = (start_x, level * ychunk)
+                start_x += xchunk
+
+        def _get_level_pos(pos, level, levels, xchunk, ychunk):
+            # Get the models in this level
+            models = levels.get(level, [])
+
+            # Get the position of the parents
+            parent_pos = [
+                _get_parent_pos(pos, self._models[model]) for model in models
+            ]
+
+            # Sort models by parent_pos
+            models = [
+                model
+                for _, model in sorted(
+                    zip(parent_pos, models), key=lambda x: x[0]
+                )
+            ]
+
+            # Get the parents
+            parents = []
+            for model in models:
+                parents.extend(
+                    [
+                        parent.label
+                        for parent in self._models[model].parents
+                        if parent.label in pos
+                    ]
+                )
+
+            # If we only have one parent for this level then we can assign
+            # the position based on the parent
+            if len(set(parents)) == 1:
+                x = _get_parent_pos(pos, self._models[models[0]])
+                _get_child_pos(x, pos, models, level, xchunk)
+            else:
+                # Get the position of the first model
+                x = -xchunk * (len(models) - 1) / 2.0
+
+                # Assign the positions
+                xs = []
+                for model in models:
+                    pos[model] = (x, level * ychunk)
+                    xs.append(x)
+                    x += xchunk
+
+            # Recurse
+            if level + 1 in levels:
+                pos = _get_level_pos(pos, level + 1, levels, xchunk, ychunk)
+
+            return pos
+
+        return _get_level_pos(
+            {self.label: (0.0, 0.0)}, 1, levels, xchunk, ychunk
+        )
+
+    def plot_emission_tree(
+        self,
+        show=True,
+        fontsize=10,
+    ):
+        """
+        Plot the tree defining the spectra.
+
+        Args:
+            show (bool):
+                Whether to show the plot.
+        """
+        # Define a dictionary to hold the links (of the form
+        # {<label>: [(<linked label>, <link_type>)]})
+        links = {}
+
+        # Get the tree levels
+        levels, links, extract_labels, masked_labels = self._get_tree_levels()
 
         # Get the postion of each node
-        pos = self._force_directed_layout(links)
+        pos = self._get_model_positions(levels)
 
         # Plot the tree using Matplotlib
-        fig, ax = plt.subplots(figsize=(10, 10))
+        fig, ax = plt.subplots(figsize=(6, 6))
 
         # Draw nodes with different styles if they are masked
         for node, (x, y) in pos.items():
@@ -1144,13 +1224,16 @@ class EmissionModel:
                     if node not in extract_labels
                     else "square,pad=0.3",
                 ),
+                fontsize=fontsize,
             )
 
         # Draw edges with different styles based on link type
+        linestyles = set()
         for source, targets in links.items():
             for target, linestyle in targets:
                 if target is None:
                     continue
+                linestyles.add(linestyle)
                 sx, sy = pos[source]
                 tx, ty = pos[target]
                 ax.plot(
@@ -1162,31 +1245,45 @@ class EmissionModel:
                 )
 
         # Create legend elements
-        attenuate_line = mlines.Line2D(
-            [], [], color="black", linestyle="dashed", label="Attenuated"
-        )
-        combine_line = mlines.Line2D(
-            [], [], color="black", linestyle="solid", label="Combined"
-        )
-        dust_emission_line = mlines.Line2D(
-            [], [], color="black", linestyle="dotted", label="Dust Calculation"
-        )
-        masked_patch = mpatches.Patch(color="lightgreen", label="Masked")
-        unmasked_patch = mpatches.Patch(color="lightblue", label="Unmasked")
-        extraction_box = mpatches.Patch(
-            facecolor="none", edgecolor="black", label="Extraction"
+        handles = []
+        if "--" in linestyles:
+            handles.append(
+                mlines.Line2D(
+                    [],
+                    [],
+                    color="black",
+                    linestyle="dashed",
+                    label="Attenuated",
+                )
+            )
+        if "-" in linestyles:
+            handles.append(
+                mlines.Line2D(
+                    [], [], color="black", linestyle="solid", label="Combined"
+                )
+            )
+        if "dotted" in linestyles:
+            handles.append(
+                mlines.Line2D(
+                    [],
+                    [],
+                    color="black",
+                    linestyle="dotted",
+                    label="Dust Luminosity",
+                )
+            )
+        if len(masked_labels) > 0:
+            handles.append(mpatches.Patch(color="lightgreen", label="Masked"))
+            handles.append(mpatches.Patch(color="lightblue", label="Unmasked"))
+        handles.append(
+            mpatches.Patch(
+                facecolor="none", edgecolor="black", label="Extraction"
+            )
         )
 
         # Add legend to the bottom of the plot
         ax.legend(
-            handles=[
-                combine_line,
-                attenuate_line,
-                dust_emission_line,
-                masked_patch,
-                unmasked_patch,
-                extraction_box,
-            ],
+            handles=handles,
             loc="upper center",
             frameon=False,
             bbox_to_anchor=(0.5, 1.1),
