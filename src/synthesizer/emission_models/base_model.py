@@ -201,7 +201,7 @@ class EmissionModel:
 
         # Containers for children and parents
         self._children = set()
-        self.parents = set()
+        self._parents = set()
 
         # Define the container which will hold mask information
         self.masks = []
@@ -435,9 +435,9 @@ class EmissionModel:
                         f"{model._dust_lum_attenuated.label}"
                     )
 
-            if len(model.parents) > 0:
+            if len(model._parents) > 0:
                 parts.append(
-                    f"  Parents: {[parent.label for parent in model.parents]}"
+                    f"  Parents: {[parent.label for parent in model._parents]}"
                 )
             if len(model._children) > 0:
                 parts.append(
@@ -525,17 +525,17 @@ class EmissionModel:
                 model.dust_curve,
             )
             model._children.add(model.apply_dust_to)
-            model.apply_dust_to.parents.add(model)
+            model.apply_dust_to._parents.add(model)
 
         # If we are applying a dust emission model, store the key
         if model.dust_emission_model is not None:
             self._dust_emission[model.label] = model.dust_emission_model
             if model._dust_lum_attenuated is not None:
                 model._children.add(model._dust_lum_attenuated)
-                model._dust_lum_attenuated.parents.add(model)
+                model._dust_lum_attenuated._parents.add(model)
             if model._dust_lum_intrinsic is not None:
                 model._children.add(model._dust_lum_intrinsic)
-                model._dust_lum_intrinsic.parents.add(model)
+                model._dust_lum_intrinsic._parents.add(model)
 
         # If we are masking, store the key
         if len(model.masks):
@@ -546,7 +546,7 @@ class EmissionModel:
             self._combine_keys[model.label] = model.combine
             for child in model.combine:
                 model._children.add(child)
-                child.parents.add(model)
+                child._parents.add(model)
 
         # Recurse over children
         for child in model._children:
@@ -588,7 +588,7 @@ class EmissionModel:
         # Now we've worked the full tree we can set parent pointers
         for model in self._models.values():
             for child in model._children:
-                child.parents.add(model)
+                child._parents.add(model)
 
     def set_grid(self, grid, label=None, set_all=False):
         """
@@ -931,7 +931,7 @@ class EmissionModel:
         replace_model = self._models[replace_label]
 
         # Get the children and parents of this model
-        parents = replace_model.parents
+        parents = replace_model._parents
         children = replace_model._children
 
         # Define the relation to all parents and children
@@ -968,7 +968,7 @@ class EmissionModel:
             if relations[parent.label] == "dust_attenuated":
                 parent._dust_lum_attenuated = None
         for child in children:
-            child.parents.remove(replace_model)
+            child._parents.remove(replace_model)
 
         # Do we have more than 1 replacement?
         if len(replacements) > 1:
@@ -989,7 +989,7 @@ class EmissionModel:
 
         # Attach the new model/s to the children
         for child in children:
-            child.parents.update(set(replacements))
+            child._parents.update(set(replacements))
 
         # Attach the new model to the parents
         for parent in parents:
@@ -1190,7 +1190,9 @@ class EmissionModel:
             """
             # Get the parents
             parents = [
-                parent.label for parent in model.parents if parent.label in pos
+                parent.label
+                for parent in model._parents
+                if parent.label in pos
             ]
             if len(set(parents)) == 0:
                 return 0.0
@@ -1268,7 +1270,7 @@ class EmissionModel:
                 parents.extend(
                     [
                         parent.label
-                        for parent in self._models[model].parents
+                        for parent in self._models[model]._parents
                         if parent.label in pos
                     ]
                 )
