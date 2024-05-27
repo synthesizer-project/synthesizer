@@ -4,7 +4,7 @@ Demonstrate the dense basis approach for describing the SFZH
 
 This script demonstrates how to describe a SFZH in the dense basis formalism.
 It includes the following steps:
-- Builds a and plots a parametric galaxy using a dense basis representation
+- Builds and plots a parametric galaxy using a dense basis representation
 - Creates spectra from this object
 """
 
