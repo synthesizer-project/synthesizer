@@ -64,6 +64,7 @@ def load_IllustrisTNG(
             Boolean array of selected galaxies from the subhalo catalogue.
     """
 
+    # Do some simple argument 
     snap_number = int(snap_number)
 
     if verbose:
@@ -116,7 +117,7 @@ def load_IllustrisTNG(
             'GFM_StellarFormationTime',
             'Coordinates',
             'Masses',
-            'GFM_InitialMass',,
+            'GFM_InitialMass',
             'GFM_Metallicity',
             'SubfindHsml',
         ]
