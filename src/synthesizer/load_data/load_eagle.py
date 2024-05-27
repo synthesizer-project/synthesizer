@@ -301,7 +301,7 @@ def load_EAGLE_shm(
     dtype: str = "float32",
     tot_chunks: int = 1535,
     verbose: bool = False,
-) -> Dict[int, Galaxy]:
+) -> List[Galaxy]:
     """
     Load EAGLE required EAGLE galaxy properties
     for generating their SEDs using numpy memmap.
