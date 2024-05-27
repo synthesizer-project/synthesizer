@@ -25,6 +25,7 @@ def load_IllustrisTNG(
     verbose=True,
     dtm=0.3,
     physical=True,
+    metals=True,
 ):
     """
     Load IllustrisTNG particle data into galaxy objects
@@ -48,6 +49,12 @@ def load_IllustrisTNG(
             Dust-to-metals ratio to apply to all gas particles
         physical (bool):
             Should the coordinates be converted to physical?
+            Default: True
+        metals (bool):
+            Should we load individual stellar element abundances?
+            Default: True. This property may not be available for
+            all snapshots ( see
+            https://www.tng-project.org/data/docs/specifications/#sec1a ).
 
     Returns:
         galaxies (list):
@@ -56,6 +63,8 @@ def load_IllustrisTNG(
         subhalo_mask (array, bool):
             Boolean array of selected galaxies from the subhalo catalogue.
     """
+
+    snap_number = int(snap_number)
 
     if verbose:
         print("Loading header information...")
@@ -107,11 +116,13 @@ def load_IllustrisTNG(
             'GFM_StellarFormationTime',
             'Coordinates',
             'Masses',
-            'GFM_InitialMass',
-            'GFM_Metals',
+            'GFM_InitialMass',,
             'GFM_Metallicity',
             'SubfindHsml',
         ]
+        if metals:
+            star_fields.append('GFM_Metals')
+        
         output = il.snapshot.loadSubhalo(
             directory, snap_number, idx, 'stars', fields=star_fields
         )
@@ -127,14 +138,18 @@ def load_IllustrisTNG(
             coods = output['Coordinates'][~mask]
             metallicities = output['GFM_Metallicity'][~mask]
             masses = output['Masses'][~mask]
-            _metals = output['GFM_Metals'][~mask]
             hsml = output['SubfindHsml'][~mask]
 
             masses = (masses * 1e10) / h
             imasses = (imasses * 1e10) / h
 
-            s_oxygen = _metals[:, 4]
-            s_hydrogen = 1.0 - np.sum(_metals[:, 1:], axis=1)
+            if metals:
+                _metals = output['GFM_Metals'][~mask]
+                s_oxygen = _metals[:, 4]
+                s_hydrogen = 1.0 - np.sum(_metals[:, 1:], axis=1)
+            else:
+                s_oxygen = None
+                s_hydrogen = None
 
             # Convert comoving coordinates to physical kpc
             if physical:
@@ -162,7 +177,7 @@ def load_IllustrisTNG(
                 current_masses=masses * Msun,
                 smoothing_lengths=smoothing_lengths,
             )
-
+                                
         gas_fields = [
             'StarFormationRate',
             'Coordinates',
