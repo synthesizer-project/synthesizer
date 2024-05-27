@@ -1,6 +1,6 @@
-from tqdm import tqdm
 import numpy as np
 from astropy.cosmology import FlatLambdaCDM
+from tqdm import tqdm
 from unyt import Msun, kpc, yr
 
 try:
@@ -64,7 +64,7 @@ def load_IllustrisTNG(
             Boolean array of selected galaxies from the subhalo catalogue.
     """
 
-    # Do some simple argument 
+    # Do some simple argument
     snap_number = int(snap_number)
 
     if verbose:
@@ -81,7 +81,7 @@ def load_IllustrisTNG(
 
     fields = ['SubhaloMassType', 'SubhaloPos']
     output = il.groupcat.loadSubhalos(directory, 99, fields=fields)
-    stellar_mass = output['SubhaloMassType'][:,4]
+    stellar_mass = output['SubhaloMassType'][:, 4]
     subhalo_mask = (stellar_mass * 1e10) > stellar_mass_limit
     subhalo_pos = output['SubhaloPos'][subhalo_mask]
 
@@ -110,7 +110,7 @@ def load_IllustrisTNG(
 
         if physical:
             pos *= scale_factor
-        
+
         galaxies[i].centre = pos * kpc
 
         star_fields = [
@@ -123,7 +123,7 @@ def load_IllustrisTNG(
         ]
         if metals:
             star_fields.append('GFM_Metals')
-        
+
         output = il.snapshot.loadSubhalo(
             directory, snap_number, idx, 'stars', fields=star_fields
         )
@@ -156,7 +156,7 @@ def load_IllustrisTNG(
             if physical:
                 coods *= scale_factor
                 hsml *= scale_factor
-                
+
             # convert formation times to ages
             cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
             universe_age = cosmo.age(1.0 / scale_factor - 1)
@@ -178,7 +178,7 @@ def load_IllustrisTNG(
                 current_masses=masses * Msun,
                 smoothing_lengths=smoothing_lengths,
             )
-                                
+
         gas_fields = [
             'StarFormationRate',
             'Coordinates',
