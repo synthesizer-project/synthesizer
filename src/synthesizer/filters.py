@@ -30,6 +30,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
+from scipy.interpolate import interp1d
 from unyt import Angstrom, Hz, c, unyt_array, unyt_quantity
 
 import synthesizer.exceptions as exceptions
@@ -1414,14 +1415,25 @@ class Filter:
         # And ensure transmission is in expected range
         self.clip_transmission()
 
-    def apply_filter(self, arr, lam=None, nu=None, verbose=True):
+    def apply_filter(
+        self,
+        arr,
+        lam=None,
+        nu=None,
+        verbose=True,
+    ):
         """
-        Apply this filter's transmission curve to an arbitrary dimensioned
+        Apply the transmission curve to any array.
+
+        Applies this filter's transmission curve to an arbitrary dimensioned
         array returning the sum of the array convolved with the filter
         transmission curve along the wavelength axis (final axis).
 
         If no wavelength or frequency array is provided then the filters rest
         frame frequency is assumed.
+
+        To apply to llam or flam, wavelengths must be provided. To apply to
+        lnu or fnu frequencies must be provided.
 
         Args:
             arr (array-like, float)
@@ -1448,10 +1460,43 @@ class Filter:
                 If the shape of the transmission and wavelength array differ
                 the convolution cannot be done.
         """
+        # Initialise the xs were about to set and use
+        xs = None
+        original_xs = None
 
-        # Warn the user that frequencies take precedence over wavelengths
-        # if both are provided
-        if lam is not None and nu is not None:
+        # Get the right x array to integrate over
+        if lam is None and nu is None:
+            # If we haven't been handed anything we'll use the filter's
+            # frequencies
+
+            # Use the filters frequency array
+            xs = self._nu
+            original_xs = self._original_nu
+
+        elif lam is not None:
+            # If we have lams we are intergrating over llam or flam
+
+            # Ensure the passed wavelengths have units
+            if not isinstance(lam, unyt_array):
+                lam *= Angstrom
+
+            # Use the passed wavelength and original lam
+            xs = lam.to(Angstrom).value
+            original_xs = self._original_lam
+
+        elif nu is not None:
+            # If we've been handed nu we are integrating over lnu or fnu
+
+            # Ensure the passed frequencies have units
+            if not isinstance(nu, unyt_array):
+                nu *= Hz
+
+            # Use the passed frequency and original frequency
+            xs = nu.to(Hz).value
+            original_xs = self._original_nu
+
+        else:
+            # If both have been handed then frequencies take precedence
             if verbose:
                 print(
                     (
@@ -1460,61 +1505,24 @@ class Filter:
                         " for filter convolution."
                     )
                 )
+            xs = self._nu.to(Hz).value
+            original_xs = self._original_nu
 
-        # Get the correct x array to integrate w.r.t and work out if we need
-        # to shift the transmission curve.
-        if nu is not None:
-            # Ensure the passed frequencies have units
-            if not isinstance(nu, unyt_array):
-                nu *= Hz
+        # Interpolate the transmission curve onto the provided frequencies
+        func = interp1d(
+            original_xs,
+            self.original_t,
+            kind="linear",
+            bounds_error=False,
+        )
+        t = func(xs)
 
-            # Define the integration xs
-            xs = nu
-
-            # Do we need to shift?
-            need_shift = not nu.value[0] == self._nu[0]
-
-            # To shift the transmission we need the corresponding wavelength
-            # with the units stripped off
-            if need_shift:
-                lam = (c / nu).to(Angstrom).value
-
-        elif lam is not None:
-            # Ensure the passed wavelengths have no units
-            if isinstance(lam, unyt_array):
-                lam = lam.value
-
-            # Define the integration xs
-            xs = lam
-
-            # Do we need to shift?
-            need_shift = not lam[0] == self._lam[0]
-
-        else:
-            # Define the integration xs
-            xs = self._nu
-
-            # No shift needed
-            need_shift = False
-
-        # Do we need to shift?
-        if need_shift:
-            # Ok, shift the tranmission curve by interpolating onto the
-            # provided wavelengths
-            t = np.interp(
-                lam, self._original_lam, self.original_t, left=0.0, right=0.0
-            )
-
-        else:
-            # We can use the standard transmission array
-            t = self.t
-
-        # Check dimensions are ok
-        if xs.size != arr.shape[-1]:
-            raise ValueError(
-                "Final dimension of array did not match "
-                "x array shape (arr.shape[-1]=%d, "
-                "xs.size=%d)" % (arr.shape[-1], xs.size)
+        # Ensure the xs array and arr are a compatible shape
+        if arr.shape[-1] != t.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "The shape of the transmission curve and the final axis of "
+                "the array to be convolved do not match. "
+                f"(arr.shape={arr.shape}, transmission.shape={t.shape})"
             )
 
         # Store this observed frame transmission
@@ -1528,7 +1536,7 @@ class Filter:
         xs_in_band = xs[in_band]
         t_in_band = t[in_band]
 
-        # Multiply the IFU by the filter transmission curve
+        # Multiply the array by the filter transmission curve
         transmission = arr_in_band * t_in_band
 
         # Sum over the final axis to "collect" transmission in this filer
