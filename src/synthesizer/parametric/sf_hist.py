@@ -628,7 +628,7 @@ class DenseBasis(Common):
 
         Args:
             interpolator (string)
-                Dense basis interpolator to use. Options: 
+                Dense basis interpolator to use. Options:
                 [gp_george, gp_sklearn, linear, and pchip].
                 Note that gp_sklearn requires sklearn to be installed.
             min_age (float)
