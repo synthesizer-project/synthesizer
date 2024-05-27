@@ -92,7 +92,7 @@ dependencies = [
   "spectres",
   "tqdm",
   "requests",
-  "dense_basis@git+https://github.com/kartheikiyer/dense_basis#egg=c9cee6c",
+  "dense_basis@git+https://github.com/kartheikiyer/dense_basis#egg=9c404ff",
   "statsmodels",
   "scikit-learn",
 ]
