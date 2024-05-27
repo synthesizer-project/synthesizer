@@ -5,9 +5,6 @@ from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 
 if __name__ == "__main__":
-    # Get the location of this script, __file__ is the absolute path of this
-    # script, however we just want to directory
-    # script_path = os.path.abspath(os.path.dirname(__file__))
 
     # Define the grid
     grid_name = "test_grid"
@@ -18,11 +15,6 @@ if __name__ == "__main__":
     # histories
     sfh_p = (9.0, -3, 2, 0.3, 0.8)
     redshift = 0.1
-
-    Z_p = {
-        "log10metallicity": -2.0
-    }  # can also use linear metallicity e.g. {'Z': 0.01}
-
     stellar_mass = 1e8
 
     # define the functional form of the star formation and metal enrichment
@@ -32,7 +24,8 @@ if __name__ == "__main__":
 
     sfh.plot()
 
-    metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
+    # Constant metallicity
+    metal_dist = ZDist.DeltaConstant(log10metallicity=-2.0)
 
     # get the 2D star formation and metal enrichment history for the given SPS
     # grid.
