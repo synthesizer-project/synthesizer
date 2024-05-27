@@ -64,12 +64,13 @@ def load_IllustrisTNG(
             Boolean array of selected galaxies from the subhalo catalogue.
     """
 
-    # Do some simple argument
+    # Do some simple argument preparation
     snap_number = int(snap_number)
 
     if verbose:
         print("Loading header information...")
 
+    # Get header information
     header = il.groupcat.loadHeader(directory, snap_number)
     scale_factor = header['Time']
     redshift = header['Redshift']
@@ -79,10 +80,14 @@ def load_IllustrisTNG(
     if verbose:
         print("Loading subhalo catalogue...")
 
+    # Load subhalo properties (positions and stellar masses)
     fields = ['SubhaloMassType', 'SubhaloPos']
-    output = il.groupcat.loadSubhalos(directory, 99, fields=fields)
+    output = il.groupcat.loadSubhalos(directory, snap_number, fields=fields)
+
+    # Perform stellar mass masking
     stellar_mass = output['SubhaloMassType'][:, 4]
     subhalo_mask = (stellar_mass * 1e10) > stellar_mass_limit
+
     subhalo_pos = output['SubhaloPos'][subhalo_mask]
 
     if verbose:
@@ -111,6 +116,7 @@ def load_IllustrisTNG(
         if physical:
             pos *= scale_factor
 
+        # Save subhalo centre
         galaxies[i].centre = pos * kpc
 
         star_fields = [
@@ -199,7 +205,7 @@ def load_IllustrisTNG(
             g_metals = output['GFM_Metallicity']
 
             g_masses = (g_masses * 1e10) / h
-            star_forming = g_sfr > 0.0
+            star_forming = g_sfr > 0.0  # star forming gas particles
 
             # Convert comoving coordinates to physical kpc
             if physical:
