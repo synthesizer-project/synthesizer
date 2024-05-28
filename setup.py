@@ -3,6 +3,25 @@
 Most of the build is defined in pyproject.toml but C extensions are not
 supported in pyproject.toml yet. To enable the compilation of the C extensions
 we use the legacy setup.py. This is ONLY used for the C extensions.
+
+This script enables the user to overise the CFLAGS and LDFLAGS environment
+variables to pass custom flags to the compiler and linker. It also enables the
+definition of preprocessing flags that can then be used in the C code.
+
+Example:
+    To build the C extensions with debugging checks enabled, run the following
+    command:
+
+    ```bash
+    WITH_DEBUGGING_CHECKS=1 pip install .
+    ```
+
+    To build the C extensions with custom compiler flags, run the following
+    command:
+
+    ```bash
+    CFLAGS="-O3 -march=native" pip install .
+    ```
 """
 
 import logging
