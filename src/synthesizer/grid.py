@@ -39,6 +39,7 @@ from synthesizer import exceptions
 from synthesizer.line import Line, LineCollection, flatten_linelist
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
+from synthesizer.warnings import warn
 
 from . import __file__ as filepath
 
@@ -376,7 +377,7 @@ class Grid:
         # If we have both new_lam (or filters) and wavelength limits
         # the limits become meaningless tell the user so.
         if len(lam_lims) > 0 and (new_lam is not None or filters is not None):
-            print(
+            warn(
                 "Passing new_lam or filters and lam_lims is contradictory, "
                 "lam_lims will be ignored."
             )
@@ -406,7 +407,7 @@ class Grid:
 
             # Warn the user the new_lam will be ignored
             if new_lam is not None:
-                print(
+                warn(
                     "If a FilterCollection is defined alongside new_lam "
                     "then FilterCollection.lam takes precedence and new_lam "
                     "is ignored"
