@@ -227,6 +227,18 @@ class Particles:
 
         return self.particle_photo_fluxes
 
+    def integate_particle_spectra(self):
+        """
+        Integrate any particle spectra to get integrated spectra.
+
+        This will take all spectra in self.particle_spectra and call the sum
+        method on them, populating self.spectra with the results.
+        """
+        # Loop over the particle spectra
+        for key, sed in self.particle_spectra.items():
+            # Sum the spectra
+            self.spectra[key] = sed.sum()
+
 
 class CoordinateGenerator:
     """
