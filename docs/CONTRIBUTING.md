@@ -126,3 +126,5 @@ debugging code...
 ```
 
 To activate debugging checks simply install with `WITH_DEBUGGING_CHECKS=1 pip install .`.
+
+It is also advisable to turn warnings into errors by including `-Werror` in the CFLAGS, however, the Python source code itself will fail with this turned on for some compilers because it does produce some warnings (observed with gcc).
