@@ -1302,7 +1302,7 @@ class Filter:
                 f_grp["Original_Wavelength"][:], lam_units
             )
             self.original_t = f_grp["Original_Transmission"][:]
-            self.lam = hdf["Header"]["Wavelengths"] * lam_units
+            self.lam = hdf["Header"]["Wavelengths"][:] * lam_units
             self.t = f_grp["Transmission"][:]
 
         elif filter_type == "TopHat":
@@ -1340,7 +1340,7 @@ class Filter:
             # For a generic filter just set the transmission and
             # wavelengths
             self.t = f_grp["Transmission"][:]
-            self.lam = hdf["Header"]["Wavelengths"] * lam_units
+            self.lam = hdf["Header"]["Wavelengths"][:] * lam_units
 
     def clip_transmission(self):
         """
