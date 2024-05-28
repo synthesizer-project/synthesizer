@@ -45,7 +45,7 @@ Synthesizer uses C extensions for much of the heavy lifting done in the backgrou
 CFLAGS=... LDFLAGS=... pip install .
 ```
 
-Setting these environment variables will override the default flags. For example, to compile with debugging symbols and no optimisation, you could use
+Setting these environment variables will override the default flags. Note that Synthesizer will santise any requested flags to ensure they are compatible with the compiler. For example, to compile with debugging symbols and no optimisation, you could use
 
 ```
 CFLAGS="-std=c99 -Wall -g" LDFLAGS="-g" pip install .
@@ -56,6 +56,10 @@ which would be recommended if you are developing the code, particularly the C ex
 ```
 CFLAGS="-std=c99 -Wall -g" WITH_DEBUGGING_CHECKS=1 pip install .
 ```
+
+This will add additional checks to the code to help catch bugs, but will slow down the code. This is recommended if you are developing the code, but not for normal use.
+
+The build process will generate a log file (`build_synth.log`) which details the compilation process and any choices that were made about the requested flags. If you encounter any issues, please check this log file for more information.
 
 Downloading SPS grids
 #####################
