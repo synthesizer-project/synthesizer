@@ -169,7 +169,7 @@ class CharlotFall2000(EmissionModel):
             young_dust_emission_nebular = DustEmission(
                 label="young_dust_emission_nebular",
                 dust_emission_model=dust_emission_nebular,
-                dust_lum_intrinsic=young_intrinsic,
+                dust_lum_intrinsic=young_incident,
                 dust_lum_attenuated=young_attenuated_nebular,
                 mask_attr="log10ages",
                 mask_thresh=age_pivot,
@@ -178,7 +178,7 @@ class CharlotFall2000(EmissionModel):
             young_dust_emission_ism = DustEmission(
                 label="young_dust_emission_ism",
                 dust_emission_model=dust_emission_ism,
-                dust_lum_intrinsic=young_intrinsic,
+                dust_lum_intrinsic=young_incident,
                 dust_lum_attenuated=young_attenuated_ism,
                 mask_attr="log10ages",
                 mask_thresh=age_pivot,
@@ -191,7 +191,7 @@ class CharlotFall2000(EmissionModel):
             old_dust_emission = DustEmission(
                 label="old_dust_emission",
                 dust_emission_model=dust_emission_ism,
-                dust_lum_intrinsic=old_intrinsic,
+                dust_lum_intrinsic=old_incident,
                 dust_lum_attenuated=old_attenuated,
                 mask_attr="log10ages",
                 mask_thresh=age_pivot,
