@@ -155,7 +155,7 @@ class Sed:
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
             # Define the axes to sum over to give only the final axis
-            sum_over = tuple(range(1, len(self._lnu.shape)))
+            sum_over = tuple(range(0, len(self._lnu.shape) - 1))
 
             # Create a new sed object with the first Lnu dimension collapsed
             new_sed = Sed(self.lam, np.sum(self._lnu, axis=sum_over))
