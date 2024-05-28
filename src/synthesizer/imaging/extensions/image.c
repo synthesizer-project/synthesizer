@@ -13,7 +13,9 @@
 #include <numpy/ndarraytypes.h>
 
 /* Define a macro to handle that bzero is non-standard. */
+#ifndef bzero
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
+#endif
 
 /**
  * @brief Function to compute an image from particle data and a kernel.
@@ -42,8 +44,8 @@
  */
 PyObject *make_img(PyObject *self, PyObject *args) {
 
-  const double res, threshold;
-  const int npix_x, npix_y, npart, kdim;
+  const double res = 0, threshold = 0;
+  const int npix_x = 0, npix_y = 0, npart = 0, kdim = 0;
   PyArrayObject *np_pix_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys;
 

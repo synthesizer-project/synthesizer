@@ -35,9 +35,9 @@
  */
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
-  const int ndim, npart;
-  const PyObject *grid_tuple, *part_tuple;
-  const PyArrayObject *np_part_mass, *np_ndims;
+  const int ndim = 0, npart = 0;
+  PyObject *grid_tuple, *part_tuple;
+  PyArrayObject *np_part_mass, *np_ndims;
   const char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOiis", &grid_tuple, &part_tuple,
@@ -97,7 +97,8 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   for (int idim = 0; idim < ndim; idim++) {
 
     /* Extract the data from the numpy array. */
-    const PyArrayObject *np_grid_arr = PyTuple_GetItem(grid_tuple, idim);
+    PyArrayObject *np_grid_arr =
+        (PyArrayObject *)PyTuple_GetItem(grid_tuple, idim);
     const double *grid_arr = PyArray_DATA(np_grid_arr);
 
     /* Assign this data to the property array. */
@@ -116,7 +117,8 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   for (int idim = 0; idim < ndim; idim++) {
 
     /* Extract the data from the numpy array. */
-    const PyArrayObject *np_part_arr = PyTuple_GetItem(part_tuple, idim);
+    PyArrayObject *np_part_arr =
+        (PyArrayObject *)PyTuple_GetItem(part_tuple, idim);
     const double *part_arr = PyArray_DATA(np_part_arr);
 
     /* Assign this data to the property array. */
