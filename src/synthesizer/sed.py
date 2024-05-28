@@ -1016,13 +1016,10 @@ class Sed:
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
             if not np.array_equal(f.lam, self.lam):
-                if verbose:
-                    print(
-                        (
-                            "WARNING: filter wavelength grid is not "
-                            "the same as the SED wavelength grid."
-                        )
-                    )
+                warn(
+                    "Filter wavelength grid is not "
+                    "the same as the SED wavelength grid."
+                )
 
             # Calculate and store the broadband flux in this filter
             bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
