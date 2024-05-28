@@ -35,10 +35,10 @@
  */
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
-  const int ndim = 0, npart = 0;
+  int ndim = 0, npart = 0;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_part_mass, *np_ndims;
-  const char *method;
+  char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOiis", &grid_tuple, &part_tuple,
                         &np_part_mass, &np_ndims, &ndim, &npart, &method))

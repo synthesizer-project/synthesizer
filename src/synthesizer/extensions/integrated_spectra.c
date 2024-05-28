@@ -35,13 +35,13 @@
  */
 PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
-  const int ndim = 0;
-  const int npart = 0, nlam = 0;
+  int ndim = 0;
+  int npart = 0, nlam = 0;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_fesc;
   PyArrayObject *np_part_mass, *np_ndims;
-  const char *method;
+  char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOOOiiis", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_fesc, &np_ndims, &ndim,

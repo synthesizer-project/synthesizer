@@ -246,8 +246,8 @@ void spectra_loop_ngp(const double **grid_props, const double **part_props,
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
-  const int ndim = 0;
-  const int npart = 0, nlam = 0;
+  int ndim = 0;
+  int npart = 0, nlam = 0;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_fesc;
