@@ -72,3 +72,38 @@ def deprecated(func, message=None, category=FutureWarning):
         return func(*args, **kwargs)
 
     return wrapped
+
+
+def warn_here(message, category=RuntimeWarning):
+    """
+    Issue a warning at the current location in the code.
+
+    Warning "here" means the location reported by the warning will be the exact
+    location in the code where this function was called
+
+    Args:
+        message (str)
+            The message to be displayed to the end user.
+        category (Warning)
+            The warning category to use. `RuntimeWarning` by default.
+
+    """
+    warnings.warn(message, category=category, stacklevel=2)
+
+
+def warn_from_caller(message, category=RuntimeWarning):
+    """
+    Issue a warning from where this function was called.
+
+    Warning "from caller" means the location reported by the warning will be
+    the location in the code where the function that called this warning was
+    called.
+
+    Args:
+        message (str)
+            The message to be displayed to the end user.
+        category (Warning)
+            The warning category to use. `RuntimeWarning` by default.
+
+    """
+    warnings.warn(message, category=category, stacklevel=3)
