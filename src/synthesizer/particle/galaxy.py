@@ -26,6 +26,7 @@ from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import Gas, Stars
 from synthesizer.sed import Sed
+from synthesizer.warnings import warn
 
 
 class Galaxy(BaseGalaxy):
@@ -141,18 +142,16 @@ class Galaxy(BaseGalaxy):
                 )
             else:
                 self.stellar_mass_weighted_age = None
-                if self.verbose:
-                    print(
-                        "Ages of stars not provided, "
-                        "setting stellar_mass_weighted_age to `None`"
-                    )
-        else:
-            self.stellar_mass_weighted_age = None
-            if self.verbose:
-                print(
-                    "Current mass of stars not provided, "
+                warn(
+                    "Ages of stars not provided, "
                     "setting stellar_mass_weighted_age to `None`"
                 )
+        else:
+            self.stellar_mass_weighted_age = None
+            warn(
+                "Current mass of stars not provided, "
+                "setting stellar_mass_weighted_age to `None`"
+            )
 
     def calculate_integrated_gas_properties(self):
         """
@@ -170,11 +169,10 @@ class Galaxy(BaseGalaxy):
             )
         else:
             self.mass_weighted_gas_metallicity = None
-            if self.verbose:
-                print(
-                    "Mass of gas particles not provided, "
-                    "setting mass_weighted_gas_metallicity to `None`"
-                )
+            warn(
+                "Mass of gas particles not provided, "
+                "setting mass_weighted_gas_metallicity to `None`"
+            )
 
         if self.gas.star_forming is not None:
             mask = self.gas.star_forming
@@ -194,11 +192,10 @@ class Galaxy(BaseGalaxy):
         else:
             self.sf_gas_mass = None
             self.sf_gas_metallicity = None
-            if self.verbose:
-                print(
-                    "Star forming gas particle mask not provided, "
-                    "setting sf_gas_mass and sf_gas_metallicity to `None`"
-                )
+            warn(
+                "Star forming gas particle mask not provided, "
+                "setting sf_gas_mass and sf_gas_metallicity to `None`"
+            )
 
     def load_stars(
         self,
@@ -237,12 +234,11 @@ class Galaxy(BaseGalaxy):
                 | (ages is None)
                 | (metallicities is None)
             ):
-                if self.verbose:
-                    print(
-                        "In `load_stars`: one of either `initial_masses`"
-                        ", `ages` or `metallicities` is not provided, setting "
-                        "`stars` object to `None`"
-                    )
+                warn(
+                    "In `load_stars`: one of either `initial_masses`"
+                    ", `ages` or `metallicities` is not provided, setting "
+                    "`stars` object to `None`"
+                )
                 self.stars = None
                 return None
             else:
@@ -286,12 +282,11 @@ class Galaxy(BaseGalaxy):
         else:
             # If nothing has been provided, just set to None and return
             if (masses is None) | (metallicities is None):
-                if self.verbose:
-                    print(
-                        "In `load_stars`: one of either `masses`"
-                        " or `metallicities` is not provided, setting "
-                        "`gas` object to `None`"
-                    )
+                warn(
+                    "In `load_stars`: one of either `masses`"
+                    " or `metallicities` is not provided, setting "
+                    "`gas` object to `None`"
+                )
                 self.gas = None
                 return None
             else:
@@ -1473,7 +1468,7 @@ class Galaxy(BaseGalaxy):
 
         #  Warn if we have stars to plot in this bin
         if self.stars.ages[mask].size == 0:
-            print("The SFR is 0! (there are 0 stars in the age bin)")
+            warn("The SFR is 0! (there are 0 stars in the age bin)")
 
         # Instantiate the Image object.
         img = Image(resolution=resolution, fov=fov)
