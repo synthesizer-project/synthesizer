@@ -25,7 +25,6 @@ from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import Gas, Stars
-from synthesizer.sed import Sed
 from synthesizer.warnings import warn
 
 
