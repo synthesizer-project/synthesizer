@@ -62,9 +62,17 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Extract a pointer to the lines grids */
   const double *grid_lines = PyArray_DATA(np_grid_lines);
+  if (grid_lines == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract grid_lines.");
+    return NULL;
+  }
 
   /* Extract a pointer to the continuum grid. */
   const double *grid_continuum = PyArray_DATA(np_grid_continuum);
+  if (grid_continuum == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract grid_continuum.");
+    return NULL;
+  }
 
   /* Declare and initialise the vairbales we'll store our result in. */
   double line_lum = 0.0;
@@ -72,18 +80,36 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Extract a pointer to the grid dims */
   const int *dims = PyArray_DATA(np_ndims);
+  if (dims == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract dims from np_ndims.");
+    return NULL;
+  }
 
   /* Extract a pointer to the particle masses. */
   const double *part_mass = PyArray_DATA(np_part_mass);
+  if (part_mass == NULL) {
+    PyErr_SetString(PyExc_ValueError,
+                    "Failed to extract part_mass from np_part_mass.");
+    return NULL;
+  }
 
   /* Extract a pointer to the fesc array. */
   const double *fesc = PyArray_DATA(np_fesc);
+  if (fesc == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract fesc from np_fesc.");
+    return NULL;
+  }
 
   /* Allocate a single array for grid properties*/
   int nprops = 0;
   for (int dim = 0; dim < ndim; dim++)
     nprops += dims[dim];
   const double **grid_props = malloc(nprops * sizeof(double *));
+  if (grid_props == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for grid_props.");
+    return NULL;
+  }
 
   /* How many grid elements are there? */
   int grid_size = 1;
@@ -92,6 +118,11 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Allocate an array to hold the grid weights. */
   double *grid_weights = malloc(grid_size * sizeof(double));
+  if (grid_weights == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for grid_weights.");
+    return NULL;
+  }
   bzero(grid_weights, grid_size * sizeof(double));
 
   /* Unpack the grid property arrays into a single contiguous array. */
@@ -107,6 +138,11 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Allocate a single array for particle properties. */
   const double **part_props = malloc(npart * ndim * sizeof(double *));
+  if (part_props == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for part_props.");
+    return NULL;
+  }
 
   /* Unpack the particle property arrays into a single contiguous array. */
   for (int idim = 0; idim < ndim; idim++) {

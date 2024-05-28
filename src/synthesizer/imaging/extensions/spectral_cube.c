@@ -43,12 +43,28 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
 
   /* Get pointers to the actual data. */
   const double *sed_values = PyArray_DATA(np_sed_values);
+  if (sed_values == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract sed_values.");
+    return NULL;
+  }
   const double *xs = PyArray_DATA(np_xs);
+  if (xs == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract xs.");
+    return NULL;
+  }
   const double *ys = PyArray_DATA(np_ys);
+  if (ys == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract ys.");
+    return NULL;
+  }
 
   /* Allocate the data cube. */
   const int npix = npix_x * npix_y;
   double *data_cube = malloc(npix * nlam * sizeof(double));
+  if (data_cube == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to allocate data_cube.");
+    return NULL;
+  }
   bzero(data_cube, npix * nlam * sizeof(double));
 
   /* Loop over positions including the sed */
@@ -121,14 +137,38 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 
   /* Get pointers to the actual data. */
   const double *sed_values = PyArray_DATA(np_sed_values);
+  if (sed_values == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract sed_values.");
+    return NULL;
+  }
   const double *smoothing_lengths = PyArray_DATA(np_smoothing_lengths);
+  if (smoothing_lengths == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract smoothing_lengths.");
+    return NULL;
+  }
   const double *xs = PyArray_DATA(np_xs);
+  if (xs == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract xs.");
+    return NULL;
+  }
   const double *ys = PyArray_DATA(np_ys);
+  if (ys == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract ys.");
+    return NULL;
+  }
   const double *kernel = PyArray_DATA(np_kernel);
+  if (kernel == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract kernel.");
+    return NULL;
+  }
 
   /* Allocate DATA_CUBE. */
   const int npix = npix_x * npix_y;
   double *data_cube = malloc(npix * nlam * sizeof(double));
+  if (data_cube == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to allocate data_cube.");
+    return NULL;
+  }
   bzero(data_cube, npix * nlam * sizeof(double));
 
   /* Loop over positions including the sed */
@@ -151,6 +191,11 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 
     /* Create an empty kernel for this particle. */
     double *part_kernel = malloc(kernel_cdim * kernel_cdim * sizeof(double));
+    if (part_kernel == NULL) {
+      PyErr_SetString(PyExc_MemoryError,
+                      "Failed to allocate memory for part_kernel.");
+      return NULL;
+    }
     bzero(part_kernel, kernel_cdim * kernel_cdim * sizeof(double));
 
     /* Track the kernel sum for normalisation. */
