@@ -231,13 +231,13 @@ void line_loop_ngp(const double **grid_props, const double **part_props,
  */
 PyObject *compute_particle_line(PyObject *self, PyObject *args) {
 
-  const int ndim = 0;
-  const int npart = 0;
+  int ndim = 0;
+  int npart = 0;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_lines, *np_grid_continuum;
   PyArrayObject *np_fesc;
   PyArrayObject *np_part_mass, *np_ndims;
-  const char *method;
+  char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOOOOiis", &np_grid_lines, &np_grid_continuum,
                         &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,

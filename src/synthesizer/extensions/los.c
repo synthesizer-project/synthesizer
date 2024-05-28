@@ -430,8 +430,8 @@ double calculate_los_recursive(struct cell *c, const double star_x,
  */
 PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
 
-  const int nstar = 0, ngas = 0, kdim = 0, force_loop = 0;
-  const double threshold = 0, max_sml = 0;
+  int nstar = 0, ngas = 0, kdim = 0, force_loop = 0;
+  double threshold = 0, max_sml = 0;
   PyArrayObject *np_kernel, *np_star_pos, *np_gas_pos, *np_gas_sml;
   PyArrayObject *np_gas_met, *np_gas_mass, *np_gas_dtm;
 

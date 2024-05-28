@@ -44,8 +44,8 @@
  */
 PyObject *make_img(PyObject *self, PyObject *args) {
 
-  const double res = 0, threshold = 0;
-  const int npix_x = 0, npix_y = 0, npart = 0, kdim = 0;
+  double res = 0, threshold = 0;
+  int npix_x = 0, npix_y = 0, npart = 0, kdim = 0;
   PyArrayObject *np_pix_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys;
 
