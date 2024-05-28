@@ -561,7 +561,7 @@ class FilterCollection:
             max_lam * self.filters[f].lam.units,
         )
 
-    def _merge_filter_lams(self, fill_gaps):
+    def _merge_filter_lams(self, fill_gaps=False):
         """
         Merge the wavelength arrays of multiple filters.
 
@@ -569,6 +569,10 @@ class FilterCollection:
 
         If a gap is found between filters it can be populated with the minimum
         average wavelength resolution of all filters if fill_gaps is True.
+
+        Args:
+            fill_gaps (bool)
+                Are we filling gaps in the wavelength array? Defaults to False.
 
         Returns:
             np.ndarray
@@ -1288,6 +1292,9 @@ class Filter:
         # Get the filter type
         filter_type = f_grp.attrs["filter_type"]
 
+        # Set wavelength array
+        self.lam = unyt_array(hdf["Header"]["Wavelengths"][:], lam_units)
+
         # For SVO filters we don't want to send a request to the
         # database so instead instatiate it as a generic filter and
         # overwrite some attributes after the fact
@@ -1302,7 +1309,6 @@ class Filter:
                 f_grp["Original_Wavelength"][:], lam_units
             )
             self.original_t = f_grp["Original_Transmission"][:]
-            self.lam = hdf["Header"]["Wavelengths"][:] * lam_units
             self.t = f_grp["Transmission"][:]
 
         elif filter_type == "TopHat":
@@ -1334,13 +1340,12 @@ class Filter:
                 setattr(self, key, value)
 
             # Finally, construct the top hat filter
-            self.make_top_hat_filter()
+            self._make_top_hat_filter()
 
         else:
             # For a generic filter just set the transmission and
             # wavelengths
             self.t = f_grp["Transmission"][:]
-            self.lam = hdf["Header"]["Wavelengths"][:] * lam_units
 
     def clip_transmission(self):
         """
