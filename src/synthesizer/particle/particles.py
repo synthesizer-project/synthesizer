@@ -227,7 +227,7 @@ class Particles:
 
         return self.particle_photo_fluxes
 
-    def integate_particle_spectra(self):
+    def intergate_particle_spectra(self):
         """
         Integrate any particle spectra to get integrated spectra.
 
