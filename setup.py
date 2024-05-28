@@ -50,7 +50,6 @@ class BuildExt(build_ext):
         "unix": [
             "-std=c99",
             "-Wall",
-            "-Werror",
             "-O3",
             "-ffast-math",
             "-I{:s}".format(np.get_include()),
