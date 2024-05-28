@@ -13,6 +13,10 @@ from synthesizer.emission_models.models import (
     TotalEmission,
 )
 from synthesizer.emission_models.charlot_fall_model import CharlotFall2000
+from synthesizer.emission_models.pacman_model import (
+    PacmanEmission,
+    BimodalPacmanEmission,
+)
 
 PREMADE_MODELS = [
     "IncidentEmission",
@@ -27,4 +31,6 @@ PREMADE_MODELS = [
     "DustEmission",
     "TotalEmission",
     "CharlotFall2000",
+    "PacmanEmission",
+    "BimodalPacmanEmission",
 ]
