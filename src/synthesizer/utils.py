@@ -10,6 +10,7 @@ import numpy as np
 from unyt import c, h, kb, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.warnings import warn
 
 
 def planck(nu, temperature):
@@ -80,13 +81,11 @@ def rebin_1d(arr, resample_factor, func=np.sum):
 
     # Safely handle no integer resamples
     if not isinstance(resample_factor, int):
-        print(
+        warn(
             f"resample factor ({resample_factor}) is not an"
-            " integer, converting it to ",
-            end="\r",
+            f" integer, converting it to {int(resample_factor)}",
         )
         resample_factor = int(resample_factor)
-        print(resample_factor)
 
     # How many elements in the input?
     n = len(arr)
