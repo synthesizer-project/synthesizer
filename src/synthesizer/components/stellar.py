@@ -13,6 +13,7 @@ from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.line import Line, LineCollection
 from synthesizer.sed import Sed, plot_spectra
 from synthesizer.units import Quantity
+from synthesizer.warnings import warn
 
 
 class StarsComponent:
@@ -444,15 +445,12 @@ class StarsComponent:
 
         # Check if grid has been run through a photoionisation code
         if not grid.reprocessed:
-            if verbose:
-                print(
-                    (
-                        "The grid you are using has not been post-processed "
-                        "through a photoionisation code. This method will "
-                        "just return the incident stellar emission. Are "
-                        "you sure this is the method you want to use?"
-                    )
-                )
+            warn(
+                "The grid you are using has not been post-processed "
+                "through a photoionisation code. This method will "
+                "just return the incident stellar emission. Are "
+                "you sure this is the method you want to use?"
+            )
 
             spec = self.get_spectra_incident(
                 grid=grid,
@@ -929,13 +927,11 @@ class StarsComponent:
             #   - total
 
             if np.isscalar(alpha):
-                print(
-                    (
-                        "Separate dust curve slopes for diffuse and "
-                        "birth cloud dust not given"
-                    )
+                warn(
+                    "Separate dust curve slopes for diffuse and "
+                    "birth cloud dust not given. "
+                    "Defaulting to dust_curve.slope (-1 if unmodified)"
                 )
-                print(("Defaulting to dust_curve.slope (-1 if unmodified)"))
                 alpha = [dust_curve.slope, dust_curve.slope]
 
             # Overwrite Nones with the dust_curve.slope value
@@ -1003,11 +999,9 @@ class StarsComponent:
                 if (not isinstance(dust_emission_model, list)) and (
                     not hasattr(dust_emission_model, "template")
                 ):
-                    print(
-                        (
-                            "Separate dust emission model for diffuse and "
-                            "birth cloud dust not given"
-                        )
+                    warn(
+                        "Separate dust emission model for diffuse and "
+                        "birth cloud dust not given"
                     )
 
                     dust_emission_model = [

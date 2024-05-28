@@ -19,8 +19,6 @@ Example usages:
                         tau_v=tau_vs, coordinates=coordinates, ...)
 """
 
-import warnings
-
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,6 +34,7 @@ from synthesizer.particle.particles import Particles
 from synthesizer.plt import single_histxy
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
+from synthesizer.warnings import warn
 
 
 class Stars(Particles, StarsComponent):
@@ -511,8 +510,7 @@ class Stars(Particles, StarsComponent):
 
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
-            if verbose:
-                print("Age mask has filtered out all particles")
+            warn("Age mask has filtered out all particles")
 
             return np.zeros(len(grid.lam))
 
@@ -522,8 +520,7 @@ class Stars(Particles, StarsComponent):
 
             # Ensure and warn that the masking hasn't removed everything
             if np.sum(aperture_mask) == 0:
-                if verbose:
-                    print("Aperture mask has filtered out all particles")
+                warn("Aperture mask has filtered out all particles")
 
                 return np.zeros(len(grid.lam))
         else:
@@ -918,8 +915,7 @@ class Stars(Particles, StarsComponent):
 
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
-            if verbose:
-                print("Age mask has filtered out all particles")
+            warn("Age mask has filtered out all particles")
 
             return np.zeros((self.nstars, len(grid.lam)))
 
@@ -1157,9 +1153,9 @@ class Stars(Particles, StarsComponent):
 
         # Warn the user we are resampling a resampled population
         if self.resampled and not force_resample:
-            warnings.warn(
-                "Warning, galaxy stars already resampled. \
-                    To force resample, set force_resample=True. Returning..."
+            warn(
+                "Galaxy stars already resampled. "
+                "To force resample, set force_resample=True. Returning..."
             )
             return None
 
