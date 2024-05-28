@@ -1,7 +1,7 @@
 /******************************************************************************
  * C extension to calculate line of sight metal surface densities for star
-particles.
-/*****************************************************************************/
+ * particles.
+ *****************************************************************************/
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
@@ -15,7 +15,9 @@ particles.
 #include <numpy/ndarraytypes.h>
 
 /* Define a macro to handle that bzero is non-standard. */
+#ifndef bzero
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
+#endif
 
 /**
  * @brief A cell to contain gas particles.
@@ -53,9 +55,11 @@ struct cell {
  * @param
  */
 void low_mass_los_loop(const double *star_pos, const double *gas_pos,
-                       const double *gas_sml, double *gas_dtm, double *gas_mass,
-                       double *gas_met, double *kernel, double *los_dustsds,
-                       int nstar, int ngas, int kdim, double threshold) {
+                       const double *gas_sml, const double *gas_dtm,
+                       const double *gas_mass, const double *gas_met,
+                       const double *kernel, double *los_dustsds,
+                       const int nstar, const int ngas, const int kdim,
+                       const double threshold) {
 
   /* Loop over stars */
   for (int istar = 0; istar < nstar; istar++) {
@@ -238,8 +242,9 @@ void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
  *
  * @param
  */
-void construct_cell_tree(double *gas_pos, double *gas_sml, double *gas_dtm,
-                         double *gas_mass, double *gas_met, int ngas,
+void construct_cell_tree(const double *gas_pos, const double *gas_sml,
+                         const double *gas_dtm, const double *gas_mass,
+                         const double *gas_met, const int ngas,
                          struct cell *cells, int ncells, int tot_cells,
                          double dim, int maxdepth, double *centre,
                          double *bounds, double width, int cdim) {
@@ -326,7 +331,8 @@ void construct_cell_tree(double *gas_pos, double *gas_sml, double *gas_dtm,
  */
 double calculate_los_recursive(struct cell *c, const double star_x,
                                const double star_y, const double star_z,
-                               double threshold, int kdim, double *kernel) {
+                               double threshold, int kdim,
+                               const double *kernel) {
 
   /* Define the line of sight dust surface density. */
   double los_dustsds = 0;
@@ -424,10 +430,10 @@ double calculate_los_recursive(struct cell *c, const double star_x,
  */
 PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
 
-  const int nstar, ngas, kdim, force_loop;
-  const double threshold, max_sml;
-  const PyArrayObject *np_kernel, *np_star_pos, *np_gas_pos, *np_gas_sml;
-  const PyArrayObject *np_gas_met, *np_gas_mass, *np_gas_dtm;
+  const int nstar = 0, ngas = 0, kdim = 0, force_loop = 0;
+  const double threshold = 0, max_sml = 0;
+  PyArrayObject *np_kernel, *np_star_pos, *np_gas_pos, *np_gas_sml;
+  PyArrayObject *np_gas_met, *np_gas_mass, *np_gas_dtm;
 
   if (!PyArg_ParseTuple(args, "OOOOOOOiiiddi", &np_kernel, &np_star_pos,
                         &np_gas_pos, &np_gas_sml, &np_gas_met, &np_gas_mass,
@@ -491,12 +497,12 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
 
   /* Set up arrays to hold the surface densities themselves. */
   double *los_dustsds = malloc(nstar * sizeof(double));
-  if los_dustsds == NULL) {
-      PyErr_SetString(
-          PyExc_MemoryError,
-          "Failed to allocate memory for the dust surface densities.");
-      return NULL;
-    }
+  if (los_dustsds == NULL) {
+    PyErr_SetString(
+        PyExc_MemoryError,
+        "Failed to allocate memory for the dust surface densities.");
+    return NULL;
+  }
   bzero(los_dustsds, nstar * sizeof(double));
 
   /* No point constructing cells if there isn't much gas. */

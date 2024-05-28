@@ -246,13 +246,13 @@ void spectra_loop_ngp(const double **grid_props, const double **part_props,
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
-  const int ndim;
-  const int npart, nlam;
-  const PyObject *grid_tuple, *part_tuple;
-  const PyArrayObject *np_grid_spectra;
-  const PyArrayObject *np_fesc;
-  const PyArrayObject *np_part_mass, *np_ndims;
-  const char *method;
+  const int ndim = 0;
+  const int npart = 0, nlam = 0;
+  PyObject *grid_tuple, *part_tuple;
+  PyArrayObject *np_grid_spectra;
+  PyArrayObject *np_fesc;
+  PyArrayObject *np_part_mass, *np_ndims;
+  char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOOOiiis", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_fesc, &np_ndims, &ndim,
@@ -340,8 +340,17 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   for (int idim = 0; idim < ndim; idim++) {
 
     /* Extract the data from the numpy array. */
-    const PyArrayObject *np_grid_arr = PyTuple_GetItem(grid_tuple, idim);
+    PyArrayObject *np_grid_arr =
+        (PyArrayObject *)PyTuple_GetItem(grid_tuple, idim);
+    if (np_grid_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
+      return NULL;
+    }
     const double *grid_arr = PyArray_DATA(np_grid_arr);
+    if (grid_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
+      return NULL;
+    }
 
     /* Assign this data to the property array. */
     grid_props[idim] = grid_arr;
@@ -359,8 +368,17 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   for (int idim = 0; idim < ndim; idim++) {
 
     /* Extract the data from the numpy array. */
-    const PyArrayObject *np_part_arr = PyTuple_GetItem(part_tuple, idim);
+    PyArrayObject *np_part_arr =
+        (PyArrayObject *)PyTuple_GetItem(part_tuple, idim);
+    if (np_part_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
+      return NULL;
+    }
     const double *part_arr = PyArray_DATA(np_part_arr);
+    if (part_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
+      return NULL;
+    }
 
     /* Assign this data to the property array. */
     part_props[idim] = part_arr;
