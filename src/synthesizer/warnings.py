@@ -74,36 +74,21 @@ def deprecated(func, message=None, category=FutureWarning):
     return wrapped
 
 
-def warn_here(message, category=RuntimeWarning):
+def warn(message, category=RuntimeWarning, stacklevel=3):
     """
-    Issue a warning at the current location in the code.
+    Issue a warning to the end user.
 
-    Warning "here" means the location reported by the warning will be the exact
-    location in the code where this function was called
+    A message must be specified, and a category can be optionally specified.
+    RuntimeWarning will, by default, warn the end user, and can be silenced by
+    setting the PYTHONWARNINGS environment variable.
 
     Args:
         message (str)
             The message to be displayed to the end user.
         category (Warning)
             The warning category to use. `RuntimeWarning` by default.
+        stacklevel (int)
+            The number of stack levels to skip when displaying the warning.
 
     """
-    warnings.warn(message, category=category, stacklevel=2)
-
-
-def warn_from_caller(message, category=RuntimeWarning):
-    """
-    Issue a warning from where this function was called.
-
-    Warning "from caller" means the location reported by the warning will be
-    the location in the code where the function that called this warning was
-    called.
-
-    Args:
-        message (str)
-            The message to be displayed to the end user.
-        category (Warning)
-            The warning category to use. `RuntimeWarning` by default.
-
-    """
-    warnings.warn(message, category=category, stacklevel=3)
+    warnings.warn(message, category=category, stacklevel=stacklevel)
