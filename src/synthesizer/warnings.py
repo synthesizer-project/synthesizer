@@ -82,6 +82,9 @@ def warn(message, category=RuntimeWarning, stacklevel=3):
     RuntimeWarning will, by default, warn the end user, and can be silenced by
     setting the PYTHONWARNINGS environment variable.
 
+    This function is a simple wrapper around the `warnings.warn` function but
+    with a default stacklevel of 3, removing the need to specify it each time.
+
     Args:
         message (str)
             The message to be displayed to the end user.
