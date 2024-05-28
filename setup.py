@@ -131,7 +131,7 @@ elif sys.platform == "win32":  # windows
     default_compile_flags = ["/std:c99", "/Ox", "/fp:fast"]
     default_link_args = []
 else:  # Unix-like systems (Linux)
-    default_compile_flags = ["-std=c99", "-Wall", "-O3", "-ffast-math" "-g"]
+    default_compile_flags = ["-std=c99", "-Wall", "-O3", "-ffast-math", "-g"]
     default_link_args = []
 
 # Get user specified flags
@@ -162,32 +162,50 @@ extensions = [
     create_extension(
         "synthesizer.extensions.integrated_spectra",
         ["src/synthesizer/extensions/integrated_spectra.c"],
+        compile_flags=compile_flags,
+        links=link_args,
     ),
     create_extension(
         "synthesizer.extensions.particle_spectra",
         ["src/synthesizer/extensions/particle_spectra.c"],
+        compile_flags=compile_flags,
+        links=link_args,
     ),
     create_extension(
         "synthesizer.imaging.extensions.spectral_cube",
         ["src/synthesizer/imaging/extensions/spectral_cube.c"],
+        compile_flags=compile_flags,
+        links=link_args,
     ),
     create_extension(
         "synthesizer.imaging.extensions.image",
         ["src/synthesizer/imaging/extensions/image.c"],
+        compile_flags=compile_flags,
+        links=link_args,
     ),
     create_extension(
-        "synthesizer.extensions.sfzh", ["src/synthesizer/extensions/sfzh.c"]
+        "synthesizer.extensions.sfzh",
+        ["src/synthesizer/extensions/sfzh.c"],
+        compile_flags=compile_flags,
+        links=link_args,
     ),
     create_extension(
-        "synthesizer.extensions.los", ["src/synthesizer/extensions/los.c"]
+        "synthesizer.extensions.los",
+        ["src/synthesizer/extensions/los.c"],
+        compile_flags=compile_flags,
+        links=link_args,
     ),
     create_extension(
         "synthesizer.extensions.integrated_line",
         ["src/synthesizer/extensions/integrated_line.c"],
+        compile_flags=compile_flags,
+        links=link_args,
     ),
     create_extension(
         "synthesizer.extensions.particle_line",
         ["src/synthesizer/extensions/particle_line.c"],
+        compile_flags=compile_flags,
+        links=link_args,
     ),
 ]
 
