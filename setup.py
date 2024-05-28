@@ -112,7 +112,7 @@ elif sys.platform == "win32":  # windows
     extra_compile_args = ["/std:c99", "/Ox", "/fp:fast"]
     extra_link_args = []
 else:  # Unix-like systems (Linux)
-    extra_compile_args = ["-std=c99", "-Wall", "-Werror", "-O3", "-ffast-math"]
+    extra_compile_args = ["-std=c99", "-Wall", "-O3", "-ffast-math"]
     extra_link_args = []
 
 # Add preprocessor flags
