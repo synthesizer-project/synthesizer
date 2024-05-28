@@ -2,23 +2,23 @@
  * C extension to calculate line of sight metal surface densities for star
 particles.
 /*****************************************************************************/
-#include <stdio.h>
-#include <stdlib.h>
 #include <float.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include <Python.h>
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
-#include <numpy/ndarraytypes.h>
 #include <numpy/ndarrayobject.h>
+#include <numpy/ndarraytypes.h>
 
 /* Define a macro to handle that bzero is non-standard. */
-#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
+#define bzero(b, len) (memset((b), '\0', (len)), (void)0)
 
 /**
- * @brief A cell to contain gas particles. 
+ * @brief A cell to contain gas particles.
  */
 struct cell {
 
@@ -43,7 +43,6 @@ struct cell {
 
   /* Pointers to cells below this one. */
   struct cell *progeny;
-  
 };
 
 /**
@@ -51,11 +50,11 @@ struct cell {
  *        small number of gas particles. No point building a cell structure
  *        with all the overhead when looping is sub second!
  *
- * @param 
+ * @param
  */
-void low_mass_los_loop(const double *star_pos, const double *gas_pos, const double *gas_sml,
-                       double *gas_dtm, double *gas_mass, double *gas_met,
-                       double *kernel, double *los_dustsds,
+void low_mass_los_loop(const double *star_pos, const double *gas_pos,
+                       const double *gas_sml, double *gas_dtm, double *gas_mass,
+                       double *gas_met, double *kernel, double *los_dustsds,
                        int nstar, int ngas, int kdim, double threshold) {
 
   /* Loop over stars */
@@ -64,7 +63,7 @@ void low_mass_los_loop(const double *star_pos, const double *gas_pos, const doub
     double star_x = star_pos[istar * 3];
     double star_y = star_pos[istar * 3 + 1];
     double star_z = star_pos[istar * 3 + 2];
-    
+
     for (int igas = 0; igas < ngas; igas++) {
 
       /* Get gas particle data. */
@@ -87,10 +86,11 @@ void low_mass_los_loop(const double *star_pos, const double *gas_pos, const doub
       /* Calculate the impact parameter. */
       double b = sqrt(x * x + y * y);
 
-      /* Early skip if the star's line of sight doesn't fall in the gas particles kernel. */
+      /* Early skip if the star's line of sight doesn't fall in the gas
+       * particles kernel. */
       if (b > (threshold * sml))
         continue;
-      
+
       /* Find fraction of smoothing length. */
       double q = b / sml;
 
@@ -102,17 +102,15 @@ void low_mass_los_loop(const double *star_pos, const double *gas_pos, const doub
       los_dustsds[istar] += dtm * mass * met / (sml * sml) * kvalue;
     }
   }
-  
 }
 
 /**
  * @brief Recursively Populates the cell tree until maxdepth is reached.
  *
- * @param 
+ * @param
  */
-void populate_cell_tree_recursive(struct cell *c,
-                                  struct cell *cells, int ncells,
-                                  int tot_cells, int maxdepth,
+void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
+                                  int ncells, int tot_cells, int maxdepth,
                                   double *centre, int depth, double *bounds) {
 
   /* printf("At depth %d with ngas=%d ncells=%d tot_cells=%d\n", */
@@ -171,9 +169,12 @@ void populate_cell_tree_recursive(struct cell *c,
     cp->loc[0] = c->loc[0];
     cp->loc[1] = c->loc[1];
     cp->loc[2] = c->loc[2];
-    if (ip & 4) cp->loc[0] += cp->width;
-    if (ip & 2) cp->loc[1] += cp->width;
-    if (ip & 1) cp->loc[2] += cp->width;
+    if (ip & 4)
+      cp->loc[0] += cp->width;
+    if (ip & 2)
+      cp->loc[1] += cp->width;
+    if (ip & 1)
+      cp->loc[2] += cp->width;
     cp->split = 0;
     cp->part_count = 0;
     cp->max_sml_squ = 0;
@@ -185,7 +186,6 @@ void populate_cell_tree_recursive(struct cell *c,
     cp->part_met = malloc(ngas * sizeof(double));
     cp->part_mass = malloc(ngas * sizeof(double));
     cp->part_dtm = malloc(ngas * sizeof(double));
-
   }
 
   /* Loop over gas particles and associate them if they are inside this
@@ -194,9 +194,9 @@ void populate_cell_tree_recursive(struct cell *c,
 
     /* Get the gas particle position relative to the cell grid. */
     double pos[3] = {
-      gas_pos[igas * 3 + 0] - c->loc[0],
-      gas_pos[igas * 3 + 1] - c->loc[1],
-      gas_pos[igas * 3 + 2] - c->loc[2],
+        gas_pos[igas * 3 + 0] - c->loc[0],
+        gas_pos[igas * 3 + 1] - c->loc[1],
+        gas_pos[igas * 3 + 2] - c->loc[2],
     };
 
     /* Compute the indices of the cell grid. */
@@ -218,7 +218,6 @@ void populate_cell_tree_recursive(struct cell *c,
     /* Have we found a larger smoothing length? */
     if (gas_sml[igas] > c->max_sml_squ)
       cp->max_sml_squ = gas_sml[igas];
-    
   }
 
   /* Recurse... */
@@ -229,24 +228,21 @@ void populate_cell_tree_recursive(struct cell *c,
     cp->max_sml_squ = cp->max_sml_squ * cp->max_sml_squ;
 
     /* Got to the next level */
-    populate_cell_tree_recursive(cp, cells, ncells, tot_cells,
-                                 maxdepth, centre, depth++,
-                                 bounds);
+    populate_cell_tree_recursive(cp, cells, ncells, tot_cells, maxdepth, centre,
+                                 depth++, bounds);
   }
-  
 }
 
 /**
  * @brief Constructs the cell tree for large numbers of gas particles.
  *
- * @param 
+ * @param
  */
-void construct_cell_tree(double *gas_pos, double *gas_sml,
-                         double *gas_dtm, double *gas_mass, double *gas_met,
-                         int ngas, struct cell *cells, int ncells,
-                         int tot_cells, double dim, int maxdepth,
-                         double *centre, double *bounds, double width,
-                         int cdim) {
+void construct_cell_tree(double *gas_pos, double *gas_sml, double *gas_dtm,
+                         double *gas_mass, double *gas_met, int ngas,
+                         struct cell *cells, int ncells, int tot_cells,
+                         double dim, int maxdepth, double *centre,
+                         double *bounds, double width, int cdim) {
 
   /* Create the top level cells. */
   for (int i = 0; i < cdim; i++) {
@@ -275,8 +271,7 @@ void construct_cell_tree(double *gas_pos, double *gas_sml,
         c->part_met = malloc(ngas * sizeof(double));
         c->part_mass = malloc(ngas * sizeof(double));
         c->part_dtm = malloc(ngas * sizeof(double));
-
-      } 
+      }
     }
   }
 
@@ -285,9 +280,9 @@ void construct_cell_tree(double *gas_pos, double *gas_sml,
 
     /* Get the gas particle position relative to the cell grid. */
     double pos[3] = {
-      gas_pos[igas * 3 + 0] - bounds[0],
-      gas_pos[igas * 3 + 1] - bounds[2],
-      gas_pos[igas * 3 + 2] - bounds[4],
+        gas_pos[igas * 3 + 0] - bounds[0],
+        gas_pos[igas * 3 + 1] - bounds[2],
+        gas_pos[igas * 3 + 2] - bounds[4],
     };
 
     /* Compute the indices of the cell grid. */
@@ -319,32 +314,27 @@ void construct_cell_tree(double *gas_pos, double *gas_sml,
     c->max_sml_squ = c->max_sml_squ * c->max_sml_squ;
 
     /* And recurse... */
-    populate_cell_tree_recursive(c, cells, ncells, tot_cells,
-                                 maxdepth, centre, 1,
-                                 bounds);
+    populate_cell_tree_recursive(c, cells, ncells, tot_cells, maxdepth, centre,
+                                 1, bounds);
   }
-  
 }
 
 /**
  * @brief Constructs the cell tree for large numbers of gas particles.
  *
- * @param 
+ * @param
  */
-double calculate_los_recursive(struct cell *c, 
-                               const double star_x,
-                               const double star_y,
-                               const double star_z,
-                               double threshold, 
-                               int kdim, double *kernel) {
+double calculate_los_recursive(struct cell *c, const double star_x,
+                               const double star_y, const double star_z,
+                               double threshold, int kdim, double *kernel) {
 
   /* Define the line of sight dust surface density. */
   double los_dustsds = 0;
 
   /* Calculate the separation between the star and this cell. */
   double sep[2] = {
-    c->loc[0] + (c->width / 2) - star_x,
-    c->loc[1] + (c->width / 2) - star_y,
+      c->loc[0] + (c->width / 2) - star_x,
+      c->loc[1] + (c->width / 2) - star_y,
   };
 
   /* Calculate distance between star and cell. */
@@ -362,17 +352,19 @@ double calculate_los_recursive(struct cell *c,
     /* Ok, so we recurse... */
     for (int ip = 0; ip < 8; ip++) {
       struct cell *cp = &c->progeny[ip];
-      if (cp->part_count == 0) continue;
+      if (cp->part_count == 0)
+        continue;
       los_dustsds += calculate_los_recursive(cp, star_x, star_y, star_z,
                                              threshold, kdim, kernel);
     }
-    
+
   }
 
   /* We reached the bottom, do the calculation... */
   else {
-    
-    /* printf("Calculating at depth %d with count %d\n", c->depth, c->part_count); */
+
+    /* printf("Calculating at depth %d with count %d\n", c->depth,
+     * c->part_count); */
 
     /* Get the particles in this cell. */
     double *gas_pos = c->part_pos;
@@ -405,10 +397,11 @@ double calculate_los_recursive(struct cell *c,
       /* Calculate the impact parameter. */
       double b = sqrt(x * x + y * y);
 
-      /* Early skip if the star's line of sight doesn't fall in the gas particles kernel. */
+      /* Early skip if the star's line of sight doesn't fall in the gas
+       * particles kernel. */
       if (b > (threshold * sml))
         continue;
-      
+
       /* Find fraction of smoothing length. */
       double q = b / sml;
 
@@ -418,19 +411,16 @@ double calculate_los_recursive(struct cell *c,
 
       /* Finally, compute the metal surface density itself. */
       los_dustsds += dtm * mass * met / (sml * sml) * kvalue;
-      
     }
   }
   return los_dustsds;
 }
 
-
-
 /**
  * @brief Computes the line of sight metal surface densities for each of the
  *        stars passed to this function.
  *
- * @param 
+ * @param
  */
 PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
 
@@ -439,28 +429,74 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
   const PyArrayObject *np_kernel, *np_star_pos, *np_gas_pos, *np_gas_sml;
   const PyArrayObject *np_gas_met, *np_gas_mass, *np_gas_dtm;
 
-  if(!PyArg_ParseTuple(args, "OOOOOOOiiiddi", &np_kernel, &np_star_pos,
-                       &np_gas_pos, &np_gas_sml, &np_gas_met, &np_gas_mass,
-                       &np_gas_dtm, &nstar, &ngas, &kdim, &threshold,
-                       &max_sml, &force_loop))
+  if (!PyArg_ParseTuple(args, "OOOOOOOiiiddi", &np_kernel, &np_star_pos,
+                        &np_gas_pos, &np_gas_sml, &np_gas_met, &np_gas_mass,
+                        &np_gas_dtm, &nstar, &ngas, &kdim, &threshold, &max_sml,
+                        &force_loop))
     return NULL;
 
   /* Quick check to make sure our inputs are valid. */
-  if (nstar == 0) return NULL;
-  if (ngas == 0) return NULL;
-  if (kdim == 0) return NULL;
+  if (nstar == 0) {
+    PyErr_SetString(PyExc_ValueError,
+                    "The number of star particles must be greater than zero.");
+    return NULL;
+  }
+  if (ngas == 0) {
+    PyErr_SetString(PyExc_ValueError,
+                    "The number of gas particles must be greater than zero.");
+    return NULL;
+  }
+  if (kdim == 0) {
+    PyErr_SetString(PyExc_ValueError,
+                    "The kernel dimension must be greater than zero.");
+    return NULL;
+  }
 
   /* Extract a pointers to the actual data in the numpy arrays. */
   const double *kernel = PyArray_DATA(np_kernel);
+  if (kernel == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract kernel data.");
+    return NULL;
+  }
   const double *star_pos = PyArray_DATA(np_star_pos);
+  if (star_pos == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract star position data.");
+    return NULL;
+  }
   const double *gas_pos = PyArray_DATA(np_gas_pos);
+  if (gas_pos == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract gas position data.");
+    return NULL;
+  }
   const double *gas_sml = PyArray_DATA(np_gas_sml);
+  if (gas_sml == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract gas sml data.");
+    return NULL;
+  }
   const double *gas_met = PyArray_DATA(np_gas_met);
+  if (gas_met == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract gas met data.");
+    return NULL;
+  }
   const double *gas_mass = PyArray_DATA(np_gas_mass);
+  if (gas_mass == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract gas mass data.");
+    return NULL;
+  }
   const double *gas_dtm = PyArray_DATA(np_gas_dtm);
+  if (gas_dtm == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract gas dtm data.");
+    return NULL;
+  }
 
   /* Set up arrays to hold the surface densities themselves. */
   double *los_dustsds = malloc(nstar * sizeof(double));
+  if los_dustsds == NULL) {
+      PyErr_SetString(
+          PyExc_MemoryError,
+          "Failed to allocate memory for the dust surface densities.");
+      return NULL;
+    }
   bzero(los_dustsds, nstar * sizeof(double));
 
   /* No point constructing cells if there isn't much gas. */
@@ -469,59 +505,70 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
     /* Use the simple loop over stars and gas. */
     low_mass_los_loop(star_pos, gas_pos, gas_sml, gas_dtm, gas_mass, gas_met,
                       kernel, los_dustsds, nstar, ngas, kdim, threshold);
-    
+
     /* Reconstruct the python array to return. */
-    npy_intp np_dims[1] = {nstar,};
-    PyArrayObject *out_los_dustsds =
-      (PyArrayObject *) PyArray_SimpleNewFromData(1, np_dims, NPY_FLOAT64,
-                                                  los_dustsds);
+    npy_intp np_dims[1] = {
+        nstar,
+    };
+    PyArrayObject *out_los_dustsds = (PyArrayObject *)PyArray_SimpleNewFromData(
+        1, np_dims, NPY_FLOAT64, los_dustsds);
 
     return Py_BuildValue("N", out_los_dustsds);
   }
 
   /* Calculate the width of the gas distribution. */
-  double bounds[6] = {
-    FLT_MAX, 0, FLT_MAX, 0, FLT_MAX, 0
-  };
+  double bounds[6] = {FLT_MAX, 0, FLT_MAX, 0, FLT_MAX, 0};
   for (int igas = 0; igas < ngas; igas++) {
 
     double x = gas_pos[igas * 3 + 0];
     double y = gas_pos[igas * 3 + 1];
     double z = gas_pos[igas * 3 + 2];
-    
+
     /* Update the boundaries. */
-    if (x > bounds[1]) bounds[1] = x;
-    if (x < bounds[0]) bounds[0] = x;
-    if (y > bounds[3]) bounds[3] = y;
-    if (y < bounds[2]) bounds[2] = y;
-    if (z > bounds[5]) bounds[5] = z;
-    if (z < bounds[4]) bounds[4] = z;
+    if (x > bounds[1])
+      bounds[1] = x;
+    if (x < bounds[0])
+      bounds[0] = x;
+    if (y > bounds[3])
+      bounds[3] = y;
+    if (y < bounds[2])
+      bounds[2] = y;
+    if (z > bounds[5])
+      bounds[5] = z;
+    if (z < bounds[4])
+      bounds[4] = z;
   }
   for (int istar = 0; istar < nstar; istar++) {
 
     double x = star_pos[istar * 3 + 0];
     double y = star_pos[istar * 3 + 1];
     double z = star_pos[istar * 3 + 2];
-    
+
     /* Update the boundaries. */
-    if (x > bounds[1]) bounds[1] = x;
-    if (x < bounds[0]) bounds[0] = x;
-    if (y > bounds[3]) bounds[3] = y;
-    if (y < bounds[2]) bounds[2] = y;
-    if (z > bounds[5]) bounds[5] = z;
-    if (z < bounds[4]) bounds[4] = z;
+    if (x > bounds[1])
+      bounds[1] = x;
+    if (x < bounds[0])
+      bounds[0] = x;
+    if (y > bounds[3])
+      bounds[3] = y;
+    if (y < bounds[2])
+      bounds[2] = y;
+    if (z > bounds[5])
+      bounds[5] = z;
+    if (z < bounds[4])
+      bounds[4] = z;
   }
 
   /* Calculate the dim of the cells with some buffer */
   double dims[3] = {
-    bounds[1] - bounds[0],
-    bounds[3] - bounds[2],
-    bounds[5] - bounds[4],
+      bounds[1] - bounds[0],
+      bounds[3] - bounds[2],
+      bounds[5] - bounds[4],
   };
   double centre[3] = {
-    bounds[0] + ((bounds[1] - bounds[0]) / 2),
-    bounds[2] + ((bounds[3] - bounds[2]) / 2),
-    bounds[4] + ((bounds[5] - bounds[4]) / 2),
+      bounds[0] + ((bounds[1] - bounds[0]) / 2),
+      bounds[2] + ((bounds[3] - bounds[2]) / 2),
+      bounds[4] + ((bounds[5] - bounds[4]) / 2),
   };
   double dim = 0;
   for (int i = 0; i < 3; i++)
@@ -535,29 +582,35 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
     bounds[(2 * i) + 1] = centre[i] + (dim / 2);
   }
 
-    /* Allocate cells. */
+  /* Allocate cells. */
   int cdim = (int)fmax(dim / max_sml, 3);
-  if (cdim > 64) cdim = 64;
+  if (cdim > 64)
+    cdim = 64;
   int maxdepth = 10;
   int ncells = pow(cdim, 3);
   int tot_cells = ncells * pow(8, 3);
   struct cell *cells = malloc(tot_cells * sizeof(struct cell));
+  if (cells == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for the cell structure.");
+    return NULL;
+  }
   bzero(cells, tot_cells * sizeof(struct cell));
-  
+
   /* Define some cell grid variables we will need. */
   double width = dim / cdim;
 
   /* Consturct the cell tree. */
-  construct_cell_tree(gas_pos, gas_sml, gas_dtm, gas_mass, gas_met,
-                      ngas, cells, ncells, tot_cells, dim, maxdepth,
-                      centre, bounds, width, cdim);
+  construct_cell_tree(gas_pos, gas_sml, gas_dtm, gas_mass, gas_met, ngas, cells,
+                      ncells, tot_cells, dim, maxdepth, centre, bounds, width,
+                      cdim);
 
   /* Loop over stars */
   for (int istar = 0; istar < nstar; istar++) {
 
     /* Get the star particle z position relative to the cell grid. */
     double star_z = star_pos[istar * 3 + 2] - bounds[4];
-    
+
     /* Compute the cell grid k index. */
     int k = (int)(star_z / width);
 
@@ -570,17 +623,16 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
           struct cell *c = &cells[kk + cdim * (jj + cdim * ii)];
 
           /* Skip empty cells */
-          if (c->part_count == 0) continue;
-          
+          if (c->part_count == 0)
+            continue;
+
           /* Calculate the contribution of particles in this cell. */
-          /* printf("Calculating for cell (i j k=[%d %d %d] ii jj kk=[%d %d %d])\n", i, j, k, ii, jj, kk); */
-          los_dustsds[istar] += calculate_los_recursive(c,
-                                                        star_pos[istar * 3],
-                                                        star_pos[istar * 3 + 1],
-                                                        star_pos[istar * 3 + 2],
-                                                        threshold,
-                                                        kdim, kernel);
-        } 
+          /* printf("Calculating for cell (i j k=[%d %d %d] ii jj kk=[%d %d
+           * %d])\n", i, j, k, ii, jj, kk); */
+          los_dustsds[istar] += calculate_los_recursive(
+              c, star_pos[istar * 3], star_pos[istar * 3 + 1],
+              star_pos[istar * 3 + 2], threshold, kdim, kernel);
+        }
       }
     }
   }
@@ -588,36 +640,36 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
   free(cells);
 
   /* Reconstruct the python array to return. */
-  npy_intp np_dims[1] = {nstar,};
-  PyArrayObject *out_los_dustsds =
-    (PyArrayObject *) PyArray_SimpleNewFromData(1, np_dims, NPY_FLOAT64,
-                                                los_dustsds);
+  npy_intp np_dims[1] = {
+      nstar,
+  };
+  PyArrayObject *out_los_dustsds = (PyArrayObject *)PyArray_SimpleNewFromData(
+      1, np_dims, NPY_FLOAT64, los_dustsds);
 
   return Py_BuildValue("N", out_los_dustsds);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef LosMethods[] = {
-  {"compute_dust_surface_dens", compute_dust_surface_dens, METH_VARARGS,
-   "Method for calculating line of sight metal surface densities."},
-  {NULL, NULL, 0, NULL} 
-};
+    {"compute_dust_surface_dens", compute_dust_surface_dens, METH_VARARGS,
+     "Method for calculating line of sight metal surface densities."},
+    {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
 static struct PyModuleDef moduledef = {
-        PyModuleDef_HEAD_INIT,
-        "los_dust_surface_dens",                                /* m_name */
-        "A module to calculate los metal surface densities",   /* m_doc */
-        -1,                                                    /* m_size */
-        LosMethods,                                            /* m_methods */
-        NULL,                                                  /* m_reload */
-        NULL,                                                  /* m_traverse */
-        NULL,                                                  /* m_clear */
-        NULL,                                                  /* m_free */
-    };
+    PyModuleDef_HEAD_INIT,
+    "los_dust_surface_dens",                             /* m_name */
+    "A module to calculate los metal surface densities", /* m_doc */
+    -1,                                                  /* m_size */
+    LosMethods,                                          /* m_methods */
+    NULL,                                                /* m_reload */
+    NULL,                                                /* m_traverse */
+    NULL,                                                /* m_clear */
+    NULL,                                                /* m_free */
+};
 
 PyMODINIT_FUNC PyInit_los(void) {
-    PyObject *m = PyModule_Create(&moduledef);
-    import_array();
-    return m;
+  PyObject *m = PyModule_Create(&moduledef);
+  import_array();
+  return m;
 }

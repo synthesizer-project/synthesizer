@@ -45,22 +45,40 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     return NULL;
 
   /* Quick check to make sure our inputs are valid. */
-  if (ndim == 0)
+  if (ndim == 0) {
+    PyErr_SetString(PyExc_ValueError, "ndim must be greater than 0.");
     return NULL;
-  if (npart == 0)
+  }
+  if (npart == 0) {
+    PyErr_SetString(PyExc_ValueError, "npart must be greater than 0.");
     return NULL;
+  }
 
   /* Extract a pointer to the grid dims */
   const int *dims = PyArray_DATA(np_ndims);
+  if (dims == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract dims from np_ndims.");
+    return NULL;
+  }
 
   /* Extract a pointer to the particle masses. */
   const double *part_mass = PyArray_DATA(np_part_mass);
+  if (part_mass == NULL) {
+    PyErr_SetString(PyExc_ValueError,
+                    "Failed to extract part_mass from np_part_mass.");
+    return NULL;
+  }
 
   /* Allocate a single array for grid properties*/
   int nprops = 0;
   for (int dim = 0; dim < ndim; dim++)
     nprops += dims[dim];
   const double **grid_props = malloc(nprops * sizeof(double *));
+  if (grid_props == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for grid_props.");
+    return NULL;
+  }
 
   /* How many grid elements are there? (excluding wavelength axis)*/
   int grid_size = 1;
@@ -69,6 +87,10 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
   /* Allocate an array to hold the grid weights. */
   double *sfzh = malloc(grid_size * sizeof(double));
+  if (sfzh == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for sfzh.");
+    return NULL;
+  }
   bzero(sfzh, grid_size * sizeof(double));
 
   /* Unpack the grid property arrays into a single contiguous array. */
@@ -84,6 +106,11 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
   /* Allocate a single array for particle properties. */
   const double **part_props = malloc(npart * ndim * sizeof(double *));
+  if (part_props == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for part_props.");
+    return NULL;
+  }
 
   /* Unpack the particle property arrays into a single contiguous array. */
   for (int idim = 0; idim < ndim; idim++) {

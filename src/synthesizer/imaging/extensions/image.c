@@ -54,14 +54,38 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   /* Get pointers to the actual data. */
   const double *pix_values = PyArray_DATA(np_pix_values);
+  if (pix_values == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract pix_values.");
+    return NULL;
+  }
   const double *smoothing_lengths = PyArray_DATA(np_smoothing_lengths);
+  if (smoothing_lengths == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract smoothing_lengths.");
+    return NULL;
+  }
   const double *xs = PyArray_DATA(np_xs);
+  if (xs == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract xs.");
+    return NULL;
+  }
   const double *ys = PyArray_DATA(np_ys);
+  if (ys == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract ys.");
+    return NULL;
+  }
   const double *kernel = PyArray_DATA(np_kernel);
+  if (kernel == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract kernel.");
+    return NULL;
+  }
 
   /* Allocate the image.. */
   int npix = npix_x * npix_y;
   double *img = malloc(npix * sizeof(double));
+  if (img == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for img.");
+    return NULL;
+  }
   bzero(img, npix * sizeof(double));
 
   /* Loop over positions including the sed */
@@ -84,6 +108,11 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
     /* Create an empty kernel for this particle. */
     double *part_kernel = malloc(kernel_cdim * kernel_cdim * sizeof(double));
+    if (part_kernel == NULL) {
+      PyErr_SetString(PyExc_MemoryError,
+                      "Failed to allocate memory for part_kernel.");
+      return NULL;
+    }
     bzero(part_kernel, kernel_cdim * kernel_cdim * sizeof(double));
 
     /* Track the kernel sum for normalisation. */
