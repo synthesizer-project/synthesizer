@@ -583,7 +583,8 @@ class EmissionModel:
 
         # Also unpack any related models
         for model in self.related_models:
-            self._unpack_model_recursively(model)
+            if model.label not in self._models:
+                self._unpack_model_recursively(model)
 
         # Now we've worked the full tree we can set parent pointers
         for model in self._models.values():
