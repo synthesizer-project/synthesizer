@@ -1255,6 +1255,75 @@ class Filter:
         """Alias for self.t."""
         return self.t
 
+    def __str__(self):
+        """
+        Return a string representation of the filter.
+
+        Returns:
+            string
+                A string representation of the filter.
+        """
+        details = [
+            f"Filter Code: {self.filter_code}",
+            f"Observatory: {self.observatory}",
+            f"Instrument: {self.instrument}",
+            f"Filter: {self.filter_}",
+            f"Filter Type: {self.filter_type}",
+        ]
+
+        if self.filter_type == "TopHat":
+            details.extend(
+                [
+                    f"Lambda Min: {self.lam_min}",
+                    f"Lambda Max: {self.lam_max}",
+                    f"Lambda Eff: {self.lam_eff}",
+                    f"Lambda FWHM: {self.lam_fwhm}",
+                ]
+            )
+        elif self.filter_type == "SVO":
+            details.extend(
+                [
+                    f"SVO URL: {self.svo_url}",
+                ]
+            )
+
+        if self.lam is not None:
+            details.append(
+                f"Wavelength Array: shape = {self.lam.shape}, "
+                f"min = {self.lam.min()}, max = {self.lam.max()}"
+            )
+        if self.nu is not None:
+            details.append(
+                f"Frequency Array: shape = {self.nu.shape}, "
+                f"min = {self.nu.min():.2e}, max = {self.nu.max():.2e}"
+            )
+        if self.original_lam is not None:
+            details.append(
+                "Original Wavelength Array: shape = "
+                f"{self.original_lam.shape},"
+                f" min = {self.original_lam.min()}, "
+                f"max = {self.original_lam.max()}"
+            )
+        if self.original_nu is not None:
+            details.append(
+                f"Original Frequency Array: shape = {self.original_nu.shape},"
+                f" min = {self.original_nu.min():.2e}, "
+                f"max = {self.original_nu.max():.2e}"
+            )
+        if self.t is not None:
+            details.append(
+                f"Transmission Curve: shape = {self.t.shape}, "
+                f"min = {self.t.min()}, max = {self.t.max()}"
+            )
+        if self.original_t is not None:
+            details.append(
+                "Original Transmission Curve: shape = "
+                f"{self.original_t.shape}, "
+                f"min = {self.original_t.min()}, max = {self.original_t.max()}"
+            )
+
+        return "\n".join(details)
+
     def clip_transmission(self):
         """
         Clips transmission curve between 0 and 1.
