@@ -19,8 +19,6 @@ Example usages:
                         tau_v=tau_vs, coordinates=coordinates, ...)
 """
 
-import warnings
-
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
@@ -1155,9 +1153,9 @@ class Stars(Particles, StarsComponent):
 
         # Warn the user we are resampling a resampled population
         if self.resampled and not force_resample:
-            warnings.warn(
-                "Warning, galaxy stars already resampled. \
-                    To force resample, set force_resample=True. Returning..."
+            warn(
+                "Galaxy stars already resampled. "
+                "To force resample, set force_resample=True. Returning..."
             )
             return None
 
