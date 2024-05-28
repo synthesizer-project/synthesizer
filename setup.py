@@ -171,9 +171,6 @@ extensions = [
 
 # Ensure the custom build_ext command is used
 setup(
-    name="synthesizer",
-    version="0.1",
-    description="Synthesizer with C extensions",
     ext_modules=extensions,
     cmdclass={
         "build_ext": BuildExt,
