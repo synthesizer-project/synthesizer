@@ -19,6 +19,7 @@ from synthesizer.dust.emission import Greybody
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
+from synthesizer.warnings import warn
 
 
 class Template:
@@ -598,8 +599,7 @@ class UnifiedAGN:
         for key, val in kwargs.items():
             # Ignore any fixed parameters
             if key in self.fixed_parameters:
-                if verbose:
-                    print(f"Ignoring {key}, it was fixed at instantiation.")
+                warn(f"Ignoring {key}, it was fixed at instantiation.")
                 continue
 
             # Remember the previous values to be returned after getting the
