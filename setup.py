@@ -45,7 +45,7 @@ def filter_compiler_flags(compiler, flags):
     return valid_flags
 
 
-def create_extension(name, sources):
+def create_extension(name, sources, compile_flags=[], links=[]):
     """
     Create a C extension module.
 
@@ -55,14 +55,14 @@ def create_extension(name, sources):
     """
     logger.info(
         f"### Creating extension {name} with compile args: "
-        f"{extra_compile_args} and link args: {extra_link_args}"
+        f"{compile_flags} and link args: {links}"
     )
     return Extension(
         name,
         sources=sources,
         include_dirs=[np.get_include()],
-        extra_compile_args=extra_compile_args,
-        extra_link_args=extra_link_args,
+        extra_compile_args=compile_flags,
+        extra_link_args=links,
     )
 
 
@@ -104,36 +104,38 @@ logger.info(
 # Log the system platform
 logger.info(f"### System platform: {sys.platform}")
 
-# Determine the platform-specific compiler and linker flags
+# Determine the platform-specific default compiler and linker flags
 if sys.platform == "darwin":  # macOS
-    extra_compile_args = ["-std=c99", "-Wall", "-O3", "-ffast-math", "-g"]
-    extra_link_args = []
+    default_compile_flags = ["-std=c99", "-Wall", "-O3", "-ffast-math", "-g"]
+    default_link_args = []
 elif sys.platform == "win32":  # windows
-    extra_compile_args = ["/std:c99", "/Ox", "/fp:fast"]
-    extra_link_args = []
+    default_compile_flags = ["/std:c99", "/Ox", "/fp:fast"]
+    default_link_args = []
 else:  # Unix-like systems (Linux)
-    extra_compile_args = ["-std=c99", "-Wall", "-O3", "-ffast-math"]
-    extra_link_args = []
+    default_compile_flags = ["-std=c99", "-Wall", "-O3", "-ffast-math" "-g"]
+    default_link_args = []
+
+# Get user specified flags
+compile_flags = CFLAGS.split()
+link_args = LDFLAGS.split()
+
+# If no flags are specified, use the default flags
+if len(compile_flags) == 0:
+    compile_flags = default_compile_flags
+if len(link_args) == 0:
+    link_args = default_link_args
 
 # Add preprocessor flags
 if WITH_DEBUGGING_CHECKS == "1":
-    extra_compile_args.append("-DWITH_DEBUGGING_CHECKS")
-
-# Allow environment variables to override default flags
-extra_compile_args.extend(CFLAGS.split())
-extra_link_args.extend(LDFLAGS.split())
-
-# Remove any duplicates that were also passed on the command line
-extra_compile_args = list(set(extra_compile_args))
-extra_link_args = list(set(extra_link_args))
+    compile_flags.append("-DWITH_DEBUGGING_CHECKS")
 
 # Create a compiler instance
 compiler = new_compiler()
 
 # Filter the flags
 logger.info("### Testing extra compile args")
-extra_compile_args = filter_compiler_flags(compiler, extra_compile_args)
-logger.info(f"### Valid extra compile args: {extra_compile_args}")
+compile_flags = filter_compiler_flags(compiler, compile_flags)
+logger.info(f"### Valid extra compile args: {compile_flags}")
 
 
 # Define the extension modules
