@@ -32,7 +32,7 @@
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements in the SEDs.
  */
-PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
+PyObject *make_data_cube_hist(PyObject *args) {
 
   const double res = 0.0;
   const int npix_x = 0, npix_y = 0, npart = 0, nlam = 0;
@@ -125,7 +125,7 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
  * @param threshold: The threshold of the SPH kernel.
  * @param kdim: The number of elements in the kernel.
  */
-PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
+PyObject *make_data_cube_smooth(PyObject *args) {
 
   double res = 0.0, threshold = 0.0;
   int npix_x = 0, npix_y = 0, npart = 0, nlam = 0, kdim = 0;
@@ -293,9 +293,9 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 }
 
 static PyMethodDef ImageMethods[] = {
-    {"make_data_cube_hist", make_data_cube_hist, METH_VARARGS,
+    {"make_data_cube_hist", (PyCFunction)make_data_cube_hist, METH_VARARGS,
      "Method for sorting particles into a spectral cube without smoothing."},
-    {"make_data_cube_smooth", make_data_cube_smooth, METH_VARARGS,
+    {"make_data_cube_smooth", (PyCFunction)make_data_cube_smooth, METH_VARARGS,
      "Method for smoothing particles into a spectral cube."},
     {NULL, NULL, 0, NULL},
 };

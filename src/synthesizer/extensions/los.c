@@ -246,8 +246,8 @@ void construct_cell_tree(const double *gas_pos, const double *gas_sml,
                          const double *gas_dtm, const double *gas_mass,
                          const double *gas_met, const int ngas,
                          struct cell *cells, int ncells, int tot_cells,
-                         double dim, int maxdepth, double *centre,
-                         double *bounds, double width, int cdim) {
+                         int maxdepth, double *centre, double *bounds,
+                         double width, int cdim) {
 
   /* Create the top level cells. */
   for (int i = 0; i < cdim; i++) {
@@ -428,7 +428,7 @@ double calculate_los_recursive(struct cell *c, const double star_x,
  *
  * @param
  */
-PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
+PyObject *compute_dust_surface_dens(PyObject *args) {
 
   int nstar = 0, ngas = 0, kdim = 0, force_loop = 0;
   double threshold = 0, max_sml = 0;
@@ -608,8 +608,7 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
 
   /* Consturct the cell tree. */
   construct_cell_tree(gas_pos, gas_sml, gas_dtm, gas_mass, gas_met, ngas, cells,
-                      ncells, tot_cells, dim, maxdepth, centre, bounds, width,
-                      cdim);
+                      ncells, tot_cells, maxdepth, centre, bounds, width, cdim);
 
   /* Loop over stars */
   for (int istar = 0; istar < nstar; istar++) {
@@ -657,7 +656,8 @@ PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
 
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef LosMethods[] = {
-    {"compute_dust_surface_dens", compute_dust_surface_dens, METH_VARARGS,
+    {"compute_dust_surface_dens", (PyCFunction)compute_dust_surface_dens,
+     METH_VARARGS,
      "Method for calculating line of sight metal surface densities."},
     {NULL, NULL, 0, NULL}};
 

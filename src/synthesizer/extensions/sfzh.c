@@ -33,7 +33,7 @@
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
  */
-PyObject *compute_sfzh(PyObject *self, PyObject *args) {
+PyObject *compute_sfzh(PyObject *args) {
 
   int ndim = 0, npart = 0;
   PyObject *grid_tuple, *part_tuple;
@@ -165,7 +165,8 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
-static PyMethodDef SFZHMethods[] = {{"compute_sfzh", compute_sfzh, METH_VARARGS,
+static PyMethodDef SFZHMethods[] = {{"compute_sfzh", (PyCFunction)compute_sfzh,
+                                     METH_VARARGS,
                                      "Method for calculating the SFZH."},
                                     {NULL, NULL, 0, NULL}};
 

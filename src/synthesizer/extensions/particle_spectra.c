@@ -244,7 +244,7 @@ void spectra_loop_ngp(const double **grid_props, const double **part_props,
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
  */
-PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
+PyObject *compute_particle_seds(PyObject *args) {
 
   int ndim = 0;
   int npart = 0, nlam = 0;
@@ -427,7 +427,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef SedMethods[] = {
-    {"compute_particle_seds", compute_particle_seds, METH_VARARGS,
+    {"compute_particle_seds", (PyCFunction)compute_particle_seds, METH_VARARGS,
      "Method for calculating particle intrinsic spectra."},
     {NULL, NULL, 0, NULL}};
 

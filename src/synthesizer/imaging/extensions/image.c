@@ -42,7 +42,7 @@
  * @param threshold: The threshold of the SPH kernel.
  * @param kdim: The number of elements in the kernel.
  */
-PyObject *make_img(PyObject *self, PyObject *args) {
+PyObject *make_img(PyObject *args) {
 
   double res = 0, threshold = 0;
   int npix_x = 0, npix_y = 0, npart = 0, kdim = 0;
@@ -206,7 +206,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 }
 
 static PyMethodDef ImageMethods[] = {
-    {"make_img", make_img, METH_VARARGS,
+    {"make_img", (PyCFunction)make_img, METH_VARARGS,
      "Method for smoothing particles into an image."},
     {NULL, NULL, 0, NULL},
 };

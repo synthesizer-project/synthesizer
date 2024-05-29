@@ -229,7 +229,7 @@ void line_loop_ngp(const double **grid_props, const double **part_props,
  * @param npart: The number of particles.
  * @param method: The method to use for assigning weights.
  */
-PyObject *compute_particle_line(PyObject *self, PyObject *args) {
+PyObject *compute_particle_line(PyObject *args) {
 
   int ndim = 0;
   int npart = 0;
@@ -426,7 +426,7 @@ PyObject *compute_particle_line(PyObject *self, PyObject *args) {
 
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef LineMethods[] = {
-    {"compute_particle_line", compute_particle_line, METH_VARARGS,
+    {"compute_particle_line", (PyCFunction)compute_particle_line, METH_VARARGS,
      "Method for calculating particle intrinsic line emission."},
     {NULL, NULL, 0, NULL}};
 
