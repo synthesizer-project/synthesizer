@@ -285,7 +285,7 @@ class Galaxy(BaseGalaxy):
             # If nothing has been provided, just set to None and return
             if (masses is None) | (metallicities is None):
                 warn(
-                    "In `load_stars`: one of either `masses`"
+                    "In `load_gas`: one of either `masses`"
                     " or `metallicities` is not provided, setting "
                     "`gas` object to `None`"
                 )
