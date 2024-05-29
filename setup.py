@@ -160,6 +160,10 @@ logger.info(f"### Valid extra compile args: {compile_flags}")
 # Define the extension modules
 extensions = [
     create_extension(
+        "synthesizer.extensions.weights",
+        ["src/synthesizer/extensions/weights.c"],
+    ),
+    create_extension(
         "synthesizer.extensions.integrated_spectra",
         ["src/synthesizer/extensions/integrated_spectra.c"],
         compile_flags=compile_flags,
