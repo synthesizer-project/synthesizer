@@ -13,6 +13,7 @@ from synthesizer.exceptions import (
     UnimplementedFunctionality,
 )
 from synthesizer.photoionisation import calculate_Q_from_U
+from synthesizer.warnings import warn
 
 
 class ShapeCommands:
@@ -313,7 +314,7 @@ def create_cloudy_input(
     # cloudy_builtin_Jenkins_depletion branch.
 
     else:
-        print("WARNING: No depletion (or unrecognised depletion) specified")
+        warn("No depletion (or unrecognised depletion) specified")
 
         for ele in ["He"] + abundances.metals:
             cinput.append(
