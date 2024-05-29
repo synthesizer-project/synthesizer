@@ -13,28 +13,29 @@ https://github.com/flaresimulations/synthesizer-pipeline
 
 import glob
 import re
-import sys
 import timeit
 from collections import namedtuple
 from functools import partial
 from typing import Any, Dict, List, Union
+from typing import Never
 
 import h5py
 import numpy as np
 from astropy.cosmology import LambdaCDM
 from numpy.typing import NDArray
 
-from synthesizer import exceptions
+from synthesizer.exceptions import (
+    UnmetDependency, InconsistentArguments
+)
 
 try:
     import schwimmbad
-except exceptions.UnmetDependency:
-    print(
+except ImportError:
+    raise UnmetDependency(
         "Loading eagle data requires the schwimmbad package"
         "You currently do not have schwimmbad installed."
         "Install it via 'pip install schwimmbad'"
     )
-    sys.exit()
 
 from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr
 
@@ -51,7 +52,7 @@ def load_EAGLE(
     chunk: int = 0,
     tot_chunks: int = 1535,
     verbose: bool = False,
-) -> Dict[int, Galaxy]:
+) -> List[Union[Galaxy, Never]]:
     """
     Load EAGLE required EAGLE galaxy properties
     for generating their SEDs
@@ -79,7 +80,7 @@ def load_EAGLE(
     # get the redshift from the given eagle tag
     zed = float(tag[5:].replace("p", "."))
     if chunk > tot_chunks:
-        exceptions.InconsistentArguments(
+        raise InconsistentArguments(
             "Value specified by 'chunk' should be lower"
             "than the total chunks (tot_chunks)"
         )
@@ -167,22 +168,22 @@ def load_EAGLE(
         numThreads=numThreads,
         verbose=verbose,
     )[ok]
-    # s_oxygen = read_array(
-    #     "PARTDATA",
-    #     fileloc,
-    #     tag,
-    #     "/PartType4/ElementAbundance/Oxygen",
-    #     numThreads=numThreads,
-    #     verbose=verbose
-    # )[ok]
-    # s_hydrogen = read_array(
-    #     "PARTDATA",
-    #     fileloc,
-    #     tag,
-    #     "/PartType4/ElementAbundance/Hydrogen",
-    #     numThreads=numThreads,
-    #     verbose=verbose
-    # )[ok]
+    s_oxygen = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/ElementAbundance/Oxygen",
+        numThreads=numThreads,
+        verbose=verbose
+    )[ok]
+    s_hydrogen = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/ElementAbundance/Hydrogen",
+        numThreads=numThreads,
+        verbose=verbose
+    )[ok]
 
     # Get gas particle properties
     g_sgrpno = read_array(
@@ -268,8 +269,8 @@ def load_EAGLE(
         s_ages=s_ages,
         s_Zsmooth=s_Zsmooth,
         s_coords=s_coords,
-        # s_oxygen=s_oxygen,
-        # s_hydrogen=s_hydrogen,
+        s_oxygen=s_oxygen,
+        s_hydrogen=s_hydrogen,
         g_grpno=g_grpno,
         g_sgrpno=g_sgrpno,
         g_masses=g_masses,
@@ -304,7 +305,7 @@ def load_EAGLE_shm(
     dtype: str = "float32",
     tot_chunks: int = 1535,
     verbose: bool = False,
-) -> List[Galaxy]:
+) -> List[Union[Galaxy, Never]]:
     """
     Load EAGLE required EAGLE galaxy properties
     for generating their SEDs using numpy memmap.
@@ -339,7 +340,7 @@ def load_EAGLE_shm(
     # get the redshift from the given eagle tag
     zed = float(tag[5:].replace("p", "."))
     if chunk > tot_chunks:
-        exceptions.InconsistentArguments(
+        InconsistentArguments(
             "Value specified by 'chunk' should be lower"
             "than the total chunks (tot_chunks)"
         )
@@ -381,12 +382,12 @@ def load_EAGLE_shm(
     s_coords = np_shm_read(
         f"{args.shm_prefix}s_coords{args.shm_suffix}", (s_len, 3), dtype
     )[ok]
-    # s_oxygen = np_shm_read(
-    #     f"{args.shm_prefix}s_oxygen{args.shm_suffix}", (s_len,), dtype
-    # )[ok]
-    # s_hydrogen = np_shm_read(
-    #     f"{args.shm_prefix}s_hydrogen{args.shm_suffix}", (s_len,), dtype
-    # )[ok]
+    s_oxygen = np_shm_read(
+        f"{args.shm_prefix}s_oxygen{args.shm_suffix}", (s_len,), dtype
+    )[ok]
+    s_hydrogen = np_shm_read(
+        f"{args.shm_prefix}s_hydrogen{args.shm_suffix}", (s_len,), dtype
+    )[ok]
 
     # read in required gas particle shared memory arrays
     g_grpno = np_shm_read(
@@ -429,8 +430,8 @@ def load_EAGLE_shm(
         s_ages=s_ages,
         s_Zsmooth=s_Zsmooth,
         s_coords=s_coords,
-        # s_oxygen=s_oxygen,
-        # s_hydrogen=s_hydrogen,
+        s_oxygen=s_oxygen,
+        s_hydrogen=s_hydrogen,
         g_grpno=g_grpno,
         g_sgrpno=g_sgrpno,
         g_masses=g_masses,
@@ -465,6 +466,9 @@ def np_shm_read(name: str, array_shape: tuple, dtype: str) -> NDArray[Any]:
             shape of the memmap array
         dtype (str)
             data type of the memmap array
+
+    Returns:
+        Required eagle array from numpy memmap location
     """
     tmp = np.memmap(name, dtype=dtype, mode="r", shape=array_shape)
     return tmp
@@ -545,6 +549,9 @@ def read_hdf5(filename: str, dataset: str) -> NDArray[Any]:
             name of the hdf5 file
         dataset (str)
             name of the dataset to extract
+    
+    Returns:
+        Numpy array of the required hdf5 dataset
     """
     with h5py.File(filename, "r") as hf:
         dat = np.array(hf.get(dataset))
@@ -588,7 +595,11 @@ def read_array(
             return in CGS units
         verbose (bool)
             verbose condition
+    
+    Returns:
+        Numpy/unyt array from eagle hdf5 filetype
     """
+
     start = timeit.default_timer()
 
     files = get_files(ftype, directory, tag)
@@ -661,6 +672,9 @@ def read_header(
         snapshot tag to read
     dataset (str)
         name of the dataset to read
+
+    Returns:
+        Reads in required eagle hdf5 header data
     """
 
     files = get_files(ftype, directory, tag)
@@ -681,6 +695,9 @@ def apply_physicalUnits_conversion(
             dataset to read attribute
         dat (array)
             dataset array to apply conversion
+
+    Returns:
+        Numpy array of the dataset converted to physical units
     """
     with h5py.File(filename, "r") as hf:
         exponent = hf[dataset].attrs["aexp-scale-exponent"]
@@ -710,6 +727,9 @@ def apply_hfreeUnits_conversion(
             dataset to read attribute
         dat (array)
             dataset array to apply conversion
+
+    Returns:
+        Numpy array of the dataset converted to `h` free units
     """
     with h5py.File(filename, "r") as hf:
         exponent = hf[dataset].attrs["h-scale-exponent"]
@@ -739,6 +759,9 @@ def apply_CGSUnits_conversion(
             dataset to read attribute
         dat (array)
             dataset array to apply conversion
+
+    Returns:
+        Numpy array of the dataset converted to CGS units
     """
 
     with h5py.File(filename, "r") as hf:
@@ -768,6 +791,9 @@ def apply_PhotUnits(
             dataset to read attribute
         dat (array)
             dataset array to apply conversion
+
+    Returns:
+        Unyt array of the dataset in the photometric units
     """
     with h5py.File(filename, "r") as hf:
         unit = hf[dataset].attrs["Units"]
@@ -834,8 +860,8 @@ def assign_galaxy_prop(
     s_ages: NDArray[np.float32],
     s_Zsmooth: NDArray[np.float32],
     s_coords: NDArray[np.float32],
-    # s_oxygen: NDArray[np.float32],
-    # s_hydrogen: NDArray[np.float32],
+    s_oxygen: NDArray[np.float32],
+    s_hydrogen: NDArray[np.float32],
     g_grpno: NDArray[np.int32],
     g_sgrpno: NDArray[np.int32],
     g_masses: NDArray[np.float32],
@@ -873,6 +899,10 @@ def assign_galaxy_prop(
             Stellar particle smoothed metallicity
         s_coords (array)
             Stellar particle coordinates in pMpc
+        s_oxygen (array)
+            Stellar particle abundance in oxygen
+        s_hydrogen (array)
+            Stellar particle abundance in hydrogen
         g_grpno (array)
             Gas particle group number
         g_sgrpno (array)
@@ -910,8 +940,8 @@ def assign_galaxy_prop(
         ages=s_ages[ok] * 1e9 * yr,
         metallicities=s_Zsmooth[ok],
         coordinates=s_coords[ok],
-        # s_oxygen=s_oxygen[ok],
-        # s_hydrogen=s_hydrogen[ok],
+        s_oxygen=s_oxygen[ok],
+        s_hydrogen=s_hydrogen[ok],
         **s_kwargs,
     )
 
