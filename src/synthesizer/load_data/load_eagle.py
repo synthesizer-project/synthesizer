@@ -166,6 +166,16 @@ def load_EAGLE(
         numThreads=numThreads,
         verbose=verbose,
     )[ok]
+    s_hsml = read_array(
+        "PARTDATA",
+        fileloc,
+        tag,
+        "/PartType4/SmoothingLength",
+        noH=True,
+        physicalUnits=True,
+        numThreads=numThreads,
+        verbose=verbose,
+    )[ok]  # physical Mpc
     s_oxygen = read_array(
         "PARTDATA",
         fileloc,
@@ -267,6 +277,7 @@ def load_EAGLE(
         s_ages=s_ages,
         s_Zsmooth=s_Zsmooth,
         s_coords=s_coords,
+        s_hsml=s_hsml,
         s_oxygen=s_oxygen,
         s_hydrogen=s_hydrogen,
         g_grpno=g_grpno,
@@ -380,6 +391,9 @@ def load_EAGLE_shm(
     s_coords = np_shm_read(
         f"{args.shm_prefix}s_coords{args.shm_suffix}", (s_len, 3), dtype
     )[ok]
+    s_hsml = np_shm_read(
+        f"{args.shm_prefix}s_hsml{args.shm_suffix}", (s_len,), dtype
+    )[ok]
     s_oxygen = np_shm_read(
         f"{args.shm_prefix}s_oxygen{args.shm_suffix}", (s_len,), dtype
     )[ok]
@@ -428,6 +442,7 @@ def load_EAGLE_shm(
         s_ages=s_ages,
         s_Zsmooth=s_Zsmooth,
         s_coords=s_coords,
+        s_hsml=s_hsml,
         s_oxygen=s_oxygen,
         s_hydrogen=s_hydrogen,
         g_grpno=g_grpno,
@@ -858,6 +873,7 @@ def assign_galaxy_prop(
     s_ages: NDArray[np.float32],
     s_Zsmooth: NDArray[np.float32],
     s_coords: NDArray[np.float32],
+    s_hsml: NDArray[np.float32],
     s_oxygen: NDArray[np.float32],
     s_hydrogen: NDArray[np.float32],
     g_grpno: NDArray[np.int32],
@@ -897,6 +913,8 @@ def assign_galaxy_prop(
             Stellar particle smoothed metallicity
         s_coords (array)
             Stellar particle coordinates in pMpc
+        s_hsml(array)
+            Stellar particle smoothing length in pMpc
         s_oxygen (array)
             Stellar particle abundance in oxygen
         s_hydrogen (array)
@@ -937,7 +955,8 @@ def assign_galaxy_prop(
         current_masses=s_masses[ok] * Msun,
         ages=s_ages[ok] * 1e9 * yr,
         metallicities=s_Zsmooth[ok],
-        coordinates=s_coords[ok],
+        coordinates=s_coords[ok] * Mpc,
+        smoothing_lengths=s_hsml[ok] * Mpc,
         s_oxygen=s_oxygen[ok],
         s_hydrogen=s_hydrogen[ok],
         **s_kwargs,
