@@ -17,7 +17,7 @@ import timeit
 from collections import namedtuple
 from functools import partial
 from typing import Any, Dict, List, Union
-from typing import Never
+from typing_extensions import Never
 
 import h5py
 import numpy as np
