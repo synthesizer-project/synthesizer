@@ -90,6 +90,9 @@ def load_EAGLE(
         sgrpno = np.array(hf.get("/Subhalo/SubGroupNumber"))
         grpno = np.array(hf.get("/Subhalo/GroupNumber"))
 
+    if grpno.dtype == object:
+        return []
+
     # Get required star particle properties
     s_sgrpno = read_array(
         "PARTDATA",
