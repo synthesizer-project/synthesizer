@@ -33,7 +33,7 @@
  * @param npart: The number of particles.
  * @param method: The method to use for assigning weights.
  */
-PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
+PyObject *compute_integrated_line(PyObject *args) {
 
   int ndim = 0;
   int npart = 0;
@@ -222,8 +222,8 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef LineMethods[] = {
-    {"compute_integrated_line", compute_integrated_line, METH_VARARGS,
-     "Method for calculating integrated intrinsic lines."},
+    {"compute_integrated_line", (PyCFunction)compute_integrated_line,
+     METH_VARARGS, "Method for calculating integrated intrinsic lines."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
