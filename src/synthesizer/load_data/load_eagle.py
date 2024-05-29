@@ -17,16 +17,14 @@ import timeit
 from collections import namedtuple
 from functools import partial
 from typing import Any, Dict, List, Union
-from typing_extensions import Never
 
 import h5py
 import numpy as np
 from astropy.cosmology import LambdaCDM
 from numpy.typing import NDArray
+from typing_extensions import Never
 
-from synthesizer.exceptions import (
-    UnmetDependency, InconsistentArguments
-)
+from synthesizer.exceptions import InconsistentArguments, UnmetDependency
 
 try:
     import schwimmbad
@@ -174,7 +172,7 @@ def load_EAGLE(
         tag,
         "/PartType4/ElementAbundance/Oxygen",
         numThreads=numThreads,
-        verbose=verbose
+        verbose=verbose,
     )[ok]
     s_hydrogen = read_array(
         "PARTDATA",
@@ -182,7 +180,7 @@ def load_EAGLE(
         tag,
         "/PartType4/ElementAbundance/Hydrogen",
         numThreads=numThreads,
-        verbose=verbose
+        verbose=verbose,
     )[ok]
 
     # Get gas particle properties
@@ -549,7 +547,7 @@ def read_hdf5(filename: str, dataset: str) -> NDArray[Any]:
             name of the hdf5 file
         dataset (str)
             name of the dataset to extract
-    
+
     Returns:
         Numpy array of the required hdf5 dataset
     """
@@ -595,7 +593,7 @@ def read_array(
             return in CGS units
         verbose (bool)
             verbose condition
-    
+
     Returns:
         Numpy/unyt array from eagle hdf5 filetype
     """
