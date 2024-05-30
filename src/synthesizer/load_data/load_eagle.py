@@ -642,9 +642,7 @@ def read_array(
         print(
             "Reading in '{}' for z = {} using {} thread(s) took {}s".format(
                 dataset,
-                np.round(
-                    read_header(ftype, directory, tag, dataset="Redshift"), 3
-                ),
+                float(tag[5:].replace("p", ".")),
                 numThreads,
                 np.round(stop - start, 6),
             )
