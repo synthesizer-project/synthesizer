@@ -41,13 +41,12 @@ from ..particle.galaxy import Galaxy
 
 # define EAGLE cosmology
 cosmo = LambdaCDM(Om0=0.307, Ode0=0.693, H0=67.77, Ob0=0.04825)
+norm = np.linalg.norm
 
 
 def load_EAGLE(
     fileloc: str,
-    tag: str,
-    numThreads: int = 1,
-    chunk: int = 0,
+    args: namedtuple,
     tot_chunks: int = 1535,
     verbose: bool = False,
 ) -> List[Union[Galaxy, Never]]:
@@ -60,12 +59,8 @@ def load_EAGLE(
     Args:
         fileloc (string):
             eagle data file location
-        tag (string):
-            snapshot tag to load
-        numThreads (int)
-            number of threads to use
-        chunk (int)
-            file number to process
+        args (namedtuple):
+            parser arguments passed on to this job
         tot_chunks (int)
             total number of files to process
         verbose (bool)
@@ -75,8 +70,13 @@ def load_EAGLE(
         a dictionary of Galaxy objects with stars and gas components
     """
 
+    tag = args.tag
+    numThreads = args.nthreads
+    chunk = args.chunk
+
     # get the redshift from the given eagle tag
     zed = float(tag[5:].replace("p", "."))
+    h = 0.6777
     if chunk > tot_chunks:
         raise InconsistentArguments(
             "Value specified by 'chunk' should be lower"
@@ -86,8 +86,12 @@ def load_EAGLE(
     with h5py.File(
         f"{fileloc}/groups_{tag}/eagle_subfind_tab_{tag}.{chunk}.hdf5", "r"
     ) as hf:
-        sgrpno = np.array(hf.get("/Subhalo/SubGroupNumber"))
-        grpno = np.array(hf.get("/Subhalo/GroupNumber"))
+        sgrpno = np.array(hf.get("/Subhalo/SubGroupNumber"), dtype=np.int32)
+        grpno = np.array(hf.get("/Subhalo/GroupNumber"), dtype=np.int32)
+        # centre of potential of subhalo in h-less physical Mpc
+        cop = np.array(
+            hf.get("/Subhalo/CentreOfPotential"), dtype=np.float32
+        ) / (h * (1 + zed))
 
     if grpno.dtype == object:
         return []
@@ -268,8 +272,10 @@ def load_EAGLE(
     _f = partial(
         assign_galaxy_prop,
         zed=zed,
+        aperture=args.aperture,
         grpno=grpno,
         sgrpno=sgrpno,
+        cop=cop,
         s_grpno=s_grpno,
         s_sgrpno=s_sgrpno,
         s_imasses=s_imasses,
@@ -348,6 +354,7 @@ def load_EAGLE_shm(
 
     # get the redshift from the given eagle tag
     zed = float(tag[5:].replace("p", "."))
+    h = 0.6777
     if chunk > tot_chunks:
         InconsistentArguments(
             "Value specified by 'chunk' should be lower"
@@ -357,8 +364,12 @@ def load_EAGLE_shm(
     with h5py.File(
         f"{fileloc}/groups_{tag}/eagle_subfind_tab_{tag}.{chunk}.hdf5", "r"
     ) as hf:
-        sgrpno = np.array(hf.get("/Subhalo/SubGroupNumber"))
-        grpno = np.array(hf.get("/Subhalo/GroupNumber"))
+        sgrpno = np.array(hf.get("/Subhalo/SubGroupNumber"), dtype=np.int32)
+        grpno = np.array(hf.get("/Subhalo/GroupNumber"), dtype=np.int32)
+        # centre of potential of subhalo in h-less physical Mpc
+        cop = np.array(
+            hf.get("/Subhalo/CentreOfPotential"), dtype=np.float32
+        ) / (h * (1 + zed))
 
     if grpno.dtype == object:
         return []
@@ -433,8 +444,10 @@ def load_EAGLE_shm(
     _f = partial(
         assign_galaxy_prop,
         zed=zed,
+        aperture=args.aperture,
         grpno=grpno,
         sgrpno=sgrpno,
+        cop=cop,
         s_grpno=s_grpno,
         s_sgrpno=s_sgrpno,
         s_imasses=s_imasses,
@@ -862,8 +875,10 @@ def get_age(
 def assign_galaxy_prop(
     ii: int,
     zed: float,
+    aperture: float,
     grpno: NDArray[np.int32],
     sgrpno: NDArray[np.int32],
+    cop: NDArray[np.float32],
     s_grpno: NDArray[np.int32],
     s_sgrpno: NDArray[np.int32],
     s_imasses: NDArray[np.float32],
@@ -893,10 +908,14 @@ def assign_galaxy_prop(
             galaxy number
         zed (float)
             redshift
+        aperture (float)
+            aperture to use from centre of potential
         grpno (array)
             Group numbers in this chunk
         sgrpno (array)
             Subgroup numbers in this chunk
+        cop (array)
+            centre of potential of subhalos in this chunk
         s_grpno (array)
             Stellar particle group numbers
         s_sgrpno (array)
@@ -946,7 +965,11 @@ def assign_galaxy_prop(
 
     # Fill individual galaxy objects with star particles
     # mask for current galaxy
-    ok = (s_grpno == grpno[ii]) * (s_sgrpno == sgrpno[ii])
+    ok = np.where((s_grpno == grpno[ii]) * (s_sgrpno == sgrpno[ii]))[0]
+    # mask for aperture
+    r = norm(cop[ii] - s_coords[ok], axis=1)
+    ok = ok[r <= aperture]
+
     # Assign stellar properties
     galaxy.load_stars(
         initial_masses=s_imasses[ok] * Msun,
@@ -963,7 +986,11 @@ def assign_galaxy_prop(
     # Fill individual galaxy objects with gas particles
     sfr_flag = g_sfr > 0
     # mask for current galaxy
-    ok = (g_grpno == grpno[ii]) * (g_sgrpno == sgrpno[ii])
+    ok = np.where((g_grpno == grpno[ii]) * (g_sgrpno == sgrpno[ii]))[0]
+    # mask for aperture
+    r = norm(cop[ii] - g_coords[ok], axis=1)
+    ok = ok[r <= aperture]
+
     # Assign gas particle properties
     galaxy.load_gas(
         masses=g_masses[ok] * Msun,
