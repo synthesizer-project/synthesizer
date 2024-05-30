@@ -42,6 +42,8 @@ from unyt import (
     yr,
 )
 
+from synthesizer.warnings import warn
+
 # Define an importable dictionary with the default unit system
 default_units = {
     "lam": Angstrom,
@@ -134,8 +136,8 @@ class UnitSingleton(type):
 
         # Print a warning if an instance exists and arguments have been passed
         elif cls in cls._instances and new_units is not None:
-            print(
-                "WARNING! Units are already set. \nAny modified units will "
+            warn(
+                "Units are already set. \nAny modified units will "
                 "not take effect. \nUnits should be configured before "
                 "running anything else... \nbut you could (and "
                 "shouldn't) force it: Units(new_units_dict, force=True)."
