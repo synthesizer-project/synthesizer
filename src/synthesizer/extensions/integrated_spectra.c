@@ -213,11 +213,12 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
       continue;
 
     /* Get the spectra ind. */
+    int spectra_ind = 0;
     if (ndim > 0) {
       int unraveled_ind[ndim + 1];
       get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
       unraveled_ind[ndim] = 0;
-      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+      spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
     } else {
       PyErr_SetString(PyExc_ValueError, "ndim must be greater than 0.");
       return NULL;
