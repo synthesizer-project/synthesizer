@@ -314,3 +314,22 @@ class GridError(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "Theres an issues with the grid."
+
+
+class UnmetDependency(Exception):
+    """
+    Generic exception class for anything to do with not having specific
+    packages not mentioned in the requirements. This is usually when there
+    are added dependency due to including extraneous capabilities.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "There are unmet package dependencies."
