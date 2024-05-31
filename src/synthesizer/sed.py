@@ -26,7 +26,6 @@ from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
-from synthesizer.igm import Inoue14
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
 from synthesizer.utils import has_units, rebin_1d, wavelength_to_rgba
@@ -154,12 +153,15 @@ class Sed:
 
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
+            # Define the axes to sum over to give only the final axis
+            sum_over = tuple(range(0, len(self._lnu.shape) - 1))
+
             # Create a new sed object with the first Lnu dimension collapsed
-            new_sed = Sed(self.lam, np.sum(self._lnu, axis=0))
+            new_sed = Sed(self.lam, np.sum(self._lnu, axis=sum_over))
 
             # If fnu exists, sum that too
             if self.fnu is not None:
-                new_sed.fnu = np.sum(self.fnu, axis=0)
+                new_sed.fnu = np.sum(self.fnu, axis=sum_over)
                 new_sed.obsnu = self.obsnu
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
@@ -895,7 +897,7 @@ class Sed:
 
         return self.fnu
 
-    def get_fnu(self, cosmo, z, igm=Inoue14):
+    def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution.
 
@@ -909,7 +911,8 @@ class Sed:
             z (float)
                 The redshift of the spectra.
             igm (igm)
-                The IGM class.
+                The IGM class. e.g. `synthesizer.igm.Inoue14`.
+                Defaults to None.
 
         Returns:
             fnu (ndarray)
