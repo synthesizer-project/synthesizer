@@ -32,7 +32,11 @@
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements in the SEDs.
  */
-PyObject *make_data_cube_hist(PyObject *args) {
+PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
+
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
 
   const double res = 0.0;
   const int npix_x = 0, npix_y = 0, npart = 0, nlam = 0;
@@ -125,7 +129,11 @@ PyObject *make_data_cube_hist(PyObject *args) {
  * @param threshold: The threshold of the SPH kernel.
  * @param kdim: The number of elements in the kernel.
  */
-PyObject *make_data_cube_smooth(PyObject *args) {
+PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
+
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
 
   double res = 0.0, threshold = 0.0;
   int npix_x = 0, npix_y = 0, npart = 0, nlam = 0, kdim = 0;

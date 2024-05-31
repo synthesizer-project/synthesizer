@@ -42,7 +42,11 @@
  * @param threshold: The threshold of the SPH kernel.
  * @param kdim: The number of elements in the kernel.
  */
-PyObject *make_img(PyObject *args) {
+PyObject *make_img(PyObject *self, PyObject *args) {
+
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
 
   double res = 0, threshold = 0;
   int npix_x = 0, npix_y = 0, npart = 0, kdim = 0;

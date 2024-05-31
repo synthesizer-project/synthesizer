@@ -244,7 +244,11 @@ void spectra_loop_ngp(const double **grid_props, const double **part_props,
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
  */
-PyObject *compute_particle_seds(PyObject *args) {
+PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
+
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
 
   int ndim = 0;
   int npart = 0, nlam = 0;
