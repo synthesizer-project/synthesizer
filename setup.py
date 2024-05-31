@@ -160,18 +160,20 @@ logger.info(f"### Valid extra compile args: {compile_flags}")
 # Define the extension modules
 extensions = [
     create_extension(
-        "synthesizer.extensions.weights",
-        ["src/synthesizer/extensions/weights.c"],
-    ),
-    create_extension(
         "synthesizer.extensions.integrated_spectra",
-        ["src/synthesizer/extensions/integrated_spectra.c"],
+        [
+            "src/synthesizer/extensions/integrated_spectra.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
         compile_flags=compile_flags,
         links=link_args,
     ),
     create_extension(
         "synthesizer.extensions.particle_spectra",
-        ["src/synthesizer/extensions/particle_spectra.c"],
+        [
+            "src/synthesizer/extensions/particle_spectra.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
         compile_flags=compile_flags,
         links=link_args,
     ),
@@ -189,25 +191,37 @@ extensions = [
     ),
     create_extension(
         "synthesizer.extensions.sfzh",
-        ["src/synthesizer/extensions/sfzh.c"],
+        [
+            "src/synthesizer/extensions/sfzh.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
         compile_flags=compile_flags,
         links=link_args,
     ),
     create_extension(
         "synthesizer.extensions.los",
-        ["src/synthesizer/extensions/los.c"],
+        [
+            "src/synthesizer/extensions/los.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
         compile_flags=compile_flags,
         links=link_args,
     ),
     create_extension(
         "synthesizer.extensions.integrated_line",
-        ["src/synthesizer/extensions/integrated_line.c"],
+        [
+            "src/synthesizer/extensions/integrated_line.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
         compile_flags=compile_flags,
         links=link_args,
     ),
     create_extension(
         "synthesizer.extensions.particle_line",
-        ["src/synthesizer/extensions/particle_line.c"],
+        [
+            "src/synthesizer/extensions/particle_line.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
         compile_flags=compile_flags,
         links=link_args,
     ),
