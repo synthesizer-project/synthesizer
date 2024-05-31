@@ -33,7 +33,11 @@
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
  */
-PyObject *compute_integrated_sed(PyObject *args) {
+PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
+
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
 
   int ndim = 0;
   int npart = 0, nlam = 0;

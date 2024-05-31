@@ -428,7 +428,11 @@ double calculate_los_recursive(struct cell *c, const double star_x,
  *
  * @param
  */
-PyObject *compute_dust_surface_dens(PyObject *args) {
+PyObject *compute_dust_surface_dens(PyObject *self, PyObject *args) {
+
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
 
   int nstar = 0, ngas = 0, kdim = 0, force_loop = 0;
   double threshold = 0, max_sml = 0;

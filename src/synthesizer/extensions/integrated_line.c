@@ -33,7 +33,11 @@
  * @param npart: The number of particles.
  * @param method: The method to use for assigning weights.
  */
-PyObject *compute_integrated_line(PyObject *args) {
+PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
+
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
 
   int ndim = 0;
   int npart = 0;
