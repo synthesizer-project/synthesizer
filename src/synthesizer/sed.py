@@ -26,7 +26,6 @@ from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
-from synthesizer.igm import Inoue14
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
 from synthesizer.utils import has_units, rebin_1d, wavelength_to_rgba
@@ -895,7 +894,7 @@ class Sed:
 
         return self.fnu
 
-    def get_fnu(self, cosmo, z, igm=Inoue14):
+    def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution.
 
@@ -909,7 +908,8 @@ class Sed:
             z (float)
                 The redshift of the spectra.
             igm (igm)
-                The IGM class.
+                The IGM class. e.g. `synthesizer.igm.Inoue14`.
+                Defaults to None.
 
         Returns:
             fnu (ndarray)
