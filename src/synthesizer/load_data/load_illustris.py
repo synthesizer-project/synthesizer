@@ -74,7 +74,6 @@ def load_IllustrisTNG(
     header = il.groupcat.loadHeader(directory, snap_number)
     scale_factor = header["Time"].astype(np.float32)
     redshift = header["Redshift"].astype(np.float32)
-    Om0 = header["Omega0"]
     h = header["HubbleParam"]
 
     if verbose:
