@@ -1,4 +1,28 @@
-""" """
+"""A module defining the Pacman emision models.
+
+This module defines the PacmanEmission and BimodalPacmanEmission classes which
+are used to define the emission models for the Pacman model. Both these models
+combine various differen spectra together to produce a final total emission
+spectrum.
+
+The PacmanEmission model is used to define the emission model for a single
+population of stars. Including both intrinsic and attenuate emission, and
+if a dust emission model is given also dust emission. It includes the option
+to include escaped emission for a given escape fraction, and if a lyman alpha
+escape fraction is given, a more sophisticated nebular emission model is used,
+including line and nebuluar continuum emission.
+
+The BimodalPacmanEmission model is similar to the PacmanEmission model but
+splits the emission into a young and old population.
+
+Example:
+    To create a PacmanEmission model for a grid with a V-band optical depth of
+    0.1 and a dust curve, one would do the following:
+
+    dust_curve = PowerLaw(...)
+    model = PacmanEmission(grid, 0.1, dust_curve)
+
+"""
 
 from unyt import dimensionless
 
@@ -14,15 +38,66 @@ from synthesizer.emission_models import (
 
 
 class PacmanEmission(EmissionModel):
+    """
+    A class defining the Pacman model.
+
+    This model defines both intrinsic and attenuated steller emission with or
+    without dust emission. It also includes the option to include escaped
+    emission for a given escape fraction. If a lyman alpha escape fraction is
+    given, a more sophisticated nebular emission model is used, including line
+    and nebuluar continuum emission.
+
+    This model will always produce:
+        - incident: the stellar emission incident onto the ISM.
+        - intrinsic: the intrinsic emission (when grid.reprocessed is False
+            this is the same as the incident emission).
+        - attenuated: the intrinsic emission attenuated by dust.
+
+    if grid.reprocessed is True:
+        - transmitted: the stellar emission transmitted through the ISM.
+        - nebular: the stellar emisison from nebulae.
+        - reprocessed: the stellar emission reprocessed by the ISM.
+
+    if fesc > 0.0:
+        - escaped: the incident emission that completely escapes the ISM.
+        - emergent: the emission which emerges from the stellar population,
+            including any escaped emission.
+
+
+    if dust_emission is not None:
+        - dust_emission: the emission from dust.
+        - total: the final total combined emission.
+
+    Attributes:
+        grid (synthesizer.grid.Grid): The grid object
+        tau_v (float): The V-band optical depth
+        dust_curve (synthesizer.dust.DustCurve): The dust curve
+        dust_emission (synthesizer.dust.DustEmissionModel): The dust emission
+        fesc (float): The escape fraction
+        fesc_ly_alpha (float): The Lyman alpha escape fraction
+    """
+
     def __init__(
         self,
         grid,
-        tau_v=None,
-        dust_curve=None,
+        tau_v,
+        dust_curve,
         dust_emission=None,
         fesc=0.0,
         fesc_ly_alpha=1.0,
     ):
+        """
+        Initialize the PacmanEmission model.
+
+        Args:
+            grid (synthesizer.grid.Grid): The grid object.
+            tau_v (float): The V-band optical depth.
+            dust_curve (synthesizer.dust.DustCurve): The dust curve.
+            dust_emission (synthesizer.dust.DustEmissionModel): The dust
+                emission.
+            fesc (float): The escape fraction.
+            fesc_ly_alpha (float): The Lyman alpha escape fraction.
+        """
         # Attach the grid
         self._grid = grid
 
@@ -238,19 +313,138 @@ class PacmanEmission(EmissionModel):
 
 
 class BimodalPacmanEmission(EmissionModel):
+    """
+    A class defining the Pacman model split into young and old populations.
+
+    This model defines both intrinsic and attenuated steller emission with or
+    without dust emission. It also includes the option to include escaped
+    emission for a given escape fraction. If a lyman alpha escape fraction is
+    given, a more sophisticated nebular emission model is used, including line
+    and nebuluar continuum emission.
+
+    All spectra produced have a young, old and combined component. The split
+    between young and old is by default 10^7 Myr but can be changed with the
+    age_pivot argument.
+
+    This model will always produce:
+        - young_incident: the stellar emission incident onto the ISM for the
+            young population.
+        - old_incident: the stellar emission incident onto the ISM for the old
+            population.
+        - incident: the stellar emission incident onto the ISM for the
+            combined population.
+        - young_intrinsic: the intrinsic emission for the young population.
+        - old_intrinsic: the intrinsic emission for the old population.
+        - intrinsic: the intrinsic emission for the combined population.
+        - young_attenuated_nebular: the nebular emission attenuated by dust
+            for the young population.
+        - young_attenuated_ism: the intrinsic emission attenuated by dust for
+            the young population.
+        - young_attenuated: the intrinsic emission attenuated by dust for the
+            young population.
+        - old_attenuated: the intrinsic emission attenuated by dust for the old
+            population.
+
+    if grid.reprocessed is True:
+        - young_transmitted: the stellar emission transmitted through the ISM
+            for the young population.
+        - old_transmitted: the stellar emission transmitted through the ISM for
+            the old population.
+        - transmitted: the stellar emission transmitted through the ISM for the
+            combined population.
+        - young_nebular: the stellar emisison from nebulae for the young
+            population.
+        - old_nebular: the stellar emisison from nebulae for the old
+            population.
+        - nebular: the stellar emisison from nebulae for the combined
+            population.
+        - young_reprocessed: the stellar emission reprocessed by the ISM for
+            the young population.
+        - old_reprocessed: the stellar emission reprocessed by the ISM for the
+            old population.
+        - reprocessed: the stellar emission reprocessed by the ISM for the
+            combined population.
+
+    if fesc > 0.0:
+        - young_escaped: the incident emission that completely escapes the ISM
+            for the young population.
+        - old_escaped: the incident emission that completely escapes the ISM
+            for the old population.
+        - escaped: the incident emission that completely escapes the ISM for
+            the combined population.
+        - young_emergent: the emission which emerges from the stellar
+            population, including any escaped emission for the young
+            population.
+        - old_emergent: the emission which emerges from the stellar population,
+            including any escaped emission for the old population.
+        - emergent: the emission which emerges from the stellar population,
+            including any escaped emission for the combined population.
+
+    if dust_emission is not None:
+        - young_dust_emission_nebular: the emission from dust for the young
+            population.
+        - young_dust_emission_ism: the emission from dust for the young
+            population.
+        - young_dust_emission: the emission from dust for the young population.
+        - old_dust_emission: the emission from dust for the old population.
+        - dust_emission: the emission from dust for the combined population.
+        - young_total: the final total combined emission for the young
+            population.
+        - old_total: the final total combined emission for the old population.
+        - total: the final total combined emission for the combined population.
+
+    Attributes:
+        grid (synthesizer.grid.Grid): The grid object.
+        tau_v_ism (float): The V-band optical depth for the ISM.
+        tau_v_nebular (float): The V-band optical depth for the nebular.
+        dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
+            ISM.
+        dust_curve_nebular (synthesizer.dust.DustCurve): The dust curve for the
+            nebular.
+        age_pivot (unyt.unyt_quantity): The age pivot between young and old
+            populations, expressed in terms of log10(age) in Myr.
+        dust_emission_ism (synthesizer.dust.DustEmissionModel): The dust
+            emission for the ISM.
+        dust_emission_nebular (synthesizer.dust.DustEmissionModel): The dust
+            emission for the nebular.
+        fesc (float): The escape fraction.
+        fesc_ly_alpha (float): The Lyman alpha escape fraction.
+
+    """
+
     def __init__(
         self,
         grid,
-        tau_v_ism=None,
-        tau_v_nebular=None,
-        dust_curve_ism=None,
-        dust_curve_nebular=None,
+        tau_v_ism,
+        tau_v_nebular,
+        dust_curve_ism,
+        dust_curve_nebular,
         age_pivot=7 * dimensionless,
         dust_emission_ism=None,
         dust_emission_nebular=None,
         fesc=0.0,
         fesc_ly_alpha=1.0,
     ):
+        """
+        Initialize the PacmanEmission model.
+
+        Args:
+            grid (synthesizer.grid.Grid): The grid object.
+            tau_v_ism (float): The V-band optical depth for the ISM.
+            tau_v_nebular (float): The V-band optical depth for the nebular.
+            dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
+                ISM.
+            dust_curve_nebular (synthesizer.dust.DustCurve): The dust curve for
+                the nebular.
+            age_pivot (unyt.unyt_quantity): The age pivot between young and old
+                populations, expressed in terms of log10(age) in Myr.
+            dust_emission_ism (synthesizer.dust.DustEmissionModel): The dust
+                emission model for the ISM.
+            dust_emission_nebular (synthesizer.dust.DustEmissionModel): The
+                dust emission model for the nebular.
+            fesc (float): The escape fraction.
+            fesc_ly_alpha (float): The Lyman alpha escape fraction.
+        """
         # Attach the grid
         self._grid = grid
 
