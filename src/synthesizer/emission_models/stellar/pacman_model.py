@@ -1,4 +1,4 @@
-"""A module defining the Pacman emision models.
+"""A module defining the Pacman emission models.
 
 This module defines the PacmanEmission and BimodalPacmanEmission classes which
 are used to define the emission models for the Pacman model. Both these models
@@ -15,6 +15,11 @@ including line and nebuluar continuum emission.
 The BimodalPacmanEmission model is similar to the PacmanEmission model but
 splits the emission into a young and old population.
 
+The Charlot & Fall (2000) model if a special of the BimodalPacmanEmission
+model and is also included. This model is identical to the
+BimodalPacmanEmission model but with a fixed age pivot of 10^7 Myr and no
+escaped emission.
+
 Example:
     To create a PacmanEmission model for a grid with a V-band optical depth of
     0.1 and a dust curve, one would do the following:
@@ -22,6 +27,25 @@ Example:
     dust_curve = PowerLaw(...)
     model = PacmanEmission(grid, 0.1, dust_curve)
 
+    To create a CharlotFall2000 model, you can use the following code:
+
+    tau_v_ism = 0.5
+    tau_v_nebular = 0.5
+    dust_curve_ism = PowerLaw(...)
+    dust_curve_nebular = PowerLaw(...)
+    age_pivot = 7 * dimensionless
+    dust_emission_ism = BlackBody(...)
+    dust_emission_nebular = GreyBody(...)
+    model = CharlotFall2000(
+        grid,
+        tau_v_ism,
+        tau_v_nebular,
+        dust_curve_ism,
+        dust_curve_nebular,
+        age_pivot,
+        dust_emission_ism,
+        dust_emission_nebular,
+    )
 """
 
 from unyt import dimensionless
@@ -32,6 +56,8 @@ from synthesizer.emission_models import (
     EmissionModel,
     EscapedEmission,
     IncidentEmission,
+    LineContinuumEmission,
+    NebularContinuumEmission,
     NebularEmission,
     TransmittedEmission,
 )
@@ -284,27 +310,75 @@ class PacmanEmission(EmissionModel):
 
     def _make_total(self):
         if self._dust_emission_model is not None:
+            # Define the related models
+            related_models = [
+                self.incident,
+                self.transmitted,
+                self.escaped,
+                self.nebular,
+                self.reprocessed,
+                self.intrinsic,
+                self.attenuated,
+                self.emergent,
+                self.dust_emission,
+            ]
+
+            # Remove any None models
+            related_models = [m for m in related_models if m is not None]
+
+            # Call the parent constructor with everything we've made
             EmissionModel.__init__(
                 self,
                 grid=self._grid,
                 label="total",
                 combine=(self.dust_emission, self.emergent),
+                related_models=related_models,
             )
         else:
             # OK, total = emergent so we need to handle whether
             # emergent = attenuated + escaped or just attenuated
             if self._fesc == 0.0:
-                return EmissionModel.__init__(
+                # Define the related models
+                related_models = [
+                    self.incident,
+                    self.transmitted,
+                    self.nebular,
+                    self.reprocessed,
+                    self.intrinsic,
+                    self.attenuated,
+                ]
+
+                # Remove any None models
+                related_models = [m for m in related_models if m is not None]
+
+                EmissionModel.__init__(
                     self,
                     grid=self._grid,
                     label="emergent",
                     tau_v=self._tau_v,
                     dust_curve=self._dust_curve,
                     apply_dust_to=self.intrinsic,
+                    related_models=related_models,
                 )
             else:
                 # Otherwise, emergent = attenuated + escaped
-                return EmissionModel.__init__(
+
+                # Define the related models
+                related_models = [
+                    self.incident,
+                    self.transmitted,
+                    self.escaped,
+                    self.nebular,
+                    self.reprocessed,
+                    self.intrinsic,
+                    self.attenuated,
+                ]
+
+                # Remove any None models
+                related_models = [m for m in related_models if m is not None]
+
+                # Call the parent constructor with everything we've made
+                EmissionModel.__init__(
                     self,
                     grid=self._grid,
                     label="emergent",
@@ -665,6 +739,42 @@ class BimodalPacmanEmission(EmissionModel):
         if not self.reprocessed:
             return None, None, None
 
+        # Get the line continuum emission
+        young_line_cont = LineContinuumEmission(
+            grid=self._grid,
+            label="young_linecont",
+            mask_attr="log10ages",
+            mask_thresh=self.age_pivot,
+            mask_op="<",
+            fesc=self._fesc_ly_alpha,
+        )
+        old_line_cont = LineContinuumEmission(
+            grid=self._grid,
+            label="old_linecont",
+            mask_attr="log10ages",
+            mask_thresh=self.age_pivot,
+            mask_op=">=",
+            fesc=self._fesc_ly_alpha,
+        )
+
+        # Get the nebular continuum emission
+        young_neb_cont = NebularContinuumEmission(
+            grid=self._grid,
+            label="young_nebular_continuum",
+            mask_attr="log10ages",
+            mask_thresh=self.age_pivot,
+            mask_op="<",
+            fesc=self._fesc,
+        )
+        old_neb_cont = NebularContinuumEmission(
+            grid=self._grid,
+            label="old_nebular_continuum",
+            mask_attr="log10ages",
+            mask_thresh=self.age_pivot,
+            mask_op=">=",
+            fesc=self._fesc,
+        )
+
         young_nebular = NebularEmission(
             grid=self._grid,
             label="young_nebular",
@@ -673,6 +783,8 @@ class BimodalPacmanEmission(EmissionModel):
             mask_op="<",
             fesc=self._fesc,
             fesc_ly_alpha=self._fesc_ly_alpha,
+            linecont=young_line_cont,
+            nebular_continuum=young_neb_cont,
         )
         old_nebular = NebularEmission(
             grid=self._grid,
@@ -682,6 +794,8 @@ class BimodalPacmanEmission(EmissionModel):
             mask_op=">=",
             fesc=self._fesc,
             fesc_ly_alpha=self._fesc_ly_alpha,
+            linecont=old_line_cont,
+            nebular_continuum=old_neb_cont,
         )
         nebular = EmissionModel(
             label="nebular",
@@ -757,11 +871,11 @@ class BimodalPacmanEmission(EmissionModel):
             )
             old_intrinsic = EmissionModel(
                 label="old_intrinsic",
-                combine=(self.old_repocessed, self.old_transmitted),
+                combine=(self.old_reprocessed, self.old_transmitted),
             )
             intrinsic = EmissionModel(
                 label="intrinsic",
-                combine=(self.young_intrinsic, self.old_intrinsic),
+                combine=(young_intrinsic, old_intrinsic),
             )
         else:
             # Otherwise, intrinsic = reprocessed + escaped
@@ -904,6 +1018,7 @@ class BimodalPacmanEmission(EmissionModel):
             self.dust_emission_ism is not None
             and self.dust_emission_nebular is not None
         ):
+            # Get the young and old total emission
             young_total = EmissionModel(
                 label="young_total",
                 combine=(self.young_dust_emission, self.young_emergent),
@@ -912,12 +1027,122 @@ class BimodalPacmanEmission(EmissionModel):
                 label="old_total",
                 combine=(self.old_dust_emission, self.old_emergent),
             )
+
+            # Define the related models
+            related_models = [
+                self.young_incident,
+                self.old_incident,
+                self.incident,
+                self.young_transmitted,
+                self.old_transmitted,
+                self.transmitted,
+                self.young_escaped,
+                self.old_escaped,
+                self.escaped,
+                self.young_nebular,
+                self.old_nebular,
+                self.nebular,
+                self.young_reprocessed,
+                self.old_reprocessed,
+                self.reprocessed,
+                self.young_intrinsic,
+                self.old_intrinsic,
+                self.intrinsic,
+                self.young_attenuated_nebular,
+                self.young_attenuated_ism,
+                self.young_attenuated,
+                self.old_attenuated,
+                self.attenuated,
+                self.young_emergent,
+                self.old_emergent,
+                self.emergent,
+                self.young_dust_emission_nebular,
+                self.young_dust_emission_ism,
+                self.young_dust_emission,
+                self.old_dust_emission,
+                self.dust_emission,
+            ]
+
+            # Remove any None models
+            related_models = [m for m in related_models if m is not None]
+
+            # Call the parent constructor with everything we've made
             EmissionModel.__init__(
                 self,
                 grid=self._grid,
                 label="total",
                 combine=(young_total, old_total),
-                related_models=[
+                related_models=related_models,
+            )
+        else:
+            # OK, total = emergent so we need to handle whether
+            # emergent = attenuated + escaped or just attenuated
+            if self._fesc == 0.0:
+                # Get the young and old emergent emission
+                young_total = AttenuatedEmission(
+                    label="young_emergent",
+                    tau_v=self.tau_v_ism,
+                    dust_curve=self._dust_curve_ism,
+                    apply_dust_to=self.young_intrinsic,
+                )
+                old_total = AttenuatedEmission(
+                    label="old_emergent",
+                    tau_v=self.tau_v_ism,
+                    dust_curve=self._dust_curve_ism,
+                    apply_dust_to=self.old_intrinsic,
+                )
+
+                # Define the related models
+                related_models = [
+                    self.young_incident,
+                    self.old_incident,
+                    self.incident,
+                    self.young_transmitted,
+                    self.old_transmitted,
+                    self.transmitted,
+                    self.young_nebular,
+                    self.old_nebular,
+                    self.nebular,
+                    self.young_reprocessed,
+                    self.old_reprocessed,
+                    self.reprocessed,
+                    self.young_intrinsic,
+                    self.old_intrinsic,
+                    self.intrinsic,
+                    self.young_attenuated_nebular,
+                    self.young_attenuated_ism,
+                    self.young_attenuated,
+                    self.old_attenuated,
+                    self.attenuated,
+                ]
+
+                # Remove any None models
+                related_models = [m for m in related_models if m is not None]
+
+                # Call the parent constructor with everything we've made
+                EmissionModel.__init__(
+                    self,
+                    grid=self._grid,
+                    label="emergent",
+                    combine=(young_total, old_total),
+                    related_models=related_models,
+                )
+
+            else:
+                # Otherwise, emergent = attenuated + escaped
+
+                # Get the young and old emergent emission
+                young_total = EmissionModel(
+                    label="young_emergent",
+                    combine=(self.young_attenuated, self.young_escaped),
+                )
+                old_total = EmissionModel(
+                    label="old_emergent",
+                    combine=(self.old_attenuated, self.old_escaped),
+                )
+
+                # Define the related models
+                related_models = [
                     self.young_incident,
                     self.old_incident,
                     self.incident,
@@ -941,51 +1166,89 @@ class BimodalPacmanEmission(EmissionModel):
                     self.young_attenuated,
                     self.old_attenuated,
                     self.attenuated,
-                    self.young_emergent,
-                    self.old_emergent,
-                    self.emergent,
-                    self.young_dust_emission_nebular,
-                    self.young_dust_emission_ism,
-                    self.young_dust_emission,
-                    self.old_dust_emission,
-                    self.dust_emission,
-                ],
-            )
-        else:
-            # OK, total = emergent so we need to handle whether
-            # emergent = attenuated + escaped or just attenuated
-            if self._fesc == 0.0:
-                young_total = AttenuatedEmission(
-                    label="young_emergent",
-                    tau_v=self.tau_v_ism,
-                    dust_curve=self._dust_curve_ism,
-                    apply_dust_to=self.young_intrinsic,
-                )
-                old_total = AttenuatedEmission(
-                    label="old_emergent",
-                    tau_v=self.tau_v_ism,
-                    dust_curve=self._dust_curve_ism,
-                    apply_dust_to=self.old_intrinsic,
-                )
+                ]
+
+                # Remove any None models
+                related_models = [m for m in related_models if m is not None]
+
+                # Call the parent constructor with everything we've made
                 EmissionModel.__init__(
                     self,
                     grid=self._grid,
                     label="emergent",
                     combine=(young_total, old_total),
+                    related_models=related_models,
                 )
-            else:
-                # Otherwise, emergent = attenuated + escaped
-                young_total = EmissionModel(
-                    label="young_emergent",
-                    combine=(self.young_attenuated, self.young_escaped),
-                )
-                old_total = EmissionModel(
-                    label="old_emergent",
-                    combine=(self.old_attenuated, self.old_escaped),
-                )
-                EmissionModel.__init__(
-                    self,
-                    grid=self._grid,
-                    label="emergent",
-                    combine=(young_total, old_total),
-                )
+
+
+class CharlotFall2000(BimodalPacmanEmission):
+    """
+    The Charlot & Fall (2000) emission model.
+
+    This emission model is based on the Charlot & Fall (2000) model, which
+    describes the emission from a galaxy as a combination of emission from a
+    young stellar population and an old stellar population. The dust
+    attenuation for each population can be different, and dust emission can be
+    optionally included.
+
+    This model is a simplified version of the BimodalPacmanEmission model, so
+    in reality is just a wrapper around that model. The only difference is that
+    there is no option to specify an escape fraction.
+
+    Attributes:
+        grid (synthesizer.grid.Grid): The grid object.
+        tau_v_ism (float): The V-band optical depth for the ISM.
+        tau_v_nebular (float): The V-band optical depth for the nebular.
+        dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
+            ISM.
+        dust_curve_nebular (synthesizer.dust.DustCurve): The dust curve for the
+            nebular.
+        age_pivot (unyt.unyt_quantity): The age pivot between young and old
+            populations, expressed in terms of log10(age) in Myr.
+        dust_emission_ism (synthesizer.dust.DustEmissionModel): The dust
+            emission model for the ISM.
+        dust_emission_nebular (synthesizer.dust.DustEmissionModel): The dust
+            emission model for the nebular.
+    """
+
+    def __init__(
+        self,
+        grid,
+        tau_v_ism,
+        tau_v_nebular,
+        dust_curve_ism,
+        dust_curve_nebular,
+        age_pivot,
+        dust_emission_ism=None,
+        dust_emission_nebular=None,
+    ):
+        """
+        Initialize the PacmanEmission model.
+
+        Args:
+            grid (synthesizer.grid.Grid): The grid object.
+            tau_v_ism (float): The V-band optical depth for the ISM.
+            tau_v_nebular (float): The V-band optical depth for the nebular.
+            dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
+                ISM.
+            dust_curve_nebular (synthesizer.dust.DustCurve): The dust curve for
+                the nebular.
+            age_pivot (unyt.unyt_quantity): The age pivot between young and old
+                populations, expressed in terms of log10(age) in Myr.
+            dust_emission_ism (synthesizer.dust.DustEmissionModel): The dust
+                emission model for the ISM.
+            dust_emission_nebular (synthesizer.dust.DustEmissionModel): The
+                dust emission model for the nebular.
+        """
+        # Call the parent constructor to intialise the model
+        BimodalPacmanEmission.__init__(
+            self,
+            grid,
+            tau_v_ism,
+            tau_v_nebular,
+            dust_curve_ism,
+            dust_curve_nebular,
+            age_pivot,
+            dust_emission_ism,
+            dust_emission_nebular,
+        )

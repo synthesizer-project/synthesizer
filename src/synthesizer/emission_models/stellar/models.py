@@ -268,12 +268,14 @@ class NebularEmission(EmissionModel):
         if fesc_ly_alpha < 1.0:
             # Make a line continuum model if we need one
             if linecont is None:
-                linecont = LineContinuumEmission(grid=grid, fesc=fesc_ly_alpha)
+                linecont = LineContinuumEmission(
+                    grid=grid, fesc=fesc_ly_alpha, **kwargs
+                )
 
             # Make a nebular continuum model if we need one
             if nebular_continuum is None:
                 nebular_continuum = NebularContinuumEmission(
-                    grid=grid, fesc=fesc
+                    grid=grid, fesc=fesc, **kwargs
                 )
 
             EmissionModel.__init__(
