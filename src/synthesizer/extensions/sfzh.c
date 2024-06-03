@@ -39,7 +39,7 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  int ndim = 0, npart = 0;
+  int ndim, npart;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;

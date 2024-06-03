@@ -39,8 +39,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  int ndim = 0;
-  int npart = 0, nlam = 0;
+  int ndim, npart, nlam;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_fesc;

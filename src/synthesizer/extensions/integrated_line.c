@@ -39,8 +39,7 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  int ndim = 0;
-  int npart = 0;
+  int ndim, npart;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_lines, *np_grid_continuum;
   PyArrayObject *np_fesc;

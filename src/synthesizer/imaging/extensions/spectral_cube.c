@@ -38,8 +38,8 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  const double res = 0.0;
-  const int npix_x = 0, npix_y = 0, npart = 0, nlam = 0;
+  const double res;
+  const int npix_x, npix_y, npart, nlam;
   PyArrayObject *np_sed_values;
   PyArrayObject *np_xs, *np_ys;
 
@@ -135,8 +135,8 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  double res = 0.0, threshold = 0.0;
-  int npix_x = 0, npix_y = 0, npart = 0, nlam = 0, kdim = 0;
+  double res, threshold;
+  int npix_x, npix_y, npart, nlam, kdim;
   PyArrayObject *np_sed_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys;
 
