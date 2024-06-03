@@ -38,8 +38,8 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  const double res;
-  const int npix_x, npix_y, npart, nlam;
+  double res;
+  int npix_x, npix_y, npart, nlam;
   PyArrayObject *np_sed_values;
   PyArrayObject *np_xs, *np_ys;
 
