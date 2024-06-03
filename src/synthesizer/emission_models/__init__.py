@@ -1,5 +1,5 @@
 from synthesizer.emission_models.base_model import EmissionModel
-from synthesizer.emission_models.models import (
+from synthesizer.emission_models.stellar.models import (
     IncidentEmission,
     LineContinuumEmission,
     TransmittedEmission,
@@ -12,10 +12,10 @@ from synthesizer.emission_models.models import (
     DustEmission,
     TotalEmission,
 )
-from synthesizer.emission_models.charlot_fall_model import CharlotFall2000
-from synthesizer.emission_models.pacman_model import (
+from synthesizer.emission_models.stellar.pacman_model import (
     PacmanEmission,
     BimodalPacmanEmission,
+    CharlotFall2000,
 )
 
 PREMADE_MODELS = [
@@ -30,7 +30,7 @@ PREMADE_MODELS = [
     "EmergentEmission",
     "DustEmission",
     "TotalEmission",
-    "CharlotFall2000",
     "PacmanEmission",
     "BimodalPacmanEmission",
+    "CharlotFall2000",
 ]
