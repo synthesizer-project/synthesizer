@@ -48,7 +48,7 @@ struct cell {
 };
 
 /**
- * @brief Computes the line of sight metal surface densities when there are a
+ * @brief Computes the line of sight dust surface densities when there are a
  *        small number of gas particles. No point building a cell structure
  *        with all the overhead when looping is sub second!
  *
@@ -102,7 +102,7 @@ void low_mass_los_loop(const double *star_pos, const double *gas_pos,
       int index = kdim * q;
       double kvalue = kernel[index];
 
-      /* Finally, compute the metal surface density itself. */
+      /* Finally, compute the dust surface density itself. */
       los_dustsds[istar] += dtm * mass * met / (sml * sml) * kvalue;
     }
   }
@@ -415,7 +415,7 @@ double calculate_los_recursive(struct cell *c, const double star_x,
       int index = kdim * q;
       double kvalue = kernel[index];
 
-      /* Finally, compute the metal surface density itself. */
+      /* Finally, compute the dust surface density itself. */
       los_dustsds += dtm * mass * met / (sml * sml) * kvalue;
     }
   }
@@ -423,7 +423,7 @@ double calculate_los_recursive(struct cell *c, const double star_x,
 }
 
 /**
- * @brief Computes the line of sight metal surface densities for each of the
+ * @brief Computes the line of sight dust surface densities for each of the
  *        stars passed to this function.
  *
  * @param
