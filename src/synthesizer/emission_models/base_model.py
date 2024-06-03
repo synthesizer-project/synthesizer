@@ -108,6 +108,7 @@ class EmissionModel:
         mask_op=None,
         fesc=None,
         related_models=None,
+        component="stellar",
         **kwargs,
     ):
         """
@@ -165,12 +166,18 @@ class EmissionModel:
                 a model that is connected somwhere within the model tree but
                 is required in the construction of the "root" model
                 encapulated by self.
+            component (str):
+                The component this emission model acts on. Default is
+                "stellar".
         """
         # What is the key for the spectra that will be produced?
         self.label = label
 
         # Attach the grid
         self._grid = grid
+
+        # Attach what component we are working with
+        self._component = component
 
         # What base key will we be extracting? (can be None if we're applying
         # a dust curve to an existing spectra)
@@ -288,6 +295,11 @@ class EmissionModel:
     def combine(self):
         """Get the models that will be combined."""
         return self._combine
+
+    @property
+    def component(self):
+        """Get the component this emission model acts on."""
+        return self._component
 
     @property
     def fesc(self):
