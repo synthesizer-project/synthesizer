@@ -1,5 +1,5 @@
 import numpy as np
-from astropy.cosmology import FlatLambdaCDM
+from astropy.cosmology import Planck15
 from tqdm import tqdm
 from unyt import Msun, kpc, yr
 
@@ -72,9 +72,8 @@ def load_IllustrisTNG(
 
     # Get header information
     header = il.groupcat.loadHeader(directory, snap_number)
-    scale_factor = header["Time"]
-    redshift = header["Redshift"]
-    Om0 = header["Omega0"]
+    scale_factor = header["Time"].astype(np.float32)
+    redshift = header["Redshift"].astype(np.float32)
     h = header["HubbleParam"]
 
     if verbose:
@@ -158,7 +157,7 @@ def load_IllustrisTNG(
                 hsml *= scale_factor
 
             # convert formation times to ages
-            cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
+            cosmo = Planck15
             universe_age = cosmo.age(1.0 / scale_factor - 1)
             _ages = cosmo.age(1.0 / form_time - 1)
             ages = (universe_age - _ages).value * 1e9  # yr
