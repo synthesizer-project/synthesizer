@@ -384,7 +384,7 @@ tophats = {
 fc = FilterCollection(filter_codes=fs, tophat_dict=tophats, new_lam=grid.lam)
 
 # Define the number of galaxies
-ngals = np.logspace(1, 4, 10, dtype=int)
+ngals = np.logspace(1, 2, 10, dtype=int)
 
 # Define lists to hold the runtimes
 traditional_times = []
