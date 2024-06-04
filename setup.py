@@ -100,16 +100,44 @@ def check_openmp(compiler):
         "win32": ["/openmp"],
     }
 
+    test_program = """
+    #include <omp.h>
+    int main() {
+        int nthreads;
+        #pragma omp parallel
+        {
+            nthreads = omp_get_num_threads();
+        }
+        return (nthreads > 0) ? 0 : 1;
+    }
+    """
+
     if sys.platform in openmp_flags:
         test_flags = openmp_flags[sys.platform]
         with tempfile.NamedTemporaryFile("w", suffix=".c") as f:
-            f.write("#include <omp.h>\nint main() { return 0; }\n")
+            f.write(test_program)
             try:
                 compiler.compile([f.name], extra_postargs=test_flags)
+                compiler.link_executable(
+                    [f.name], "test_openmp", extra_postargs=test_flags
+                )
+                os.remove("test_openmp")
                 return True, test_flags
             except CompileError:
                 return False, []
     return False, []
+
+
+def add_openmp_flags(compile_flags, link_args):
+    if sys.platform == "darwin":
+        compile_flags.extend(["-Xpreprocessor", "-fopenmp"])
+        link_args.append("-lomp")
+    elif sys.platform == "unix":
+        compile_flags.append("-fopenmp")
+        link_args.append("-fopenmp")
+    elif sys.platform == "win32":
+        compile_flags.append("/openmp")
+    return compile_flags, link_args
 
 
 # Get environment variables we'll need for optional features and flags
@@ -182,8 +210,7 @@ compiler = new_compiler()
 openmp_supported, openmp_flags = check_openmp(compiler)
 if openmp_supported:
     logger.info("### OpenMP is supported.")
-    compile_flags.extend(openmp_flags)
-    link_args.extend(openmp_flags)
+    compile_flags, link_args = add_openmp_flags(compile_flags, link_args)
     compile_flags.append("-DWITH_OPENMP")
 else:
     logger.info("### OpenMP is not supported.")
