@@ -360,6 +360,11 @@ class Stars(Particles, StarsComponent):
         grid_props = tuple(grid_props)
         part_props = tuple(part_props)
 
+        # Warn the user if the method is unrecognised, but default to cic
+        if grid_assignment_method not in ["cic", "ngp"]:
+            warn("Unrecognised grid assignment method. Defaulting to CIC.")
+            grid_assignment_method = "cic"
+
         return (
             grid_spectra,
             grid_props,

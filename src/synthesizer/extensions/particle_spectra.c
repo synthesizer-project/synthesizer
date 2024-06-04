@@ -4,6 +4,7 @@
  *****************************************************************************/
 /* C includes */
 #include <math.h>
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -387,7 +388,8 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     part_props[idim] = part_arr;
   }
 
-  /* Loop over particles. */
+/* Loop over particles. */
+#pragma omp parallel for
   for (int p = 0; p < npart; p++) {
 
     /* Get this particle's mass. */

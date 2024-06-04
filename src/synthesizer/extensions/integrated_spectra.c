@@ -4,6 +4,7 @@
  *****************************************************************************/
 /* C includes */
 #include <math.h>
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -176,6 +177,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   }
 
   /* Loop over particles. */
+#pragma omp parallel for
   for (int p = 0; p < npart; p++) {
 
     /* Get this particle's mass. */
@@ -188,14 +190,6 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
                       fesc[p]);
     } else if (strcmp(method, "ngp") == 0) {
       weight_loop_ngp(grid_props, part_props, mass, grid_weights, dims, ndim, p,
-                      fesc[p]);
-    } else {
-      /* Only print this warning once! */
-      if (p == 0)
-        printf(
-            "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
-            method);
-      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim, p,
                       fesc[p]);
     }
 

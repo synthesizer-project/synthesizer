@@ -2,6 +2,7 @@
  * C functions for calculating the value of a stellar particles SPH kernel
  *****************************************************************************/
 #include <math.h>
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -94,8 +95,17 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   }
   bzero(img, npix * sizeof(double));
 
-  /* Loop over positions including the sed */
+  /* Intialise a flag to track if we failed to allocate. This is necessary
+   * because we can't return NULL from within a parallel region. */
+  int failed = 0;
+
+/* Loop over positions including the sed */
+#pragma omp parallel for
   for (int ind = 0; ind < npart; ind++) {
+
+    /* Have we failed on the last loop? */
+    if (failed)
+      continue;
 
     /* Get this particles smoothing length and position */
     const double smooth_length = smoothing_lengths[ind];
@@ -115,9 +125,8 @@ PyObject *make_img(PyObject *self, PyObject *args) {
     /* Create an empty kernel for this particle. */
     double *part_kernel = malloc(kernel_cdim * kernel_cdim * sizeof(double));
     if (part_kernel == NULL) {
-      PyErr_SetString(PyExc_MemoryError,
-                      "Failed to allocate memory for part_kernel.");
-      return NULL;
+      failed = 1;
+      continue;
     }
     bzero(part_kernel, kernel_cdim * kernel_cdim * sizeof(double));
 
@@ -199,6 +208,13 @@ PyObject *make_img(PyObject *self, PyObject *args) {
     }
 
     free(part_kernel);
+  }
+
+  /* Check if we failed to allocate memory. */
+  if (failed) {
+    free(img);
+    PyErr_SetString(PyExc_MemoryError, "Failedto allocate memory for img.");
+    return NULL;
   }
 
   /* Construct a numpy python array to return the IFU. */
