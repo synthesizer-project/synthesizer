@@ -227,6 +227,53 @@ class Particles:
 
         return self.particle_photo_fluxes
 
+    def get_mask(self, attr, thresh, op, mask=None):
+        """
+        Create a mask using a threshold and attribute on which to mask.
+
+        Args:
+            attr (str)
+                The attribute to derive the mask from.
+            thresh (float)
+                The threshold value.
+            op (str)
+                The operation to apply. Can be '<', '>', '<=', '>=', "==",
+                or "!=".
+            mask (array)
+                Optionally, a mask to combine with the new mask.
+
+        Returns:
+            mask (array)
+                The mask array.
+        """
+        # Get the attribute
+        attr = getattr(self, attr)
+
+        # Apply the operator
+        if op == ">":
+            new_mask = attr > thresh
+        elif op == "<":
+            new_mask = attr < thresh
+        elif op == ">=":
+            new_mask = attr >= thresh
+        elif op == "<=":
+            new_mask = attr <= thresh
+        elif op == "==":
+            new_mask = attr == thresh
+        elif op == "!=":
+            new_mask = attr != thresh
+        else:
+            raise exceptions.InconsistentArguments(
+                "Masking operation must be '<', '>', '<=', '>=', '==', or "
+                f"'!=', not {op}"
+            )
+
+        # Combine with the existing mask
+        if mask is not None:
+            new_mask = np.logical_and(new_mask, mask)
+
+        return new_mask
+
 
 class CoordinateGenerator:
     """
@@ -294,50 +341,3 @@ class CoordinateGenerator:
         com /= total_mass
 
         self.center = com
-
-    def get_mask(self, attr, thresh, op, mask=None):
-        """
-        Create a mask using a threshold and attribute on which to mask.
-
-        Args:
-            attr (str)
-                The attribute to derive the mask from.
-            thresh (float)
-                The threshold value.
-            op (str)
-                The operation to apply. Can be '<', '>', '<=', '>=', "==",
-                or "!=".
-            mask (array)
-                Optionally, a mask to combine with the new mask.
-
-        Returns:
-            mask (array)
-                The mask array.
-        """
-        # Get the attribute
-        attr = getattr(self, attr)
-
-        # Apply the operator
-        if op == ">":
-            new_mask = attr > thresh
-        elif op == "<":
-            new_mask = attr < thresh
-        elif op == ">=":
-            new_mask = attr >= thresh
-        elif op == "<=":
-            new_mask = attr <= thresh
-        elif op == "==":
-            new_mask = attr == thresh
-        elif op == "!=":
-            new_mask = attr != thresh
-        else:
-            raise exceptions.InconsistentArguments(
-                "Masking operation must be '<', '>', '<=', '>=', '==', or "
-                f"'!=', not {op}"
-            )
-
-        # Combine with the existing mask
-        if mask is not None:
-            new_mask = np.logical_and(new_mask, mask)
-
-        return new_mask
