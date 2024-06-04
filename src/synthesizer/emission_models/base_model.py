@@ -1597,7 +1597,7 @@ class EmissionModel:
             component_flag = "blackhole"
         else:
             raise exceptions.InconsistentArguments(
-                "Component must be either a Stars or BlackHole instance."
+                "Component must be either a Stars or BlackHoles instance."
             )
 
         # Apply any overides we have
