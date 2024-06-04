@@ -1662,9 +1662,7 @@ class EmissionModel:
 
                 # Combine the spectra handling the possible mask
                 for combine_model in this_model.combine:
-                    spectra[label]._lnu[this_mask] += spectra[
-                        combine_model.label
-                    ]._lnu[this_mask]
+                    spectra[label]._lnu += spectra[combine_model.label]._lnu
 
             elif this_model._is_dust_attenuating:
                 # Unpack the tau_v value unpacking any attributes we need
