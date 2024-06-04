@@ -38,6 +38,10 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.parametric import BlackHole as ParametricBlackHole
+from synthesizer.parametric import Stars as ParametricStars
+from synthesizer.particle import BlackHoles as ParticleBlackHoles
+from synthesizer.particle import Stars as ParticleStars
 from synthesizer.sed import Sed
 
 
@@ -1586,6 +1590,16 @@ class EmissionModel:
         # only their reference)
         emission_model = copy.copy(self)
 
+        # Get the component flag
+        if isinstance(component, (ParticleStars, ParametricStars)):
+            component_flag = "stellar"
+        elif isinstance(component, (ParticleBlackHoles, ParametricBlackHole)):
+            component_flag = "blackhole"
+        else:
+            raise exceptions.InconsistentArguments(
+                "Component must be either a Stars or BlackHole instance."
+            )
+
         # Apply any overides we have
         self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
 
@@ -1596,6 +1610,10 @@ class EmissionModel:
         for label, spectra_key in emission_model._extract_keys.items():
             # Get this model
             this_model = emission_model._models[label]
+
+            # Skip models for a different component
+            if this_model.component != component_flag:
+                continue
 
             # Do we have to define a mask?
             this_mask = None
@@ -1622,6 +1640,10 @@ class EmissionModel:
         for label in emission_model._bottom_to_top:
             # Get this model
             this_model = emission_model._models[label]
+
+            # Skip models for a different component
+            if this_model.component != component_flag:
+                continue
 
             # Do we have to define a mask?
             this_mask = None

@@ -867,11 +867,11 @@ class BimodalPacmanEmission(EmissionModel):
         if self._fesc == 0.0:
             young_intrinsic = EmissionModel(
                 label="young_intrinsic",
-                combine=(self.young_reprocessed, self.young_transmitted),
+                combine=(self.young_nebular, self.young_transmitted),
             )
             old_intrinsic = EmissionModel(
                 label="old_intrinsic",
-                combine=(self.old_reprocessed, self.old_transmitted),
+                combine=(self.old_nebular, self.old_transmitted),
             )
             intrinsic = EmissionModel(
                 label="intrinsic",
