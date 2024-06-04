@@ -97,8 +97,8 @@ def check_openmp(compiler):
         Tuple (bool, list): True if OpenMP is supported, and the OpenMP flags.
     """
     openmp_flags = {
-        "unix": ["-fopenmp", "-lgomp"],
-        "darwin": ["-Xpreprocessor", "-fopenmp", "-lomp"],
+        "unix": ["-fopenmp"],
+        "darwin": ["-Xpreprocessor", "-fopenmp"],
         "win32": ["/openmp"],
     }
 
@@ -120,10 +120,6 @@ def check_openmp(compiler):
             f.write(test_program)
             try:
                 compiler.compile([f.name], extra_postargs=test_flags)
-                compiler.link_executable(
-                    [f.name], "test_openmp", extra_postargs=test_flags
-                )
-                os.remove("test_openmp")
                 return True, test_flags
             except CompileError:
                 return False, []
