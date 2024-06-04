@@ -59,8 +59,10 @@ def filter_compiler_flags(compiler, flags):
             try:
                 compiler.compile([f.name], extra_postargs=[flag])
                 valid_flags.append(flag)
-            except CompileError:
-                logger.info(f"### Compiler flag {flag} is not supported.")
+            except CompileError as e:
+                logger.info(
+                    f"### Compiler flag {flag} is not supported. ({e}))"
+                )
     return valid_flags
 
 
@@ -95,8 +97,8 @@ def check_openmp(compiler):
         Tuple (bool, list): True if OpenMP is supported, and the OpenMP flags.
     """
     openmp_flags = {
-        "unix": ["-fopenmp"],
-        "darwin": ["-Xpreprocessor", "-fopenmp"],
+        "unix": ["-fopenmp", "-lgomp"],
+        "darwin": ["-Xpreprocessor", "-fopenmp", "-lomp"],
         "win32": ["/openmp"],
     }
 
@@ -134,7 +136,7 @@ def add_openmp_flags(compile_flags, link_args):
         link_args.append("-lomp")
     elif sys.platform == "unix":
         compile_flags.append("-fopenmp")
-        link_args.append("-fopenmp")
+        link_args.append("-lgomp")
     elif sys.platform == "win32":
         compile_flags.append("/openmp")
     return compile_flags, link_args
