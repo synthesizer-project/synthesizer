@@ -6,14 +6,8 @@
 
 static PyObject *check_openmp(PyObject *self, PyObject *args) {
 #ifdef WITH_OPENMP
-#pragma omp parallel
-  {
-#pragma omp single
-    { printf("OpenMP is enabled\n"); }
-  }
   Py_RETURN_TRUE;
 #else
-  printf("OpenMP is not enabled\n");
   Py_RETURN_FALSE;
 #endif
 }
