@@ -10,12 +10,14 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.cosmology import Planck15 as cosmo
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.emission_models import (
     EmissionModel,
     IncidentEmission,
     ReprocessedEmission,
 )
+from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
@@ -170,7 +172,7 @@ def make_galaxies(ngal, sfh, metal_dist, log10ages, metallicities):
     return galaxies
 
 
-def get_spectra_traditional(gals, grid, age_pivot=10.0 * Myr):
+def get_spectra_traditional(gals, grid, filters, age_pivot=10.0 * Myr):
     """
     Get the spectra for a galaxy.
 
@@ -182,6 +184,8 @@ def get_spectra_traditional(gals, grid, age_pivot=10.0 * Myr):
             A list of galaxy objects.
         grid (Grid)
             The grid object to use for the emission model.
+        filters (FilterCollection)
+            The filter collection object to use.
         age_pivot (unyt_quantity)
             The age to pivot the spectra at for the traditional method.
     """
@@ -204,8 +208,13 @@ def get_spectra_traditional(gals, grid, age_pivot=10.0 * Myr):
             dust_curve=PowerLaw(slope=-1), tau_v=0.33
         )
 
+        spec["screen"].get_fnu(cosmo, z=1)
 
-def get_spectra_single_sed(gals, grid, age_pivot=10.0 * Myr):
+        spec["screen"].get_photo_fluxes(filters)
+        spec["screen"].get_photo_luminosities(filters)
+
+
+def get_spectra_single_sed(gals, grid, filters, age_pivot=10.0 * Myr):
     """
     Get the spectra for a galaxy.
 
@@ -217,10 +226,11 @@ def get_spectra_single_sed(gals, grid, age_pivot=10.0 * Myr):
             A list of galaxy objects.
         grid (Grid)
             The grid object to use for the emission model.
+        filters (FilterCollection)
+            The filter collection object to use.
         age_pivot (unyt_quantity)
             The age to pivot the spectra at for the traditional method.
     """
-    seds = []
     for gal in gals:
         spec = {}
 
@@ -238,15 +248,22 @@ def get_spectra_single_sed(gals, grid, age_pivot=10.0 * Myr):
         )
 
         # Simple screen model
-        seds.append(young_reprocessed_spec + old_spec)
+        spec["intrinsic"] = young_reprocessed_spec + old_spec
+
+        gal.stars.spectra["intrinsic"] = spec["intrinsic"]
 
     # Combine seds
-    sed = combine_list_of_seds(seds)
+    sed = combine_list_of_seds(
+        [gal.stars.spectra["intrinsic"] for gal in gals]
+    )
 
     sed.apply_attenuation(dust_curve=PowerLaw(slope=-1), tau_v=0.33)
+    sed.get_fnu(cosmo, z=1)
+    sed.get_photo_fluxes(filters)
+    sed.get_photo_luminosities(filters)
 
 
-def get_spectra_emission_model(gals, model):
+def get_spectra_emission_model(gals, model, filters):
     """
     Get the spectra for a galaxy using an emission model.
 
@@ -258,9 +275,12 @@ def get_spectra_emission_model(gals, model):
     """
     for gal in gals:
         gal.stars.get_spectra(model)
+        gal.stars.spectra["intrinsic"].get_fnu(cosmo, z=1)
+        gal.stars.spectra["intrinsic"].get_photo_fluxes(filters)
+        gal.stars.spectra["intrinsic"].get_photo_luminosities(filters)
 
 
-def get_spectra_emission_model_single_sed(gals, model):
+def get_spectra_emission_model_single_sed(gals, model, filters):
     """
     Get the spectra for a galaxy combining an emission model with a single sed.
 
@@ -270,15 +290,19 @@ def get_spectra_emission_model_single_sed(gals, model):
         model (EmissionModel)
             The emission model to use.
     """
-    seds = []
     for gal in gals:
         gal.stars.get_spectra(model)
-        seds.append(gal.stars.spectra["intrinsic"])
+        gal.stars.spectra["intrinsic"]
 
     # Combine seds
-    sed = combine_list_of_seds(seds)
+    sed = combine_list_of_seds(
+        [gal.stars.spectra["intrinsic"] for gal in gals]
+    )
 
     sed.apply_attenuation(dust_curve=PowerLaw(slope=-1), tau_v=0.33)
+    sed.get_fnu(cosmo, z=1)
+    sed.get_photo_fluxes(filters)
+    sed.get_photo_luminosities(filters)
 
 
 # Define the grid
@@ -298,6 +322,67 @@ metal_dist = ZDist.DeltaConstant(**Z_p)
 sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation
 
+
+# Define a filter collection object
+fs = [f"SLOAN/SDSS.{f}" for f in ["u", "g", "r", "i", "z"]]
+fs += ["GALEX/GALEX.FUV", "GALEX/GALEX.NUV"]
+fs += [f"Generic/Johnson.{f}" for f in ["U", "B", "V", "J"]]
+fs += [f"2MASS/2MASS.{f}" for f in ["J", "H", "Ks"]]
+fs += [
+    f"HST/ACS_HRC.{f}" for f in ["F435W", "F606W", "F775W", "F814W", "F850LP"]
+]
+fs += [
+    f"HST/WFC3_IR.{f}"
+    for f in ["F098M", "F105W", "F110W", "F125W", "F140W", "F160W"]
+]
+
+fs += [
+    f"JWST/NIRCam.{f}"
+    for f in [
+        "F070W",
+        "F090W",
+        "F115W",
+        "F140M",
+        "F150W",
+        "F162M",
+        "F182M",
+        "F200W",
+        "F210M",
+        "F250M",
+        "F277W",
+        "F300M",
+        "F356W",
+        "F360M",
+        "F410M",
+        "F430M",
+        "F444W",
+        "F460M",
+        "F480M",
+    ]
+]
+
+fs += [
+    f"JWST/MIRI.{f}"
+    for f in [
+        "F1000W",
+        "F1130W",
+        "F1280W",
+        "F1500W",
+        "F1800W",
+        "F2100W",
+        "F2550W",
+        "F560W",
+        "F770W",
+    ]
+]
+
+tophats = {
+    "UV1500": {"lam_eff": 1500, "lam_fwhm": 300},
+    "UV2800": {"lam_eff": 2800, "lam_fwhm": 300},
+}
+
+fc = FilterCollection(filter_codes=fs, tophat_dict=tophats, new_lam=grid.lam)
+
 # Define the number of galaxies
 ngals = np.logspace(1, 4, 10, dtype=int)
 
@@ -315,22 +400,22 @@ for ngal in ngals:
 
     # Time each method
     start_time = time.time()
-    get_spectra_traditional(gals, grid)
+    get_spectra_traditional(gals, grid, fc)
     traditional_times.append(time.time() - start_time)
     print(f"Traditional method took {time.time() - start_time:.2f} seconds")
 
     start_time = time.time()
-    get_spectra_single_sed(gals, grid)
+    get_spectra_single_sed(gals, grid, fc)
     single_sed_times.append(time.time() - start_time)
     print(f"Single sed method took {time.time() - start_time:.2f} seconds")
 
     start_time = time.time()
-    get_spectra_emission_model(gals, screen_model)
+    get_spectra_emission_model(gals, screen_model, fc)
     screen_model_times.append(time.time() - start_time)
     print(f"Screen model method took {time.time() - start_time:.2f} seconds")
 
     start_time = time.time()
-    get_spectra_emission_model_single_sed(gals, intrinsic_model)
+    get_spectra_emission_model_single_sed(gals, intrinsic_model, fc)
     single_sed_model_times.append(time.time() - start_time)
     print(
         f"Single sed model method took {time.time() - start_time:.2f} seconds"
