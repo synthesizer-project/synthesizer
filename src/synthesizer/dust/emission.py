@@ -26,6 +26,7 @@ from unyt.dimensions import temperature as temperature_dim
 from synthesizer import exceptions
 from synthesizer.sed import Sed
 from synthesizer.utils import planck
+from synthesizer.warnings import warn
 
 
 class EmissionBase:
@@ -447,25 +448,21 @@ class IR_templates:
         umax = 1e7
 
         if (self.gamma is None) or (self.umin is None) or (self.alpha == 2.0):
-            if self.verbose:
-                print(
-                    "Gamma, Umin or alpha for DL07 model not provided, "
-                    "using default values"
-                )
-                print(
-                    "Computing required values using Magdis+2012 "
-                    "stacking results"
-                )
+            warn(
+                "Gamma, Umin or alpha for DL07 model not provided, "
+                "using default values"
+            )
+            warn(
+                "Computing required values using Magdis+2012 "
+                "stacking results"
+            )
 
             self.u_avg = u_mean_magdis12(
                 (self.mdust / Msun).value, (self.ldust / Lsun).value, self.p0
             )
 
             if self.gamma is None:
-                if self.verbose:
-                    print("Gamma not provided")
-                    print("Choosing default gamma value as 5%")
-
+                warn("Gamma not provided, choosing default gamma value as 5%")
                 self.gamma = 0.05
 
             func = partial(
@@ -486,7 +483,7 @@ class IR_templates:
         self.umin_id = umin_id
         self.alpha_id = alpha_id
 
-    def get_spectra(self, _lam, dust_components=False, **kwargs):
+    def get_spectra(self, _lam, dust_components=False, verbose=True, **kwargs):
         """
         Returns the lnu for the provided wavelength grid
 
@@ -500,7 +497,8 @@ class IR_templates:
         """
 
         if self.template == "DL07":
-            print("Using the Draine & Li 2007 dust models")
+            if verbose:
+                print("Using the Draine & Li 2007 dust models")
             self.dl07(self.grid)
         else:
             raise exceptions.UnimplementedFunctionality(
