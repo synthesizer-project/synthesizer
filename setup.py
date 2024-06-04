@@ -27,46 +27,20 @@ Example:
 import logging
 import os
 import sys
-import tempfile
 from datetime import datetime
 from distutils.ccompiler import new_compiler
 
 import numpy as np
 from setuptools import Extension, setup
-from setuptools.errors import CompileError
 
 
-def filter_compiler_flags(compiler, flags):
-    """
-    Filter compiler flags to remove any that aren't compatible.
-
-    We could use the compiler.has_flag() method to check if a flag is
-    supported, but this method is not implemented for all compilers. Instead,
-    we compile a simple C program with each flag and check if it compiles.
-
-    We could just let the build fail if a flag is not supported, but this is
-    more user-friendly and ensure Synthesizer will still build without placing
-    a compilation hurdle in front of an inexperienced user.
-
-    Args:
-        compiler: The compiler instance.
-        flags: A list of compiler flags to test.
-    """
-    valid_flags = []
-    with tempfile.NamedTemporaryFile("w", suffix=".c") as f:
-        f.write("int main() { return 0; }\n")
-        for flag in flags:
-            try:
-                compiler.compile([f.name], extra_postargs=[flag])
-                valid_flags.append(flag)
-            except CompileError as e:
-                logger.info(
-                    f"### Compiler flag {flag} is not supported. ({e}))"
-                )
-    return valid_flags
-
-
-def create_extension(name, sources, compile_flags=[], links=[]):
+def create_extension(
+    name,
+    sources,
+    compile_flags=[],
+    links=[],
+    include_dirs=[],
+):
     """
     Create a C extension module.
 
@@ -81,67 +55,17 @@ def create_extension(name, sources, compile_flags=[], links=[]):
     return Extension(
         name,
         sources=sources,
-        include_dirs=[np.get_include()],
+        include_dirs=[np.get_include()] + include_dirs,
         extra_compile_args=compile_flags,
         extra_link_args=links,
     )
 
 
-def check_openmp(compiler):
-    """
-    Check if OpenMP is supported by the compiler.
-
-    Args:
-        compiler: The compiler instance.
-    Returns:
-        Tuple (bool, list): True if OpenMP is supported, and the OpenMP flags.
-    """
-    openmp_flags = {
-        "unix": ["-fopenmp"],
-        "darwin": ["-Xpreprocessor", "-fopenmp"],
-        "win32": ["/openmp"],
-    }
-
-    test_program = """
-    #include <omp.h>
-    int main() {
-        int nthreads;
-        #pragma omp parallel
-        {
-            nthreads = omp_get_num_threads();
-        }
-        return (nthreads > 0) ? 0 : 1;
-    }
-    """
-
-    if sys.platform in openmp_flags:
-        test_flags = openmp_flags[sys.platform]
-        with tempfile.NamedTemporaryFile("w", suffix=".c") as f:
-            f.write(test_program)
-            try:
-                compiler.compile([f.name], extra_postargs=test_flags)
-                return True, test_flags
-            except CompileError:
-                return False, []
-    return False, []
-
-
-def add_openmp_flags(compile_flags, link_args):
-    if sys.platform == "darwin":
-        compile_flags.extend(["-Xpreprocessor", "-fopenmp"])
-        link_args.append("-lomp")
-    elif sys.platform == "unix":
-        compile_flags.append("-fopenmp")
-        link_args.append("-lgomp")
-    elif sys.platform == "win32":
-        compile_flags.append("/openmp")
-    return compile_flags, link_args
-
-
 # Get environment variables we'll need for optional features and flags
 CFLAGS = os.environ.get("CFLAGS", "")
 LDFLAGS = os.environ.get("LDFLAGS", "")
-WITH_DEBUGGING_CHECKS = os.environ.get("WITH_DEBUGGING_CHECKS", "0")
+WITH_OPENMP = os.environ.get("WITH_OPENMP", "")
+WITH_DEBUGGING_CHECKS = "ENABLE_DEBUGGING_CHECKS" in os.environ
 
 # Define the log file
 LOG_FILE = "build_synth.log"
@@ -176,16 +100,34 @@ logger.info(
 # Log the system platform
 logger.info(f"### System platform: {sys.platform}")
 
+# Report the environment variables
+logger.info(f"### CFLAGS: {CFLAGS}")
+logger.info(f"### LDFLAGS: {LDFLAGS}")
+logger.info(f"### WITH_OPENMP: {WITH_OPENMP}")
+if WITH_DEBUGGING_CHECKS:
+    logger.info(f"### WITH_DEBUGGING_CHECKS: {WITH_DEBUGGING_CHECKS}")
+
 # Determine the platform-specific default compiler and linker flags
 if sys.platform == "darwin":  # macOS
-    default_compile_flags = ["-std=c99", "-Wall", "-O3", "-ffast-math", "-g"]
-    default_link_args = []
+    default_compile_flags = [
+        "-std=c99",
+        "-Wall",
+        "-O3",
+        "-ffast-math",
+        "-g",
+        "-fopenmp",
+    ]
+    default_link_args = ["-lomp"]
 elif sys.platform == "win32":  # windows
-    default_compile_flags = ["/std:c99", "/Ox", "/fp:fast"]
+    default_compile_flags = ["/std:c99", "/Ox", "/fp:fast", "/openmp"]
     default_link_args = []
 else:  # Unix-like systems (Linux)
     default_compile_flags = ["-std=c99", "-Wall", "-O3", "-ffast-math", "-g"]
-    default_link_args = []
+    default_link_args = ["-lgomp"]
+
+# Add OpenMP flags if requested
+if WITH_OPENMP == "1":
+    default_compile_flags.append("-DWITH_OPENMP")
 
 # Get user specified flags
 compile_flags = CFLAGS.split()
@@ -203,20 +145,6 @@ if WITH_DEBUGGING_CHECKS == "1":
 
 # Create a compiler instance
 compiler = new_compiler()
-
-# Check for OpenMP support
-openmp_supported, openmp_flags = check_openmp(compiler)
-if openmp_supported:
-    logger.info("### OpenMP is supported.")
-    compile_flags, link_args = add_openmp_flags(compile_flags, link_args)
-    compile_flags.append("-DWITH_OPENMP")
-else:
-    logger.info("### OpenMP is not supported.")
-
-# Filter the flags
-logger.info("### Testing extra compile args")
-compile_flags = filter_compiler_flags(compiler, compile_flags)
-logger.info(f"### Valid extra compile args: {compile_flags}")
 
 # Define the extension modules
 extensions = [
