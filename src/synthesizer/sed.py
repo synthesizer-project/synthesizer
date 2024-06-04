@@ -30,6 +30,7 @@ from synthesizer.igm import Inoue14
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
 from synthesizer.utils import has_units, rebin_1d, wavelength_to_rgba
+from synthesizer.warnings import warn
 
 
 class Sed:
@@ -964,13 +965,10 @@ class Sed:
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
             if not np.array_equal(f.lam, self.lam):
-                if verbose:
-                    print(
-                        (
-                            "WARNING: filter wavelength grid is not "
-                            "the same as the SED wavelength grid."
-                        )
-                    )
+                warn(
+                    "Filter wavelength grid is not "
+                    "the same as the SED wavelength grid."
+                )
 
             # Apply the filter transmission curve and store the resulting
             # luminosity
@@ -1017,13 +1015,10 @@ class Sed:
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
             if not np.array_equal(f.lam, self.lam):
-                if verbose:
-                    print(
-                        (
-                            "WARNING: filter wavelength grid is not "
-                            "the same as the SED wavelength grid."
-                        )
-                    )
+                warn(
+                    "Filter wavelength grid is not "
+                    "the same as the SED wavelength grid."
+                )
 
             # Calculate and store the broadband flux in this filter
             bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
@@ -1178,7 +1173,7 @@ class Sed:
 
         # Both arguments are unecessary, tell the user what we will do
         if resample_factor is not None and new_lam is not None:
-            print("Got resample_factor and new_lam, ignoring resample_factor")
+            warn("Got resample_factor and new_lam, ignoring resample_factor")
 
         # Resample the wavelength array
         if new_lam is None:
@@ -1419,7 +1414,7 @@ def plot_spectra(
 
         # Don't draw a legend if not label given
         if label is None and draw_legend:
-            print("No label given, we will not draw a legend")
+            warn("No label given, we will not draw a legend")
             draw_legend = False
 
     # If we don't already have a figure, make one
