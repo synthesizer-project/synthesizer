@@ -4,7 +4,7 @@ Most of the build is defined in pyproject.toml but C extensions are not
 supported in pyproject.toml yet. To enable the compilation of the C extensions
 we use the legacy setup.py. This is ONLY used for the C extensions.
 
-This script enables the user to overise the CFLAGS and LDFLAGS environment
+This script enables the user to override the CFLAGS and LDFLAGS environment
 variables to pass custom flags to the compiler and linker. It also enables the
 definition of preprocessing flags that can then be used in the C code.
 
@@ -85,7 +85,34 @@ def create_extension(name, sources, compile_flags=[], links=[]):
     )
 
 
-# Get environment variables well need for optional features and flags
+def check_openmp(compiler):
+    """
+    Check if OpenMP is supported by the compiler.
+
+    Args:
+        compiler: The compiler instance.
+    Returns:
+        Tuple (bool, list): True if OpenMP is supported, and the OpenMP flags.
+    """
+    openmp_flags = {
+        "unix": ["-fopenmp"],
+        "darwin": ["-Xpreprocessor", "-fopenmp"],
+        "win32": ["/openmp"],
+    }
+
+    if sys.platform in openmp_flags:
+        test_flags = openmp_flags[sys.platform]
+        with tempfile.NamedTemporaryFile("w", suffix=".c") as f:
+            f.write("#include <omp.h>\nint main() { return 0; }\n")
+            try:
+                compiler.compile([f.name], extra_postargs=test_flags)
+                return True, test_flags
+            except CompileError:
+                return False, []
+    return False, []
+
+
+# Get environment variables we'll need for optional features and flags
 CFLAGS = os.environ.get("CFLAGS", "")
 LDFLAGS = os.environ.get("LDFLAGS", "")
 WITH_DEBUGGING_CHECKS = os.environ.get("WITH_DEBUGGING_CHECKS", "0")
@@ -151,11 +178,20 @@ if WITH_DEBUGGING_CHECKS == "1":
 # Create a compiler instance
 compiler = new_compiler()
 
+# Check for OpenMP support
+openmp_supported, openmp_flags = check_openmp(compiler)
+if openmp_supported:
+    logger.info("### OpenMP is supported.")
+    compile_flags.extend(openmp_flags)
+    link_args.extend(openmp_flags)
+    compile_flags.append("-DWITH_OPENMP")
+else:
+    logger.info("### OpenMP is not supported.")
+
 # Filter the flags
 logger.info("### Testing extra compile args")
 compile_flags = filter_compiler_flags(compiler, compile_flags)
 logger.info(f"### Valid extra compile args: {compile_flags}")
-
 
 # Define the extension modules
 extensions = [
