@@ -33,7 +33,7 @@ np.random.seed(42)
 
 def make_screen_emission(grid):
     """
-    Makes an emission model to match the traditional methods.
+    Make an emission model to match the traditional methods.
 
     Args:
         grid (Grid)
@@ -77,7 +77,7 @@ def make_screen_emission(grid):
 
 def make_intrinsic_emission(grid):
     """
-    Makes an emission model to match the singel sed methods.
+    Make an emission model to match the single sed methods.
 
     Args:
         grid (Grid)
