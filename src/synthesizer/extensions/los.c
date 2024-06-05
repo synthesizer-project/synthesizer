@@ -77,7 +77,7 @@ void low_mass_los_loop(const double *star_pos, const double *gas_pos, const doub
       double met = gas_met[igas];
 
       /* Skip straight away if the gas particle is behind the star. */
-      if (gas_z > star_z)
+      if (gas_z < star_z)
         continue;
 
       /* Calculate the x and y separations. */
@@ -395,7 +395,7 @@ double calculate_los_recursive(struct cell *c,
       double met = gas_met[igas];
 
       /* Skip straight away if the gas particle is behind the star. */
-      if (gas_z > star_z)
+      if (gas_z < star_z)
         continue;
 
       /* Calculate the x and y separations. */
