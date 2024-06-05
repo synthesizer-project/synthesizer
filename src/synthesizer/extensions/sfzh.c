@@ -27,7 +27,6 @@
  * @param part_tuple: The tuple of particle property arrays (in the same order
  *                    as grid_tuple).
  * @param np_part_mass: The particle mass array.
- * @param fesc: The escape fraction.
  * @param np_ndims: The size of each grid axis.
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
@@ -129,30 +128,41 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     part_props[idim] = part_arr;
   }
 
-  /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
+  /* With everything set up we can compute the weights for each particle using
+   * the requested method. */
+  Weights *weights;
+  if (strcmp(method, "cic") == 0) {
+    weights =
+        weight_loop_cic(grid_props, part_props, part_mass, dims, ndim, npart);
+  } else if (strcmp(method, "ngp") == 0) {
+    weights =
+        weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim, npart);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    return NULL;
+  }
 
-    /* Get this particle's mass. */
-    const double mass = part_mass[p];
+  /* Populate the SFZH. */
+  for (int weight_ind = 0; weight_ind < weights->size; weight_ind++) {
 
-    /* Finally, compute the weights for this particle using the
-     * requested method. */
-    if (strcmp(method, "cic") == 0) {
-      weight_loop_cic(grid_props, part_props, mass, sfzh, dims, ndim, p, 0);
-    } else if (strcmp(method, "ngp") == 0) {
-      weight_loop_ngp(grid_props, part_props, mass, sfzh, dims, ndim, p, 0);
-    } else {
-      /* Only print this warning once! */
-      if (p == 0)
-        printf(
-            "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
-            method);
-      weight_loop_cic(grid_props, part_props, mass, sfzh, dims, ndim, p, 0);
-    }
+    /* Get the weight. */
+    const double weight = weights->values[weight_ind];
 
-  } /* Loop over particles. */
+    /* Get the flattened index. */
+    int flat_ind = get_flat_index(weights->indices[weight_ind], dims, ndim);
+
+    /* Add the weight to the SFZH. */
+    sfzh[flat_ind] += weight;
+  }
 
   /* Clean up memory! */
+  for (int i = 0; i < ndim; i++) {
+    free(weights->indices[i]);
+  }
+  free(weights->axis_size);
+  free(weights->indices);
+  free(weights->values);
+  free(weights);
   free(part_props);
   free(grid_props);
 

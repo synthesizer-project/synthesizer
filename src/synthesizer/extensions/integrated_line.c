@@ -112,20 +112,6 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* How many grid elements are there? */
-  int grid_size = 1;
-  for (int dim = 0; dim < ndim; dim++)
-    grid_size *= dims[dim];
-
-  /* Allocate an array to hold the grid weights. */
-  double *grid_weights = malloc(grid_size * sizeof(double));
-  if (grid_weights == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for grid_weights.");
-    return NULL;
-  }
-  bzero(grid_weights, grid_size * sizeof(double));
-
   /* Unpack the grid property arrays into a single contiguous array. */
   for (int idim = 0; idim < ndim; idim++) {
 
@@ -170,49 +156,46 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
     part_props[idim] = part_arr;
   }
 
-  /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
+  /* With everything set up we can compute the weights for each particle using
+   * the requested method. */
+  Weights *weights;
+  if (strcmp(method, "cic") == 0) {
+    weights =
+        weight_loop_cic(grid_props, part_props, part_mass, dims, ndim, npart);
+  } else if (strcmp(method, "ngp") == 0) {
+    weights =
+        weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim, npart);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    return NULL;
+  }
 
-    /* Get this particle's mass. */
-    const double mass = part_mass[p];
+  /* Loop over weights populating the lines. */
+  for (int weight_ind = 0; weight_ind < weights->size; weight_ind++) {
 
-    /* Finally, compute the weights for this particle using the
-     * requested method. */
-    if (strcmp(method, "cic") == 0) {
-      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim, p,
-                      fesc[p]);
-    } else if (strcmp(method, "ngp") == 0) {
-      weight_loop_ngp(grid_props, part_props, mass, grid_weights, dims, ndim, p,
-                      fesc[p]);
-    } else {
-      /* Only print this warning once! */
-      if (p == 0)
-        printf(
-            "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
-            method);
-      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim, p,
-                      fesc[p]);
-    }
-
-  } /* Loop over particles. */
-
-  /* Loop over grid cells populating the lines. */
-  for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
+    /* Get the particle index. */
+    const int p = weights->part_indices[weight_ind];
 
     /* Get the weight. */
-    const double weight = grid_weights[grid_ind];
+    const double weight = weights->values[weight_ind];
 
-    /* Skip zero weight cells. */
-    if (weight <= 0)
-      continue;
+    /* Get the flattened grid cell index. */
+    const int grid_ind =
+        get_flat_index(weights->indices[weight_ind], dims, ndim);
 
     /* Add this grid cell's contribution to the lines */
-    line_lum += grid_lines[grid_ind] * weight;
-    line_cont += grid_continuum[grid_ind] * weight;
+    line_lum += grid_lines[grid_ind] * weight * (1.0 - fesc[p]);
+    line_cont += grid_continuum[grid_ind] * weight * (1.0 - fesc[p]);
   }
 
   /* Clean up memory! */
-  free(grid_weights);
+  for (int i = 0; i < ndim; i++) {
+    free(weights->indices[i]);
+  }
+  free(weights->axis_size);
+  free(weights->indices);
+  free(weights->values);
+  free(weights);
   free(part_props);
   free(grid_props);
 

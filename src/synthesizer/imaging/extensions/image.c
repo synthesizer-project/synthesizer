@@ -99,8 +99,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
    * because we can't return NULL from within a parallel region. */
   int failed = 0;
 
-/* Loop over positions including the sed */
-#pragma omp parallel for
+  /* Loop over positions including the sed */
   for (int ind = 0; ind < npart; ind++) {
 
     /* Have we failed on the last loop? */
