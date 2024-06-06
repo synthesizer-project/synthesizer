@@ -180,6 +180,12 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Ensure weights calculation and allocation went smoothly. */
+  if (weights == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to get weights.");
+    return NULL;
+  }
+
   /* Allocate an array to hold the grid weights. */
   double *grid_weights = malloc(grid_size * sizeof(double));
   bzero(grid_weights, grid_size * sizeof(double));

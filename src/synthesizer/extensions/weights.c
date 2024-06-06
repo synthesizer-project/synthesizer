@@ -21,25 +21,65 @@ Weights *init_weights(int ndim, const int *dims, int size) {
 
   /* Allocate the struct. */
   Weights *weights = malloc(sizeof(Weights));
+  if (weights == NULL) {
+    return NULL;
+  }
 
   /* Allocate the axis size array. */
   weights->axis_size = malloc(ndim * sizeof(int));
+  if (weights->axis_size == NULL) {
+    free(weights);
+    return NULL;
+  }
   memcpy(weights->axis_size, dims, ndim * sizeof(int));
 
   /* Allocate the indices array. */
   weights->indices = malloc(size * sizeof(int *));
+  if (weights->indices == NULL) {
+    free(weights->axis_size);
+    free(weights);
+    return NULL;
+  }
   for (int i = 0; i < size; i++) {
     weights->indices[i] = malloc(ndim * sizeof(int));
   }
 
   /* Allocate the values array. */
   weights->values = malloc(size * sizeof(double));
+  if (weights->values == NULL) {
+    for (int i = 0; i < size; i++) {
+      free(weights->indices[i]);
+    }
+    free(weights->indices);
+    free(weights->axis_size);
+    free(weights);
+    return NULL;
+  }
 
   /* Set the size. */
   weights->size = size;
+  if (weights->values == NULL) {
+    for (int i = 0; i < size; i++) {
+      free(weights->indices[i]);
+    }
+    free(weights->indices);
+    free(weights->axis_size);
+    free(weights);
+    return NULL;
+  }
 
   /* Allocate the part indices array. */
   weights->part_indices = malloc(size * sizeof(int));
+  if (weights->part_indices == NULL) {
+    for (int i = 0; i < size; i++) {
+      free(weights->indices[i]);
+    }
+    free(weights->indices);
+    free(weights->axis_size);
+    free(weights->values);
+    free(weights);
+    return NULL;
+  }
 
   return weights;
 }
@@ -130,6 +170,9 @@ Weights *weight_loop_cic(const double **grid_props, const double **part_props,
   /* Get a weights struct to store what we find. */
   Weights *weights =
       init_weights(ndim, dims, npart * (int)pow(2, (double)ndim));
+  if (weights == NULL) {
+    return NULL;
+  }
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -186,9 +229,9 @@ Weights *weight_loop_cic(const double **grid_props, const double **part_props,
       part_indices[dim] = part_cell;
     }
 
-    /* To combine fractions we will need an array of dimensions for the subset.
-     * These are always two in size, one for the low and one for high grid
-     * point. */
+    /* To combine fractions we will need an array of dimensions for the
+     * subset. These are always two in size, one for the low and one for high
+     * grid point. */
     int sub_dims[ndim];
     for (int idim = 0; idim < ndim; idim++) {
       sub_dims[idim] = 2;
@@ -257,6 +300,9 @@ Weights *weight_loop_ngp(const double **grid_props, const double **part_props,
 
   /* Get a weights struct to store what we find. */
   Weights *weights = init_weights(ndim, dims, npart);
+  if (weights == NULL) {
+    return NULL;
+  }
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {

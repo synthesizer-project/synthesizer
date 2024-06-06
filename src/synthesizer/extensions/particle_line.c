@@ -189,6 +189,12 @@ PyObject *compute_particle_line(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Ensure weights calculation and allocation went smoothly. */
+  if (weights == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to get weights.");
+    return NULL;
+  }
+
   /* Loop over the weights summing the line. */
   for (int weight_ind = 0; weight_ind < weights->size; weight_ind++) {
 
