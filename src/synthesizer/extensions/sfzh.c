@@ -15,6 +15,7 @@
 #include <numpy/ndarraytypes.h>
 
 /* Local includes */
+#include "hashmap.h"
 #include "macros.h"
 #include "weights.h"
 
@@ -130,45 +131,41 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
-  Weights *weights;
+  HashMap *weights;
   if (strcmp(method, "cic") == 0) {
-    weights =
-        weight_loop_cic(grid_props, part_props, part_mass, dims, ndim, npart);
+    weights = weight_loop_cic(grid_props, part_props, part_mass, dims, ndim,
+                              npart, /*per_part*/ 0);
   } else if (strcmp(method, "ngp") == 0) {
-    weights =
-        weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim, npart);
+    weights = weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim,
+                              npart, /*per_part*/ 0);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
 
-  /* Ensure weights calculation and allocation went smoothly. */
-  if (weights == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to get weights.");
-    return NULL;
-  }
-
   /* Populate the SFZH. */
-  for (int weight_ind = 0; weight_ind < weights->size; weight_ind++) {
+  for (int i = 0; i < weights->size; i++) {
+    /* Get the hash map node. */
+    Node *node = weights->buckets[i];
 
-    /* Get the weight. */
-    const double weight = weights->values[weight_ind];
+    /* Traverse the node linked list. */
+    while (node) {
 
-    /* Get the flattened index. */
-    int flat_ind = get_flat_index(weights->indices[weight_ind], dims, ndim);
+      /* Get the weight and indices. */
+      const double weight = node->value;
+      const IndexKey key = node->key;
+      const int flat_ind = get_flat_index(key.grid_indices, dims, ndim);
 
-    /* Add the weight to the SFZH. */
-    sfzh[flat_ind] += weight;
+      /* Add the weight to the SFZH. */
+      sfzh[flat_ind] += weight;
+
+      /* Next... */
+      node = node->next;
+    }
   }
 
   /* Clean up memory! */
-  for (int i = 0; i < ndim; i++) {
-    free(weights->indices[i]);
-  }
-  free(weights->axis_size);
-  free(weights->indices);
-  free(weights->values);
-  free(weights);
+  free_hash_map(weights);
   free(part_props);
   free(grid_props);
 
