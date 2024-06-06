@@ -4,85 +4,13 @@
  *****************************************************************************/
 /* C includes */
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /* Local includes */
+#include "hashmap.h"
 #include "weights.h"
-
-/**
- * @brief Initialise the weights struct.
- *
- * @param ndim: The number of dimensions.
- * @param dims: The size of each dimension.
- * @param size: The number of non-zero elements.
- */
-Weights *init_weights(int ndim, const int *dims, int size) {
-
-  /* Allocate the struct. */
-  Weights *weights = malloc(sizeof(Weights));
-  if (weights == NULL) {
-    return NULL;
-  }
-
-  /* Allocate the axis size array. */
-  weights->axis_size = malloc(ndim * sizeof(int));
-  if (weights->axis_size == NULL) {
-    free(weights);
-    return NULL;
-  }
-  memcpy(weights->axis_size, dims, ndim * sizeof(int));
-
-  /* Allocate the indices array. */
-  weights->indices = malloc(size * sizeof(int *));
-  if (weights->indices == NULL) {
-    free(weights->axis_size);
-    free(weights);
-    return NULL;
-  }
-  for (int i = 0; i < size; i++) {
-    weights->indices[i] = malloc(ndim * sizeof(int));
-  }
-
-  /* Allocate the values array. */
-  weights->values = malloc(size * sizeof(double));
-  if (weights->values == NULL) {
-    for (int i = 0; i < size; i++) {
-      free(weights->indices[i]);
-    }
-    free(weights->indices);
-    free(weights->axis_size);
-    free(weights);
-    return NULL;
-  }
-
-  /* Set the size. */
-  weights->size = size;
-  if (weights->values == NULL) {
-    for (int i = 0; i < size; i++) {
-      free(weights->indices[i]);
-    }
-    free(weights->indices);
-    free(weights->axis_size);
-    free(weights);
-    return NULL;
-  }
-
-  /* Allocate the part indices array. */
-  weights->part_indices = malloc(size * sizeof(int));
-  if (weights->part_indices == NULL) {
-    for (int i = 0; i < size; i++) {
-      free(weights->indices[i]);
-    }
-    free(weights->indices);
-    free(weights->axis_size);
-    free(weights->values);
-    free(weights);
-    return NULL;
-  }
-
-  return weights;
-}
 
 /**
  * @brief Compute an ndimensional index from a flat index.
@@ -163,16 +91,14 @@ int binary_search(int low, int high, const double *arr, const double val) {
  * @param ndim: The number of grid dimensions.
  * @param npart: The number of particles.
  */
-Weights *weight_loop_cic(const double **grid_props, const double **part_props,
+HashMap *weight_loop_cic(const double **grid_props, const double **part_props,
                          const double *part_masses, const int *dims,
-                         const int ndim, const int npart) {
+                         const int ndim, const int npart, const int per_part) {
 
-  /* Get a weights struct to store what we find. */
-  Weights *weights =
-      init_weights(ndim, dims, npart * (int)pow(2, (double)ndim));
-  if (weights == NULL) {
-    return NULL;
-  }
+  /* Get a hashmap to store the weights in. */
+  HashMap *weights = create_hash_map(ndim + 1);
+
+  printf("Got hashmap\n");
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -262,22 +188,24 @@ Weights *weight_loop_cic(const double **grid_props, const double **part_props,
       }
 
       /* Early skip for cells contributing a 0 fraction. */
-      if (frac <= 0)
+      if (frac == 0)
         continue;
 
-      /* Store the grid indices. */
-      for (int idim = 0; idim < ndim; idim++) {
-        weights->indices[p * (int)pow(2, (double)ndim) + icell][idim] =
-            frac_ind[idim];
+      /* Create a key for the hash map (with or without the particle
+       * index). */
+      IndexKey key;
+      if (per_part) {
+        key = create_key(p, frac_ind, ndim + 1);
+      } else {
+        key = create_key(0, frac_ind, ndim + 1);
       }
 
       /* Store the weight. */
-      weights->values[p * (int)pow(2, (double)ndim) + icell] = mass * frac;
-
-      /* Store the particle index. */
-      weights->part_indices[p * (int)pow(2, (double)ndim) + icell] = p;
+      insert(weights, key, mass * frac);
     }
   }
+
+  printf("Done looping\n");
 
   return weights;
 }
@@ -294,15 +222,12 @@ Weights *weight_loop_cic(const double **grid_props, const double **part_props,
  * @param ndim: The number of grid dimensions.
  * @param npart: The number of particles.
  */
-Weights *weight_loop_ngp(const double **grid_props, const double **part_props,
+HashMap *weight_loop_ngp(const double **grid_props, const double **part_props,
                          const double *part_masses, const int *dims,
-                         const int ndim, const int npart) {
+                         const int ndim, const int npart, const int per_part) {
 
-  /* Get a weights struct to store what we find. */
-  Weights *weights = init_weights(ndim, dims, npart);
-  if (weights == NULL) {
-    return NULL;
-  }
+  /* Get a hashmap to store the weights in. */
+  HashMap *weights = create_hash_map(ndim + 1);
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -360,16 +285,17 @@ Weights *weight_loop_ngp(const double **grid_props, const double **part_props,
       }
     }
 
-    /* Store the grid indices. */
-    for (int idim = 0; idim < ndim; idim++) {
-      weights->indices[p][idim] = part_indices[idim];
+    /* Create a key for the hash map (with or without the particle
+     * index). */
+    IndexKey key;
+    if (per_part) {
+      key = create_key(p, part_indices, ndim + 1);
+    } else {
+      key = create_key(0, part_indices, ndim + 1);
     }
 
     /* Store the weight. */
-    weights->values[p] = mass;
-
-    /* Store the particle index. */
-    weights->part_indices[p] = p;
+    insert(weights, key, mass);
   }
 
   return weights;
