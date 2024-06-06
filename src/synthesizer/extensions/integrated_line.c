@@ -170,6 +170,12 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Ensure weights calculation and allocation went smoothly. */
+  if (weights == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to get weights.");
+    return NULL;
+  }
+
   /* Loop over weights populating the lines. */
   for (int weight_ind = 0; weight_ind < weights->size; weight_ind++) {
 
