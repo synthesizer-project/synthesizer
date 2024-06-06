@@ -1,170 +1,233 @@
 """Setup file for synthesizer.
 
-Most the of the build is defined in pyproject.toml but C extensions are not
+Most of the build is defined in pyproject.toml but C extensions are not
 supported in pyproject.toml yet. To enable the compilation of the C extensions
 we use the legacy setup.py. This is ONLY used for the C extensions.
+
+This script enables the user to overise the CFLAGS and LDFLAGS environment
+variables to pass custom flags to the compiler and linker. It also enables the
+definition of preprocessing flags that can then be used in the C code.
+
+Example:
+    To build the C extensions with debugging checks enabled, run the following
+    command:
+
+    ```bash
+    WITH_DEBUGGING_CHECKS=1 pip install .
+    ```
+
+    To build the C extensions with custom compiler flags, run the following
+    command:
+
+    ```bash
+    CFLAGS="-O3 -march=native" pip install .
+    ```
 """
 
+import logging
+import os
+import sys
 import tempfile
+from datetime import datetime
+from distutils.ccompiler import new_compiler
 
 import numpy as np
 from setuptools import Extension, setup
-from setuptools.command.build_ext import build_ext
 from setuptools.errors import CompileError
 
 
-def has_flags(compiler, flags):
+def filter_compiler_flags(compiler, flags):
     """
-    A function to check whether the C compiler allows for a flag to be passed.
+    Filter compiler flags to remove any that aren't compatible.
 
-    This is tested by compiling a small temporary test program.
+    We could use the compiler.has_flag() method to check if a flag is
+    supported, but this method is not implemented for all compilers. Instead,
+    we compile a simple C program with each flag and check if it compiles.
+
+    We could just let the build fail if a flag is not supported, but this is
+    more user-friendly and ensure Synthesizer will still build without placing
+    a compilation hurdle in front of an inexperienced user.
 
     Args:
-        compiler
-            The loaded C compiler.
-        flags (list)
-            A list of compiler flags to test the compiler with.
-
-    Returns
-        bool
-            Success/Failure
+        compiler: The compiler instance.
+        flags: A list of compiler flags to test.
     """
-
-    # Attempt to compile a temporary C file
+    valid_flags = []
     with tempfile.NamedTemporaryFile("w", suffix=".c") as f:
-        f.write("int main (int argc, char **argv) { return 0; }")
-        try:
-            compiler.compile([f.name], extra_postargs=flags)
-        except CompileError:
-            return False
-    return True
+        f.write("int main() { return 0; }\n")
+        for flag in flags:
+            try:
+                compiler.compile([f.name], extra_postargs=[flag])
+                valid_flags.append(flag)
+            except CompileError:
+                logger.info(f"### Compiler flag {flag} is not supported.")
+    return valid_flags
 
 
-class BuildExt(build_ext):
+def create_extension(name, sources, compile_flags=[], links=[]):
     """
-    A class for building extensions with a specific set of accepted compiler
-    flags.
+    Create a C extension module.
 
-    NOTE: Windows is currently not explictly supported.
+    Args:
+        name: The name of the extension module.
+        sources: A list of source files.
     """
-
-    # Never check these; they're always added.
-    # Note that we don't support MSVC here.
-    compile_flags = {
-        "unix": [
-            "-std=c99",
-            "-w",
-            "-O3",
-            "-ffast-math",
-            "-I{:s}".format(np.get_include()),
-        ]
-    }
-
-    def build_extensions(self):
-        """
-        A method to set up the build extensions with the correct compiler
-        flags.
-        """
-        # Get local useful variables
-        ct = self.compiler.compiler_type
-
-        # Set up the flags and links for compilation
-        opts = self.compile_flags.get(ct, [])
-        links = []
-
-        # Uncomment below if we use openMP and find a nice way to demonstrate
-        # the user how to install it.
-        # Will - NOTE: this broke for me with a complaint about -lgomp
-
-        # # Check for the presence of -fopenmp; if it's there we're good to go!
-        # if has_flags(self.compiler, ["-fopenmp"]):
-        #     # Generic case, this is what GCC accepts
-        #     opts += ["-fopenmp"]
-        #     links += ["-lgomp"]
-
-        # elif has_flags(
-        #     self.compiler,
-        #     ["-Xpreprocessor", "-fopenmp", "-lomp"],
-        # ):
-        #     # Hope that clang accepts this
-        #     opts += ["-Xpreprocessor", "-fopenmp", "-lomp"]
-        #     links += ["-lomp"]
-
-        # elif has_flags(
-        #     self.compiler,
-        #     [
-        #         "-Xpreprocessor",
-        #         "-fopenmp",
-        #         "-lomp",
-        #         '-I"$(brew --prefix libomp)/include"',
-        #         '-L"$(brew --prefix libomp)/lib"',
-        #     ],
-        # ):
-        #     # Case on MacOS where somebody has installed libomp using
-        #     # homebrew
-        #     opts += [
-        #         "-Xpreprocessor",
-        #         "-fopenmp",
-        #         "-lomp",
-        #         '-I"$(brew --prefix libomp)/include"',
-        #         '-L"$(brew --prefix libomp)/lib"',
-        #     ]
-
-        #     links += ["-lomp"]
-
-        # else:
-        #     raise CompileError(
-        #         "Unable to compile C extensions on your machine, "
-        #         "as we can't find OpenMP. "
-        #         "If you are on MacOS, try `brew install libomp` "
-        #         "and try again. "
-        #         "If you are on Windows, please reach out on the GitHub and "
-        #         "we can try to find a solution."
-        #     )
-
-        # Apply the flags and links
-        for ext in self.extensions:
-            ext.extra_compile_args = opts
-            ext.extra_link_args = links
-
-        # Build the extensions
-        build_ext.build_extensions(self)
-
-
-# Define the extension source files
-src_files = {
-    "synthesizer.extensions.integrated_spectra": (
-        "src/synthesizer/extensions/integrated_spectra.c"
-    ),
-    "synthesizer.extensions.particle_spectra": (
-        "src/synthesizer/extensions/particle_spectra.c"
-    ),
-    "synthesizer.imaging.extensions.spectral_cube": (
-        "src/synthesizer/imaging/extensions/spectral_cube.c"
-    ),
-    "synthesizer.imaging.extensions.image": (
-        "src/synthesizer/imaging/extensions/image.c"
-    ),
-    "synthesizer.extensions.sfzh": "src/synthesizer/extensions/sfzh.c",
-    "synthesizer.extensions.los": "src/synthesizer/extensions/los.c",
-    "synthesizer.extensions.integrated_line": (
-        "src/synthesizer/extensions/integrated_line.c"
-    ),
-    "synthesizer.extensions.particle_line": (
-        "src/synthesizer/extensions/particle_line.c"
-    ),
-}
-
-# Create the extension objects
-extensions = [
-    Extension(
-        path,
-        sources=[source],
-        include_dirs=[np.get_include()],
-        py_limited_api=True,
+    logger.info(
+        f"### Creating extension {name} with compile args: "
+        f"{compile_flags} and link args: {links}"
     )
-    for path, source in src_files.items()
+    return Extension(
+        name,
+        sources=sources,
+        include_dirs=[np.get_include()],
+        extra_compile_args=compile_flags,
+        extra_link_args=links,
+    )
+
+
+# Get environment variables well need for optional features and flags
+CFLAGS = os.environ.get("CFLAGS", "")
+LDFLAGS = os.environ.get("LDFLAGS", "")
+WITH_DEBUGGING_CHECKS = os.environ.get("WITH_DEBUGGING_CHECKS", "0")
+
+# Define the log file
+LOG_FILE = "build_synth.log"
+
+# Set up logging (this allows us to log messages directly to a file during
+# the build)
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger()
+file_handler = logging.FileHandler(LOG_FILE)
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(message)s")
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# Include a log message for the start of the build
+logger.info("\n")
+logger.info("### Building synthesizer C extensions")
+
+# Log the Python version
+logger.info(f"### Python version: {sys.version}")
+
+# Log the time and date the build started
+current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+logger.info(f"### Build started: {current_time}")
+
+# Tell the user lines starting with '###' are log messages from setup.py
+logger.info(
+    "### Log messages starting with '###' are from setup.py, "
+    "other messages are from the build process."
+)
+
+# Log the system platform
+logger.info(f"### System platform: {sys.platform}")
+
+# Determine the platform-specific default compiler and linker flags
+if sys.platform == "darwin":  # macOS
+    default_compile_flags = ["-std=c99", "-Wall", "-O3", "-ffast-math", "-g"]
+    default_link_args = []
+elif sys.platform == "win32":  # windows
+    default_compile_flags = ["/std:c99", "/Ox", "/fp:fast"]
+    default_link_args = []
+else:  # Unix-like systems (Linux)
+    default_compile_flags = ["-std=c99", "-Wall", "-O3", "-ffast-math", "-g"]
+    default_link_args = []
+
+# Get user specified flags
+compile_flags = CFLAGS.split()
+link_args = LDFLAGS.split()
+
+# If no flags are specified, use the default flags
+if len(compile_flags) == 0:
+    compile_flags = default_compile_flags
+if len(link_args) == 0:
+    link_args = default_link_args
+
+# Add preprocessor flags
+if WITH_DEBUGGING_CHECKS == "1":
+    compile_flags.append("-DWITH_DEBUGGING_CHECKS")
+
+# Create a compiler instance
+compiler = new_compiler()
+
+# Filter the flags
+logger.info("### Testing extra compile args")
+compile_flags = filter_compiler_flags(compiler, compile_flags)
+logger.info(f"### Valid extra compile args: {compile_flags}")
+
+
+# Define the extension modules
+extensions = [
+    create_extension(
+        "synthesizer.extensions.integrated_spectra",
+        [
+            "src/synthesizer/extensions/integrated_spectra.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+    ),
+    create_extension(
+        "synthesizer.extensions.particle_spectra",
+        [
+            "src/synthesizer/extensions/particle_spectra.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+    ),
+    create_extension(
+        "synthesizer.imaging.extensions.spectral_cube",
+        ["src/synthesizer/imaging/extensions/spectral_cube.c"],
+        compile_flags=compile_flags,
+        links=link_args,
+    ),
+    create_extension(
+        "synthesizer.imaging.extensions.image",
+        ["src/synthesizer/imaging/extensions/image.c"],
+        compile_flags=compile_flags,
+        links=link_args,
+    ),
+    create_extension(
+        "synthesizer.extensions.sfzh",
+        [
+            "src/synthesizer/extensions/sfzh.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+    ),
+    create_extension(
+        "synthesizer.extensions.los",
+        [
+            "src/synthesizer/extensions/los.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+    ),
+    create_extension(
+        "synthesizer.extensions.integrated_line",
+        [
+            "src/synthesizer/extensions/integrated_line.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+    ),
+    create_extension(
+        "synthesizer.extensions.particle_line",
+        [
+            "src/synthesizer/extensions/particle_line.c",
+            "src/synthesizer/extensions/weights.c",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+    ),
 ]
 
-# Finally, call the setup
-setup(cmdclass={build_ext: BuildExt}, ext_modules=extensions)
+# Setup configuration
+setup(
+    ext_modules=extensions,
+)

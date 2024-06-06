@@ -35,13 +35,16 @@
  */
 PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
-  const int ndim;
-  const int npart;
-  const PyObject *grid_tuple, *part_tuple;
-  const PyArrayObject *np_grid_lines, *np_grid_continuum;
-  const PyArrayObject *np_fesc;
-  const PyArrayObject *np_part_mass, *np_ndims;
-  const char *method;
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
+
+  int ndim, npart;
+  PyObject *grid_tuple, *part_tuple;
+  PyArrayObject *np_grid_lines, *np_grid_continuum;
+  PyArrayObject *np_fesc;
+  PyArrayObject *np_part_mass, *np_ndims;
+  char *method;
 
   if (!PyArg_ParseTuple(args, "OOOOOOOiis", &np_grid_lines, &np_grid_continuum,
                         &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,
@@ -50,9 +53,7 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Quick check to make sure our inputs are valid. */
   if (ndim == 0) {
-    PyErr_SetString(
-        PyExc_ValueError,
-        "Grid appears to be dimensionless! Something awful has happened!");
+    PyErr_SetString(PyExc_ValueError, "ndim must be greater than 0.");
     return NULL;
   }
   if (npart == 0) {
@@ -62,9 +63,17 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Extract a pointer to the lines grids */
   const double *grid_lines = PyArray_DATA(np_grid_lines);
+  if (grid_lines == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract grid_lines.");
+    return NULL;
+  }
 
   /* Extract a pointer to the continuum grid. */
   const double *grid_continuum = PyArray_DATA(np_grid_continuum);
+  if (grid_continuum == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract grid_continuum.");
+    return NULL;
+  }
 
   /* Declare and initialise the vairbales we'll store our result in. */
   double line_lum = 0.0;
@@ -72,18 +81,36 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Extract a pointer to the grid dims */
   const int *dims = PyArray_DATA(np_ndims);
+  if (dims == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract dims from np_ndims.");
+    return NULL;
+  }
 
   /* Extract a pointer to the particle masses. */
   const double *part_mass = PyArray_DATA(np_part_mass);
+  if (part_mass == NULL) {
+    PyErr_SetString(PyExc_ValueError,
+                    "Failed to extract part_mass from np_part_mass.");
+    return NULL;
+  }
 
   /* Extract a pointer to the fesc array. */
   const double *fesc = PyArray_DATA(np_fesc);
+  if (fesc == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract fesc from np_fesc.");
+    return NULL;
+  }
 
   /* Allocate a single array for grid properties*/
   int nprops = 0;
   for (int dim = 0; dim < ndim; dim++)
     nprops += dims[dim];
   const double **grid_props = malloc(nprops * sizeof(double *));
+  if (grid_props == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for grid_props.");
+    return NULL;
+  }
 
   /* How many grid elements are there? */
   int grid_size = 1;
@@ -92,14 +119,28 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Allocate an array to hold the grid weights. */
   double *grid_weights = malloc(grid_size * sizeof(double));
+  if (grid_weights == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for grid_weights.");
+    return NULL;
+  }
   bzero(grid_weights, grid_size * sizeof(double));
 
   /* Unpack the grid property arrays into a single contiguous array. */
   for (int idim = 0; idim < ndim; idim++) {
 
     /* Extract the data from the numpy array. */
-    const PyArrayObject *np_grid_arr = PyTuple_GetItem(grid_tuple, idim);
+    PyArrayObject *np_grid_arr =
+        (PyArrayObject *)PyTuple_GetItem(grid_tuple, idim);
+    if (np_grid_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
+      return NULL;
+    }
     const double *grid_arr = PyArray_DATA(np_grid_arr);
+    if (grid_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
+      return NULL;
+    }
 
     /* Assign this data to the property array. */
     grid_props[idim] = grid_arr;
@@ -107,12 +148,22 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Allocate a single array for particle properties. */
   const double **part_props = malloc(npart * ndim * sizeof(double *));
+  if (part_props == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for part_props.");
+    return NULL;
+  }
 
   /* Unpack the particle property arrays into a single contiguous array. */
   for (int idim = 0; idim < ndim; idim++) {
 
     /* Extract the data from the numpy array. */
-    const PyArrayObject *np_part_arr = PyTuple_GetItem(part_tuple, idim);
+    PyArrayObject *np_part_arr =
+        (PyArrayObject *)PyTuple_GetItem(part_tuple, idim);
+    if (np_part_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
+      return NULL;
+    }
     const double *part_arr = PyArray_DATA(np_part_arr);
 
     /* Assign this data to the property array. */
@@ -174,8 +225,8 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef LineMethods[] = {
-    {"compute_integrated_line", compute_integrated_line, METH_VARARGS,
-     "Method for calculating integrated intrinsic lines."},
+    {"compute_integrated_line", (PyCFunction)compute_integrated_line,
+     METH_VARARGS, "Method for calculating integrated intrinsic lines."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
