@@ -15,6 +15,7 @@
 #include <numpy/ndarraytypes.h>
 
 /* Local includes */
+#include "hashmap.h"
 #include "macros.h"
 #include "weights.h"
 
@@ -177,49 +178,47 @@ PyObject *compute_particle_line(PyObject *self, PyObject *args) {
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
-  Weights *weights;
+  HashMap *weights;
   if (strcmp(method, "cic") == 0) {
     weights =
-        weight_loop_cic(grid_props, part_props, part_mass, dims, ndim, npart);
+        weight_loop_cic(grid_props, part_props, part_mass, dims, ndim, npart,
+                        /*per_part*/ 0);
   } else if (strcmp(method, "ngp") == 0) {
     weights =
-        weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim, npart);
+        weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim, npart,
+                        /*per_part*/ 0);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
 
-  /* Ensure weights calculation and allocation went smoothly. */
-  if (weights == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to get weights.");
-    return NULL;
-  }
+  /* Populate the integrated line. */
+  for (int i = 0; i < weights->size; i++) {
+    /* Get the hash map node. */
+    Node *node = weights->buckets[i];
 
-  /* Loop over the weights summing the line. */
-  for (int weight_ind = 0; weight_ind < weights->size; weight_ind++) {
+    /* Traverse the node linked list. */
+    while (node) {
 
-    /* Get the particle index. */
-    int p = weights->part_indices[weight_ind];
+      /* Get the weight and indices. */
+      const double weight = node->value;
+      const IndexKey key = node->key;
+      const int p = key.particle_index;
 
-    /* Get the weight. */
-    double weight = weights->values[weight_ind];
+      /* Get the grid index. */
+      int grid_ind = get_flat_index(key.grid_indices, dims, ndim);
 
-    /* Get the grid cell index. */
-    int grid_ind = get_flat_index(weights->indices[weight_ind], dims, ndim);
+      /* Add the contribution to this particle. */
+      line_lum[p] += grid_lines[grid_ind] * (1 - fesc[p]) * weight;
+      line_cont[p] += grid_continuum[grid_ind] * (1 - fesc[p]) * weight;
 
-    /* Add the contribution to this particle. */
-    line_lum[p] += grid_lines[grid_ind] * (1 - fesc[p]) * weight;
-    line_cont[p] += grid_continuum[grid_ind] * (1 - fesc[p]) * weight;
+      /* Next... */
+      node = node->next;
+    }
   }
 
   /* Clean up memory! */
-  for (int i = 0; i < ndim; i++) {
-    free(weights->indices[i]);
-  }
-  free(weights->axis_size);
-  free(weights->indices);
-  free(weights->values);
-  free(weights);
+  free_hash_map(weights);
   free(part_props);
   free(grid_props);
 

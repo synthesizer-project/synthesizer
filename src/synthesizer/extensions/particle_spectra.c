@@ -15,6 +15,7 @@
 #include <numpy/ndarraytypes.h>
 
 /* Local includes */
+#include "hashmap.h"
 #include "macros.h"
 #include "weights.h"
 
@@ -163,59 +164,53 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
-  Weights *weights;
+  HashMap *weights;
   if (strcmp(method, "cic") == 0) {
-    weights =
-        weight_loop_cic(grid_props, part_props, part_mass, dims, ndim, npart);
+    weights = weight_loop_cic(grid_props, part_props, part_mass, dims, ndim,
+                              npart, /*per_part*/ 1);
   } else if (strcmp(method, "ngp") == 0) {
-    weights =
-        weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim, npart);
+    weights = weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim,
+                              npart, /*per_part*/ 1);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
 
-  /* Ensure weights calculation and allocation went smoothly. */
-  if (weights == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to get weights.");
-    return NULL;
-  }
+  /* Populate the integrated spectra. */
+  for (int i = 0; i < weights->size; i++) {
+    /* Get the hash map node. */
+    Node *node = weights->buckets[i];
 
-  /* Loop over the weights making the spectra. */
-  for (int weight_ind = 0; weight_ind < weights->size; weight_ind++) {
+    /* Traverse the node linked list. */
+    while (node) {
 
-    /* Get the particle index. */
-    int p = weights->part_indices[weight_ind];
+      /* Get the weight and indices. */
+      const double weight = node->value;
+      const IndexKey key = node->key;
+      const int *grid_ind = key.grid_indices;
+      const int p = key.particle_index;
 
-    /* Get the weight. */
-    double weight = weights->values[weight_ind];
+      /* Get the spectra ind. */
+      int unraveled_ind[ndim + 1];
+      memcpy(unraveled_ind, grid_ind, ndim * sizeof(int));
+      unraveled_ind[ndim] = 0;
+      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
 
-    /* Get the grid cell index. */
-    int grid_ind = get_flat_index(weights->indices[weight_ind], dims, ndim);
+      /* Add this grid cell's contribution to the spectra */
+      for (int ilam = 0; ilam < nlam; ilam++) {
 
-    /* Get the spectra ind. */
-    int unraveled_ind[ndim + 1];
-    get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-    unraveled_ind[ndim] = 0;
-    int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+        /* Add the contribution to this wavelength. */
+        spectra[p * nlam + ilam] +=
+            grid_spectra[spectra_ind + ilam] * (1 - fesc[p]) * weight;
+      }
 
-    /* Add this grid cell's contribution to the spectra */
-    for (int ilam = 0; ilam < nlam; ilam++) {
-
-      /* Add the contribution to this wavelength. */
-      spectra[p * nlam + ilam] +=
-          grid_spectra[spectra_ind + ilam] * (1 - fesc[p]) * weight;
+      /* Next... */
+      node = node->next;
     }
   }
 
   /* Clean up memory! */
-  for (int i = 0; i < ndim; i++) {
-    free(weights->indices[i]);
-  }
-  free(weights->axis_size);
-  free(weights->indices);
-  free(weights->values);
-  free(weights);
+  free_hash_map(weights);
   free(part_props);
   free(grid_props);
 

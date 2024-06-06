@@ -15,6 +15,7 @@
 #include <numpy/ndarraytypes.h>
 
 /* Local includes */
+#include "hashmap.h"
 #include "macros.h"
 #include "weights.h"
 
@@ -168,81 +169,54 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
-  Weights *weights;
+  HashMap *weights;
   if (strcmp(method, "cic") == 0) {
-    weights =
-        weight_loop_cic(grid_props, part_props, part_mass, dims, ndim, npart);
+    weights = weight_loop_cic(grid_props, part_props, part_mass, dims, ndim,
+                              npart, /*per_part*/ 0);
   } else if (strcmp(method, "ngp") == 0) {
-    weights =
-        weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim, npart);
+    weights = weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim,
+                              npart, /*per_part*/ 0);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
 
-  /* Ensure weights calculation and allocation went smoothly. */
-  if (weights == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to get weights.");
-    return NULL;
-  }
+  /* Populate the integrated spectra. */
+  for (int i = 0; i < weights->size; i++) {
+    /* Get the hash map node. */
+    Node *node = weights->buckets[i];
 
-  /* Allocate an array to hold the grid weights. */
-  double *grid_weights = malloc(grid_size * sizeof(double));
-  bzero(grid_weights, grid_size * sizeof(double));
+    /* Traverse the node linked list. */
+    while (node) {
 
-  /* Loop over grid cells populating the weights (we only want to loop
-   * over the wavelength axis once per grid cell so it's worth this
-   * extra loop). */
-  for (int weight_ind = 0; weight_ind < weights->size; weight_ind++) {
+      /* Get the weight and indices. */
+      const double weight = node->value;
+      const IndexKey key = node->key;
+      const int *grid_ind = key.grid_indices;
+      const int p = key.particle_index;
 
-    /* Get the particle index. */
-    const int p = weights->part_indices[weight_ind];
+      /* Get the spectra ind. */
+      int unraveled_ind[ndim + 1];
+      memcpy(unraveled_ind, grid_ind, ndim * sizeof(int));
+      unraveled_ind[ndim] = 0;
+      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
 
-    /* Get the weight. */
-    const double weight = weights->values[weight_ind];
+      /* Add this grid cell's contribution to the spectra */
+      for (int ilam = 0; ilam < nlam; ilam++) {
 
-    /* Get the flattened grid cell index. */
-    const int grid_ind =
-        get_flat_index(weights->indices[weight_ind], dims, ndim);
+        /* Add the contribution to this wavelength. */
+        /* fesc is already included in the weight */
+        spectra[ilam] +=
+            grid_spectra[spectra_ind + ilam] * weight * (1.0 - fesc[p]);
+      }
 
-    /* Populate the grid weight. */
-    grid_weights[grid_ind] += weight * (1 - fesc[p]);
-  }
-
-  /* Loop over grid cells. */
-  for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
-
-    /* Get the weight. */
-    const double weight = grid_weights[grid_ind];
-
-    /* Skip zero weight cells. */
-    if (weight <= 0)
-      continue;
-
-    /* Get the spectra ind. */
-    int unraveled_ind[ndim + 1];
-    get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-    unraveled_ind[ndim] = 0;
-    int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
-
-    /* Add this grid cell's contribution to the spectra */
-    for (int ilam = 0; ilam < nlam; ilam++) {
-
-      /* Add the contribution to this wavelength. */
-      /* fesc is already included in the weight */
-      spectra[ilam] += grid_spectra[spectra_ind + ilam] * weight;
+      /* Next... */
+      node = node->next;
     }
-  } /* Loop over grid cells. */
+  }
 
   /* Clean up memory! */
-  for (int i = 0; i < ndim; i++) {
-    free(weights->indices[i]);
-  }
-  free(weights->axis_size);
-  free(weights->indices);
-  free(weights->values);
-  free(weights);
-  free(grid_weights);
+  free_hash_map(weights);
   free(part_props);
   free(grid_props);
 
