@@ -98,8 +98,6 @@ HashMap *weight_loop_cic(const double **grid_props, const double **part_props,
   /* Get a hashmap to store the weights in. */
   HashMap *weights = create_hash_map(ndim + 1);
 
-  printf("Got hashmap\n");
-
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
 
@@ -204,8 +202,6 @@ HashMap *weight_loop_cic(const double **grid_props, const double **part_props,
       insert(weights, key, mass * frac);
     }
   }
-
-  printf("Done looping\n");
 
   return weights;
 }
