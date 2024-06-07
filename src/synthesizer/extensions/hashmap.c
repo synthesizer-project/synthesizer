@@ -37,19 +37,17 @@ IndexKey create_key(const int particle_index, const int *grid_indices,
 
   /* Allocate the index arrays. */
   key.indices = (int *)malloc(ndim * sizeof(int));
-  key.grid_indices = (int *)malloc(ndim * sizeof(int));
-
-  /* Copy over the grid indices. */
-  memcpy(key.grid_indices, grid_indices, ndim * sizeof(int));
+  key.grid_indices = (int *)malloc((ndim - 1) * sizeof(int));
 
   /* Store the grid indices in the front end of the whole index array. */
   for (int i = 0; i < ndim - 1; i++) {
+    key.grid_indices[i] = grid_indices[i];
     key.indices[i] = grid_indices[i];
   }
 
   /* Store the particle index. */
   key.particle_index = particle_index;
-  key.indices[ndim] = particle_index;
+  key.indices[ndim - 1] = particle_index;
 
   return key;
 }
@@ -136,6 +134,10 @@ void resize(HashMap *map) {
 
   /* Get the new size. */
   int new_size = map->size * 2;
+
+#ifdef WITH_DEBUGGING_CHECKS
+  printf("Resizing hash map from %d to %d\n", map->size, new_size);
+#endif
 
   /* Create the new buckets. */
   Node **new_buckets = malloc(sizeof(Node *) * new_size);
