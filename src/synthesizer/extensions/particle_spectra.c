@@ -72,15 +72,6 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Set up arrays to hold the SEDs themselves. */
-  double *spectra = malloc(npart * nlam * sizeof(double));
-  if (spectra == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for spectra.");
-    return NULL;
-  }
-  bzero(spectra, npart * nlam * sizeof(double));
-
   /* Extract a pointer to the grid dims */
   const int *dims = PyArray_DATA(np_ndims);
   if (dims == NULL) {
@@ -175,6 +166,15 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
+
+  /* Set up arrays to hold the SEDs themselves. */
+  double *spectra = malloc(npart * nlam * sizeof(double));
+  if (spectra == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for spectra.");
+    return NULL;
+  }
+  bzero(spectra, npart * nlam * sizeof(double));
 
   /* Populate the integrated spectra. */
   for (int i = 0; i < weights->size; i++) {
