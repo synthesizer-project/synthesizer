@@ -9,7 +9,7 @@
 #include <string.h>
 
 // Initial size of the hash map
-#define INITIAL_SIZE 16
+#define INITIAL_SIZE 50
 #define LOAD_FACTOR_THRESHOLD 0.75
 
 /*! @brief A key for the hash map. */
