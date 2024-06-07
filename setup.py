@@ -209,6 +209,8 @@ extensions = [
         [
             "src/synthesizer/extensions/los.c",
             "src/synthesizer/extensions/weights.c",
+            "src/synthesizer/extensions/hashmap.c",
+            "src/synthesizer/extensions/property_funcs.c",
         ],
         compile_flags=compile_flags,
         links=link_args,
