@@ -17,6 +17,7 @@
 /* Local includes */
 #include "hashmap.h"
 #include "macros.h"
+#include "property_funcs.h"
 #include "weights.h"
 
 /**
@@ -59,28 +60,26 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   }
 
   /* Extract a pointer to the grid dims */
-  const int *dims = PyArray_DATA(np_ndims);
+  const int *dims = extract_data_int(np_ndims, "dims");
   if (dims == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract dims from np_ndims.");
     return NULL;
   }
 
   /* Extract a pointer to the particle masses. */
-  const double *part_mass = PyArray_DATA(np_part_mass);
+  const double *part_mass = extract_data_double(np_part_mass, "part_mass");
   if (part_mass == NULL) {
-    PyErr_SetString(PyExc_ValueError,
-                    "Failed to extract part_mass from np_part_mass.");
     return NULL;
   }
 
-  /* Allocate a single array for grid properties*/
-  int nprops = 0;
-  for (int dim = 0; dim < ndim; dim++)
-    nprops += dims[dim];
-  const double **grid_props = malloc(nprops * sizeof(double *));
+  /* Extract the grid properties from the tuple of numpy arrays. */
+  const double **grid_props = extract_grid_props(grid_tuple, ndim, dims);
   if (grid_props == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for grid_props.");
+    return NULL;
+  }
+
+  /* Extract the particle properties from the tuple of numpy arrays. */
+  const double **part_props = extract_part_props(part_tuple, ndim, npart);
+  if (part_props == NULL) {
     return NULL;
   }
 
@@ -88,46 +87,6 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   int grid_size = 1;
   for (int dim = 0; dim < ndim; dim++)
     grid_size *= dims[dim];
-
-  /* Allocate an array to hold the grid weights. */
-  double *sfzh = malloc(grid_size * sizeof(double));
-  if (sfzh == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for sfzh.");
-    return NULL;
-  }
-  bzero(sfzh, grid_size * sizeof(double));
-
-  /* Unpack the grid property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    PyArrayObject *np_grid_arr =
-        (PyArrayObject *)PyTuple_GetItem(grid_tuple, idim);
-    const double *grid_arr = PyArray_DATA(np_grid_arr);
-
-    /* Assign this data to the property array. */
-    grid_props[idim] = grid_arr;
-  }
-
-  /* Allocate a single array for particle properties. */
-  const double **part_props = malloc(npart * ndim * sizeof(double *));
-  if (part_props == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for part_props.");
-    return NULL;
-  }
-
-  /* Unpack the particle property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    PyArrayObject *np_part_arr =
-        (PyArrayObject *)PyTuple_GetItem(part_tuple, idim);
-    const double *part_arr = PyArray_DATA(np_part_arr);
-
-    /* Assign this data to the property array. */
-    part_props[idim] = part_arr;
-  }
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
@@ -142,6 +101,14 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
+
+  /* Allocate an array to hold the grid weights. */
+  double *sfzh = malloc(grid_size * sizeof(double));
+  if (sfzh == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for sfzh.");
+    return NULL;
+  }
+  bzero(sfzh, grid_size * sizeof(double));
 
   /* Populate the SFZH. */
   for (int i = 0; i < weights->size; i++) {
