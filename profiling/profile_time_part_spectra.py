@@ -1,7 +1,7 @@
 """A script to profile the memory usage of a particle spectra calculation.
 
 Usage:
-    python profile_mem_part_spectra.py 1000 --basename test
+    python profile_time_part_spectra.py --basename test
 """
 
 import argparse
@@ -22,8 +22,8 @@ plt.rcParams["font.serif"] = ["Times New Roman"]
 np.random.seed(42)
 
 
-def profile_mem_part_spectra(n, basename):
-    """Profile the memory usage of the particle spectra calculation."""
+def profile_time_part_spectra(basename):
+    """Profile the cpu time usage of the particle spectra calculation."""
     start = time.time()
 
     # Define the grid
@@ -50,33 +50,31 @@ def profile_mem_part_spectra(n, basename):
     # Setup lists for times
     times = []
 
-    # Sample the SFZH, producing a Stars object
-    stars = sample_sfhz(
-        param_stars.sfzh,
-        param_stars.log10ages,
-        param_stars.log10metallicities,
-        n,
-        current_masses=np.full(n, 10**8.7 / n),
-        redshift=1,
-    )
+    # Loop over the number of stars
+    for n in [10, 100, 1000, 10000]:
+        start = time.time()
 
-    stars.get_particle_spectra_incident(grid)
+        # Sample the SFZH, producing a Stars object
+        stars = sample_sfhz(
+            param_stars.sfzh,
+            param_stars.log10ages,
+            param_stars.log10metallicities,
+            n,
+            current_masses=np.full(n, 10**8.7 / n),
+            redshift=1,
+        )
 
-    print(f"{n} stars took", time.time() - start)
-    times.append(time.time() - start)
+        stars.get_particle_spectra_incident(grid)
 
-    np.savetxt(f"{basename}_mem_times.txt", times)
+        print(f"{n} stars took", time.time() - start)
+        times.append(time.time() - start)
+
+    np.savetxt(f"{basename}_time_prof.txt", times)
 
 
 if __name__ == "__main__":
     # Get the command line args
     args = argparse.ArgumentParser()
-
-    args.add_argument(
-        "n",
-        type=int,
-        help="The number of stars to generate.",
-    )
 
     args.add_argument(
         "--basename",
@@ -87,4 +85,4 @@ if __name__ == "__main__":
 
     args = args.parse_args()
 
-    profile_mem_part_spectra(args.n, args.basename)
+    profile_time_part_spectra(args.basename)
