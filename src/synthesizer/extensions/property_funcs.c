@@ -219,6 +219,8 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
   struct grid *grid = malloc(sizeof(struct grid));
   bzero(grid, sizeof(struct grid));
 
+  printf("Malloced grid\n");
+
   /* Quick check to make sure our inputs are valid. */
   if (ndim == 0) {
     PyErr_SetString(PyExc_ValueError, "ndim must be greater than 0.");
@@ -239,11 +241,19 @@ struct grid *get_lines_grid_struct(PyObject *grid_tuple,
     return NULL;
   }
 
+  printf("Extracted dims: ");
+  for (int i = 0; i < ndim; i++) {
+    printf("%d ", grid->dims[i]);
+  }
+  printf("\n");
+
   /* Calculate the size of the grid. */
   grid->size = 1;
   for (int dim = 0; dim < ndim; dim++) {
     grid->size *= grid->dims[dim];
   }
+
+  printf("size: %d\n", grid->size);
 
   /* Extract the grid properties from the tuple of numpy arrays. */
   grid->props = extract_grid_props(grid_tuple, ndim, grid->dims);
