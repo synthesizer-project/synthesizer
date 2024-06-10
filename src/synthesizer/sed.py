@@ -249,10 +249,10 @@ class Sed:
         """
 
         # Ensure the wavelength arrays are compatible
-        # # NOTE: this is probably overkill and too costly. We
-        # could instead check the first and last entry and the shape.
-        # In rare instances this could fail though.
-        if not np.array_equal(self._lam, second_sed._lam):
+        if not (
+            self._lam[0] == second_sed._lam[0]
+            and self._lam[-1] == second_sed._lam[-1]
+        ):
             raise exceptions.InconsistentAddition(
                 "Wavelength grids must be identical "
                 f"({self.lam.min()}->{self.lam.max()} "
