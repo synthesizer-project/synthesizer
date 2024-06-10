@@ -40,7 +40,7 @@ static void store_weight(double weight, struct callback_data *data, void *out) {
   double *out_arr = (double *)out;
 
   /* Store the weight. */
-  out_arr[flat_ind] = weight;
+  out_arr[flat_ind] += weight;
 }
 
 /**
@@ -99,8 +99,6 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
   }
   bzero(grid_weights, grid_props->size * sizeof(double));
 
-  printf("Unpacked\n");
-
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
   if (strcmp(method, "cic") == 0) {
@@ -111,8 +109,6 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
-
-  printf("Got weights");
 
   /* Declare and initialise the vairbales we'll store our result in. */
   double line_lum = 0.0;

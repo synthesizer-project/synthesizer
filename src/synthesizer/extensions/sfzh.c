@@ -106,10 +106,6 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Clean up memory! */
-  free(part_props);
-  free(grid_props);
-
   /* Reconstruct the python array to return. */
   npy_intp np_dims[ndim];
   for (int idim = 0; idim < ndim; idim++) {
@@ -118,6 +114,10 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
   PyArrayObject *out_sfzh = (PyArrayObject *)PyArray_SimpleNewFromData(
       ndim, np_dims, NPY_FLOAT64, sfzh);
+
+  /* Clean up memory! */
+  free(part_props);
+  free(grid_props);
 
   return Py_BuildValue("N", out_sfzh);
 }

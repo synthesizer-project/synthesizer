@@ -41,7 +41,7 @@ static void store_weight(double weight, struct callback_data *data, void *out) {
   double *out_arr = (double *)out;
 
   /* Store the weight. */
-  out_arr[flat_ind] = weight * (1.0 - fesc);
+  out_arr[flat_ind] += weight * (1.0 - fesc);
 }
 
 /**
