@@ -164,6 +164,7 @@ extensions = [
         [
             "src/synthesizer/extensions/integrated_spectra.c",
             "src/synthesizer/extensions/weights.c",
+            "src/synthesizer/extensions/property_funcs.c",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -173,6 +174,7 @@ extensions = [
         [
             "src/synthesizer/extensions/particle_spectra.c",
             "src/synthesizer/extensions/weights.c",
+            "src/synthesizer/extensions/property_funcs.c",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -194,6 +196,7 @@ extensions = [
         [
             "src/synthesizer/extensions/sfzh.c",
             "src/synthesizer/extensions/weights.c",
+            "src/synthesizer/extensions/property_funcs.c",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -203,6 +206,7 @@ extensions = [
         [
             "src/synthesizer/extensions/los.c",
             "src/synthesizer/extensions/weights.c",
+            "src/synthesizer/extensions/property_funcs.c",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -212,6 +216,7 @@ extensions = [
         [
             "src/synthesizer/extensions/integrated_line.c",
             "src/synthesizer/extensions/weights.c",
+            "src/synthesizer/extensions/property_funcs.c",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -221,6 +226,7 @@ extensions = [
         [
             "src/synthesizer/extensions/particle_line.c",
             "src/synthesizer/extensions/weights.c",
+            "src/synthesizer/extensions/property_funcs.c",
         ],
         compile_flags=compile_flags,
         links=link_args,
