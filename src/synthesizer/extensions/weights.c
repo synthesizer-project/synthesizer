@@ -193,12 +193,6 @@ void weight_loop_cic(struct grid *grid, struct particles *parts, void *out,
           .indices = frac_ind,
           .dims = dims,
           .ndim = ndim,
-          .particle_index = p,
-          .nlam = grid->nlam,
-          .fesc = fesc[p] ? fesc != NULL : 0,
-          .grid_spectra = grid->spectra,
-          .grid_lines = grid->lines,
-          .grid_continuum = grid->continuum,
       };
 
       /* Call the callback function if we have something to do. */
