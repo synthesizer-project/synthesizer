@@ -15,10 +15,48 @@
 #include <numpy/ndarraytypes.h>
 
 /* Local includes */
-#include "hashmap.h"
 #include "macros.h"
 #include "property_funcs.h"
 #include "weights.h"
+
+/**
+ * @brief The callback function to store the spectra for each particle.
+ *
+ * @param weight: The weight for this particle.
+ * @param out: The particle spectra array.
+ */
+static void store_spectra(double weight, struct callback_data *data,
+                          void *out) {
+
+  /* Unpack the data. */
+  const int *indices = data->indices;
+  const int *dims = data->dims;
+  const int ndim = data->ndim;
+  const int nlam = data->nlam;
+  const double *grid_spectra = data->grid_spectra;
+  const int p = data->particle_index;
+  const double fesc = data->fesc;
+
+  /* Get the output array. */
+  double *spectra = (double *)out;
+
+  /* Get the weight's index. */
+  const int grid_ind = get_flat_index(indices, dims, ndim);
+
+  /* Get the spectra ind. */
+  int unraveled_ind[ndim + 1];
+  get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+  unraveled_ind[ndim] = 0;
+  int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+  /* Add this grid cell's contribution to the spectra */
+  for (int ilam = 0; ilam < nlam; ilam++) {
+
+    /* Add the contribution to this wavelength. */
+    spectra[p * nlam + ilam] +=
+        grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight;
+  }
+}
 
 /**
  * @brief Computes an integrated SED for a collection of particles.
@@ -52,70 +90,13 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
                         &npart, &nlam, &method))
     return NULL;
 
-  /* Quick check to make sure our inputs are valid. */
-  if (ndim == 0) {
-    PyErr_SetString(PyExc_ValueError, "ndim must be greater than 0.");
-    return NULL;
-  }
-  if (npart == 0) {
-    PyErr_SetString(PyExc_ValueError, "npart must be greater than 0.");
-    return NULL;
-  }
-  if (nlam == 0) {
-    PyErr_SetString(PyExc_ValueError, "nlam must be greater than 0.");
-    return NULL;
-  }
+  /* Extract the grid struct. */
+  struct grid *grid_props = get_spectra_grid_struct(
+      grid_tuple, np_ndims, np_grid_spectra, ndim, nlam);
 
-  /* Extract a pointer to the grid dims */
-  const int *dims = extract_data_int(np_ndims, "dims");
-  if (dims == NULL) {
-    return NULL;
-  }
-
-  /* Extract a pointer to the particle masses. */
-  const double *part_mass = extract_data_double(np_part_mass, "part_mass");
-  if (part_mass == NULL) {
-    return NULL;
-  }
-
-  /* Extract a pointer to the fesc array. */
-  const double *fesc = extract_data_double(np_fesc, "fesc");
-  if (fesc == NULL) {
-    return NULL;
-  }
-
-  /* Extract the grid properties from the tuple of numpy arrays. */
-  const double **grid_props = extract_grid_props(grid_tuple, ndim, dims);
-  if (grid_props == NULL) {
-    return NULL;
-  }
-
-  /* Extract the particle properties from the tuple of numpy arrays. */
-  const double **part_props = extract_part_props(part_tuple, ndim, npart);
-  if (part_props == NULL) {
-    return NULL;
-  }
-
-  /* With everything set up we can compute the weights for each particle using
-   * the requested method. */
-  HashMap *weights;
-  if (strcmp(method, "cic") == 0) {
-    weights = weight_loop_cic(grid_props, part_props, part_mass, dims, ndim,
-                              npart, /*per_part*/ 1);
-  } else if (strcmp(method, "ngp") == 0) {
-    weights = weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim,
-                              npart, /*per_part*/ 1);
-  } else {
-    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
-    return NULL;
-  }
-
-  /* Extract a pointer to the spectra grids */
-  const double *grid_spectra =
-      extract_data_double(np_grid_spectra, "grid_spectra");
-  if (grid_spectra == NULL) {
-    return NULL;
-  }
+  /* Extract the particle struct. */
+  struct particles *part_props =
+      get_part_struct(part_tuple, np_part_mass, np_fesc, npart, ndim);
 
   /* Set up arrays to hold the SEDs themselves. */
   double *spectra = malloc(npart * nlam * sizeof(double));
@@ -126,41 +107,18 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   }
   bzero(spectra, npart * nlam * sizeof(double));
 
-  /* Populate the integrated spectra. */
-  for (int i = 0; i < weights->size; i++) {
-    /* Get the hash map node. */
-    Node *node = weights->buckets[i];
-
-    /* Traverse the node linked list. */
-    while (node) {
-
-      /* Get the weight and indices. */
-      const double weight = node->value;
-      const IndexKey key = node->key;
-      const int *grid_ind = key.grid_indices;
-      const int p = key.particle_index;
-
-      /* Get the spectra ind. */
-      int unraveled_ind[ndim + 1];
-      memcpy(unraveled_ind, grid_ind, ndim * sizeof(int));
-      unraveled_ind[ndim] = 0;
-      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
-
-      /* Add this grid cell's contribution to the spectra */
-      for (int ilam = 0; ilam < nlam; ilam++) {
-
-        /* Add the contribution to this wavelength. */
-        spectra[p * nlam + ilam] +=
-            grid_spectra[spectra_ind + ilam] * (1 - fesc[p]) * weight;
-      }
-
-      /* Next... */
-      node = node->next;
-    }
+  /* With everything set up we can compute the weights for each particle using
+   * the requested method. */
+  if (strcmp(method, "cic") == 0) {
+    weight_loop_cic(grid_props, part_props, spectra, store_spectra);
+  } else if (strcmp(method, "ngp") == 0) {
+    weight_loop_ngp(grid_props, part_props, spectra, store_spectra);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    return NULL;
   }
 
   /* Clean up memory! */
-  free_hash_map(weights);
   free(part_props);
   free(grid_props);
 
