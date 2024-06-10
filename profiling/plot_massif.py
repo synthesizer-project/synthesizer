@@ -26,11 +26,13 @@ def parse_massif_file(filename):
     Parse a massif output file to extract time points and memory usage.
 
     Args:
-    filename (str): The name of the massif output file.
+        filename (str):
+            The name of the massif output file.
 
     Returns:
-    tuple: Two lists containing time points (in milliseconds) and memory usage
-    (in KB).
+        tuple:
+            Two lists containing time points (in milliseconds) and memory usage
+            (in KB).
     """
     with open(filename, "r") as f:
         lines = f.readlines()
@@ -66,7 +68,8 @@ def plot_massif_files(filenames):
     Plot memory usage over time for multiple massif output files.
 
     Args:
-    filenames (list): A list of massif output file names.
+        filenames (list):
+            A list of massif output file names.
     """
     plt.figure(figsize=(10, 6))
 
