@@ -131,3 +131,186 @@ const double **extract_part_props(PyObject *part_tuple, int ndim, int npart) {
   /* Success. */
   return part_props;
 }
+
+/**
+ * @brief Create the grid struct from the input numpy arrays.
+ *
+ * This method should be used for spectra grids.
+ *
+ * @param grid_tuple: A tuple of numpy arrays containing the grid properties.
+ * @param np_ndims: The number of grid cells along each axis.
+ * @param np_grid_spectra: The grid spectra.
+ * @param ndim: The number of dimensions in the grid.
+ * @param nlam: The number of wavelength elements.
+ *
+ * @return struct grid*: A pointer to the grid struct.
+ */
+struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
+                                     PyArrayObject *np_ndims,
+                                     PyArrayObject *np_grid_spectra,
+                                     const int ndim, const int nlam) {
+
+  /* Initialise the grid struct. */
+  struct grid *grid = malloc(sizeof(struct grid));
+  bzero(grid, sizeof(struct grid));
+
+  /* Quick check to make sure our inputs are valid. */
+  if (ndim == 0) {
+    PyErr_SetString(PyExc_ValueError, "ndim must be greater than 0.");
+    return NULL;
+  }
+  if (nlam == 0) {
+    PyErr_SetString(PyExc_ValueError, "nlam must be greater than 0.");
+    return NULL;
+  }
+
+  /* Attach the simple integers. */
+  grid->ndim = ndim;
+  grid->nlam = nlam;
+
+  /* Extract a pointer to the grid dims */
+  grid->dims = extract_data_int(np_ndims, "dims");
+  if (grid->dims == NULL) {
+    return NULL;
+  }
+
+  /* Calculate the size of the grid. */
+  grid->size = 1;
+  for (int dim = 0; dim < ndim; dim++) {
+    grid->size *= grid->dims[dim];
+  }
+
+  /* Extract the grid properties from the tuple of numpy arrays. */
+  grid->props = extract_grid_props(grid_tuple, ndim, grid->dims);
+  if (grid->props == NULL) {
+    return NULL;
+  }
+
+  /* Extract a pointer to the spectra grids */
+  grid->spectra = extract_data_double(np_grid_spectra, "grid_spectra");
+  if (grid->spectra == NULL) {
+    return NULL;
+  }
+
+  return grid;
+}
+
+/**
+ * @brief Create the grid struct from the input numpy arrays.
+ *
+ * This method should be used for line grids.
+ *
+ * @param grid_tuple: A tuple of numpy arrays containing the grid properties.
+ * @param np_ndims: The number of grid cells along each axis.
+ * @param np_grid_lines: The grid lines.
+ * @param np_grid_continuum: The grid continuum.
+ * @param ndim: The number of dimensions in the grid.
+ * @param nlam: The number of wavelength elements.
+ *
+ * @return struct grid*: A pointer to the grid struct.
+ */
+struct grid *get_lines_grid_struct(PyObject *grid_tuple,
+                                   PyArrayObject *np_ndims,
+                                   PyArrayObject *np_grid_lines,
+                                   PyArrayObject *np_grid_continuum,
+                                   const int ndim, const int nlam) {
+
+  /* Initialise the grid struct. */
+  struct grid *grid = malloc(sizeof(struct grid));
+  bzero(grid, sizeof(struct grid));
+
+  /* Quick check to make sure our inputs are valid. */
+  if (ndim == 0) {
+    PyErr_SetString(PyExc_ValueError, "ndim must be greater than 0.");
+    return NULL;
+  }
+  if (nlam == 0) {
+    PyErr_SetString(PyExc_ValueError, "nlam must be greater than 0.");
+    return NULL;
+  }
+
+  /* Attach the simple integers. */
+  grid->ndim = ndim;
+  grid->nlam = nlam;
+
+  /* Extract a pointer to the grid dims */
+  grid->dims = extract_data_int(np_ndims, "dims");
+  if (grid->dims == NULL) {
+    return NULL;
+  }
+
+  /* Calculate the size of the grid. */
+  grid->size = 1;
+  for (int dim = 0; dim < ndim; dim++) {
+    grid->size *= grid->dims[dim];
+  }
+
+  /* Extract the grid properties from the tuple of numpy arrays. */
+  grid->props = extract_grid_props(grid_tuple, ndim, grid->dims);
+  if (grid->props == NULL) {
+    return NULL;
+  }
+
+  /* Extract a pointer to the line grids */
+  grid->lines = extract_data_double(np_grid_lines, "grid_lines");
+  if (grid->lines == NULL) {
+    return NULL;
+  }
+
+  /* Extract a pointer to the continuum grid. */
+  grid->continuum = extract_data_double(np_grid_continuum, "grid_continuum");
+  if (grid->continuum == NULL) {
+    return NULL;
+  }
+
+  return grid;
+}
+/**
+ * @brief Create the particles struct from the input numpy arrays.
+ *
+ * @param part_tuple: A tuple of numpy arrays containing the particle
+ * properties.
+ * @param np_part_mass: The particle masses.
+ * @param np_fesc: The escape fractions.
+ * @param npart: The number of particles.
+ *
+ * @return struct particles*: A pointer to the particles struct.
+ */
+struct particles *get_part_struct(PyObject *part_tuple,
+                                  PyArrayObject *np_part_mass,
+                                  PyArrayObject *np_fesc, const int npart,
+                                  const int ndim) {
+
+  /* Initialise the particles struct. */
+  struct particles *particles = malloc(sizeof(struct particles));
+  bzero(particles, sizeof(struct particles));
+
+  /* Quick check to make sure our inputs are valid. */
+  if (npart == 0) {
+    PyErr_SetString(PyExc_ValueError, "npart must be greater than 0.");
+    return NULL;
+  }
+
+  /* Attach the simple integers. */
+  particles->npart = npart;
+
+  /* Extract a pointer to the particle masses. */
+  particles->mass = extract_data_double(np_part_mass, "part_mass");
+  if (particles->mass == NULL) {
+    return NULL;
+  }
+
+  /* Extract a pointer to the fesc array. */
+  particles->fesc = extract_data_double(np_fesc, "fesc");
+  if (particles->fesc == NULL) {
+    return NULL;
+  }
+
+  /* Extract the particle properties from the tuple of numpy arrays. */
+  particles->props = extract_part_props(part_tuple, ndim, npart);
+  if (particles->props == NULL) {
+    return NULL;
+  }
+
+  return particles;
+}
