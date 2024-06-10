@@ -255,9 +255,9 @@ class Sed:
         ):
             raise exceptions.InconsistentAddition(
                 "Wavelength grids must be identical "
-                f"({self.lam.min()}->{self.lam.max()} "
+                f"({self.lam.min()} -> {self.lam.max()} "
                 f"with shape {self._lam.shape} != "
-                f"{second_sed.lam.min()}->{second_sed.lam.max()} "
+                f"{second_sed.lam.min()} -> {second_sed.lam.max()} "
                 f"with shape {second_sed._lam.shape})"
             )
 
