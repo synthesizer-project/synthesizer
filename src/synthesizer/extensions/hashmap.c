@@ -233,9 +233,9 @@ void insert(HashMap *hash_map, const IndexKey key, const double value) {
   else if (hash_map->node_pool_used == hash_map->node_pool_count) {
 
     /* Allocate a new node pool. */
-    hash_map->node_pool[hash_map->node_pool_count] =
-        (Node *)malloc(NODE_POOL_SIZE * sizeof(Node));
     hash_map->node_pool_count += NODE_POOL_SIZE;
+    hash_map->node_pool = (Node *)realloc(
+        hash_map->node_pool, hash_map->node_pool_count * sizeof(Node));
   }
 }
 
