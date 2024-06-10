@@ -9,7 +9,6 @@
 #include <string.h>
 
 /* Local includes */
-#include "hashmap.h"
 #include "weights.h"
 
 /**
@@ -83,20 +82,24 @@ int binary_search(int low, int high, const double *arr, const double val) {
  * @brief This calculates the grid weights in each grid cell using a cloud
  *        in cell approach.
  *
- * @param grid_props: An array of the properties along each grid axis.
- * @param part_props: An array of the particle properties, in the same property
- *                    order as grid props.
- * @param part_masses: The mass of the particles.
- * @param dims: The length of each grid dimension.
- * @param ndim: The number of grid dimensions.
- * @param npart: The number of particles.
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param out: The output to be handed to the callback function.
+ * @param func: The callback function to be called.
  */
-HashMap *weight_loop_cic(const double **grid_props, const double **part_props,
-                         const double *part_masses, const int *dims,
-                         const int ndim, const int npart, const int per_part) {
+void weight_loop_cic(struct grid *grid, struct particles *parts, void *out,
+                     WeightFunc func) {
 
-  /* Get a hashmap to store the weights in. */
-  HashMap *weights = create_hash_map(ndim + 1);
+  /* Unpack the grid properties. */
+  const int *dims = grid->dims;
+  const int ndim = grid->ndim;
+  const double **grid_props = grid->props;
+
+  /* Unpack the particles properties. */
+  const double *part_masses = parts->mass;
+  const double **part_props = parts->props;
+  const double *fesc = parts->fesc;
+  const int npart = parts->npart;
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -185,45 +188,47 @@ HashMap *weight_loop_cic(const double **grid_props, const double **part_props,
         }
       }
 
-      /* Early skip for cells contributing a 0 fraction. */
-      if (frac == 0)
-        continue;
+      /* Define the callback data. */
+      struct callback_data data = {
+          .indices = frac_ind,
+          .dims = dims,
+          .ndim = ndim,
+          .particle_index = p,
+          .nlam = grid->nlam,
+          .fesc = fesc[p] ? fesc != NULL : 0,
+          .grid_spectra = grid->spectra,
+          .grid_lines = grid->lines,
+          .grid_continuum = grid->continuum,
+      };
 
-      /* Create a key for the hash map (with or without the particle
-       * index). */
-      IndexKey key;
-      if (per_part) {
-        key = create_key(p, frac_ind, ndim + 1);
-      } else {
-        key = create_key(0, frac_ind, ndim + 1);
-      }
-
-      /* Store the weight. */
-      insert(weights, key, mass * frac);
+      /* Call the callback function if we have something to do. */
+      func(frac * mass, &data, out);
     }
   }
-
-  return weights;
 }
 
 /**
  * @brief This calculates the grid weights in each grid cell using a nearest
  *        grid point approach.
  *
- * @param grid_props: An array of the properties along each grid axis.
- * @param part_props: An array of the particle properties, in the same property
- *                    order as grid props.
- * @param part_masses: The mass of the particles.
- * @param dims: The length of each grid dimension.
- * @param ndim: The number of grid dimensions.
- * @param npart: The number of particles.
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param out: The output to be handed to the callback function.
+ * @param func: The callback function to be called.
  */
-HashMap *weight_loop_ngp(const double **grid_props, const double **part_props,
-                         const double *part_masses, const int *dims,
-                         const int ndim, const int npart, const int per_part) {
+void weight_loop_ngp(struct grid *grid, struct particles *parts, void *out,
+                     WeightFunc func) {
 
-  /* Get a hashmap to store the weights in. */
-  HashMap *weights = create_hash_map(ndim + 1);
+  /* Unpack the grid properties. */
+  const int *dims = grid->dims;
+  const int ndim = grid->ndim;
+  const double **grid_props = grid->props;
+
+  /* Unpack the particles properties. */
+  const double *part_masses = parts->mass;
+  const double **part_props = parts->props;
+  const double *fesc = parts->fesc;
+  const int npart = parts->npart;
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -281,18 +286,21 @@ HashMap *weight_loop_ngp(const double **grid_props, const double **part_props,
       }
     }
 
-    /* Create a key for the hash map (with or without the particle
-     * index). */
-    IndexKey key;
-    if (per_part) {
-      key = create_key(p, part_indices, ndim + 1);
-    } else {
-      key = create_key(0, part_indices, ndim + 1);
-    }
+    /* Define the callback data. */
+    struct callback_data data = {
+        .indices = part_indices,
+        .dims = dims,
+        .ndim = ndim,
+        .particle_index = p,
+        .nlam = grid->nlam,
+        .fesc = fesc[p] ? fesc != NULL : 0,
+        .grid_spectra = grid->spectra,
+        .grid_lines = grid->lines,
+        .grid_continuum = grid->continuum,
 
-    /* Store the weight. */
-    insert(weights, key, mass);
+    };
+
+    /* Call the callback function if we have something to do. */
+    func(mass, &data, out);
   }
-
-  return weights;
 }
