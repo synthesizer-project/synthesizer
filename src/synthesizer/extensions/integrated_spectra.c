@@ -127,36 +127,29 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   bzero(spectra, nlam * sizeof(double));
 
   /* Populate the integrated spectra. */
-  for (int i = 0; i < weights->size; i++) {
+  for (int i = 0; i < weights->node_pool_used; i++) {
     /* Get the hash map node. */
-    Node *node = weights->buckets[i];
+    Node *node = weights->node_pool[i];
 
-    /* Traverse the node linked list. */
-    while (node) {
+    /* Get the weight and indices. */
+    const double weight = node->value;
+    const IndexKey key = node->key;
+    const int *grid_ind = key.grid_indices;
+    const int p = key.particle_index;
 
-      /* Get the weight and indices. */
-      const double weight = node->value;
-      const IndexKey key = node->key;
-      const int *grid_ind = key.grid_indices;
-      const int p = key.particle_index;
+    /* Get the spectra ind. */
+    int unraveled_ind[ndim + 1];
+    memcpy(unraveled_ind, grid_ind, ndim * sizeof(int));
+    unraveled_ind[ndim] = 0;
+    int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
 
-      /* Get the spectra ind. */
-      int unraveled_ind[ndim + 1];
-      memcpy(unraveled_ind, grid_ind, ndim * sizeof(int));
-      unraveled_ind[ndim] = 0;
-      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+    /* Add this grid cell's contribution to the spectra */
+    for (int ilam = 0; ilam < nlam; ilam++) {
 
-      /* Add this grid cell's contribution to the spectra */
-      for (int ilam = 0; ilam < nlam; ilam++) {
-
-        /* Add the contribution to this wavelength. */
-        /* fesc is already included in the weight */
-        spectra[ilam] +=
-            grid_spectra[spectra_ind + ilam] * weight * (1.0 - fesc[p]);
-      }
-
-      /* Next... */
-      node = node->next;
+      /* Add the contribution to this wavelength. */
+      /* fesc is already included in the weight */
+      spectra[ilam] +=
+          grid_spectra[spectra_ind + ilam] * weight * (1.0 - fesc[p]);
     }
   }
 
