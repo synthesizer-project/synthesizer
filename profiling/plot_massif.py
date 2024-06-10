@@ -15,9 +15,9 @@ visualized using this script.
 """
 
 import argparse
-import re
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def parse_massif_file(filename):
@@ -37,20 +37,27 @@ def parse_massif_file(filename):
     time_points = []
     memory_usage = []
 
-    # Regular expressions to match time and memory usage lines in the massif
-    # file
-    time_re = re.compile(r"time=(\d+)")
-    mem_re = re.compile(r"mem_heap_B=(\d+)")
-
     for line in lines:
-        time_match = time_re.search(line)
-        mem_match = mem_re.search(line)
-        if time_match and mem_match:
-            # Convert time to milliseconds and memory to KB
-            time_points.append(int(time_match.group(1)))
-            memory_usage.append(
-                int(mem_match.group(1)) / 1024
-            )  # Convert to KB
+        # Skip lines that don't contain memory usage data
+        if not line.startswith("time=") and not line.startswith("mem_heap_B"):
+            continue
+
+        # Extract time and memory usage data
+        time_match = int(line.strip().split("=")[1])
+        mem_match = int(line.strip().split("=")[1])
+
+        # Convert time to milliseconds and memory to KB
+        time_points.append(time_match)
+        memory_usage.append(mem_match / 1024)  # Convert to KB
+
+    # Convert to arrays
+    time_points = np.array(time_points)
+    memory_usage = np.array(memory_usage)
+
+    # Sort by time points
+    sort_idx = np.argsort(time_points)
+    time_points = time_points[sort_idx]
+    memory_usage = memory_usage[sort_idx]
 
     return time_points, memory_usage
 
@@ -66,7 +73,7 @@ def plot_massif_files(filenames):
 
     for filename in filenames:
         time_points, memory_usage = parse_massif_file(filename)
-        plt.plot(time_points, memory_usage, label=filename)
+        plt.semilogy(time_points, memory_usage, label=filename)
 
     plt.xlabel("Time (ms)")
     plt.ylabel("Memory Usage (KB)")
