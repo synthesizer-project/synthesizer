@@ -51,7 +51,7 @@ def profile_time_part_spectra(basename):
     times = []
 
     # Loop over the number of stars
-    for n in [10, 100, 1000, 10000]:
+    for n in [10, 10**2, 10**3, 10**4, 10**5]:
         start = time.time()
 
         # Sample the SFZH, producing a Stars object
