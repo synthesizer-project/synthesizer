@@ -34,10 +34,8 @@ def profile_mem_part_spectra(n, basename):
     # Define the grid (normally this would be defined by an SPS grid)
     log10ages = np.arange(6.0, 10.5, 0.1)
     metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
-    Z_p = {"metallicity": 0.01}
-    metal_dist = ZDist.DeltaConstant(**Z_p)
-    sfh_p = {"duration": 100 * Myr}
-    sfh = SFH.Constant(**sfh_p)  # constant star formation
+    metal_dist = ZDist.Normal(0.01, 0.005)
+    sfh = SFH.Constant(100 * Myr)  # constant star formation
 
     # Generate the star formation metallicity history
     mass = 10**10
