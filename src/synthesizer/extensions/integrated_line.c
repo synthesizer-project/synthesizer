@@ -15,7 +15,9 @@
 #include <numpy/ndarraytypes.h>
 
 /* Local includes */
+#include "hashmap.h"
 #include "macros.h"
+#include "property_funcs.h"
 #include "weights.h"
 
 /**
@@ -61,17 +63,60 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Extract a pointer to the lines grids */
-  const double *grid_lines = PyArray_DATA(np_grid_lines);
+  /* Extract a pointer to the grid dims */
+  const int *dims = extract_data_int(np_ndims, "dims");
+  if (dims == NULL) {
+    return NULL;
+  }
+
+  /* Extract a pointer to the particle masses. */
+  const double *part_mass = extract_data_double(np_part_mass, "part_mass");
+  if (part_mass == NULL) {
+    return NULL;
+  }
+
+  /* Extract a pointer to the fesc array. */
+  const double *fesc = extract_data_double(np_fesc, "fesc");
+  if (fesc == NULL) {
+    return NULL;
+  }
+
+  /* Extract the grid properties from the tuple of numpy arrays. */
+  const double **grid_props = extract_grid_props(grid_tuple, ndim, dims);
+  if (grid_props == NULL) {
+    return NULL;
+  }
+
+  /* Extract the particle properties from the tuple of numpy arrays. */
+  const double **part_props = extract_part_props(part_tuple, ndim, npart);
+  if (part_props == NULL) {
+    return NULL;
+  }
+
+  /* With everything set up we can compute the weights for each particle using
+   * the requested method. */
+  HashMap *weights;
+  if (strcmp(method, "cic") == 0) {
+    weights = weight_loop_cic(grid_props, part_props, part_mass, dims, ndim,
+                              npart, /*per_part*/ 0);
+  } else if (strcmp(method, "ngp") == 0) {
+    weights = weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim,
+                              npart, /*per_part*/ 0);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    return NULL;
+  }
+
+  /* Extract a pointer to the line grids */
+  const double *grid_lines = extract_data_double(np_grid_lines, "grid_lines");
   if (grid_lines == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract grid_lines.");
     return NULL;
   }
 
   /* Extract a pointer to the continuum grid. */
-  const double *grid_continuum = PyArray_DATA(np_grid_continuum);
+  const double *grid_continuum =
+      extract_data_double(np_grid_continuum, "grid_continuum");
   if (grid_continuum == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract grid_continuum.");
     return NULL;
   }
 
@@ -79,140 +124,33 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
   double line_lum = 0.0;
   double line_cont = 0.0;
 
-  /* Extract a pointer to the grid dims */
-  const int *dims = PyArray_DATA(np_ndims);
-  if (dims == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract dims from np_ndims.");
-    return NULL;
-  }
+  /* Populate the integrated line. */
+  for (int i = 0; i < weights->size; i++) {
+    /* Get the hash map node. */
+    Node *node = weights->buckets[i];
 
-  /* Extract a pointer to the particle masses. */
-  const double *part_mass = PyArray_DATA(np_part_mass);
-  if (part_mass == NULL) {
-    PyErr_SetString(PyExc_ValueError,
-                    "Failed to extract part_mass from np_part_mass.");
-    return NULL;
-  }
+    /* Traverse the node linked list. */
+    while (node) {
 
-  /* Extract a pointer to the fesc array. */
-  const double *fesc = PyArray_DATA(np_fesc);
-  if (fesc == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract fesc from np_fesc.");
-    return NULL;
-  }
+      /* Get the weight and indices. */
+      const double weight = node->value;
+      const IndexKey key = node->key;
+      const int p = key.particle_index;
 
-  /* Allocate a single array for grid properties*/
-  int nprops = 0;
-  for (int dim = 0; dim < ndim; dim++)
-    nprops += dims[dim];
-  const double **grid_props = malloc(nprops * sizeof(double *));
-  if (grid_props == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for grid_props.");
-    return NULL;
-  }
+      /* Get the grid index. */
+      int grid_ind = get_flat_index(key.grid_indices, dims, ndim);
 
-  /* How many grid elements are there? */
-  int grid_size = 1;
-  for (int dim = 0; dim < ndim; dim++)
-    grid_size *= dims[dim];
+      /* Add this grid cell's contribution to the lines */
+      line_lum += grid_lines[grid_ind] * weight * (1.0 - fesc[p]);
+      line_cont += grid_continuum[grid_ind] * weight * (1.0 - fesc[p]);
 
-  /* Allocate an array to hold the grid weights. */
-  double *grid_weights = malloc(grid_size * sizeof(double));
-  if (grid_weights == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for grid_weights.");
-    return NULL;
-  }
-  bzero(grid_weights, grid_size * sizeof(double));
-
-  /* Unpack the grid property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    PyArrayObject *np_grid_arr =
-        (PyArrayObject *)PyTuple_GetItem(grid_tuple, idim);
-    if (np_grid_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
-      return NULL;
+      /* Next... */
+      node = node->next;
     }
-    const double *grid_arr = PyArray_DATA(np_grid_arr);
-    if (grid_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
-      return NULL;
-    }
-
-    /* Assign this data to the property array. */
-    grid_props[idim] = grid_arr;
-  }
-
-  /* Allocate a single array for particle properties. */
-  const double **part_props = malloc(npart * ndim * sizeof(double *));
-  if (part_props == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for part_props.");
-    return NULL;
-  }
-
-  /* Unpack the particle property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    PyArrayObject *np_part_arr =
-        (PyArrayObject *)PyTuple_GetItem(part_tuple, idim);
-    if (np_part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-      return NULL;
-    }
-    const double *part_arr = PyArray_DATA(np_part_arr);
-
-    /* Assign this data to the property array. */
-    part_props[idim] = part_arr;
-  }
-
-  /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
-
-    /* Get this particle's mass. */
-    const double mass = part_mass[p];
-
-    /* Finally, compute the weights for this particle using the
-     * requested method. */
-    if (strcmp(method, "cic") == 0) {
-      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim, p,
-                      fesc[p]);
-    } else if (strcmp(method, "ngp") == 0) {
-      weight_loop_ngp(grid_props, part_props, mass, grid_weights, dims, ndim, p,
-                      fesc[p]);
-    } else {
-      /* Only print this warning once! */
-      if (p == 0)
-        printf(
-            "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
-            method);
-      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim, p,
-                      fesc[p]);
-    }
-
-  } /* Loop over particles. */
-
-  /* Loop over grid cells populating the lines. */
-  for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
-
-    /* Get the weight. */
-    const double weight = grid_weights[grid_ind];
-
-    /* Skip zero weight cells. */
-    if (weight <= 0)
-      continue;
-
-    /* Add this grid cell's contribution to the lines */
-    line_lum += grid_lines[grid_ind] * weight;
-    line_cont += grid_continuum[grid_ind] * weight;
   }
 
   /* Clean up memory! */
-  free(grid_weights);
+  free_hash_map(weights);
   free(part_props);
   free(grid_props);
 
