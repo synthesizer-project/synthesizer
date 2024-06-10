@@ -54,6 +54,7 @@ static void store_lines(double weight, struct callback_data *data, void *out) {
   line_lum[p] += grid_lines[grid_ind] * (1 - fesc) * weight;
   line_cont[p] += grid_continuum[grid_ind] * (1 - fesc) * weight;
 }
+
 /**
  * @brief Computes per particle line emission for a collection of particles.
  *
