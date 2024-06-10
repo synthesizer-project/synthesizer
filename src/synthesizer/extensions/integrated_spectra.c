@@ -80,10 +80,16 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   /* Extract the grid struct. */
   struct grid *grid_props = get_spectra_grid_struct(
       grid_tuple, np_ndims, np_grid_spectra, ndim, nlam);
+  if (grid_props == NULL) {
+    return NULL;
+  }
 
   /* Extract the particle struct. */
   struct particles *part_props =
       get_part_struct(part_tuple, np_part_mass, np_fesc, npart, ndim);
+  if (part_props == NULL) {
+    return NULL;
+  }
 
   /* Allocate an array to hold the grid weights. */
   double *grid_weights = malloc(grid_props->size * sizeof(double));

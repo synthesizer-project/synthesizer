@@ -78,11 +78,17 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
   /* Extract the grid struct. */
   struct grid *grid_props = get_lines_grid_struct(
-      grid_tuple, np_ndims, np_grid_lines, np_grid_continuum, ndim, /*nlam*/ 0);
+      grid_tuple, np_ndims, np_grid_lines, np_grid_continuum, ndim, /*nlam*/ 1);
+  if (grid_props == NULL) {
+    return NULL;
+  }
 
   /* Extract the particle struct. */
   struct particles *part_props =
       get_part_struct(part_tuple, np_part_mass, np_fesc, npart, ndim);
+  if (part_props == NULL) {
+    return NULL;
+  }
 
   /* Allocate an array to hold the grid weights. */
   double *grid_weights = malloc(grid_props->size * sizeof(double));
@@ -92,6 +98,8 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
     return NULL;
   }
   bzero(grid_weights, grid_props->size * sizeof(double));
+
+  printf("Unpacked\n");
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
@@ -103,6 +111,8 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
+
+  printf("Got weights");
 
   /* Declare and initialise the vairbales we'll store our result in. */
   double line_lum = 0.0;
