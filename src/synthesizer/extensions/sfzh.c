@@ -15,10 +15,34 @@
 #include <numpy/ndarraytypes.h>
 
 /* Local includes */
-#include "hashmap.h"
 #include "macros.h"
 #include "property_funcs.h"
 #include "weights.h"
+
+/**
+ * @brief The callback function to store the mass of each particle in the
+ * corresponding SFZH bin.
+ *
+ * @param mass: The mass for this particle.
+ * @param data: The callback data.
+ * @param out: The grid weights.
+ */
+static void store_mass(double mass, struct callback_data *data, void *out) {
+
+  /* Unpack the data. */
+  const int *indices = data->indices;
+  const int *dims = data->dims;
+  const int ndim = data->ndim;
+
+  /* Unravel the indices. */
+  int flat_ind = get_flat_index(indices, dims, ndim);
+
+  /* Get the output array. */
+  double *out_arr = (double *)out;
+
+  /* Store the mass. */
+  out_arr[flat_ind] += mass;
+}
 
 /**
  * @brief Computes an integrated SED for a collection of particles.
@@ -49,97 +73,41 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
                         &np_part_mass, &np_ndims, &ndim, &npart, &method))
     return NULL;
 
-  /* Quick check to make sure our inputs are valid. */
-  if (ndim == 0) {
-    PyErr_SetString(PyExc_ValueError, "ndim must be greater than 0.");
-    return NULL;
-  }
-  if (npart == 0) {
-    PyErr_SetString(PyExc_ValueError, "npart must be greater than 0.");
-    return NULL;
-  }
+  /* Extract the grid struct. */
+  struct grid *grid_props = get_spectra_grid_struct(
+      grid_tuple, np_ndims, /*np_grid_spectra*/ NULL, ndim, /*nlam*/ 0);
 
-  /* Extract a pointer to the grid dims */
-  const int *dims = extract_data_int(np_ndims, "dims");
-  if (dims == NULL) {
+  /* Extract the particle struct. */
+  struct particles *part_props =
+      get_part_struct(part_tuple, np_part_mass, /*np_fesc*/ NULL, npart, ndim);
+
+  /* Allocate an array to hold the grid weights. */
+  double *sfzh = malloc(grid_props->size * sizeof(double));
+  if (sfzh == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for sfzh.");
     return NULL;
   }
-
-  /* Extract a pointer to the particle masses. */
-  const double *part_mass = extract_data_double(np_part_mass, "part_mass");
-  if (part_mass == NULL) {
-    return NULL;
-  }
-
-  /* Extract the grid properties from the tuple of numpy arrays. */
-  const double **grid_props = extract_grid_props(grid_tuple, ndim, dims);
-  if (grid_props == NULL) {
-    return NULL;
-  }
-
-  /* Extract the particle properties from the tuple of numpy arrays. */
-  const double **part_props = extract_part_props(part_tuple, ndim, npart);
-  if (part_props == NULL) {
-    return NULL;
-  }
-
-  /* How many grid elements are there? (excluding wavelength axis)*/
-  int grid_size = 1;
-  for (int dim = 0; dim < ndim; dim++)
-    grid_size *= dims[dim];
+  bzero(sfzh, grid_props->size * sizeof(double));
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
-  HashMap *weights;
   if (strcmp(method, "cic") == 0) {
-    weights = weight_loop_cic(grid_props, part_props, part_mass, dims, ndim,
-                              npart, /*per_part*/ 0);
+    weight_loop_cic(grid_props, part_props, sfzh, store_mass);
   } else if (strcmp(method, "ngp") == 0) {
-    weights = weight_loop_ngp(grid_props, part_props, part_mass, dims, ndim,
-                              npart, /*per_part*/ 0);
+    weight_loop_ngp(grid_props, part_props, sfzh, store_mass);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
 
-  /* Allocate an array to hold the grid weights. */
-  double *sfzh = malloc(grid_size * sizeof(double));
-  if (sfzh == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for sfzh.");
-    return NULL;
-  }
-  bzero(sfzh, grid_size * sizeof(double));
-
-  /* Populate the SFZH. */
-  for (int i = 0; i < weights->size; i++) {
-    /* Get the hash map node. */
-    Node *node = weights->buckets[i];
-
-    /* Traverse the node linked list. */
-    while (node) {
-
-      /* Get the weight and indices. */
-      const double weight = node->value;
-      const IndexKey key = node->key;
-      const int flat_ind = get_flat_index(key.grid_indices, dims, ndim);
-
-      /* Add the weight to the SFZH. */
-      sfzh[flat_ind] += weight;
-
-      /* Next... */
-      node = node->next;
-    }
-  }
-
   /* Clean up memory! */
-  free_hash_map(weights);
   free(part_props);
   free(grid_props);
 
   /* Reconstruct the python array to return. */
   npy_intp np_dims[ndim];
   for (int idim = 0; idim < ndim; idim++) {
-    np_dims[idim] = dims[idim];
+    np_dims[idim] = grid_props->dims[idim];
   }
 
   PyArrayObject *out_sfzh = (PyArrayObject *)PyArray_SimpleNewFromData(
