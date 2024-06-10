@@ -125,6 +125,9 @@ void free_hash_map(HashMap *hash_map) {
     }
   }
 
+  /* Free the node pool. */
+  free(hash_map->node_pool);
+
   /* Free the hash map. */
   free(hash_map->buckets);
   free(hash_map);
