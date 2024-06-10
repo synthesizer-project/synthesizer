@@ -1,4 +1,8 @@
-"""A script to profile the memory usage of a particle spectra calculation."""
+"""A script to profile the memory usage of a particle spectra calculation.
+
+Usage:
+    python profile_mem_part_spectra.py 1000 --basename test
+"""
 
 import argparse
 import time
