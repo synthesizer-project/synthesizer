@@ -114,18 +114,7 @@ HashMap *create_hash_map(const int ndim) {
  */
 void free_hash_map(HashMap *hash_map) {
 
-  /* Free the buckets. */
-  for (int i = 0; i < hash_map->size; i++) {
-    Node *node = hash_map->buckets[i];
-    while (node != NULL) {
-      Node *next = node->next;
-      free_key(node->key);
-      free(node);
-      node = next;
-    }
-  }
-
-  /* Free the node pool. */
+  /* Free the node pool (which will free all nodes). */
   free(hash_map->node_pool);
 
   /* Free the hash map. */
@@ -244,9 +233,9 @@ void insert(HashMap *hash_map, const IndexKey key, const double value) {
   else if (hash_map->node_pool_used == hash_map->node_pool_count) {
 
     /* Allocate a new node pool. */
-    hash_map->node_pool = (Node *)malloc(NODE_POOL_SIZE * sizeof(Node));
+    hash_map->node_pool[hash_map->node_pool_count] =
+        (Node *)malloc(NODE_POOL_SIZE * sizeof(Node));
     hash_map->node_pool_count += NODE_POOL_SIZE;
-    hash_map->node_pool_used = 0;
   }
 }
 
@@ -278,7 +267,6 @@ void delete_key(HashMap *hash_map, IndexKey key) {
 
       /* Free the memory. */
       free_key(node->key);
-      free(node);
       hash_map->count--;
       return;
     }
