@@ -11,6 +11,7 @@
 // Initial size of the hash map
 #define INITIAL_SIZE 50
 #define LOAD_FACTOR_THRESHOLD 0.75
+#define NODE_POOL_SIZE 100
 
 /*! @brief A key for the hash map. */
 typedef struct {
@@ -54,6 +55,15 @@ typedef struct HashMap {
 
   /* The dimension of the key. */
   int dimension;
+
+  /* The pool of nodes (to avoid multiple small mallocs). */
+  Node *node_pool;
+
+  /* The number of nodes in the pool. */
+  int node_pool_count;
+
+  /* The number of used nodes in the pool. */
+  int node_pool_used;
 
 } HashMap;
 

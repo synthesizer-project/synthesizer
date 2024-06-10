@@ -99,6 +99,11 @@ HashMap *create_hash_map(const int ndim) {
     hash_map->buckets[i] = NULL;
   }
 
+  /* Allocate the initial node pool. */
+  hash_map->node_pool = (Node *)malloc(NODE_POOL_SIZE * sizeof(Node));
+  hash_map->node_pool_count = NODE_POOL_SIZE;
+  hash_map->node_pool_used = 0;
+
   return hash_map;
 }
 
@@ -216,7 +221,7 @@ void insert(HashMap *hash_map, const IndexKey key, const double value) {
   }
 
   /* Ok, if we got here it doesn't exist, lets make a new node. */
-  node = (Node *)malloc(sizeof(Node));
+  node = &hash_map->node_pool[hash_map->node_pool_used++];
   node->key = key;
   node->value = value;
 
@@ -230,6 +235,15 @@ void insert(HashMap *hash_map, const IndexKey key, const double value) {
 
     /* Resize the hash map. */
     resize(hash_map);
+  }
+
+  /* Have we exceeded the node pool? */
+  else if (hash_map->node_pool_used == hash_map->node_pool_count) {
+
+    /* Allocate a new node pool. */
+    hash_map->node_pool = (Node *)malloc(NODE_POOL_SIZE * sizeof(Node));
+    hash_map->node_pool_count += NODE_POOL_SIZE;
+    hash_map->node_pool_used = 0;
   }
 }
 
