@@ -8,7 +8,8 @@ Usage:
     python plot_massif.py massif.out.1 massif.out.2
 
 Example of profiling a script with valgrind:
-    valgrind --tool=massif --massif-out-file=massif.out python your_script.py
+    valgrind --tool=massif --time-unit=ms --detailed-freq=1
+       --massif-out-file=massif.out python your_script.py
 
 This will generate a massif output file named massif.out, which can then be
 visualized using this script.
@@ -43,12 +44,10 @@ def parse_massif_file(filename):
             continue
 
         # Extract time and memory usage data
-        time_match = int(line.strip().split("=")[1])
-        mem_match = int(line.strip().split("=")[1])
-
-        # Convert time to milliseconds and memory to KB
-        time_points.append(time_match)
-        memory_usage.append(mem_match / 1024)  # Convert to KB
+        if line.startswith("time="):
+            time_points.append(int(line.split("=")[1]))
+        else:
+            memory_usage.append(int(line.split("=")[1]) / 1024)
 
     # Convert to arrays
     time_points = np.array(time_points)
@@ -73,7 +72,9 @@ def plot_massif_files(filenames):
 
     for filename in filenames:
         time_points, memory_usage = parse_massif_file(filename)
-        plt.semilogy(time_points, memory_usage, label=filename)
+        plt.semilogy(
+            time_points, memory_usage, label="_".join(filename.split(".")[:-1])
+        )
 
     plt.xlabel("Time (ms)")
     plt.ylabel("Memory Usage (KB)")
