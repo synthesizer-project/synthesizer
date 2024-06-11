@@ -22,7 +22,7 @@ plt.rcParams["font.serif"] = ["Times New Roman"]
 np.random.seed(42)
 
 
-def profile_mem_int_spectra(n, basename):
+def profile_mem_int_spectra(n):
     """Profile the memory usage of the integrated spectra calculation."""
     start = time.time()
 
@@ -47,9 +47,6 @@ def profile_mem_int_spectra(n, basename):
         initial_mass=mass,
     )
 
-    # Setup lists for times
-    times = []
-
     # Sample the SFZH, producing a Stars object
     stars = sample_sfhz(
         param_stars.sfzh,
@@ -63,9 +60,6 @@ def profile_mem_int_spectra(n, basename):
     stars.get_spectra_incident(grid)
 
     print(f"{n} stars took", time.time() - start)
-    times.append(time.time() - start)
-
-    np.savetxt(f"{basename}_{n}_integrated_mem_times.txt", times)
 
 
 if __name__ == "__main__":
@@ -78,13 +72,6 @@ if __name__ == "__main__":
         help="The number of stars to generate.",
     )
 
-    args.add_argument(
-        "--basename",
-        type=str,
-        default="test",
-        help="The basename of the output files.",
-    )
-
     args = args.parse_args()
 
-    profile_mem_int_spectra(args.n, args.basename)
+    profile_mem_int_spectra(args.n)
