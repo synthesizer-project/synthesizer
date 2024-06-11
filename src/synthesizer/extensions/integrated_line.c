@@ -195,10 +195,11 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
 
 #ifdef WITH_OPENMP
   /* Do we have mutliple threads to do the reduction onto the lines? */
+  double *result;
   if (nthreads > 1) {
-    double *result = get_lines_omp(grid_props, grid_weights, nthreads);
+    result = get_lines_omp(grid_props, grid_weights, nthreads);
   } else {
-    double *result = get_lines_serial(grid_props, grid_weights);
+    result = get_lines_serial(grid_props, grid_weights);
   }
 #else
   /* We don't have OpenMP so we can't do the reduction in parallel. */
