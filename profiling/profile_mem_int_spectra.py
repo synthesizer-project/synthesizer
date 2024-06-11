@@ -1,7 +1,7 @@
-"""A script to profile the memory usage of a particle spectra calculation.
+"""A script to profile the memory usage of a integrated spectra calculation.
 
 Usage:
-    python profile_mem_part_spectra.py 1000 --basename test
+    python profile_mem_int_spectra.py 1000 --basename test
 """
 
 import argparse
@@ -22,8 +22,8 @@ plt.rcParams["font.serif"] = ["Times New Roman"]
 np.random.seed(42)
 
 
-def profile_mem_part_spectra(n):
-    """Profile the memory usage of the particle spectra calculation."""
+def profile_mem_int_spectra(n):
+    """Profile the memory usage of the integrated spectra calculation."""
     start = time.time()
 
     # Define the grid
@@ -57,7 +57,7 @@ def profile_mem_part_spectra(n):
         redshift=1,
     )
 
-    stars.get_particle_spectra_incident(grid)
+    stars.get_spectra_incident(grid)
 
     print(f"{n} stars took", time.time() - start)
 
@@ -74,4 +74,4 @@ if __name__ == "__main__":
 
     args = args.parse_args()
 
-    profile_mem_part_spectra(args.n)
+    profile_mem_int_spectra(args.n)
