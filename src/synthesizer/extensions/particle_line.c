@@ -19,11 +19,6 @@
 #include "property_funcs.h"
 #include "weights.h"
 
-struct lines_output {
-  double *line_lum;
-  double *line_cont;
-};
-
 /**
  * @brief The callback function to store the lines for each particle.
  *
@@ -37,22 +32,21 @@ static void store_lines(double weight, struct callback_data *data, void *out) {
   const int *dims = data->dims;
   const int ndim = data->ndim;
   const int nlam = data->nlam;
+  const int npart = data->npart;
   const double *grid_lines = data->grid_lines;
   const double *grid_continuum = data->grid_continuum;
   const int p = data->particle_index;
   const double fesc = data->fesc;
 
-  /* Get the output arrays. */
-  struct lines_output *lines = (struct lines_output *)out;
-  double *line_lum = lines->line_lum;
-  double *line_cont = lines->line_cont;
+  /* Get the output array. */
+  double *lines = (double *)out;
 
   /* We have a contribution, get the flattened index into the grid array. */
   const int grid_ind = get_flat_index(indices, dims, ndim);
 
   /* Add the contribution to this particle. */
-  line_lum[p] += grid_lines[grid_ind] * (1 - fesc) * weight;
-  line_cont[p] += grid_continuum[grid_ind] * (1 - fesc) * weight;
+  lines[p] += grid_lines[grid_ind] * (1 - fesc) * weight;
+  lines[p + npart] += grid_continuum[grid_ind] * (1 - fesc) * weight;
 }
 
 /**
@@ -76,17 +70,16 @@ PyObject *compute_particle_line(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  int ndim, npart;
+  int ndim, npart, nthreads;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_lines, *np_grid_continuum;
   PyArrayObject *np_fesc;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOiis", &np_grid_lines, &np_grid_continuum,
+  if (!PyArg_ParseTuple(args, "OOOOOOOiisi", &np_grid_lines, &np_grid_continuum,
                         &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,
-                        &np_ndims, &ndim, &npart, &method))
-    /* Error message is already set here. */
+                        &np_ndims, &ndim, &npart, &method, &nthreads))
     return NULL;
 
   /* Extract the grid struct. */
@@ -103,37 +96,36 @@ PyObject *compute_particle_line(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Set up arrays to hold the line emission and continuum. */
-  double *line_lum = malloc(npart * sizeof(double));
-  if (line_lum == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for line_lum.");
-    return NULL;
-  }
-  bzero(line_lum, npart * sizeof(double));
-  double *line_cont = malloc(npart * sizeof(double));
-  if (line_cont == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for line_cont.");
-    return NULL;
-  }
-  bzero(line_cont, npart * sizeof(double));
-
-  /* Create the lines output struct. */
-  struct lines_output lines = {.line_lum = line_lum, .line_cont = line_cont};
-
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
+  /* NOTE: rather than modify the weights function to make the 2 outputs
+   * we'll instead pass an array with line_lum at one end and line_cont at the
+   * other and then just extract the result later. */
+  double *lines;
   if (strcmp(method, "cic") == 0) {
-    weight_loop_cic(grid_props, part_props, &lines, store_lines);
+    lines = weight_loop_cic(grid_props, part_props, npart * 2, store_lines,
+                            nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    weight_loop_ngp(grid_props, part_props, &lines, store_lines);
+    lines = weight_loop_ngp(grid_props, part_props, npart * 2, store_lines,
+                            nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
 
+  /* Ensure we got the lines ok. */
+  if (lines == NULL) {
+    return NULL;
+  }
+
+  /* Extract the line and continuum arrays. */
+  double *line_lum = malloc(npart * sizeof(double));
+  double *line_cont = malloc(npart * sizeof(double));
+  memcpy(line_lum, lines, npart * sizeof(double));
+  memcpy(line_cont, lines + npart, npart * sizeof(double));
+
   /* Clean up memory! */
+  free(lines);
   free(part_props);
   free(grid_props);
 
