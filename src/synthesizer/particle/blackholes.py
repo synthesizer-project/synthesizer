@@ -13,6 +13,8 @@ Example usages:
                      redshift=redshift, accretion_rate=accretion_rate, ...)
 """
 
+import os
+
 import numpy as np
 from unyt import deg, rad, unyt_array
 
@@ -351,6 +353,10 @@ class BlackHoles(Particles, BlackholesComponent):
         grid_props = tuple(grid_props)
         props = tuple(props)
 
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
         return (
             grid_spectra,
             grid_props,
@@ -362,6 +368,7 @@ class BlackHoles(Particles, BlackholesComponent):
             np.int32(npart),
             nlam,
             grid_assignment_method,
+            nthreads,
         )
 
     def generate_particle_lnu(
