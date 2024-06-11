@@ -78,16 +78,16 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  int ndim, npart, nlam;
+  int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_fesc;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOiiis", &np_grid_spectra, &grid_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOOOiiisi", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_fesc, &np_ndims, &ndim,
-                        &npart, &nlam, &method))
+                        &npart, &nlam, &method, &nthreads))
     return NULL;
 
   /* Extract the grid struct. */
@@ -104,23 +104,23 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Set up arrays to hold the SEDs themselves. */
-  double *spectra = malloc(npart * nlam * sizeof(double));
-  if (spectra == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for spectra.");
-    return NULL;
-  }
-  bzero(spectra, npart * nlam * sizeof(double));
-
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
+  double *spectra;
   if (strcmp(method, "cic") == 0) {
-    weight_loop_cic(grid_props, part_props, spectra, store_spectra);
+    spectra = weight_loop_cic(grid_props, part_props, npart * nlam,
+                              store_spectra, nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    weight_loop_ngp(grid_props, part_props, spectra, store_spectra);
+    spectra = weight_loop_ngp(grid_props, part_props, npart * nlam,
+                              store_spectra, nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    return NULL;
+  }
+
+  /* Check we got the spectra sucessfully. (Any error messages will already be
+   * set) */
+  if (spectra == NULL) {
     return NULL;
   }
 
