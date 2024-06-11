@@ -19,6 +19,8 @@ Example usages:
                         tau_v=tau_vs, coordinates=coordinates, ...)
 """
 
+import os
+
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
@@ -1973,6 +1975,7 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         grid_assignment_method,
+        nthreads,
     ):
         """
         Prepare the arguments for SFZH computation with the C functions.
@@ -2015,6 +2018,10 @@ class Stars(Particles, StarsComponent):
         grid_props = tuple(grid_props)
         part_props = tuple(part_props)
 
+        # If nthreads = -1 we will use all available
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
         return (
             grid_props,
             part_props,
@@ -2023,12 +2030,14 @@ class Stars(Particles, StarsComponent):
             len(grid_props),
             npart,
             grid_assignment_method,
+            nthreads,
         )
 
     def get_sfzh(
         self,
         grid,
         grid_assignment_method="cic",
+        nthreads=0,
     ):
         """
         Generate the binned SFZH history of this collection of particles.
@@ -2044,6 +2053,9 @@ class Stars(Particles, StarsComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used.
 
         Returns:
             Numpy array of containing the SFZH.
