@@ -94,13 +94,11 @@ int binary_search(int low, int high, const double *arr, const double val) {
  *
  * @param grid: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
- * @param out_size: The size of the output array. (This will be allocated within
- *                  this function.)
+ * @param out: The output array.
  * @param func: The callback function to be called.
  */
-static double *weight_loop_cic_serial(struct grid *grid,
-                                      struct particles *parts, int out_size,
-                                      WeightFunc func) {
+static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
+                                   void *out, WeightFunc func) {
 
   /* Unpack the grid properties. */
   int *dims = grid->dims;
@@ -112,13 +110,6 @@ static double *weight_loop_cic_serial(struct grid *grid,
   double **part_props = parts->props;
   double *fesc = parts->fesc;
   int npart = parts->npart;
-
-  /* Allocate the output. */
-  double *out = (double *)malloc(out_size * sizeof(double));
-  if (out == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for output.");
-    return NULL;
-  }
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -207,6 +198,11 @@ static double *weight_loop_cic_serial(struct grid *grid,
         }
       }
 
+      /* Nothing to do if fraction is 0. */
+      if (frac == 0) {
+        continue;
+      }
+
       /* Define the callback data. */
       struct callback_data data = {
           .indices = frac_ind,
@@ -225,7 +221,6 @@ static double *weight_loop_cic_serial(struct grid *grid,
       func(frac * mass, &data, out);
     }
   }
-  return out;
 }
 
 /**
@@ -238,19 +233,12 @@ static double *weight_loop_cic_serial(struct grid *grid,
  * @param parts: A struct containing the particle properties.
  * @param out_size: The size of the output array. (This will be allocated within
  *                  this function.)
+ * @param out: The output array.
  * @param func: The callback function to be called.
  */
-static double *weight_loop_cic_omp(struct grid *grid, struct particles *parts,
-                                   int out_size, WeightFunc func) {
 #ifdef WITH_OPENMP
-
-  /* Define the output array we'll unpack everything into. */
-  double *out = (double *)malloc(out_size * sizeof(double));
-  if (out == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for output.");
-    return NULL;
-  }
-  bzero(out, out_size * sizeof(double));
+static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
+                                int out_size, void *out, WeightFunc func) {
 
 #pragma omp parallel
   {
@@ -264,6 +252,9 @@ static double *weight_loop_cic_omp(struct grid *grid, struct particles *parts,
     double **part_props = parts->props;
     double *fesc = parts->fesc;
     int npart = parts->npart;
+
+    /* Convert out. */
+    double *out_arr = (double *)out;
 
     /* Allocate the output. */
     double *out_per_thread = (double *)malloc(out_size * sizeof(double));
@@ -361,6 +352,10 @@ static double *weight_loop_cic_omp(struct grid *grid, struct particles *parts,
           }
         }
 
+        if (frac == 0) {
+          continue;
+        }
+
         /* Define the callback data. */
         struct callback_data data = {
             .indices = frac_ind,
@@ -381,22 +376,16 @@ static double *weight_loop_cic_omp(struct grid *grid, struct particles *parts,
     }
 
     /* Use reduction to collect everything into the output array */
-#pragma omp for reduction(+ : out[ : out_size])
+#pragma omp for reduction(+ : out_arr[ : out_size])
     for (int i = 0; i < out_size; i++) {
-      out[i] += out_per_thread[i];
+      out_arr[i] += out_per_thread[i];
     }
 
     /* Free the per-thread output. */
     free(out_per_thread);
   }
-  return out;
-#else
-  /* We shouldn't be able to get here. */
-  PyErr_SetString(PyExc_RuntimeError,
-                  "OpenMP not enabled but in an OpenMP function.");
-  return NULL;
-#endif
 }
+#endif
 
 /**
  * @brief This calculates the grid weights in each grid cell using a cloud
@@ -409,14 +398,12 @@ static double *weight_loop_cic_omp(struct grid *grid, struct particles *parts,
  * @param parts: A struct containing the particle properties.
  * @param out_size: The size of the output array. (This will be allocated
  * within this function.)
+ * @param out: The output array.
  * @param func: The callback function to be called.
  * @param nthreads: The number of threads to use.
  */
-double *weight_loop_cic(struct grid *grid, struct particles *parts,
-                        int out_size, WeightFunc func, const int nthreads) {
-
-  /* Declare the output. This will be allocated when needed. */
-  double *out;
+void weight_loop_cic(struct grid *grid, struct particles *parts, int out_size,
+                     void *out, WeightFunc func, const int nthreads) {
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -425,26 +412,21 @@ double *weight_loop_cic(struct grid *grid, struct particles *parts,
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
     omp_set_num_threads(nthreads);
-    out = weight_loop_cic_omp(grid, parts, out_size, func);
+    weight_loop_cic_omp(grid, parts, out_size, out, func);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    out = weight_loop_cic_serial(grid, parts, out_size, func);
+    weight_loop_cic_serial(grid, parts, out, func);
   }
 
 #else
 
+  (void)nthreads;
+
   /* We don't have OpenMP, just call the serial version. */
-  out = weight_loop_cic_serial(grid, parts, out_size, func);
+  weight_loop_cic_serial(grid, parts, out, func);
 
 #endif
-  /* Return what we've done, any error message will have been set at the
-   * point of the error. */
-  if (out == NULL) {
-    return NULL;
-  } else {
-    return out;
-  }
 }
 
 /**
@@ -455,20 +437,11 @@ double *weight_loop_cic(struct grid *grid, struct particles *parts,
  *
  * @param grid: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
- * @param out_size: The size of the output array. (This will be allocated
- * within this function.)
+ * @param out: The output array.
  * @param func: The callback function to be called.
  */
-static double *weight_loop_ngp_serial(struct grid *grid,
-                                      struct particles *parts, int out_size,
-                                      WeightFunc func) {
-
-  /* Allocate the output. */
-  double *out = (double *)malloc(out_size * sizeof(double));
-  if (out == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for output.");
-    return NULL;
-  }
+static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
+                                   void *out, WeightFunc func) {
 
   /* Unpack the grid properties. */
   int *dims = grid->dims;
@@ -554,7 +527,6 @@ static double *weight_loop_ngp_serial(struct grid *grid,
     /* Call the callback function if we have something to do. */
     func(mass, &data, out);
   }
-  return out;
 }
 
 /**
@@ -567,20 +539,12 @@ static double *weight_loop_ngp_serial(struct grid *grid,
  * @param parts: A struct containing the particle properties.
  * @param out_size: The size of the output array. (This will be allocated
  * within this function.)
+ * @param out: The output array.
  * @param func: The callback function to be called.
  */
-static double *weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
-                                   int out_size, WeightFunc func) {
-
 #ifdef WITH_OPENMP
-
-  /* Define the output array we'll unpack everything into. */
-  double *out = (double *)malloc(out_size * sizeof(double));
-  if (out == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for output.");
-    return NULL;
-  }
-  bzero(out, out_size * sizeof(double));
+static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
+                                int out_size, void *out, WeightFunc func) {
 
 #pragma omp parallel
   {
@@ -594,6 +558,9 @@ static double *weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
     double **part_props = parts->props;
     double *fesc = parts->fesc;
     int npart = parts->npart;
+
+    /* Convert out. */
+    double *out_arr = (double *)out;
 
     /* Allocate the output. */
     double *out_per_thread = (double *)malloc(out_size * sizeof(double));
@@ -679,24 +646,16 @@ static double *weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
     }
 
     /* Use reduction to collect everything into the output array */
-#pragma omp for reduction(+ : out[ : out_size])
+#pragma omp for reduction(+ : out_arr[ : out_size])
     for (int i = 0; i < out_size; i++) {
-      out[i] += out_per_thread[i];
+      out_arr[i] += out_per_thread[i];
     }
 
     /* Free the per-thread output. */
     free(out_per_thread);
   }
-
-  return out;
-
-#else
-  /* We shouldn't be able to get here. */
-  PyErr_SetString(PyExc_RuntimeError,
-                  "OpenMP not enabled but in an OpenMP function.");
-  return NULL;
-#endif
 }
+#endif
 
 /**
  * @brief This calculates the grid weights in each grid cell using a nearest
@@ -709,14 +668,12 @@ static double *weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
  * @param parts: A struct containing the particle properties.
  * @param out_size: The size of the output array. (This will be allocated
  * within this function.)
+ * @param out: The output array.
  * @param func: The callback function to be called.
  * @param nthreads: The number of threads to use.
  */
-double *weight_loop_ngp(struct grid *grid, struct particles *parts,
-                        int out_size, WeightFunc func, const int nthreads) {
-
-  /* Declare the output. This will be allocated when needed. */
-  double *out;
+void weight_loop_ngp(struct grid *grid, struct particles *parts, int out_size,
+                     void *out, WeightFunc func, const int nthreads) {
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -725,24 +682,19 @@ double *weight_loop_ngp(struct grid *grid, struct particles *parts,
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
     omp_set_num_threads(nthreads);
-    out = weight_loop_ngp_omp(grid, parts, out_size, func);
+    weight_loop_ngp_omp(grid, parts, out_size, out, func);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    out = weight_loop_ngp_serial(grid, parts, out_size, func);
+    weight_loop_ngp_serial(grid, parts, out, func);
   }
 
 #else
 
+  (void)nthreads;
+
   /* We don't have OpenMP, just call the serial version. */
-  out = weight_loop_ngp_serial(grid, parts, out_size, func);
+  weight_loop_ngp_serial(grid, parts, out, func);
 
 #endif
-  /* Return what we've done, any error message will have been set at the
-   * point of the error. */
-  if (out == NULL) {
-    return NULL;
-  } else {
-    return out;
-  }
 }

@@ -56,7 +56,7 @@ static double *get_spectra_serial(struct grid *grid_props,
                                   double *grid_weights) {
 
   /* Set up array to hold the SED itself. */
-  double *spectra = malloc(grid_props->nlam * sizeof(double));
+  double *spectra = (double *)malloc(grid_props->nlam * sizeof(double));
   if (spectra == NULL) {
     PyErr_SetString(PyExc_ValueError, "Failed to allocate memory for spectra.");
     return NULL;
@@ -102,9 +102,9 @@ static double *get_spectra_serial(struct grid *grid_props,
  *
  * @return The integrated spectra.
  */
+#ifdef WITH_OPENMP
 static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
                                int nthreads) {
-#ifdef WITH_OPENMP
   /* Set up array to hold the SED itself. */
   double *spectra = malloc(grid_props->nlam * sizeof(double));
   if (spectra == NULL) {
@@ -162,21 +162,14 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
   }
 
   return spectra;
-
-#else
-
-  /* We shouldn't be able to get here. */
-  PyErr_SetString(PyExc_RuntimeError,
-                  "OpenMP not enabled but in an OpenMP function.");
-  return NULL;
-#endif
 }
+#endif
 
 /**
  * @brief Computes an integrated SED for a collection of particles.
  *
  * @param np_grid_spectra: The SPS spectra array.
- * o
+ *o
  * @param grid_tuple: The tuple containing arrays of grid axis properties.
  * @param part_tuple: The tuple of particle property arrays (in the same order
  *                    as grid_tuple).
@@ -219,15 +212,23 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Allocate the grid weights. */
+  double *grid_weights = malloc(grid_props->size * sizeof(double));
+  if (grid_weights == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Could not allocate memory for grid weights.");
+    return NULL;
+  }
+  bzero(grid_weights, grid_props->size * sizeof(double));
+
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
-  double *grid_weights;
   if (strcmp(method, "cic") == 0) {
-    grid_weights = weight_loop_cic(grid_props, part_props, grid_props->size,
-                                   store_weight, nthreads);
+    weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
+                    store_weight, nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    grid_weights = weight_loop_ngp(grid_props, part_props, grid_props->size,
-                                   store_weight, nthreads);
+    weight_loop_ngp(grid_props, part_props, grid_props->size, grid_weights,
+                    store_weight, nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
@@ -249,7 +250,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   }
 #else
   /* We can't do the reduction in parallel without OpenMP. */
-  spectra = get_spectra_serial(grid_props, grid_weights);
+  double *spectra = get_spectra_serial(grid_props, grid_weights);
 #endif
 
   /* Ensure we got the spectra sucessfully. */

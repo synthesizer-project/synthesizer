@@ -88,15 +88,22 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Allocate the sfzh array to output. */
+  double *sfzh = malloc(grid_props->size * sizeof(double));
+  if (sfzh == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
+    return NULL;
+  }
+  bzero(sfzh, grid_props->size * sizeof(double));
+
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
-  double *sfzh;
   if (strcmp(method, "cic") == 0) {
-    sfzh = weight_loop_cic(grid_props, part_props, grid_props->size, store_mass,
-                           nthreads);
+    weight_loop_cic(grid_props, part_props, grid_props->size, sfzh, store_mass,
+                    nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    sfzh = weight_loop_ngp(grid_props, part_props, grid_props->size, store_mass,
-                           nthreads);
+    weight_loop_ngp(grid_props, part_props, grid_props->size, sfzh, store_mass,
+                    nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;

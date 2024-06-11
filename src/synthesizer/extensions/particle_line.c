@@ -95,18 +95,25 @@ PyObject *compute_particle_line(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Allocate the lines array. */
+  double *lines = malloc(npart * 2 * sizeof(double));
+  if (lines == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for lines.");
+    return NULL;
+  }
+  bzero(lines, npart * 2 * sizeof(double));
+
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
   /* NOTE: rather than modify the weights function to make the 2 outputs
    * we'll instead pass an array with line_lum at one end and line_cont at the
    * other and then just extract the result later. */
-  double *lines;
   if (strcmp(method, "cic") == 0) {
-    lines = weight_loop_cic(grid_props, part_props, npart * 2, store_lines,
-                            nthreads);
+    weight_loop_cic(grid_props, part_props, npart * 2, lines, store_lines,
+                    nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    lines = weight_loop_ngp(grid_props, part_props, npart * 2, store_lines,
-                            nthreads);
+    weight_loop_ngp(grid_props, part_props, npart * 2, lines, store_lines,
+                    nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
