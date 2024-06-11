@@ -209,6 +209,7 @@ class BlackholesComponent:
         mask=None,
         verbose=False,
         grid_assignment_method="cic",
+        nthreads=0,
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -237,6 +238,9 @@ class BlackholesComponent:
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
         """
         # Ensure we have a key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
@@ -262,6 +266,7 @@ class BlackholesComponent:
             line_region=line_region,
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
+            nthreads=nthreads,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
