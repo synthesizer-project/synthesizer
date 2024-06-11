@@ -74,7 +74,9 @@ static double *get_lines_serial(struct grid *grid_props, double *grid_weights) {
   }
 
   /* Create an array to return. */
-  double result[2] = {line_lum, line_cont};
+  double *result = malloc(2 * sizeof(double));
+  result[0] = line_lum;
+  result[1] = line_cont;
   return result;
 }
 
@@ -115,7 +117,9 @@ static double *get_lines_omp(struct grid *grid_props, double *grid_weights,
   }
 
   /* Create an array to return. */
-  double result[2] = {line_lum, line_cont};
+  double *result = malloc(2 * sizeof(double));
+  result[0] = line_lum;
+  result[1] = line_cont;
   return result;
 #else
 
@@ -217,6 +221,7 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
   double line_cont = result[1];
 
   /* Clean up memory! */
+  free(result);
   free(grid_weights);
   free(part_props);
   free(grid_props);

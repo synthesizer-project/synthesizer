@@ -5,12 +5,19 @@
 #ifndef PROPERTY_FUNCS_H_
 #define PROPERTY_FUNCS_H_
 
+/* We need the below because numpy triggers warnings which are errors
+ * when we compiled with RUTHLESS. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+
 /* Python includes */
 #include <Python.h>
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 #include <numpy/ndarrayobject.h>
 #include <numpy/ndarraytypes.h>
+
+#pragma GCC diagnostic pop
 
 /* A struct to hold grid properties. */
 struct grid {
@@ -57,10 +64,10 @@ struct particles {
 };
 
 /* Prototypes */
-const double *extract_data_double(PyArrayObject *np_arr, char *name);
-const int *extract_data_int(PyArrayObject *np_arr, char *name);
-const double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
-const double **extract_part_props(PyObject *part_tuple, int ndim, int npart);
+double *extract_data_double(PyArrayObject *np_arr, char *name);
+int *extract_data_int(PyArrayObject *np_arr, char *name);
+double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
+double **extract_part_props(PyObject *part_tuple, int ndim, int npart);
 struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
                                      PyArrayObject *np_ndims,
                                      PyArrayObject *np_grid_spectra,

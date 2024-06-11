@@ -120,7 +120,6 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
     if (thread_spectra == NULL) {
       PyErr_SetString(PyExc_ValueError,
                       "Failed to allocate memory for thread spectra.");
-      return NULL;
     }
     bzero(thread_spectra, grid_props->nlam * sizeof(double));
 
@@ -153,7 +152,7 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
     }
 
     /* Add the thread's contribution to the global spectra. */
-#pragma omp for reduction(+ : spectra[ : nlam])
+#pragma omp for reduction(+ : spectra[ : grid_props->nlam])
     for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
       spectra[ilam] += thread_spectra[ilam];
     }
@@ -161,6 +160,9 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
     /* Clean up memory! */
     free(thread_spectra);
   }
+
+  return spectra;
+
 #else
 
   /* We shouldn't be able to get here. */
