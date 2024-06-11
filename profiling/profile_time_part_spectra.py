@@ -69,7 +69,7 @@ def profile_time_part_spectra(basename):
         print(f"{n} stars took", time.time() - start)
         times.append(time.time() - start)
 
-    np.savetxt(f"{basename}_time_prof.txt", times)
+    np.savetxt(f"{basename}_particle_time_prof.txt", times)
 
 
 if __name__ == "__main__":
