@@ -31,7 +31,6 @@ static void store_lines(double weight, struct callback_data *data, void *out) {
   const int *indices = data->indices;
   const int *dims = data->dims;
   const int ndim = data->ndim;
-  const int nlam = data->nlam;
   const int npart = data->npart;
   const double *grid_lines = data->grid_lines;
   const double *grid_continuum = data->grid_continuum;

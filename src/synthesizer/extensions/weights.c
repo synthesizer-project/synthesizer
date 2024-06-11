@@ -103,15 +103,15 @@ static double *weight_loop_cic_serial(struct grid *grid,
                                       WeightFunc func) {
 
   /* Unpack the grid properties. */
-  const int *dims = grid->dims;
-  const int ndim = grid->ndim;
-  const double **grid_props = grid->props;
+  int *dims = grid->dims;
+  int ndim = grid->ndim;
+  double **grid_props = grid->props;
 
   /* Unpack the particles properties. */
-  const double *part_masses = parts->mass;
-  const double **part_props = parts->props;
-  const double *fesc = parts->fesc;
-  const int npart = parts->npart;
+  double *part_masses = parts->mass;
+  double **part_props = parts->props;
+  double *fesc = parts->fesc;
+  int npart = parts->npart;
 
   /* Allocate the output. */
   double *out = (double *)malloc(out_size * sizeof(double));
@@ -255,22 +255,21 @@ static double *weight_loop_cic_omp(struct grid *grid, struct particles *parts,
 #pragma omp parallel
   {
     /* Unpack the grid properties. */
-    const int *dims = grid->dims;
-    const int ndim = grid->ndim;
-    const double **grid_props = grid->props;
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    double **grid_props = grid->props;
 
     /* Unpack the particles properties. */
-    const double *part_masses = parts->mass;
-    const double **part_props = parts->props;
-    const double *fesc = parts->fesc;
-    const int npart = parts->npart;
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    double *fesc = parts->fesc;
+    int npart = parts->npart;
 
     /* Allocate the output. */
     double *out_per_thread = (double *)malloc(out_size * sizeof(double));
     if (out == NULL) {
       PyErr_SetString(PyExc_MemoryError,
                       "Failed to allocate memory for output.");
-      return NULL;
     }
     bzero(out_per_thread, out_size * sizeof(double));
 
@@ -430,13 +429,13 @@ double *weight_loop_cic(struct grid *grid, struct particles *parts,
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    out = weight_loop_cic_serial(grid, parts, out, func);
+    out = weight_loop_cic_serial(grid, parts, out_size, func);
   }
 
 #else
 
   /* We don't have OpenMP, just call the serial version. */
-  out = weight_loop_cic_serial(grid, parts, out, func);
+  out = weight_loop_cic_serial(grid, parts, out_size, func);
 
 #endif
   /* Return what we've done, any error message will have been set at the
@@ -472,15 +471,15 @@ static double *weight_loop_ngp_serial(struct grid *grid,
   }
 
   /* Unpack the grid properties. */
-  const int *dims = grid->dims;
-  const int ndim = grid->ndim;
-  const double **grid_props = grid->props;
+  int *dims = grid->dims;
+  int ndim = grid->ndim;
+  double **grid_props = grid->props;
 
   /* Unpack the particles properties. */
-  const double *part_masses = parts->mass;
-  const double **part_props = parts->props;
-  const double *fesc = parts->fesc;
-  const int npart = parts->npart;
+  double *part_masses = parts->mass;
+  double **part_props = parts->props;
+  double *fesc = parts->fesc;
+  int npart = parts->npart;
 
   /* Loop over particles. */
   for (int p = 0; p < npart; p++) {
@@ -586,22 +585,21 @@ static double *weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
 #pragma omp parallel
   {
     /* Unpack the grid properties. */
-    const int *dims = grid->dims;
-    const int ndim = grid->ndim;
-    const double **grid_props = grid->props;
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    double **grid_props = grid->props;
 
     /* Unpack the particles properties. */
-    const double *part_masses = parts->mass;
-    const double **part_props = parts->props;
-    const double *fesc = parts->fesc;
-    const int npart = parts->npart;
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    double *fesc = parts->fesc;
+    int npart = parts->npart;
 
     /* Allocate the output. */
     double *out_per_thread = (double *)malloc(out_size * sizeof(double));
     if (out == NULL) {
       PyErr_SetString(PyExc_MemoryError,
                       "Failed to allocate memory for output.");
-      return NULL;
     }
     bzero(out_per_thread, out_size * sizeof(double));
 
@@ -731,13 +729,13 @@ double *weight_loop_ngp(struct grid *grid, struct particles *parts,
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    out = weight_loop_ngp_serial(grid, parts, out, func);
+    out = weight_loop_ngp_serial(grid, parts, out_size, func);
   }
 
 #else
 
   /* We don't have OpenMP, just call the serial version. */
-  out = weight_loop_ngp_serial(grid, parts, out, func);
+  out = weight_loop_ngp_serial(grid, parts, out_size, func);
 
 #endif
   /* Return what we've done, any error message will have been set at the
