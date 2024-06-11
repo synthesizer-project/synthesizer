@@ -218,6 +218,7 @@ class BlackHoles(Particles, BlackholesComponent):
         line_region,
         mask,
         grid_assignment_method,
+        nthreads,
     ):
         """
         A method to prepare the arguments for SED computation with the C
