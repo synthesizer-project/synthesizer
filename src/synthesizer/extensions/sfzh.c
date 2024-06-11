@@ -64,13 +64,14 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  int ndim, npart;
+  int ndim, npart, nthreads;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOiis", &grid_tuple, &part_tuple,
-                        &np_part_mass, &np_ndims, &ndim, &npart, &method))
+  if (!PyArg_ParseTuple(args, "OOOOiisi", &grid_tuple, &part_tuple,
+                        &np_part_mass, &np_ndims, &ndim, &npart, &method,
+                        &nthreads))
     return NULL;
 
   /* Extract the grid struct. */
@@ -87,22 +88,22 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Allocate an array to hold the grid weights. */
-  double *sfzh = malloc(grid_props->size * sizeof(double));
-  if (sfzh == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for sfzh.");
-    return NULL;
-  }
-  bzero(sfzh, grid_props->size * sizeof(double));
-
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
+  double *sfzh;
   if (strcmp(method, "cic") == 0) {
-    weight_loop_cic(grid_props, part_props, sfzh, store_mass);
+    sfzh = weight_loop_cic(grid_props, part_props, grid_props->size, store_mass,
+                           nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    weight_loop_ngp(grid_props, part_props, sfzh, store_mass);
+    sfzh = weight_loop_ngp(grid_props, part_props, grid_props->size, store_mass,
+                           nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    return NULL;
+  }
+
+  /* Check we got the output. (Any error messages will already be set) */
+  if (sfzh == NULL) {
     return NULL;
   }
 
