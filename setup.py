@@ -203,6 +203,13 @@ if WITH_DEBUGGING_CHECKS == "1":
 # Define the extension modules
 extensions = [
     create_extension(
+        "synthesizer.extensions.openmp_check",
+        ["src/synthesizer/extensions/openmp_check.c"],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
+    create_extension(
         "synthesizer.extensions.integrated_spectra",
         [
             "src/synthesizer/extensions/integrated_spectra.c",
@@ -211,6 +218,7 @@ extensions = [
         ],
         compile_flags=compile_flags,
         links=link_args,
+        include_dirs=include_dirs,
     ),
     create_extension(
         "synthesizer.extensions.particle_spectra",
@@ -221,18 +229,21 @@ extensions = [
         ],
         compile_flags=compile_flags,
         links=link_args,
+        include_dirs=include_dirs,
     ),
     create_extension(
         "synthesizer.imaging.extensions.spectral_cube",
         ["src/synthesizer/imaging/extensions/spectral_cube.c"],
         compile_flags=compile_flags,
         links=link_args,
+        include_dirs=include_dirs,
     ),
     create_extension(
         "synthesizer.imaging.extensions.image",
         ["src/synthesizer/imaging/extensions/image.c"],
         compile_flags=compile_flags,
         links=link_args,
+        include_dirs=include_dirs,
     ),
     create_extension(
         "synthesizer.extensions.sfzh",
@@ -243,6 +254,7 @@ extensions = [
         ],
         compile_flags=compile_flags,
         links=link_args,
+        include_dirs=include_dirs,
     ),
     create_extension(
         "synthesizer.extensions.los",
@@ -253,6 +265,7 @@ extensions = [
         ],
         compile_flags=compile_flags,
         links=link_args,
+        include_dirs=include_dirs,
     ),
     create_extension(
         "synthesizer.extensions.integrated_line",
@@ -263,6 +276,7 @@ extensions = [
         ],
         compile_flags=compile_flags,
         links=link_args,
+        include_dirs=include_dirs,
     ),
     create_extension(
         "synthesizer.extensions.particle_line",
@@ -271,12 +285,6 @@ extensions = [
             "src/synthesizer/extensions/weights.c",
             "src/synthesizer/extensions/property_funcs.c",
         ],
-        compile_flags=compile_flags,
-        links=link_args,
-    ),
-    create_extension(
-        "synthesizer.extensions.openmp_check",
-        ["src/synthesizer/extensions/openmp_check.c"],
         compile_flags=compile_flags,
         links=link_args,
         include_dirs=include_dirs,
