@@ -46,7 +46,7 @@ def profile_mem_int_spectra(n):
         metal_dist=metal_dist,
         initial_mass=mass,
     )
-    
+
     # Sample the SFZH, producing a Stars object
     stars = sample_sfhz(
         param_stars.sfzh,
