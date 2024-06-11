@@ -45,6 +45,132 @@ static void store_weight(double weight, struct callback_data *data, void *out) {
 }
 
 /**
+ * @brief Compute the integrated spectra from the grid weights.
+ *
+ * @param grid_props: The grid properties.
+ * @param grid_weights: The grid weights computed from the particles.
+ *
+ * @return The integrated spectra.
+ */
+static double *get_spectra_serial(struct grid *grid_props,
+                                  double *grid_weights) {
+
+  /* Set up array to hold the SED itself. */
+  double *spectra = malloc(grid_props->nlam * sizeof(double));
+  if (spectra == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to allocate memory for spectra.");
+    return NULL;
+  }
+  bzero(spectra, grid_props->nlam * sizeof(double));
+
+  /* Loop over grid cells. */
+  for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
+
+    /* Get the weight. */
+    const double weight = grid_weights[grid_ind];
+
+    /* Skip zero weight cells. */
+    if (weight <= 0)
+      continue;
+
+    /* Get the spectra ind. */
+    int unraveled_ind[grid_props->ndim + 1];
+    get_indices_from_flat(grid_ind, grid_props->ndim, grid_props->dims,
+                          unraveled_ind);
+    unraveled_ind[grid_props->ndim] = 0;
+    int spectra_ind =
+        get_flat_index(unraveled_ind, grid_props->dims, grid_props->ndim + 1);
+
+    /* Add this grid cell's contribution to the spectra */
+    for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
+
+      /* Add the contribution to this wavelength. */
+      /* fesc is already included in the weight */
+      spectra[ilam] += grid_props->spectra[spectra_ind + ilam] * weight;
+    }
+  }
+
+  return spectra;
+}
+
+/**
+ * @brief Compute the integrated spectra from the grid weights.
+ *
+ * @param grid_props: The grid properties.
+ * @param grid_weights: The grid weights computed from the particles.
+ * @param nthreads: The number of threads to use.
+ *
+ * @return The integrated spectra.
+ */
+static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
+                               int nthreads) {
+#ifdef WITH_OPENMP
+  /* Set up array to hold the SED itself. */
+  double *spectra = malloc(grid_props->nlam * sizeof(double));
+  if (spectra == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to allocate memory for spectra.");
+    return NULL;
+  }
+  bzero(spectra, grid_props->nlam * sizeof(double));
+
+#pragma omp parallel num_threads(nthreads)
+  {
+    /* Allocate any output spectra for this thread. */
+    double *thread_spectra = malloc(grid_props->nlam * sizeof(double));
+    if (thread_spectra == NULL) {
+      PyErr_SetString(PyExc_ValueError,
+                      "Failed to allocate memory for thread spectra.");
+      return NULL;
+    }
+    bzero(thread_spectra, grid_props->nlam * sizeof(double));
+
+    /* Loop over grid cells. */
+#pragma omp for
+    for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
+      /* Get the weight. */
+      const double weight = grid_weights[grid_ind];
+
+      /* Skip zero weight cells. */
+      if (weight <= 0)
+        continue;
+
+      /* Get the spectra ind. */
+      int unraveled_ind[grid_props->ndim + 1];
+      get_indices_from_flat(grid_ind, grid_props->ndim, grid_props->dims,
+                            unraveled_ind);
+      unraveled_ind[grid_props->ndim] = 0;
+      int spectra_ind =
+          get_flat_index(unraveled_ind, grid_props->dims, grid_props->ndim + 1);
+
+      /* Add this grid cell's contribution to the spectra */
+      for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
+
+        /* Add the contribution to this wavelength. */
+        /* fesc is already included in the weight */
+        thread_spectra[ilam] +=
+            grid_props->spectra[spectra_ind + ilam] * weight;
+      }
+    }
+
+    /* Add the thread's contribution to the global spectra. */
+#pragma omp for reduction(+ : spectra[ : nlam])
+    for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
+      spectra[ilam] += thread_spectra[ilam];
+    }
+
+    /* Clean up memory! */
+    free(thread_spectra);
+  }
+#else
+
+  /* We shouldn't be able to get here. */
+  PyErr_SetString(PyExc_RuntimeError,
+                  "OpenMP not enabled but in an OpenMP function.");
+  return NULL;
+#endif
+}
+
+/**
  * @brief Computes an integrated SED for a collection of particles.
  *
  * @param np_grid_spectra: The SPS spectra array.
@@ -111,94 +237,23 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Set up array to hold the SED itself. */
-  double *spectra = malloc(nlam * sizeof(double));
+#ifdef WITH_OPENMP
+  /* Do we have multiple threads to do the reduction on to the spectra? */
+  double *spectra;
+  if (nthreads > 1) {
+    spectra = get_spectra_omp(grid_props, grid_weights, nthreads);
+  } else {
+    spectra = get_spectra_serial(grid_props, grid_weights);
+  }
+#else
+  /* We can't do the reduction in parallel without OpenMP. */
+  spectra = get_spectra_serial(grid_props, grid_weights);
+#endif
+
+  /* Ensure we got the spectra sucessfully. */
   if (spectra == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to allocate memory for spectra.");
     return NULL;
   }
-  bzero(spectra, nlam * sizeof(double));
-
-#ifdef WITH_OPENMP
-
-#pragma omp parallel num_threads(nthreads)
-  {
-    /* Allocate any output spectra for this thread. */
-    double *thread_spectra = malloc(nlam * sizeof(double));
-    if (thread_spectra == NULL) {
-      PyErr_SetString(PyExc_ValueError,
-                      "Failed to allocate memory for thread spectra.");
-      return NULL;
-    }
-    bzero(thread_spectra, nlam * sizeof(double));
-
-    /* Loop over grid cells. */
-#pragma omp for
-    for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
-      /* Get the weight. */
-      const double weight = grid_weights[grid_ind];
-
-      /* Skip zero weight cells. */
-      if (weight <= 0)
-        continue;
-
-      /* Get the spectra ind. */
-      int unraveled_ind[ndim + 1];
-      get_indices_from_flat(grid_ind, grid_props->ndim, grid_props->dims,
-                            unraveled_ind);
-      unraveled_ind[ndim] = 0;
-      int spectra_ind =
-          get_flat_index(unraveled_ind, grid_props->dims, grid_props->ndim + 1);
-
-      /* Add this grid cell's contribution to the spectra */
-      for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
-
-        /* Add the contribution to this wavelength. */
-        /* fesc is already included in the weight */
-        thread_spectra[ilam] +=
-            grid_props->spectra[spectra_ind + ilam] * weight;
-      }
-    }
-
-    /* Add the thread's contribution to the global spectra. */
-#pragma omp for reduction(+ : spectra[ : nlam])
-    for (int ilam = 0; ilam < nlam; ilam++) {
-      spectra[ilam] += thread_spectra[ilam];
-    }
-
-    /* Clean up memory! */
-    free(thread_spectra);
-  }
-
-#else
-
-  /* Loop over grid cells. */
-  for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
-
-    /* Get the weight. */
-    const double weight = grid_weights[grid_ind];
-
-    /* Skip zero weight cells. */
-    if (weight <= 0)
-      continue;
-
-    /* Get the spectra ind. */
-    int unraveled_ind[ndim + 1];
-    get_indices_from_flat(grid_ind, grid_props->ndim, grid_props->dims,
-                          unraveled_ind);
-    unraveled_ind[ndim] = 0;
-    int spectra_ind =
-        get_flat_index(unraveled_ind, grid_props->dims, grid_props->ndim + 1);
-
-    /* Add this grid cell's contribution to the spectra */
-    for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
-
-      /* Add the contribution to this wavelength. */
-      /* fesc is already included in the weight */
-      spectra[ilam] += grid_props->spectra[spectra_ind + ilam] * weight;
-    }
-  }
-#endif
 
   /* Clean up memory! */
   free(grid_weights);
