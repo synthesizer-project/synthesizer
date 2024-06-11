@@ -274,6 +274,13 @@ extensions = [
         compile_flags=compile_flags,
         links=link_args,
     ),
+    create_extension(
+        "synthesizer.extensions.openmp_check",
+        ["src/synthesizer/extensions/openmp_check.c"],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
 ]
 
 # Setup configuration
