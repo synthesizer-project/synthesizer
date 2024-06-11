@@ -395,6 +395,7 @@ class BlackholesComponent:
         mask,
         verbose,
         grid_assignment_method,
+        **kwargs,
     ):
         """
         Generate the disc spectra, updating the parameters if required.
@@ -445,6 +446,7 @@ class BlackholesComponent:
                 mask=None,
                 verbose=verbose,
                 grid_assignment_method=grid_assignment_method,
+                **kwargs,
             ),
         )
 
