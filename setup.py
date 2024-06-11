@@ -94,6 +94,7 @@ CFLAGS = os.environ.get("CFLAGS", "")
 LDFLAGS = os.environ.get("LDFLAGS", "")
 WITH_OPENMP = os.environ.get("WITH_OPENMP", "")
 WITH_DEBUGGING_CHECKS = "ENABLE_DEBUGGING_CHECKS" in os.environ
+RUTHLESS = "RUTHLESS" in os.environ
 
 # Define the log file
 LOG_FILE = "build_synth.log"
@@ -184,6 +185,23 @@ if len(WITH_OPENMP) > 0:
         default_compile_flags.append("-fopenmp")
         default_link_args.append("-lgomp")
     default_compile_flags.append("-DWITH_OPENMP")
+
+# If RUTHLESS is set, add all the flags to convert warnings to errors and
+# enable all warnings
+if RUTHLESS:
+    if sys.platform == "darwin":
+        default_compile_flags.append("-Werror")
+        default_compile_flags.append("-Wall")
+        default_compile_flags.append("-Wextra")
+        default_compile_flags.append("-pedantic")
+    elif sys.platform == "win32":
+        default_compile_flags.append("/WX")
+        default_compile_flags.append("/Wall")
+    else:
+        default_compile_flags.append("-Werror")
+        default_compile_flags.append("-Wall")
+        default_compile_flags.append("-Wextra")
+        default_compile_flags.append("-pedantic")
 
 # Get user specified flags
 compile_flags = CFLAGS.split()
