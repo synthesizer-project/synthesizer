@@ -17,6 +17,7 @@ struct callback_data {
   int ndim;
   int particle_index;
   int nlam;
+  int npart;
   double fesc;
   double *grid_spectra;
   double *grid_lines;
