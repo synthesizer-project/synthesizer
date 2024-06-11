@@ -197,9 +197,6 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
   /* Do we have mutliple threads to do the reduction onto the lines? */
   if (nthreads > 1) {
     double *result = get_lines_omp(grid_props, grid_weights, nthreads);
-    if (result == NULL) {
-      return NULL;
-    }
   } else {
     double *result = get_lines_serial(grid_props, grid_weights);
   }
@@ -207,6 +204,11 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
   /* We don't have OpenMP so we can't do the reduction in parallel. */
   double *result = get_lines_serial(grid_props, grid_weights);
 #endif
+
+  /* Ensure we got the result ok. */
+  if (result == NULL) {
+    return NULL;
+  }
 
   /* Unpack the result array (it's 2 elements containing the line and
    * continuum). */
