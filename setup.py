@@ -193,7 +193,6 @@ if RUTHLESS:
         default_compile_flags.append("-Werror")
         default_compile_flags.append("-Wall")
         default_compile_flags.append("-Wextra")
-        default_compile_flags.append("-pedantic")
     elif sys.platform == "win32":
         default_compile_flags.append("/WX")
         default_compile_flags.append("/Wall")
@@ -201,7 +200,6 @@ if RUTHLESS:
         default_compile_flags.append("-Werror")
         default_compile_flags.append("-Wall")
         default_compile_flags.append("-Wextra")
-        default_compile_flags.append("-pedantic")
 
 # Get user specified flags
 compile_flags = CFLAGS.split()
