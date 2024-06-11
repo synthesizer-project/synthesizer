@@ -104,15 +104,23 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Allocate the spectra. */
+  double *spectra = malloc(npart * nlam * sizeof(double));
+  if (spectra == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Could not allocate memory for spectra.");
+    return NULL;
+  }
+  bzero(spectra, npart * nlam * sizeof(double));
+
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
-  double *spectra;
   if (strcmp(method, "cic") == 0) {
-    spectra = weight_loop_cic(grid_props, part_props, npart * nlam,
-                              store_spectra, nthreads);
+    weight_loop_cic(grid_props, part_props, npart * nlam, spectra,
+                    store_spectra, nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    spectra = weight_loop_ngp(grid_props, part_props, npart * nlam,
-                              store_spectra, nthreads);
+    weight_loop_ngp(grid_props, part_props, npart * nlam, spectra,
+                    store_spectra, nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;

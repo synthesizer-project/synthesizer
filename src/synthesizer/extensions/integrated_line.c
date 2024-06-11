@@ -87,10 +87,10 @@ static double *get_lines_serial(struct grid *grid_props, double *grid_weights) {
  * @param grid_weights: The grid weights computed from the particles.
  * @param nthreads: The number of threads to use.
  */
+#ifdef WITH_OPENMP
 static double *get_lines_omp(struct grid *grid_props, double *grid_weights,
                              int nthreads) {
 
-#ifdef WITH_OPENMP
   /* Declare and initialise the vairbales we'll store our result in. */
   double line_lum = 0.0;
   double line_cont = 0.0;
@@ -121,14 +121,8 @@ static double *get_lines_omp(struct grid *grid_props, double *grid_weights,
   result[0] = line_lum;
   result[1] = line_cont;
   return result;
-#else
-
-  /* We shouldn't be able to get here. */
-  PyErr_SetString(PyExc_RuntimeError,
-                  "OpenMP not enabled but in an OpenMP function.");
-  return NULL;
-#endif
 }
+#endif
 
 /**
  * @brief Computes an integrated line emission for a collection of particles.
@@ -158,7 +152,7 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOiis", &np_grid_lines, &np_grid_continuum,
+  if (!PyArg_ParseTuple(args, "OOOOOOOiisi", &np_grid_lines, &np_grid_continuum,
                         &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,
                         &np_ndims, &ndim, &npart, &method, &nthreads))
     return NULL;
@@ -177,15 +171,23 @@ PyObject *compute_integrated_line(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Allocate the grid weights. */
+  double *grid_weights = malloc(grid_props->size * sizeof(double));
+  if (grid_weights == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Could not allocate memory for grid weights.");
+    return NULL;
+  }
+  bzero(grid_weights, grid_props->size * sizeof(double));
+
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
-  double *grid_weights;
   if (strcmp(method, "cic") == 0) {
-    grid_weights = weight_loop_cic(grid_props, part_props, grid_props->size,
-                                   store_weight, nthreads);
+    weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
+                    store_weight, nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    grid_weights = weight_loop_ngp(grid_props, part_props, grid_props->size,
-                                   store_weight, nthreads);
+    weight_loop_ngp(grid_props, part_props, grid_props->size, grid_weights,
+                    store_weight, nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;

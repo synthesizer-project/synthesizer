@@ -2130,6 +2130,7 @@ class Stars(Particles, StarsComponent):
         args = self._prepare_sfzh_args(
             grid,
             grid_assignment_method=grid_assignment_method.lower(),
+            nthreads=nthreads,
         )
 
         # Get the SFZH
