@@ -12,6 +12,7 @@
 #include <Python.h>
 
 /* Local includes */
+#include "timers.h"
 #include "weights.h"
 
 /* Optional openmp include. */
@@ -405,6 +406,8 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
 void weight_loop_cic(struct grid *grid, struct particles *parts, int out_size,
                      void *out, WeightFunc func, const int nthreads) {
 
+  double start_time = tic();
+
   /* Call the correct function for the configuration/number of threads. */
 
 #ifdef WITH_OPENMP
@@ -427,6 +430,7 @@ void weight_loop_cic(struct grid *grid, struct particles *parts, int out_size,
   weight_loop_cic_serial(grid, parts, out, func);
 
 #endif
+  toc("Cloud in Cell weight loop", start_time);
 }
 
 /**
@@ -675,6 +679,8 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
 void weight_loop_ngp(struct grid *grid, struct particles *parts, int out_size,
                      void *out, WeightFunc func, const int nthreads) {
 
+  double start_time = tic();
+
   /* Call the correct function for the configuration/number of threads. */
 
 #ifdef WITH_OPENMP
@@ -697,4 +703,5 @@ void weight_loop_ngp(struct grid *grid, struct particles *parts, int out_size,
   weight_loop_ngp_serial(grid, parts, out, func);
 
 #endif
+  toc("Nearest Grid Point weight loop", start_time);
 }
