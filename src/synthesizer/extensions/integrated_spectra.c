@@ -16,7 +16,33 @@
 
 /* Local includes */
 #include "macros.h"
+#include "property_funcs.h"
 #include "weights.h"
+
+/**
+ * @brief The callback function to store the weights for each particle.
+ *
+ * @param weight: The weight for this particle.
+ * @param data: The callback data.
+ * @param out: The grid weights.
+ */
+static void store_weight(double weight, struct callback_data *data, void *out) {
+
+  /* Unpack the data. */
+  const int *indices = data->indices;
+  const int *dims = data->dims;
+  const int ndim = data->ndim;
+  const double fesc = data->fesc;
+
+  /* Unravel the indices. */
+  int flat_ind = get_flat_index(indices, dims, ndim);
+
+  /* Get the output array. */
+  double *out_arr = (double *)out;
+
+  /* Store the weight. */
+  out_arr[flat_ind] += weight * (1.0 - fesc);
+}
 
 /**
  * @brief Computes an integrated SED for a collection of particles.
@@ -51,26 +77,28 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
                         &npart, &nlam, &method))
     return NULL;
 
-  /* Quick check to make sure our inputs are valid. */
-  if (ndim == 0) {
-    PyErr_SetString(PyExc_ValueError, "ndim must be greater than 0.");
-    return NULL;
-  }
-  if (npart == 0) {
-    PyErr_SetString(PyExc_ValueError, "npart must be greater than 0.");
-    return NULL;
-  }
-  if (nlam == 0) {
-    PyErr_SetString(PyExc_ValueError, "nlam must be greater than 0.");
+  /* Extract the grid struct. */
+  struct grid *grid_props = get_spectra_grid_struct(
+      grid_tuple, np_ndims, np_grid_spectra, ndim, nlam);
+  if (grid_props == NULL) {
     return NULL;
   }
 
-  /* Extract a pointer to the spectra grids */
-  const double *grid_spectra = PyArray_DATA(np_grid_spectra);
-  if (grid_spectra == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract grid_spectra.");
+  /* Extract the particle struct. */
+  struct particles *part_props =
+      get_part_struct(part_tuple, np_part_mass, np_fesc, npart, ndim);
+  if (part_props == NULL) {
     return NULL;
   }
+
+  /* Allocate an array to hold the grid weights. */
+  double *grid_weights = malloc(grid_props->size * sizeof(double));
+  if (grid_weights == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for grid_weights.");
+    return NULL;
+  }
+  bzero(grid_weights, grid_props->size * sizeof(double));
 
   /* Set up arrays to hold the SEDs themselves. */
   double *spectra = malloc(nlam * sizeof(double));
@@ -80,129 +108,19 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   }
   bzero(spectra, nlam * sizeof(double));
 
-  /* Extract a pointer to the grid dims */
-  const int *dims = PyArray_DATA(np_ndims);
-  if (dims == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract dims from np_ndims.");
+  /* With everything set up we can compute the weights for each particle using
+   * the requested method. */
+  if (strcmp(method, "cic") == 0) {
+    weight_loop_cic(grid_props, part_props, grid_weights, store_weight);
+  } else if (strcmp(method, "ngp") == 0) {
+    weight_loop_ngp(grid_props, part_props, grid_weights, store_weight);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
-
-  /* Extract a pointer to the particle masses. */
-  const double *part_mass = PyArray_DATA(np_part_mass);
-  if (part_mass == NULL) {
-    PyErr_SetString(PyExc_ValueError,
-                    "Failed to extract part_mass from np_part_mass.");
-    return NULL;
-  }
-
-  /* Extract a pointer to the fesc array. */
-  const double *fesc = PyArray_DATA(np_fesc);
-  if (fesc == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract fesc from np_fesc.");
-    return NULL;
-  }
-
-  /* Allocate a single array for grid properties*/
-  int nprops = 0;
-  for (int dim = 0; dim < ndim; dim++)
-    nprops += dims[dim];
-  const double **grid_props = malloc(nprops * sizeof(double *));
-  if (grid_props == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for grid_props.");
-    return NULL;
-  }
-
-  /* How many grid elements are there? (excluding wavelength axis)*/
-  int grid_size = 1;
-  for (int dim = 0; dim < ndim; dim++)
-    grid_size *= dims[dim];
-
-  /* Allocate an array to hold the grid weights. */
-  double *grid_weights = malloc(grid_size * sizeof(double));
-  if (grid_weights == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for grid_weights.");
-    return NULL;
-  }
-  bzero(grid_weights, grid_size * sizeof(double));
-
-  /* Unpack the grid property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    PyArrayObject *np_grid_arr =
-        (PyArrayObject *)PyTuple_GetItem(grid_tuple, idim);
-    if (np_grid_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
-      return NULL;
-    }
-    const double *grid_arr = PyArray_DATA(np_grid_arr);
-    if (grid_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
-      return NULL;
-    }
-
-    /* Assign this data to the property array. */
-    grid_props[idim] = grid_arr;
-  }
-
-  /* Allocate a single array for particle properties. */
-  const double **part_props = malloc(npart * ndim * sizeof(double *));
-  if (part_props == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for part_props.");
-    return NULL;
-  }
-
-  /* Unpack the particle property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    PyArrayObject *np_part_arr =
-        (PyArrayObject *)PyTuple_GetItem(part_tuple, idim);
-    if (np_part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-      return NULL;
-    }
-    const double *part_arr = PyArray_DATA(np_part_arr);
-    if (part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-      return NULL;
-    }
-
-    /* Assign this data to the property array. */
-    part_props[idim] = part_arr;
-  }
-
-  /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
-
-    /* Get this particle's mass. */
-    const double mass = part_mass[p];
-
-    /* Finally, compute the weights for this particle using the
-     * requested method. */
-    if (strcmp(method, "cic") == 0) {
-      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim, p,
-                      fesc[p]);
-    } else if (strcmp(method, "ngp") == 0) {
-      weight_loop_ngp(grid_props, part_props, mass, grid_weights, dims, ndim, p,
-                      fesc[p]);
-    } else {
-      /* Only print this warning once! */
-      if (p == 0)
-        printf(
-            "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
-            method);
-      weight_loop_cic(grid_props, part_props, mass, grid_weights, dims, ndim, p,
-                      fesc[p]);
-    }
-
-  } /* Loop over particles. */
 
   /* Loop over grid cells. */
-  for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
+  for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
 
     /* Get the weight. */
     const double weight = grid_weights[grid_ind];
@@ -213,16 +131,18 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
     /* Get the spectra ind. */
     int unraveled_ind[ndim + 1];
-    get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+    get_indices_from_flat(grid_ind, grid_props->ndim, grid_props->dims,
+                          unraveled_ind);
     unraveled_ind[ndim] = 0;
-    int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+    int spectra_ind =
+        get_flat_index(unraveled_ind, grid_props->dims, grid_props->ndim + 1);
 
     /* Add this grid cell's contribution to the spectra */
-    for (int ilam = 0; ilam < nlam; ilam++) {
+    for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
 
       /* Add the contribution to this wavelength. */
       /* fesc is already included in the weight */
-      spectra[ilam] += grid_spectra[spectra_ind + ilam] * weight;
+      spectra[ilam] += grid_props->spectra[spectra_ind + ilam] * weight;
     }
   }
 
