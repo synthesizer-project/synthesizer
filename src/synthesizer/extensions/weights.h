@@ -2,11 +2,14 @@
  * A C module containing all the weights functions common to all particle
  * spectra extensions.
  *****************************************************************************/
+#ifndef WEIGHTS_H_
+#define WEIGHTS_H_
 /* C includes */
 #include <math.h>
 #include <string.h>
 
 /* Local includes */
+#include "macros.h"
 #include "property_funcs.h"
 
 /* Define a struct to hold the useful data a generic callback function will
@@ -39,3 +42,5 @@ void weight_loop_cic(struct grid *grid, struct particles *parts, int out_size,
                      void *out, WeightFunc func, const int nthreads);
 void weight_loop_ngp(struct grid *grid, struct particles *parts, int out_size,
                      void *out, WeightFunc func, const int nthreads);
+
+#endif // WEIGHTS_H_
