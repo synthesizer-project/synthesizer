@@ -37,7 +37,7 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
     # Define the grid (normally this would be defined by an SPS grid)
     log10ages = np.arange(6.0, 10.5, 0.1)
     metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
-    metal_dist = ZDist.Normal(0.01, 0.005)
+    metal_dist = ZDist.Normal(0.005, 0.01)
     sfh = SFH.Constant(100 * Myr)  # constant star formation
 
     # Generate the star formation metallicity history
@@ -60,10 +60,17 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
         redshift=1,
     )
 
+    sfzh = stars.get_sfzh(grid, grid_assignment_method="ngp")
+    threaded_sfhz = stars.get_sfzh(
+        grid, nthreads=2, grid_assignment_method="ngp"
+    )
+    print(np.sum(sfzh - threaded_sfhz))
+    stars.plot_sfzh(grid)
+
     # Get spectra in serial first to get over any overhead due to linking
     # the first time the function is called
     print("Initial serial spectra calculation")
-    stars.get_spectra_incident(grid, nthreads=1)
+    stars.get_spectra_incident(grid, nthreads=1, grid_assignment_method="ngp")
     print()
 
     # Step 1: Save original stdout file descriptor and redirect
@@ -81,7 +88,9 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
         nthreads = 1
         while nthreads <= max_threads:
             spec_start = time.time()
-            stars.get_spectra_incident(grid, nthreads=nthreads)
+            stars.get_spectra_incident(
+                grid, nthreads=nthreads, grid_assignment_method="ngp"
+            )
             execution_time = time.time() - spec_start
 
             print(
@@ -97,7 +106,9 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
         else:
             if max_threads not in threads:
                 spec_start = time.time()
-                stars.get_spectra_incident(grid, nthreads=max_threads)
+                stars.get_spectra_incident(
+                    grid, nthreads=max_threads, grid_assignment_method="ngp"
+                )
                 execution_time = time.time() - spec_start
 
                 print(
