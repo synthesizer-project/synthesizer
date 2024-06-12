@@ -17,6 +17,7 @@
 /* Local includes */
 #include "macros.h"
 #include "property_funcs.h"
+#include "timers.h"
 #include "weights.h"
 
 /**

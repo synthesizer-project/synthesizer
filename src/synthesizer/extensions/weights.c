@@ -239,9 +239,10 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
  */
 #ifdef WITH_OPENMP
 static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
-                                int out_size, void *out, WeightFunc func) {
+                                int out_size, void *out, WeightFunc func,
+                                int nthreads) {
 
-#pragma omp parallel
+#pragma omp parallel num_threads(nthreads)
   {
     /* Unpack the grid properties. */
     int *dims = grid->dims;
@@ -414,8 +415,7 @@ void weight_loop_cic(struct grid *grid, struct particles *parts, int out_size,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    omp_set_num_threads(nthreads);
-    weight_loop_cic_omp(grid, parts, out_size, out, func);
+    weight_loop_cic_omp(grid, parts, out_size, out, func, nthreads);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
@@ -548,9 +548,19 @@ static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
  */
 #ifdef WITH_OPENMP
 static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
-                                int out_size, void *out, WeightFunc func) {
+                                int out_size, void *out, WeightFunc func,
+                                int nthreads) {
+  /* Convert out. */
+  double *out_arr = (double *)out;
 
-#pragma omp parallel
+  /* Allocate the output. */
+  double **out_per_thread = malloc(nthreads * sizeof(double *));
+  if (out == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for output.");
+  }
+  bzero(out_per_thread, nthreads * sizeof(double *));
+
+#pragma omp parallel num_threads(nthreads)
   {
     /* Unpack the grid properties. */
     int *dims = grid->dims;
@@ -563,16 +573,16 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
     double *fesc = parts->fesc;
     int npart = parts->npart;
 
-    /* Convert out. */
-    double *out_arr = (double *)out;
+    /* Get the thread id. */
+    int tid = omp_get_thread_num();
 
     /* Allocate the output. */
-    double *out_per_thread = (double *)malloc(out_size * sizeof(double));
-    if (out == NULL) {
+    out_per_thread[tid] = malloc(out_size * sizeof(double));
+    if (out_per_thread[tid] == NULL) {
       PyErr_SetString(PyExc_MemoryError,
                       "Failed to allocate memory for output.");
     }
-    bzero(out_per_thread, out_size * sizeof(double));
+    bzero(out_per_thread[tid], out_size * sizeof(double));
 
     /* Loop over particles. */
 #pragma omp for
@@ -646,18 +656,23 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
       };
 
       /* Call the callback function if we have something to do. */
-      func(mass, &data, out_per_thread);
+      func(mass, &data, out_per_thread[tid]);
     }
-
-    /* Use reduction to collect everything into the output array */
-#pragma omp for reduction(+ : out_arr[ : out_size])
-    for (int i = 0; i < out_size; i++) {
-      out_arr[i] += out_per_thread[i];
-    }
-
-    /* Free the per-thread output. */
-    free(out_per_thread);
   }
+
+  /* Use reduction to collect everything into the output array */
+#pragma omp parallel for num_threads(nthreads)
+  for (int i = 0; i < out_size; i++) {
+    for (int j = 0; j < nthreads; j++) {
+      out_arr[i] += out_per_thread[j][i];
+    }
+  }
+
+  /* Free the per-thread output. */
+  for (int i = 0; i < nthreads; i++) {
+    free(out_per_thread[i]);
+  }
+  free(out_per_thread);
 }
 #endif
 
@@ -687,8 +702,7 @@ void weight_loop_ngp(struct grid *grid, struct particles *parts, int out_size,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    omp_set_num_threads(nthreads);
-    weight_loop_ngp_omp(grid, parts, out_size, out, func);
+    weight_loop_ngp_omp(grid, parts, out_size, out, func, nthreads);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
