@@ -17,6 +17,7 @@
 /* Local includes */
 #include "macros.h"
 #include "property_funcs.h"
+#include "timers.h"
 #include "weights.h"
 
 /**
@@ -105,6 +106,9 @@ static double *get_spectra_serial(struct grid *grid_props,
 #ifdef WITH_OPENMP
 static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
                                int nthreads) {
+
+  /* TIC(); */
+
   /* Set up array to hold the SED itself. */
   double *spectra = malloc(grid_props->nlam * sizeof(double));
   if (spectra == NULL) {
@@ -182,6 +186,9 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
  */
 PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
+  double start_time = tic();
+  double setup_start = tic();
+
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
   (void)self;
@@ -221,6 +228,8 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   }
   bzero(grid_weights, grid_props->size * sizeof(double));
 
+  toc("Extracting Python data", setup_start);
+
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
   if (strcmp(method, "cic") == 0) {
@@ -240,6 +249,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  double reduction_start = tic();
 #ifdef WITH_OPENMP
   /* Do we have multiple threads to do the reduction on to the spectra? */
   double *spectra;
@@ -253,6 +263,8 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   double *spectra = get_spectra_serial(grid_props, grid_weights);
 #endif
 
+  toc("Compute integrated spectra from weights", reduction_start);
+
   /* Ensure we got the spectra sucessfully. */
   if (spectra == NULL) {
     return NULL;
@@ -263,12 +275,17 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   free(part_props);
   free(grid_props);
 
+  double output_start = tic();
+
   /* Reconstruct the python array to return. */
   npy_intp np_dims[1] = {
       nlam,
   };
   PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
       1, np_dims, NPY_FLOAT64, spectra);
+
+  toc("Construct Python output array", output_start);
+  toc("Compute integrated SED", start_time);
 
   return Py_BuildValue("N", out_spectra);
 }
