@@ -1,6 +1,7 @@
 /******************************************************************************
- * C extension to calculate integrated SEDs for a galaxy's star particles.
- * Calculates weights on an arbitrary dimensional grid given the mass.
+ * C extension to calculate integrated line emission for a galaxy's star
+ * particles. Calculates weights on an arbitrary dimensional grid given the
+ *mass.
  *****************************************************************************/
 /* C includes */
 #include <math.h>
