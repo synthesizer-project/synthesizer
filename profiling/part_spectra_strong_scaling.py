@@ -56,6 +56,12 @@ def part_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
         redshift=1,
     )
 
+    # Get spectra in serial first to get over any overhead due to linking
+    # the first time the function is called
+    stars.get_particle_spectra_incident(grid, nthreads=1)
+    print("++++++++++++++++++++++++++++++++++++++++++++++")
+    print()
+
     # Setup lists for times
     times = []
     threads = []
@@ -74,6 +80,18 @@ def part_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
         threads.append(nthreads)
 
         nthreads *= 2
+
+    # Make sure we test the max_threads in case it wasn't a power of 2
+    if max_threads not in threads:
+        spec_start = time.time()
+        stars.get_particle_spectra_incident(grid, nthreads=max_threads)
+        print(
+            f"{nstars} stars with {max_threads} threads took",
+            time.time() - spec_start,
+        )
+
+        times.append(time.time() - spec_start)
+        threads.append(max_threads)
 
     # Combine times and threads into a single array
     times = np.array([threads, times])

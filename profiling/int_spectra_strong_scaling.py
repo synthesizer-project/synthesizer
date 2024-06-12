@@ -6,8 +6,12 @@ Usage:
 """
 
 import argparse
+import os
+import sys
+import tempfile
 import time
 
+import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 from synthesizer.grid import Grid
@@ -56,37 +60,185 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
         redshift=1,
     )
 
-    # Setup lists for times
-    times = []
-    threads = []
+    # Get spectra in serial first to get over any overhead due to linking
+    # the first time the function is called
+    print("Initial serial spectra calculation")
+    stars.get_spectra_incident(grid, nthreads=1)
+    print()
 
-    # Loop over the number of threads
-    nthreads = 1
-    while nthreads <= max_threads:
-        spec_start = time.time()
-        stars.get_spectra_incident(grid, nthreads=nthreads)
-        print(
-            f"{nstars} stars with {nthreads} threads took",
-            time.time() - spec_start,
-        )
+    # Step 1: Save original stdout file descriptor and redirect
+    # stdout to a temporary file
+    original_stdout_fd = sys.stdout.fileno()
+    temp_stdout = os.dup(original_stdout_fd)
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        os.dup2(temp_file.fileno(), original_stdout_fd)
 
-        times.append(time.time() - spec_start)
-        threads.append(nthreads)
+        # Setup lists for times
+        times = []
+        threads = []
 
-        nthreads *= 2
+        # Loop over the number of threads
+        nthreads = 1
+        while nthreads <= max_threads:
+            spec_start = time.time()
+            stars.get_spectra_incident(grid, nthreads=nthreads)
+            execution_time = time.time() - spec_start
+
+            print(
+                "[Python] Getting spectra execution time:",
+                execution_time,
+            )
+
+            times.append(execution_time)
+            threads.append(nthreads)
+
+            nthreads *= 2
+            print()
+        else:
+            if max_threads not in threads:
+                spec_start = time.time()
+                stars.get_spectra_incident(grid, nthreads=max_threads)
+                execution_time = time.time() - spec_start
+
+                print(
+                    "[Python] Getting spectra execution time:",
+                    execution_time,
+                )
+
+                times.append(execution_time)
+                threads.append(max_threads)
+
+    # Step 3: Reset stdout to original
+    os.dup2(temp_stdout, original_stdout_fd)
+    os.close(temp_stdout)
+
+    # Step 4: Read the captured output from the temporary file
+    with open(temp_file.name, "r") as temp_file:
+        output = temp_file.read()
+    os.unlink(temp_file.name)
+
+    # Step 5: Parse the output lines and store in a dictionary
+    output_lines = output.splitlines()
+    atomic_runtimes = {}
+
+    prev_key = None
+    C_total_key = None
+    for line in output_lines:
+        if ":" in line:
+            # Get the key and value from the line
+            key, value = line.split(":")
+
+            # Replace the total key
+            if "[Python]" in key:
+                key = "Total"
+                C_total_key = prev_key
+
+            # Strip certain information from the key
+            key = key.replace("[Python]", "").strip()
+            key = key.replace("[Parallel]", "").strip()
+            key = key.replace("execution time", "").strip()
+
+            # Convert the value to a float
+            value = float(value.replace("seconds", "").strip())
+
+            atomic_runtimes.setdefault(key.strip(), []).append(value)
+            prev_key = key
+        print(line)
+
+    # Compute the python overhead (Total - C_total_key)
+    python_overhead = [
+        atomic_runtimes["Total"][i] - atomic_runtimes[C_total_key][i]
+        for i in range(len(atomic_runtimes["Total"]))
+    ]
+    atomic_runtimes["Python Overhead"] = python_overhead
 
     # Combine times and threads into a single array
     times = np.array([threads, times])
+    # Convert dictionary to a structured array
+    dtype = [(key, "f8") for key in atomic_runtimes.keys()]
+    values = np.array(list(zip(*atomic_runtimes.values())), dtype=dtype)
 
-    np.savetxt(f"{basename}_integrated_strong_scaling_{nstars}.txt", times)
+    # Define the header
+    header = " ".join(atomic_runtimes.keys())
 
-    # Plot the results
-    fig, ax = plt.subplots()
-    ax.plot(times[0], times[1], "o-")
-    ax.set_xlabel("Number of Threads")
-    ax.set_ylabel("Time (s)")
-    ax.set_title(f"Integrated Spectra Strong Scaling ({nstars} stars)")
-    ax.grid(True)
+    # Save to a text file
+    np.savetxt(
+        f"{basename}_integrated_strong_scaling_{nstars}.txt",
+        values,
+        fmt="%.2f",
+        header=header,
+        delimiter=" ",
+    )
+
+    # Create the figure and gridspec layout
+    fig = plt.figure(figsize=(12, 10))
+    gs = gridspec.GridSpec(
+        3, 2, width_ratios=[3, 1], height_ratios=[1, 1, 0.05], hspace=0.0
+    )
+
+    # Main plot
+    ax_main = fig.add_subplot(gs[0, 0])
+    for key in atomic_runtimes.keys():
+        if key == "Total":
+            ls = "-"
+        elif key == "Python Overhead":
+            ls = ":"
+        else:
+            ls = "--"
+        ax_main.semilogy(
+            times[0], atomic_runtimes[key], "o", label=key, linestyle=ls
+        )
+
+    ax_main.set_ylabel("Time (s)")
+    ax_main.set_title(f"Integrated Spectra Strong Scaling ({nstars} stars)")
+    ax_main.grid(True)
+
+    # Speedup plot
+    ax_speedup = fig.add_subplot(gs[1, 0], sharex=ax_main)
+    for key in atomic_runtimes.keys():
+        if key == "Total":
+            ls = "-"
+        elif key == "Python Overhead":
+            ls = ":"
+        else:
+            ls = "--"
+        initial_time = atomic_runtimes[key][0]
+        speedup = [initial_time / t for t in atomic_runtimes[key]]
+        ax_speedup.plot(times[0], speedup, "o", label=key, linestyle=ls)
+
+    # PLot a 1-1 line
+    ax_speedup.plot(
+        [times[0][0], times[0][-1]],
+        [times[0][0], times[0][-1]],
+        "--",
+        color="black",
+        label="Ideal",
+        alpha=0.7,
+    )
+
+    ax_speedup.set_xlabel("Number of Threads")
+    ax_speedup.set_ylabel("Speedup")
+    ax_speedup.grid(True)
+
+    # Hide x-tick labels for the main plot
+    plt.setp(ax_main.get_xticklabels(), visible=False)
+
+    # Sacrificial axis for the legend
+    ax_legend = fig.add_subplot(gs[0:2, 1])
+    ax_legend.axis("off")  # Hide the sacrificial axis
+
+    # Create the legend
+    handles, labels = ax_main.get_legend_handles_labels()
+    ax_legend.legend(
+        handles, labels, loc="center left", bbox_to_anchor=(-0.3, 0.5)
+    )
+
+    fig.savefig(
+        f"{basename}_integrated_strong_scaling_NStars"
+        f"{nstars}_TotThreahs{max_threads}.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
     plt.show()
 
 
