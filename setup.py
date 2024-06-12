@@ -268,6 +268,7 @@ extensions = [
             "src/synthesizer/extensions/sfzh.c",
             "src/synthesizer/extensions/weights.c",
             "src/synthesizer/extensions/property_funcs.c",
+            "src/synthesizer/extensions/timers.c",
         ],
         compile_flags=compile_flags,
         links=link_args,
