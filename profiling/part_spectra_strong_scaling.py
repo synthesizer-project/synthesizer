@@ -141,7 +141,6 @@ def part_spectra_strong_scaling(
     output_lines = output.splitlines()
     atomic_runtimes = {}
 
-    C_total_key = None
     linestyles = {}
     for line in output_lines:
         if "===" in line:
@@ -160,20 +159,16 @@ def part_spectra_strong_scaling(
                 .strip()
             )
 
-            # Set the linestyle
-            if "[C]" in key:
-                linestyles[stripped_key] = "-"
-            elif "[Python]" in key:
-                linestyles[stripped_key] = "--"
-
             # Replace the total key
             if "[Total]" in key:
                 stripped_key = "Total"
 
-            # Get the total time for the C extension (the last line with
-            # [C] in will always be the total C time).
-            if "[C]" in key:
-                C_total_key = stripped_key
+            # Set the linestyle
+            if key not in linestyles:
+                if "[C]" in key or stripped_key == "Total":
+                    linestyles[stripped_key] = "-"
+                elif "[Python]" in key:
+                    linestyles[stripped_key] = "--"
 
             # Convert the value to a float
             value = float(value.replace("seconds", "").strip())
@@ -188,12 +183,16 @@ def part_spectra_strong_scaling(
             for i in range(0, len(atomic_runtimes[key]), average_over)
         ]
 
-    # Compute the python overhead (Total - C_total_key)
-    python_overhead = [
-        atomic_runtimes["Total"][i] - atomic_runtimes[C_total_key][i]
+    # Compute the overhead
+    overhead = [
+        atomic_runtimes["Total"][i]
         for i in range(len(atomic_runtimes["Total"]))
     ]
-    atomic_runtimes["Untimed Overhead"] = python_overhead
+    for key in atomic_runtimes.keys():
+        if key != "Total":
+            for i in range(len(atomic_runtimes[key])):
+                overhead[i] -= atomic_runtimes[key][i]
+    atomic_runtimes["Untimed Overhead"] = overhead
     linestyles["Untimed Overhead"] = ":"
 
     # Temporarily add the threads to the dictionary for saving
@@ -233,9 +232,10 @@ def part_spectra_strong_scaling(
         ax_main.semilogy(
             threads,
             atomic_runtimes[key],
-            "o",
+            "s" if key == "Total" else "o",
             label=key,
             linestyle=linestyles[key],
+            linewidth=3 if key == "Total" else 1,
         )
 
     ax_main.set_ylabel("Time (s)")
@@ -250,16 +250,17 @@ def part_spectra_strong_scaling(
         ax_speedup.plot(
             threads,
             speedup,
-            "o",
+            "s" if key == "Total" else "o",
             label=key,
             linestyle=linestyles[key],
+            linewidth=3 if key == "Total" else 1,
         )
 
     # PLot a 1-1 line
     ax_speedup.plot(
         [threads[0], threads[-1]],
         [threads[0], threads[-1]],
-        "--",
+        "-.",
         color="black",
         label="Ideal",
         alpha=0.7,
@@ -281,6 +282,18 @@ def part_spectra_strong_scaling(
     ax_legend.legend(
         handles, labels, loc="center left", bbox_to_anchor=(-0.3, 0.5)
     )
+
+    # Add a second key for linestyle
+    handles = [
+        plt.Line2D(
+            [0], [0], color="black", linestyle="-", label="C Extension"
+        ),
+        plt.Line2D([0], [0], color="black", linestyle="--", label="Python"),
+        plt.Line2D(
+            [0], [0], color="black", linestyle="-.", label="Perfect Scaling"
+        ),
+    ]
+    ax_speedup.legend(handles=handles, loc="upper left")
 
     fig.savefig(
         f"{basename}_particle_strong_scaling_{gam}_NStars"
