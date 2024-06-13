@@ -188,7 +188,7 @@ def int_spectra_strong_scaling(
         values,
         fmt="%.2f",
         header=header,
-        delimiter=" ",
+        delimiter=",",
     )
 
     # Create the figure and gridspec layout
