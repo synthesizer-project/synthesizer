@@ -28,7 +28,11 @@ np.random.seed(42)
 
 
 def int_spectra_strong_scaling(
-    basename, max_threads=8, nstars=10**5, average_over=10
+    basename,
+    max_threads=8,
+    nstars=10**5,
+    average_over=10,
+    gam="cic",
 ):
     """Profile the cpu time usage of the integrated spectra calculation."""
     # Define the grid
@@ -65,7 +69,7 @@ def int_spectra_strong_scaling(
     # Get spectra in serial first to get over any overhead due to linking
     # the first time the function is called
     print("Initial serial spectra calculation")
-    stars.get_spectra_incident(grid, nthreads=1, grid_assignment_method="ngp")
+    stars.get_spectra_incident(grid, nthreads=1, grid_assignment_method=gam)
     print()
 
     # Step 1: Save original stdout file descriptor and redirect
@@ -86,7 +90,7 @@ def int_spectra_strong_scaling(
             for i in range(average_over):
                 spec_start = time.time()
                 stars.get_spectra_incident(
-                    grid, nthreads=nthreads, grid_assignment_method="ngp"
+                    grid, nthreads=nthreads, grid_assignment_method=gam
                 )
                 execution_time = time.time() - spec_start
 
@@ -109,7 +113,7 @@ def int_spectra_strong_scaling(
                     stars.get_spectra_incident(
                         grid,
                         nthreads=max_threads,
-                        grid_assignment_method="ngp",
+                        grid_assignment_method=gam,
                     )
                     execution_time = time.time() - spec_start
 
@@ -187,7 +191,7 @@ def int_spectra_strong_scaling(
 
     # Save to a text file
     np.savetxt(
-        f"{basename}_integrated_strong_scaling_{nstars}.txt",
+        f"{basename}_integrated_strong_scaling_{gam}_{nstars}.txt",
         values,
         fmt=[
             "%.10f" if key != "Threads" else "%d"
@@ -264,7 +268,7 @@ def int_spectra_strong_scaling(
     )
 
     fig.savefig(
-        f"{basename}_integrated_strong_scaling_NStars"
+        f"{basename}_integrated_strong_scaling_{gam}_NStars"
         f"{nstars}_TotThreahs{max_threads}.png",
         dpi=300,
         bbox_inches="tight",
@@ -304,6 +308,13 @@ if __name__ == "__main__":
         help="The number of times to average over.",
     )
 
+    args.add_argument(
+        "--grid_assign",
+        type=str,
+        default="cic",
+        help="The grid assignment method (cic or ngp).",
+    )
+
     args = args.parse_args()
 
     int_spectra_strong_scaling(
@@ -311,4 +322,5 @@ if __name__ == "__main__":
         args.max_threads,
         args.nstars,
         args.average_over,
+        args.grid_assign,
     )
