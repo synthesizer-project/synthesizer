@@ -323,6 +323,9 @@ struct particles *get_part_struct(PyObject *part_tuple,
     if (particles->fesc == NULL) {
       return NULL;
     }
+  } else {
+    /* If we have no fesc we need an array of zeros. */
+    particles->fesc = calloc(npart, sizeof(double));
   }
 
   /* Extract the particle properties from the tuple of numpy arrays. */

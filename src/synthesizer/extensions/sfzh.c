@@ -21,31 +21,6 @@
 #include "weights.h"
 
 /**
- * @brief The callback function to store the mass of each particle in the
- * corresponding SFZH bin.
- *
- * @param mass: The mass for this particle.
- * @param data: The callback data.
- * @param out: The grid weights.
- */
-static void store_mass(double mass, struct callback_data *data, void *out) {
-
-  /* Unpack the data. */
-  const int *indices = data->indices;
-  const int *dims = data->dims;
-  const int ndim = data->ndim;
-
-  /* Unravel the indices. */
-  int flat_ind = get_flat_index(indices, dims, ndim);
-
-  /* Get the output array. */
-  double *out_arr = (double *)out;
-
-  /* Store the mass. */
-  out_arr[flat_ind] += mass;
-}
-
-/**
  * @brief Computes an integrated SED for a collection of particles.
  *
  * @param np_grid_spectra: The SPS spectra array.
@@ -60,6 +35,9 @@ static void store_mass(double mass, struct callback_data *data, void *out) {
  * @param nlam: The number of wavelength elements.
  */
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
+
+  double start_time = tic();
+  double setup_start = tic();
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -90,21 +68,20 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   }
 
   /* Allocate the sfzh array to output. */
-  double *sfzh = malloc(grid_props->size * sizeof(double));
+  double *sfzh = calloc(grid_props->size, sizeof(double));
   if (sfzh == NULL) {
     PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
     return NULL;
   }
-  bzero(sfzh, grid_props->size * sizeof(double));
+
+  toc("Extracting Python data", setup_start);
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
   if (strcmp(method, "cic") == 0) {
-    weight_loop_cic(grid_props, part_props, grid_props->size, sfzh, store_mass,
-                    nthreads);
+    weight_loop_cic(grid_props, part_props, grid_props->size, sfzh, nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    weight_loop_ngp(grid_props, part_props, grid_props->size, sfzh, store_mass,
-                    nthreads);
+    weight_loop_ngp(grid_props, part_props, grid_props->size, sfzh, nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
@@ -127,6 +104,8 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   /* Clean up memory! */
   free(part_props);
   free(grid_props);
+
+  toc("Computing SFZH", start_time);
 
   return Py_BuildValue("N", out_sfzh);
 }

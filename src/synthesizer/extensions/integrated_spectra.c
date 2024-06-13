@@ -21,31 +21,6 @@
 #include "weights.h"
 
 /**
- * @brief The callback function to store the weights for each particle.
- *
- * @param weight: The weight for this particle.
- * @param data: The callback data.
- * @param out: The grid weights.
- */
-static void store_weight(double weight, struct callback_data *data, void *out) {
-
-  /* Unpack the data. */
-  const int *indices = data->indices;
-  const int *dims = data->dims;
-  const int ndim = data->ndim;
-  const double fesc = data->fesc;
-
-  /* Unravel the indices. */
-  int flat_ind = get_flat_index(indices, dims, ndim);
-
-  /* Get the output array. */
-  double *out_arr = (double *)out;
-
-  /* Store the weight. */
-  out_arr[flat_ind] += weight * (1.0 - fesc);
-}
-
-/**
  * @brief Compute the integrated spectra from the grid weights.
  *
  * @param grid_props: The grid properties.
@@ -108,12 +83,19 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
                                int nthreads) {
 
   /* Set up array to hold the SED itself. */
-  double *spectra = malloc(grid_props->nlam * sizeof(double));
+  double *spectra = calloc(grid_props->nlam, sizeof(double));
   if (spectra == NULL) {
     PyErr_SetString(PyExc_ValueError, "Failed to allocate memory for spectra.");
     return NULL;
   }
-  bzero(spectra, grid_props->nlam * sizeof(double));
+
+  /* Allocate a continuous chunk of data for each thread to use. */
+  double *out_data = calloc(nthreads * grid_props->nlam, sizeof(double));
+  if (out_data == NULL) {
+    PyErr_SetString(PyExc_ValueError,
+                    "Failed to allocate memory for thread spectra.");
+    return NULL;
+  }
 
   /* Allocate thread spectra. */
   double **thread_spectra = malloc(nthreads * sizeof(double *));
@@ -122,19 +104,17 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
                     "Failed to allocate memory for thread spectra.");
     return NULL;
   }
-  bzero(thread_spectra, nthreads * sizeof(double *));
+  for (int t = 0; t < nthreads; t++) {
+    thread_spectra[t] = out_data + t * grid_props->nlam;
+  }
+
 #pragma omp parallel num_threads(nthreads)
   {
     /* Get the thread id. */
     int tid = omp_get_thread_num();
 
-    /* Allocate the thread spectra. */
-    thread_spectra[tid] = malloc(grid_props->nlam * sizeof(double));
-    if (thread_spectra[tid] == NULL) {
-      PyErr_SetString(PyExc_ValueError,
-                      "Failed to allocate memory for thread spectra.");
-    }
-    bzero(thread_spectra[tid], grid_props->nlam * sizeof(double));
+    /* Get a local pointer to this threads spectra. */
+    double *local_spectra = thread_spectra[tid];
 
 #pragma omp for
     /* Loop over wavelengths. */
@@ -160,27 +140,64 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
 
         /* Add the contribution to this wavelength. */
         /* fesc is already included in the weight */
-        thread_spectra[tid][ilam] +=
-            grid_props->spectra[spectra_ind + ilam] * weight;
+        local_spectra[ilam] += grid_props->spectra[spectra_ind + ilam] * weight;
       }
     }
   }
 
-  /* Sum the thread spectra. */
+  /* Hierarchical reduction */
+  for (int step = 1; step < nthreads; step *= 2) {
+    for (int tid = 0; tid < nthreads; tid += 2 * step) {
+      if (tid + step < nthreads) {
 #pragma omp parallel for num_threads(nthreads)
-  for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
-    for (int t = 0; t < nthreads; t++) {
-      spectra[ilam] += thread_spectra[t][ilam];
+        for (int i = 0; i < grid_props->nlam; i++) {
+          thread_spectra[tid][i] += thread_spectra[tid + step][i];
+        }
+      }
     }
   }
-  for (int t = 0; t < nthreads; t++) {
-    free(thread_spectra[t]);
-  }
+
+  /* Copy the final reduced result to spectra */
+  memcpy(spectra, thread_spectra[0], grid_props->nlam * sizeof(double));
+
+  /* Clean up. */
+  free(out_data);
   free(thread_spectra);
 
   return spectra;
 }
 #endif
+
+/**
+ * @brief Compute the integrated spectra from the grid weights.
+ *
+ * @param grid_props: The grid properties.
+ * @param grid_weights: The grid weights computed from the particles.
+ * @param nthreads: The number of threads to use.
+ *
+ * @return The integrated spectra.
+ */
+static double *get_spectra(struct grid *grid_props, double *grid_weights,
+                           int nthreads) {
+
+  double reduction_start = tic();
+#ifdef WITH_OPENMP
+  /* Do we have multiple threads to do the reduction on to the spectra? */
+  double *spectra;
+  if (nthreads > 1) {
+    spectra = get_spectra_omp(grid_props, grid_weights, nthreads);
+  } else {
+    spectra = get_spectra_serial(grid_props, grid_weights);
+  }
+#else
+  /* We can't do the reduction in parallel without OpenMP. */
+  double *spectra = get_spectra_serial(grid_props, grid_weights);
+#endif
+
+  toc("Compute integrated spectra from weights", reduction_start);
+
+  return spectra;
+}
 
 /**
  * @brief Computes an integrated SED for a collection of particles.
@@ -233,13 +250,12 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   }
 
   /* Allocate the grid weights. */
-  double *grid_weights = malloc(grid_props->size * sizeof(double));
+  double *grid_weights = calloc(grid_props->size, sizeof(double));
   if (grid_weights == NULL) {
     PyErr_SetString(PyExc_MemoryError,
                     "Could not allocate memory for grid weights.");
     return NULL;
   }
-  bzero(grid_weights, grid_props->size * sizeof(double));
 
   toc("Extracting Python data", setup_start);
 
@@ -247,10 +263,10 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
    * the requested method. */
   if (strcmp(method, "cic") == 0) {
     weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
-                    store_weight, nthreads);
+                    nthreads);
   } else if (strcmp(method, "ngp") == 0) {
     weight_loop_ngp(grid_props, part_props, grid_props->size, grid_weights,
-                    store_weight, nthreads);
+                    nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
@@ -262,24 +278,10 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  double reduction_start = tic();
-#ifdef WITH_OPENMP
-  /* Do we have multiple threads to do the reduction on to the spectra? */
-  double *spectra;
-  if (nthreads > 1) {
-    spectra = get_spectra_omp(grid_props, grid_weights, nthreads);
-  } else {
-    spectra = get_spectra_serial(grid_props, grid_weights);
-  }
-#else
-  /* We can't do the reduction in parallel without OpenMP. */
-  double *spectra = get_spectra_serial(grid_props, grid_weights);
-#endif
-
-  toc("Compute integrated spectra from weights", reduction_start);
-
-  /* Ensure we got the spectra sucessfully. */
+  /* Compute the integrated SED. */
+  double *spectra = get_spectra(grid_props, grid_weights, nthreads);
   if (spectra == NULL) {
+    PyErr_SetString(PyExc_RuntimeError, "Could not compute integrated SED.");
     return NULL;
   }
 
