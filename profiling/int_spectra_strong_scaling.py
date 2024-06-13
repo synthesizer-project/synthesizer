@@ -27,7 +27,9 @@ plt.rcParams["font.serif"] = ["Times New Roman"]
 np.random.seed(42)
 
 
-def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
+def int_spectra_strong_scaling(
+    basename, max_threads=8, nstars=10**5, average_over=10
+):
     """Profile the cpu time usage of the integrated spectra calculation."""
     # Define the grid
     grid_name = "test_grid"
@@ -60,13 +62,6 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
         redshift=1,
     )
 
-    sfzh = stars.get_sfzh(grid, grid_assignment_method="ngp")
-    threaded_sfhz = stars.get_sfzh(
-        grid, nthreads=2, grid_assignment_method="ngp"
-    )
-    print(np.sum(sfzh - threaded_sfhz))
-    stars.plot_sfzh(grid)
-
     # Get spectra in serial first to get over any overhead due to linking
     # the first time the function is called
     print("Initial serial spectra calculation")
@@ -87,27 +82,11 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
         # Loop over the number of threads
         nthreads = 1
         while nthreads <= max_threads:
-            spec_start = time.time()
-            stars.get_spectra_incident(
-                grid, nthreads=nthreads, grid_assignment_method="ngp"
-            )
-            execution_time = time.time() - spec_start
-
-            print(
-                "[Python] Getting spectra execution time:",
-                execution_time,
-            )
-
-            times.append(execution_time)
-            threads.append(nthreads)
-
-            nthreads *= 2
-            print()
-        else:
-            if max_threads not in threads:
+            print(f"=== Testing with {nthreads} threads ===")
+            for i in range(average_over):
                 spec_start = time.time()
                 stars.get_spectra_incident(
-                    grid, nthreads=max_threads, grid_assignment_method="ngp"
+                    grid, nthreads=nthreads, grid_assignment_method="ngp"
                 )
                 execution_time = time.time() - spec_start
 
@@ -117,7 +96,31 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
                 )
 
                 times.append(execution_time)
-                threads.append(max_threads)
+                if i == 0:
+                    threads.append(nthreads)
+
+            nthreads *= 2
+            print()
+        else:
+            if max_threads not in threads:
+                print(f"=== Testing with {max_threads} threads ===")
+                for i in range(average_over):
+                    spec_start = time.time()
+                    stars.get_spectra_incident(
+                        grid,
+                        nthreads=max_threads,
+                        grid_assignment_method="ngp",
+                    )
+                    execution_time = time.time() - spec_start
+
+                    print(
+                        "[Python] Getting spectra execution time:",
+                        execution_time,
+                    )
+
+                    times.append(execution_time)
+                    if i == 0:
+                        threads.append(max_threads)
 
     # Step 3: Reset stdout to original
     os.dup2(temp_stdout, original_stdout_fd)
@@ -135,6 +138,8 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
     prev_key = None
     C_total_key = None
     for line in output_lines:
+        if "===" in line:
+            nthreads = int(line.split()[3])
         if ":" in line:
             # Get the key and value from the line
             key, value = line.split(":")
@@ -152,9 +157,16 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
             # Convert the value to a float
             value = float(value.replace("seconds", "").strip())
 
-            atomic_runtimes.setdefault(key.strip(), []).append(value)
+            atomic_runtimes.setdefault(key, []).append(value)
             prev_key = key
         print(line)
+
+    # Average every average_over runs
+    for key in atomic_runtimes.keys():
+        atomic_runtimes[key] = [
+            np.mean(atomic_runtimes[key][i : i + average_over])
+            for i in range(0, len(atomic_runtimes[key]), average_over)
+        ]
 
     # Compute the python overhead (Total - C_total_key)
     python_overhead = [
@@ -163,8 +175,6 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
     ]
     atomic_runtimes["Python Overhead"] = python_overhead
 
-    # Combine times and threads into a single array
-    times = np.array([threads, times])
     # Convert dictionary to a structured array
     dtype = [(key, "f8") for key in atomic_runtimes.keys()]
     values = np.array(list(zip(*atomic_runtimes.values())), dtype=dtype)
@@ -197,7 +207,7 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
         else:
             ls = "--"
         ax_main.semilogy(
-            times[0], atomic_runtimes[key], "o", label=key, linestyle=ls
+            threads, atomic_runtimes[key], "o", label=key, linestyle=ls
         )
 
     ax_main.set_ylabel("Time (s)")
@@ -215,12 +225,12 @@ def int_spectra_strong_scaling(basename, max_threads=8, nstars=10**5):
             ls = "--"
         initial_time = atomic_runtimes[key][0]
         speedup = [initial_time / t for t in atomic_runtimes[key]]
-        ax_speedup.plot(times[0], speedup, "o", label=key, linestyle=ls)
+        ax_speedup.plot(threads, speedup, "o", label=key, linestyle=ls)
 
     # PLot a 1-1 line
     ax_speedup.plot(
-        [times[0][0], times[0][-1]],
-        [times[0][0], times[0][-1]],
+        [threads[0], threads[-1]],
+        [threads[0], threads[-1]],
         "--",
         color="black",
         label="Ideal",
@@ -278,6 +288,18 @@ if __name__ == "__main__":
         help="The number of stars to use in the simulation.",
     )
 
+    args.add_argument(
+        "--average_over",
+        type=int,
+        default=10,
+        help="The number of times to average over.",
+    )
+
     args = args.parse_args()
 
-    int_spectra_strong_scaling(args.basename, args.max_threads, args.nstars)
+    int_spectra_strong_scaling(
+        args.basename,
+        args.max_threads,
+        args.nstars,
+        args.average_over,
+    )
