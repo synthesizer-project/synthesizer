@@ -177,10 +177,13 @@ def int_spectra_strong_scaling(
 
     # Convert dictionary to a structured array
     dtype = [(key, "f8") for key in atomic_runtimes.keys()]
-    values = np.array(list(zip(*atomic_runtimes.values())), dtype=dtype)
+    dtype.insert(0, ("Threads", "i4"))
+    values = list(zip(*atomic_runtimes.values()))
+    values.insert(0, threads)
+    values = np.array(values, dtype=dtype)
 
     # Define the header
-    header = " ".join(atomic_runtimes.keys())
+    header = " ".join([t[0] for t in dtype])
 
     # Save to a text file
     np.savetxt(
