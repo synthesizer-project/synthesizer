@@ -1,6 +1,7 @@
 /******************************************************************************
  * C extension for timing code execution.
  *****************************************************************************/
+#include <Python.h>
 #include <stdio.h>
 
 #ifdef WITH_OPENMP
@@ -10,9 +11,6 @@
 #include <time.h>
 #define GET_TIME() ((double)clock() / CLOCKS_PER_SEC)
 #endif
-
-/* Local includes.*/
-#include "timers.h"
 
 /**
  * @brief Start a timer.
@@ -30,9 +28,48 @@ double tic() { return GET_TIME(); }
 void toc(const char *msg, double start_time) {
   double end_time = GET_TIME();
   double elapsed_time = end_time - start_time;
-#ifdef WITH_OPENMP
-  printf("[Parallel] %s execution time: %f seconds\n", msg, elapsed_time);
+#ifdef PYTHON_CALL
+  printf("[Python] %s execution time: %f seconds\n", msg, elapsed_time);
 #else
-  printf("[Serial] %s execution time: %f seconds\n", msg, elapsed_time);
+#ifdef WITH_OPENMP
+  printf("[C] %s execution time: %f seconds\n", msg, elapsed_time);
+#else
+  printf("[C] %s (serial) execution time: %f seconds\n", msg, elapsed_time);
+#endif
 #endif
 }
+
+/* Python wrapper for tic */
+static PyObject *py_tic(PyObject *self, PyObject *args) {
+  return Py_BuildValue("d", tic());
+}
+
+/* Python wrapper for toc */
+static PyObject *py_toc(PyObject *self, PyObject *args) {
+  const char *msg;
+  double start_time;
+  if (!PyArg_ParseTuple(args, "sd", &msg, &start_time))
+    return NULL;
+#define PYTHON_CALL
+  toc(msg, start_time);
+#undef PYTHON_CALL
+  Py_RETURN_NONE;
+}
+
+/* Module method table */
+static PyMethodDef TimerMethods[] = {
+    {"tic", py_tic, METH_NOARGS, "Start a timer and return the start time."},
+    {"toc", py_toc, METH_VARARGS, "Stop the timer and print the elapsed time."},
+    {NULL, NULL, 0, NULL} /* Sentinel */
+};
+
+/* Module definition */
+static struct PyModuleDef timermodule = {
+    PyModuleDef_HEAD_INIT, "timer", /* name of module */
+    NULL,                           /* module documentation, may be NULL */
+    -1, /* size of per-interpreter state of the module,
+           or -1 if the module keeps state in global variables. */
+    TimerMethods};
+
+/* Module initialization function */
+PyMODINIT_FUNC PyInit_timers(void) { return PyModule_Create(&timermodule); }
