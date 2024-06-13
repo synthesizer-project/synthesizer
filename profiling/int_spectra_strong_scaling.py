@@ -175,24 +175,30 @@ def int_spectra_strong_scaling(
     ]
     atomic_runtimes["Python Overhead"] = python_overhead
 
+    # Temporarily add the threads to the dictionary for saving
+    atomic_runtimes["Threads"] = threads
+
     # Convert dictionary to a structured array
     dtype = [(key, "f8") for key in atomic_runtimes.keys()]
-    dtype.insert(0, ("Threads", "i4"))
-    values = list(zip(*atomic_runtimes.values()))
-    values.insert(0, threads)
-    values = np.array(values, dtype=dtype)
+    values = np.array(list(zip(*atomic_runtimes.values())), dtype=dtype)
 
     # Define the header
-    header = " ".join([t[0] for t in dtype])
+    header = ", ".join(atomic_runtimes.keys())
 
     # Save to a text file
     np.savetxt(
         f"{basename}_integrated_strong_scaling_{nstars}.txt",
         values,
-        fmt="%.2f",
+        fmt=[
+            "%.10f" if key != "Threads" else "%d"
+            for key in atomic_runtimes.keys()
+        ],
         header=header,
         delimiter=",",
     )
+
+    # Remove the threads from the dictionary
+    atomic_runtimes.pop("Threads")
 
     # Create the figure and gridspec layout
     fig = plt.figure(figsize=(12, 10))
