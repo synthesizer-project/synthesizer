@@ -97,7 +97,7 @@ def part_spectra_strong_scaling(
                 execution_time = time.time() - spec_start
 
                 print(
-                    "[Python] Getting spectra execution time:",
+                    "[Total] Getting spectra execution time:",
                     execution_time,
                 )
 
@@ -120,7 +120,7 @@ def part_spectra_strong_scaling(
                     execution_time = time.time() - spec_start
 
                     print(
-                        "[Python] Getting spectra execution time:",
+                        "[Total] Getting spectra execution time:",
                         execution_time,
                     )
 
@@ -141,7 +141,6 @@ def part_spectra_strong_scaling(
     output_lines = output.splitlines()
     atomic_runtimes = {}
 
-    prev_key = None
     C_total_key = None
     for line in output_lines:
         if "===" in line:
@@ -151,20 +150,27 @@ def part_spectra_strong_scaling(
             key, value = line.split(":")
 
             # Replace the total key
-            if "[Python]" in key:
+            if "[Total]" in key:
                 key = "Total"
-                C_total_key = prev_key
+
+            # Get the total time for the C extension (the last line with
+            # [C] in will always be the total C time).
+            if "[C]" in key:
+                C_total_key = (
+                    key.replace("[C]", "")
+                    .replace("execution time", "")
+                    .strip()
+                )
 
             # Strip certain information from the key
             key = key.replace("[Python]", "").strip()
-            key = key.replace("[Parallel]", "").strip()
+            key = key.replace("[C]", "").strip()
             key = key.replace("execution time", "").strip()
 
             # Convert the value to a float
             value = float(value.replace("seconds", "").strip())
 
             atomic_runtimes.setdefault(key, []).append(value)
-            prev_key = key
         print(line)
 
     # Average every average_over runs
