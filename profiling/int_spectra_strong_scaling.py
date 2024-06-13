@@ -140,12 +140,19 @@ def int_spectra_strong_scaling(
     atomic_runtimes = {}
 
     C_total_key = None
+    linestyles = {}
     for line in output_lines:
         if "===" in line:
             nthreads = int(line.split()[3])
         if ":" in line:
             # Get the key and value from the line
             key, value = line.split(":")
+
+            # Set the linestyle
+            if "[C]" in key:
+                linestyles[key] = "-"
+            elif "[Python]" in key:
+                linestyles[key] = "--"
 
             # Replace the total key
             if "[Total]" in key:
@@ -183,7 +190,8 @@ def int_spectra_strong_scaling(
         atomic_runtimes["Total"][i] - atomic_runtimes[C_total_key][i]
         for i in range(len(atomic_runtimes["Total"]))
     ]
-    atomic_runtimes["Python Overhead"] = python_overhead
+    atomic_runtimes["Untimed Overhead"] = python_overhead
+    linestyles["Untimed Overhead"] = ":"
 
     # Temporarily add the threads to the dictionary for saving
     atomic_runtimes["Threads"] = threads
@@ -219,14 +227,12 @@ def int_spectra_strong_scaling(
     # Main plot
     ax_main = fig.add_subplot(gs[0, 0])
     for key in atomic_runtimes.keys():
-        if key == "Total":
-            ls = "-"
-        elif key == "Python Overhead":
-            ls = ":"
-        else:
-            ls = "--"
         ax_main.semilogy(
-            threads, atomic_runtimes[key], "o", label=key, linestyle=ls
+            threads,
+            atomic_runtimes[key],
+            "o",
+            label=key,
+            linestyle=linestyles[key],
         )
 
     ax_main.set_ylabel("Time (s)")
@@ -236,15 +242,15 @@ def int_spectra_strong_scaling(
     # Speedup plot
     ax_speedup = fig.add_subplot(gs[1, 0], sharex=ax_main)
     for key in atomic_runtimes.keys():
-        if key == "Total":
-            ls = "-"
-        elif key == "Python Overhead":
-            ls = ":"
-        else:
-            ls = "--"
         initial_time = atomic_runtimes[key][0]
         speedup = [initial_time / t for t in atomic_runtimes[key]]
-        ax_speedup.plot(threads, speedup, "o", label=key, linestyle=ls)
+        ax_speedup.plot(
+            threads,
+            speedup,
+            "o",
+            label=key,
+            linestyle=linestyles[key],
+        )
 
     # PLot a 1-1 line
     ax_speedup.plot(
