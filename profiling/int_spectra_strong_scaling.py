@@ -148,34 +148,35 @@ def int_spectra_strong_scaling(
             # Get the key and value from the line
             key, value = line.split(":")
 
+            # Get the stripped key
+            stripped_key = (
+                key.replace("[Python]", "")
+                .replace("[C]", "")
+                .replace("took", "")
+                .replace("took (in serial)", "")
+                .replace("[Total]", "")
+                .strip()
+            )
+
             # Set the linestyle
             if "[C]" in key:
-                linestyles[key] = "-"
+                linestyles[stripped_key] = "-"
             elif "[Python]" in key:
-                linestyles[key] = "--"
+                linestyles[stripped_key] = "--"
 
             # Replace the total key
             if "[Total]" in key:
-                key = "Total"
+                stripped_key = "Total"
 
             # Get the total time for the C extension (the last line with
             # [C] in will always be the total C time).
             if "[C]" in key:
-                C_total_key = (
-                    key.replace("[C]", "")
-                    .replace("execution time", "")
-                    .strip()
-                )
-
-            # Strip certain information from the key
-            key = key.replace("[Python]", "").strip()
-            key = key.replace("[C]", "").strip()
-            key = key.replace("execution time", "").strip()
+                C_total_key = stripped_key
 
             # Convert the value to a float
             value = float(value.replace("seconds", "").strip())
 
-            atomic_runtimes.setdefault(key, []).append(value)
+            atomic_runtimes.setdefault(stripped_key, []).append(value)
         print(line)
 
     # Average every average_over runs
