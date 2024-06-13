@@ -28,14 +28,10 @@ double tic() { return GET_TIME(); }
 void toc(const char *msg, double start_time) {
   double end_time = GET_TIME();
   double elapsed_time = end_time - start_time;
-#ifdef PYTHON_CALL
-  printf("[Python] %s execution time: %f seconds\n", msg, elapsed_time);
-#else
 #ifdef WITH_OPENMP
-  printf("[C] %s execution time: %f seconds\n", msg, elapsed_time);
+  printf("[C] %s took: %f seconds\n", msg, elapsed_time);
 #else
-  printf("[C] %s (serial) execution time: %f seconds\n", msg, elapsed_time);
-#endif
+  printf("[C] %s took (in serial): %f seconds\n", msg, elapsed_time);
 #endif
 }
 
@@ -46,13 +42,13 @@ static PyObject *py_tic(PyObject *self, PyObject *args) {
 
 /* Python wrapper for toc */
 static PyObject *py_toc(PyObject *self, PyObject *args) {
-  const char *msg;
+  char *msg;
   double start_time;
   if (!PyArg_ParseTuple(args, "sd", &msg, &start_time))
     return NULL;
-#define PYTHON_CALL
-  toc(msg, start_time);
-#undef PYTHON_CALL
+  double end_time = GET_TIME();
+  double elapsed_time = end_time - start_time;
+  printf("[Python] %s took: %f seconds\n", msg, elapsed_time);
   Py_RETURN_NONE;
 }
 
