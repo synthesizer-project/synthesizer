@@ -38,9 +38,14 @@ void get_indices_from_flat(int flat_ind, int ndim, const int *dims,
                            int *indices);
 int get_flat_index(const int *multi_index, const int *dims, const int ndims);
 int binary_search(int low, int high, const double *arr, const double val);
+void get_part_ind_frac_cic(int *part_indices, double *axis_fracs, int *dims,
+                           int ndim, double **grid_props, double **part_props,
+                           int p);
 void weight_loop_cic(struct grid *grid, struct particles *parts, int out_size,
-                     void *out, WeightFunc func, const int nthreads);
+                     void *out, const int nthreads);
+void get_part_inds_ngp(int *part_indices, int *dims, int ndim,
+                       double **grid_props, double **part_props, int p);
 void weight_loop_ngp(struct grid *grid, struct particles *parts, int out_size,
-                     void *out, WeightFunc func, const int nthreads);
+                     void *out, const int nthreads);
 
 #endif // WEIGHTS_H_
