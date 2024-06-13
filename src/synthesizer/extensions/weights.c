@@ -659,20 +659,27 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
       func(mass, &data, out_per_thread[tid]);
     }
   }
-  /* Hierarchical reduction */
-  for (int step = 1; step < nthreads; step *= 2) {
-#pragma omp parallel for num_threads(nthreads)
-    for (int tid = 0; tid < nthreads; tid += 2 * step) {
-      if (tid + step < nthreads) {
-        for (int i = 0; i < out_size; i++) {
-          out_per_thread[tid][i] += out_per_thread[tid + step][i];
-        }
-      }
+  /*   /\* Hierarchical reduction *\/ */
+  /*   for (int step = 1; step < nthreads; step *= 2) { */
+  /*     for (int tid = 0; tid < nthreads; tid += 2 * step) { */
+  /*       if (tid + step < nthreads) { */
+  /* #pragma omp parallel for num_threads(nthreads) */
+  /*         for (int i = 0; i < out_size; i++) { */
+  /*           out_per_thread[tid][i] += out_per_thread[tid + step][i]; */
+  /*         } */
+  /*       } */
+  /*     } */
+  /*   } */
+
+  /*   /\* Copy the final reduced result to spectra *\/ */
+  /*   memcpy(out_arr, out_per_thread[0], out_size * sizeof(double)); */
+
+  /* Use reduction to collect everything into the output array */
+  for (int i = 0; i < out_size; i++) {
+    for (int j = 0; j < nthreads; j++) {
+      out_arr[i] += out_per_thread[j][i];
     }
   }
-
-  /* Copy the final reduced result to spectra */
-  memcpy(out_arr, out_per_thread[0], out_size * sizeof(double));
 
   /* Free the per-thread output. */
   for (int i = 0; i < nthreads; i++) {
