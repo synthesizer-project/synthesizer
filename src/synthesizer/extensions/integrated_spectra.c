@@ -288,8 +288,6 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   free(part_props);
   free(grid_props);
 
-  double output_start = tic();
-
   /* Reconstruct the python array to return. */
   npy_intp np_dims[1] = {
       nlam,
@@ -297,7 +295,6 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
       1, np_dims, NPY_FLOAT64, spectra);
 
-  toc("Construct Python output array", output_start);
   toc("Compute integrated SED", start_time);
 
   return Py_BuildValue("N", out_spectra);
