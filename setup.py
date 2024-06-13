@@ -219,6 +219,13 @@ if WITH_DEBUGGING_CHECKS == "1":
 # Define the extension modules
 extensions = [
     create_extension(
+        "synthesizer.extensions.timers",
+        ["src/synthesizer/extensions/timers.c"],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
+    create_extension(
         "synthesizer.extensions.openmp_check",
         ["src/synthesizer/extensions/openmp_check.c"],
         compile_flags=compile_flags,

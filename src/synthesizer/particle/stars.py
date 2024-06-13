@@ -29,6 +29,7 @@ from unyt import Hz, angstrom, erg, kpc, s
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
 from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line, LineCollection
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
@@ -900,6 +901,8 @@ class Stars(Particles, StarsComponent):
             Numpy array of integrated spectra in units of (erg / s / Hz).
         """
 
+        start = tic()
+
         # Ensure we have a total key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
             raise exceptions.MissingSpectraType(
@@ -989,9 +992,12 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
         )
+        toc("Preparing C args", start)
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         masked_spec = compute_particle_seds(*args)
+
+        start = tic()
 
         # If there's no mask we're done
         if mask is None:
@@ -1000,6 +1006,9 @@ class Stars(Particles, StarsComponent):
         # If we have a mask we need to account for the zeroed spectra
         spec = np.zeros((self.nstars, masked_spec.shape[-1]))
         spec[mask] = masked_spec
+
+        toc("Masking spectra and adding contribution", start)
+
         return spec
 
     def generate_particle_line(
