@@ -26,10 +26,11 @@ from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
-from synthesizer.igm import Inoue14
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
 from synthesizer.utils import has_units, rebin_1d, wavelength_to_rgba
+from synthesizer.warnings import warn
 
 
 class Sed:
@@ -88,6 +89,7 @@ class Sed:
             description (string)
                 An optional descriptive string defining the Sed.
         """
+        start = tic()
 
         # Set the description
         self.description = description
@@ -141,6 +143,8 @@ class Sed:
         self.photo_luminosities = None
         self.photo_fluxes = None
 
+        toc("Creating Sed", start)
+
     def sum(self):
         """
         For multidimensional `sed`'s, sum the luminosity to provide a 1D
@@ -153,12 +157,15 @@ class Sed:
 
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
+            # Define the axes to sum over to give only the final axis
+            sum_over = tuple(range(0, len(self._lnu.shape) - 1))
+
             # Create a new sed object with the first Lnu dimension collapsed
-            new_sed = Sed(self.lam, np.sum(self._lnu, axis=0))
+            new_sed = Sed(self.lam, np.sum(self._lnu, axis=sum_over))
 
             # If fnu exists, sum that too
             if self.fnu is not None:
-                new_sed.fnu = np.sum(self.fnu, axis=0)
+                new_sed.fnu = np.sum(self.fnu, axis=sum_over)
                 new_sed.obsnu = self.obsnu
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
@@ -246,12 +253,16 @@ class Sed:
         """
 
         # Ensure the wavelength arrays are compatible
-        # # NOTE: this is probably overkill and too costly. We
-        # could instead check the first and last entry and the shape.
-        # In rare instances this could fail though.
-        if not np.array_equal(self._lam, second_sed._lam):
+        if not (
+            self._lam[0] == second_sed._lam[0]
+            and self._lam[-1] == second_sed._lam[-1]
+        ):
             raise exceptions.InconsistentAddition(
-                "Wavelength grids must be identical"
+                "Wavelength grids must be identical "
+                f"({self.lam.min()} -> {self.lam.max()} "
+                f"with shape {self._lam.shape} != "
+                f"{second_sed.lam.min()} -> {second_sed.lam.max()} "
+                f"with shape {second_sed._lam.shape})"
             )
 
         # Ensure the lnu arrays are compatible
@@ -259,7 +270,8 @@ class Sed:
         # not erroneously error. Nor is it expensive.
         if self._lnu.shape[0] != second_sed._lnu.shape[0]:
             raise exceptions.InconsistentAddition(
-                "SEDs must have same dimensions"
+                "SEDs must have same dimensions "
+                f"({self._lnu.shape} != {second_sed._lnu.shape})"
             )
 
         # They're compatible, add them and make a new Sed
@@ -545,6 +557,7 @@ class Sed:
             UnrecognisedOption
                 If method is an incompatible option an error is raised.
         """
+        start = tic()
 
         # If the method is trapz we can do any number of dimensions
         if method == "trapz":
@@ -600,6 +613,9 @@ class Sed:
             )
 
         self.bolometric_luminosity = bolometric_luminosity
+
+        toc("Calculating bolometric luminosity", start)
+
         return self.bolometric_luminosity
 
     def measure_window_luminosity(self, window, method="trapz"):
@@ -894,7 +910,7 @@ class Sed:
 
         return self.fnu
 
-    def get_fnu(self, cosmo, z, igm=Inoue14):
+    def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution.
 
@@ -908,7 +924,8 @@ class Sed:
             z (float)
                 The redshift of the spectra.
             igm (igm)
-                The IGM class.
+                The IGM class. e.g. `synthesizer.igm.Inoue14`.
+                Defaults to None.
 
         Returns:
             fnu (ndarray)
@@ -964,13 +981,10 @@ class Sed:
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
             if not np.array_equal(f.lam, self.lam):
-                if verbose:
-                    print(
-                        (
-                            "WARNING: filter wavelength grid is not "
-                            "the same as the SED wavelength grid."
-                        )
-                    )
+                warn(
+                    "Filter wavelength grid is not "
+                    "the same as the SED wavelength grid."
+                )
 
             # Apply the filter transmission curve and store the resulting
             # luminosity
@@ -1017,13 +1031,10 @@ class Sed:
             # Check whether the filter transmission curve wavelength grid
             # and the spectral grid are the same array
             if not np.array_equal(f.lam, self.lam):
-                if verbose:
-                    print(
-                        (
-                            "WARNING: filter wavelength grid is not "
-                            "the same as the SED wavelength grid."
-                        )
-                    )
+                warn(
+                    "Filter wavelength grid is not "
+                    "the same as the SED wavelength grid."
+                )
 
             # Calculate and store the broadband flux in this filter
             bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
@@ -1178,7 +1189,7 @@ class Sed:
 
         # Both arguments are unecessary, tell the user what we will do
         if resample_factor is not None and new_lam is not None:
-            print("Got resample_factor and new_lam, ignoring resample_factor")
+            warn("Got resample_factor and new_lam, ignoring resample_factor")
 
         # Resample the wavelength array
         if new_lam is None:
@@ -1430,7 +1441,7 @@ def plot_spectra(
 
         # Don't draw a legend if not label given
         if label is None and draw_legend:
-            print("No label given, we will not draw a legend")
+            warn("No label given, we will not draw a legend")
             draw_legend = False
 
     # If we don't already have a figure, make one

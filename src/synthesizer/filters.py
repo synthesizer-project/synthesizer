@@ -36,6 +36,7 @@ from unyt import Angstrom, Hz, c, unyt_array, unyt_quantity
 import synthesizer.exceptions as exceptions
 from synthesizer._version import __version__
 from synthesizer.units import Quantity
+from synthesizer.warnings import warn
 
 
 def UVJ(new_lam=None):
@@ -167,19 +168,19 @@ class FilterCollection:
         # Ensure we haven't been passed both a path and parameters
         if path is not None:
             if filter_codes is not None:
-                print(
+                warn(
                     "If a path is passed only the saved FilterCollection is "
                     "loaded! Create a separate FilterCollection with these "
-                    "filter codes and add them."
+                    "filter codes and add them.",
                 )
             if tophat_dict is not None:
-                print(
+                warn(
                     "If a path is passed only the saved FilterCollection is "
                     "loaded! Create a separate FilterCollection with this "
                     "top hat dictionary and add them."
                 )
             if generic_dict is not None:
-                print(
+                warn(
                     "If a path is passed only the saved FilterCollection is "
                     "loaded! Create a separate FilterCollection with this "
                     "generic dictionary and add them."
@@ -238,8 +239,8 @@ class FilterCollection:
 
         # Warn if the synthesizer versions don't match
         if hdf["Header"].attrs["synthesizer_version"] != __version__:
-            print(
-                "WARNING: Synthesizer versions differ between the code and "
+            warn(
+                "Synthesizer versions differ between the code and "
                 "FilterCollection file! This is probably fine but there "
                 "is no gaurantee it won't cause errors."
             )
@@ -1359,8 +1360,8 @@ class Filter:
 
         # Warn the user we are are doing this
         if self.t.max() > 1 or self.t.min() < 0:
-            print(
-                "Warning: Out of range transmission values found "
+            warn(
+                "Out of range transmission values found "
                 f"(min={self.t.min()}, max={self.t.max()}). "
                 "Transmission will be clipped to [0-1]"
             )
@@ -1479,8 +1480,8 @@ class Filter:
             if new_lam.max() < self.lam[self.t > 0].max():
                 truncated = True
             if truncated:
-                print(
-                    f"Warning: {self.filter_code} will be truncated where "
+                warn(
+                    f"{self.filter_code} will be truncated where "
                     "transmission is non-zero "
                     "(old_lam_bounds = "
                     f"({self.lam[self.t > 0].min():.2e}, "
@@ -1589,14 +1590,11 @@ class Filter:
 
         else:
             # If both have been handed then frequencies take precedence
-            if verbose:
-                print(
-                    (
-                        "WARNING: Both wavelengths and frequencies were "
-                        "provided, frequencies take priority over wavelengths"
-                        " for filter convolution."
-                    )
-                )
+            warn(
+                "Both wavelengths and frequencies were "
+                "provided, frequencies take priority over wavelengths"
+                " for filter convolution."
+            )
             xs = self._nu.to(Hz).value
             original_xs = self._original_nu
 

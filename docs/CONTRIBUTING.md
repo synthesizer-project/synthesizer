@@ -114,3 +114,17 @@ The `examples/` top level directory contains a number of self contained example 
 Subfolders of examples should contain a `README.rst` with a section heading (please follow the template in other subfolders).
 
 If an example is named `plot_*.py` then `sphinx-gallery` will attempt to run the script and use any images generated in the gallery thumbnail. Images should be generated using `plt.show()` and not saved to disk.
+
+## Debugging C development
+
+If you are writing C extensions for synthesizer you can include debugging checks and optionally activate them using the `WITH_DEBUGGING_CHECKS` preprocessor directive. To use this wrap the debugging code in an ifdef:
+
+```
+#ifdef WITH_DEBUGGING_CHECKS
+debugging code...
+#endif
+```
+
+To activate debugging checks simply install with `WITH_DEBUGGING_CHECKS=1 pip install .`.
+
+It is also advisable to turn warnings into errors by including `-Werror` in the CFLAGS, however, the Python source code itself will fail with this turned on for some compilers because it does produce some warnings (observed with gcc).
