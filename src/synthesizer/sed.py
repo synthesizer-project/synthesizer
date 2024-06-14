@@ -541,79 +541,41 @@ class Sed:
 
     def measure_bolometric_luminosity(self, method="trapz"):
         """
-        Calculate the bolometric luminosity of the SED by simply integrating
-        the SED.
+        Calculate the bolometric luminosity of the SED.
+
+        This will integrate the SED over the final axis (which is always the
+        wavelength axis) for an arbitrary number of dimensions.
 
         Args:
             method (str)
                 The method used to calculate the bolometric luminosity. Options
-                include 'trapz' and 'quad'.
+                include 'trapz' and 'simps'.
 
         Returns:
             bolometric_luminosity (float)
                 The bolometric luminosity.
 
         Raises:
-            UnrecognisedOption
+            InconsistentArguments
                 If method is an incompatible option an error is raised.
         """
         start = tic()
 
-        # If the method is trapz we can do any number of dimensions
-        if method == "trapz":
-            bolometric_luminosity = np.trapz(
-                np.flip(self._lnu, axis=-1),
-                x=self._nu[::-1],
-                axis=-1,
-            )
-        elif method == "quad":
-            # Handle multiple dimensions explicitly
-            if self._lnu.ndim == 1:
-                # Integrate using quad
-                bolometric_luminosity = (
-                    integrate.quad(
-                        self._get_lnu_at_nu,
-                        1e12,
-                        1e16,
-                        args=("cubic"),
-                    )[0]
-                    * self.lnu.units
-                    * Hz
-                )
-
-            elif self._lnu.ndim == 2:
-                # Set up bolometric luminosity array
-                bolometric_luminosity = np.zeros(self._lnu.shape[0])
-
-                # Loop over spectra
-                for ind in range(self._lnu.shape[0]):
-                    bolometric_luminosity[ind] = (
-                        integrate.quad(
-                            self._get_lnu_at_nu,
-                            1e12,
-                            1e16,
-                            args=("cubic", ind),
-                        )[0]
-                        * self.lnu.units
-                        * Hz
-                    )
-            else:
-                raise exceptions.UnimplementedFunctionality(
-                    "Measuring bolometric luminosities for Sed.lnu.ndim > 2"
-                    " not yet implemented! Feel free to implement and raise "
-                    "a pull request. Guidance for contributing can be found "
-                    "at https://github.com/flaresimulations/"
-                    "synthesizer/blob/main/"
-                    "docs/CONTRIBUTING.md"
-                )
-        else:
-            raise exceptions.UnrecognisedOption(
+        if method not in ["trapz", "simps"]:
+            raise exceptions.InconsistentArguments(
                 f"Unrecognised integration method ({method}). "
-                "Options are 'trapz' or 'quad'"
+                "Options are 'trapz' or 'simps'"
             )
+
+        integration_function = (
+            np.trapz if method == "trapz" else integrate.simps
+        )
+
+        bolometric_luminosity = integration_function(
+            self._lnu, x=self._nu, axis=-1
+        )
 
         self.bolometric_luminosity = bolometric_luminosity
-
         toc("Calculating bolometric luminosity", start)
 
         return self.bolometric_luminosity
