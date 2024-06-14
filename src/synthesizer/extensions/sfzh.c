@@ -17,32 +17,8 @@
 /* Local includes */
 #include "macros.h"
 #include "property_funcs.h"
+#include "timers.h"
 #include "weights.h"
-
-/**
- * @brief The callback function to store the mass of each particle in the
- * corresponding SFZH bin.
- *
- * @param mass: The mass for this particle.
- * @param data: The callback data.
- * @param out: The grid weights.
- */
-static void store_mass(double mass, struct callback_data *data, void *out) {
-
-  /* Unpack the data. */
-  const int *indices = data->indices;
-  const int *dims = data->dims;
-  const int ndim = data->ndim;
-
-  /* Unravel the indices. */
-  int flat_ind = get_flat_index(indices, dims, ndim);
-
-  /* Get the output array. */
-  double *out_arr = (double *)out;
-
-  /* Store the mass. */
-  out_arr[flat_ind] += mass;
-}
 
 /**
  * @brief Computes an integrated SED for a collection of particles.
@@ -60,17 +36,21 @@ static void store_mass(double mass, struct callback_data *data, void *out) {
  */
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
+  double start_time = tic();
+  double setup_start = tic();
+
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
   (void)self;
 
-  int ndim, npart;
+  int ndim, npart, nthreads;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOiis", &grid_tuple, &part_tuple,
-                        &np_part_mass, &np_ndims, &ndim, &npart, &method))
+  if (!PyArg_ParseTuple(args, "OOOOiisi", &grid_tuple, &part_tuple,
+                        &np_part_mass, &np_ndims, &ndim, &npart, &method,
+                        &nthreads))
     return NULL;
 
   /* Extract the grid struct. */
@@ -87,22 +67,28 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Allocate an array to hold the grid weights. */
-  double *sfzh = malloc(grid_props->size * sizeof(double));
+  /* Allocate the sfzh array to output. */
+  double *sfzh = calloc(grid_props->size, sizeof(double));
   if (sfzh == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for sfzh.");
+    PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
     return NULL;
   }
-  bzero(sfzh, grid_props->size * sizeof(double));
+
+  toc("Extracting Python data", setup_start);
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
   if (strcmp(method, "cic") == 0) {
-    weight_loop_cic(grid_props, part_props, sfzh, store_mass);
+    weight_loop_cic(grid_props, part_props, grid_props->size, sfzh, nthreads);
   } else if (strcmp(method, "ngp") == 0) {
-    weight_loop_ngp(grid_props, part_props, sfzh, store_mass);
+    weight_loop_ngp(grid_props, part_props, grid_props->size, sfzh, nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    return NULL;
+  }
+
+  /* Check we got the output. (Any error messages will already be set) */
+  if (sfzh == NULL) {
     return NULL;
   }
 
@@ -118,6 +104,8 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   /* Clean up memory! */
   free(part_props);
   free(grid_props);
+
+  toc("Computing SFZH", start_time);
 
   return Py_BuildValue("N", out_sfzh);
 }
