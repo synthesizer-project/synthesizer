@@ -1309,7 +1309,7 @@ class Sed:
 
         # Define integration arrays
         x = self._lam
-        y = llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)
+        y = (llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)).value
 
         # Get value of luminosity at ionisation wavelength
         ionisation_y = np.interp(
@@ -1321,10 +1321,12 @@ class Sed:
         y = y[ionisation_mask]
 
         # Add ionisation wavelength and luminosity values
-        x = np.append(x, ionisation_wavelength)
+        x = np.append(x, ionisation_wavelength.to(angstrom).value)
         y = np.append(y, ionisation_y)
 
-        return integrate.trapezoid(y, x)
+        ion_photon_prod_rate = integrate.trapezoid(y, x) / s
+
+        return ion_photon_prod_rate
 
     def plot_spectra(self, **kwargs):
         """
