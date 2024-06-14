@@ -95,6 +95,7 @@ LDFLAGS = os.environ.get("LDFLAGS", "")
 WITH_OPENMP = os.environ.get("WITH_OPENMP", "")
 WITH_DEBUGGING_CHECKS = "ENABLE_DEBUGGING_CHECKS" in os.environ
 RUTHLESS = "RUTHLESS" in os.environ
+ATOMIC_TIMING = "ATOMIC_TIMING" in os.environ
 
 # Define the log file
 LOG_FILE = "build_synth.log"
@@ -214,6 +215,8 @@ if len(link_args) == 0:
 # Add preprocessor flags
 if WITH_DEBUGGING_CHECKS == "1":
     compile_flags.append("-DWITH_DEBUGGING_CHECKS")
+if ATOMIC_TIMING:
+    compile_flags.append("-DATOMIC_TIMING")
 
 
 # Define the extension modules
