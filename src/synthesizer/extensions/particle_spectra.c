@@ -161,9 +161,13 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
     /* Get this threads local start index. */
     int start = tid * npart_per_thread;
 
+    /* Account for any missing/extra particles on the last thread. */
+    if (tid == nthreads - 1) {
+      npart_per_thread = npart - start;
+    }
+
     /* Loop over particles. */
-    for (int p_local = 0; p_local < npart_per_thread && start + p_local < npart;
-         p_local++) {
+    for (int p_local = 0; p_local < npart_per_thread; p_local++) {
 
       /* Get the global particle index. */
       int p = start + p_local;
@@ -380,9 +384,13 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
     /* Get this threads local start index. */
     int start = tid * npart_per_thread;
 
+    /* Account for any missing/extra particles on the last thread. */
+    if (tid == nthreads - 1) {
+      npart_per_thread = npart - start;
+    }
+
     /* Loop over particles. */
-    for (int p_local = 0; p_local < npart_per_thread && start + p_local < npart;
-         p_local++) {
+    for (int p_local = 0; p_local < npart_per_thread; p_local++) {
 
       /* Get the global particle index. */
       int p = start + p_local;
