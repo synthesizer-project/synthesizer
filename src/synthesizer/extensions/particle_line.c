@@ -140,30 +140,8 @@ static void lines_loop_cic_omp(struct grid *grid, struct particles *parts,
   double *fesc = parts->fesc;
   int npart = parts->npart;
 
-  /* Allocate pointers to each thread's portion of the output arrays. */
-  double **lum_per_thread = malloc(nthreads * sizeof(double *));
-  if (lum_per_thread == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for output pointers.");
-    return;
-  }
-  double **cont_per_thread = malloc(nthreads * sizeof(double *));
-  if (cont_per_thread == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for output pointers.");
-    return;
-  }
-
   /* How many particles should each thread get? */
   int npart_per_thread = (int)(ceil(parts->npart / nthreads));
-
-  /* Lets slice up the output arrays as evenly as possible. Each thread will
-   * get ceil(npart / nthreads) with the final thread getting any extras to mop
-   * up. */
-  for (int i = 0; i < nthreads; i++) {
-    lum_per_thread[i] = lines_lum + (npart_per_thread * i);
-    cont_per_thread[i] = lines_cont + (npart_per_thread * i);
-  }
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -172,8 +150,8 @@ static void lines_loop_cic_omp(struct grid *grid, struct particles *parts,
     int tid = omp_get_thread_num();
 
     /* Get a local pointer to the thread outputs. */
-    double *local_lum = lum_per_thread[tid];
-    double *local_cont = cont_per_thread[tid];
+    double *local_lum = lines_lum + (npart_per_thread * tid);
+    double *local_cont = lines_cont + (npart_per_thread * tid);
 
     /* Get this threads local start index. */
     int start = tid * npart_per_thread;
@@ -245,10 +223,6 @@ static void lines_loop_cic_omp(struct grid *grid, struct particles *parts,
       }
     }
   }
-
-  /* Free the allocated memory. */
-  free(lum_per_thread);
-  free(cont_per_thread);
 }
 #endif
 
@@ -372,30 +346,8 @@ static void lines_loop_ngp_omp(struct grid *grid, struct particles *parts,
   double *fesc = parts->fesc;
   int npart = parts->npart;
 
-  /* Allocate pointers to each thread's portion of the output arrays. */
-  double **lum_per_thread = malloc(nthreads * sizeof(double *));
-  if (lum_per_thread == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for output pointers.");
-    return;
-  }
-  double **cont_per_thread = malloc(nthreads * sizeof(double *));
-  if (cont_per_thread == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for output pointers.");
-    return;
-  }
-
   /* How many particles should each thread get? */
   int npart_per_thread = (int)(ceil(parts->npart / nthreads));
-
-  /* Lets slice up the output arrays as evenly as possible. Each thread will
-   * get ceil(npart / nthreads) with the final thread getting any extras to mop
-   * up. */
-  for (int i = 0; i < nthreads; i++) {
-    lum_per_thread[i] = lines_lum + (npart_per_thread * i);
-    cont_per_thread[i] = lines_cont + (npart_per_thread * i);
-  }
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -404,8 +356,8 @@ static void lines_loop_ngp_omp(struct grid *grid, struct particles *parts,
     int tid = omp_get_thread_num();
 
     /* Get a local pointer to the thread outputs. */
-    double *local_lum = lum_per_thread[tid];
-    double *local_cont = cont_per_thread[tid];
+    double *local_lum = lines_lum + (npart_per_thread * tid);
+    double *local_cont = lines_cont + (npart_per_thread * tid);
 
     /* Get this threads local start index. */
     int start = tid * npart_per_thread;
@@ -437,10 +389,6 @@ static void lines_loop_ngp_omp(struct grid *grid, struct particles *parts,
       local_cont[p_local] += grid_continuum[grid_ind] * weight;
     }
   }
-
-  /* Free the allocated memory. */
-  free(lum_per_thread);
-  free(cont_per_thread);
 }
 #endif
 
