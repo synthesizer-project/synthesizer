@@ -127,45 +127,47 @@ static void lines_loop_cic_omp(struct grid *grid, struct particles *parts,
                                double *lines_lum, double *lines_cont,
                                int nthreads) {
 
-  /* Unpack the grid properties. */
-  int *dims = grid->dims;
-  int ndim = grid->ndim;
-  double **grid_props = grid->props;
-  const double *grid_lines = grid->lines;
-  const double *grid_continuum = grid->continuum;
-
-  /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
-  double **part_props = parts->props;
-  double *fesc = parts->fesc;
-  int npart = parts->npart;
-
   /* How many particles should each thread get? */
   int npart_per_thread = (int)(ceil(parts->npart / nthreads));
 
 #pragma omp parallel num_threads(nthreads)
   {
 
+    /* Unpack the grid properties. */
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    double **grid_props = grid->props;
+    const double *grid_lines = grid->lines;
+    const double *grid_continuum = grid->continuum;
+
+    /* Unpack the particles properties. */
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    double *fesc = parts->fesc;
+    int npart = parts->npart;
+
     /* Get the thread id. */
     int tid = omp_get_thread_num();
 
-    /* Get a local pointer to the thread outputs. */
-    double *local_lum = lines_lum + (npart_per_thread * tid);
-    double *local_cont = lines_cont + (npart_per_thread * tid);
-
-    /* Get this threads local start index. */
+    /* Calculate start and end indices for each thread */
     int start = tid * npart_per_thread;
-
-    /* Account for any missing/extra particles on the last thread. */
-    if (tid == nthreads - 1) {
-      npart_per_thread = npart - start;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
     }
+#ifdef WITH_DEBUGGING_CHECKS
+    else {
+#pragma omp critical
+      PyErr_SetString(PyExc_RuntimeError,
+                      "Not all particles distributed to threads.");
+      free(spectra);
+      spectra = NULL;
+      return;
+    }
+#endif
 
     /* Loop over particles. */
-    for (int p_local = 0; p_local < npart_per_thread; p_local++) {
-
-      /* Get the global particle index. */
-      int p = start + p_local;
+    for (int p = start; p < end; p++) {
 
       /* Get this particle's mass. */
       const double mass = part_masses[p];
@@ -222,8 +224,8 @@ static void lines_loop_cic_omp(struct grid *grid, struct particles *parts,
         const int grid_ind = get_flat_index(frac_ind, dims, ndim);
 
         /* Add the contribution to this particle. */
-        local_lum[p_local] += grid_lines[grid_ind] * weight;
-        local_cont[p_local] += grid_continuum[grid_ind] * weight;
+        lines_lum[p] += grid_lines[grid_ind] * weight;
+        lines_cont[p] += grid_continuum[grid_ind] * weight;
       }
     }
   }
@@ -337,45 +339,47 @@ static void lines_loop_ngp_omp(struct grid *grid, struct particles *parts,
                                double *lines_lum, double *lines_cont,
                                int nthreads) {
 
-  /* Unpack the grid properties. */
-  int *dims = grid->dims;
-  int ndim = grid->ndim;
-  double **grid_props = grid->props;
-  const double *grid_lines = grid->lines;
-  const double *grid_continuum = grid->continuum;
-
-  /* Unpack the particles properties. */
-  double *part_masses = parts->mass;
-  double **part_props = parts->props;
-  double *fesc = parts->fesc;
-  int npart = parts->npart;
-
   /* How many particles should each thread get? */
   int npart_per_thread = (int)(ceil(parts->npart / nthreads));
 
 #pragma omp parallel num_threads(nthreads)
   {
 
+    /* Unpack the grid properties. */
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    double **grid_props = grid->props;
+    const double *grid_lines = grid->lines;
+    const double *grid_continuum = grid->continuum;
+
+    /* Unpack the particles properties. */
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    double *fesc = parts->fesc;
+    int npart = parts->npart;
+
     /* Get the thread id. */
     int tid = omp_get_thread_num();
 
-    /* Get a local pointer to the thread outputs. */
-    double *local_lum = lines_lum + (npart_per_thread * tid);
-    double *local_cont = lines_cont + (npart_per_thread * tid);
-
-    /* Get this threads local start index. */
+    /* Calculate start and end indices for each thread */
     int start = tid * npart_per_thread;
-
-    /* Account for any missing/extra particles on the last thread. */
-    if (tid == nthreads - 1) {
-      npart_per_thread = npart - start;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
     }
+#ifdef WITH_DEBUGGING_CHECKS
+    else {
+#pragma omp critical
+      PyErr_SetString(PyExc_RuntimeError,
+                      "Not all particles distributed to threads.");
+      free(spectra);
+      spectra = NULL;
+      return;
+    }
+#endif
 
     /* Loop over particles. */
-    for (int p_local = 0; p_local < npart_per_thread; p_local++) {
-
-      /* Get the global particle index. */
-      int p = start + p_local;
+    for (int p = start; p < end; p++) {
 
       /* Get this particle's mass. */
       const double mass = part_masses[p];
@@ -393,8 +397,8 @@ static void lines_loop_ngp_omp(struct grid *grid, struct particles *parts,
       const int grid_ind = get_flat_index(part_indices, dims, ndim);
 
       /* Add the contribution to this particle. */
-      local_lum[p_local] += grid_lines[grid_ind] * weight;
-      local_cont[p_local] += grid_continuum[grid_ind] * weight;
+      lines_lum[p] += grid_lines[grid_ind] * weight;
+      lines_cont[p] += grid_continuum[grid_ind] * weight;
     }
   }
 }
