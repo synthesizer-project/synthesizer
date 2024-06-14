@@ -26,12 +26,14 @@ double tic() { return GET_TIME(); }
  * @param start_time: The start time.
  */
 void toc(const char *msg, double start_time) {
+#ifdef ATOMIC_TIMING
   double end_time = GET_TIME();
   double elapsed_time = end_time - start_time;
 #ifdef WITH_OPENMP
   printf("[C] %s took: %f seconds\n", msg, elapsed_time);
 #else
   printf("[C] %s took (in serial): %f seconds\n", msg, elapsed_time);
+#endif
 #endif
 }
 
@@ -42,6 +44,7 @@ static PyObject *py_tic(PyObject *self, PyObject *args) {
 
 /* Python wrapper for toc */
 static PyObject *py_toc(PyObject *self, PyObject *args) {
+#ifdef ATOMIC_TIMING
   char *msg;
   double start_time;
   if (!PyArg_ParseTuple(args, "sd", &msg, &start_time))
@@ -49,6 +52,7 @@ static PyObject *py_toc(PyObject *self, PyObject *args) {
   double end_time = GET_TIME();
   double elapsed_time = end_time - start_time;
   printf("[Python] %s took: %f seconds\n", msg, elapsed_time);
+#endif
   Py_RETURN_NONE;
 }
 
