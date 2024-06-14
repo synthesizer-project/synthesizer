@@ -146,23 +146,8 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
   double *fesc = parts->fesc;
   int npart = parts->npart;
 
-  /* Allocate pointers to each thread's portion of the output array. */
-  double **out_per_thread = malloc(nthreads * sizeof(double *));
-  if (out_per_thread == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for output pointers.");
-    return;
-  }
-
   /* How many particles should each thread get? */
   int npart_per_thread = (int)(ceil(npart / nthreads));
-
-  /* Lets slice up the output array as evenly as possible. Each thread will
-   * get ceil(npart / nthreads) with the final thread getting any extras to mop
-   * up. */
-  for (int i = 0; i < nthreads; i++) {
-    out_per_thread[i] = spectra + (npart_per_thread * nlam * i);
-  }
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -171,7 +156,7 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
     int tid = omp_get_thread_num();
 
     /* Get a local pointer to the thread weights. */
-    double *local_out = out_per_thread[tid];
+    double *local_out = spectra + (npart_per_thread * nlam * tid);
 
     /* Get this threads local start index. */
     int start = tid * npart_per_thread;
@@ -252,9 +237,6 @@ static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
       }
     }
   }
-
-  /* Free the allocated memory. */
-  free(out_per_thread);
 }
 #endif
 
@@ -383,23 +365,8 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
   double *fesc = parts->fesc;
   int npart = parts->npart;
 
-  /* Allocate pointers to each thread's portion of the output array. */
-  double **out_per_thread = malloc(nthreads * sizeof(double *));
-  if (out_per_thread == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for output pointers.");
-    return;
-  }
-
   /* How many particles should each thread get? */
   int npart_per_thread = (int)(ceil(npart / nthreads));
-
-  /* Lets slice up the output array as evenly as possible. Each thread will
-   * get ceil(npart / nthreads) with the final thread getting any extras to mop
-   * up. */
-  for (int i = 0; i < nthreads; i++) {
-    out_per_thread[i] = spectra + (npart_per_thread * nlam * i);
-  }
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -408,7 +375,7 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
     int tid = omp_get_thread_num();
 
     /* Get a local pointer to the thread weights. */
-    double *local_out = out_per_thread[tid];
+    double *local_out = spectra + (npart_per_thread * nlam * tid);
 
     /* Get this threads local start index. */
     int start = tid * npart_per_thread;
@@ -450,9 +417,6 @@ static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
       }
     }
   }
-
-  /* Free the allocated memory. */
-  free(out_per_thread);
 }
 #endif
 
