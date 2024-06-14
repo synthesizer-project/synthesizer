@@ -128,9 +128,6 @@ class Sed:
                     )
                 )
 
-        # Measure the bolometric luminosity
-        self.bolometric_luminosity = self.measure_bolometric_luminosity()
-
         # Redshift of the SED
         self.redshift = 0
 
