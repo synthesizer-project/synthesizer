@@ -209,6 +209,7 @@ class BlackholesComponent:
         mask=None,
         verbose=False,
         grid_assignment_method="cic",
+        nthreads=0,
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -237,6 +238,9 @@ class BlackholesComponent:
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
         """
         # Ensure we have a key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
@@ -262,6 +266,7 @@ class BlackholesComponent:
             line_region=line_region,
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
+            nthreads=nthreads,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
@@ -390,6 +395,7 @@ class BlackholesComponent:
         mask,
         verbose,
         grid_assignment_method,
+        **kwargs,
     ):
         """
         Generate the disc spectra, updating the parameters if required.
@@ -440,6 +446,7 @@ class BlackholesComponent:
                 mask=None,
                 verbose=verbose,
                 grid_assignment_method=grid_assignment_method,
+                **kwargs,
             ),
         )
 
@@ -459,6 +466,7 @@ class BlackholesComponent:
                 mask=None,
                 verbose=verbose,
                 grid_assignment_method=grid_assignment_method,
+                **kwargs,
             ),
         )
 
@@ -476,6 +484,7 @@ class BlackholesComponent:
                 mask=mask,
                 verbose=verbose,
                 grid_assignment_method=grid_assignment_method,
+                **kwargs,
             ),
         )
 
@@ -489,6 +498,7 @@ class BlackholesComponent:
             mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
+            **kwargs,
         )
         blr_spectra = self.generate_lnu(
             emission_model,
@@ -499,6 +509,7 @@ class BlackholesComponent:
             mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
+            **kwargs,
         )
 
         # The transmitted spectra is the sum of the spectra transmitted
@@ -527,6 +538,7 @@ class BlackholesComponent:
         line_region,
         verbose,
         grid_assignment_method,
+        nthreads=0,
     ):
         """
         Generate the spectra of a generic line region.
@@ -547,6 +559,9 @@ class BlackholesComponent:
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
 
         Returns:
             Sed
@@ -569,7 +584,9 @@ class BlackholesComponent:
             mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
+            nthreads=nthreads,
         )
+
         sed = Sed(
             emission_model.grid[line_region].lam,
             getattr(emission_model, f"covering_fraction_{line_region}") * spec,
@@ -630,6 +647,7 @@ class BlackholesComponent:
         emission_model,
         verbose=False,
         grid_assignment_method="cic",
+        nthreads=0,
     ):
         """
         Generate intrinsic blackhole spectra for a given emission_model.
@@ -649,6 +667,9 @@ class BlackholesComponent:
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
 
         Returns:
             dict, Sed
@@ -711,6 +732,7 @@ class BlackholesComponent:
             mask=mask,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
+            nthreads=nthreads,
         )
         self.spectra["blr"] = self._get_spectra_lr(
             emission_model=emission_model,
@@ -718,6 +740,7 @@ class BlackholesComponent:
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
             line_region="blr",
+            nthreads=nthreads,
         )
 
         # Generate the spectra of the nlr and torus
@@ -727,6 +750,7 @@ class BlackholesComponent:
             mask=None,
             grid_assignment_method=grid_assignment_method,
             line_region="nlr",
+            nthreads=nthreads,
         )
         self.spectra["torus"] = self._get_spectra_torus(
             emission_model=emission_model,
@@ -778,6 +802,7 @@ class BlackholesComponent:
         tau_v=None,
         dust_curve=None,
         dust_emission_model=None,
+        nthreads=0,
     ):
         """
         Generate blackhole spectra for a given emission_model including
@@ -800,6 +825,9 @@ class BlackholesComponent:
                 A synthesizer dust.attenuation.AttenuationLaw instance.
             dust_emission_model (object)
                 A synthesizer dust.emission.DustEmission instance.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
 
         Returns:
             dict, Sed
@@ -812,6 +840,7 @@ class BlackholesComponent:
             emission_model=emission_model,
             verbose=verbose,
             grid_assignment_method=grid_assignment_method,
+            nthreads=nthreads,
         )
 
         # If dust attenuation is provided then calcualate additional spectra

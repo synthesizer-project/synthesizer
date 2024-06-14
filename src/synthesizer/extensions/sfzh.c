@@ -16,6 +16,8 @@
 
 /* Local includes */
 #include "macros.h"
+#include "property_funcs.h"
+#include "timers.h"
 #include "weights.h"
 
 /**
@@ -27,7 +29,6 @@
  * @param part_tuple: The tuple of particle property arrays (in the same order
  *                    as grid_tuple).
  * @param np_part_mass: The particle mass array.
- * @param fesc: The escape fraction.
  * @param np_ndims: The size of each grid axis.
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
@@ -35,108 +36,83 @@
  */
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
-  const int ndim, npart;
-  const PyObject *grid_tuple, *part_tuple;
-  const PyArrayObject *np_part_mass, *np_ndims;
-  const char *method;
+  double start_time = tic();
+  double setup_start = tic();
 
-  if (!PyArg_ParseTuple(args, "OOOOiis", &grid_tuple, &part_tuple,
-                        &np_part_mass, &np_ndims, &ndim, &npart, &method))
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
+
+  int ndim, npart, nthreads;
+  PyObject *grid_tuple, *part_tuple;
+  PyArrayObject *np_part_mass, *np_ndims;
+  char *method;
+
+  if (!PyArg_ParseTuple(args, "OOOOiisi", &grid_tuple, &part_tuple,
+                        &np_part_mass, &np_ndims, &ndim, &npart, &method,
+                        &nthreads))
     return NULL;
 
-  /* Quick check to make sure our inputs are valid. */
-  if (ndim == 0)
+  /* Extract the grid struct. */
+  struct grid *grid_props = get_spectra_grid_struct(
+      grid_tuple, np_ndims, /*np_grid_spectra*/ NULL, ndim, /*nlam*/ 1);
+  if (grid_props == NULL) {
     return NULL;
-  if (npart == 0)
-    return NULL;
-
-  /* Extract a pointer to the grid dims */
-  const int *dims = PyArray_DATA(np_ndims);
-
-  /* Extract a pointer to the particle masses. */
-  const double *part_mass = PyArray_DATA(np_part_mass);
-
-  /* Allocate a single array for grid properties*/
-  int nprops = 0;
-  for (int dim = 0; dim < ndim; dim++)
-    nprops += dims[dim];
-  const double **grid_props = malloc(nprops * sizeof(double *));
-
-  /* How many grid elements are there? (excluding wavelength axis)*/
-  int grid_size = 1;
-  for (int dim = 0; dim < ndim; dim++)
-    grid_size *= dims[dim];
-
-  /* Allocate an array to hold the grid weights. */
-  double *sfzh = malloc(grid_size * sizeof(double));
-  bzero(sfzh, grid_size * sizeof(double));
-
-  /* Unpack the grid property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    const PyArrayObject *np_grid_arr = PyTuple_GetItem(grid_tuple, idim);
-    const double *grid_arr = PyArray_DATA(np_grid_arr);
-
-    /* Assign this data to the property array. */
-    grid_props[idim] = grid_arr;
   }
 
-  /* Allocate a single array for particle properties. */
-  const double **part_props = malloc(npart * ndim * sizeof(double *));
-
-  /* Unpack the particle property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    const PyArrayObject *np_part_arr = PyTuple_GetItem(part_tuple, idim);
-    const double *part_arr = PyArray_DATA(np_part_arr);
-
-    /* Assign this data to the property array. */
-    part_props[idim] = part_arr;
+  /* Extract the particle struct. */
+  struct particles *part_props =
+      get_part_struct(part_tuple, np_part_mass, /*np_fesc*/ NULL, npart, ndim);
+  if (part_props == NULL) {
+    return NULL;
   }
 
-  /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
+  /* Allocate the sfzh array to output. */
+  double *sfzh = calloc(grid_props->size, sizeof(double));
+  if (sfzh == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
+    return NULL;
+  }
 
-    /* Get this particle's mass. */
-    const double mass = part_mass[p];
+  toc("Extracting Python data", setup_start);
 
-    /* Finally, compute the weights for this particle using the
-     * requested method. */
-    if (strcmp(method, "cic") == 0) {
-      weight_loop_cic(grid_props, part_props, mass, sfzh, dims, ndim, p, 0);
-    } else if (strcmp(method, "ngp") == 0) {
-      weight_loop_ngp(grid_props, part_props, mass, sfzh, dims, ndim, p, 0);
-    } else {
-      /* Only print this warning once! */
-      if (p == 0)
-        printf(
-            "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
-            method);
-      weight_loop_cic(grid_props, part_props, mass, sfzh, dims, ndim, p, 0);
-    }
+  /* With everything set up we can compute the weights for each particle using
+   * the requested method. */
+  if (strcmp(method, "cic") == 0) {
+    weight_loop_cic(grid_props, part_props, grid_props->size, sfzh, nthreads);
+  } else if (strcmp(method, "ngp") == 0) {
+    weight_loop_ngp(grid_props, part_props, grid_props->size, sfzh, nthreads);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    return NULL;
+  }
 
-  } /* Loop over particles. */
-
-  /* Clean up memory! */
-  free(part_props);
-  free(grid_props);
+  /* Check we got the output. (Any error messages will already be set) */
+  if (sfzh == NULL) {
+    return NULL;
+  }
 
   /* Reconstruct the python array to return. */
   npy_intp np_dims[ndim];
   for (int idim = 0; idim < ndim; idim++) {
-    np_dims[idim] = dims[idim];
+    np_dims[idim] = grid_props->dims[idim];
   }
 
   PyArrayObject *out_sfzh = (PyArrayObject *)PyArray_SimpleNewFromData(
       ndim, np_dims, NPY_FLOAT64, sfzh);
 
+  /* Clean up memory! */
+  free(part_props);
+  free(grid_props);
+
+  toc("Computing SFZH", start_time);
+
   return Py_BuildValue("N", out_sfzh);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
-static PyMethodDef SFZHMethods[] = {{"compute_sfzh", compute_sfzh, METH_VARARGS,
+static PyMethodDef SFZHMethods[] = {{"compute_sfzh", (PyCFunction)compute_sfzh,
+                                     METH_VARARGS,
                                      "Method for calculating the SFZH."},
                                     {NULL, NULL, 0, NULL}};
 
