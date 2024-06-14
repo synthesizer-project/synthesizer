@@ -26,6 +26,7 @@ from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
 from synthesizer.utils import has_units, rebin_1d, wavelength_to_rgba
@@ -88,6 +89,7 @@ class Sed:
             description (string)
                 An optional descriptive string defining the Sed.
         """
+        start = tic()
 
         # Set the description
         self.description = description
@@ -140,6 +142,8 @@ class Sed:
         # Broadband photometry
         self.photo_luminosities = None
         self.photo_fluxes = None
+
+        toc("Creating Sed", start)
 
     def sum(self):
         """
@@ -553,6 +557,7 @@ class Sed:
             UnrecognisedOption
                 If method is an incompatible option an error is raised.
         """
+        start = tic()
 
         # If the method is trapz we can do any number of dimensions
         if method == "trapz":
@@ -608,6 +613,9 @@ class Sed:
             )
 
         self.bolometric_luminosity = bolometric_luminosity
+
+        toc("Calculating bolometric luminosity", start)
+
         return self.bolometric_luminosity
 
     def measure_window_luminosity(self, window, method="trapz"):
