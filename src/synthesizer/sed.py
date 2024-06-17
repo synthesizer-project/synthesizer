@@ -569,7 +569,10 @@ class Sed:
         # frequency. It's faster to just multiply by -1 than to reverse the
         # array.
         self.bolometric_luminosity = -integrate_last_axis(
-            self._nu, self._lnu, nthreads=nthreads, method=method
+            self._nu,
+            self._lnu,
+            nthreads=nthreads,
+            method=method,
         )
         toc("Calculating bolometric luminosity", start)
 
@@ -606,7 +609,9 @@ class Sed:
         # array.
         luminosity = -(
             integrate_last_axis(
-                self._nu, self._lnu * transmission, nthreads=nthreads
+                self._nu,
+                self._lnu * transmission,
+                nthreads=nthreads,
             )
             * self.lnu.units
             * Hz
@@ -614,7 +619,7 @@ class Sed:
 
         return luminosity
 
-    def measure_window_lnu(self, window, method="trapz"):
+    def measure_window_lnu(self, window, method="trapz", nthreads=1):
         """
         Measure lnu in a spectral window.
 
@@ -660,57 +665,77 @@ class Sed:
         else:
             # Luminosity integral
             lum = integrate_last_axis(
-                self._nu, self._lnu * transmission / self.nu
+                self._nu,
+                self._lnu * transmission / self.nu,
+                nthreads=nthreads,
             )
 
             # Transmission integral
-            tran = integrate_last_axis(self._nu, transmission / self.nu)
+            tran = integrate_last_axis(
+                self._nu,
+                transmission / self.nu,
+                nthreads=nthreads,
+            )
 
             # Compute lnu
             lnu = lum / tran * self.lnu.units
 
         return lnu.to(self.lnu.units)
 
-    def measure_break(self, blue, red):
+    def measure_break(self, blue, red, nthreads=1):
         """
-        Measure a spectral break (e.g. the Balmer break) or D4000 using two
-        windows.
+        Measure a spectral break (e.g. the Balmer break) using two windows.
 
         Args:
             blue (tuple, float)
                 The wavelength limits of the blue window.
             red (tuple, float)
                 The wavelength limits of the red window.
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             break
                 The ratio of the luminosity in the two windows.
         """
-        return self.measure_window_lnu(red) / self.measure_window_lnu(blue)
+        return (
+            self.measure_window_lnu(red, nthreads).value
+            / self.measure_window_lnu(blue, nthreads).value
+        )
 
-    def measure_balmer_break(self):
+    def measure_balmer_break(self, nthreads=1):
         """
-        Measure the Balmer break using two windows at (3400,3600) and
-        (4150,4250)
+        Measure the Balmer break.
+
+        This will use two windows at (3400,3600) and (4150,4250).
+
+        Args:
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             float
                 The Balmer break strength
         """
-
         blue = (3400, 3600) * angstrom
         red = (4150, 4250) * angstrom
 
-        return self.measure_break(blue, red)
+        return self.measure_break(blue, red, nthreads=nthreads)
 
-    def measure_d4000(self, definition="Bruzual83"):
+    def measure_d4000(self, definition="Bruzual83", nthreads=1):
         """
-        Measure the D4000 index using either the Bruzual83 or Balogh
-        definitions.
+        Measure the D4000 index.
+
+        This can optionally use either the Bruzual83 or Balogh definitions.
 
         Args:
             definition
                 The choice of definition: 'Bruzual83' or 'Balogh'.
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             float
@@ -720,7 +745,6 @@ class Sed:
             UnrecognisedOption
                 If definition is an incompatible option an error is raised.
         """
-
         # Define the requested definition
         if definition == "Bruzual83":
             blue = (3750, 3950) * angstrom
@@ -735,24 +759,27 @@ class Sed:
                 "Options are 'Bruzual83' or 'Balogh'"
             )
 
-        return self.measure_break(blue, red)
+        return self.measure_break(blue, red, nthreads=nthreads)
 
-    def measure_beta(self, window=(1250.0, 3000.0)):
+    def measure_beta(self, window=(1250.0, 3000.0), nthreads=1):
         """
-        Measure the UV continuum slope ($\beta$) measured using the provided
-        window. If the window has len(2) a full fit to the spectra is performed
-        else the luminosity in two windows is calculated and used to determine
-        the slope, similar to observations.
+        Measure the UV continuum slope (beta).
+
+        If the provided window is len(2) a full fit to the spectra is performed
+        otherwise the luminosity in two windows is calculated and used to
+        determine the slope, similar to observations.
 
         Args:
             window (tuple, float)
                 The window in which to measure in terms of wavelength.
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             float
-                The UV continuum slope ($\beta$)
+                The UV continuum slope (beta)
         """
-
         # If a single window is provided
         if len(window) == 2:
             s = (self.lam > window[0]) & (self.lam < window[1])
@@ -784,8 +811,8 @@ class Sed:
             red = window[2:]
 
             # Measure the red and blue windows
-            lnu_blue = self.measure_window_lnu(blue)
-            lnu_red = self.measure_window_lnu(red)
+            lnu_blue = self.measure_window_lnu(blue, nthreads)
+            lnu_red = self.measure_window_lnu(red, nthreads)
 
             # Measure beta
             beta = (
