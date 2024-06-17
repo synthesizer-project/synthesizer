@@ -660,8 +660,16 @@ class Sed:
                 The ratio of the luminosity in the two windows.
         """
         return (
-            self.measure_window_lnu(red, nthreads, method).value
-            / self.measure_window_lnu(blue, nthreads, method).value
+            self.measure_window_lnu(
+                red,
+                nthreads=nthreads,
+                method=method,
+            ).value
+            / self.measure_window_lnu(
+                blue,
+                nthreads=nthreads,
+                method=method,
+            ).value
         )
 
     def measure_balmer_break(self, nthreads=1, method="trapz"):
@@ -784,8 +792,16 @@ class Sed:
             red = window[2:]
 
             # Measure the red and blue windows
-            lnu_blue = self.measure_window_lnu(blue, nthreads, method)
-            lnu_red = self.measure_window_lnu(red, nthreads, method)
+            lnu_blue = self.measure_window_lnu(
+                blue,
+                nthreads=nthreads,
+                method=method,
+            )
+            lnu_red = self.measure_window_lnu(
+                red,
+                nthreads=nthreads,
+                method=method,
+            )
 
             # Measure beta
             beta = (
