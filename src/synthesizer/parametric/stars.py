@@ -692,7 +692,9 @@ class Stars(StarsComponent):
             )
 
         # Calculate the current flux in scale_filter
-        current_flux = scale_filter.apply_filter(sed.fnu, nu=sed.obsnu)
+        current_flux = (
+            scale_filter.apply_filter(sed.fnu, nu=sed.obsnu) * sed.fnu.units
+        )
 
         # Calculate the conversion ratio between the requested and current
         # flux
