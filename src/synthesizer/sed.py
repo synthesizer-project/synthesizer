@@ -472,7 +472,6 @@ class Sed:
             luminosity (unyt_array)
                 The luminosity (lnu) at the provided wavelength.
         """
-
         return interp1d(self._nu, self._lnu, kind=kind)(nu) * self.lnu.units
 
     def get_lnu_at_lam(self, lam, kind=False):
@@ -492,7 +491,6 @@ class Sed:
             luminosity (unyt-array)
                 The luminosity (lnu) at the provided wavelength.
         """
-
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
     def measure_bolometric_luminosity(self, method="trapz", nthreads=1):
