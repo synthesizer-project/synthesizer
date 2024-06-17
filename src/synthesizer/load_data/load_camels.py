@@ -1,9 +1,11 @@
+from functools import partial
+
 import h5py
 import numpy as np
 from astropy.cosmology import Planck15, Planck18
-from tqdm import tqdm
 from unyt import Msun, kpc, yr
 
+from synthesizer.exceptions import UnmetDependency
 from synthesizer.load_data.utils import get_len
 
 from ..particle.galaxy import Galaxy
@@ -450,6 +452,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     physical=True,
     cosmo=Planck15,
     min_star_part=10,
+    num_threads=-1,
 ):
     """
     Load CAMELS-Swift-EAGLE galaxies
@@ -472,11 +475,32 @@ def load_CAMELS_SwiftEAGLE_subfind(
             Should the coordinates be converted to physical?
         cosmo (astropy cosmology):
             cosmology object to use for age calculation
+        min_star_part (int):
+            minimum number of star particles required to load galaxy
+        num_threads (int)
+            number of threads to use for multiprocessing.
+            Default is -1, i.e. use all available cores.
 
     Returns:
         galaxies (object):
             `ParticleGalaxy` object containing star and gas particle
     """
+
+    try:
+        import schwimmbad
+    except ImportError:
+        raise UnmetDependency(
+            "Loading Swift-EAGLE CAMELS data requires the `schwimmbad`"
+            "package. You currently do not have schwimmbad installed. "
+            "Install it via `pip install schwimmbad`"
+        )
+
+    if num_threads == 1:
+        pool = schwimmbad.SerialPool()
+    elif num_threads == -1:
+        pool = schwimmbad.MultiPool()
+    else:
+        pool = schwimmbad.MultiPool(processes=num_threads)
 
     # Check if snapshot and subfind files in same directory
     if group_dir is None:
@@ -486,7 +510,6 @@ def load_CAMELS_SwiftEAGLE_subfind(
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
         scale_factor = hf["Cosmology"].attrs["Scale-factor"]
         redshift = hf["Cosmology"].attrs["Redshift"]
-        # h = hf["Cosmology"].attrs["h"]
 
     # get subfind particle info (lens and IDs) for subsetting snapshot info
     with h5py.File(f'{group_dir}/{group_name}', 'r') as hf:
@@ -531,16 +554,30 @@ def load_CAMELS_SwiftEAGLE_subfind(
     # Get subhalos with minimum number of star particles
     mask = np.where(lentype[:, 4] > min_star_part)[0]
 
-    # Loop over each subhalo
-    galaxies = [None] * len(lentype)
-    for idx in tqdm(
-        mask,
-        total=len(mask),
-        desc="Loading Galaxies"
+    def swifteagle_particle_assignment(
+        idx,
+        redshift,
+        grpn,
+        grp_lentype,
+        grp_firstsub,
+        lentype,
+        ids,
+        star_ids,
+        gas_ids,
+        form_time,
+        coods,
+        masses,
+        imasses,
+        metallicity,
+        hsml,
+        g_sfr,
+        g_masses,
+        g_metals,
+        g_coods,
+        g_hsml,
     ):
-        galaxies[idx] = Galaxy()
-        galaxies[idx].redshift = redshift
-        galaxies[idx].centre = pos[idx] * kpc
+        gal = Galaxy()
+        gal.redshift = redshift
 
         # Find star particles in this subhalo
         ptype = 4
@@ -586,7 +623,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         else:
             smoothing_lengths = sh_hsml * kpc
 
-        galaxies[idx].load_stars(
+        gal.load_stars(
             initial_masses=sh_imasses * Msun,
             ages=ages * yr,
             metallicities=sh_metallicity,
@@ -620,7 +657,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
 
             star_forming = sh_g_sfr > 0.0
 
-            galaxies[idx].load_gas(
+            gal.load_gas(
                 coordinates=sh_g_coods * kpc,
                 masses=sh_g_masses * Msun,
                 metallicities=sh_g_metals,
@@ -629,4 +666,35 @@ def load_CAMELS_SwiftEAGLE_subfind(
                 dust_to_metal_ratio=dtm,
             )
 
-    return galaxies
+        return gal
+
+    _f = partial(
+        swifteagle_particle_assignment,
+        redshift=redshift,
+        grpn=grpn,
+        grp_lentype=grp_lentype,
+        grp_firstsub=grp_firstsub,
+        lentype=lentype,
+        ids=ids,
+        star_ids=star_ids,
+        gas_ids=gas_ids,
+        form_time=form_time,
+        coods=coods,
+        masses=masses,
+        imasses=imasses,
+        metallicity=metallicity,
+        hsml=hsml,
+        g_sfr=g_sfr,
+        g_masses=g_masses,
+        g_metals=g_metals,
+        g_coods=g_coods,
+        g_hsml=g_hsml,
+    )
+
+    galaxies = pool.map(_f, mask)
+    pool.close()
+
+    for idx in np.arange(len(gals)):
+        galaxies[idx].centre = pos[idx] * kpc
+
+    return galaxies, mask
