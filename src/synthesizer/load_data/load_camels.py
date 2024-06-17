@@ -116,8 +116,8 @@ def _load_CAMELS(
 def load_CAMELS_IllustrisTNG(
     _dir=".",
     snap_name="snap_033.hdf5",
-    fof_name="fof_subhalo_tab_033.hdf5",
-    fof_dir=None,
+    group_name="fof_subhalo_tab_033.hdf5",
+    group_dir=None,
     verbose=False,
     dtm=0.3,
     physical=True,
@@ -130,9 +130,9 @@ def load_CAMELS_IllustrisTNG(
             data location
         snap_name (string):
             snapshot filename
-        fof_name (string):
+        group_name (string):
             subfind / FOF filename
-        fof_dir (string):
+        group_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
         verbose (bool):
@@ -166,9 +166,9 @@ def load_CAMELS_IllustrisTNG(
         g_coods = hf["PartType0/Coordinates"][:]  # kpc (physical)
         g_hsml = hf["PartType0/SubfindHsml"][:]
 
-    if fof_dir:
-        _dir = fof_dir  # replace if symlinks for fof files are broken
-    with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
+    if group_dir:
+        _dir = group_dir  # replace if symlinks for fof files are broken
+    with h5py.File(f"{_dir}/{group_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
         pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
 
@@ -249,8 +249,8 @@ def load_CAMELS_IllustrisTNG(
 def load_CAMELS_Astrid(
     _dir=".",
     snap_name="snap_090.hdf5",
-    fof_name="fof_subhalo_tab_090.hdf5",
-    fof_dir=None,
+    group_name="fof_subhalo_tab_090.hdf5",
+    group_dir=None,
     dtm=0.3,
     physical=True,
 ):
@@ -262,9 +262,9 @@ def load_CAMELS_Astrid(
             data location
         snap_name (string):
             snapshot filename
-        fof_name (string):
+        group_name (string):
             subfind / FOF filename
-        fof_dir (string):
+        group_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
         dtm (float):
@@ -311,9 +311,9 @@ def load_CAMELS_Astrid(
     _ages = cosmo.age(1.0 / form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
-    if fof_dir:
-        _dir = fof_dir  # replace if symlinks for fof files are broken
-    with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
+    if group_dir:
+        _dir = group_dir  # replace if symlinks for fof files are broken
+    with h5py.File(f"{_dir}/{group_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
         pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
 
@@ -347,8 +347,8 @@ def load_CAMELS_Astrid(
 def load_CAMELS_Simba(
     _dir=".",
     snap_name="snap_033.hdf5",
-    fof_name="fof_subhalo_tab_033.hdf5",
-    fof_dir=None,
+    group_name="fof_subhalo_tab_033.hdf5",
+    group_dir=None,
     dtm=0.3,
     physical=True,
 ):
@@ -360,9 +360,9 @@ def load_CAMELS_Simba(
             data location
         snap_name (string):
             snapshot filename
-        fof_name (string):
+        group_name (string):
             subfind / FOF filename
-        fof_dir (string):
+        group_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
         dtm (float):
@@ -408,9 +408,9 @@ def load_CAMELS_Simba(
     _ages = cosmo.age(1.0 / form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
-    if fof_dir:
-        _dir = fof_dir  # replace if symlinks for fof files are broken
-    with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
+    if group_dir:
+        _dir = group_dir  # replace if symlinks for fof files are broken
+    with h5py.File(f"{_dir}/{group_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
         pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
 
@@ -444,9 +444,8 @@ def load_CAMELS_Simba(
 def load_CAMELS_SwiftEAGLE_subfind(
     _dir=".",
     snap_name="snapshot_033.hdf5",
-    subfind_name="groups_033.hdf5",
-    subfind_dir=None,
-    verbose=False,
+    group_name="groups_033.hdf5",
+    group_dir=None,
     dtm=0.3,
     physical=True,
     cosmo=Planck15,
@@ -460,9 +459,9 @@ def load_CAMELS_SwiftEAGLE_subfind(
             data location
         snap_name (string):
             snapshot filename
-        fof_name (string):
+        group_name (string):
             subfind / FOF filename
-        fof_dir (string):
+        group_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
         verbose (bool):
@@ -480,8 +479,8 @@ def load_CAMELS_SwiftEAGLE_subfind(
     """
 
     # Check if snapshot and subfind files in same directory
-    if subfind_dir is None:
-        subfind_dir = _dir
+    if group_dir is None:
+        group_dir = _dir
 
     # Load cosmology information
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
@@ -490,7 +489,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         # h = hf["Cosmology"].attrs["h"]
 
     # get subfind particle info (lens and IDs) for subsetting snapshot info
-    with h5py.File(f'{subfind_dir}/{subfind_name}', 'r') as hf:
+    with h5py.File(f'{group_dir}/{group_name}', 'r') as hf:
         lentype = hf['Subhalo/SubhaloLenType'][:]
         grp_lentype = hf['Group/GroupLenType'][:]
         grpn = hf['Subhalo/SubhaloGrNr'][:]
