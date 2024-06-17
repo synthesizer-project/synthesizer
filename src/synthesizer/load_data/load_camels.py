@@ -1,8 +1,8 @@
 import h5py
 import numpy as np
 from astropy.cosmology import Planck15, Planck18
-from unyt import Msun, kpc, yr
 from tqdm import tqdm
+from unyt import Msun, kpc, yr
 
 from synthesizer.load_data.utils import get_len
 
