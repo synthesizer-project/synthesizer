@@ -17,7 +17,6 @@ import re
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy import integrate
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from spectres import spectres
@@ -27,6 +26,7 @@ from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.extensions.timers import tic, toc
+from synthesizer.integrate import integrate_last_axis
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
 from synthesizer.utils import has_units, rebin_1d, wavelength_to_rgba
@@ -392,7 +392,7 @@ class Sed:
     @property
     def flux(self):
         """
-        Get the spectra in terms fo flux
+        Get the spectra in terms fo flux.
 
         Returns:
             flux (unyt_array)
@@ -539,7 +539,7 @@ class Sed:
             * self.lnu.units
         )
 
-    def measure_bolometric_luminosity(self, method="simpson"):
+    def measure_bolometric_luminosity(self, method="trapz", nthreads=1):
         """
         Calculate the bolometric luminosity of the SED.
 
@@ -549,7 +549,10 @@ class Sed:
         Args:
             method (str)
                 The method used to calculate the bolometric luminosity. Options
-                include 'trapz' and 'simpson'.
+                include 'trapz' and 'simps'.
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             bolometric_luminosity (float)
@@ -561,26 +564,14 @@ class Sed:
         """
         start = tic()
 
-        if method not in ["trapz", "simpson"]:
-            raise exceptions.InconsistentArguments(
-                f"Unrecognised integration method ({method}). "
-                "Options are 'trapz' or 'simps'"
-            )
-
-        integration_function = (
-            np.trapz if method == "trapz" else integrate.simpson
+        self.bolometric_luminosity = integrate_last_axis(
+            self._nu, self._lnu, nthreads=nthreads, method=method
         )
-
-        bolometric_luminosity = integration_function(
-            self._lnu, x=self._nu, axis=-1
-        )
-
-        self.bolometric_luminosity = bolometric_luminosity
         toc("Calculating bolometric luminosity", start)
 
         return self.bolometric_luminosity
 
-    def measure_window_luminosity(self, window, method="trapz"):
+    def measure_window_luminosity(self, window, method="trapz", nthreads=1):
         """
         Measure the luminosity in a spectral window.
 
@@ -589,7 +580,10 @@ class Sed:
                 The window in wavelength.
             method (str)
                 The method used to calculate the bolometric luminosity. Options
-                include 'trapz' and 'quad'.
+                include 'trapz' and 'simps'.
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             luminosity (float)
@@ -599,30 +593,16 @@ class Sed:
             UnrecognisedOption
                 If method is an incompatible option an error is raised.
         """
+        # Define the "transmission" for the window
+        transmission = (self.lam > window[0]) & (self.lam < window[1])
 
-        # Integrate using the requested method
-        if method == "quad":
-            # Convert wavelength limits to frequency limits and convert to
-            # base units.
-            lims = (c / np.array(window)).to(self.nu.units).value
-            luminosity = (
-                integrate.quad(self._get_lnu_at_nu, *lims)[0]
-                * self.lnu.units
-                * Hz
+        # Integrate the window
+        luminosity = (
+            integrate_last_axis(
+                self._lam, self._lnu * transmission, nthreads=nthreads
             )
-
-        elif method == "trapz":
-            # Define a pseudo transmission function
-            transmission = (self.lam > window[0]) & (self.lam < window[1])
-            transmission = transmission.astype(float)
-            luminosity = np.trapz(
-                self.lnu[::-1] * transmission[::-1], x=self.nu[::-1]
-            )
-        else:
-            raise exceptions.UnrecognisedOption(
-                f"Unrecognised integration method ({method}). "
-                "Options are 'trapz' or 'quad'"
-            )
+            * self.lnu.units
+        )
 
         return luminosity.to(self.lnu.units * Hz)
 
@@ -634,8 +614,11 @@ class Sed:
             window (tuple, float)
                 The window in wavelength.
             method (str)
-                The method to use for the integration. Options include
-                'average', 'trapz', and 'quad'.
+                The method to use on the window. Options include
+                'average', or for integration 'trapz', and 'simps'.
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns:
             luminosity (float)
@@ -645,16 +628,15 @@ class Sed:
             UnrecognisedOption
                 If method is an incompatible option an error is raised.
         """
+        # Define a pseudo transmission function
+        transmission = (self.lam > window[0]) & (self.lam < window[1])
+        transmission = transmission.astype(float)
 
         # Apply the correct method
         if method == "average":
-            # Define a pseudo transmission function
-            transmission = (self.lam > window[0]) & (self.lam < window[1])
-            transmission = transmission.astype(float)
-
             # Apply to the correct axis of the spectra
             if self._spec_dims == 2:
-                Lnu = (
+                lnu = (
                     np.array(
                         [
                             np.sum(_lnu * transmission) / np.sum(transmission)
@@ -665,61 +647,21 @@ class Sed:
                 )
 
             else:
-                Lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
-
-        elif method == "trapz":
-            # Define a pseudo transmission function
-            transmission = (self.lam > window[0]) & (self.lam < window[1])
-            transmission = transmission.astype(float)
-
-            # Reverse the frequencies
-            nu = self.nu[::-1]
-
-            # Apply to the correct axis of the spectra
-            if self._spec_dims == 2:
-                Lnu = (
-                    np.array(
-                        [
-                            np.trapz(
-                                _lnu[::-1] * transmission[::-1] / nu, x=nu
-                            )
-                            / np.trapz(transmission[::-1] / nu, x=nu)
-                            for _lnu in self._lnu
-                        ]
-                    )
-                    * self.lnu.units
-                )
-
-            else:
-                lnu = self.lnu[::-1]
-                Lnu = np.trapz(lnu * transmission[::-1] / nu, x=nu) / np.trapz(
-                    transmission[::-1] / nu, x=nu
-                )
-
-        # note: not yet adapted for multiple SEDs
-        elif method == "quad":
-            # define limits in base units
-            lims = (c / window).to(self.nu.units).value
-
-            def func(x):
-                return self._get_lnu_at_nu(x) / x
-
-            def inv(x):
-                return 1 / x
-
-            Lnu = (
-                integrate.quad(func, *lims)[0] / integrate.quad(inv, *lims)[0]
-            )
-
-            Lnu = Lnu * self.lnu.units
+                lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
 
         else:
-            raise exceptions.UnrecognisedOption(
-                f"Unrecognised integration method ({method}). "
-                "Options are 'average', 'trapz' or 'quad'"
+            # Luminosity integral
+            lum = integrate_last_axis(
+                self._nu, self._lnu * transmission / self.nu
             )
 
-        return Lnu.to(self.lnu.units)
+            # Transmission integral
+            tran = integrate_last_axis(self._nu, transmission / self.nu)
+
+            # Compute lnu
+            lnu = lum / tran * self.lnu.units
+
+        return lnu.to(self.lnu.units)
 
     def measure_break(self, blue, red):
         """
@@ -1242,9 +1184,7 @@ class Sed:
         return Sed(self.lam, lnu=spectra)
 
     def calculate_ionising_photon_production_rate(
-        self,
-        ionisation_energy=13.6 * eV,
-        limit=100,
+        self, ionisation_energy=13.6 * eV, limit=100, nthreads=1
     ):
         """
         A function to calculate the ionising photon production rate.
@@ -1255,6 +1195,9 @@ class Sed:
             limit (float/int)
                 An upper bound on the number of subintervals
                 used in the integration adaptive algorithm.
+            nthreads (int)
+                The number of threads to use for the integration. If -1 then
+                all available threads are used.
 
         Returns
             float
@@ -1286,7 +1229,7 @@ class Sed:
         x = np.append(x, ionisation_wavelength.to(angstrom).value)
         y = np.append(y, ionisation_y)
 
-        ion_photon_prod_rate = integrate.trapezoid(y, x) / s
+        ion_photon_prod_rate = integrate_last_axis(x, y, nthreads=nthreads) / s
 
         return ion_photon_prod_rate
 
