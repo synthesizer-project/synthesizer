@@ -602,9 +602,10 @@ class Sed:
                 self._lam, self._lnu * transmission, nthreads=nthreads
             )
             * self.lnu.units
+            * Hz
         )
 
-        return luminosity.to(self.lnu.units * Hz)
+        return luminosity
 
     def measure_window_lnu(self, window, method="trapz"):
         """
