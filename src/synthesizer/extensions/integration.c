@@ -36,15 +36,14 @@ static double *trapz_last_axis_serial(double *x, double *y, npy_intp n,
  *
  * @param xs 1D array of x values.
  * @param ys 1D array of y values.
- * @param num_threads Number of threads to use.
+ * @param nthreads Number of threads to use.
  */
 #ifdef WITH_OPENMP
 static double *trapz_last_axis_parallel(double *x, double *y, npy_intp n,
-                                        npy_intp num_elements,
-                                        int num_threads) {
+                                        npy_intp num_elements, int nthreads) {
   double *integral = (double *)calloc(num_elements, sizeof(double));
 
-#pragma omp parallel for num_threads(num_threads)                              \
+#pragma omp parallel for num_threads(nthreads)                                 \
     reduction(+ : integral[ : num_elements])
   for (npy_intp i = 0; i < num_elements; ++i) {
     for (npy_intp j = 0; j < n - 1; ++j) {
@@ -68,11 +67,11 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
   (void)self; /* Unused variable */
 
   PyArrayObject *xs, *ys;
-  int num_threads;
+  int nthreads;
 
   /* Parse the input tuple */
   if (!PyArg_ParseTuple(args, "O!O!i", &PyArray_Type, &xs, &PyArray_Type, &ys,
-                        &num_threads)) {
+                        &nthreads)) {
     return NULL; /* Return NULL in case of parsing error */
   }
 
@@ -95,8 +94,8 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
   /* Compute the integral with the appropriate function. */
   double *integral;
 #ifdef WITH_OPENMP
-  if (num_threads > 1) {
-    integral = trapz_last_axis_parallel(x, y, n, num_elements, num_threads);
+  if (nthreads > 1) {
+    integral = trapz_last_axis_parallel(x, y, n, num_elements, nthreads);
   } else {
     integral = trapz_last_axis_serial(x, y, n, num_elements);
   }
@@ -149,15 +148,14 @@ static double *simps_last_axis_serial(double *x, double *y, npy_intp n,
  *
  * @param xs 1D array of x values.
  * @param ys ND array of y values.
- * @param num_threads Number of threads to use.
+ * @param nthreads Number of threads to use.
  */
 #ifdef WITH_OPENMP
 static double *simps_last_axis_parallel(double *x, double *y, npy_intp n,
-                                        npy_intp num_elements,
-                                        int num_threads) {
+                                        npy_intp num_elements, int nthreads) {
   double *integral = (double *)calloc(num_elements, sizeof(double));
 
-#pragma omp parallel for num_threads(num_threads)                              \
+#pragma omp parallel for num_threads(nthreads)                                 \
     reduction(+ : integral[ : num_elements])
   for (npy_intp i = 0; i < num_elements; ++i) {
     if (n < 2) {
@@ -185,17 +183,17 @@ static double *simps_last_axis_parallel(double *x, double *y, npy_intp n,
  *
  * @param xs 1D array of x values.
  * @param ys ND array of y values.
- * @param num_threads Number of threads to use.
+ * @param nthreads Number of threads to use.
  */
 static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
   (void)self; /* Unused variable */
 
   PyArrayObject *xs, *ys;
-  int num_threads;
+  int nthreads;
 
   /* Parse the input tuple */
   if (!PyArg_ParseTuple(args, "O!O!i", &PyArray_Type, &xs, &PyArray_Type, &ys,
-                        &num_threads)) {
+                        &nthreads)) {
     return NULL; /* Return NULL in case of parsing error */
   }
 
@@ -218,8 +216,8 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
   /* Compute the integral with the appropriate function. */
   double *integral;
 #ifdef WITH_OPENMP
-  if (num_threads > 1) {
-    integral = simps_last_axis_parallel(x, y, n, num_elements, num_threads);
+  if (nthreads > 1) {
+    integral = simps_last_axis_parallel(x, y, n, num_elements, nthreads);
   } else {
     integral = simps_last_axis_serial(x, y, n, num_elements);
   }
