@@ -564,7 +564,11 @@ class Sed:
         """
         start = tic()
 
-        self.bolometric_luminosity = integrate_last_axis(
+        # Calculate the bolometric luminosity
+        # NOTE: the integration is done "backwards" when integrating over
+        # frequency. It's faster to just multiply by -1 than to reverse the
+        # array.
+        self.bolometric_luminosity = -integrate_last_axis(
             self._nu, self._lnu, nthreads=nthreads, method=method
         )
         toc("Calculating bolometric luminosity", start)
@@ -597,9 +601,12 @@ class Sed:
         transmission = (self.lam > window[0]) & (self.lam < window[1])
 
         # Integrate the window
-        luminosity = (
+        # NOTE: the integration is done "backwards" when integrating over
+        # frequency. It's faster to just multiply by -1 than to reverse the
+        # array.
+        luminosity = -(
             integrate_last_axis(
-                self._lam, self._lnu * transmission, nthreads=nthreads
+                self._nu, self._lnu * transmission, nthreads=nthreads
             )
             * self.lnu.units
             * Hz
