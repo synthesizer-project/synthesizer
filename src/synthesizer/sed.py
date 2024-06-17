@@ -455,28 +455,6 @@ class Sed:
         """
         return np.ndim(self.lnu)
 
-    def _get_lnu_at_nu(self, nu, kind=False, ind=None):
-        """
-        A simple internal function for getting lnu at nu assuming the default
-        unit system.
-
-        Args:
-            nu (float/array-like, float)
-                The frequency(s) of interest.
-            kind (str)
-                Interpolation kind, see scipy.interp1d docs.
-            ind (int)
-                Row index of the spectra. Only applicable for muiti-dimensional
-                spectra.
-
-        Returns:
-            luminosity (float/array-like, float)
-                The luminosity (lnu) at the provided wavelength.
-        """
-        if ind is None:
-            return interp1d(self._nu, self._lnu, kind=kind)(nu)
-        return interp1d(self._nu, self._lnu[ind, :], kind=kind)(nu)
-
     def get_lnu_at_nu(self, nu, kind=False):
         """
         Return lnu with units at a provided frequency using 1d interpolation.
@@ -485,39 +463,17 @@ class Sed:
             wavelength (float/array-like, float)
                 The wavelength(s) of interest.
             kind (str)
-                Interpolation kind, see scipy.interp1d docs.
+                Interpolation kind, see scipy.interp1d docs for more
+                information. Possible values are 'linear', 'nearest',
+                'zero', 'slinear', 'quadratic', 'cubic', 'previous', and
+                'next'.
 
         Returns:
             luminosity (unyt_array)
                 The luminosity (lnu) at the provided wavelength.
         """
 
-        return (
-            self._get_lnu_at_nu(nu.to(self.nu.units).value, kind=kind)
-            * self.lnu.units
-        )
-
-    def _get_lnu_at_lam(self, lam, kind=False, ind=None):
-        """
-        Return lnu without units at a provided wavelength using 1d
-        interpolation.
-
-        Args:
-            lam (float/array-like, float)
-                The wavelength(s) of interest.
-            kind (str)
-                Interpolation kind, see scipy.interp1d docs.
-            ind (int)
-                Row index of the spectra. Only applicable for muiti-dimensional
-                spectra.
-
-        Returns:
-            luminosity (float/array-like, float)
-                The luminosity (lnu) at the provided wavelength.
-        """
-        if ind is None:
-            return interp1d(self._lam, self._lnu, kind=kind)(lam)
-        return interp1d(self._lam, self._lnu[ind, :], kind=kind)(lam)
+        return interp1d(self._nu, self._lnu, kind=kind)(nu) * self.lnu.units
 
     def get_lnu_at_lam(self, lam, kind=False):
         """
@@ -527,17 +483,17 @@ class Sed:
             lam (float/array-like, float)
                 The wavelength(s) of interest.
             kind (str)
-                Interpolation kind, see scipy.interp1d docs.
+                Interpolation kind, see scipy.interp1d docs for more
+                information. Possible values are 'linear', 'nearest',
+                'zero', 'slinear', 'quadratic', 'cubic', 'previous', and
+                'next'.
 
         Returns:
             luminosity (unyt-array)
                 The luminosity (lnu) at the provided wavelength.
         """
 
-        return (
-            self._get_lnu_at_lam(lam.to(self.lam.units).value, kind=kind)
-            * self.lnu.units
-        )
+        return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
     def measure_bolometric_luminosity(self, method="trapz", nthreads=1):
         """
