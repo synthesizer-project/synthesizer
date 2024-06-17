@@ -128,6 +128,9 @@ class Sed:
                     )
                 )
 
+        # Measure bolometric luminosity
+        self.bolometric_luminosity = self.measure_bolometric_luminosity()
+
         # Redshift of the SED
         self.redshift = 0
 
@@ -536,7 +539,7 @@ class Sed:
             * self.lnu.units
         )
 
-    def measure_bolometric_luminosity(self, method="trapz"):
+    def measure_bolometric_luminosity(self, method="simpson"):
         """
         Calculate the bolometric luminosity of the SED.
 
@@ -546,7 +549,7 @@ class Sed:
         Args:
             method (str)
                 The method used to calculate the bolometric luminosity. Options
-                include 'trapz' and 'simps'.
+                include 'trapz' and 'simpson'.
 
         Returns:
             bolometric_luminosity (float)
@@ -558,14 +561,14 @@ class Sed:
         """
         start = tic()
 
-        if method not in ["trapz", "simps"]:
+        if method not in ["trapz", "simpson"]:
             raise exceptions.InconsistentArguments(
                 f"Unrecognised integration method ({method}). "
                 "Options are 'trapz' or 'simps'"
             )
 
         integration_function = (
-            np.trapz if method == "trapz" else integrate.simps
+            np.trapz if method == "trapz" else integrate.simpson
         )
 
         bolometric_luminosity = integration_function(
