@@ -237,9 +237,9 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
 }
 
 static PyMethodDef IntegrationMethods[] = {
-    {"trapz_last_axis_integration", trapz_last_axis_integration, METH_VARARGS,
+    {"trapz_last_axis", trapz_last_axis_integration, METH_VARARGS,
      "Trapezoidal integration with OpenMP"},
-    {"simps_last_axis_integration", simps_last_axis_integration, METH_VARARGS,
+    {"simps_last_axis", simps_last_axis_integration, METH_VARARGS,
      "Simpson's integration with OpenMP"},
     {NULL, NULL, 0, NULL}};
 
