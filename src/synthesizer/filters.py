@@ -29,12 +29,12 @@ from urllib.error import URLError
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy import integrate
 from scipy.interpolate import interp1d
 from unyt import Angstrom, Hz, c, unyt_array, unyt_quantity
 
 import synthesizer.exceptions as exceptions
 from synthesizer._version import __version__
+from synthesizer.integrate import integrate_last_axis
 from synthesizer.units import Quantity
 from synthesizer.warnings import warn
 
@@ -1514,6 +1514,8 @@ class Filter:
         lam=None,
         nu=None,
         verbose=True,
+        nthreads=1,
+        method="trapz",
     ):
         """
         Apply the transmission curve to any array.
@@ -1542,6 +1544,12 @@ class Filter:
                 provided.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use in the integration. If -1 then
+                all available threads are used. Defaults to 1.
+            method (str)
+                The method to use in the integration. Can be either "trapz"
+                or "simps". Defaults to "trapz".
 
         Returns:
             float
@@ -1630,11 +1638,17 @@ class Filter:
         transmission = arr_in_band * t_in_band
 
         # Sum over the final axis to "collect" transmission in this filer
-        sum_per_x = integrate.trapezoid(
-            transmission / xs_in_band, xs_in_band, axis=-1
+        sum_per_x = integrate_last_axis(
+            xs_in_band,
+            transmission / xs_in_band,
+            nthreads=nthreads,
+            method=method,
         )
-        sum_den = integrate.trapezoid(
-            t_in_band / xs_in_band, xs_in_band, axis=-1
+        sum_den = integrate_last_axis(
+            xs_in_band,
+            t_in_band / xs_in_band,
+            nthreads=nthreads,
+            method=method,
         )
         sum_in_band = sum_per_x / sum_den
 
