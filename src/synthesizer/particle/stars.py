@@ -19,6 +19,8 @@ Example usages:
                         tau_v=tau_vs, coordinates=coordinates, ...)
 """
 
+import os
+
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
@@ -27,6 +29,7 @@ from unyt import Hz, angstrom, erg, kpc, s
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
 from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line, LineCollection
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
@@ -289,6 +292,7 @@ class Stars(Particles, StarsComponent):
         spectra_type,
         mask,
         grid_assignment_method,
+        nthreads,
     ):
         """
         A method to prepare the arguments for SED computation with the C
@@ -310,6 +314,9 @@ class Stars(Particles, StarsComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
 
         Returns:
             tuple
@@ -362,6 +369,10 @@ class Stars(Particles, StarsComponent):
         grid_props = tuple(grid_props)
         part_props = tuple(part_props)
 
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
         return (
             grid_spectra,
             grid_props,
@@ -373,6 +384,7 @@ class Stars(Particles, StarsComponent):
             npart,
             nlam,
             grid_assignment_method,
+            nthreads,
         )
 
     def generate_lnu(
@@ -388,6 +400,7 @@ class Stars(Particles, StarsComponent):
         parametric_young_stars=None,
         parametric_sfh="constant",
         aperture=None,
+        nthreads=0,
     ):
         """
         Generate the integrated rest frame spectra for a given grid key
@@ -432,6 +445,12 @@ class Stars(Particles, StarsComponent):
                 Currently two are supported, `Constant` and
                 `TruncatedExponential`, selected using the keyword
                 arguments `constant` and `exponential`.
+            aperture (float)
+                If not None, specifies the radius of a spherical aperture
+                to apply to the particles.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
@@ -552,6 +571,7 @@ class Stars(Particles, StarsComponent):
             spectra_type=spectra_name,
             mask=mask & aperture_mask,
             grid_assignment_method=grid_assignment_method.lower(),
+            nthreads=nthreads,
         )
 
         # Get the integrated spectra in grid units (erg / s / Hz)
@@ -655,7 +675,32 @@ class Stars(Particles, StarsComponent):
         fesc,
         mask,
         grid_assignment_method,
+        nthreads,
     ):
+        """
+        Generate the arguments for the C extension to compute lines.
+
+        Args:
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            line_id (str)
+                The id of the line to extract.
+            fesc (float/array-like, float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
+            mask (bool)
+                A mask to be applied to the stars. Spectra will only be
+                computed and returned for stars with True in the mask.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
+        """
         # Make a dummy mask if none has been passed
         if mask is None:
             mask = np.ones(self.nparticles, dtype=bool)
@@ -702,6 +747,10 @@ class Stars(Particles, StarsComponent):
         grid_props = tuple(grid_props)
         part_props = tuple(part_props)
 
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
         return (
             grid_line,
             grid_continuum,
@@ -713,9 +762,12 @@ class Stars(Particles, StarsComponent):
             len(grid_props),
             npart,
             grid_assignment_method,
+            nthreads,
         )
 
-    def generate_line(self, grid, line_id, fesc, mask=None, method="cic"):
+    def generate_line(
+        self, grid, line_id, fesc, mask=None, method="cic", nthreads=0
+    ):
         """
         Calculate rest frame line luminosity and continuum from an SPS Grid.
 
@@ -740,6 +792,9 @@ class Stars(Particles, StarsComponent):
                 The method to use for the interpolation. Options are:
                 'cic' - Cloud in cell
                 'ngp' - Nearest grid point
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
 
         Returns:
             Line
@@ -775,6 +830,7 @@ class Stars(Particles, StarsComponent):
                     fesc,
                     mask=mask,
                     grid_assignment_method=method,
+                    nthreads=nthreads,
                 )
             )
 
@@ -804,6 +860,7 @@ class Stars(Particles, StarsComponent):
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
+        nthreads=0,
     ):
         """
         Generate the particle rest frame spectra for a given grid key spectra
@@ -840,10 +897,15 @@ class Stars(Particles, StarsComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
 
         Returns:
             Numpy array of integrated spectra in units of (erg / s / Hz).
         """
+
+        start = tic()
 
         # Ensure we have a total key in the grid. If not error.
         if spectra_name not in list(grid.spectra.keys()):
@@ -932,10 +994,14 @@ class Stars(Particles, StarsComponent):
             spectra_type=spectra_name,
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
+            nthreads=nthreads,
         )
+        toc("Preparing C args", start)
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         masked_spec = compute_particle_seds(*args)
+
+        start = tic()
 
         # If there's no mask we're done
         if mask is None:
@@ -944,6 +1010,9 @@ class Stars(Particles, StarsComponent):
         # If we have a mask we need to account for the zeroed spectra
         spec = np.zeros((self.nstars, masked_spec.shape[-1]))
         spec[mask] = masked_spec
+
+        toc("Masking spectra and adding contribution", start)
+
         return spec
 
     def generate_particle_line(
@@ -953,6 +1022,7 @@ class Stars(Particles, StarsComponent):
         fesc,
         mask=None,
         method="cic",
+        nthreads=0,
     ):
         """
         Calculate rest frame line luminosity and continuum from an SPS Grid.
@@ -979,6 +1049,9 @@ class Stars(Particles, StarsComponent):
                 The method to use for the interpolation. Options are:
                 'cic' - Cloud in cell
                 'ngp' - Nearest grid point
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
 
         Returns:
             Line
@@ -1014,6 +1087,7 @@ class Stars(Particles, StarsComponent):
                     fesc,
                     mask=mask,
                     grid_assignment_method=method,
+                    nthreads=nthreads,
                 )
             )
 
@@ -1977,6 +2051,7 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         grid_assignment_method,
+        nthreads,
     ):
         """
         Prepare the arguments for SFZH computation with the C functions.
@@ -2019,6 +2094,10 @@ class Stars(Particles, StarsComponent):
         grid_props = tuple(grid_props)
         part_props = tuple(part_props)
 
+        # If nthreads = -1 we will use all available
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
         return (
             grid_props,
             part_props,
@@ -2027,12 +2106,14 @@ class Stars(Particles, StarsComponent):
             len(grid_props),
             npart,
             grid_assignment_method,
+            nthreads,
         )
 
     def get_sfzh(
         self,
         grid,
         grid_assignment_method="cic",
+        nthreads=0,
     ):
         """
         Generate the binned SFZH history of this collection of particles.
@@ -2048,6 +2129,9 @@ class Stars(Particles, StarsComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the computation. If set to -1
+                all available threads will be used.
 
         Returns:
             Numpy array of containing the SFZH.
@@ -2059,6 +2143,7 @@ class Stars(Particles, StarsComponent):
         args = self._prepare_sfzh_args(
             grid,
             grid_assignment_method=grid_assignment_method.lower(),
+            nthreads=nthreads,
         )
 
         # Get the SFZH

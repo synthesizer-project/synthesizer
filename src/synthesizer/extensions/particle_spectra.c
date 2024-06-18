@@ -16,119 +16,318 @@
 
 /* Local includes */
 #include "macros.h"
+#include "property_funcs.h"
+#include "timers.h"
 #include "weights.h"
 
 /**
- * @brief This calculates the spectra of a particle using a cloud in cell
- *        approach.
+ * @brief This calculates particle spectra using a cloud in cell approach.
  *
- * @param grid_props: An array of the properties along each grid axis.
- * @param part_props: An array of the particle properties, in the same property
- *                    order as grid props.
- * @param mass: The mass of the current particle.
- * @param grid_spectra: The grid of SPS spectra.
- * @param dims: The length of each grid dimension.
- * @param ndim: The number of grid dimensions.
- * @param spectra: The array of particle spectra.
- * @param nlam: The number of wavelength elements.
- * @param fesc: The escape fraction.
- * @param p: The index of the current particle.
+ * This is the serial version of the function.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param spectra: The output array.
  */
-void spectra_loop_cic(const double **grid_props, const double **part_props,
-                      const double mass, const double *grid_spectra,
-                      const int *dims, const int ndim, double *spectra,
-                      const int nlam, const double fesc, const int p) {
+static void spectra_loop_cic_serial(struct grid *grid, struct particles *parts,
+                                    double *spectra) {
 
-  /* Setup the index and mass fraction arrays. */
-  int part_indices[ndim];
-  double axis_fracs[ndim];
+  /* Unpack the grid properties. */
+  int *dims = grid->dims;
+  int ndim = grid->ndim;
+  int nlam = grid->nlam;
+  double **grid_props = grid->props;
+  double *grid_spectra = grid->spectra;
 
-  /* Loop over dimensions finding the mass weightings and indicies. */
-  for (int dim = 0; dim < ndim; dim++) {
+  /* Unpack the particles properties. */
+  double *part_masses = parts->mass;
+  double **part_props = parts->props;
+  double *fesc = parts->fesc;
+  int npart = parts->npart;
 
-    /* Get this array of grid properties for this dimension */
-    const double *grid_prop = grid_props[dim];
+  /* Loop over particles. */
+  for (int p = 0; p < npart; p++) {
 
-    /* Get this particle property. */
-    const double part_val = part_props[dim][p];
+    /* Get this particle's mass. */
+    const double mass = part_masses[p];
 
-    /* Here we need to handle if we are outside the range of values. If so
-     * there's no point in searching and we return the edge nearest to the
-     * value. */
-    int part_cell;
-    double frac;
-    if (part_val <= grid_prop[0]) {
+    /* Setup the index and mass fraction arrays. */
+    int part_indices[ndim];
+    double axis_fracs[ndim];
 
-      /* Use the grid edge. */
-      part_cell = 0;
-      frac = 0;
+    /* Get the grid indices and cell fractions for the particle. */
+    get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
+                          part_props, p);
 
-    } else if (part_val > grid_prop[dims[dim] - 1]) {
-
-      /* Use the grid edge. */
-      part_cell = dims[dim] - 1;
-      frac = 1;
-
-    } else {
-
-      /* Find the grid index corresponding to this particle property. */
-      part_cell =
-          binary_search(/*low*/ 0, /*high*/ dims[dim] - 1, grid_prop, part_val);
-
-      /* Calculate the fraction. Note, here we do the "low" cell, the cell
-       * above is calculated from this fraction. */
-      frac = (grid_prop[part_cell] - part_val) /
-             (grid_prop[part_cell] - grid_prop[part_cell - 1]);
+    /* To combine fractions we will need an array of dimensions for the
+     * subset. These are always two in size, one for the low and one for high
+     * grid point. */
+    int sub_dims[ndim];
+    for (int idim = 0; idim < ndim; idim++) {
+      sub_dims[idim] = 2;
     }
 
-    /* Set the fraction for this dimension. */
-    axis_fracs[dim] = (1 - frac);
+    /* Now loop over this collection of cells collecting and setting their
+     * weights. */
+    for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
 
-    /* Set this index. */
-    part_indices[dim] = part_cell;
-  }
+      /* Set up some index arrays we'll need. */
+      int subset_ind[ndim];
+      int frac_ind[ndim];
 
-  /* To combine fractions we will need an array of dimensions for the subset.
-   * These are always two in size, one for the low and one for high grid
-   * point. */
-  int sub_dims[ndim];
-  for (int idim = 0; idim < ndim; idim++) {
-    sub_dims[idim] = 2;
-  }
+      /* Get the multi-dimensional version of icell. */
+      get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
 
-  /* Now loop over this collection of cells collecting and setting their
-   * weights. */
-  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+      /* Multiply all contributing fractions and get the fractions index
+       * in the grid. */
+      double frac = 1;
+      for (int idim = 0; idim < ndim; idim++) {
+        if (subset_ind[idim] == 0) {
+          frac *= (1 - axis_fracs[idim]);
+          frac_ind[idim] = part_indices[idim] - 1;
+        } else {
+          frac *= axis_fracs[idim];
+          frac_ind[idim] = part_indices[idim];
+        }
+      }
 
-    /* Set up some index arrays we'll need. */
-    int subset_ind[ndim];
-    int frac_ind[ndim];
+      /* Nothing to do if fraction is 0. */
+      if (frac == 0) {
+        continue;
+      }
 
-    /* Get the multi-dimensional version of icell. */
-    get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
+      /* Define the weight. */
+      double weight = frac * mass * (1.0 - fesc[p]);
 
-    /* Multiply all contributing fractions and get the fractions index
-     * in the grid. */
-    double frac = 1;
-    for (int idim = 0; idim < ndim; idim++) {
-      if (subset_ind[idim] == 0) {
-        frac *= (1 - axis_fracs[idim]);
-        frac_ind[idim] = part_indices[idim] - 1;
-      } else {
-        frac *= axis_fracs[idim];
-        frac_ind[idim] = part_indices[idim];
+      /* Get the weight's index. */
+      const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+
+      /* Get the spectra ind. */
+      int unraveled_ind[ndim + 1];
+      get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+      unraveled_ind[ndim] = 0;
+      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+      /* Add this grid cell's contribution to the spectra */
+      for (int ilam = 0; ilam < nlam; ilam++) {
+
+        /* Add the contribution to this wavelength. */
+        spectra[p * nlam + ilam] += grid_spectra[spectra_ind + ilam] * weight;
       }
     }
+  }
+}
 
-    /* Early skip for cells contributing a 0 fraction. */
-    if (frac <= 0)
-      continue;
+/**
+ * @brief This calculates the grid weights in each grid cell using a cloud
+ *        in cell approach.
+ *
+ * This is the parallel version of the function.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param spectra: The output array.
+ * @param nthreads: The number of threads to use.
+ */
+#ifdef WITH_OPENMP
+static void spectra_loop_cic_omp(struct grid *grid, struct particles *parts,
+                                 double *spectra, int nthreads) {
 
-    /* We have a contribution, get the flattened index into the grid array. */
-    const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+  /* How many particles should each thread get? */
+  int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
+
+#pragma omp parallel num_threads(nthreads)
+  {
+
+    /* Unpack the grid properties. */
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    int nlam = grid->nlam;
+    double **grid_props = grid->props;
+    double *grid_spectra = grid->spectra;
+
+    /* Unpack the particles properties. */
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    double *fesc = parts->fesc;
+    int npart = parts->npart;
+
+    /* Get the thread id. */
+    int tid = omp_get_thread_num();
+
+    /* Calculate start and end indices for each thread */
+    int start = tid * npart_per_thread;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
+    }
+#ifdef WITH_DEBUGGING_CHECKS
+    else {
+#pragma omp critical
+      PyErr_SetString(PyExc_RuntimeError,
+                      "Not all particles distributed to threads.");
+      free(spectra);
+      spectra = NULL;
+      return;
+    }
+#endif
+
+    /* Loop over particles. */
+    for (int p = start; p < end; p++) {
+
+      /* Get this particle's mass. */
+      const double mass = part_masses[p];
+
+      /* Setup the index and mass fraction arrays. */
+      int part_indices[ndim];
+      double axis_fracs[ndim];
+
+      /* Get the grid indices and cell fractions for the particle. */
+      get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
+                            part_props, p);
+
+      /* To combine fractions we will need an array of dimensions for the
+       * subset. These are always two in size, one for the low and one for high
+       * grid point. */
+      int sub_dims[ndim];
+      for (int idim = 0; idim < ndim; idim++) {
+        sub_dims[idim] = 2;
+      }
+
+      /* Now loop over this collection of cells collecting and setting their
+       * weights. */
+      for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+
+        /* Set up some index arrays we'll need. */
+        int subset_ind[ndim];
+        int frac_ind[ndim];
+
+        /* Get the multi-dimensional version of icell. */
+        get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
+
+        /* Multiply all contributing fractions and get the fractions index
+         * in the grid. */
+        double frac = 1;
+        for (int idim = 0; idim < ndim; idim++) {
+          if (subset_ind[idim] == 0) {
+            frac *= (1 - axis_fracs[idim]);
+            frac_ind[idim] = part_indices[idim] - 1;
+          } else {
+            frac *= axis_fracs[idim];
+            frac_ind[idim] = part_indices[idim];
+          }
+        }
+
+        if (frac == 0) {
+          continue;
+        }
+
+        /* Define the weight. */
+        double weight = frac * mass * (1.0 - fesc[p]);
+
+        /* Get the weight's index. */
+        const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+
+        /* Get the spectra ind. */
+        int unraveled_ind[ndim + 1];
+        get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+        unraveled_ind[ndim] = 0;
+        int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+        /* Add this grid cell's contribution to the spectra */
+        for (int ilam = 0; ilam < nlam; ilam++) {
+
+          /* Add the contribution to this wavelength. */
+          spectra[p * nlam + ilam] += grid_spectra[spectra_ind + ilam] * weight;
+        }
+      }
+    }
+  }
+}
+#endif
+
+/**
+ * @brief This calculates particle spectra using a cloud in cell approach.
+ *
+ * This is a wrapper which calls the correct function based on the number of
+ * threads requested and whether OpenMP is available.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param spectra: The output array.
+ * @param nthreads: The number of threads to use.
+ */
+void spectra_loop_cic(struct grid *grid, struct particles *parts,
+                      double *spectra, const int nthreads) {
+
+  double start_time = tic();
+
+  /* Call the correct function for the configuration/number of threads. */
+
+#ifdef WITH_OPENMP
+
+  /* If we have multiple threads and OpenMP we can parallelise. */
+  if (nthreads > 1) {
+    spectra_loop_cic_omp(grid, parts, spectra, nthreads);
+  }
+  /* Otherwise there's no point paying the OpenMP overhead. */
+  else {
+    spectra_loop_cic_serial(grid, parts, spectra);
+  }
+
+#else
+
+  (void)nthreads;
+
+  /* We don't have OpenMP, just call the serial version. */
+  spectra_loop_cic_serial(grid, parts, spectra);
+
+#endif
+  toc("Cloud in Cell particle spectra loop", start_time);
+}
+
+/**
+ * @brief This calculates particle spectra using a nearest grid point approach.
+ *
+ * This is the serial version of the function.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param spectra: The output array.
+ */
+static void spectra_loop_ngp_serial(struct grid *grid, struct particles *parts,
+                                    double *spectra) {
+
+  /* Unpack the grid properties. */
+  int *dims = grid->dims;
+  int ndim = grid->ndim;
+  int nlam = grid->nlam;
+  double **grid_props = grid->props;
+  double *grid_spectra = grid->spectra;
+
+  /* Unpack the particles properties. */
+  double *part_masses = parts->mass;
+  double **part_props = parts->props;
+  double *fesc = parts->fesc;
+  int npart = parts->npart;
+
+  /* Loop over particles. */
+  for (int p = 0; p < npart; p++) {
+
+    /* Get this particle's mass. */
+    const double mass = part_masses[p];
+
+    /* Setup the index array. */
+    int part_indices[ndim];
+
+    /* Get the grid indices for the particle */
+    get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
 
     /* Define the weight. */
-    double weight = mass * frac;
+    double weight = mass * (1.0 - fesc[p]);
+
+    /* Get the weight's index. */
+    const int grid_ind = get_flat_index(part_indices, dims, ndim);
 
     /* Get the spectra ind. */
     int unraveled_ind[ndim + 1];
@@ -140,94 +339,137 @@ void spectra_loop_cic(const double **grid_props, const double **part_props,
     for (int ilam = 0; ilam < nlam; ilam++) {
 
       /* Add the contribution to this wavelength. */
-      spectra[p * nlam + ilam] +=
-          grid_spectra[spectra_ind + ilam] * (1 - fesc) * weight;
+      spectra[p * nlam + ilam] += grid_spectra[spectra_ind + ilam] * weight;
     }
   }
 }
 
 /**
- * @brief This calculates the spectra of a particle using a nearest grid point
- *        approach.
+ * @brief This calculates particle spectra using a nearest grid point approach.
  *
- * @param grid_props: An array of the properties along each grid axis.
- * @param part_props: An array of the particle properties, in the same property
- *                    order as grid props.
- * @param mass: The mass of the current particle.
- * @param grid_spectra: The grid of SPS spectra.
- * @param dims: The length of each grid dimension.
- * @param ndim: The number of grid dimensions.
- * @param spectra: The array of particle spectra.
- * @param nlam: The number of wavelength elements.
- * @param fesc: The escape fraction.
- * @param p: The index of the current particle.
+ * This is the serial version of the function.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param spectra: The output array.
+ * @param nthreads: The number of threads to use.
  */
-void spectra_loop_ngp(const double **grid_props, const double **part_props,
-                      const double mass, const double *grid_spectra,
-                      const int *dims, const int ndim, double *spectra,
-                      const int nlam, const double fesc, const int p) {
+#ifdef WITH_OPENMP
+static void spectra_loop_ngp_omp(struct grid *grid, struct particles *parts,
+                                 double *spectra, int nthreads) {
 
-  /* Setup the index array. */
-  int part_indices[ndim];
+  /* How many particles should each thread get? */
+  int npart_per_thread = (parts->npart + nthreads - 1) / nthreads;
 
-  /* Loop over dimensions finding the indicies. */
-  for (int dim = 0; dim < ndim; dim++) {
+#pragma omp parallel num_threads(nthreads)
+  {
 
-    /* Get this array of grid properties for this dimension */
-    const double *grid_prop = grid_props[dim];
+    /* Unpack the grid properties. */
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    int nlam = grid->nlam;
+    double **grid_props = grid->props;
+    double *grid_spectra = grid->spectra;
 
-    /* Get this particle property. */
-    const double part_val = part_props[dim][p];
+    /* Unpack the particles properties. */
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    double *fesc = parts->fesc;
+    int npart = parts->npart;
 
-    /* Here we need to handle if we are outside the range of values. If so
-     * there's no point in searching and we return the edge nearest to the
-     * value. */
-    int part_cell;
-    if (part_val <= grid_prop[0]) {
+    /* Get the thread id. */
+    int tid = omp_get_thread_num();
 
-      /* Use the grid edge. */
-      part_cell = 0;
-
-    } else if (part_val > grid_prop[dims[dim] - 1]) {
-
-      /* Use the grid edge. */
-      part_cell = dims[dim] - 1;
-
-    } else {
-
-      /* Find the grid index corresponding to this particle property. */
-      part_cell =
-          binary_search(/*low*/ 1, /*high*/ dims[dim] - 1, grid_prop, part_val);
+    /* Calculate start and end indices for each thread */
+    int start = tid * npart_per_thread;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
     }
+#ifdef WITH_DEBUGGING_CHECKS
+    else {
+#pragma omp critical
+      PyErr_SetString(PyExc_RuntimeError,
+                      "Not all particles distributed to threads.");
+      free(spectra);
+      spectra = NULL;
+      return;
+    }
+#endif
 
-    /* Set the index to the closest grid point either side of part_val. */
-    if (part_cell == 0) {
-      /* Handle the case where part_cell - 1 doesn't exist. */
-      part_indices[dim] = part_cell;
-    } else if ((part_val - grid_prop[part_cell - 1]) <
-               (grid_prop[part_cell] - part_val)) {
-      part_indices[dim] = part_cell - 1;
-    } else {
-      part_indices[dim] = part_cell;
+    /* Loop over particles. */
+    for (int p = start; p < end; p++) {
+
+      /* Get this particle's mass. */
+      const double mass = part_masses[p];
+
+      /* Setup the index array. */
+      int part_indices[ndim];
+
+      /* Get the grid indices for the particle */
+      get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
+
+      /* Define the weight. */
+      double weight = mass * (1.0 - fesc[p]);
+
+      /* Get the weight's index. */
+      const int grid_ind = get_flat_index(part_indices, dims, ndim);
+
+      /* Get the spectra ind. */
+      int unraveled_ind[ndim + 1];
+      get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
+      unraveled_ind[ndim] = 0;
+      int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+
+      /* Add this grid cell's contribution to the spectra */
+      for (int ilam = 0; ilam < nlam; ilam++) {
+
+        /* Add the contribution to this wavelength. */
+        spectra[p * nlam + ilam] += grid_spectra[spectra_ind + ilam] * weight;
+      }
     }
   }
+}
+#endif
 
-  /* Get the weight's index. */
-  const int grid_ind = get_flat_index(part_indices, dims, ndim);
+/**
+ * @brief This calculates particle spectra using a nearest grid point approach.
+ *
+ * This is a wrapper which calls the correct function based on the number of
+ * threads requested and whether OpenMP is available.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param spectra: The output array.
+ * @param nthreads: The number of threads to use.
+ */
+void spectra_loop_ngp(struct grid *grid, struct particles *parts,
+                      double *spectra, const int nthreads) {
 
-  /* Get the spectra ind. */
-  int unraveled_ind[ndim + 1];
-  get_indices_from_flat(grid_ind, ndim, dims, unraveled_ind);
-  unraveled_ind[ndim] = 0;
-  int spectra_ind = get_flat_index(unraveled_ind, dims, ndim + 1);
+  double start_time = tic();
 
-  /* Add this grid cell's contribution to the spectra */
-  for (int ilam = 0; ilam < nlam; ilam++) {
+  /* Call the correct function for the configuration/number of threads. */
 
-    /* Add the contribution to this wavelength. */
-    spectra[p * nlam + ilam] +=
-        grid_spectra[spectra_ind + ilam] * (1 - fesc) * mass;
+#ifdef WITH_OPENMP
+
+  /* If we have multiple threads and OpenMP we can parallelise. */
+  if (nthreads > 1) {
+    spectra_loop_ngp_omp(grid, parts, spectra, nthreads);
   }
+  /* Otherwise there's no point paying the OpenMP overhead. */
+  else {
+    spectra_loop_ngp_serial(grid, parts, spectra);
+  }
+
+#else
+
+  (void)nthreads;
+
+  /* We don't have OpenMP, just call the serial version. */
+  spectra_loop_ngp_serial(grid, parts, spectra);
+
+#endif
+  toc("Nearest Grid Point particle spectra loop", start_time);
 }
 
 /**
@@ -246,174 +488,67 @@ void spectra_loop_ngp(const double **grid_props, const double **part_props,
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
+  double start_time = tic();
+  double setup_start = tic();
+
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
   (void)self;
 
-  int ndim, npart, nlam;
+  int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_fesc;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOiiis", &np_grid_spectra, &grid_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOOOiiisi", &np_grid_spectra, &grid_tuple,
                         &part_tuple, &np_part_mass, &np_fesc, &np_ndims, &ndim,
-                        &npart, &nlam, &method))
+                        &npart, &nlam, &method, &nthreads))
     return NULL;
 
-  /* Quick check to make sure our inputs are valid. */
-  if (ndim == 0) {
-    PyErr_SetString(PyExc_ValueError, "ndim must be greater than 0.");
-    return NULL;
-  }
-  if (npart == 0) {
-    PyErr_SetString(PyExc_ValueError, "npart must be greater than 0.");
-    return NULL;
-  }
-  if (nlam == 0) {
-    PyErr_SetString(PyExc_ValueError, "nlam must be greater than 0.");
+  /* Extract the grid struct. */
+  struct grid *grid_props = get_spectra_grid_struct(
+      grid_tuple, np_ndims, np_grid_spectra, ndim, nlam);
+  if (grid_props == NULL) {
     return NULL;
   }
 
-  /* Extract a pointer to the spectra grids */
-  const double *grid_spectra = PyArray_DATA(np_grid_spectra);
-  if (grid_spectra == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract grid_spectra.");
+  /* Extract the particle struct. */
+  struct particles *part_props =
+      get_part_struct(part_tuple, np_part_mass, np_fesc, npart, ndim);
+  if (part_props == NULL) {
     return NULL;
   }
 
-  /* Set up arrays to hold the SEDs themselves. */
-  double *spectra = malloc(npart * nlam * sizeof(double));
+  /* Allocate the spectra. */
+  double *spectra = calloc(npart * nlam, sizeof(double));
   if (spectra == NULL) {
     PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for spectra.");
-    return NULL;
-  }
-  bzero(spectra, npart * nlam * sizeof(double));
-
-  /* Extract a pointer to the grid dims */
-  const int *dims = PyArray_DATA(np_ndims);
-  if (dims == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract dims from np_ndims.");
+                    "Could not allocate memory for spectra.");
     return NULL;
   }
 
-  /* Extract a pointer to the particle masses. */
-  const double *part_mass = PyArray_DATA(np_part_mass);
-  if (part_mass == NULL) {
-    PyErr_SetString(PyExc_ValueError,
-                    "Failed to extract part_mass from np_part_mass.");
+  toc("Extracting Python data", setup_start);
+
+  /* With everything set up we can compute the spectra for each particle using
+   * the requested method. */
+  if (strcmp(method, "cic") == 0) {
+    spectra_loop_cic(grid_props, part_props, spectra, nthreads);
+  } else if (strcmp(method, "ngp") == 0) {
+    spectra_loop_ngp(grid_props, part_props, spectra, nthreads);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
     return NULL;
   }
 
-  /* Extract a pointer to the fesc array. */
-  const double *fesc = PyArray_DATA(np_fesc);
-  if (fesc == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract fesc from np_fesc.");
+  /* Check we got the spectra sucessfully. (Any error messages will already be
+   * set) */
+  if (spectra == NULL) {
     return NULL;
-  }
-
-  /* Allocate a single array for grid properties*/
-  int nprops = 0;
-  for (int dim = 0; dim < ndim; dim++)
-    nprops += dims[dim];
-  const double **grid_props = malloc(nprops * sizeof(double *));
-  if (grid_props == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for grid_props.");
-    return NULL;
-  }
-
-  /* How many grid elements are there? (excluding wavelength axis)*/
-  int grid_size = 1;
-  for (int dim = 0; dim < ndim; dim++)
-    grid_size *= dims[dim];
-
-  /* Allocate an array to hold the grid weights. */
-  double *grid_weights = malloc(grid_size * sizeof(double));
-  if (grid_weights == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for grid_weights.");
-    return NULL;
-  }
-  bzero(grid_weights, grid_size * sizeof(double));
-
-  /* Unpack the grid property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    PyArrayObject *np_grid_arr =
-        (PyArrayObject *)PyTuple_GetItem(grid_tuple, idim);
-    if (np_grid_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
-      return NULL;
-    }
-    const double *grid_arr = PyArray_DATA(np_grid_arr);
-    if (grid_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract grid_arr.");
-      return NULL;
-    }
-
-    /* Assign this data to the property array. */
-    grid_props[idim] = grid_arr;
-  }
-
-  /* Allocate a single array for particle properties. */
-  const double **part_props = malloc(npart * ndim * sizeof(double *));
-  if (part_props == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for part_props.");
-    return NULL;
-  }
-
-  /* Unpack the particle property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    PyArrayObject *np_part_arr =
-        (PyArrayObject *)PyTuple_GetItem(part_tuple, idim);
-    if (np_part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-      return NULL;
-    }
-    const double *part_arr = PyArray_DATA(np_part_arr);
-    if (part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-      return NULL;
-    }
-
-    /* Assign this data to the property array. */
-    part_props[idim] = part_arr;
-  }
-
-  /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
-
-    /* Get this particle's mass. */
-    const double mass = part_mass[p];
-
-    /* Finally, compute the spectra for this particle using the
-     * requested method. */
-    if (strcmp(method, "cic") == 0) {
-      spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
-                       spectra, nlam, fesc[p], p);
-    } else if (strcmp(method, "ngp") == 0) {
-      spectra_loop_ngp(grid_props, part_props, mass, grid_spectra, dims, ndim,
-                       spectra, nlam, fesc[p], p);
-    } else {
-      /* Only print this warning once */
-      if (p == 0)
-        printf(
-            "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
-            method);
-      spectra_loop_cic(grid_props, part_props, mass, grid_spectra, dims, ndim,
-                       spectra, nlam, fesc[p], p);
-    }
   }
 
   /* Clean up memory! */
-  free(grid_weights);
   free(part_props);
   free(grid_props);
 
@@ -424,6 +559,8 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   };
   PyArrayObject *out_spectra = (PyArrayObject *)PyArray_SimpleNewFromData(
       2, np_dims, NPY_FLOAT64, spectra);
+
+  toc("Computing particle SEDs", start_time);
 
   return Py_BuildValue("N", out_spectra);
 }

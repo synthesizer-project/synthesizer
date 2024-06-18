@@ -26,6 +26,7 @@ from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
 from synthesizer.utils import has_units, rebin_1d, wavelength_to_rgba
@@ -88,6 +89,7 @@ class Sed:
             description (string)
                 An optional descriptive string defining the Sed.
         """
+        start = tic()
 
         # Set the description
         self.description = description
@@ -140,6 +142,8 @@ class Sed:
         # Broadband photometry
         self.photo_luminosities = None
         self.photo_fluxes = None
+
+        toc("Creating Sed", start)
 
     def sum(self):
         """
@@ -249,12 +253,16 @@ class Sed:
         """
 
         # Ensure the wavelength arrays are compatible
-        # # NOTE: this is probably overkill and too costly. We
-        # could instead check the first and last entry and the shape.
-        # In rare instances this could fail though.
-        if not np.array_equal(self._lam, second_sed._lam):
+        if not (
+            self._lam[0] == second_sed._lam[0]
+            and self._lam[-1] == second_sed._lam[-1]
+        ):
             raise exceptions.InconsistentAddition(
-                "Wavelength grids must be identical"
+                "Wavelength grids must be identical "
+                f"({self.lam.min()} -> {self.lam.max()} "
+                f"with shape {self._lam.shape} != "
+                f"{second_sed.lam.min()} -> {second_sed.lam.max()} "
+                f"with shape {second_sed._lam.shape})"
             )
 
         # Ensure the lnu arrays are compatible
@@ -262,7 +270,8 @@ class Sed:
         # not erroneously error. Nor is it expensive.
         if self._lnu.shape[0] != second_sed._lnu.shape[0]:
             raise exceptions.InconsistentAddition(
-                "SEDs must have same dimensions"
+                "SEDs must have same dimensions "
+                f"({self._lnu.shape} != {second_sed._lnu.shape})"
             )
 
         # They're compatible, add them and make a new Sed
@@ -548,6 +557,7 @@ class Sed:
             UnrecognisedOption
                 If method is an incompatible option an error is raised.
         """
+        start = tic()
 
         # If the method is trapz we can do any number of dimensions
         if method == "trapz":
@@ -603,6 +613,9 @@ class Sed:
             )
 
         self.bolometric_luminosity = bolometric_luminosity
+
+        toc("Calculating bolometric luminosity", start)
+
         return self.bolometric_luminosity
 
     def measure_window_luminosity(self, window, method="trapz"):
