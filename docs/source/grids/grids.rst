@@ -29,6 +29,8 @@ Available Grids
 
 A goal of `synthesizer` is to be **flexible**. With this in mind we have generated a variety of grids for different stellar population synthesis (SPS) models, initial mass functions (IMFs), and photoionisation modelling assumptions.
 
+.. _grid-naming:
+
 Grid naming
 -----------
 
@@ -216,12 +218,16 @@ Grid list
         - maraston-rhb_bpl-0.1,100-2.35 
 
 
-
-Loading and using Grids
-=======================
+How to create your own grids
+============================
 
 .. toctree::
    :maxdepth: 2
 
-   grids_example
-   
+   creating_grids
+
+
+Loading and using Grids
+=======================
+
+On the next page we demonstrate how to load and explore a grid in `synthesizer`.
