@@ -25,7 +25,7 @@ from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import Gas, Stars
-from synthesizer.sed import Sed
+from synthesizer.warnings import warn
 
 
 class Galaxy(BaseGalaxy):
@@ -56,6 +56,7 @@ class Galaxy(BaseGalaxy):
         black_holes=None,
         redshift=None,
         centre=None,
+        verbose=True,
     ):
         """Initialise a particle based Galaxy with objects derived from
            Particles.
@@ -76,6 +77,8 @@ class Galaxy(BaseGalaxy):
             centre (float)
                 Centre of the galaxy particles. Can be defined in a number
                 of ways (e.g. centre of mass)
+            verbose (float)
+                Are we talking?
 
         Raises:
             InconsistentArguments
@@ -91,6 +94,7 @@ class Galaxy(BaseGalaxy):
 
         # Set the type of galaxy
         self.galaxy_type = "Particle"
+        self.verbose = verbose
 
         # Instantiate the parent (load stars and gas below)
         BaseGalaxy.__init__(
@@ -137,6 +141,18 @@ class Galaxy(BaseGalaxy):
                     np.sum(self.stars.ages * self.stars.current_masses)
                     / self.stellar_mass
                 )
+            else:
+                self.stellar_mass_weighted_age = None
+                warn(
+                    "Ages of stars not provided, "
+                    "setting stellar_mass_weighted_age to `None`"
+                )
+        else:
+            self.stellar_mass_weighted_age = None
+            warn(
+                "Current mass of stars not provided, "
+                "setting stellar_mass_weighted_age to `None`"
+            )
 
     def calculate_integrated_gas_properties(self):
         """
@@ -151,6 +167,12 @@ class Galaxy(BaseGalaxy):
             self.mass_weighted_gas_metallicity = (
                 np.sum(self.gas.masses * self.gas.metallicities)
                 / self.gas_mass
+            )
+        else:
+            self.mass_weighted_gas_metallicity = None
+            warn(
+                "Mass of gas particles not provided, "
+                "setting mass_weighted_gas_metallicity to `None`"
             )
 
         if self.gas.star_forming is not None:
@@ -168,6 +190,13 @@ class Galaxy(BaseGalaxy):
                     )
                     / self.sf_gas_mass
                 )
+        else:
+            self.sf_gas_mass = None
+            self.sf_gas_metallicity = None
+            warn(
+                "Star forming gas particle mask not provided, "
+                "setting sf_gas_mass and sf_gas_metallicity to `None`"
+            )
 
     def load_stars(
         self,
@@ -175,7 +204,6 @@ class Galaxy(BaseGalaxy):
         ages=None,
         metallicities=None,
         stars=None,
-        verbose=True,
         **kwargs,
     ):
         """
@@ -191,8 +219,6 @@ class Galaxy(BaseGalaxy):
                 Star particle metallicity (total metal fraction)
             stars (stars particle object)
                 A pre-existing stars particle object to use. Defaults to None.
-            verbose (bool)
-                If True, print warnings and information messages.
             **kwargs
                 Arbitrary keyword arguments.
 
@@ -209,12 +235,11 @@ class Galaxy(BaseGalaxy):
                 | (ages is None)
                 | (metallicities is None)
             ):
-                if verbose:
-                    print(
-                        "In `load_stars`: one of either `initial_masses`"
-                        ", `ages` or `metallicities` is not provided, setting "
-                        "`stars` object to `None`"
-                    )
+                warn(
+                    "In `load_stars`: one of either `initial_masses`"
+                    ", `ages` or `metallicities` is not provided, setting "
+                    "`stars` object to `None`"
+                )
                 self.stars = None
                 return None
             else:
@@ -234,7 +259,6 @@ class Galaxy(BaseGalaxy):
         masses=None,
         metallicities=None,
         gas=None,
-        verbose=True,
         **kwargs,
     ):
         """
@@ -248,8 +272,6 @@ class Galaxy(BaseGalaxy):
                 gas particle metallicity (total metal fraction)
             gas (gas particle object)
                 A pre-existing gas particle object to use. Defaults to None.
-            verbose (bool)
-                If True, print warnings and information messages.
         **kwargs
 
         Returns:
@@ -261,12 +283,11 @@ class Galaxy(BaseGalaxy):
         else:
             # If nothing has been provided, just set to None and return
             if (masses is None) | (metallicities is None):
-                if verbose:
-                    print(
-                        "In `load_stars`: one of either `masses`"
-                        " or `metallicities` is not provided, setting "
-                        "`gas` object to `None`"
-                    )
+                warn(
+                    "In `load_gas`: one of either `masses`"
+                    " or `metallicities` is not provided, setting "
+                    "`gas` object to `None`"
+                )
                 self.gas = None
                 return None
             else:
@@ -447,27 +468,14 @@ class Galaxy(BaseGalaxy):
         )
 
     def integrate_particle_spectra(self):
-        """
-        Integrates all particle spectra on any attached components.
-        """
-
+        """Integrate all particle spectra on any attached components."""
         # Handle stellar spectra
         if self.stars is not None:
-            # Loop over stellar particle spectra
-            for key, sed in self.stars.particle_spectra.items():
-                self.stars.spectra[key] = Sed(
-                    sed.lam,
-                    np.sum(sed._lnu, axis=0),
-                )
+            self.stars.integrate_particle_spectra()
 
         # Handle black hole spectra
         if self.black_holes is not None:
-            # Loop over stellar particle spectra
-            for key, sed in self.black_holes.particle_spectra.items():
-                self.black_holes.spectra[key] = Sed(
-                    sed.lam,
-                    np.sum(sed._lnu, axis=0),
-                )
+            self.black_holes.integrate_particle_spectra()
 
         # Handle gas spectra
         if self.gas is not None:
@@ -1448,7 +1456,7 @@ class Galaxy(BaseGalaxy):
 
         #  Warn if we have stars to plot in this bin
         if self.stars.ages[mask].size == 0:
-            print("The SFR is 0! (there are 0 stars in the age bin)")
+            warn("The SFR is 0! (there are 0 stars in the age bin)")
 
         # Instantiate the Image object.
         img = Image(resolution=resolution, fov=fov)

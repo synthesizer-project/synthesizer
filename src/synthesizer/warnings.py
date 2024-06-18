@@ -72,3 +72,26 @@ def deprecated(func, message=None, category=FutureWarning):
         return func(*args, **kwargs)
 
     return wrapped
+
+
+def warn(message, category=RuntimeWarning, stacklevel=3):
+    """
+    Issue a warning to the end user.
+
+    A message must be specified, and a category can be optionally specified.
+    RuntimeWarning will, by default, warn the end user, and can be silenced by
+    setting the PYTHONWARNINGS environment variable.
+
+    This function is a simple wrapper around the `warnings.warn` function but
+    with a default stacklevel of 3, removing the need to specify it each time.
+
+    Args:
+        message (str)
+            The message to be displayed to the end user.
+        category (Warning)
+            The warning category to use. `RuntimeWarning` by default.
+        stacklevel (int)
+            The number of stack levels to skip when displaying the warning.
+
+    """
+    warnings.warn(message, category=category, stacklevel=stacklevel)

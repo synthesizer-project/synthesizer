@@ -13,7 +13,9 @@
 #include <numpy/ndarraytypes.h>
 
 /* Define a macro to handle that bzero is non-standard. */
+#ifndef bzero
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
+#endif
 
 /**
  * @brief Function to compute an image from particle data and a kernel.
@@ -42,8 +44,12 @@
  */
 PyObject *make_img(PyObject *self, PyObject *args) {
 
-  const double res, threshold;
-  const int npix_x, npix_y, npart, kdim;
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
+
+  double res, threshold;
+  int npix_x, npix_y, npart, kdim;
   PyArrayObject *np_pix_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys;
 
@@ -54,14 +60,38 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   /* Get pointers to the actual data. */
   const double *pix_values = PyArray_DATA(np_pix_values);
+  if (pix_values == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract pix_values.");
+    return NULL;
+  }
   const double *smoothing_lengths = PyArray_DATA(np_smoothing_lengths);
+  if (smoothing_lengths == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract smoothing_lengths.");
+    return NULL;
+  }
   const double *xs = PyArray_DATA(np_xs);
+  if (xs == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract xs.");
+    return NULL;
+  }
   const double *ys = PyArray_DATA(np_ys);
+  if (ys == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract ys.");
+    return NULL;
+  }
   const double *kernel = PyArray_DATA(np_kernel);
+  if (kernel == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract kernel.");
+    return NULL;
+  }
 
   /* Allocate the image.. */
   int npix = npix_x * npix_y;
   double *img = malloc(npix * sizeof(double));
+  if (img == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for img.");
+    return NULL;
+  }
   bzero(img, npix * sizeof(double));
 
   /* Loop over positions including the sed */
@@ -84,6 +114,11 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
     /* Create an empty kernel for this particle. */
     double *part_kernel = malloc(kernel_cdim * kernel_cdim * sizeof(double));
+    if (part_kernel == NULL) {
+      PyErr_SetString(PyExc_MemoryError,
+                      "Failed to allocate memory for part_kernel.");
+      return NULL;
+    }
     bzero(part_kernel, kernel_cdim * kernel_cdim * sizeof(double));
 
     /* Track the kernel sum for normalisation. */
@@ -175,7 +210,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 }
 
 static PyMethodDef ImageMethods[] = {
-    {"make_img", make_img, METH_VARARGS,
+    {"make_img", (PyCFunction)make_img, METH_VARARGS,
      "Method for smoothing particles into an image."},
     {NULL, NULL, 0, NULL},
 };

@@ -18,6 +18,7 @@ import numpy as np
 from synthesizer import exceptions
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
+from synthesizer.warnings import warn
 
 
 class Gas(Particles):
@@ -129,15 +130,16 @@ class Gas(Particles):
         # Set the smoothing lengths for these gas particles
         self.smoothing_lengths = smoothing_lengths
 
-        #
-        if (dust_to_metal_ratio is None) & (dust_masses is None):
-            if verbose:
-                print(
-                    (
-                        "Neither dust mass nor dust to metal ratio "
-                        "provided. Assuming dust to metal ratio = 0.3"
-                    )
-                )
+        # None metallicity warning already captured when loading gas
+        if (
+            (self.metallicities is not None)
+            & (dust_to_metal_ratio is None)
+            & (dust_masses is None)
+        ):
+            warn(
+                "Neither dust mass nor dust to metal ratio "
+                "provided. Assuming dust to metal ratio = 0.3"
+            )
             self.dust_to_metal_ratio = 0.3
             self.calculate_dust_mass()
         elif dust_to_metal_ratio is not None:
