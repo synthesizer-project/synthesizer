@@ -162,6 +162,9 @@ class NLRIncidentEmission(EmissionModel):
             **kwargs,
         )
 
+        # Flag which line region this is
+        self.line_region = "nlr"
+
 
 class BLRIncidentEmission(EmissionModel):
     """
@@ -192,6 +195,9 @@ class BLRIncidentEmission(EmissionModel):
             extract="incident",
             **kwargs,
         )
+
+        # Flag which line region this is
+        self.line_region = "blr"
 
 
 class NLRTransmittedEmission(EmissionModel):
@@ -234,6 +240,9 @@ class NLRTransmittedEmission(EmissionModel):
             **kwargs,
         )
 
+        # Flag which line region this is
+        self.line_region = "nlr"
+
 
 class BLRTransmittedEmission(EmissionModel):
     """
@@ -275,6 +284,9 @@ class BLRTransmittedEmission(EmissionModel):
             **kwargs,
         )
 
+        # Flag which line region this is
+        self.line_region = "blr"
+
 
 class DiscIncidentEmission(EmissionModel):
     """
@@ -306,6 +318,10 @@ class DiscIncidentEmission(EmissionModel):
             extract="incident",
             **kwargs,
         )
+
+        # Flag which line region this is (needed for extraction and
+        # technically this is NLR)
+        self.line_region = "nlr"
 
 
 class DiscTranmittedEmission(EmissionModel):
@@ -480,6 +496,7 @@ class TorusEmission(EmissionModel):
             self,
             label=label,
             dust_emission_model=torus_emission_model,
+            dust_lum_intrinsic=scale_by,
             **kwargs,
         )
 
