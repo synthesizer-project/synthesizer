@@ -83,7 +83,7 @@ master_doc = "index"
 
 html_static_path = []
 
-html_logo = "synth.png"
+html_logo = "img/synthesizer_logo.png"
 
 # html_theme = 'sphinx_rtd_theme'
 html_theme = "furo"
