@@ -685,12 +685,12 @@ class Sed:
             self.measure_window_lnu(
                 red,
                 nthreads=nthreads,
-                method=integration_method,
+                integration_method=integration_method,
             ).value
             / self.measure_window_lnu(
                 blue,
                 nthreads=nthreads,
-                method=integration_method,
+                integration_method=integration_method,
             ).value
         )
 
@@ -724,7 +724,7 @@ class Sed:
             blue,
             red,
             nthreads=nthreads,
-            method=integration_method
+            integration_method=integration_method
         )
 
     def measure_d4000(
@@ -772,7 +772,7 @@ class Sed:
             blue,
             red,
             nthreads=nthreads,
-            method=integration_method,
+            integration_method=integration_method,
         )
 
     def measure_beta(
@@ -838,12 +838,12 @@ class Sed:
             lnu_blue = self.measure_window_lnu(
                 blue,
                 nthreads=nthreads,
-                method=integration_method,
+                integration_method=integration_method,
             )
             lnu_red = self.measure_window_lnu(
                 red,
                 nthreads=nthreads,
-                method=integration_method,
+                integration_method=integration_method,
             )
 
             # Measure beta
