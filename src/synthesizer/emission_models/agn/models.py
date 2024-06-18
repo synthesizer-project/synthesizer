@@ -10,7 +10,7 @@ Example usage:
         grid=grid,
         dust_curve=dust_curve,
         tau_v=tau_v,
-        dust_emission_model=dust_emission_model,
+        generator=dust_emission_model,
         fesc=0.0,
     )
 
@@ -481,7 +481,7 @@ class TorusEmission(EmissionModel):
         EmissionModel.__init__(
             self,
             label=label,
-            dust_emission_model=torus_emission_model,
+            generator=torus_emission_model,
             dust_lum_intrinsic="torus_fraction",
             **kwargs,
         )

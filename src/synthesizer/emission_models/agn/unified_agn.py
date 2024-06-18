@@ -237,6 +237,6 @@ class UnifiedAGN(EmissionModel):
         """Make the torus spectra."""
         return EmissionModel(
             label="torus",
-            dust_emission_model=torus_emission_model,
+            generator=torus_emission_model,
             scale_by="torus_fraction",
         )
