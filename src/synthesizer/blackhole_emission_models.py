@@ -12,7 +12,7 @@ Example Usage:
 """
 
 import numpy as np
-from unyt import Hz, K, cm, deg, km, rad, s, unyt_array
+from unyt import K, cm, deg, km, rad, s
 
 from synthesizer import exceptions
 from synthesizer.dust.emission import Greybody
@@ -20,92 +20,6 @@ from synthesizer.grid import Grid
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 from synthesizer.warnings import warn
-
-
-class Template:
-    """
-    Use a template for the emission model.
-
-    The template is simply scaled by bolometric luminosity.
-
-    Attributes:
-        sed (Sed)
-            The template spectra for the AGN.
-        normalisation (unyt_quantity)
-            The normalisation for the spectra. In reality this is the
-            bolometric luminosity.
-    """
-
-    def __init__(self, filename=None, lam=None, lnu=None):
-        """
-        Initialise the Template.
-
-        Args:
-            filename (str)
-                The filename (including full path) to a file containing the
-                template. The file should contain two columns with wavelength
-                and luminosity (lnu).
-            lam (array)
-                Wavelength array.
-            lnu (array)
-                Luminosity array.
-
-        """
-
-        # Ensure we have been given units
-        if lam is not None and not isinstance(lam, unyt_array):
-            raise exceptions.MissingUnits("lam must be provided with units")
-        if lnu is not None and not isinstance(lnu, unyt_array):
-            raise exceptions.MissingUnits("lam must be provided with units")
-
-        if filename:
-            raise exceptions.UnimplementedFunctionality(
-                "Not yet implemented! Feel free to implement and raise a "
-                "pull request. Guidance for contributing can be found at "
-                "https://github.com/flaresimulations/synthesizer/blob/main/"
-                "docs/CONTRIBUTING.md"
-            )
-
-        if lam is not None and lnu is not None:
-            # initialise a synthesizer Sed object
-            self.sed = Sed(lam=lam, lnu=lnu)
-
-            # normalise
-            # TODO: add a method to Sed that does this.
-            self.normalisation = self.sed.measure_bolometric_luminosity()
-            self.sed.lnu /= self.normalisation.value
-
-        else:
-            raise exceptions.MissingArgument(
-                "Either a filename or both lam and lnu must be provided!"
-            )
-
-    def get_spectra(self, bolometric_luminosity):
-        """
-
-        Calculating the blackhole spectra. This is done by simply scaling the
-        normalised template by the bolometric luminosity
-
-        Args:
-            bolometric_luminosity (float)
-                The bolometric luminosity of the blackhole(s) for scaling.
-
-        """
-
-        # Ensure we have units for safety
-        if bolometric_luminosity is not None and not isinstance(
-            bolometric_luminosity, unyt_array
-        ):
-            raise exceptions.MissingUnits(
-                "bolometric luminosity must be provided with units"
-            )
-
-        return {
-            "intrinsic": bolometric_luminosity.to(
-                self.sed.lnu.units * Hz
-            ).value
-            * self.sed,
-        }
 
 
 class UnifiedAGN:
