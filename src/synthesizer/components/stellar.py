@@ -13,7 +13,7 @@ from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.line import Line, LineCollection
 from synthesizer.sed import Sed, plot_spectra
 from synthesizer.units import Quantity
-from synthesizer.warnings import warn
+from synthesizer.warnings import deprecated, warn
 
 
 class StarsComponent:
@@ -90,6 +90,7 @@ class StarsComponent:
             )
         )
 
+    @deprecated
     def get_spectra_nebular_continuum(
         self,
         grid,
@@ -149,6 +150,7 @@ class StarsComponent:
 
         return nebcont
 
+    @deprecated
     def get_spectra_linecont(
         self,
         grid,
@@ -208,6 +210,7 @@ class StarsComponent:
 
         return linecont
 
+    @deprecated
     def get_spectra_incident(
         self,
         grid,
@@ -260,6 +263,7 @@ class StarsComponent:
 
         return sed
 
+    @deprecated
     def get_spectra_transmitted(
         self,
         grid,
@@ -318,6 +322,7 @@ class StarsComponent:
 
         return sed
 
+    @deprecated
     def get_spectra_nebular(
         self,
         grid,
@@ -378,6 +383,7 @@ class StarsComponent:
 
         return sed
 
+    @deprecated
     def get_spectra_reprocessed(
         self,
         grid,
@@ -537,6 +543,7 @@ class StarsComponent:
 
         return reprocessed
 
+    @deprecated
     def get_spectra_screen(
         self,
         grid,
@@ -608,6 +615,7 @@ class StarsComponent:
 
         return emergent
 
+    @deprecated
     def get_spectra_pacman(
         self,
         grid,
@@ -1106,6 +1114,7 @@ class StarsComponent:
         else:
             return self.spectra["emergent"]
 
+    @deprecated
     def get_spectra_CharlotFall(
         self,
         grid,
@@ -1567,3 +1576,102 @@ class StarsComponent:
             draw_legend=isinstance(spectra, dict),
             **kwargs,
         )
+
+    def get_mask(self, attr, thresh, op, mask=None):
+        """
+        This method is a prototype for generating masks for a stellar
+        component. It is redefined on the child classes.
+        """
+        raise Warning(
+            (
+                "get_masks should be overloaded by child classes:\n"
+                "`particle.Particles`\n"
+                "`parametric.Stars`\n"
+                "You should not be seeing this!!!"
+            )
+        )
+
+    def get_spectra(
+        self,
+        emission_model,
+        dust_curves=None,
+        tau_v=None,
+        fesc=None,
+        mask=None,
+        verbose=True,
+        **kwargs,
+    ):
+        """
+        Generate stellar spectra as described by the emission model.
+
+        If the emission model defines a dust_curve or fesc and no overide
+        is provided in the arguments to this function
+
+        Args:
+            emission_model (EmissionModel):
+                The emission model to use.
+            dust_curves (dict):
+                An overide to the emisison model dust curves. Either:
+                    - None, indicating the dust_curves defined on the emission
+                      models should be used.
+                    - A single dust curve to apply to all emission models.
+                    - A dictionary of the form:
+                          {<label>: <dust_curve instance>}
+                      to use a specific dust curve instance with particular
+                      properties.
+            tau_v (dict):
+                An overide to the dust model optical depth. Either:
+                    - None, indicating the tau_v defined on the emission model
+                        should be used.
+                    - A float to use as the optical depth for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<tau_v>)}
+                        to use a specific optical depth with a particular
+                        model or
+                            {<label>: str(<attribute>)}
+                        to use an attribute of the component as the optical
+                        depth.
+            fesc (dict):
+                An overide to the emission model escape fraction. Either:
+                    - None, indicating the fesc defined on the emission model
+                      should be used.
+                    - A float to use as the escape fraction for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<fesc>)}
+                      to use a specific escape fraction with a particular
+                      model or
+                            {<label>: str(<attribute>)}
+                      to use an attribute of the component as the escape
+                      fraction.
+            mask (dict):
+                An overide to the emission model mask. Either:
+                    - None, indicating the mask defined on the emission model
+                      should be used.
+                    - A dictionary of the form:
+                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
+                      to add a specific mask to a particular model.
+            verbose (bool)
+                Are we talking?
+            kwargs (dict)
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            dict
+                A dictionary of spectra which can be attached to the
+                appropriate spectra attribute of the component
+                (spectra/particle_spectra)
+        """
+        # Get the spectra
+        self.spectra = emission_model._get_spectra(
+            component=self,
+            generator=self.generate_lnu,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            fesc=fesc,
+            mask=mask,
+            verbose=verbose,
+            **kwargs,
+        )
+
+        return self.spectra[emission_model.label]

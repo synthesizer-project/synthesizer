@@ -1,0 +1,16 @@
+STELLAR_MODELS = [
+    "IncidentEmission",
+    "LineContinuumEmission",
+    "TransmittedEmission",
+    "EscapedEmission",
+    "NebularContinuumEmission",
+    "NebularEmission",
+    "ReprocessedEmission",
+    "AttenuatedEmission",
+    "EmergentEmission",
+    "DustEmission",
+    "TotalEmission",
+    "CharlotFall2000",
+    "PacmanEmission",
+    "BimodalPacmanEmission",
+]
