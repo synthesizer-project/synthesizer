@@ -1515,7 +1515,7 @@ class Filter:
         nu=None,
         verbose=True,
         nthreads=1,
-        method="trapz",
+        integration_method="trapz",
     ):
         """
         Apply the transmission curve to any array.
@@ -1547,7 +1547,7 @@ class Filter:
             nthreads (int)
                 The number of threads to use in the integration. If -1 then
                 all available threads are used. Defaults to 1.
-            method (str)
+            integration_method (str)
                 The method to use in the integration. Can be either "trapz"
                 or "simps". Defaults to "trapz".
 
@@ -1560,6 +1560,9 @@ class Filter:
             ValueError
                 If the shape of the transmission and wavelength array differ
                 the convolution cannot be done.
+            InconsistentArguments
+                If `integration_method` is an incompatible option an error
+                is raised.
         """
         # Initialise the xs were about to set and use
         xs = None
@@ -1642,13 +1645,13 @@ class Filter:
             xs_in_band,
             transmission / xs_in_band,
             nthreads=nthreads,
-            method=method,
+            method=integration_method,
         )
         sum_den = integrate_last_axis(
             xs_in_band,
             t_in_band / xs_in_band,
             nthreads=nthreads,
-            method=method,
+            method=integration_method,
         )
         sum_in_band = sum_per_x / sum_den
 

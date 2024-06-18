@@ -493,7 +493,11 @@ class Sed:
         """
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
-    def measure_bolometric_luminosity(self, method="trapz", nthreads=1):
+    def measure_bolometric_luminosity(
+        self,
+        integration_method="trapz",
+        nthreads=1
+    ):
         """
         Calculate the bolometric luminosity of the SED.
 
@@ -501,9 +505,9 @@ class Sed:
         wavelength axis) for an arbitrary number of dimensions.
 
         Args:
-            method (str)
-                The method used to calculate the bolometric luminosity. Options
-                include 'trapz' and 'simps'.
+            integration_method (str)
+                The integration method used to calculate the bolometric
+                luminosity. Options include 'trapz' and 'simps'.
             nthreads (int)
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
@@ -514,7 +518,8 @@ class Sed:
 
         Raises:
             InconsistentArguments
-                If method is an incompatible option an error is raised.
+                If `integration_method` is an incompatible option an error
+                is raised.
         """
         start = tic()
 
@@ -526,22 +531,22 @@ class Sed:
             self._nu,
             self._lnu,
             nthreads=nthreads,
-            method=method,
+            method=integration_method,
         )
         toc("Calculating bolometric luminosity", start)
 
         return self.bolometric_luminosity
 
-    def measure_window_luminosity(self, window, method="trapz", nthreads=1):
+    def measure_window_luminosity(self, window, integration_method="trapz", nthreads=1):
         """
         Measure the luminosity in a spectral window.
 
         Args:
             window (tuple, float)
                 The window in wavelength.
-            method (str)
-                The method used to calculate the bolometric luminosity. Options
-                include 'trapz' and 'simps'.
+            integration_method (str)
+                The integration method used to calculate the window
+                luminosity. Options include 'trapz' and 'simps'.
             nthreads (int)
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
@@ -552,7 +557,8 @@ class Sed:
 
         Raises:
             UnrecognisedOption
-                If method is an incompatible option an error is raised.
+                If `integration_method` is an incompatible option
+                an error is raised.
         """
         # Define the "transmission" for the window
         transmission = (self.lam > window[0]) & (self.lam < window[1])
@@ -566,7 +572,7 @@ class Sed:
                 self._nu,
                 self._lnu * transmission,
                 nthreads=nthreads,
-                method=method,
+                method=integration_method,
             )
             * self.lnu.units
             * Hz
@@ -574,15 +580,15 @@ class Sed:
 
         return luminosity
 
-    def measure_window_lnu(self, window, method="trapz", nthreads=1):
+    def measure_window_lnu(self, window, integration_method="trapz", nthreads=1):
         """
         Measure lnu in a spectral window.
 
         Args:
             window (tuple, float)
                 The window in wavelength.
-            method (str)
-                The method to use on the window. Options include
+            integration_method (str)
+                The integration method to use on the window. Options include
                 'average', or for integration 'trapz', and 'simps'.
             nthreads (int)
                 The number of threads to use for the integration. If -1 then
@@ -594,14 +600,15 @@ class Sed:
 
          Raises:
             UnrecognisedOption
-                If method is an incompatible option an error is raised.
+                If `integration_method` is an incompatible option an error
+                is raised.
         """
         # Define a pseudo transmission function
         transmission = (self.lam > window[0]) & (self.lam < window[1])
         transmission = transmission.astype(float)
 
         # Apply the correct method
-        if method == "average":
+        if integration_method == "average":
             # Apply to the correct axis of the spectra
             if self._spec_dims == 2:
                 lnu = (
@@ -623,7 +630,7 @@ class Sed:
                 self._nu,
                 self._lnu * transmission / self.nu,
                 nthreads=nthreads,
-                method=method,
+                method=integration_method,
             )
 
             # Transmission integral
@@ -631,7 +638,7 @@ class Sed:
                 self._nu,
                 transmission / self.nu,
                 nthreads=nthreads,
-                method=method,
+                method=integration_method,
             )
 
             # Compute lnu
@@ -639,7 +646,7 @@ class Sed:
 
         return lnu.to(self.lnu.units)
 
-    def measure_break(self, blue, red, nthreads=1, method="trapz"):
+    def measure_break(self, blue, red, nthreads=1, integration_method="trapz"):
         """
         Measure a spectral break (e.g. the Balmer break) using two windows.
 
@@ -651,28 +658,33 @@ class Sed:
             nthreads (int)
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
-            method (str)
-                The method used to calculate the bolometric luminosity. Options
-                include 'trapz' and 'simps'.
+            integration_method (str)
+                The integration method used. Options include 'trapz'
+                and 'simps'.
 
         Returns:
             break
                 The ratio of the luminosity in the two windows.
+
+        Raises:
+            UnrecognisedOption
+                If `integration_method` is an incompatible option an error
+                is raised.
         """
         return (
             self.measure_window_lnu(
                 red,
                 nthreads=nthreads,
-                method=method,
+                method=integration_method,
             ).value
             / self.measure_window_lnu(
                 blue,
                 nthreads=nthreads,
-                method=method,
+                method=integration_method,
             ).value
         )
 
-    def measure_balmer_break(self, nthreads=1, method="trapz"):
+    def measure_balmer_break(self, nthreads=1, integration_method="trapz"):
         """
         Measure the Balmer break.
 
@@ -682,21 +694,26 @@ class Sed:
             nthreads (int)
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
-            method (str)
-                The method used to calculate the window luminosity. Options
-                include 'trapz' and 'simps'.
+            integration_method (str)
+                The integration method used. Options include 'trapz'
+                and 'simps'.
 
         Returns:
             float
                 The Balmer break strength
+
+        Raises:
+            UnrecognisedOption
+                If `integration_method` is an incompatible option an error
+                is raised.
         """
         blue = (3400, 3600) * angstrom
         red = (4150, 4250) * angstrom
 
-        return self.measure_break(blue, red, nthreads=nthreads, method=method)
+        return self.measure_break(blue, red, nthreads=nthreads, method=integration_method)
 
     def measure_d4000(
-        self, definition="Bruzual83", nthreads=1, method="trapz"
+        self, definition="Bruzual83", nthreads=1, integration_method="trapz"
     ):
         """
         Measure the D4000 index.
@@ -709,9 +726,9 @@ class Sed:
             nthreads (int)
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
-            method (str)
-                The method used to calculate the window luminosity. Options
-                include 'trapz' and 'simps'.
+            integration_method (str)
+                The integration method used. Options include 'trapz'
+                and 'simps'.
 
         Returns:
             float
@@ -719,7 +736,8 @@ class Sed:
 
          Raises:
             UnrecognisedOption
-                If definition is an incompatible option an error is raised.
+                If `definition` or `integration_method` is an
+                incompatible option an error is raised.
         """
         # Define the requested definition
         if definition == "Bruzual83":
@@ -735,10 +753,15 @@ class Sed:
                 "Options are 'Bruzual83' or 'Balogh'"
             )
 
-        return self.measure_break(blue, red, nthreads=nthreads, method=method)
+        return self.measure_break(
+            blue,
+            red,
+            nthreads=nthreads,
+            method=integration_method,
+        )
 
     def measure_beta(
-        self, window=(1250.0, 3000.0), nthreads=1, method="trapz"
+        self, window=(1250.0, 3000.0), nthreads=1, integration_method="trapz"
     ):
         """
         Measure the UV continuum slope (beta).
@@ -753,13 +776,18 @@ class Sed:
             nthreads (int)
                 The number of threads to use for the integration. If -1 then
                 all available threads are used.
-            method (str)
-                The method used to calculate the window luminosity. Options
-                include 'trapz' and 'simps'.
+            integration_method (str)
+                The integration method used to calculate the window luminosity.
+                Options include 'trapz' and 'simps'.
 
         Returns:
             float
                 The UV continuum slope (beta)
+
+        Raises:
+            UnrecognisedOption
+                If `integration_method` is an incompatible option an error
+                is raised.                
         """
         # If a single window is provided
         if len(window) == 2:
@@ -795,12 +823,12 @@ class Sed:
             lnu_blue = self.measure_window_lnu(
                 blue,
                 nthreads=nthreads,
-                method=method,
+                method=integration_method,
             )
             lnu_red = self.measure_window_lnu(
                 red,
                 nthreads=nthreads,
-                method=method,
+                method=integration_method,
             )
 
             # Measure beta
