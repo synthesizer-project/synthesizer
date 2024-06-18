@@ -218,15 +218,6 @@ Grid list
         - maraston-rhb_bpl-0.1,100-2.35 
 
 
-
-Loading and using Grids
-=======================
-
-.. toctree::
-   :maxdepth: 2
-
-   grids_example
-
 How to create your own grids
 ============================
 
@@ -235,3 +226,8 @@ How to create your own grids
 
    creating_grids
 
+
+Loading and using Grids
+=======================
+
+On the next page we demonstrate how to load and explore a grid in `synthesizer`.
