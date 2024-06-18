@@ -695,7 +695,9 @@ class Stars(StarsComponent):
 
         # Calculate the current luminosity in scale_filter
         sed = self.spectra[spectra_type]
-        current_lum = scale_filter.apply_filter(sed.lnu, nu=sed.nu)
+        current_lum = (
+            scale_filter.apply_filter(sed.lnu, nu=sed.nu) * sed.lnu.units
+        )
 
         # Calculate the conversion ratio between the requested and current
         # luminosity
@@ -759,7 +761,9 @@ class Stars(StarsComponent):
             )
 
         # Calculate the current flux in scale_filter
-        current_flux = scale_filter.apply_filter(sed.fnu, nu=sed.obsnu)
+        current_flux = (
+            scale_filter.apply_filter(sed.fnu, nu=sed.obsnu) * sed.fnu.units
+        )
 
         # Calculate the conversion ratio between the requested and current
         # flux

@@ -128,6 +128,7 @@ class Stars(Particles, StarsComponent):
         s_hydrogen=None,
         softening_length=None,
         centre=None,
+        metallicity_floor=1e-5,
     ):
         """
         Intialise the Stars instance. The first 3 arguments are always
@@ -178,6 +179,7 @@ class Stars(Particles, StarsComponent):
             softening_length=softening_length,
             nparticles=len(initial_masses),
             centre=centre,
+            metallicity_floor=metallicity_floor,
         )
         StarsComponent.__init__(self, ages, metallicities)
 
@@ -218,11 +220,6 @@ class Stars(Particles, StarsComponent):
         self.s_oxygen = s_oxygen
         self.s_hydrogen = s_hydrogen
 
-        # Compute useful logged quantities
-        # TODO: should be changed to a property to avoid data duplication
-        self.log10ages = np.log10(self.ages)
-        self.log10metallicities = np.log10(self.metallicities)
-
         # Set up IMF properties (updated later)
         self.imf_hmass_slope = None  # slope of the imf
 
@@ -239,6 +236,34 @@ class Stars(Particles, StarsComponent):
         # Particle stars can calculate and attach a SFZH analogous to a
         # parametric galaxy
         self.sfzh = None
+
+    @property
+    def log10ages(self):
+        """
+        Return stellar particle ages in log (base 10)
+
+        Returns:
+            log10ages (array)
+                log10 stellar ages
+        """
+        return np.log10(self.ages)
+
+    @property
+    def log10metallicities(self):
+        """
+        Return stellar particle ages in log (base 10).
+        Zero valued metallicities are set to `metallicity_floor`,
+        which is set on initialisation of this stars object. To
+        check it, run `stars.metallicity_floor`.
+
+        Returns:
+            log10metallicities (array)
+                log10 stellar metallicities.
+        """
+        mets = self.metallicities
+        mets[mets == 0.0] = self.metallicity_floor
+
+        return np.log10(mets)
 
     def _check_star_args(self):
         """
@@ -329,12 +354,14 @@ class Stars(Particles, StarsComponent):
 
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
+            np.ascontiguousarray(grid.log10ages, dtype=np.float64),
+            np.ascontiguousarray(grid.log10metallicities, dtype=np.float64),
         ]
         part_props = [
             np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
-            np.ascontiguousarray(self.metallicities[mask], dtype=np.float64),
+            np.ascontiguousarray(
+                self.log10metallicities[mask], dtype=np.float64
+            ),
         ]
         part_mass = np.ascontiguousarray(
             self._initial_masses[mask],
@@ -707,12 +734,14 @@ class Stars(Particles, StarsComponent):
 
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
+            np.ascontiguousarray(grid.log10ages, dtype=np.float64),
+            np.ascontiguousarray(grid.log10metallicities, dtype=np.float64),
         ]
         part_props = [
             np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
-            np.ascontiguousarray(self.metallicities[mask], dtype=np.float64),
+            np.ascontiguousarray(
+                self.log10metallicities[mask], dtype=np.float64
+            ),
         ]
         part_mass = np.ascontiguousarray(
             self._initial_masses[mask],
