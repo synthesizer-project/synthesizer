@@ -1,4 +1,4 @@
-"""A submodule containing the definitions of common stellar emisison models.
+"""A submodule containing the definitions of common stellar emission models.
 
 This module contains the definitions of commoon stellar emission models that
 can be used "out of the box" to generate spectra from components or as a
@@ -20,6 +20,7 @@ Example usage:
 """
 
 from synthesizer.emission_models.base_model import EmissionModel
+from synthesizer.emission_models.models import AttenuatedEmission, DustEmission
 
 
 class IncidentEmission(EmissionModel):
@@ -358,51 +359,6 @@ class ReprocessedEmission(EmissionModel):
         )
 
 
-class AttenuatedEmission(EmissionModel):
-    """
-    An emission model that defines the attenuated emission.
-
-    This defines the attenuation of the reprocessed emission by dust.
-
-    This is a child of the EmissionModel class for a full description of the
-    parameters see the EmissionModel class.
-
-    Attributes:
-        grid (synthesizer.grid.Grid): The grid object to extract from.
-        dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
-        apply_dust_to (EmissionModel): The emission model to apply the dust to.
-        tau_v (float): The optical depth of the dust.
-        label (str): The label for this emission model.
-    """
-
-    def __init__(
-        self,
-        dust_curve,
-        apply_dust_to,
-        tau_v,
-        label="attenuated",
-        **kwargs,
-    ):
-        """
-        Initialise the AttenuatedEmission object.
-
-        Args:
-            grid (synthesizer.grid.Grid): The grid object to extract from.
-            dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
-            apply_dust_to (EmissionModel): The model to apply the dust to.
-            tau_v (float): The optical depth of the dust.
-            label (str): The label for this emission model.
-        """
-        EmissionModel.__init__(
-            self,
-            label=label,
-            dust_curve=dust_curve,
-            apply_dust_to=apply_dust_to,
-            tau_v=tau_v,
-            **kwargs,
-        )
-
-
 class EmergentEmission(EmissionModel):
     """
     An emission model that defines the emergent emission.
@@ -468,51 +424,6 @@ class EmergentEmission(EmissionModel):
             label=label,
             combine=(attenuated, escaped),
             fesc=fesc,
-            **kwargs,
-        )
-
-
-class DustEmission(EmissionModel):
-    """
-    An emission model that defines the dust emission.
-
-    This defines the dust emission model to use.
-
-    This is a child of the EmissionModel class for a full description of the
-    parameters see the EmissionModel class.
-
-    Attributes:
-        dust_emission_model (synthesizer.dust.DustEmissionModel): The dust
-            emission model to use.
-        label (str): The label for this emission model.
-    """
-
-    def __init__(
-        self,
-        dust_emission_model,
-        dust_lum_intrinsic=None,
-        dust_lum_attenuated=None,
-        label="dust_emission",
-        **kwargs,
-    ):
-        """
-        Initialise the DustEmission object.
-
-        Args:
-            dust_emission_model (synthesizer.dust.DustEmissionModel): The dust
-                emission model to use.
-            dust_lum_intrinsic (EmissionModel): The intrinsic spectra to use
-                when calculating dust luminosity.
-            dust_lum_attenuated (EmissionModel): The attenuated spectra to use
-                when calculating dust luminosity.
-            label (str): The label for this emission model.
-        """
-        EmissionModel.__init__(
-            self,
-            label=label,
-            dust_emission_model=dust_emission_model,
-            dust_lum_intrinsic=dust_lum_intrinsic,
-            dust_lum_attenuated=dust_lum_attenuated,
             **kwargs,
         )
 
