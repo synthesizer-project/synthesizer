@@ -591,15 +591,12 @@ class IR_templates:
         self.umin_id = umin_id
         self.alpha_id = alpha_id
 
-<<<<<<< HEAD
-    def get_spectra(self, _lam, dust_components=False, verbose=True):
-=======
+
     def get_spectra(
         self,
         _lam: Union[NDArray[np.float64], unyt_array],
         dust_components: bool = False,
     ) -> Union[tuple[Sed, Sed], Sed]:
->>>>>>> added CMB heating to dust emission
         """
         Returns the lnu for the provided wavelength grid
 
@@ -613,14 +610,8 @@ class IR_templates:
         """
 
         if self.template == "DL07":
-<<<<<<< HEAD
-            if verbose:
-                print("Using the Draine & Li 2007 dust models")
-            self.dl07(self.grid)
-=======
             print("Using the Draine & Li 2007 dust models")
             self.dl07()  # type: ignore
->>>>>>> added CMB heating to dust emission
         else:
             raise exceptions.UnimplementedFunctionality(
                 f"{self.template} not a valid model!"
