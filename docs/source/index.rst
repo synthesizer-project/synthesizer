@@ -69,23 +69,22 @@ License
 Synthesizer is free software made available under the GNU General Public License v3.0. For details see the `LICENSE <https://github.com/flaresimulations/synthesizer/blob/main/LICENSE.md>`_.
 
 Contents
---------
+^^^^^^^^
 
 .. toctree::
    :maxdepth: 1
    
    getting_started/getting_started
-   
+   grids/grids
    galaxies/galaxies
+   components/components
+   emission_models/emission_models
    spectra
    units
    sed
    lines
    filters
-   blackholes/blackholes
-   parametric/parametric
-   cosmo/cosmo
    imaging/imaging
-   creating_grids/creating_grids
+   advanced/advanced
    auto_examples/index
    API
