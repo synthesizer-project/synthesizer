@@ -5,6 +5,17 @@ to generate spectra from components or as a foundation to work from when
 creating more complex models.
 
 Example usage:
+    # Create the Unified AGN model
+    model = UnifiedAGN(
+        nlr_grid=nlr_grid,
+        blr_grid=blr_grid,
+        covering_fraction_nlr=0.5,
+        covering_fraction_blr=0.5,
+        torus_emission_model=torus_emission_model,
+    )
+
+    # Generate a spectra
+    spectra = black_holes.get_spectra(model)
 """
 
 from unyt import deg
@@ -45,7 +56,8 @@ class UnifiedAGN(EmissionModel):
 
     def __init__(
         self,
-        grid,
+        nlr_grid,
+        blr_grid,
         covering_fraction_nlr,
         covering_fraction_blr,
         torus_emission_model,
@@ -54,17 +66,20 @@ class UnifiedAGN(EmissionModel):
         Initialize the UnifiedAGN model.
 
         Args:
-            grid (synthesizer.grid.Grid): The grid to use.
+            nlr_grid (synthesizer.grid.Grid): The grid for the NLR.
+            blr_grid (synthesizer.grid.Grid): The grid for the BLR.
             covering_fraction_nlr (float): The covering fraction of the NLR.
             covering_fraction_blr (float): The covering fraction of the BLR.
             torus_emission_model (synthesizer.dust.DustEmissionModel): The dust
                 emission model to use for the torus.
         """
         # Get the incident istropic disc emission model
-        self.disc_incident_isotropic = self._make_disc_incident_isotropic(grid)
+        self.disc_incident_isotropic = self._make_disc_incident_isotropic(
+            nlr_grid
+        )
 
         # Get the incident model accounting for the geometry but unmasked
-        self.disc_incident = self._make_disc_incident(grid)
+        self.disc_incident = self._make_disc_incident(nlr_grid)
 
         # Get the transmitted disc emission models
         (
@@ -72,14 +87,15 @@ class UnifiedAGN(EmissionModel):
             self.blr_transmitted,
             self.disc_transmitted,
         ) = self._make_disc_transmitted(
-            grid,
+            nlr_grid,
+            blr_grid,
             covering_fraction_nlr,
             covering_fraction_blr,
         )
 
         # Get the escaped disc emission model
         self.disc_escaped = self._make_disc_escaped(
-            grid,
+            nlr_grid,
             covering_fraction_nlr,
             covering_fraction_blr,
         )
@@ -88,10 +104,10 @@ class UnifiedAGN(EmissionModel):
         self.disc = self._make_disc()
 
         # Get the line regions
-        self.nlr, self.blr = self._make_line_regions(grid)
+        self.nlr, self.blr = self._make_line_regions(nlr_grid, blr_grid)
 
         # Get the torus emission model
-        self.torus = self._make_torus(grid, torus_emission_model)
+        self.torus = self._make_torus(torus_emission_model)
 
         # Create the final model
         EmissionModel.__init__(
@@ -103,6 +119,10 @@ class UnifiedAGN(EmissionModel):
                 self.blr,
                 self.torus,
             ),
+            related_models=(
+                self.disc_incident_isotropic,
+                self.disc_incident,
+            ),
         )
 
     def _make_disc_incident_isotropic(self, grid):
@@ -111,7 +131,6 @@ class UnifiedAGN(EmissionModel):
             grid=grid,
             label="disc_incident_isotropic",
             extract="incident",
-            line_region="nlr",
             fixed_parameters={"inclination": 60 * deg},
         )
 
@@ -123,7 +142,6 @@ class UnifiedAGN(EmissionModel):
             grid=grid,
             label="disc_incident",
             extract="incident",
-            line_region="nlr",
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
@@ -133,24 +151,23 @@ class UnifiedAGN(EmissionModel):
 
     def _make_disc_transmitted(
         self,
-        grid,
+        nlr_grid,
+        blr_grid,
         covering_fraction_nlr,
         covering_fraction_blr,
     ):
         """Make the disc transmitted spectra."""
         # Make the line regions
         nlr = EmissionModel(
-            grid=grid,
+            grid=nlr_grid,
             label="nlr_transmitted",
             extract="transmitted",
-            line_region="nlr",
             fesc=covering_fraction_nlr,
         )
         blr = EmissionModel(
-            grid=grid,
+            grid=blr_grid,
             label="blr_transmitted",
             extract="transmitted",
-            line_region="blr",
             fesc=covering_fraction_blr,
         )
 
@@ -176,9 +193,8 @@ class UnifiedAGN(EmissionModel):
         """
         model = EmissionModel(
             grid=grid,
-            label="disc_incident",
+            label="disc_escaped",
             extract="incident",
-            line_region="nlr",
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
@@ -194,24 +210,22 @@ class UnifiedAGN(EmissionModel):
             combine=(self.disc_transmitted, self.disc_escaped),
         )
 
-    def _make_line_regions(self, grid):
+    def _make_line_regions(self, nlr_grid, blr_grid):
         """Make the line regions."""
         # Make the line regions with fixed inclination
         nlr = EmissionModel(
-            grid=grid,
+            grid=nlr_grid,
             label="nlr",
             extract="transmitted",
-            line_region="nlr",
             fixed_parameters={"inclination": 60 * deg},
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
         )
         blr = EmissionModel(
-            grid=grid,
+            grid=nlr_grid,
             label="blr",
             extract="transmitted",
-            line_region="blr",
             fixed_parameters={"inclination": 60 * deg},
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
@@ -219,7 +233,7 @@ class UnifiedAGN(EmissionModel):
         )
         return nlr, blr
 
-    def _make_torus(self, grid, torus_emission_model):
+    def _make_torus(self, torus_emission_model):
         """Make the torus spectra."""
         return EmissionModel(
             label="torus",
