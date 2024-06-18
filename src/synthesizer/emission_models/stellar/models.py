@@ -1,8 +1,8 @@
-"""A submodule containing the definitions of common simple emisison models.
+"""A submodule containing the definitions of common stellar emisison models.
 
-This module contains the definitions of simple emission models that can be
-used "out of the box" to generate spectra from components or as a foundation
-to work from when creating more complex models.
+This module contains the definitions of commoon stellar emission models that
+can be used "out of the box" to generate spectra from components or as a
+foundation to work from when creating more complex models.
 
 Example usage:
     # Create a simple emission model
