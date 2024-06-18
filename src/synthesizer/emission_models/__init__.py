@@ -31,16 +31,22 @@ from synthesizer.emission_models.agn.models import (
     DiscEmission,
     TorusEmission,
     AGNIntrinsicEmission,
-    UnifiedAGN,
 )
+from synthesizer.emission_models.agn.unified_agn import UnifiedAGN
 
 
 from synthesizer.emission_models.stellar import STELLAR_MODELS
 from synthesizer.emission_models.agn import AGN_MODELS
 
-PREMADE_MODELS = [
+# List of premade common models
+COMMON_MODELS = [
     "AttenuatedEmission",
     "DustEmission",
+]
+
+# List of premade models
+PREMADE_MODELS = [
+    *COMMON_MODELS,
 ]
 PREMADE_MODELS.extend(STELLAR_MODELS)
 PREMADE_MODELS.extend(AGN_MODELS)
