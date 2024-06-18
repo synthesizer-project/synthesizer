@@ -159,11 +159,9 @@ class NLRIncidentEmission(EmissionModel):
             grid=grid,
             label=label,
             extract="incident",
+            line_region="nlr",
             **kwargs,
         )
-
-        # Flag which line region this is
-        self.line_region = "nlr"
 
 
 class BLRIncidentEmission(EmissionModel):
@@ -193,11 +191,9 @@ class BLRIncidentEmission(EmissionModel):
             grid=grid,
             label=label,
             extract="incident",
+            line_region="blr",
             **kwargs,
         )
-
-        # Flag which line region this is
-        self.line_region = "blr"
 
 
 class NLRTransmittedEmission(EmissionModel):
@@ -237,11 +233,9 @@ class NLRTransmittedEmission(EmissionModel):
             label=label,
             fesc=covering_fraction,
             extract="transmitted",
+            line_region="nlr",
             **kwargs,
         )
-
-        # Flag which line region this is
-        self.line_region = "nlr"
 
 
 class BLRTransmittedEmission(EmissionModel):
@@ -281,11 +275,9 @@ class BLRTransmittedEmission(EmissionModel):
             label=label,
             fesc=covering_fraction,
             extract="transmitted",
+            line_region="blr",
             **kwargs,
         )
-
-        # Flag which line region this is
-        self.line_region = "blr"
 
 
 class DiscIncidentEmission(EmissionModel):
@@ -316,12 +308,9 @@ class DiscIncidentEmission(EmissionModel):
             grid=grid,
             label=label,
             extract="incident",
+            line_region="nlr",
             **kwargs,
         )
-
-        # Flag which line region this is (needed for extraction and
-        # technically this is NLR)
-        self.line_region = "nlr"
 
 
 class DiscTranmittedEmission(EmissionModel):
