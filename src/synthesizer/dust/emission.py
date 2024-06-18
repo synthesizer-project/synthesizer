@@ -72,7 +72,57 @@ class EmissionBase:
             limit=100,
         )[0]
 
-    def get_spectra(self, _lam):
+    def get_spectra(
+        self,
+        _lam,
+        intrinsic_sed=None,
+        attenuated_sed=None,
+    ):
+        """
+        Return the normalised lnu for the provided wavelength grid.
+
+        Args:
+            _lam (float/array-like, float)
+                An array of wavelengths (expected in AA, global unit)
+            intrinsic_sed (Sed)
+                The intrinsic SED to scale with dust.
+            attenuated_sed (Sed)
+                The attenuated SED to scale with dust.
+        """
+        # If we haven't been given spectra to scale with dust just return the
+        # spectra
+        if intrinsic_sed is None and attenuated_sed is None:
+            return self._get_spectra(_lam)
+
+        # If we have been given spectra to scale with dust, we need to scale
+        # the dust spectra to the bolometric luminosity of the input spectra
+        # and then add the input spectra to the dust spectra
+        if intrinsic_sed is not None and attenuated_sed is not None:
+            # Calculate the bolometric dust luminosity as the difference
+            # between the intrinsic and attenuated
+            dust_bolometric_luminosity = (
+                intrinsic_sed.measure_bolometric_luminosity()
+                - attenuated_sed.measure_bolometric_luminosity()
+            )
+
+            # Get the spectrum and normalise it properly
+            lnu = (
+                dust_bolometric_luminosity.to("erg/s").value
+                * self._get_spectra(_lam)._lnu
+                * erg
+                / s
+                / Hz
+            )
+
+            # Create new Sed object containing dust emission spectra
+            return Sed(_lam, lnu=lnu)
+
+        # If we get here then an invalid set of arguments have been given
+        raise exceptions.InconsistentArguments(
+            "Both intrinsic and emergent SEDs must be provided"
+        )
+
+    def _get_spectra(self, _lam):
         """
         Returns the normalised lnu for the provided wavelength grid
 
@@ -433,7 +483,7 @@ class IR_templates:
         self.umin_id = umin_id
         self.alpha_id = alpha_id
 
-    def get_spectra(self, _lam, dust_components=False, verbose=True):
+    def get_spectra(self, _lam, dust_components=False, verbose=True, **kwargs):
         """
         Returns the lnu for the provided wavelength grid
 
