@@ -17,6 +17,8 @@ Example usages:
 )
 """
 
+import os
+
 import numpy as np
 from unyt import kpc, unyt_array
 
@@ -108,6 +110,7 @@ class BlackHole(BlackholesComponent):
         spectra_type,
         line_region,
         grid_assignment_method,
+        nthreads,
         **kwargs,
     ):
         """
@@ -131,6 +134,9 @@ class BlackHole(BlackholesComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
             kwargs (dict)
                 Any other arguments. Mainly unused and here for consistency
                 with particle version of this method which does have extra
@@ -219,6 +225,10 @@ class BlackHole(BlackholesComponent):
         grid_props = tuple(grid_props)
         props = tuple(props)
 
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
         return (
             grid_spectra,
             grid_props,
@@ -230,4 +240,5 @@ class BlackHole(BlackholesComponent):
             np.int32(1),
             nlam,
             grid_assignment_method,
+            nthreads,
         )

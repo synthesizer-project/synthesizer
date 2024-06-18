@@ -30,11 +30,13 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
+from scipy.interpolate import interp1d
 from unyt import Angstrom, Hz, c, unyt_array, unyt_quantity
 
 import synthesizer.exceptions as exceptions
 from synthesizer._version import __version__
 from synthesizer.units import Quantity
+from synthesizer.warnings import warn
 
 
 def UVJ(new_lam=None):
@@ -166,19 +168,19 @@ class FilterCollection:
         # Ensure we haven't been passed both a path and parameters
         if path is not None:
             if filter_codes is not None:
-                print(
+                warn(
                     "If a path is passed only the saved FilterCollection is "
                     "loaded! Create a separate FilterCollection with these "
-                    "filter codes and add them."
+                    "filter codes and add them.",
                 )
             if tophat_dict is not None:
-                print(
+                warn(
                     "If a path is passed only the saved FilterCollection is "
                     "loaded! Create a separate FilterCollection with this "
                     "top hat dictionary and add them."
                 )
             if generic_dict is not None:
-                print(
+                warn(
                     "If a path is passed only the saved FilterCollection is "
                     "loaded! Create a separate FilterCollection with this "
                     "generic dictionary and add them."
@@ -226,20 +228,19 @@ class FilterCollection:
 
     def _load_filters(self, path):
         """
-        Loads a `FilterCollection` from a HDF5 file.
+        Load a `FilterCollection` from a HDF5 file.
 
         Args:
             path (str)
                 The file path from which to load the `FilterCollection`.
         """
-
         # Open the HDF5 file
         hdf = h5py.File(path, "r")
 
         # Warn if the synthesizer versions don't match
         if hdf["Header"].attrs["synthesizer_version"] != __version__:
-            print(
-                "WARNING: Synthesizer versions differ between the code and "
+            warn(
+                "Synthesizer versions differ between the code and "
                 "FilterCollection file! This is probably fine but there "
                 "is no gaurantee it won't cause errors."
             )
@@ -256,73 +257,17 @@ class FilterCollection:
 
         # Loop over the groups and make the filters
         for filter_code in self.filter_codes:
-            # Open the filter group
-            f_grp = hdf[filter_code.replace("/", ".")]
-
-            # Get the filter type
-            filter_type = f_grp.attrs["filter_type"]
-
-            # For SVO filters we don't want to send a request to the
-            # database so instead instatiate it as a generic filter and
-            # overwrite some attributes after the fact
-            if filter_type == "SVO":
-                filt = Filter(
-                    filter_code,
-                    transmission=f_grp["Transmission"][:],
-                    new_lam=self.lam,
-                )
-
-                # Set the SVO specific attributes
-                filt.filter_type = filter_type
-                filt.svo_url = f_grp.attrs["svo_url"]
-                filt.observatory = f_grp.attrs["observatory"]
-                filt.instrument = f_grp.attrs["instrument"]
-                filt.filter_ = f_grp.attrs["filter_"]
-                filt.original_lam = unyt_array(
-                    f_grp["Original_Wavelength"][:], lam_units
-                )
-                filt.original_t = f_grp["Original_Transmission"][:]
-
-            elif filter_type == "TopHat":
-                # For a top hat filter we can pass the related parameters
-                # and build the filter as normal
-
-                # Set up key word params, we have to do this to handle to
-                # two methods for creating top hat filters
-                tophat_dict = {
-                    key: None
-                    for key in [
-                        "lam_min",
-                        "lam_max",
-                        "lam_eff",
-                        "lam_fwhm",
-                    ]
-                }
-
-                # Loop over f_grp keys and set those that exist
-                for key in f_grp.attrs.keys():
-                    if "lam" in key:
-                        tophat_dict[key] = unyt_quantity(
-                            f_grp.attrs[key],
-                            lam_units,
-                        )
-
-                # Create the filter
-                filt = Filter(filter_code, **tophat_dict)
-
-            else:
-                # For a generic filter just set the transmission and
-                # wavelengths
-                filt = Filter(
-                    filter_code,
-                    transmission=f_grp["Transmission"][:],
-                    new_lam=self.lam,
-                )
+            # Get the filter
+            filt = Filter(filter_code, hdf=hdf)
 
             # Store the created filter
             self.filters[filter_code] = filt
 
         hdf.close()
+
+        # We're done loading so lets merge the filters, if they need to be
+        # resampled they will be at the end of the __init__
+        self._merge_filter_lams()
 
     def _include_svo_filters(self, filter_codes):
         """
@@ -333,7 +278,6 @@ class FilterCollection:
                 A list of SVO filter codes, used to retrieve filter data from
                 the database.
         """
-
         # Loop over the given filter codes
         for f in filter_codes:
             # Get filter from SVO
@@ -359,7 +303,6 @@ class FilterCollection:
                                       "lam_max": <maximum_nonzero_wavelength>},
                                       ...}.
         """
-
         # Loop over the keys of the dictionary
         for key in tophat_dict:
             # Get this filter's properties
@@ -406,7 +349,6 @@ class FilterCollection:
                     {<filter_code1> : {"transmission": <transmission_array>}}.
                 For generic filters new_lam must be provided.
         """
-
         # Loop over the keys of the dictionary
         for key in generic_dict:
             # Get this filter's properties
@@ -429,7 +371,6 @@ class FilterCollection:
                 A list of SVO filter codes, used to retrieve filter data from
                 the database.
         """
-
         # Loop over the given filter codes
         for _filter in filters:
             # Store the filter and its code
@@ -621,7 +562,7 @@ class FilterCollection:
             max_lam * self.filters[f].lam.units,
         )
 
-    def _merge_filter_lams(self, fill_gaps):
+    def _merge_filter_lams(self, fill_gaps=False):
         """
         Merge the wavelength arrays of multiple filters.
 
@@ -629,6 +570,10 @@ class FilterCollection:
 
         If a gap is found between filters it can be populated with the minimum
         average wavelength resolution of all filters if fill_gaps is True.
+
+        Args:
+            fill_gaps (bool)
+                Are we filling gaps in the wavelength array? Defaults to False.
 
         Returns:
             np.ndarray
@@ -1159,6 +1104,7 @@ class Filter:
         lam_eff=None,
         lam_fwhm=None,
         new_lam=None,
+        hdf=None,
     ):
         """
         Initialise a filter.
@@ -1182,6 +1128,9 @@ class Filter:
                 If a top hat filter: The FWHM of the filter curve.
             new_lam (array-like, float)
                 The wavelength array for which the transmission is defined.
+            hdf (h5py.Group)
+                The HDF5 root group of a HDF5 file from which to load the
+                filter.
         """
 
         # Metadata of this filter
@@ -1208,9 +1157,13 @@ class Filter:
         self.original_t = transmission
         self._shifted_t = None
 
+        # Are loading from a hdf5 group?
+        if hdf is not None:
+            self._load_filter_from_hdf5(hdf)
+
         # Is this a generic filter? (Everything other than the label is defined
         # above.)
-        if transmission is not None and new_lam is not None:
+        elif transmission is not None and new_lam is not None:
             self.filter_type = "Generic"
 
         # Is this a top hat filter?
@@ -1254,6 +1207,147 @@ class Filter:
         """Alias for self.t."""
         return self.t
 
+    def __str__(self):
+        """
+        Return a string representation of the filter.
+
+        Returns:
+            string
+                A string representation of the filter.
+        """
+        details = [
+            f"Filter Code: {self.filter_code}",
+            f"Observatory: {self.observatory}",
+            f"Instrument: {self.instrument}",
+            f"Filter: {self.filter_}",
+            f"Filter Type: {self.filter_type}",
+        ]
+
+        if self.filter_type == "TopHat":
+            details.extend(
+                [
+                    f"Lambda Min: {self.lam_min}",
+                    f"Lambda Max: {self.lam_max}",
+                    f"Lambda Eff: {self.lam_eff}",
+                    f"Lambda FWHM: {self.lam_fwhm}",
+                ]
+            )
+        elif self.filter_type == "SVO":
+            details.extend(
+                [
+                    f"SVO URL: {self.svo_url}",
+                ]
+            )
+
+        if self.lam is not None:
+            details.append(
+                f"Wavelength Array: shape = {self.lam.shape}, "
+                f"min = {self.lam.min()}, max = {self.lam.max()}"
+            )
+        if self.nu is not None:
+            details.append(
+                f"Frequency Array: shape = {self.nu.shape}, "
+                f"min = {self.nu.min():.2e}, max = {self.nu.max():.2e}"
+            )
+        if self.original_lam is not None:
+            details.append(
+                "Original Wavelength Array: shape = "
+                f"{self.original_lam.shape},"
+                f" min = {self.original_lam.min()}, "
+                f"max = {self.original_lam.max()}"
+            )
+        if self.original_nu is not None:
+            details.append(
+                f"Original Frequency Array: shape = {self.original_nu.shape},"
+                f" min = {self.original_nu.min():.2e}, "
+                f"max = {self.original_nu.max():.2e}"
+            )
+        if self.t is not None:
+            details.append(
+                f"Transmission Curve: shape = {self.t.shape}, "
+                f"min = {self.t.min()}, max = {self.t.max()}"
+            )
+        if self.original_t is not None:
+            details.append(
+                "Original Transmission Curve: shape = "
+                f"{self.original_t.shape}, "
+                f"min = {self.original_t.min()}, max = {self.original_t.max()}"
+            )
+
+        return "\n".join(details)
+
+    def _load_filter_from_hdf5(self, hdf):
+        """
+        Load a filter from an HDF5 group.
+
+        Args:
+            hdf (h5py.Group)
+                The HDF5 root group containing the filter data.
+        """
+        # Get the wavelength units
+        lam_units = hdf["Header"].attrs["Wavelength_units"]
+
+        # Get the filter group
+        f_grp = hdf[self.filter_code.replace("/", ".")]
+
+        # Get the filter type
+        filter_type = f_grp.attrs["filter_type"]
+
+        # Set wavelength array
+        self.lam = unyt_array(hdf["Header"]["Wavelengths"][:], lam_units)
+
+        # For SVO filters we don't want to send a request to the
+        # database so instead instatiate it as a generic filter and
+        # overwrite some attributes after the fact
+        if filter_type == "SVO":
+            # Set the SVO specific attributes
+            self.filter_type = filter_type
+            self.svo_url = f_grp.attrs["svo_url"]
+            self.observatory = f_grp.attrs["observatory"]
+            self.instrument = f_grp.attrs["instrument"]
+            self.filter_ = f_grp.attrs["filter_"]
+            self.original_lam = unyt_array(
+                f_grp["Original_Wavelength"][:], lam_units
+            )
+            self.original_t = f_grp["Original_Transmission"][:]
+            self.t = f_grp["Transmission"][:]
+
+        elif filter_type == "TopHat":
+            # For a top hat filter we can pass the related parameters
+            # and build the filter as normal
+
+            # Set up key word params, we have to do this to handle to
+            # two methods for creating top hat filters
+            tophat_dict = {
+                key: None
+                for key in [
+                    "lam_min",
+                    "lam_max",
+                    "lam_eff",
+                    "lam_fwhm",
+                ]
+            }
+
+            # Loop over f_grp keys and set those that exist
+            for key in f_grp.attrs.keys():
+                if "lam" in key:
+                    tophat_dict[key] = unyt_quantity(
+                        f_grp.attrs[key],
+                        lam_units,
+                    )
+
+            # Attach top hat properties
+            for key, value in tophat_dict.items():
+                setattr(self, key, value)
+
+            # Finally, construct the top hat filter
+            self._make_top_hat_filter()
+
+        else:
+            # For a generic filter just set the transmission and
+            # wavelengths
+            self.t = f_grp["Transmission"][:]
+
     def clip_transmission(self):
         """
         Clips transmission curve between 0 and 1.
@@ -1266,8 +1360,8 @@ class Filter:
 
         # Warn the user we are are doing this
         if self.t.max() > 1 or self.t.min() < 0:
-            print(
-                "Warning: Out of range transmission values found "
+            warn(
+                "Out of range transmission values found "
                 f"(min={self.t.min()}, max={self.t.max()}). "
                 "Transmission will be clipped to [0-1]"
             )
@@ -1386,8 +1480,8 @@ class Filter:
             if new_lam.max() < self.lam[self.t > 0].max():
                 truncated = True
             if truncated:
-                print(
-                    f"Warning: {self.filter_code} will be truncated where "
+                warn(
+                    f"{self.filter_code} will be truncated where "
                     "transmission is non-zero "
                     "(old_lam_bounds = "
                     f"({self.lam[self.t > 0].min():.2e}, "
@@ -1414,14 +1508,25 @@ class Filter:
         # And ensure transmission is in expected range
         self.clip_transmission()
 
-    def apply_filter(self, arr, lam=None, nu=None, verbose=True):
+    def apply_filter(
+        self,
+        arr,
+        lam=None,
+        nu=None,
+        verbose=True,
+    ):
         """
-        Apply this filter's transmission curve to an arbitrary dimensioned
+        Apply the transmission curve to any array.
+
+        Applies this filter's transmission curve to an arbitrary dimensioned
         array returning the sum of the array convolved with the filter
         transmission curve along the wavelength axis (final axis).
 
         If no wavelength or frequency array is provided then the filters rest
         frame frequency is assumed.
+
+        To apply to llam or flam, wavelengths must be provided. To apply to
+        lnu or fnu frequencies must be provided.
 
         Args:
             arr (array-like, float)
@@ -1448,73 +1553,66 @@ class Filter:
                 If the shape of the transmission and wavelength array differ
                 the convolution cannot be done.
         """
+        # Initialise the xs were about to set and use
+        xs = None
+        original_xs = None
 
-        # Warn the user that frequencies take precedence over wavelengths
-        # if both are provided
-        if lam is not None and nu is not None:
-            if verbose:
-                print(
-                    (
-                        "WARNING: Both wavelengths and frequencies were "
-                        "provided, frequencies take priority over wavelengths"
-                        " for filter convolution."
-                    )
-                )
+        # Get the right x array to integrate over
+        if lam is None and nu is None:
+            # If we haven't been handed anything we'll use the filter's
+            # frequencies
 
-        # Get the correct x array to integrate w.r.t and work out if we need
-        # to shift the transmission curve.
-        if nu is not None:
+            # Use the filters frequency array
+            xs = self._nu
+            original_xs = self._original_nu
+
+        elif lam is not None:
+            # If we have lams we are intergrating over llam or flam
+
+            # Ensure the passed wavelengths have units
+            if not isinstance(lam, unyt_array):
+                lam *= Angstrom
+
+            # Use the passed wavelength and original lam
+            xs = lam.to(Angstrom).value
+            original_xs = self._original_lam
+
+        elif nu is not None:
+            # If we've been handed nu we are integrating over lnu or fnu
+
             # Ensure the passed frequencies have units
             if not isinstance(nu, unyt_array):
                 nu *= Hz
 
-            # Define the integration xs
-            xs = nu
-
-            # Do we need to shift?
-            need_shift = not nu.value[0] == self._nu[0]
-
-            # To shift the transmission we need the corresponding wavelength
-            # with the units stripped off
-            if need_shift:
-                lam = (c / nu).to(Angstrom).value
-
-        elif lam is not None:
-            # Ensure the passed wavelengths have no units
-            if isinstance(lam, unyt_array):
-                lam = lam.value
-
-            # Define the integration xs
-            xs = lam
-
-            # Do we need to shift?
-            need_shift = not lam[0] == self._lam[0]
+            # Use the passed frequency and original frequency
+            xs = nu.to(Hz).value
+            original_xs = self._original_nu
 
         else:
-            # Define the integration xs
-            xs = self._nu
-
-            # No shift needed
-            need_shift = False
-
-        # Do we need to shift?
-        if need_shift:
-            # Ok, shift the tranmission curve by interpolating onto the
-            # provided wavelengths
-            t = np.interp(
-                lam, self._original_lam, self.original_t, left=0.0, right=0.0
+            # If both have been handed then frequencies take precedence
+            warn(
+                "Both wavelengths and frequencies were "
+                "provided, frequencies take priority over wavelengths"
+                " for filter convolution."
             )
+            xs = self._nu.to(Hz).value
+            original_xs = self._original_nu
 
-        else:
-            # We can use the standard transmission array
-            t = self.t
+        # Interpolate the transmission curve onto the provided frequencies
+        func = interp1d(
+            original_xs,
+            self.original_t,
+            kind="linear",
+            bounds_error=False,
+        )
+        t = func(xs)
 
-        # Check dimensions are ok
-        if xs.size != arr.shape[-1]:
-            raise ValueError(
-                "Final dimension of array did not match "
-                "x array shape (arr.shape[-1]=%d, "
-                "xs.size=%d)" % (arr.shape[-1], xs.size)
+        # Ensure the xs array and arr are a compatible shape
+        if arr.shape[-1] != t.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "The shape of the transmission curve and the final axis of "
+                "the array to be convolved do not match. "
+                f"(arr.shape={arr.shape}, transmission.shape={t.shape})"
             )
 
         # Store this observed frame transmission
@@ -1528,7 +1626,7 @@ class Filter:
         xs_in_band = xs[in_band]
         t_in_band = t[in_band]
 
-        # Multiply the IFU by the filter transmission curve
+        # Multiply the array by the filter transmission curve
         transmission = arr_in_band * t_in_band
 
         # Sum over the final axis to "collect" transmission in this filer

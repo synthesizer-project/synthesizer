@@ -1,6 +1,6 @@
 import h5py
 import numpy as np
-from astropy.cosmology import FlatLambdaCDM
+from astropy.cosmology import Planck15, Planck18
 from unyt import Msun, kpc, yr
 
 from synthesizer.load_data.utils import get_len
@@ -149,7 +149,6 @@ def load_CAMELS_IllustrisTNG(
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
         scale_factor = hf["Header"].attrs["Time"]
         redshift = 1.0 / scale_factor - 1
-        Om0 = hf["Header"].attrs["Omega0"]
         h = hf["Header"].attrs["HubbleParam"]
 
         form_time = hf["PartType4/GFM_StellarFormationTime"][:]
@@ -220,8 +219,8 @@ def load_CAMELS_IllustrisTNG(
         pos *= scale_factor
 
     # convert formation times to ages
-    cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
-    universe_age = cosmo.age(1.0 / scale_factor - 1)
+    cosmo = Planck15
+    universe_age = cosmo.age(redshift)
     _ages = cosmo.age(1.0 / form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
@@ -276,9 +275,8 @@ def load_CAMELS_Astrid(
     """
 
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
-        redshift = hf["Header"].attrs["Redshift"]
-        scale_factor = hf["Header"].attrs["Time"][0]
-        Om0 = hf["Header"].attrs["Omega0"][0]
+        redshift = hf["Header"].attrs["Redshift"].astype(np.float32)
+        scale_factor = hf["Header"].attrs["Time"][0].astype(np.float32)
         h = hf["Header"].attrs["HubbleParam"][0]
 
         form_time = hf["PartType4/GFM_StellarFormationTime"][:]
@@ -307,8 +305,8 @@ def load_CAMELS_Astrid(
     s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
 
     # convert formation times to ages
-    cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
-    universe_age = cosmo.age(1.0 / scale_factor - 1)
+    cosmo = Planck18
+    universe_age = cosmo.age(redshift)
     _ages = cosmo.age(1.0 / form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
@@ -377,7 +375,6 @@ def load_CAMELS_Simba(
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
         redshift = hf["Header"].attrs["Redshift"]
         scale_factor = hf["Header"].attrs["Time"]
-        Om0 = hf["Header"].attrs["Omega0"]
         h = hf["Header"].attrs["HubbleParam"]
 
         form_time = hf["PartType4/StellarFormationTime"][:]
@@ -405,7 +402,7 @@ def load_CAMELS_Simba(
     metallicity = _metals[:, 0]
 
     # convert formation times to ages
-    cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
+    cosmo = Planck15
     universe_age = cosmo.age(1.0 / scale_factor - 1)
     _ages = cosmo.age(1.0 / form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
