@@ -3,7 +3,17 @@ Overview
 
 By now you have hopefully installed the code and downloaded a grid file. You're now ready to start using `synthesizer`.
 
-In this section we briefly describe the design philosophy and the main elements of the code.
+In this section we briefly describe the main elements of the code, and the design philosophy.
+
+Grids
+*****
+
+`Grids`` are one of the fundamental components in synthesizer.
+At its simplest, a grid describes the emission as a function of some parameters.
+Typically these are the age and metallicity of a stellar population, and the emission is derived from a stellar population synthesis models.
+
+However, these parameters can be arbitrary, and of any number of dimensions.
+For example, one could also describe arbitrary parameter dimensions.
 
 Particle vs Parametric
 **********************
@@ -11,27 +21,29 @@ Particle vs Parametric
 Synthesizer can be used to generate astrophysical emission from a number of different data sources.
 These data sources can primarily be divided into two types: **Particle** or **Parametric**.
 
-Particle data describes an astrophysical object through discrete elements with individual properties.
-These can describe, for example, the stellar mass spatial distribution, or the ages of individual star elements.
+Particle data represents an astrophysical object through discrete elements with individual properties.
+These can describe, for example, the spatial distribution of stellar mass, or the ages of individual star elements.
 
-Conversely, Parametric data typically describes a galaxy through attributes binned along different dimensions.
+Conversely, Parametric data typically represents a galaxy through *binned attributes*.
+This binning can be represented along different dimensions representing various properties of the galaxy.
 An example of this is the star formation history; a parametric galaxy would describe this history by dividing the mass formed into bins of age.
 
 Whilst both of these approaches may appear to be superficially similar, there are some important distinctions under the hood within synthesizer.
 In most use cases `synthesizer` will be smart enough to know what kind of data you are providing, and create the appropriate objects as required.
-However, it is worth understanding this distinction, particularly when trying to debug any issues.
+However, it is worth understanding this distinction, particularly when debugging any issues.
+We provide examples for various tasks in synthesizer using both particle and parametric approaches where applicable.
 
 Galaxies & Components
 *********************
 
-The main base object within `synthesizer` is a `Galaxy` object. This describes various integrated properties of a galaxy, as well as individual *components*.
-These can include:
+The main object within `synthesizer` is a `Galaxy`. A `Galaxy` object describes various integrated properties of a galaxy, as well as containing individual *components*.
+These components can include:
 
 * A stellar component
 * A gas component
 * Black hole components
 
-Each component within synthesizer can be initialised and used independently of a `Galaxy` object, and used to predict the emission from it.
+A component in `synthesizer`` can be initialised and used independently of a `Galaxy` object, and the emission from that individual component can be produced.
 However, much of the power of synthesizer comes from combining these components; a `Galaxy` object simplifies how they interact with one another, making the generation of complex spectra from various components simpler and faster.
 
 Emission models
