@@ -113,6 +113,7 @@ class EmissionModel:
         fesc=None,
         related_models=None,
         component="stellar",
+        property_overrides={},
         **kwargs,
     ):
         """
@@ -173,12 +174,24 @@ class EmissionModel:
             component (str):
                 The component this emission model acts on. Default is
                 "stellar".
+            fixed_parameters (dict):
+                A dictionary of parameters which are fixed and should not take
+                the value of the component attribute. This should take the form
+                {<parameter_name>: <value>}.
+            **kwargs:
+                Any additional keyword arguments to store. These can be used
+                to store additional information needed by the model.
         """
         # What is the key for the spectra that will be produced?
         self.label = label
 
         # Attach the grid
         self._grid = grid
+
+        # Store any extra kwargs this can either be used to store additional
+        # information needed by the model
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
         # Attach what component we are working with
         self._component = component
