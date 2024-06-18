@@ -322,12 +322,14 @@ class Stars(Particles, StarsComponent):
 
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
+            np.ascontiguousarray(grid.log10ages, dtype=np.float64),
+            np.ascontiguousarray(grid.log10metallicities, dtype=np.float64),
         ]
         part_props = [
             np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
-            np.ascontiguousarray(self.metallicities[mask], dtype=np.float64),
+            np.ascontiguousarray(
+                self.log10metallicities[mask], dtype=np.float64
+            ),
         ]
         part_mass = np.ascontiguousarray(
             self._initial_masses[mask],
@@ -660,12 +662,14 @@ class Stars(Particles, StarsComponent):
 
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
+            np.ascontiguousarray(grid.log10ages, dtype=np.float64),
+            np.ascontiguousarray(grid.log10metallicities, dtype=np.float64),
         ]
         part_props = [
             np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
-            np.ascontiguousarray(self.metallicities[mask], dtype=np.float64),
+            np.ascontiguousarray(
+                self.log10metallicities[mask], dtype=np.float64
+            ),
         ]
         part_mass = np.ascontiguousarray(
             self._initial_masses[mask],
