@@ -468,7 +468,7 @@ class IR_templates:
             func = partial(
                 solve_umin, umax=umax, u_avg=self.u_avg, gamma=self.gamma
             )
-            self.umin = fsolve(func, [0.1])
+            self.umin = fsolve(func, [10.])
 
         qpah_id = qpahs == qpahs[np.argmin(np.abs(qpahs - self.qpah))]
         umin_id = umins == umins[np.argmin(np.abs(umins - self.umin))]
@@ -483,14 +483,19 @@ class IR_templates:
         self.umin_id = umin_id
         self.alpha_id = alpha_id
 
-    def get_spectra(self, _lam, dust_components=False, verbose=True, **kwargs):
+    def get_spectra(self, _lam, intrinsic_sed=None,
+        attenuated_sed=None, dust_components=False,
+        verbose=True, **kwargs):
         """
         Returns the lnu for the provided wavelength grid
 
         Arguments:
             _lam (float/array-like, float)
                     An array of wavelengths (expected in AA, global unit)
-
+            intrinsic_sed (Sed)
+                The intrinsic SED to scale with dust.
+            attenuated_sed (Sed)
+                The attenuated SED to scale with dust.
             dust_components (boolean)
                     If True, returns the constituent dust components
 
@@ -499,6 +504,18 @@ class IR_templates:
         if self.template == "DL07":
             if verbose:
                 print("Using the Draine & Li 2007 dust models")
+            if intrinsic_sed is not None and attenuated_sed is not None:
+                if self.ldust is not None:
+                    warn(
+                        F"Dust luminosity is already set by user to {self.ldust}."
+                        "Is this expected behaviour?"
+                    )
+                # Calculate the bolometric dust luminosity as the difference
+                # between the intrinsic and attenuated
+                self.ldust = (
+                    intrinsic_sed.measure_bolometric_luminosity()
+                    - attenuated_sed.measure_bolometric_luminosity()
+                )
             self.dl07(self.grid)
         else:
             raise exceptions.UnimplementedFunctionality(
