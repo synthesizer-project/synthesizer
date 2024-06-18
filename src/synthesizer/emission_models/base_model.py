@@ -113,7 +113,7 @@ class EmissionModel:
         fesc=None,
         related_models=None,
         component="stellar",
-        property_overrides={},
+        fixed_parameters={},
         **kwargs,
     ):
         """
@@ -192,6 +192,9 @@ class EmissionModel:
         # information needed by the model
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+        # Store any fixed parameters
+        self.fixed_parameters = fixed_parameters
 
         # Attach what component we are working with
         self._component = component
@@ -464,14 +467,11 @@ class EmissionModel:
                         f"{model._dust_lum_attenuated.label}"
                     )
 
-            if len(model._parents) > 0:
-                parts.append(
-                    f"  Parents: {[parent.label for parent in model._parents]}"
-                )
-            if len(model._children) > 0:
-                parts.append(
-                    f"  Children: {[child.label for child in model._children]}"
-                )
+            # Print any fixed parameters if there are any
+            if len(model.fixed_parameters) > 0:
+                parts.append("  Fixed parameters:")
+                for key, value in model.fixed_parameters.items():
+                    parts.append(f"    - {key}: {value}")
 
             if model._is_masked:
                 parts.append("  Masks:")
