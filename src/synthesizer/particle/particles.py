@@ -51,6 +51,7 @@ class Particles:
         softening_length,
         nparticles,
         centre,
+        metallicity_floor=1e-5,
     ):
         """
         Intialise the Particles.
@@ -70,6 +71,9 @@ class Particles:
                 How many particles are there?
             centre (array, float)
                 Centre of the particle distribution.
+            metallicity_floor (float)
+                The metallicity floor when using log properties (only matters
+                for baryons). This is used to avoid log(0) errors.
         """
         # Check arguments are valid
 
@@ -97,6 +101,10 @@ class Particles:
 
         # Set the centre of the particle distribution
         self.centre = centre
+
+        # Set the metallicity floor when using log properties (only matters for
+        # baryons)
+        self.metallicity_floor = metallicity_floor
 
     def _check_part_args(
         self, coordinates, velocities, masses, softening_length
