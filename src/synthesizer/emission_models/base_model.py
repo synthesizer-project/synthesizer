@@ -114,6 +114,7 @@ class EmissionModel:
         related_models=None,
         component="stellar",
         fixed_parameters={},
+        scale_by=None,
         **kwargs,
     ):
         """
@@ -178,6 +179,8 @@ class EmissionModel:
                 A dictionary of parameters which are fixed and should not take
                 the value of the component attribute. This should take the form
                 {<parameter_name>: <value>}.
+            scale_by (str):
+                A component attribute to scale the resultant spectra by.
             **kwargs:
                 Any additional keyword arguments to store. These can be used
                 to store additional information needed by the model.
@@ -229,6 +232,9 @@ class EmissionModel:
         # Containers for children and parents
         self._children = set()
         self._parents = set()
+
+        # Store the arribute to scale the spectra by
+        self.scale_by = scale_by
 
         # Define the container which will hold mask information
         self.masks = []
@@ -1538,7 +1544,9 @@ class EmissionModel:
         Generate stellar spectra as described by the emission model.
 
         If the emission model defines a dust_curve or fesc and no overide
-        is provided in the arguments to this function
+        is provided in the arguments to this function.
+
+        TODO: Apply any fixed parameters.
 
         Args:
             component (Stars/BlackHoles):
@@ -1717,5 +1725,9 @@ class EmissionModel:
                     intrinsic,
                     attenuated,
                 )
+
+            # Are we scaling the spectra?
+            if this_model.scale_by is not None:
+                spectra[label]._lnu *= getattr(component, this_model.scale_by)
 
         return spectra
