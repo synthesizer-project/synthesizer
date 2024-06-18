@@ -17,7 +17,7 @@ from synthesizer.conversions import apparent_mag_to_fnu, fnu_to_lnu
 from synthesizer.filters import Filter
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
-from unyt import Msun, Myr, erg, nJy
+from unyt import Hz, Msun, Myr, erg, nJy, s
 
 # Set up a figure to plot on
 fig = plt.figure()
@@ -88,7 +88,7 @@ ax_flux.plot(
 f = Filter(filter_code="JWST/NIRCam.F150W", new_lam=grid.lam)
 
 # First lets scale by luminosity
-scale_lum = 10**25.0 * erg
+scale_lum = 10**25.0 * erg / s / Hz
 gal.stars.scale_mass_by_luminosity(
     lum=scale_lum,
     scale_filter=f,
