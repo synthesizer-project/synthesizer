@@ -10,6 +10,7 @@ from scipy.optimize import fsolve
 from unyt import (
     Angstrom,
     Hz,
+    K,
     Lsun,
     Msun,
     accepts,
@@ -105,7 +106,7 @@ class EmissionBase:
         """
 
         # temperature of CMB at z=0
-        _T_cmb_0 = 2.73
+        _T_cmb_0 = 2.73 * K
         _T_cmb_z = _T_cmb_0 * (1 + z)
         _exp_factor = 4.0 + emissivity
 
@@ -542,9 +543,9 @@ class IR_templates:
         """
 
         # Define the models parameters
-        qpahs: NDArray[float] = self.grid.qpah
-        umins: NDArray[float] = self.grid.umin
-        alphas: NDArray[float] = self.grid.alpha
+        qpahs: NDArray[np.float32] = self.grid.qpah
+        umins: NDArray[np.float32] = self.grid.umin
+        alphas: NDArray[np.float32] = self.grid.alpha
 
         # default Umax=1e7
         umax = 1e7
@@ -644,34 +645,6 @@ class IR_templates:
             return sed_old, sed_young
         else:
             return sed_old + sed_young
-
-
-def apply_cmb_heating(temperature: float, emissivity: float, z: float):
-    """
-    Returns the dust temperature due to heating by the CMB
-    (See implementation in da Cunha+2013)
-
-    Args:
-        temperature (float)
-            The temperature of the dust
-        emissivity (float)
-            The emissivity index in the FIR (no unit)
-        z (float)
-            The redshift of the galaxy
-    """
-
-    # temperature of CMB at z=0
-    _T_cmb_0 = 2.73
-    _T_cmb_z = _T_cmb_0 * (1 + z)
-    _exp_factor = 4.0 + emissivity
-
-    _temperature = (
-        temperature**_exp_factor
-        + _T_cmb_z**_exp_factor
-        - _T_cmb_0**_exp_factor
-    ) ** (1 / _exp_factor)
-
-    return _temperature
 
 
 def u_mean_magdis12(mdust: float, ldust: float, p0: float):
