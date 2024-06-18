@@ -8,7 +8,6 @@ import numpy as np
 from unyt import c, cm, deg, km, rad, s
 
 from synthesizer import exceptions
-from synthesizer.blackhole_emission_models import Template
 from synthesizer.sed import Sed, plot_spectra
 from synthesizer.units import Quantity
 
@@ -750,14 +749,6 @@ class BlackholesComponent:
             dict, Sed
                 A dictionary of Sed instances including the intrinsic emission.
         """
-
-        # Early exit if the emission model is a Template, for this we just
-        # return the template scaled by bolometric luminosity
-        if isinstance(emission_model, Template):
-            self.spectra["intrinsic"] = emission_model.get_spectra(
-                self.bolometric_luminosity
-            )
-            return self.spectra
 
         # Temporarily have the emission model adopt any vairable parameters
         # from this BlackHole/BlackHoles
