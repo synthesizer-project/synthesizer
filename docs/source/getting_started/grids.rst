@@ -6,10 +6,9 @@ Introduction
 
 Most of the functionality of `synthesizer` is reliant on Stellar Population Synthesis (SPS) grids. These are precomputed grids of spectra (and lines) for a range of ages and metallicities, and potentially other parameters (see below)
 
-There is a limited, low-resolution, test grid built into to `synthesizer` but for actual projects you will need to download one or more full production grid from dropbox `here <https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&dl=0>`_. See details below on where to download these grids and how to load them. 
+There is a low-resolution test grid built into to `synthesizer`, but for actual projects you will need to download one or more full production grids from dropbox `here <https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&dl=0>`_. See details below on where on your system to download these grids and how to load them. 
 
 For advanced users, Synthesizer contains scripts for creating your own grids from popular SPS codes, and running these through CLOUDY. These are contained within the `generate_grids` directory of synthesizer. You will need a working installation of synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. CLOUDY, python-FSPS). Please reach out to us if you have questions about the pre-computed grids or grid creation.
-
 
 The Grid Directory
 ------------------
@@ -221,13 +220,11 @@ Grid list
 How to create your own grids
 ============================
 
+Advanced users may wish to create their own grids. We provide scripts for doing this in the `synthesizer-grids` repository. Details are provided in the section linked below. 
+
 .. toctree::
    :maxdepth: 2
 
-   creating_grids
+   ../advanced/creating_grids
 
 
-Loading and using Grids
-=======================
-
-On the next page we demonstrate how to load and explore a grid in `synthesizer`.

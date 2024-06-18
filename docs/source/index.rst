@@ -15,34 +15,6 @@ This documentation provides a broad overview of the various components in synthe
 For detailed examples please see the `examples page <auto_examples/index>`_.
 The full API is provided `here <API>`_.
 
-Contents
---------
-
-.. toctree::
-   :maxdepth: 1
-   
-   installation
-   grids/grids
-   galaxies/galaxies
-   spectra
-   units
-   sed
-   lines
-   filters
-   blackholes/blackholes
-   parametric/parametric
-   cosmo/cosmo
-   imaging/imaging
-   creating_grids/creating_grids
-   auto_examples/index
-   API
-
-
-Contributing
-------------
-
-Please see `here <https://github.com/flaresimulations/synthesizer/blob/main/docs/CONTRIBUTING.md>`_ for contribution guidelines.
-   
 Citation & Acknowledgement
 --------------------------
 
@@ -79,6 +51,13 @@ A code paper is currently in preparation. For now please cite `Vijayan et al. 20
       eprint = {https://academic.oup.com/mnras/article-pdf/493/4/6079/32980291/staa649.pdf},
     }
 
+
+Contributing
+------------
+
+Please see `here <https://github.com/flaresimulations/synthesizer/blob/main/docs/CONTRIBUTING.md>`_ for contribution guidelines.
+
+
 Primary Contributors
 ---------------------
 
@@ -88,3 +67,25 @@ License
 -------
 
 Synthesizer is free software made available under the GNU General Public License v3.0. For details see the `LICENSE <https://github.com/flaresimulations/synthesizer/blob/main/LICENSE.md>`_.
+
+Contents
+--------
+
+.. toctree::
+   :maxdepth: 1
+   
+   getting_started/getting_started
+   
+   galaxies/galaxies
+   spectra
+   units
+   sed
+   lines
+   filters
+   blackholes/blackholes
+   parametric/parametric
+   cosmo/cosmo
+   imaging/imaging
+   creating_grids/creating_grids
+   auto_examples/index
+   API
