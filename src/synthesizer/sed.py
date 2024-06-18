@@ -537,7 +537,12 @@ class Sed:
 
         return self.bolometric_luminosity
 
-    def measure_window_luminosity(self, window, integration_method="trapz", nthreads=1):
+    def measure_window_luminosity(
+        self,
+        window,
+        integration_method="trapz",
+        nthreads=1
+    ):
         """
         Measure the luminosity in a spectral window.
 
@@ -580,7 +585,12 @@ class Sed:
 
         return luminosity
 
-    def measure_window_lnu(self, window, integration_method="trapz", nthreads=1):
+    def measure_window_lnu(
+        self,
+        window,
+        integration_method="trapz",
+        nthreads=1
+    ):
         """
         Measure lnu in a spectral window.
 
@@ -710,7 +720,12 @@ class Sed:
         blue = (3400, 3600) * angstrom
         red = (4150, 4250) * angstrom
 
-        return self.measure_break(blue, red, nthreads=nthreads, method=integration_method)
+        return self.measure_break(
+            blue,
+            red,
+            nthreads=nthreads,
+            method=integration_method
+        )
 
     def measure_d4000(
         self, definition="Bruzual83", nthreads=1, integration_method="trapz"
@@ -787,7 +802,7 @@ class Sed:
         Raises:
             UnrecognisedOption
                 If `integration_method` is an incompatible option an error
-                is raised.                
+                is raised.
         """
         # If a single window is provided
         if len(window) == 2:
