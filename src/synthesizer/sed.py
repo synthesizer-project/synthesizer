@@ -26,7 +26,7 @@ from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
-from synthesizer.igm import Inoue14
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
 from synthesizer.utils import has_units, rebin_1d, wavelength_to_rgba
@@ -89,6 +89,7 @@ class Sed:
             description (string)
                 An optional descriptive string defining the Sed.
         """
+        start = tic()
 
         # Set the description
         self.description = description
@@ -142,6 +143,8 @@ class Sed:
         self.photo_luminosities = None
         self.photo_fluxes = None
 
+        toc("Creating Sed", start)
+
     def sum(self):
         """
         For multidimensional `sed`'s, sum the luminosity to provide a 1D
@@ -154,12 +157,15 @@ class Sed:
 
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
+            # Define the axes to sum over to give only the final axis
+            sum_over = tuple(range(0, len(self._lnu.shape) - 1))
+
             # Create a new sed object with the first Lnu dimension collapsed
-            new_sed = Sed(self.lam, np.sum(self._lnu, axis=0))
+            new_sed = Sed(self.lam, np.sum(self._lnu, axis=sum_over))
 
             # If fnu exists, sum that too
             if self.fnu is not None:
-                new_sed.fnu = np.sum(self.fnu, axis=0)
+                new_sed.fnu = np.sum(self.fnu, axis=sum_over)
                 new_sed.obsnu = self.obsnu
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
@@ -247,12 +253,16 @@ class Sed:
         """
 
         # Ensure the wavelength arrays are compatible
-        # # NOTE: this is probably overkill and too costly. We
-        # could instead check the first and last entry and the shape.
-        # In rare instances this could fail though.
-        if not np.array_equal(self._lam, second_sed._lam):
+        if not (
+            self._lam[0] == second_sed._lam[0]
+            and self._lam[-1] == second_sed._lam[-1]
+        ):
             raise exceptions.InconsistentAddition(
-                "Wavelength grids must be identical"
+                "Wavelength grids must be identical "
+                f"({self.lam.min()} -> {self.lam.max()} "
+                f"with shape {self._lam.shape} != "
+                f"{second_sed.lam.min()} -> {second_sed.lam.max()} "
+                f"with shape {second_sed._lam.shape})"
             )
 
         # Ensure the lnu arrays are compatible
@@ -260,7 +270,8 @@ class Sed:
         # not erroneously error. Nor is it expensive.
         if self._lnu.shape[0] != second_sed._lnu.shape[0]:
             raise exceptions.InconsistentAddition(
-                "SEDs must have same dimensions"
+                "SEDs must have same dimensions "
+                f"({self._lnu.shape} != {second_sed._lnu.shape})"
             )
 
         # They're compatible, add them and make a new Sed
@@ -546,6 +557,7 @@ class Sed:
             UnrecognisedOption
                 If method is an incompatible option an error is raised.
         """
+        start = tic()
 
         # If the method is trapz we can do any number of dimensions
         if method == "trapz":
@@ -601,6 +613,9 @@ class Sed:
             )
 
         self.bolometric_luminosity = bolometric_luminosity
+
+        toc("Calculating bolometric luminosity", start)
+
         return self.bolometric_luminosity
 
     def measure_window_luminosity(self, window, method="trapz"):
@@ -895,7 +910,7 @@ class Sed:
 
         return self.fnu
 
-    def get_fnu(self, cosmo, z, igm=Inoue14):
+    def get_fnu(self, cosmo, z, igm=None):
         """
         Calculate the observed frame spectral energy distribution.
 
@@ -909,7 +924,8 @@ class Sed:
             z (float)
                 The redshift of the spectra.
             igm (igm)
-                The IGM class.
+                The IGM class. e.g. `synthesizer.igm.Inoue14`.
+                Defaults to None.
 
         Returns:
             fnu (ndarray)

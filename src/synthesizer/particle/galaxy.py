@@ -25,7 +25,6 @@ from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import Gas, Stars
-from synthesizer.sed import Sed
 from synthesizer.warnings import warn
 
 
@@ -78,6 +77,8 @@ class Galaxy(BaseGalaxy):
             centre (float)
                 Centre of the galaxy particles. Can be defined in a number
                 of ways (e.g. centre of mass)
+            verbose (float)
+                Are we talking?
 
         Raises:
             InconsistentArguments
@@ -283,7 +284,7 @@ class Galaxy(BaseGalaxy):
             # If nothing has been provided, just set to None and return
             if (masses is None) | (metallicities is None):
                 warn(
-                    "In `load_stars`: one of either `masses`"
+                    "In `load_gas`: one of either `masses`"
                     " or `metallicities` is not provided, setting "
                     "`gas` object to `None`"
                 )
@@ -467,27 +468,14 @@ class Galaxy(BaseGalaxy):
         )
 
     def integrate_particle_spectra(self):
-        """
-        Integrates all particle spectra on any attached components.
-        """
-
+        """Integrate all particle spectra on any attached components."""
         # Handle stellar spectra
         if self.stars is not None:
-            # Loop over stellar particle spectra
-            for key, sed in self.stars.particle_spectra.items():
-                self.stars.spectra[key] = Sed(
-                    sed.lam,
-                    np.sum(sed._lnu, axis=0),
-                )
+            self.stars.integrate_particle_spectra()
 
         # Handle black hole spectra
         if self.black_holes is not None:
-            # Loop over stellar particle spectra
-            for key, sed in self.black_holes.particle_spectra.items():
-                self.black_holes.spectra[key] = Sed(
-                    sed.lam,
-                    np.sum(sed._lnu, axis=0),
-                )
+            self.black_holes.integrate_particle_spectra()
 
         # Handle gas spectra
         if self.gas is not None:
