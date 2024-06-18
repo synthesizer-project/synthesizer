@@ -10,7 +10,6 @@ from scipy.optimize import fsolve
 from unyt import (
     Angstrom,
     Hz,
-    K,
     Lsun,
     Msun,
     accepts,
@@ -92,6 +91,36 @@ class EmissionBase:
             limit=100,
         )[0]
 
+    def apply_cmb_heating(self, emissivity: float, z: float) -> None:
+        """
+        Returns the factor by which the CMB boosts the
+        infrared luminosity
+        (See implementation in da Cunha+2013)
+
+        Args:
+            emissivity (float)
+                The emissivity index in the FIR (no unit)
+            z (float)
+                The redshift of the galaxy
+        """
+
+        # temperature of CMB at z=0
+        _T_cmb_0 = 2.73
+        _T_cmb_z = _T_cmb_0 * (1 + z)
+        _exp_factor = 4.0 + emissivity
+
+        _temperature = (
+            self.temperature**_exp_factor
+            + _T_cmb_z**_exp_factor
+            - _T_cmb_0**_exp_factor
+        ) ** (1 / _exp_factor)
+
+        cmb_factor: float = (_temperature / self.temperature) ** (
+            4 + emissivity
+        )
+
+        self.cmb_factor = cmb_factor
+
     def get_spectra(self, _lam: Union[NDArray[np.float64], unyt_array]) -> Sed:
         """
         Returns the normalised lnu for the provided wavelength grid
@@ -149,27 +178,16 @@ class Blackbody(EmissionBase):
                 Redshift of the galaxy
 
         """
+
+        EmissionBase.__init__(self, temperature)
+
         # emmissivity of true blackbody is 1
         emissivity = 1.0
-        _temperature: unyt_quantity
-        cmb_factor: float
-        if cmb_heating:
-            _temperature = (
-                apply_cmb_heating(
-                    temperature=temperature.value,  # type: ignore
-                    emissivity=emissivity,
-                    z=z,
-                )
-                * K
-            )
-            cmb_factor = (_temperature / temperature) ** (4 + emissivity)  # type: ignore
-        else:
-            _temperature = temperature
-            cmb_factor = 1.0
 
-        self.temperature_z: unyt_quantity = _temperature
-        self.cmb_factor: float = cmb_factor
-        EmissionBase.__init__(self, temperature, cmb_factor)
+        if cmb_heating:
+            # calculate the factor by which the CMB boosts the
+            # infrared luminosity
+            self.apply_cmb_heating(emissivity=emissivity, z=z)
 
     def _lnu(self, nu: unyt_array) -> unyt_array:  # type: ignore[override]
         """
@@ -235,25 +253,13 @@ class Greybody(EmissionBase):
 
         """
 
-        _temperature: unyt_quantity
-        cmb_factor: float
-        if cmb_heating:
-            _temperature = (
-                apply_cmb_heating(
-                    temperature=temperature.to("K").value,  # type: ignore
-                    emissivity=emissivity,
-                    z=z,
-                )
-                * K
-            )
-            cmb_factor = (_temperature / temperature) ** (4 + emissivity)  # type: ignore
-        else:
-            _temperature = temperature
-            cmb_factor = 1.0
+        EmissionBase.__init__(self, temperature)
 
-        self.temperature_z: unyt_quantity = _temperature
-        self.cmb_factor: float = cmb_factor
-        EmissionBase.__init__(self, temperature, cmb_factor)
+        if cmb_heating:
+            # calculate the factor by which the CMB boosts the
+            # infrared luminosity
+            self.apply_cmb_heating(emissivity=emissivity, z=z)
+
         self.emissivity = emissivity
 
     def _lnu(self, nu: unyt_array) -> unyt_array:  # type: ignore[override]
@@ -353,25 +359,13 @@ class Casey12(EmissionBase):
 
         """
 
-        _temperature: unyt_quantity
-        cmb_factor: float
-        if cmb_heating:
-            _temperature = (
-                apply_cmb_heating(
-                    temperature=temperature.to("K").value,  # type: ignore
-                    emissivity=emissivity,
-                    z=z,
-                )
-                * K
-            )
-            cmb_factor = (_temperature / temperature) ** (4 + emissivity)  # type: ignore
-        else:
-            _temperature = temperature
-            cmb_factor = 1.0
+        EmissionBase.__init__(self, temperature)
 
-        self.temperature_z: unyt_quantity = _temperature
-        self.cmb_factor: float = cmb_factor
-        EmissionBase.__init__(self, temperature, cmb_factor)
+        if cmb_heating:
+            # calculate the factor by which the CMB boosts the
+            # infrared luminosity
+            self.apply_cmb_heating(emissivity=emissivity, z=z)
+
         self.emissivity = emissivity
         self.alpha = alpha
         self.N_bb = N_bb
@@ -525,16 +519,16 @@ class IR_templates:
         p0: float = 125.0,
         verbose: bool = True,
     ) -> None:
-        self.grid = grid
-        self.mdust = mdust
-        self.template = template
-        self.ldust = ldust
-        self.gamma = gamma
-        self.qpah = qpah
-        self.umin = umin
-        self.alpha = alpha
-        self.p0 = p0
-        self.verbose = verbose
+        self.grid: Grid = grid
+        self.mdust: unyt_quantity = mdust
+        self.template: str = template
+        self.ldust: Optional[float] = ldust
+        self.gamma: Optional[float] = gamma
+        self.qpah: float = qpah
+        self.umin: Optional[float] = umin
+        self.alpha: float = alpha
+        self.p0: float = p0
+        self.verbose: bool = verbose
 
     def dl07(self) -> None:
         """
@@ -548,9 +542,9 @@ class IR_templates:
         """
 
         # Define the models parameters
-        qpahs = self.grid.qpah  # type: ignore
-        umins = self.grid.umin  # type: ignore
-        alphas = self.grid.alpha  # type: ignore
+        qpahs: NDArray[float] = self.grid.qpah
+        umins: NDArray[float] = self.grid.umin
+        alphas: NDArray[float] = self.grid.alpha
 
         # default Umax=1e7
         umax = 1e7
@@ -576,7 +570,7 @@ class IR_templates:
             func = partial(
                 solve_umin, umax=umax, u_avg=self.u_avg, gamma=self.gamma
             )
-            self.umin = fsolve(func, [0.1])  # type: ignore
+            self.umin = fsolve(func, [0.1])
 
         qpah_id = qpahs == qpahs[np.argmin(np.abs(qpahs - self.qpah))]
         umin_id = umins == umins[np.argmin(np.abs(umins - self.umin))]
@@ -590,7 +584,6 @@ class IR_templates:
         self.qpah_id = qpah_id
         self.umin_id = umin_id
         self.alpha_id = alpha_id
-
 
     def get_spectra(
         self,
