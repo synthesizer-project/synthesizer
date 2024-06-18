@@ -494,9 +494,7 @@ class Sed:
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
     def measure_bolometric_luminosity(
-        self,
-        integration_method="trapz",
-        nthreads=1
+        self, integration_method="trapz", nthreads=1
     ):
         """
         Calculate the bolometric luminosity of the SED.
@@ -538,10 +536,7 @@ class Sed:
         return self.bolometric_luminosity
 
     def measure_window_luminosity(
-        self,
-        window,
-        integration_method="trapz",
-        nthreads=1
+        self, window, integration_method="trapz", nthreads=1
     ):
         """
         Measure the luminosity in a spectral window.
@@ -586,10 +581,7 @@ class Sed:
         return luminosity
 
     def measure_window_lnu(
-        self,
-        window,
-        integration_method="trapz",
-        nthreads=1
+        self, window, integration_method="trapz", nthreads=1
     ):
         """
         Measure lnu in a spectral window.
@@ -721,10 +713,7 @@ class Sed:
         red = (4150, 4250) * angstrom
 
         return self.measure_break(
-            blue,
-            red,
-            nthreads=nthreads,
-            integration_method=integration_method
+            blue, red, nthreads=nthreads, integration_method=integration_method
         )
 
     def measure_d4000(
