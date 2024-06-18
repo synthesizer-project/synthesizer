@@ -210,6 +210,11 @@ class Grid:
             f"{self.grid_dir}/{self.grid_name}.{self.grid_ext}"
         )
 
+    @property
+    def log10metallicities(self):
+        """Return the log10 metallicity axis."""
+        return np.log10(self.metallicity)
+
     def _get_axes(self):
         """Get the grid axes from the HDF5 file."""
         # Get basic info of the grid
