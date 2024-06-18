@@ -13,7 +13,9 @@
 #include <numpy/ndarraytypes.h>
 
 /* Define a macro to handle that bzero is non-standard. */
+#ifndef bzero
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
+#endif
 
 /**
  * @brief Function to compute a data cube from particle data without smoothing.
@@ -32,8 +34,12 @@
  */
 PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
 
-  const double res;
-  const int npix_x, npix_y, npart, nlam;
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
+
+  double res;
+  int npix_x, npix_y, npart, nlam;
   PyArrayObject *np_sed_values;
   PyArrayObject *np_xs, *np_ys;
 
@@ -43,12 +49,28 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
 
   /* Get pointers to the actual data. */
   const double *sed_values = PyArray_DATA(np_sed_values);
+  if (sed_values == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract sed_values.");
+    return NULL;
+  }
   const double *xs = PyArray_DATA(np_xs);
+  if (xs == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract xs.");
+    return NULL;
+  }
   const double *ys = PyArray_DATA(np_ys);
+  if (ys == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract ys.");
+    return NULL;
+  }
 
   /* Allocate the data cube. */
   const int npix = npix_x * npix_y;
   double *data_cube = malloc(npix * nlam * sizeof(double));
+  if (data_cube == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to allocate data_cube.");
+    return NULL;
+  }
   bzero(data_cube, npix * nlam * sizeof(double));
 
   /* Loop over positions including the sed */
@@ -109,8 +131,12 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
  */
 PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 
-  const double res, threshold;
-  const int npix_x, npix_y, npart, nlam, kdim;
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
+
+  double res, threshold;
+  int npix_x, npix_y, npart, nlam, kdim;
   PyArrayObject *np_sed_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys;
 
@@ -121,14 +147,38 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 
   /* Get pointers to the actual data. */
   const double *sed_values = PyArray_DATA(np_sed_values);
+  if (sed_values == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract sed_values.");
+    return NULL;
+  }
   const double *smoothing_lengths = PyArray_DATA(np_smoothing_lengths);
+  if (smoothing_lengths == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract smoothing_lengths.");
+    return NULL;
+  }
   const double *xs = PyArray_DATA(np_xs);
+  if (xs == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract xs.");
+    return NULL;
+  }
   const double *ys = PyArray_DATA(np_ys);
+  if (ys == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract ys.");
+    return NULL;
+  }
   const double *kernel = PyArray_DATA(np_kernel);
+  if (kernel == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to extract kernel.");
+    return NULL;
+  }
 
   /* Allocate DATA_CUBE. */
   const int npix = npix_x * npix_y;
   double *data_cube = malloc(npix * nlam * sizeof(double));
+  if (data_cube == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Failed to allocate data_cube.");
+    return NULL;
+  }
   bzero(data_cube, npix * nlam * sizeof(double));
 
   /* Loop over positions including the sed */
@@ -151,6 +201,11 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 
     /* Create an empty kernel for this particle. */
     double *part_kernel = malloc(kernel_cdim * kernel_cdim * sizeof(double));
+    if (part_kernel == NULL) {
+      PyErr_SetString(PyExc_MemoryError,
+                      "Failed to allocate memory for part_kernel.");
+      return NULL;
+    }
     bzero(part_kernel, kernel_cdim * kernel_cdim * sizeof(double));
 
     /* Track the kernel sum for normalisation. */
@@ -246,9 +301,9 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 }
 
 static PyMethodDef ImageMethods[] = {
-    {"make_data_cube_hist", make_data_cube_hist, METH_VARARGS,
+    {"make_data_cube_hist", (PyCFunction)make_data_cube_hist, METH_VARARGS,
      "Method for sorting particles into a spectral cube without smoothing."},
-    {"make_data_cube_smooth", make_data_cube_smooth, METH_VARARGS,
+    {"make_data_cube_smooth", (PyCFunction)make_data_cube_smooth, METH_VARARGS,
      "Method for smoothing particles into a spectral cube."},
     {NULL, NULL, 0, NULL},
 };

@@ -243,7 +243,6 @@ class StarsComponent:
             Sed
                 An Sed object containing the stellar spectra.
         """
-
         # Make sure young and old in Myr, if provided
         young, old = self._check_young_old_units(young, old)
 
