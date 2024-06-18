@@ -65,6 +65,7 @@ class BlackholesComponent:
         spin=None,
         bolometric_luminosity=None,
         metallicity=None,
+        theta_torus=60 * deg,
         **kwargs,
     ):
         """
@@ -103,15 +104,18 @@ class BlackholesComponent:
         self.photo_luminosities = {}
         self.photo_fluxes = {}
 
-        # Save the arguments as attributes
+        # Save the black hole properties
         self.mass = mass
         self.accretion_rate = accretion_rate
         self.epsilon = epsilon
         self.accretion_rate_eddington = accretion_rate_eddington
-        self.inclination = inclination
         self.spin = spin
         self.bolometric_luminosity = bolometric_luminosity
         self.metallicity = metallicity
+
+        # Include any attributes needed for the emission models
+        self.inclination = inclination
+        self.theta_torus = theta_torus
 
         # Set any of the extra attribute provided as kwargs
         for key, val in kwargs.items():
