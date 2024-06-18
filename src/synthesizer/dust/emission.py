@@ -121,6 +121,7 @@ class EmissionBase:
         )
 
         self.cmb_factor = cmb_factor
+        self.temperature_z = _temperature
 
     def get_spectra(self, _lam: Union[NDArray[np.float64], unyt_array]) -> Sed:
         """
@@ -189,6 +190,8 @@ class Blackbody(EmissionBase):
             # calculate the factor by which the CMB boosts the
             # infrared luminosity
             self.apply_cmb_heating(emissivity=emissivity, z=z)
+        else:
+            self.temperature_z = temperature
 
     def _lnu(self, nu: unyt_array) -> unyt_array:  # type: ignore[override]
         """
@@ -260,6 +263,8 @@ class Greybody(EmissionBase):
             # calculate the factor by which the CMB boosts the
             # infrared luminosity
             self.apply_cmb_heating(emissivity=emissivity, z=z)
+        else:
+            self.temperature_z = temperature
 
         self.emissivity = emissivity
 
@@ -366,6 +371,8 @@ class Casey12(EmissionBase):
             # calculate the factor by which the CMB boosts the
             # infrared luminosity
             self.apply_cmb_heating(emissivity=emissivity, z=z)
+        else:
+            self.temperature_z = temperature
 
         self.emissivity = emissivity
         self.alpha = alpha
