@@ -284,6 +284,7 @@ class PacmanEmission(StellarEmissionModel):
             tau_v=self._tau_v,
             dust_curve=self._dust_curve,
             apply_dust_to=self.intrinsic,
+            component="stellar",
         )
 
     def _make_emergent(self):
@@ -294,6 +295,7 @@ class PacmanEmission(StellarEmissionModel):
                 tau_v=self._tau_v,
                 dust_curve=self._dust_curve,
                 apply_dust_to=self.intrinsic,
+                component="stellar",
             )
         else:
             # Otherwise, emergent = attenuated + escaped
@@ -308,6 +310,7 @@ class PacmanEmission(StellarEmissionModel):
             dust_emission_model=self._dust_emission_model,
             dust_lum_intrinsic=self.incident,
             dust_lum_attenuated=self.attenuated,
+            component="stellar",
         )
 
     def _make_total(self):
@@ -902,24 +905,28 @@ class BimodalPacmanEmission(StellarEmissionModel):
             tau_v=self.tau_v_nebular,
             dust_curve=self._dust_curve_nebular,
             apply_dust_to=self.young_intrinsic,
+            component="stellar",
         )
         young_attenuated_ism = AttenuatedEmission(
             label="young_attenuated_ism",
             tau_v=self.tau_v_ism,
             dust_curve=self._dust_curve_ism,
             apply_dust_to=self.young_intrinsic,
+            component="stellar",
         )
         young_attenuated = AttenuatedEmission(
             label="young_attenuated",
             tau_v=self.tau_v_ism,
             dust_curve=self._dust_curve_ism,
             apply_dust_to=young_attenuated_nebular,
+            component="stellar",
         )
         old_attenuated = AttenuatedEmission(
             label="old_attenuated",
             tau_v=self.tau_v_ism,
             dust_curve=self._dust_curve_ism,
             apply_dust_to=self.old_intrinsic,
+            component="stellar",
         )
         attenuated = StellarEmissionModel(
             label="attenuated",
@@ -942,12 +949,14 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 tau_v=self.tau_v_ism,
                 dust_curve=self._dust_curve_ism,
                 apply_dust_to=self.young_attenuated_nebular,
+                component="stellar",
             )
             old_emergent = AttenuatedEmission(
                 label="old_emergent",
                 tau_v=self.tau_v_ism,
                 dust_curve=self._dust_curve_ism,
                 apply_dust_to=self.old_intrinsic,
+                component="stellar",
             )
             emergent = StellarEmissionModel(
                 label="emergent",
@@ -979,6 +988,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
             mask_op="<",
+            component="stellar",
         )
         young_dust_emission_ism = DustEmission(
             label="young_dust_emission_ism",
@@ -988,6 +998,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
             mask_op="<",
+            component="stellar",
         )
         young_dust_emission = StellarEmissionModel(
             label="young_dust_emission",
@@ -1001,6 +1012,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
             mask_op=">=",
+            component="stellar",
         )
         dust_emission = StellarEmissionModel(
             label="dust_emission",
@@ -1086,12 +1098,14 @@ class BimodalPacmanEmission(StellarEmissionModel):
                     tau_v=self.tau_v_ism,
                     dust_curve=self._dust_curve_ism,
                     apply_dust_to=self.young_intrinsic,
+                    component="stellar",
                 )
                 old_total = AttenuatedEmission(
                     label="old_emergent",
                     tau_v=self.tau_v_ism,
                     dust_curve=self._dust_curve_ism,
                     apply_dust_to=self.old_intrinsic,
+                    component="stellar",
                 )
 
                 # Define the related models
