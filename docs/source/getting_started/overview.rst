@@ -62,3 +62,9 @@ An emission model is a set of standardised procedures for generating spectra fro
 These often take one of four forms: extraction, combinations, generation, and attenuation.
 Further details are provided in the 
 `Emission Models <../emission_models/emission_model.ipynb>`_ section.
+
+
+Observables
+***********
+
+SED objects, filters, imaging, etc.
