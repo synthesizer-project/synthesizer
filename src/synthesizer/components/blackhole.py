@@ -1125,7 +1125,7 @@ class BlackholesComponent:
                 (spectra/particle_spectra)
         """
         # Get the spectra
-        self.spectra = emission_model._get_spectra(
+        spectra = emission_model._get_spectra(
             component=self,
             generator_func=self.generate_lnu,
             dust_curves=dust_curves,
@@ -1135,5 +1135,8 @@ class BlackholesComponent:
             verbose=verbose,
             **kwargs,
         )
+
+        # Update the spectra dictionary
+        self.spectra.update(spectra)
 
         return self.spectra[emission_model.label]
