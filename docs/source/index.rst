@@ -4,10 +4,10 @@
 Synthesizer is an open-source python package for generating synthetic astrophysical spectra. It is modular, flexible and fast.
 
 This documentation provides a broad overview of the various components in synthesizer and how they interact.
-To get started please take a look at the `Getting started guide <getting_started/getting_started>`_, which contains download and installation instructions, as well as an overview of the code.
+To get started please take a look at the `getting started guide <getting_started/getting_started>`_, which contains download and installation instructions, as well as an overview of the code.
 
-For detailed examples of what synthesizer can do, take a look at the `examples page <auto_examples/index>`_.
-The full API is provided `here <API>`_.
+For detailed examples of what synthesizer can do, take a look at the `examples <auto_examples/index>`_ page.
+Check out the `API <API>`_ for exhaustive details on all synthesizer functionality.
 
 Contents
 ^^^^^^^^
@@ -20,8 +20,8 @@ Contents
    galaxies/galaxies
    components/components
    sed
-   emission_models/emission_models
    lines
+   emission_models/emission_models
    filters
    imaging/imaging
    advanced/advanced

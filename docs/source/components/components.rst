@@ -9,6 +9,7 @@ Each of these components
 .. toctree::
    :maxdepth: 1
 
-   stars
-   gas
-   blackholes
+   stars/stars
+   gas/gas
+   blackholes/blackholes
+   composite/composite
