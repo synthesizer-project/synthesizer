@@ -6,7 +6,6 @@ only contains common attributes and methods to reduce boilerplate.
 
 from synthesizer import exceptions
 from synthesizer.igm import Inoue14
-from synthesizer.line import LineCollection
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
 
 
@@ -742,20 +741,10 @@ class BaseGalaxy:
             dict
                 The combined spectra for the galaxy.
         """
-        # Get the stellar spectra
-        self.stars.get_spectra(
-            emission_model=emission_model,
-            dust_curves=dust_curves,
-            tau_v=tau_v,
-            fesc=fesc,
-            mask=mask,
-            verbose=verbose,
-            **kwargs,
-        )
-
-        # Get the black hole spectra
-        self.black_holes.get_spectra(
-            emission_model=emission_model,
+        # Get the spectra
+        spectra = emission_model._get_spectra(
+            components={"stellar": self.stars, "blackhole": self.black_holes},
+            per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
             covering_fraction=covering_fraction,
@@ -764,36 +753,18 @@ class BaseGalaxy:
             **kwargs,
         )
 
-        # Define a dictionary to hold the combined spectra
-        spectra = {}
-
-        # Temporarily include the stars and black hole spectra
-        for label, sed in self.stars.spectra.items():
-            spectra[label] = sed
-        for label, sed in self.black_holes.spectra.items():
-            spectra[label] = sed
-
-        # The only thing left to do is combine any multi-component spectra
-        for this_model in emission_model._models:
-            # If we have a combined spectra from multiple components we need
-            # to combine them
-            if this_model.combine and this_model.component is None:
-                spectra = this_model._combine_spectra(
-                    emission_model,
-                    spectra,
-                    this_model,
+        # Unpack the spectra to the right component
+        for model in emission_model._models:
+            if model.component is None:
+                self.spectra[model.label] = spectra[model.label]
+            elif model.component == "stellar":
+                self.stars.spectra[model.label] = spectra[model.label]
+            elif model.component == "blackhole":
+                self.black_holes.spectra[model.label] = spectra[model.label]
+            else:
+                raise KeyError(
+                    f"Unknown component in emission model. ({model.component})"
                 )
-
-        # Remove the component spectra from the spectra dictionary
-        for label in spectra:
-            if (
-                label in self.stars.spectra
-                or label in self.black_holes.spectra
-            ):
-                del spectra[label]
-
-        # Update the spectra dictionary
-        self.spectra.update(spectra)
 
         return self.spectra
 
@@ -879,22 +850,11 @@ class BaseGalaxy:
             dict
                 The combined lines for the galaxy.
         """
-        # Get the stellar spectra
-        self.stars.get_lines(
+        # Get the lines
+        lines = emission_model._get_lines(
             line_ids=line_ids,
-            emission_model=emission_model,
-            dust_curves=dust_curves,
-            tau_v=tau_v,
-            fesc=fesc,
-            mask=mask,
-            verbose=verbose,
-            **kwargs,
-        )
-
-        # Get the black hole spectra
-        self.black_holes.get_lines(
-            line_ids=line_ids,
-            emission_model=emission_model,
+            components={"stellar": self.stars, "blackhole": self.black_holes},
+            per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
             covering_fraction=covering_fraction,
@@ -903,36 +863,17 @@ class BaseGalaxy:
             **kwargs,
         )
 
-        # Define a dictionary to hold the combined lines
-        lines = {}
-
-        # Temporarily include the stars and black hole lines
-        for label, line_col in self.stars.lines.items():
-            lines[label] = {line.id: line for line in line_col}
-        for label, line_col in self.black_holes.lines.items():
-            lines[label] = {line.id: line for line in line_col}
-
-        # The only thing left to do is combine any multi-component lines
-        for this_model in emission_model._models:
-            # If we have a combined lines from multiple components we need
-            # to combine them
-            if this_model.combine and this_model.component is None:
-                lines = this_model._combine_lines(
-                    emission_model,
-                    lines,
-                    this_model,
+        # Unpack the lines to the right component
+        for model in emission_model._models:
+            if model.component is None:
+                self.lines[model.label] = lines[model.label]
+            elif model.component == "stellar":
+                self.stars.lines[model.label] = lines[model.label]
+            elif model.component == "blackhole":
+                self.black_holes.lines[model.label] = lines[model.label]
+            else:
+                raise KeyError(
+                    f"Unknown component in emission model. ({model.component})"
                 )
-
-        # Remove the component lines from the lines dictionary
-        for label in lines:
-            if label in self.stars.lines or label in self.black_holes.lines:
-                del lines[label]
-
-        # Convert lines dictionary to a LineCollection object
-        for label, line_dict in lines.items():
-            lines[label] = LineCollection(line_dict)
-
-        # Update the lines dictionary
-        self.lines.update(lines)
 
         return self.lines
