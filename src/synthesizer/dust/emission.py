@@ -142,40 +142,11 @@ class EmissionBase:
             "Both intrinsic and emergent SEDs must be provided"
         )
 
-    def apply_cmb_heating(self, emissivity: float, z: float) -> None:
+    def _get_spectra(
+        self, _lam: Union[NDArray[np.float64], unyt_array]
+    ) -> Sed:
         """
-        Returns the factor by which the CMB boosts the
-        infrared luminosity
-        (See implementation in da Cunha+2013)
-
-        Args:
-            emissivity (float)
-                The emissivity index in the FIR (no unit)
-            z (float)
-                The redshift of the galaxy
-        """
-
-        # temperature of CMB at z=0
-        _T_cmb_0 = 2.73 * K
-        _T_cmb_z = _T_cmb_0 * (1 + z)
-        _exp_factor = 4.0 + emissivity
-
-        _temperature = (
-            self.temperature**_exp_factor
-            + _T_cmb_z**_exp_factor
-            - _T_cmb_0**_exp_factor
-        ) ** (1 / _exp_factor)
-
-        cmb_factor: float = (_temperature / self.temperature) ** (
-            4 + emissivity
-        )
-
-        self.cmb_factor = cmb_factor
-        self.temperature_z = _temperature
-
-    def get_spectra(self, _lam: Union[NDArray[np.float64], unyt_array]) -> Sed:
-        """
-        Returns the normalised lnu for the provided wavelength grid
+        Return the normalised lnu for the provided wavelength grid.
 
         Args:
             _lam (float/array-like, float)
@@ -198,6 +169,36 @@ class EmissionBase:
         sed._lnu *= self.cmb_factor
 
         return sed
+
+    def apply_cmb_heating(self, emissivity: float, z: float) -> None:
+        """
+        Return the factor by which the CMB boosts the infrared luminosity.
+
+        (See implementation in da Cunha+2013)
+
+        Args:
+            emissivity (float)
+                The emissivity index in the FIR (no unit)
+            z (float)
+                The redshift of the galaxy
+        """
+        # Temperature of CMB at z=0
+        _T_cmb_0 = 2.73 * K
+        _T_cmb_z = _T_cmb_0 * (1 + z)
+        _exp_factor = 4.0 + emissivity
+
+        _temperature = (
+            self.temperature**_exp_factor
+            + _T_cmb_z**_exp_factor
+            - _T_cmb_0**_exp_factor
+        ) ** (1 / _exp_factor)
+
+        cmb_factor: float = (_temperature / self.temperature) ** (
+            4 + emissivity
+        )
+
+        self.cmb_factor = cmb_factor
+        self.temperature_z = _temperature
 
 
 class Blackbody(EmissionBase):
