@@ -6,12 +6,12 @@ To get started with ``synthesizer`` you need to complete the following setup ste
 - Create a python environment
 - Clone the code base
 - Install the code
-- Download a stellar population synthesis (SPS) grid
+- Download a `grid`
 
 Creating a python environment
 #############################
 
-First create a virtual python environment (``synthesizer`` has been tested with Python 3.10). You should replace this path with where you wish to install your virtual environment::
+First create a virtual python environment. ``synthesizer`` has been tested with Python 3.10, 3.11 and 3.12. You should replace this path with where you wish to install your virtual environment::
 
     python3 -m venv /path_to_new_virtual_environment
     source /path_to_new_virtual_environment/bin/activate
@@ -27,7 +27,7 @@ You can then clone the latest version of ``synthesizer`` from `github <https://g
 
 If you want to install the code in *editable* mode, so any changes in the code base will be reflected in the installation::
 
-    pip install .
+    pip install -e .
 
 Make sure you stay up to date with the latest versions through git::
 
@@ -61,7 +61,7 @@ This will add additional checks to the code to help catch bugs, but will slow do
 
 The build process will generate a log file (`build_synth.log`) which details the compilation process and any choices that were made about the requested flags. If you encounter any issues, please check this log file for more information.
 
-Downloading SPS grids
-#####################
+Downloading grids
+#################
 
-Once you've installed the code, you're almost ready to get started with Synthesizer. The last step is to download an SPS *grid* file, described in the next section.
+Once you've installed the code, you're almost ready to get started with Synthesizer. The last step is to download a *grid* file, described in the next section.

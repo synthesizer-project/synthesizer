@@ -217,14 +217,13 @@ Grid list
         - maraston-rhb_bpl-0.1,100-2.35 
 
 
-How to create your own grids
-============================
+Creating your own grids
+=======================
 
-Advanced users may wish to create their own grids. We provide scripts for doing this in the `synthesizer-grids` repository. Details are provided in the section linked below. 
+Advanced users may wish to create their own grids. We provide scripts for doing this in the `synthesizer-grids` repository. Details are provided `here <../advanced/creating_grids>`_.
+
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
-   ../advanced/creating_grids
-
-
+   grids_example
