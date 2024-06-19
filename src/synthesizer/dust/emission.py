@@ -376,6 +376,12 @@ class IR_templates:
         mdust (float)
             The mass of dust in the galaxy (Msun).
 
+        dgr (float)
+            The dust-to-gas ratio of the galaxy
+
+        MH (float)
+            The mass in hydrogen of the galaxy
+
         template (string)
             The IR template model to be used
             (Currently only Draine and Li 2007 model implemented)
@@ -408,6 +414,8 @@ class IR_templates:
         self,
         grid,
         mdust,
+        dgr=0.01,
+        MH=None,
         ldust=None,
         template="DL07",
         gamma=None,
@@ -419,8 +427,10 @@ class IR_templates:
     ):
         self.grid = grid
         self.mdust = mdust
+        self.dgr = dgr
         self.template = template
         self.ldust = ldust
+        self.MH = MH
         self.gamma = gamma
         self.qpah = qpah
         self.umin = umin
@@ -447,6 +457,14 @@ class IR_templates:
         # default Umax=1e7
         umax = 1e7
 
+        if self.MH is None:
+            warn(
+                "No hydrogen gas mass provided, assuming a"
+                f"dust-to-gas ratio of {self.dgr}"
+            )
+            # calculate MH: Mass in hydrogen gas
+            self.MH = 0.74 * self.mdust / self.dgr
+
         if (self.gamma is None) or (self.umin is None) or (self.alpha == 2.0):
             warn(
                 "Gamma, Umin or alpha for DL07 model not provided, "
@@ -468,7 +486,7 @@ class IR_templates:
             func = partial(
                 solve_umin, umax=umax, u_avg=self.u_avg, gamma=self.gamma
             )
-            self.umin = fsolve(func, [10.])
+            self.umin = fsolve(func, [10.0])
 
         qpah_id = qpahs == qpahs[np.argmin(np.abs(qpahs - self.qpah))]
         umin_id = umins == umins[np.argmin(np.abs(umins - self.umin))]
@@ -483,9 +501,15 @@ class IR_templates:
         self.umin_id = umin_id
         self.alpha_id = alpha_id
 
-    def get_spectra(self, _lam, intrinsic_sed=None,
-        attenuated_sed=None, dust_components=False,
-        verbose=True, **kwargs):
+    def get_spectra(
+        self,
+        _lam,
+        intrinsic_sed=None,
+        attenuated_sed=None,
+        dust_components=False,
+        verbose=True,
+        **kwargs,
+    ):
         """
         Returns the lnu for the provided wavelength grid
 
@@ -507,15 +531,16 @@ class IR_templates:
             if intrinsic_sed is not None and attenuated_sed is not None:
                 if self.ldust is not None:
                     warn(
-                        F"Dust luminosity is already set by user to {self.ldust}."
-                        "Is this expected behaviour?"
+                        "Dust luminosity is already set by user"
+                        "to {self.ldust}. Is this expected behaviour?"
                     )
                 # Calculate the bolometric dust luminosity as the difference
                 # between the intrinsic and attenuated
-                self.ldust = (
+                ldust = (
                     intrinsic_sed.measure_bolometric_luminosity()
                     - attenuated_sed.measure_bolometric_luminosity()
                 )
+                self.ldust = ldust.to("Lsun")
             self.dl07(self.grid)
         else:
             raise exceptions.UnimplementedFunctionality(
@@ -533,7 +558,7 @@ class IR_templates:
         lnu_old = (
             (1.0 - self.gamma)
             * self.grid.spectra["diffuse"][self.qpah_id, self.umin_id][0]
-            * (self.mdust / Msun).value
+            * (self.MH / Msun).value
         )
 
         lnu_young = (
@@ -541,7 +566,7 @@ class IR_templates:
             * self.grid.spectra["pdr"][
                 self.qpah_id, self.umin_id, self.alpha_id
             ][0]
-            * (self.mdust / Msun).value
+            * (self.MH / Msun).value
         )
 
         sed_old = Sed(lam=lam, lnu=lnu_old * (erg / s / Hz))
