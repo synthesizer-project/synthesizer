@@ -702,7 +702,7 @@ class IR_templates:
                     - attenuated_sed.measure_bolometric_luminosity()
                 )
                 self.ldust = ldust.to("Lsun")
-            self.dl07(self.grid)
+            self.dl07()
         else:
             raise exceptions.UnimplementedFunctionality(
                 f"{self.template} not a valid model!"
