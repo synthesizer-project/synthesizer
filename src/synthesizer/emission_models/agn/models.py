@@ -26,7 +26,7 @@ from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.sed import Sed
 
 
-class Template(EmissionModel):
+class Template:
     """
     Use a template for the emission model.
 
@@ -69,14 +69,6 @@ class Template(EmissionModel):
             **kwargs
 
         """
-        EmissionModel.__init__(
-            self,
-            grid=None,
-            label=label,
-            fesc=fesc,
-            **kwargs,
-        )
-
         # Ensure we have been given units
         if lam is not None and not isinstance(lam, unyt_array):
             raise exceptions.MissingUnits("lam must be provided with units")
@@ -105,10 +97,10 @@ class Template(EmissionModel):
                 "Either a filename or both lam and lnu must be provided!"
             )
 
-        # Flag that this is a template
-        self._is_template = True
+        # Set the escape fraction
+        self.fesc = fesc
 
-    def _scale_template(self, bolometric_luminosity):
+    def get_spectra(self, bolometric_luminosity):
         """
         Calculate the blackhole spectra by scaling the template.
 
@@ -129,6 +121,34 @@ class Template(EmissionModel):
             bolometric_luminosity.to(self.sed.lnu.units * Hz).value
             * self.sed
             * (1 - self.fesc)
+        )
+
+
+class TemplateEmission(EmissionModel):
+    """
+    An emission model that uses a template for the AGN emission.
+
+    This is a child of the EmisisonModel class, for a full description of the
+    parameters see the EmissionModel class.
+    """
+
+    def __init__(self, template, label="template", **kwargs):
+        """
+        Initialise the TemplateEmission model.
+
+        Args:
+            template (Template)
+                The template object containing the AGN emission.
+            label (str)
+                The label for the model.
+            **kwargs
+
+        """
+        EmissionModel.__init__(
+            self,
+            label=label,
+            generator=template,
+            **kwargs,
         )
 
 
