@@ -2330,9 +2330,6 @@ def sample_sfhz(
         """
         Generate stellar spectra as described by the emission model.
 
-        If the emission model defines a dust_curve or fesc and no overide
-        is provided in the arguments to this function
-
         Args:
             emission_model (EmissionModel):
                 The emission model to use.
