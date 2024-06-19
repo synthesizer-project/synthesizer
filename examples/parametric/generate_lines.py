@@ -1,5 +1,6 @@
 """
-# Generating Lines from a Parametric Galaxy
+Generating Lines from a Parametric Galaxy
+=========================================
 
 In this example we're going to generate emission line predictions for a
 parametric galaxy.

@@ -1,11 +1,11 @@
-#!/usr/bin/env python
-# coding: utf-8
+"""
+Camels example
+==============
 
-# # Camels example
-#
-# Use test cosmological simulation data (from the [CAMELS simulations](
-# https://www.camel-simulations.org/)) to generate spectra and calculate
-# photometry.
+Use test cosmological simulation data (from the [CAMELS simulations](
+https://www.camel-simulations.org/)) to generate spectra and calculate
+photometry.
+"""
 
 
 import matplotlib.pyplot as plt

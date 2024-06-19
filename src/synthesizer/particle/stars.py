@@ -28,14 +28,12 @@ from unyt import Hz, angstrom, erg, kpc, s
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
-from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.extensions.timers import tic, toc
-from synthesizer.line import Line, LineCollection
+from synthesizer.line import Line
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
 from synthesizer.plt import single_histxy
-from synthesizer.sed import Sed
 from synthesizer.units import Quantity
 from synthesizer.warnings import warn
 
@@ -1372,778 +1370,6 @@ class Stars(Particles, StarsComponent):
         # Set resampled flag
         self.resampled = True
 
-    def get_particle_spectra_linecont(
-        self,
-        grid,
-        fesc=0.0,
-        fesc_LyA=1.0,
-        young=None,
-        old=None,
-        **kwargs,
-    ):
-        """
-        Generate the line contribution spectra. This is only invoked if
-        fesc_LyA < 1.
-
-        Args:
-            grid (obj):
-                Spectral grid object.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
-            fesc_LyA (float)
-                Fraction of Lyman-alpha emission that can escape unimpeded
-                by the ISM/IGM.
-            young (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
-            kwargs
-                Any keyword arguments which can be passed to
-                generate_particle_lnu.
-
-        Returns:
-            numpy.ndarray
-                The line contribution spectra.
-        """
-
-        # Generate contribution of line emission alone and reduce the
-        # contribution of Lyman-alpha
-        linecont = self.generate_particle_lnu(
-            grid,
-            spectra_name="linecont",
-            old=old,
-            young=young,
-            **kwargs,
-        )
-
-        # Multiply by the Lyamn-continuum escape fraction
-        linecont *= 1 - fesc
-
-        # Get index of Lyman-alpha
-        idx = grid.get_nearest_index(1216.0, grid.lam)
-        linecont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
-
-        return linecont
-
-    def get_particle_spectra_incident(
-        self,
-        grid,
-        young=None,
-        old=None,
-        label="",
-        **kwargs,
-    ):
-        """
-        Generate the incident (equivalent to pure stellar for stars) spectra
-        using the provided Grid.
-
-        Args:
-            grid (obj):
-                Spectral grid object.
-            young (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
-            label (string)
-                A modifier for the spectra dictionary key such that the
-                key is label + "_incident".
-            kwargs
-                Any keyword arguments which can be passed to
-                generate_particle_lnu.
-
-
-        Returns:
-            Sed
-                An Sed object containing the stellar spectra.
-        """
-
-        # Get the incident spectra
-        lnu = self.generate_particle_lnu(
-            grid,
-            "incident",
-            young=young,
-            old=old,
-            **kwargs,
-        )
-
-        # Create the Sed object
-        sed = Sed(grid.lam, lnu)
-
-        # Store the Sed object
-        self.particle_spectra[label + "incident"] = sed
-
-        return sed
-
-    def get_particle_spectra_transmitted(
-        self,
-        grid,
-        fesc=0.0,
-        young=None,
-        old=None,
-        label="",
-        **kwargs,
-    ):
-        """
-        Generate the transmitted spectra using the provided Grid. This is the
-        emission which is transmitted through the gas as calculated by the
-        photoionisation code.
-
-        Args:
-            grid (obj):
-                Spectral grid object.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
-            young (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
-            label (string)
-                A modifier for the spectra dictionary key such that the
-                key is label + "_transmitted".
-            kwargs
-                Any keyword arguments which can be passed to
-                generate_particle_lnu.
-
-        Returns:
-            Sed
-                An Sed object containing the transmitted spectra.
-        """
-
-        # Get the transmitted spectra
-        lnu = (1.0 - fesc) * self.generate_particle_lnu(
-            grid,
-            "transmitted",
-            young=young,
-            old=old,
-            **kwargs,
-        )
-
-        # Create the Sed object
-        sed = Sed(grid.lam, lnu)
-
-        # Store the Sed object
-        self.particle_spectra[label + "transmitted"] = sed
-
-        return sed
-
-    def get_particle_spectra_nebular(
-        self,
-        grid,
-        fesc=0.0,
-        young=None,
-        old=None,
-        label="",
-        **kwargs,
-    ):
-        """
-        Generate nebular spectra from a grid object and star particles.
-        The grid object must contain a nebular component.
-
-        Args:
-            grid (obj):
-                Spectral grid object.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
-            young (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
-            label (string)
-                A modifier for the spectra dictionary key such that the
-                key is label + "_nebular".
-            kwargs
-                Any keyword arguments which can be passed to
-                generate_particle_lnu.
-
-        Returns:
-            Sed
-                An Sed object containing the nebular spectra.
-        """
-
-        # Get the nebular emission spectra
-        lnu = self.generate_particle_lnu(
-            grid, "nebular", young=young, old=old, **kwargs
-        )
-
-        # Apply the escape fraction
-        lnu *= 1 - fesc
-
-        # Create the Sed object
-        sed = Sed(grid.lam, lnu)
-
-        # Store the Sed object
-        self.particle_spectra[label + "nebular"] = sed
-
-        return sed
-
-    def get_particle_spectra_reprocessed(
-        self,
-        grid,
-        fesc=0.0,
-        fesc_LyA=1.0,
-        young=None,
-        old=None,
-        label="",
-        **kwargs,
-    ):
-        """
-        Generates the intrinsic spectra, this is the sum of the escaping
-        radiation (if fesc>0), the transmitted emission, and the nebular
-        emission. The transmitted emission is the emission that is
-        transmitted through the gas. In addition to returning the intrinsic
-        spectra this saves the incident, nebular, and escaped spectra if
-        update is set to True.
-
-        Args:
-            grid (obj):
-                Spectral grid object.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
-            fesc_LyA (float)
-                Fraction of Lyman-alpha emission that can escape unimpeded
-                by the ISM/IGM.
-            young (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for young star particles.
-            old (unyt_quantity):
-                If not None, specifies age in Myr at which to filter
-                for old star particles.
-            label (string)
-                A modifier for the spectra dictionary key such that the
-                key is label + "_transmitted".
-            kwargs
-                Any keyword arguments which can be passed to
-                generate_particle_lnu.
-
-        Updates:
-            incident:
-            transmitted
-            nebular
-            reprocessed
-            intrinsic
-
-            if fesc>0:
-                escaped
-
-        Returns:
-            Sed
-                An Sed object containing the intrinsic spectra.
-        """
-
-        # add underscore to label if it doesn't have one
-        if len(label) > 0 and label[-1] != "_":
-            label = f"{label}_"
-
-        # The incident emission
-        incident = self.get_particle_spectra_incident(
-            grid,
-            young=young,
-            old=old,
-            label=label,
-            **kwargs,
-        )
-
-        # The emission which escapes the gas
-        if fesc > 0:
-            escaped = Sed(grid.lam, fesc * incident._lnu)
-
-        # The stellar emission which **is** reprocessed by the gas
-        transmitted = self.get_particle_spectra_transmitted(
-            grid,
-            fesc,
-            young=young,
-            old=old,
-            label=label,
-            **kwargs,
-        )
-
-        # The nebular emission
-        nebular = self.get_particle_spectra_nebular(
-            grid, fesc, young=young, old=old, label=label, **kwargs
-        )
-
-        # If the Lyman-alpha escape fraction is <1.0 suppress it.
-        if fesc_LyA < 1.0:
-            # Get the new line contribution to the spectrum
-            linecont = self.get_particle_spectra_linecont(
-                grid,
-                fesc=fesc,
-                fesc_LyA=fesc_LyA,
-                **kwargs,
-            )
-
-            # Get the nebular continuum emission
-            nebular_continuum = self.generate_particle_lnu(
-                grid,
-                "nebular_continuum",
-                young=young,
-                old=old,
-                **kwargs,
-            )
-            nebular_continuum *= 1 - fesc
-
-            # Redefine the nebular emission
-            nebular._lnu = linecont + nebular_continuum
-
-        # The reprocessed emission, the sum of transmitted, and nebular
-        reprocessed = nebular + transmitted
-
-        # The intrinsic emission, the sum of escaped, transmitted, and nebular
-        # if escaped exists other its simply the reprocessed
-        if fesc > 0:
-            intrinsic = reprocessed + escaped
-        else:
-            intrinsic = reprocessed
-
-        if fesc > 0:
-            self.particle_spectra[label + "escaped"] = escaped
-        self.particle_spectra[label + "reprocessed"] = reprocessed
-        self.particle_spectra[label + "intrinsic"] = intrinsic
-
-        return reprocessed
-
-    def get_particle_spectra_screen(
-        self,
-        grid=None,
-        fesc=0.0,
-        tau_v=None,
-        dust_curve=PowerLaw(slope=-1.0),
-        young=None,
-        old=None,
-        label="",
-    ):
-        """
-        Generates the dust attenuated spectra. First generates the intrinsic
-        spectra if this hasn't already been calculated.
-
-        Args:
-            grid (obj):
-                Spectral grid object.
-            fesc (float/array-like, float)
-                Fraction of stellar emission that escapes unattenuated from
-                the birth cloud. Can either be a single value
-                or an value per star (defaults to 0.0).
-            kwargs
-                Any keyword arguments which can be passed to
-                generate_particle_lnu.
-
-        Updates:
-            incident:
-            transmitted
-            nebular
-            reprocessed
-            intrinsic
-            attenuated
-
-            if fesc>0:
-                escaped
-
-        Returns:
-            Sed
-                An Sed object containing the attenuated spectra.
-        """
-
-        # add underscore to label if it doesn't have one
-        if len(label) > 0 and label[-1] != "_":
-            label = f"{label}_"
-
-        # If the reprocessed spectra haven't already been calculated and saved
-        # then generate them.
-
-        if label + "intrinsic" not in self.particle_spectra:
-            self.get_particle_spectra_reprocessed(
-                grid,
-                fesc=fesc,
-                young=young,
-                old=old,
-                label=label,
-            )
-
-        # we need the mask based on young old arguments for this to work
-        mask = self._get_masks(young, old)
-
-        # If tau_v is None use the tau_v on stars otherwise raise exception.
-        if tau_v is not None:
-            if hasattr(self, "tau_v"):
-                tau_v = self.tau_v[mask]
-            else:
-                raise exceptions.InconsistentArguments(
-                    "tau_v must either be provided or exist on stars for"
-                    "attenuated spectra to be calculated."
-                )
-
-        intrinsic_spectra = self.particle_spectra[label + "intrinsic"]
-
-        # apply attenuated and save Sed object
-        self.particle_spectra[label + "attenuated"] = (
-            intrinsic_spectra.apply_attenuation(
-                tau_v=tau_v,
-                dust_curve=dust_curve,
-            )
-        )
-
-        return self.particle_spectra[label + "attenuated"]
-
-    def get_particle_line_intrinsic(
-        self,
-        grid,
-        line_ids,
-        fesc=0.0,
-        mask=None,
-        method="cic",
-        label="",
-    ):
-        """
-        Get a LineCollection containing intrinsic lines for each particle.
-
-        The resulting LineCollection contains the intrinsic lines for each
-        individual particle.
-
-        Args:
-            grid (Grid):
-                A Grid object.
-            line_ids (list/str):
-                A list of line_ids or a str denoting a single line.
-                Doublets can be specified as a nested list or using a
-                comma (e.g. 'OIII4363,OIII4959').
-            fesc (float):
-                The Lyman continuum escaped fraction, the fraction of
-                ionising photons that entirely escaped.
-            mask (array)
-                A mask to apply to the particles (only applicable to particle)
-            method (str)
-                The method to use for the interpolation. Options are:
-                'cic' - Cloud in cell
-                'ngp' - Nearest grid point
-
-        Returns:
-            LineCollection
-                A dictionary like object containing line objects.
-        """
-
-        # add underscore to label if it doesn't have one
-        if len(label) > 0 and label[-1] != "_":
-            label = f"{label}_"
-
-        # Handle the line ids
-        if isinstance(line_ids, str):
-            # If only one line specified convert to a list
-            line_ids = [
-                line_ids,
-            ]
-        elif isinstance(line_ids, (list, tuple)):
-            # Convert all tuple or list line_ids to strings
-            line_ids = [
-                ", ".join(line_id)
-                if isinstance(line_id, (list, tuple))
-                else line_id
-                for line_id in line_ids
-            ]
-        else:
-            raise exceptions.InconsistentArguments(
-                "line_ids must be a list, tuple or string"
-            )
-
-        # Dictionary holding Line objects
-        lines = {}
-
-        # Loop over the lines
-        for line_id in line_ids:
-            # Compute the line object
-            line = self.generate_particle_line(
-                grid=grid,
-                line_id=line_id,
-                fesc=fesc,
-                mask=mask,
-                method=method,
-            )
-
-            # Store this line
-            lines[line.id] = line
-
-        # Create a line collection
-        line_collection = LineCollection(lines)
-
-        # Associate that line collection with the Stars object
-        if "intrinsic" not in self.particle_lines:
-            self.particle_lines["intrinsic"] = line_collection
-        else:
-            self.particle_lines["intrinsic"] = self.particle_lines[
-                "intrinsic"
-            ].concatenate(line_collection)
-
-        return line_collection
-
-    def get_particle_line_attenuated(
-        self,
-        grid,
-        line_ids,
-        fesc=0.0,
-        tau_v_nebular=None,
-        tau_v_stellar=None,
-        dust_curve_nebular=PowerLaw(slope=-1.0),
-        dust_curve_stellar=PowerLaw(slope=-1.0),
-        mask=None,
-        method="cic",
-        label="",
-    ):
-        """
-        Get a LineCollection containing attenuated lines for each particle.
-
-        Calculates attenuated properties (luminosity, continuum, EW) for a
-        set of lines. Allows the nebular and stellar attenuation to be set
-        separately.
-
-        Args:
-            grid (Grid)
-                The Grid object.
-            line_ids (list/str)
-                A list of line_ids or a str denoting a single line. Doublets
-                can be specified as a nested list or using a comma
-                (e.g. 'OIII4363,OIII4959').
-            fesc (float)
-                The Lyman continuum escaped fraction, the fraction of
-                ionising photons that entirely escaped.
-            tau_v_BS (float)
-                V-band optical depth of the nebular emission.
-            tau_v_stellar (float)
-                V-band optical depth of the stellar emission.
-            dust_curve_nebular (dust_curve)
-                A dust_curve object specifying the dust curve.
-                for the nebular emission
-            dust_curve_stellar (dust_curve)
-                A dust_curve object specifying the dust curve
-                for the stellar emission.
-            mask (array)
-                A mask to apply to the particles (only applicable to particle)
-            method (str)
-                The method to use for the interpolation. Options are:
-                'cic' - Cloud in cell
-                'ngp' - Nearest grid point
-
-        Returns:
-            LineCollection
-                A dictionary like object containing line objects.
-        """
-
-        # add underscore to label if it doesn't have one
-        if len(label) > 0 and label[-1] != "_":
-            label = f"{label}_"
-
-        # Make a dummy mask if none has been passed
-        if mask is None:
-            mask = np.ones(self.nparticles, dtype=bool)
-
-        # If the intrinsic lines haven't already been calculated and saved
-        # then generate them
-        if "intrinsic" not in self.particle_lines:
-            self.get_particle_line_intrinsic(
-                grid,
-                line_ids,
-                fesc=fesc,
-                mask=mask,
-                method=method,
-            )
-        else:
-            old_lines = self.particle_lines["intrinsic"]
-
-            # Ok, well are all the requested lines in it?
-            old_line_ids = set(old_lines.line_ids)
-            if isinstance(line_ids, str):
-                new_line_ids = set([line_ids]) - old_line_ids
-            else:
-                new_line_ids = set(line_ids) - old_line_ids
-
-            # Combine the old collection with the newly requested lines
-            self.get_particle_line_intrinsic(
-                grid,
-                list(new_line_ids),
-                fesc,
-                mask=mask,
-                method=method,
-            )
-
-        # Get the intrinsic lines now we're sure they are there
-        intrinsic_lines = self.particle_lines["intrinsic"]
-
-        # Dictionary holding lines
-        lines = {}
-
-        # Loop over the intrinsic lines
-        for line_id, intrinsic_line in intrinsic_lines.lines.items():
-            # Skip lines we haven't been asked for
-            if line_id not in line_ids:
-                continue
-
-            # Calculate attenuation
-            T_nebular = dust_curve_nebular.get_transmission(
-                tau_v_nebular, intrinsic_line._wavelength
-            )
-            T_stellar = dust_curve_stellar.get_transmission(
-                tau_v_stellar, intrinsic_line._wavelength
-            )
-
-            # Apply attenuation
-            luminosity = intrinsic_line.luminosity * T_nebular
-            continuum = intrinsic_line.continuum * T_stellar
-
-            # Create the line object
-            line = Line(
-                line_id=line_id,
-                wavelength=intrinsic_line.wavelength,
-                luminosity=luminosity,
-                continuum=continuum,
-            )
-            lines[line_id] = line
-
-        # Create a line collection
-        line_collection = LineCollection(lines)
-
-        # Associate that line collection with the Stars object
-        if "attenuated" not in self.particle_lines:
-            self.particle_lines["attenuated"] = line_collection
-        else:
-            self.particle_lines["attenuated"] = self.particle_lines[
-                "attenuated"
-            ].concatenate(line_collection)
-
-        return line_collection
-
-    def get_particle_line_screen(
-        self,
-        grid,
-        line_ids,
-        fesc=0.0,
-        tau_v=None,
-        dust_curve=PowerLaw(slope=-1.0),
-        mask=None,
-        method="cic",
-        label="",
-    ):
-        """
-        Get a LineCollection with screen attenuated lines for each particle.
-
-        Calculates attenuated properties (luminosity, continuum, EW) for a set
-        of lines assuming a simple dust screen (i.e. both nebular and stellar
-        emission feels the same dust attenuation). This is a wrapper around
-        the more general method above.
-
-        Args:
-            grid (Grid)
-                The Grid object.
-            line_ids (list/str)
-                A list of line_ids or a str denoting a single line. Doublets
-                can be specified as a nested list or using a comma
-                (e.g. 'OIII4363,OIII4959').
-            fesc (float)
-                The Lyman continuum escaped fraction, the fraction of
-                ionising photons that entirely escaped.
-            tau_v (float)
-                V-band optical depth.
-            dust_curve (dust_curve)
-                A dust_curve object specifying the dust curve.
-            mask (array)
-                A mask to apply to the particles (only applicable to particle)
-            method (str)
-                The method to use for the interpolation. Options are:
-                'cic' - Cloud in cell
-                'ngp' - Nearest grid point
-
-        Returns:
-            LineCollection
-                A dictionary like object containing line objects.
-        """
-        return self.get_particle_line_attenuated(
-            grid,
-            line_ids,
-            fesc=fesc,
-            tau_v_nebular=tau_v,
-            tau_v_stellar=tau_v,
-            dust_curve_nebular=dust_curve,
-            dust_curve_stellar=dust_curve,
-            mask=mask,
-            method=method,
-            label=label,
-        )
-
-    def _prepare_sfzh_args(
-        self,
-        grid,
-        grid_assignment_method,
-        nthreads,
-    ):
-        """
-        Prepare the arguments for SFZH computation with the C functions.
-
-        Args:
-            grid (Grid)
-                The SPS grid object to extract spectra from.
-            grid_assignment_method (string)
-                The type of method used to assign particles to a SPS grid
-                point. Allowed methods are cic (cloud in cell) or nearest
-                grid point (ngp) or there uppercase equivalents (CIC, NGP).
-                Defaults to cic.
-
-        Returns:
-            tuple
-                A tuple of all the arguments required by the C extension.
-        """
-        # Set up the inputs to the C function.
-        grid_props = [
-            np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
-        ]
-        part_props = [
-            np.ascontiguousarray(self.log10ages, dtype=np.float64),
-            np.ascontiguousarray(self.metallicities, dtype=np.float64),
-        ]
-        part_mass = np.ascontiguousarray(
-            self._initial_masses, dtype=np.float64
-        )
-
-        # Make sure we set the number of particles to the size of the mask
-        npart = np.int32(len(part_mass))
-
-        # Get the grid dimensions after slicing what we need
-        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
-        for ind, g in enumerate(grid_props):
-            grid_dims[ind] = len(g)
-
-        # Convert inputs to tuples
-        grid_props = tuple(grid_props)
-        part_props = tuple(part_props)
-
-        # If nthreads = -1 we will use all available
-        if nthreads == -1:
-            nthreads = os.cpu_count()
-
-        return (
-            grid_props,
-            part_props,
-            part_mass,
-            grid_dims,
-            len(grid_props),
-            npart,
-            grid_assignment_method,
-            nthreads,
-        )
-
     def get_sfzh(
         self,
         grid,
@@ -2259,71 +1485,6 @@ class Stars(Particles, StarsComponent):
             plt.show()
 
         return fig, ax
-
-
-def sample_sfhz(
-    sfzh,
-    log10ages,
-    log10metallicities,
-    nstar,
-    initial_mass=1,
-    **kwargs,
-):
-    """
-    Create "fake" stellar particles by sampling a SFZH.
-
-    Args:
-        sfhz (array-like, float)
-            The Star Formation Metallicity History grid
-            (from parametric.Stars).
-        log10ages (array-like, float)
-            The log of the SFZH age axis.
-        log10metallicities (array-like, float)
-            The log of the SFZH metallicities axis.
-        nstar (int)
-            The number of stellar particles to produce.
-        intial_mass (int)
-            The intial mass of the fake stellar particles.
-
-    Returns:
-        stars (Stars)
-            An instance of Stars containing the fake stellar particles.
-    """
-
-    # Normalise the sfhz to produce a histogram (binned in time) between 0
-    # and 1.
-    hist = sfzh / np.sum(sfzh)
-
-    # Compute the cumaltive distribution function
-    cdf = np.cumsum(hist.flatten())
-    cdf = cdf / cdf[-1]
-
-    # Get a random sample from the cdf
-    values = np.random.rand(nstar)
-    value_bins = np.searchsorted(cdf, values)
-
-    # Convert 1D random indices to 2D indices
-    x_idx, y_idx = np.unravel_index(
-        value_bins, (len(log10ages), len(log10metallicities))
-    )
-
-    # Extract the sampled ages and metallicites and create an array
-    random_from_cdf = np.column_stack(
-        (log10ages[x_idx], log10metallicities[y_idx])
-    )
-
-    # Extract the individual logged quantities
-    log10ages, log10metallicities = random_from_cdf.T
-
-    # Instantiate Stars object with extra keyword arguments
-    stars = Stars(
-        initial_mass * np.ones(nstar),
-        10**log10ages,
-        10**log10metallicities,
-        **kwargs,
-    )
-
-    return stars
 
     def get_particle_spectra(
         self,
@@ -2498,3 +1659,68 @@ def sample_sfhz(
         self.particle_lines.update(lines)
 
         return self.particle_lines[emission_model.label]
+
+
+def sample_sfhz(
+    sfzh,
+    log10ages,
+    log10metallicities,
+    nstar,
+    initial_mass=1,
+    **kwargs,
+):
+    """
+    Create "fake" stellar particles by sampling a SFZH.
+
+    Args:
+        sfhz (array-like, float)
+            The Star Formation Metallicity History grid
+            (from parametric.Stars).
+        log10ages (array-like, float)
+            The log of the SFZH age axis.
+        log10metallicities (array-like, float)
+            The log of the SFZH metallicities axis.
+        nstar (int)
+            The number of stellar particles to produce.
+        intial_mass (int)
+            The intial mass of the fake stellar particles.
+
+    Returns:
+        stars (Stars)
+            An instance of Stars containing the fake stellar particles.
+    """
+
+    # Normalise the sfhz to produce a histogram (binned in time) between 0
+    # and 1.
+    hist = sfzh / np.sum(sfzh)
+
+    # Compute the cumaltive distribution function
+    cdf = np.cumsum(hist.flatten())
+    cdf = cdf / cdf[-1]
+
+    # Get a random sample from the cdf
+    values = np.random.rand(nstar)
+    value_bins = np.searchsorted(cdf, values)
+
+    # Convert 1D random indices to 2D indices
+    x_idx, y_idx = np.unravel_index(
+        value_bins, (len(log10ages), len(log10metallicities))
+    )
+
+    # Extract the sampled ages and metallicites and create an array
+    random_from_cdf = np.column_stack(
+        (log10ages[x_idx], log10metallicities[y_idx])
+    )
+
+    # Extract the individual logged quantities
+    log10ages, log10metallicities = random_from_cdf.T
+
+    # Instantiate Stars object with extra keyword arguments
+    stars = Stars(
+        initial_mass * np.ones(nstar),
+        10**log10ages,
+        10**log10metallicities,
+        **kwargs,
+    )
+
+    return stars

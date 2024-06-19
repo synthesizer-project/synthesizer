@@ -1,12 +1,10 @@
-#!/usr/bin/env python
-# coding: utf-8
+"""
+Generating Rest Frame SEDs from a Parametric Galaxy
+===================================================
 
-# # Generating Rest Frame SEDs from a Parametric Galaxy
-#
-# Building on the `make_sfzh` documents we can now see how to generate a
-# galaxy and produce its rest-frame spectral energy distribution.
-#
-
+Building on the `make_sfzh` documents we can now see how to generate a
+galaxy and produce its rest-frame spectral energy distribution.
+"""
 
 import matplotlib.pyplot as plt
 from synthesizer.filters import FilterCollection
@@ -17,16 +15,12 @@ from synthesizer.sed import plot_spectra_as_rainbow
 from unyt import Angstrom, Msun, Myr
 
 # We begin by initialising a `Grid`:
-
-
 grid_name = "test_grid"
 grid_dir = "../../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
 
 # Next we can define the star formation and metal enrichment history:
-
-
 # Define the functional form of the star formation and
 # metal enrichment histories
 
