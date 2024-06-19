@@ -180,11 +180,14 @@ class BlackholesComponent:
         self.velocity_dispersion_nlr = velocity_dispersion_nlr
 
         # The inclination of the black hole disc
-        self.inclination = inclination
+        self.inclination = (
+            inclination if inclination is not None else 0.0 * deg
+        )
 
         # The angle of the torus
         self.theta_torus = theta_torus
-        self.torus_fraction = self.theta_torus / (90 * deg)
+        self.torus_fraction = (self.theta_torus / (90 * deg)).value
+        print(self.inclination, self.theta_torus, self.torus_fraction)
         self._torus_edgeon_cond = self.inclination + self.theta_torus
 
         # Set any of the extra attribute provided as kwargs
