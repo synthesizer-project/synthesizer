@@ -1898,8 +1898,8 @@ class StellarEmissionModel(EmissionModel):
 
     def __init__(self, *args, **kwargs):
         """Instantiate a StellarEmissionModel instance."""
-        EmissionModel.__init__(*args, **kwargs)
-        self.component = "stellar"
+        EmissionModel.__init__(self, *args, **kwargs)
+        self._component = "stellar"
 
 
 class BlackHoleEmissionModel(EmissionModel):
@@ -1916,5 +1916,5 @@ class BlackHoleEmissionModel(EmissionModel):
 
     def __init__(self, *args, **kwargs):
         """Instantiate a BlackHoleEmissionModel instance."""
-        EmissionModel.__init__(*args, **kwargs)
-        self.component = "blackhole"
+        EmissionModel.__init__(self, *args, **kwargs)
+        self._component = "blackhole"
