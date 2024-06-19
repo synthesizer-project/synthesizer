@@ -209,7 +209,7 @@ class StarsComponent:
         # a single spectra
         if spectra_to_plot is None:
             spectra = self.spectra
-        elif isinstance(spectra_to_plot, list):
+        elif isinstance(spectra_to_plot, (list, tuple)):
             spectra = {key: self.spectra[key] for key in spectra_to_plot}
         else:
             spectra = self.spectra[spectra_to_plot]
