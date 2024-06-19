@@ -36,25 +36,25 @@ extensions = [
     # Automatically document param types (less noise in class signature)
     "sphinx_autodoc_typehints",
     "IPython.sphinxext.ipython_console_highlighting",
-#     "sphinx_gallery.gen_gallery",
+    "sphinx_gallery.gen_gallery",
     "sphinx_toolbox.collapse",
 ]
 
-# sphinx_gallery_conf = {
-#     "examples_dirs": "../../examples",  # path to your example scripts
-#     # Path to where to save gallery generated output
-#     "gallery_dirs": "auto_examples",
-#     "nested_sections": True,
-#     # Directory where function/class granular galleries are stored
-#     "backreferences_dir": "_autosummary/backreferences",
-#     # Modules for which function/class level galleries are created. In
-#     # this case sphinx_gallery and numpy in a tuple of strings.
-#     "doc_module": ("synthesizer"),
-#     #     # Regexes to match objects to exclude from implicit backreferences.
-#     #     # The default option is an empty set, i.e. exclude nothing.
-#     #     # To exclude everything, use: '.*'
-#     #     # 'exclude_implicit_doc': {r'pyplot\.show'},
-# }
+sphinx_gallery_conf = {
+    "examples_dirs": "../../examples",  # path to your example scripts
+    # Path to where to save gallery generated output
+    "gallery_dirs": "auto_examples",
+    "nested_sections": True,
+    # Directory where function/class granular galleries are stored
+    "backreferences_dir": "_autosummary/backreferences",
+    # Modules for which function/class level galleries are created. In
+    # this case sphinx_gallery and numpy in a tuple of strings.
+    "doc_module": ("synthesizer"),
+    #     # Regexes to match objects to exclude from implicit backreferences.
+    #     # The default option is an empty set, i.e. exclude nothing.
+    #     # To exclude everything, use: '.*'
+    #     # 'exclude_implicit_doc': {r'pyplot\.show'},
+}
 
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
 html_show_sourcelink = (
