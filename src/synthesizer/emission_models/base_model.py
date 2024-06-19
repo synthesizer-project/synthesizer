@@ -445,7 +445,11 @@ class EmissionModel:
 
             # Make the model title
             parts.append("-")
-            parts.append(f"  {model.label}".upper() + f" ({model._component})")
+            parts.append(f"  {model.label}".upper())
+            if model._component is not None:
+                parts[-1] += f" ({model._component})"
+            else:
+                parts[-1] += " (galaxy)"
             parts.append("-")
 
             if model._is_extracting:
