@@ -17,12 +17,12 @@ Contents
    
    getting_started/getting_started
    grids/grids
-   galaxies/galaxies
+   galaxy/galaxy
    components/components
    sed
    lines
    emission_models/emission_models
-   filters
+   filters/filters
    imaging/imaging
    advanced/advanced
    auto_examples/index
