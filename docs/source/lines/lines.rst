@@ -1,7 +1,11 @@
 Lines
 =====
 
+
+Contents
+^^^^^^^^
+
 .. toctree::
    :maxdepth: 1
 
-   lines
+   lines_example
