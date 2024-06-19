@@ -1,4 +1,8 @@
-from synthesizer.emission_models.base_model import EmissionModel
+from synthesizer.emission_models.base_model import (
+    EmissionModel,
+    StellarEmissionModel,
+    BlackHoleEmissionModel,
+)
 from synthesizer.emission_models.models import (
     DustEmission,
     AttenuatedEmission,

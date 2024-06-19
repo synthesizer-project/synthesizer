@@ -20,6 +20,7 @@ from unyt import Angstrom, cm, unyt_array, unyt_quantity
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
+from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.units import Quantity
 from synthesizer.warnings import deprecation
 
@@ -836,3 +837,67 @@ class Line:
             )
 
         return Line(self, *lines)
+
+    def apply_attenuation(
+        self,
+        tau_v,
+        dust_curve=PowerLaw(slope=-1.0),
+        mask=None,
+    ):
+        """
+        Apply attenuation to this line.
+
+        Args:
+            tau_v (float/array-like, float)
+                The V-band optical depth for every star particle.
+            dust_curve (synthesizer.dust.attenuation.*)
+                An instance of one of the dust attenuation models. (defined in
+                synthesizer/dust/attenuation.py)
+            mask (array-like, bool)
+                A mask array with an entry for each line. Masked out
+                spectra will be ignored when applying the attenuation. Only
+                applicable for multidimensional lines.
+
+        Returns:
+                Line
+                    A new Line object containing the attenuated line.
+        """
+        # Ensure the mask is compatible with the spectra
+        if mask is not None:
+            if self._luminosity.ndim < 2:
+                raise exceptions.InconsistentArguments(
+                    "Masks are only applicable for Lines containing "
+                    "multiple elements"
+                )
+            if self._luminosity.shape[0] != mask.size:
+                raise exceptions.InconsistentArguments(
+                    "Mask and lines are incompatible shapes "
+                    f"({mask.shape}, {self._lnu.shape})"
+                )
+
+        # If tau_v is an array it needs to match the spectra shape
+        if isinstance(tau_v, np.ndarray):
+            if self._luminosity.ndim < 2:
+                raise exceptions.InconsistentArguments(
+                    "Arrays of tau_v values are only applicable for Lines"
+                    " containing multiple elements"
+                )
+            if self._luminosity.shape[0] != tau_v.size:
+                raise exceptions.InconsistentArguments(
+                    "tau_v and lines are incompatible shapes "
+                    f"({tau_v.shape}, {self._lnu.shape})"
+                )
+
+        # Compute the transmission
+        transmission = dust_curve.get_transmission(tau_v, self._wavelength)
+
+        # Apply the transmision
+        att_lum = self.luminosity * transmission
+        att_cont = self.continuum * transmission
+
+        return Line(
+            line_id=self.id,
+            wavelength=self.wavelength,
+            luminosity=att_lum,
+            continuum=att_cont,
+        )
