@@ -661,3 +661,126 @@ class BaseGalaxy:
             filters=filters,
             quantity_to_plot=quantity_to_plot,
         )
+
+    def get_spectra(
+        self,
+        emission_model,
+        dust_curves=None,
+        tau_v=None,
+        fesc=None,
+        covering_fraction=None,
+        mask=None,
+        verbose=True,
+        **kwargs,
+    ):
+        """
+        Generate spectra as described by the emission model.
+
+
+        Args:
+            emission_model (EmissionModel):
+                The emission model to use.
+            dust_curves (dict):
+                An overide to the emisison model dust curves. Either:
+                    - None, indicating the dust_curves defined on the emission
+                      models should be used.
+                    - A single dust curve to apply to all emission models.
+                    - A dictionary of the form:
+                          {<label>: <dust_curve instance>}
+                      to use a specific dust curve instance with particular
+                      properties.
+            tau_v (dict):
+                An overide to the dust model optical depth. Either:
+                    - None, indicating the tau_v defined on the emission model
+                        should be used.
+                    - A float to use as the optical depth for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<tau_v>)}
+                        to use a specific optical depth with a particular
+                        model or
+                            {<label>: str(<attribute>)}
+                        to use an attribute of the component as the optical
+                        depth.
+            fesc (dict):
+                An overide to the emission model escape fraction. Either:
+                    - None, indicating the fesc defined on the emission model
+                      should be used.
+                    - A float to use as the escape fraction for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<fesc>)}
+                      to use a specific escape fraction with a particular
+                      model or
+                            {<label>: str(<attribute>)}
+                      to use an attribute of the component as the escape
+                      fraction.
+            covering_fraction (dict):
+                An overide to the emission model covering fraction. Either:
+                    - None, indicating the covering fraction defined on the
+                      emission model should be used.
+                    - A float to use as the covering fraction for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<covering_fraction>)}
+                      to use a specific covering fraction with a particular
+                      model or
+                            {<label>: str(<attribute>)}
+                      to use an attribute of the component as the covering
+                      fraction.
+            mask (dict):
+                An overide to the emission model mask. Either:
+                    - None, indicating the mask defined on the emission model
+                      should be used.
+                    - A dictionary of the form:
+                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
+                      to add a specific mask to a particular model.
+            verbose (bool)
+                Are we talking?
+            kwargs (dict)
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            dict
+                A dictionary of spectra which can be attached to the
+                appropriate spectra attribute of the component
+                (spectra/particle_spectra)
+        """
+        # Get the stellar spectra
+        self.stars.get_spectra(
+            emission_model=emission_model,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            fesc=fesc,
+            mask=mask,
+            verbose=verbose,
+            **kwargs,
+        )
+
+        # Get the black hole spectra
+        self.black_holes.get_spectra(
+            emission_model=emission_model,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            verbose=verbose,
+            **kwargs,
+        )
+
+        # Define a dictionary to hold the combined spectra
+        spectra = {}
+
+        # The only thing left to do is combine any multi-component spectra
+        for this_model in emission_model._models:
+            # If we have a combined spectra from multiple components we need
+            # to combine them
+            if this_model.combine and this_model.component is None:
+                spectra = this_model._combine_spectra(
+                    emission_model,
+                    spectra,
+                    this_model,
+                )
+
+        # Update the spectra dictionary
+        self.spectra.update(spectra)
+
+        return self.spectra[emission_model.label]
