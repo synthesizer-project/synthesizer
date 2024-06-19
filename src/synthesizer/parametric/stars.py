@@ -8,7 +8,7 @@ Example usage:
 
     stars = Stars(log10ages, metallicities,
                   sfzh=sfzh)
-    stars.get_spectra_incident(grid)
+    stars.get_spectra(emission_model)
     stars.plot_spectra()
 """
 
