@@ -892,8 +892,8 @@ class Line:
         transmission = dust_curve.get_transmission(tau_v, self._wavelength)
 
         # Apply the transmision
-        att_lum = self._luminosity * transmission
-        att_cont = self._continuum * transmission
+        att_lum = self.luminosity * transmission
+        att_cont = self.continuum * transmission
 
         return Line(
             line_id=self.id,
