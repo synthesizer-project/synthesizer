@@ -10,15 +10,23 @@ Grids
 
 `Grids`` are one of the fundamental components in synthesizer.
 At its simplest, a grid describes the emission as a function of some parameters.
-Typically these are the age and metallicity of a stellar population, and the emission is derived from a stellar population synthesis models.
+Typically these are the age and metallicity of a stellar population, and the emission is derived from a stellar population synthesis (SPS) model.
 
-However, these parameters can be arbitrary, and of any number of dimensions.
-For example, one could also describe arbitrary parameter dimensions.
+However, these parameters can be arbitrary, of any number of dimensions, and the emission can describe any source.
+For example, one could have a grid that has been post-processed through a photoionisation code, where the ionisation parameter is changed, or the source could be the emission from the narrow line region of an active galactic nuclei.
+Different grids can also be swapped in and out to assess the impact of different modelling choices; for example, one might wish to understand the impact of different SPS models on the integrated stellar emission.
+
+We provide a number of pre-computed grids for stellar and AGN emission that will be sufficient for most use cases (see `here <../grids/grids.rst>`_ for details).
+Advanced users can also generate their own grids, using the `synthesizer-grids` package (see `here <../advanced/creating_grids.rst>`_).
+
 
 Particle vs Parametric
 **********************
 
-Synthesizer can be used to generate astrophysical emission from a number of different data sources.
+Synthesizer can be used to generate the multi-wavelength emission from a range of astrophysical models with a wide array of complexity and fidelity.
+At one end, simple toy models can be generated within synthesizer that describe a galaxy through analytic forms; at the other end, data from high resolution isolated galaxy simulations can be ingested into synthesizer, consisting of tens of thousands of discrete elements describing the galaxy properties.
+
+Wherever your data source lies on this spectrum of complexity, it can typically be described in one of two 
 These data sources can primarily be divided into two types: **Particle** or **Parametric**.
 
 Particle data represents an astrophysical object through discrete elements with individual properties.
@@ -43,8 +51,8 @@ These components can include:
 * A gas component
 * Black hole components
 
-A component in `synthesizer`` can be initialised and used independently of a `Galaxy` object, and the emission from that individual component can be produced.
-However, much of the power of synthesizer comes from combining these components; a `Galaxy` object simplifies how they interact with one another, making the generation of complex spectra from various components simpler and faster.
+A component in `synthesizer`` can be initialised and used independently of a `Galaxy` object, and the emission from that individual component can also be generated.
+However, much of the power of synthesizer comes from combining these components; a `Galaxy` object simplifies how they interact with one another, making the self-consistent generation of complex spectra from various components within a galaxy simpler and faster.
 
 Emission models
 ***************

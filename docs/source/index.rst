@@ -1,19 +1,32 @@
 .. image:: img/synthesizer_text.png
     :alt: Synthesizer
 
-Synthesizer is a python package for generating synthetic astrophysical spectra. It is modular, flexible and fast.
-
-Here are just some examples of what synthesizer can do:
-
-- generate spectra for parametric star formation and metal enrichment histories
-- generate spectra for galaxies from particle-based cosmological hydrodynamic simulations
-- measure spectral diagnostics for given spectra
-- easily compare stellar population synthesis models
-- apply screen dust models to intrinsic spectra
+Synthesizer is an open-source python package for generating synthetic astrophysical spectra. It is modular, flexible and fast.
 
 This documentation provides a broad overview of the various components in synthesizer and how they interact.
-For detailed examples please see the `examples page <auto_examples/index>`_.
+To get started please take a look at the `Getting started guide <getting_started/getting_started>`_, which contains download and installation instructions, as well as an overview of the code.
+
+For detailed examples of what synthesizer can do, take a look at the `examples page <auto_examples/index>`_.
 The full API is provided `here <API>`_.
+
+Contents
+^^^^^^^^
+
+.. toctree::
+   :maxdepth: 1
+   
+   getting_started/getting_started
+   grids/grids
+   galaxies/galaxies
+   components/components
+   sed
+   emission_models/emission_models
+   lines
+   filters
+   imaging/imaging
+   advanced/advanced
+   auto_examples/index
+   API
 
 Citation & Acknowledgement
 --------------------------
@@ -68,23 +81,3 @@ License
 
 Synthesizer is free software made available under the GNU General Public License v3.0. For details see the `LICENSE <https://github.com/flaresimulations/synthesizer/blob/main/LICENSE.md>`_.
 
-Contents
-^^^^^^^^
-
-.. toctree::
-   :maxdepth: 1
-   
-   getting_started/getting_started
-   grids/grids
-   galaxies/galaxies
-   components/components
-   emission_models/emission_models
-   spectra
-   units
-   sed
-   lines
-   filters
-   imaging/imaging
-   advanced/advanced
-   auto_examples/index
-   API
