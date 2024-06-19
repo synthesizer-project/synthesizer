@@ -19,10 +19,10 @@ Contents
    grids/grids
    galaxies/galaxies
    components/components
-   sed
+   sed/sed
    lines
    emission_models/emission_models
-   filters
+   filters/filters
    imaging/imaging
    advanced/advanced
    auto_examples/index
