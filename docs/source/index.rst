@@ -23,6 +23,7 @@ Contents
    lines
    emission_models/emission_models
    filters/filters
+   dust/dust
    imaging/imaging
    advanced/advanced
    auto_examples/index
