@@ -524,6 +524,12 @@ class IR_templates:
         mdust (float)
             The mass of dust in the galaxy (Msun).
 
+        dgr (float)
+            The dust-to-gas ratio of the galaxy
+
+        MH (float)
+            The mass in hydrogen of the galaxy
+
         template (string)
             The IR template model to be used
             (Currently only Draine and Li 2007 model implemented)
@@ -553,7 +559,9 @@ class IR_templates:
 
     grid: Grid
     mdust: unyt_quantity
-    ldust: Optional[float]
+    dgr: float
+    MH: Optional[unyt_quantity]
+    ldust: Optional[unyt_quantity]
     template: str
     gamma: Optional[float]
     qpah: float
@@ -567,7 +575,9 @@ class IR_templates:
         self,
         grid: Grid,
         mdust: unyt_quantity,
-        ldust: Optional[float] = None,
+        dgr: float = 0.01,
+        MH: Optional[unyt_quantity] = None,
+        ldust: Optional[unyt_quantity] = None,
         template: str = "DL07",
         gamma: Optional[float] = None,
         qpah: float = 0.025,
@@ -578,8 +588,10 @@ class IR_templates:
     ) -> None:
         self.grid: Grid = grid
         self.mdust: unyt_quantity = mdust
+        self.dgr: float = dgr
         self.template: str = template
-        self.ldust: Optional[float] = ldust
+        self.ldust: Optional[unyt_quantity] = ldust
+        self.MH: Optional[unyt_quantity] = MH
         self.gamma: Optional[float] = gamma
         self.qpah: float = qpah
         self.umin: Optional[float] = umin
@@ -604,7 +616,15 @@ class IR_templates:
         alphas: NDArray[np.float32] = self.grid.alpha
 
         # default Umax=1e7
-        umax = 1e7
+        umax: float = 1e7
+
+        if self.MH is None:
+            warn(
+                "No hydrogen gas mass provided, assuming a"
+                f"dust-to-gas ratio of {self.dgr}"
+            )
+            # calculate MH: Mass in hydrogen gas
+            self.MH = 0.74 * self.mdust / self.dgr
 
         if (self.gamma is None) or (self.umin is None) or (self.alpha == 2.0):
             warn(
@@ -672,16 +692,17 @@ class IR_templates:
             if intrinsic_sed is not None and attenuated_sed is not None:
                 if self.ldust is not None:
                     warn(
-                        "Dust luminosity is already set by user to "
-                        f"{self.ldust}. Is this expected behaviour?"
+                        "Dust luminosity is already set by user"
+                        "to {self.ldust}. Is this expected behaviour?"
                     )
                 # Calculate the bolometric dust luminosity as the difference
                 # between the intrinsic and attenuated
-                self.ldust = (
+                ldust = (
                     intrinsic_sed.measure_bolometric_luminosity()
                     - attenuated_sed.measure_bolometric_luminosity()
                 )
-            self.dl07()
+                self.ldust = ldust.to("Lsun")
+            self.dl07(self.grid)
         else:
             raise exceptions.UnimplementedFunctionality(
                 f"{self.template} not a valid model!"
@@ -698,7 +719,7 @@ class IR_templates:
         lnu_old = (
             (1.0 - self.gamma)
             * self.grid.spectra["diffuse"][self.qpah_id, self.umin_id][0]
-            * (self.mdust / Msun).value
+            * (self.MH / Msun).value
         )
 
         lnu_young = (
@@ -706,7 +727,7 @@ class IR_templates:
             * self.grid.spectra["pdr"][
                 self.qpah_id, self.umin_id, self.alpha_id
             ][0]
-            * (self.mdust / Msun).value
+            * (self.MH / Msun).value
         )
 
         sed_old = Sed(lam=lam, lnu=lnu_old * (erg / s / Hz))
@@ -723,7 +744,7 @@ class IR_templates:
             return sed_old + sed_young
 
 
-def u_mean_magdis12(mdust: float, ldust: float, p0: float):
+def u_mean_magdis12(mdust: float, ldust: float, p0: float) -> float:
     """
     P0 value obtained from stacking analysis in Magdis+12
     For alpha=2.0
@@ -733,9 +754,9 @@ def u_mean_magdis12(mdust: float, ldust: float, p0: float):
     return ldust / (p0 * mdust)
 
 
-def u_mean(umin: float, umax: float, gamma: float):
+def u_mean(umin: float, umax: float, gamma: float) -> float:
     """
-    For fixed alpha=2.0
+    For fixed alpha=2.0, get <U> for Draine and Li model
     """
 
     return (1.0 - gamma) * umin + gamma * np.log(umax / umin) / (
@@ -743,9 +764,9 @@ def u_mean(umin: float, umax: float, gamma: float):
     )
 
 
-def solve_umin(umin: float, umax: float, u_avg: float, gamma: float):
+def solve_umin(umin: float, umax: float, u_avg: float, gamma: float) -> float:
     """
-    For fixed alpha=2.0
+    For fixed alpha=2.0, equation to solve to <U> in Draine and Li
     """
 
     return u_mean(umin, umax, gamma) - u_avg
