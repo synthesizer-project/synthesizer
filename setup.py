@@ -321,6 +321,16 @@ extensions = [
         links=link_args,
         include_dirs=include_dirs,
     ),
+    create_extension(
+        "synthesizer.extensions.integration",
+        [
+            "src/synthesizer/extensions/integration.c",
+            "src/synthesizer/extensions/property_funcs.c",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
 ]
 
 # Setup configuration

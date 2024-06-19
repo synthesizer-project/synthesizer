@@ -128,6 +128,7 @@ class Stars(Particles, StarsComponent):
         s_hydrogen=None,
         softening_length=None,
         centre=None,
+        metallicity_floor=1e-5,
     ):
         """
         Intialise the Stars instance. The first 3 arguments are always
@@ -178,7 +179,7 @@ class Stars(Particles, StarsComponent):
             softening_length=softening_length,
             nparticles=len(initial_masses),
             centre=centre,
-            metallicity_floor=1e-5,
+            metallicity_floor=metallicity_floor,
         )
         StarsComponent.__init__(self, ages, metallicities)
 
@@ -263,7 +264,7 @@ class Stars(Particles, StarsComponent):
                 log10 stellar metallicities.
         """
         mets = self.metallicities
-        mets[mets == 0.] = self.metallicity_floor
+        mets[mets == 0.0] = self.metallicity_floor
 
         return np.log10(mets)
 
@@ -356,12 +357,14 @@ class Stars(Particles, StarsComponent):
 
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
+            np.ascontiguousarray(grid.log10ages, dtype=np.float64),
+            np.ascontiguousarray(grid.log10metallicities, dtype=np.float64),
         ]
         part_props = [
             np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
-            np.ascontiguousarray(self.metallicities[mask], dtype=np.float64),
+            np.ascontiguousarray(
+                self.log10metallicities[mask], dtype=np.float64
+            ),
         ]
         part_mass = np.ascontiguousarray(
             self._initial_masses[mask],
@@ -732,12 +735,14 @@ class Stars(Particles, StarsComponent):
 
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(grid.log10age, dtype=np.float64),
-            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
+            np.ascontiguousarray(grid.log10ages, dtype=np.float64),
+            np.ascontiguousarray(grid.log10metallicities, dtype=np.float64),
         ]
         part_props = [
             np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
-            np.ascontiguousarray(self.metallicities[mask], dtype=np.float64),
+            np.ascontiguousarray(
+                self.log10metallicities[mask], dtype=np.float64
+            ),
         ]
         part_mass = np.ascontiguousarray(
             self._initial_masses[mask],
