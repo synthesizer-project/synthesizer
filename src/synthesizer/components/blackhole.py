@@ -1067,10 +1067,7 @@ class BlackholesComponent:
         **kwargs,
     ):
         """
-        Generate stellar spectra as described by the emission model.
-
-        If the emission model defines a dust_curve or covering_fraction and
-        no overide is provided in the arguments to this function
+        Generate black hole spectra as described by the emission model.
 
         Args:
             emission_model (EmissionModel):
