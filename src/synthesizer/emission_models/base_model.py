@@ -2214,8 +2214,7 @@ class EmissionModel:
         # Finally, loop over everything we've created and convert the nested
         # dictionaries to LineCollections
         for label in lines:
-            for line_id in line_ids:
-                lines[label] = LineCollection(lines[label])
+            lines[label] = LineCollection(lines[label])
 
         return lines
 
