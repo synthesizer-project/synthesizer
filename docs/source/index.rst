@@ -13,7 +13,7 @@ Contents
 ^^^^^^^^
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    
    getting_started/getting_started
    grids/grids

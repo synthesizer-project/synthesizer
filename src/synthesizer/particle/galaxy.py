@@ -12,7 +12,7 @@ spectra for all particles in a simulation.)
 Example usage:
 
     galaxy = Galaxy(stars, gas, black_holes, ...)
-    galaxystars.get_spectra_incident(...)
+    galaxy.stars.get_spectra(...)
 
 """
 

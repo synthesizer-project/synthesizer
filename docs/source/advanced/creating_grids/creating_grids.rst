@@ -16,3 +16,12 @@ Abundances
 ==========
 
 The next page demonstrates how to modify the chemical abundance pattern of gas, stars and dust using the `abundances`` object, and use this when running `cloudy`.
+
+
+Contents
+^^^^^^^^
+
+.. toctree::
+   :maxdepth: 1
+   
+   creating_grids_example
