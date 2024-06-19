@@ -2395,8 +2395,8 @@ def sample_sfhz(
         """
         # Get the spectra
         spectra = emission_model._get_spectra(
-            component=self,
-            generator_func=self.generate_particle_lnu,
+            components={"stellar": self},
+            per_particle=True,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=fesc,
@@ -2484,8 +2484,8 @@ def sample_sfhz(
         # Get the lines
         lines = emission_model._get_lines(
             line_ids=line_ids,
-            component=self,
-            generator_func=self.generate_particle_line,
+            components={"stellar": self},
+            per_particle=True,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=fesc,

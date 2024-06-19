@@ -1126,8 +1126,8 @@ class BlackholesComponent:
         """
         # Get the spectra
         spectra = emission_model._get_spectra(
-            component=self,
-            generator_func=self.generate_lnu,
+            components={"blackhole": self},
+            per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
             covering_fraction=covering_fraction,
@@ -1215,8 +1215,8 @@ class BlackholesComponent:
         # Get the lines
         lines = emission_model._get_lines(
             line_ids=line_ids,
-            component=self,
-            generator_func=self.generate_line,
+            components={"blackhole": self},
+            per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
             covering_fraction=covering_fraction,

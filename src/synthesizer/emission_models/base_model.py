@@ -39,10 +39,6 @@ from unyt import unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.line import LineCollection
-from synthesizer.parametric import BlackHole as ParametricBlackHole
-from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.particle import BlackHoles as ParticleBlackHoles
-from synthesizer.particle import Stars as ParticleStars
 from synthesizer.sed import Sed
 
 
@@ -1555,9 +1551,8 @@ class EmissionModel:
     def _extract_spectra(
         self,
         emission_model,
-        component,
-        component_flag,
-        generator_func,
+        components,
+        per_particle,
         spectra,
         verbose,
         **kwargs,
@@ -1568,13 +1563,10 @@ class EmissionModel:
         Args:
             emission_model (EmissionModel):
                 The emission model to extract from.
-            component (Stars/BlackHoles):
-                The component to extract the spectra for.
-            component_flag (str):
-                The flag indicating the component type.
-            generator_func (function):
-                The generator function from the component (generate_lnu or
-                generate_particle_lnu).
+            components (dict):
+                The components to extract the spectra for.
+            per_particle (bool):
+                Are we extracting per particle?
             spectra (dict):
                 The dictionary to store the extracted spectra in.
             verbose (bool):
@@ -1593,8 +1585,11 @@ class EmissionModel:
             this_model = emission_model._models[label]
 
             # Skip models for a different component
-            if this_model.component != component_flag:
+            if this_model.component not in components:
                 continue
+
+            # Get the component
+            component = components[this_model.component]
 
             # Do we have to define a mask?
             this_mask = None
@@ -1606,6 +1601,12 @@ class EmissionModel:
             for prop in this_model.fixed_parameters:
                 prev_properties[prop] = getattr(component, prop, None)
                 setattr(component, prop, this_model.fixed_parameters[prop])
+
+            # Get the generator function
+            if per_particle:
+                generator_func = component.generate_particle_lnu
+            else:
+                generator_func = component.generate_lnu
 
             # Get this base spectra
             spectra[label] = Sed(
@@ -1742,8 +1743,8 @@ class EmissionModel:
 
     def _get_spectra(
         self,
-        component,
-        generator_func,
+        components,
+        per_particle,
         dust_curves=None,
         tau_v=None,
         fesc=None,
@@ -1758,11 +1759,11 @@ class EmissionModel:
         is provided in the arguments to this function.
 
         Args:
-            component (Stars/BlackHoles):
-                The component to generate the spectra for.
-            generator_func (function):
-                The generator function from the component (generate_lnu or
-                generate_particle_lnu).
+            components (Stars/BlackHoles):
+                The components to generate the spectra for in the form of a
+                dictionary, {"stellar": <component>, "blackhole": <component>}.
+            per_particle (bool):
+                Are we generating per particle?
             dust_curves (dict):
                 An overide to the emisison model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
@@ -1821,16 +1822,6 @@ class EmissionModel:
         # only their reference)
         emission_model = copy.copy(self)
 
-        # Get the component flag
-        if isinstance(component, (ParticleStars, ParametricStars)):
-            component_flag = "stellar"
-        elif isinstance(component, (ParticleBlackHoles, ParametricBlackHole)):
-            component_flag = "blackhole"
-        else:
-            raise exceptions.InconsistentArguments(
-                "Component must be either a Stars or BlackHoles instance."
-            )
-
         # Apply any overides we have
         self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
 
@@ -1840,9 +1831,8 @@ class EmissionModel:
         # Perform all extractions
         spectra = self._extract_spectra(
             emission_model,
-            component,
-            component_flag,
-            generator_func,
+            components,
+            per_particle,
             spectra,
             verbose,
             **kwargs,
@@ -1855,8 +1845,11 @@ class EmissionModel:
             this_model = emission_model._models[label]
 
             # Skip models for a different component
-            if this_model.component != component_flag:
+            if this_model.component not in components:
                 continue
+
+            # Get the component
+            component = components[this_model.component]
 
             # Do we have to define a mask?
             this_mask = None
@@ -1896,9 +1889,8 @@ class EmissionModel:
         self,
         line_ids,
         emission_model,
-        component,
-        component_flag,
-        generator_func,
+        components,
+        per_particle,
         lines,
         verbose,
         **kwargs,
@@ -1911,13 +1903,10 @@ class EmissionModel:
                 The line ids to extract.
             emission_model (EmissionModel):
                 The emission model to extract from.
-            component (Stars/BlackHoles):
-                The component to extract the lines for.
-            component_flag (str):
-                The flag indicating the component type.
-            generator_func (function):
-                The generator function from the component (generate_lnu or
-                generate_particle_lnu).
+            components (dict):
+                The components to extract the lines for.
+            per_particle (bool):
+                Are we generating lines per particle?
             lines (dict):
                 The dictionary to store the extracted lines in.
             verbose (bool):
@@ -1936,8 +1925,11 @@ class EmissionModel:
             this_model = emission_model._models[label]
 
             # Skip models for a different component
-            if this_model.component != component_flag:
+            if this_model.component not in components:
                 continue
+
+            # Get the component
+            component = components[this_model.component]
 
             # Do we have to define a mask?
             this_mask = None
@@ -1950,24 +1942,27 @@ class EmissionModel:
                 prev_properties[prop] = getattr(component, prop, None)
                 setattr(component, prop, this_model.fixed_parameters[prop])
 
+            # Get the generator function
+            if per_particle:
+                generator_func = component.generate_particle_line
+            else:
+                generator_func = component.generate_line
+
             # Initialise the lines dictionary for this label
             lines[label] = {}
 
             # Loop over the line ids
             for line_id in line_ids:
                 # Get this base lines
-                lines[label][line_id] = Sed(
-                    emission_model.grid.lam,
-                    generator_func(
-                        grid=emission_model.grid,
-                        line_id=line_id,
-                        fesc=getattr(component, this_model.fesc)
-                        if isinstance(this_model.fesc, str)
-                        else this_model.fesc,
-                        mask=this_mask,
-                        verbose=verbose,
-                        **kwargs,
-                    ),
+                lines[label][line_id] = generator_func(
+                    grid=emission_model.grid,
+                    line_id=line_id,
+                    fesc=getattr(component, this_model.fesc)
+                    if isinstance(this_model.fesc, str)
+                    else this_model.fesc,
+                    mask=this_mask,
+                    verbose=verbose,
+                    **kwargs,
                 )
 
             # Replace any fixed parameters
@@ -2000,7 +1995,7 @@ class EmissionModel:
 
         # Loop over lines copying over the first set of lines
         for line_id in line_ids:
-            lines[this_model.label][line_id] = copy(
+            lines[this_model.label][line_id] = copy.copy(
                 lines[this_model.combine[0].label][line_id]
             )
 
@@ -2072,8 +2067,8 @@ class EmissionModel:
     def _get_lines(
         self,
         line_ids,
-        component,
-        generator_func,
+        components,
+        per_particle,
         dust_curves=None,
         tau_v=None,
         fesc=None,
@@ -2090,11 +2085,11 @@ class EmissionModel:
         Args:
             line_ids (list):
                 The line ids to extract.
-            component (Stars/BlackHoles):
-                The component to generate the lines for.
-            generator_func (function):
-                The generator function from the component (generate_lnu or
-                generate_particle_lnu).
+            components (Stars/BlackHoles):
+                The components to generate the lines for in the form of a
+                dictionary, {"stellar": <component>, "blackhole": <component>}.
+            per_particle (bool):
+                Are we generating lines per particle?
             dust_curves (dict):
                 An overide to the emisison model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
@@ -2153,16 +2148,6 @@ class EmissionModel:
         # only their reference)
         emission_model = copy.copy(self)
 
-        # Get the component flag
-        if isinstance(component, (ParticleStars, ParametricStars)):
-            component_flag = "stellar"
-        elif isinstance(component, (ParticleBlackHoles, ParametricBlackHole)):
-            component_flag = "blackhole"
-        else:
-            raise exceptions.InconsistentArguments(
-                "Component must be either a Stars or BlackHoles instance."
-            )
-
         # Apply any overides we have
         self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
 
@@ -2173,9 +2158,8 @@ class EmissionModel:
         lines = self._extract_lines(
             line_ids,
             emission_model,
-            component,
-            component_flag,
-            generator_func,
+            components,
+            per_particle,
             lines,
             verbose,
             **kwargs,
@@ -2188,8 +2172,11 @@ class EmissionModel:
             this_model = emission_model._models[label]
 
             # Skip models for a different component
-            if this_model.component != component_flag:
+            if this_model.component not in components:
                 continue
+
+            # Get the component
+            component = components[this_model.component]
 
             # Do we have to define a mask?
             this_mask = None
