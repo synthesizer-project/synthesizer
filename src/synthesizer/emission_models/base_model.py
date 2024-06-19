@@ -1551,6 +1551,184 @@ class EmissionModel:
             for label, mask in mask.items():
                 emission_model.add_mask(**mask, label=label)
 
+    def _extract_spectra(
+        self,
+        emission_model,
+        component,
+        component_flag,
+        generator_func,
+        spectra,
+        verbose,
+        **kwargs,
+    ):
+        """
+        Extract spectra from the grid.
+
+        Args:
+            emission_model (EmissionModel):
+                The emission model to extract from.
+            component (Stars/BlackHoles):
+                The component to extract the spectra for.
+            component_flag (str):
+                The flag indicating the component type.
+            generator_func (function):
+                The generator function from the component (generate_lnu or
+                generate_particle_lnu).
+            spectra (dict):
+                The dictionary to store the extracted spectra in.
+            verbose (bool):
+                Are we talking?
+            kwargs (dict):
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            dict:
+                The dictionary of extracted spectra.
+        """
+        # First step we need to extract each base spectra
+        for label, spectra_key in emission_model._extract_keys.items():
+            # Get this model
+            this_model = emission_model._models[label]
+
+            # Skip models for a different component
+            if this_model.component != component_flag:
+                continue
+
+            # Do we have to define a mask?
+            this_mask = None
+            for mask_dict in this_model.masks:
+                this_mask = component.get_mask(**mask_dict, mask=this_mask)
+
+            # Get this base spectra
+            spectra[label] = Sed(
+                emission_model.grid.lam,
+                generator_func(
+                    emission_model.grid,
+                    spectra_key,
+                    fesc=getattr(component, this_model.fesc)
+                    if isinstance(this_model.fesc, str)
+                    else this_model.fesc,
+                    mask=this_mask,
+                    verbose=verbose,
+                    **kwargs,
+                ),
+            )
+
+        return spectra
+
+    def _combine_spectra(self, emission_model, spectra, this_model):
+        """
+        Combine the extracted spectra.
+
+        Args:
+            emission_model (EmissionModel):
+                The root emission model. This is used to get a consistent
+                wavelength grid.
+            spectra (dict):
+                The dictionary of spectra.
+            this_model (EmissionModel):
+                The model defining the combination.
+
+        Returns:
+            dict:
+                The dictionary of spectra.
+        """
+        # Create an empty spectra to add to
+        spectra[this_model.label] = Sed(
+            emission_model.grid.lam,
+            lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
+        )
+
+        # Combine the spectra handling the possible mask
+        for combine_model in this_model.combine:
+            spectra[this_model.label]._lnu += spectra[combine_model.label]._lnu
+
+        return spectra
+
+    def _dust_attenuate_spectra(
+        self,
+        this_model,
+        spectra,
+        component,
+        this_mask,
+    ):
+        """
+        Dust attenuate the extracted spectra.
+
+        Args:
+            this_model (EmissionModel):
+                The model defining the dust attenuation.
+            spectra (dict):
+                The dictionary of spectra.
+            component (Stars/BlackHoles):
+                The component to dust attenuate the spectra for.
+            this_mask (dict):
+                The mask to apply to the spectra.
+
+        Returns:
+            dict:
+                The dictionary of spectra.
+        """
+        # Unpack the tau_v value unpacking any attributes we need
+        # to extract from the component
+        tau_v = 1
+        for tv in this_model.tau_v:
+            tau_v *= getattr(component, tv) if isinstance(tv, str) else tv
+            tau_v *= getattr(component, tv) if isinstance(tv, str) else tv
+
+        # Get the spectra to apply dust to
+        apply_dust_to = spectra[this_model.apply_dust_to.label]
+
+        # Otherwise, we are applying a dust curve (there's no
+        # alternative)
+        spectra[this_model.label] = apply_dust_to.apply_attenuation(
+            tau_v,
+            dust_curve=this_model.dust_curve,
+            mask=this_mask,
+        )
+
+        return spectra
+
+    def _generate_spectra(self, this_model, emission_model, spectra):
+        """
+        Generate the spectra for a given model.
+
+        Args:
+            this_model (EmissionModel):
+                The model to generate the spectra for.
+            emission_model (EmissionModel):
+                The root emission model.
+            spectra (dict):
+                The dictionary of spectra.
+
+        Returns:
+            dict:
+                The dictionary of spectra.
+        """
+        # Unpack what we need for dust emission
+        generator = this_model.generator
+
+        # Handle the dust emission case
+        if this_model._is_dust_emitting:
+            intrinsic = spectra[this_model.dust_lum_intrinsic.label]
+            attenuated = spectra[this_model.dust_lum_attenuated.label]
+
+            # Apply the dust emission model
+            spectra[this_model.label] = generator.get_spectra(
+                emission_model.grid.lam,
+                intrinsic,
+                attenuated,
+            )
+
+        else:
+            # Otherwise we have a bog standard generation
+            spectra[this_model.label] = generator.get_spectra(
+                emission_model.grid.lam,
+            )
+
+        return spectra
+
     def _get_spectra(
         self,
         component,
@@ -1650,34 +1828,16 @@ class EmissionModel:
         # Define a dictionary to hold the spectra
         spectra = {}
 
-        # First step we need to extract each base spectra
-        for label, spectra_key in emission_model._extract_keys.items():
-            # Get this model
-            this_model = emission_model._models[label]
-
-            # Skip models for a different component
-            if this_model.component != component_flag:
-                continue
-
-            # Do we have to define a mask?
-            this_mask = None
-            for mask_dict in this_model.masks:
-                this_mask = component.get_mask(**mask_dict, mask=this_mask)
-
-            # Get this base spectra
-            spectra[label] = Sed(
-                emission_model.grid.lam,
-                generator_func(
-                    emission_model.grid,
-                    spectra_key,
-                    fesc=getattr(component, this_model.fesc)
-                    if isinstance(this_model.fesc, str)
-                    else this_model.fesc,
-                    mask=this_mask,
-                    verbose=verbose,
-                    **kwargs,
-                ),
-            )
+        # Perform all extractions
+        spectra = self._extract_spectra(
+            emission_model,
+            component,
+            component_flag,
+            generator_func,
+            spectra,
+            verbose,
+            **kwargs,
+        )
 
         # With all base spectra extracted we can now loop from bottom to top
         # of the tree creating each spectra
@@ -1696,60 +1856,25 @@ class EmissionModel:
 
             # Are we doing a combination?
             if this_model._is_combining:
-                # Create an empty spectra to add to
-                spectra[label] = Sed(
-                    emission_model.grid.lam,
-                    lnu=np.zeros_like(
-                        spectra[this_model.combine[0].label]._lnu
-                    ),
+                spectra = self._combine_spectra(
+                    emission_model,
+                    spectra,
+                    this_model,
                 )
-
-                # Combine the spectra handling the possible mask
-                for combine_model in this_model.combine:
-                    spectra[label]._lnu += spectra[combine_model.label]._lnu
 
             elif this_model._is_dust_attenuating:
-                # Unpack the tau_v value unpacking any attributes we need
-                # to extract from the component
-                tau_v = 1
-                for tv in this_model.tau_v:
-                    tau_v *= (
-                        getattr(component, tv) if isinstance(tv, str) else tv
-                    )
-                    tau_v *= (
-                        getattr(component, tv) if isinstance(tv, str) else tv
-                    )
-
-                # Get the spectra to apply dust to
-                apply_dust_to = spectra[this_model.apply_dust_to.label]
-
-                # Otherwise, we are applying a dust curve (there's no
-                # alternative)
-                spectra[label] = apply_dust_to.apply_attenuation(
-                    tau_v,
-                    dust_curve=this_model.dust_curve,
-                    mask=this_mask,
+                self._dust_attenuate_spectra(
+                    this_model,
+                    spectra,
+                    component,
+                    this_mask,
                 )
 
-            elif this_model._is_dust_emitting:
-                # Unpack what we need for dust emission
-                generator = this_model.generator
-                intrinsic = spectra[this_model.dust_lum_intrinsic.label]
-                attenuated = spectra[this_model.dust_lum_attenuated.label]
-
-                # Apply the dust emission model
-                spectra[label] = generator.get_spectra(
-                    emission_model.grid.lam,
-                    intrinsic,
-                    attenuated,
-                )
-
-            elif this_model._is_generator:
-                generator = this_model.generator
-
-                # Apply the dust emission model
-                spectra[label] = generator.get_spectra(
-                    emission_model.grid.lam,
+            elif this_model._is_dust_emitting or this_model._is_generator:
+                spectra = self._generate_spectra(
+                    this_model,
+                    emission_model,
+                    spectra,
                 )
 
             # Are we scaling the spectra?
@@ -1757,3 +1882,39 @@ class EmissionModel:
                 spectra[label]._lnu *= getattr(component, this_model.scale_by)
 
         return spectra
+
+
+class StellarEmissionModel(EmissionModel):
+    """
+    An emission model for stellar components.
+
+    This is a simple wrapper to quickly apply that the component a model
+    should act on is stellar.
+
+    Attributes:
+        component (str):
+            The component this model is for.
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Instantiate a StellarEmissionModel instance."""
+        EmissionModel.__init__(*args, **kwargs)
+        self.component = "stellar"
+
+
+class BlackHoleEmissionModel(EmissionModel):
+    """
+    An emission model for black hole components.
+
+    This is a simple wrapper to quickly apply that the component a model
+    should act on is a black hole.
+
+    Attributes:
+        component (str):
+            The component this model is for.
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Instantiate a BlackHoleEmissionModel instance."""
+        EmissionModel.__init__(*args, **kwargs)
+        self.component = "blackhole"
