@@ -38,6 +38,7 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.line import LineCollection
 from synthesizer.parametric import BlackHole as ParametricBlackHole
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import BlackHoles as ParticleBlackHoles
@@ -1756,8 +1757,6 @@ class EmissionModel:
         If the emission model defines a dust_curve or fesc and no overide
         is provided in the arguments to this function.
 
-        TODO: Apply any fixed parameters.
-
         Args:
             component (Stars/BlackHoles):
                 The component to generate the spectra for.
@@ -2088,8 +2087,6 @@ class EmissionModel:
         If the emission model defines a dust_curve or fesc and no overide
         is provided in the arguments to this function.
 
-        TODO: Apply any fixed parameters.
-
         Args:
             line_ids (list):
                 The line ids to extract.
@@ -2227,6 +2224,12 @@ class EmissionModel:
                         component, this_model.scale_by
                     )
 
+        # Finally, loop over everything we've created and convert the nested
+        # dictionaries to LineCollections
+        for label in lines:
+            for line_id in line_ids:
+                lines[label] = LineCollection(lines[label])
+
         return lines
 
 
@@ -2284,8 +2287,8 @@ class GalaxyEmissionModel(EmissionModel):
         EmissionModel.__init__(self, *args, **kwargs)
         self._component = None
 
-        # Ensure we are only combining or dust attenuating
-        if not self._is_combining and not self._is_dust_attenuating:
+        # Ensure we are only combining
+        if not self._is_combining:
             raise exceptions.InconsistentArguments(
                 "A GalaxyEmissionModel must be either combining or dust "
                 "attenuating."

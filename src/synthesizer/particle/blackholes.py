@@ -959,3 +959,92 @@ class BlackHoles(Particles, BlackholesComponent):
         self.particle_spectra.update(spectra)
 
         return self.particle_spectra[emission_model.label]
+
+    def get_lines(
+        self,
+        line_ids,
+        emission_model,
+        dust_curves=None,
+        tau_v=None,
+        covering_fraction=None,
+        mask=None,
+        verbose=True,
+        **kwargs,
+    ):
+        """
+        Generate stellar lines as described by the emission model.
+
+        Args:
+            line_ids (list):
+                A list of line_ids. Doublets can be specified as a nested list
+                or using a comma (e.g. 'OIII4363,OIII4959').
+            emission_model (EmissionModel):
+                The emission model to use.
+            dust_curves (dict):
+                An overide to the emisison model dust curves. Either:
+                    - None, indicating the dust_curves defined on the emission
+                      models should be used.
+                    - A single dust curve to apply to all emission models.
+                    - A dictionary of the form:
+                          {<label>: <dust_curve instance>}
+                      to use a specific dust curve instance with particular
+                      properties.
+            tau_v (dict):
+                An overide to the dust model optical depth. Either:
+                    - None, indicating the tau_v defined on the emission model
+                        should be used.
+                    - A float to use as the optical depth for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<tau_v>)}
+                        to use a specific optical depth with a particular
+                        model or
+                            {<label>: str(<attribute>)}
+                        to use an attribute of the component as the optical
+                        depth.
+            covering_fraction (dict):
+                An overide to the emission model escape fraction. Either:
+                    - None, indicating the covering_fraction defined on the
+                      emission model should be used.
+                    - A float to use as the escape fraction for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<covering_fraction>)}
+                      to use a specific escape fraction with a particular
+                      model or
+                            {<label>: str(<attribute>)}
+                      to use an attribute of the component as the escape
+                      fraction.
+            mask (dict):
+                An overide to the emission model mask. Either:
+                    - None, indicating the mask defined on the emission model
+                      should be used.
+                    - A dictionary of the form:
+                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
+                      to add a specific mask to a particular model.
+            verbose (bool)
+                Are we talking?
+            kwargs (dict)
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            LineCollection
+                A LineCollection object containing the lines defined by the
+                root model.
+        """
+        # Get the lines
+        lines = emission_model._get_lines(
+            line_ids=line_ids,
+            component=self,
+            generator_func=self.generate_particle_line,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            verbose=verbose,
+            **kwargs,
+        )
+
+        # Update the lines dictionary
+        self.particle_lines.update(lines)
+
+        return self.particle_lines[emission_model.label]
