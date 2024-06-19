@@ -22,7 +22,7 @@ Example usage:
 from unyt import Hz, unyt_array
 
 from synthesizer import exceptions
-from synthesizer.emission_models.base_model import EmissionModel
+from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 from synthesizer.sed import Sed
 
 
@@ -124,12 +124,12 @@ class Template:
         )
 
 
-class TemplateEmission(EmissionModel):
+class TemplateEmission(BlackHoleEmissionModel):
     """
     An emission model that uses a template for the AGN emission.
 
     This is a child of the EmisisonModel class, for a full description of the
-    parameters see the EmissionModel class.
+    parameters see the BlackHoleEmissionModel class.
     """
 
     def __init__(self, template, label="template", **kwargs):
@@ -144,7 +144,7 @@ class TemplateEmission(EmissionModel):
             **kwargs
 
         """
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             label=label,
             generator=template,
@@ -152,14 +152,14 @@ class TemplateEmission(EmissionModel):
         )
 
 
-class NLRIncidentEmission(EmissionModel):
+class NLRIncidentEmission(BlackHoleEmissionModel):
     """
     An emission model that extracts the NLR incident emission.
 
     This defines the extraction of key "incident" from a NLR grid.
 
     This is a child of the EmisisonModel class, for a full description of the
-    parameters see the EmissionModel class.
+    parameters see the BlackHoleEmissionModel class.
     """
 
     def __init__(self, grid, label="nlr_incident", **kwargs):
@@ -174,7 +174,7 @@ class NLRIncidentEmission(EmissionModel):
             **kwargs
 
         """
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -183,14 +183,14 @@ class NLRIncidentEmission(EmissionModel):
         )
 
 
-class BLRIncidentEmission(EmissionModel):
+class BLRIncidentEmission(BlackHoleEmissionModel):
     """
     An emission model that extracts the BLR incident emission.
 
     This defines the extraction of key "incident" from a BLR grid.
 
     This is a child of the EmisisonModel class, for a full
-    description of the parameters see the EmissionModel class.
+    description of the parameters see the BlackHoleEmissionModel class.
     """
 
     def __init__(self, grid, label="blr_incident", **kwargs):
@@ -205,7 +205,7 @@ class BLRIncidentEmission(EmissionModel):
             **kwargs
 
         """
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -214,14 +214,14 @@ class BLRIncidentEmission(EmissionModel):
         )
 
 
-class NLRTransmittedEmission(EmissionModel):
+class NLRTransmittedEmission(BlackHoleEmissionModel):
     """
     An emission model that extracts the NLR transmitted emission.
 
     This defines the extraction of key "transmitted" from a NLR grid.
 
     This is a child of the EmisisonModel class, for a full
-    description of the parameters see the EmissionModel class.
+    description of the parameters see the BlackHoleEmissionModel class.
     """
 
     def __init__(
@@ -245,7 +245,7 @@ class NLRTransmittedEmission(EmissionModel):
             **kwargs
 
         """
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -255,14 +255,14 @@ class NLRTransmittedEmission(EmissionModel):
         )
 
 
-class BLRTransmittedEmission(EmissionModel):
+class BLRTransmittedEmission(BlackHoleEmissionModel):
     """
     An emission model that extracts the BLR transmitted emission.
 
     This defines the extraction of key "transmitted" from a BLR grid.
 
     This is a child of the EmisisonModel class, for a full
-    description of the parameters see the EmissionModel class.
+    description of the parameters see the BlackHoleEmissionModel class.
     """
 
     def __init__(
@@ -286,7 +286,7 @@ class BLRTransmittedEmission(EmissionModel):
             **kwargs
 
         """
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -296,7 +296,7 @@ class BLRTransmittedEmission(EmissionModel):
         )
 
 
-class DiscIncidentEmission(EmissionModel):
+class DiscIncidentEmission(BlackHoleEmissionModel):
     """
     An emission model that extracts the incident disc emission.
 
@@ -304,7 +304,7 @@ class DiscIncidentEmission(EmissionModel):
     the emission directly from the NLR with no reprocessing.
 
     This is a child of the EmisisonModel class, for a full
-    description of the parameters see the EmissionModel class.
+    description of the parameters see the BlackHoleEmissionModel class.
     """
 
     def __init__(self, grid, label="disc_incident", **kwargs):
@@ -319,7 +319,7 @@ class DiscIncidentEmission(EmissionModel):
             **kwargs
 
         """
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -328,7 +328,7 @@ class DiscIncidentEmission(EmissionModel):
         )
 
 
-class DiscTransmittedEmission(EmissionModel):
+class DiscTransmittedEmission(BlackHoleEmissionModel):
     """
     An emission model that combines the transmitted disc emission.
 
@@ -336,7 +336,7 @@ class DiscTransmittedEmission(EmissionModel):
     transmitted disc emission.
 
     This is a child of the EmisisonModel class, for a full
-    description of the parameters see the EmissionModel class.
+    description of the parameters see the BlackHoleEmissionModel class.
     """
 
     def __init__(
@@ -375,7 +375,7 @@ class DiscTransmittedEmission(EmissionModel):
             **kwargs,
         )
 
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             label=label,
             combine=(nlr, blr),
@@ -383,7 +383,7 @@ class DiscTransmittedEmission(EmissionModel):
         )
 
 
-class DiscEscapedEmission(EmissionModel):
+class DiscEscapedEmission(BlackHoleEmissionModel):
     """
     An emission model that computes the escaped disc emission.
 
@@ -392,7 +392,7 @@ class DiscEscapedEmission(EmissionModel):
     transmitted emission.
 
     This is a child of the EmisisonModel class, for a full description of the
-    parameters see the EmissionModel class.
+    parameters see the BlackHoleEmissionModel class.
     """
 
     def __init__(
@@ -419,7 +419,7 @@ class DiscEscapedEmission(EmissionModel):
                 fraction of the BLR). Default is 0.1.
             **kwargs
         """
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -429,14 +429,14 @@ class DiscEscapedEmission(EmissionModel):
         )
 
 
-class DiscEmission(EmissionModel):
+class DiscEmission(BlackHoleEmissionModel):
     """
     An emission model that computes the total disc emission.
 
     This will combine the tranmitted and escaped disc emission.
 
     This is a child of the EmisisonModel class, for a full
-    description of the parameters see the EmissionModel class.
+    description of the parameters see the BlackHoleEmissionModel class.
     """
 
     def __init__(self, nlr_grid, blr_grid, label="disc", **kwargs):
@@ -466,7 +466,7 @@ class DiscEmission(EmissionModel):
             **kwargs,
         )
 
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             label=label,
             combine=(transmitted, escaped),
@@ -474,14 +474,14 @@ class DiscEmission(EmissionModel):
         )
 
 
-class TorusEmission(EmissionModel):
+class TorusEmission(BlackHoleEmissionModel):
     """
     An emission model that computes the torus emission.
 
     This will generate the torus emission from the model.
 
     This is a child of the EmisisonModel class, for a full
-    description of the parameters see the EmissionModel class.
+    description of the parameters see the BlackHoleEmissionModel class.
     """
 
     def __init__(self, torus_emission_model, label="torus", **kwargs):
@@ -498,7 +498,7 @@ class TorusEmission(EmissionModel):
             **kwargs
 
         """
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             label=label,
             generator=torus_emission_model,
@@ -507,7 +507,7 @@ class TorusEmission(EmissionModel):
         )
 
 
-class AGNIntrinsicEmission(EmissionModel):
+class AGNIntrinsicEmission(BlackHoleEmissionModel):
     """
     An emission model that computes the intrinsic AGN emission.
 
@@ -515,7 +515,7 @@ class AGNIntrinsicEmission(EmissionModel):
     all child models.
 
     This is a child of the EmisisonModel class, for a full
-    description of the parameters see the EmissionModel class.
+    description of the parameters see the BlackHoleEmissionModel class.
     """
 
     def __init__(
@@ -565,7 +565,7 @@ class AGNIntrinsicEmission(EmissionModel):
             **kwargs,
         )
 
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             label=label,
             combine=(
