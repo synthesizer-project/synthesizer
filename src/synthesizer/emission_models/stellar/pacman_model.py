@@ -50,15 +50,17 @@ Example:
 
 from unyt import dimensionless
 
-from synthesizer.emission_models import (
+from synthesizer.emission_models.base_model import StellarEmissionModel
+from synthesizer.emission_models.models import (
     AttenuatedEmission,
     DustEmission,
+)
+from synthesizer.emission_models.stellar.models import (
     EscapedEmission,
     IncidentEmission,
     LineContinuumEmission,
     NebularContinuumEmission,
     NebularEmission,
-    StellarEmissionModel,
     TransmittedEmission,
 )
 
