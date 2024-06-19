@@ -412,6 +412,7 @@ class EmergentEmission(StellarEmissionModel):
                 dust_curve=dust_curve,
                 apply_dust_to=apply_dust_to,
                 tau_v=tau_v,
+                component="stellar",
             )
 
         # Make an escaped model if we need one
@@ -492,6 +493,7 @@ class TotalEmission(StellarEmissionModel):
             dust_curve=dust_curve,
             apply_dust_to=reprocessed,
             tau_v=tau_v,
+            component="stellar",
             **kwargs,
         )
 
@@ -508,6 +510,7 @@ class TotalEmission(StellarEmissionModel):
                 dust_emission_model=dust_emission_model,
                 dust_lum_intrinsic=reprocessed,
                 dust_lum_attenuated=attenuated,
+                component="stellar",
                 **kwargs,
             )
 

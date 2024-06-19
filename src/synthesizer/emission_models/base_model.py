@@ -1872,7 +1872,7 @@ class EmissionModel:
                 )
 
             elif this_model._is_dust_attenuating:
-                self._dust_attenuate_spectra(
+                spectra = self._dust_attenuate_spectra(
                     this_model,
                     spectra,
                     component,
@@ -2206,7 +2206,7 @@ class EmissionModel:
                 )
 
             elif this_model._is_dust_attenuating:
-                self._dust_attenuate_lines(
+                lines = self._dust_attenuate_lines(
                     line_ids,
                     this_model,
                     lines,
