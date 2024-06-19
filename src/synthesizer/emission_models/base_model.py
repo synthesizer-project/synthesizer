@@ -445,7 +445,7 @@ class EmissionModel:
 
             # Make the model title
             parts.append("-")
-            parts.append(f"  {model.label}".upper())
+            parts.append(f"  {model.label}".upper() + f" ({model._component})")
             parts.append("-")
 
             if model._is_extracting:
