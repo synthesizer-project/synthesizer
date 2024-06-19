@@ -960,7 +960,7 @@ class BlackHoles(Particles, BlackholesComponent):
 
         return self.particle_spectra[emission_model.label]
 
-    def get_lines(
+    def get_particle_lines(
         self,
         line_ids,
         emission_model,
