@@ -11,7 +11,8 @@ from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
 
-# Begin by defining and initialising the grid. By setting `read_spectra` to `False` we can avoid reading in the spectra reducing the memory footprint.
+# Begin by defining and initialising the grid. By setting `read_spectra`
+# to `False` we can avoid reading in the spectra reducing the memory footprint.
 grid_name = "test_grid"
 grid_dir = "../../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir, read_spectra=False)
@@ -42,7 +43,8 @@ galaxy = Galaxy(stars)
 # Print a summary of the Galaxy object
 print(galaxy)
 
-# Let's define a list of lines that we're interested in. Note that we can provide multiples which are automatically summed as if they were blended.
+# Let's define a list of lines that we're interested in. Note that we can
+# provide multiples which are automatically summed as if they were blended.
 line_ids = [
     line_ratios.Hb,  # "H 1 4861.32A"
     line_ratios.O3b,  # "O 3 4958.91A"
@@ -56,14 +58,16 @@ line_ids = [
 # Next, let's get the intrinsic line properties:
 lines = galaxy.stars.get_line_intrinsic(grid, line_ids)
 
-# This produces a LineCollection object which has some useful methods and information.
+# This produces a LineCollection object which has some useful methods and
+# information.
 print(lines)
 
 # Let's now examine individual lines (or doublets):
 for line in lines:
     print(line)
 
-# Those lines are now associated with the `Galaxy` object, revealed by using the print function:
+# Those lines are now associated with the `Galaxy` object, revealed by
+# using the print function:
 print(galaxy)
 
 # Next, lets get the attenuated line properties:
