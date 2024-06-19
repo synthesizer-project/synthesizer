@@ -557,7 +557,6 @@ class EmissionModel:
             self._generator is not None and not self._is_dust_emitting
         )
         self._is_masked = len(self.masks) > 0
-        self._is_template = False  # this is explictly set on any templates
 
     def _unpack_model_recursively(self, model):
         """

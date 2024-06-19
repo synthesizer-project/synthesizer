@@ -20,7 +20,7 @@ from synthesizer.emission_models.stellar.pacman_model import (
     CharlotFall2000,
 )
 from synthesizer.emission_models.agn.models import (
-    Template,
+    TemplateEmission,
     NLRIncidentEmission,
     BLRIncidentEmission,
     NLRTransmittedEmission,
