@@ -79,13 +79,20 @@ The flowchart below shows how these different spectra are typically generated an
 
 * ``total`` is the sum of ``attenuated`` and ``dust``, i.e. it includes both the effect of dust attenuation and dust emission.
 
-* For two component dust models (e.g. Charlot & Fall 2000 and ``BimodalPacmanEmission``) we also generate the individual spectra of the young and old component. This includes ``young_incident``, ``young_nebular``, ``young_attenuated`` etc. ``young`` and ``old`` are equivalent to ``total`` for the young and old components.
+* For two component dust models (e.g. Charlot & Fall 2000 or ``BimodalPacmanEmission``) we also generate the individual spectra of the young and old component. This includes ``young_incident``, ``young_nebular``, ``young_attenuated`` etc. ``young`` and ``old`` are equivalent to ``total`` for the young and old components.
 
 All premade models follow these conventions and we encourage the user to employ the same system.
+
+Working with ``EmissionModels``
+-------------------------------
+
+In the sections linked below we detail the premade stellar and black hole emission models and how to customise a model or construct your own.
 
 .. toctree::
    :maxdepth: 1
 
-   premade_models
+   stellar_models
    agn_models
-   dust_emission
+   combined_models
+   modify_models
+   custom_models
