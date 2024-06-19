@@ -53,17 +53,17 @@ from unyt import dimensionless
 from synthesizer.emission_models import (
     AttenuatedEmission,
     DustEmission,
-    EmissionModel,
     EscapedEmission,
     IncidentEmission,
     LineContinuumEmission,
     NebularContinuumEmission,
     NebularEmission,
+    StellarEmissionModel,
     TransmittedEmission,
 )
 
 
-class PacmanEmission(EmissionModel):
+class PacmanEmission(StellarEmissionModel):
     """
     A class defining the Pacman model.
 
@@ -98,7 +98,7 @@ class PacmanEmission(EmissionModel):
         grid (synthesizer.grid.Grid): The grid object
         tau_v (float): The V-band optical depth
         dust_curve (synthesizer.dust.DustCurve): The dust curve
-        dust_emission (synthesizer.dust.DustEmissionModel): The dust emission
+        dust_emission (synthesizer.dust.EmissionModel): The dust emission
         fesc (float): The escape fraction
         fesc_ly_alpha (float): The Lyman alpha escape fraction
     """
@@ -119,7 +119,7 @@ class PacmanEmission(EmissionModel):
             grid (synthesizer.grid.Grid): The grid object.
             tau_v (float): The V-band optical depth.
             dust_curve (synthesizer.dust.DustCurve): The dust curve.
-            dust_emission (synthesizer.dust.DustEmissionModel): The dust
+            dust_emission (synthesizer.dust.EmissionModel): The dust
                 emission.
             fesc (float): The escape fraction.
             fesc_ly_alpha (float): The Lyman alpha escape fraction.
@@ -169,7 +169,7 @@ class PacmanEmission(EmissionModel):
         incident onto the nebular, ism and dust components.
 
         Returns:
-            EmissionModel:
+            StellarEmissionModel:
                 - incident
         """
         return IncidentEmission(grid=self._grid, label="incident")
@@ -182,7 +182,7 @@ class PacmanEmission(EmissionModel):
         components because the transmitted spectra won't exist.
 
         Returns:
-            EmissionModel:
+            StellarEmissionModel:
                 - transmitted
         """
         # No spectra if grid hasn't been reprocessed
@@ -208,7 +208,7 @@ class PacmanEmission(EmissionModel):
         components because the transmitted spectra won't exist.
 
         Returns:
-            EmissionModel:
+            StellarEmissionModel:
                 - escaped
         """
         # No spectra if grid hasn't been reprocessed
@@ -240,7 +240,7 @@ class PacmanEmission(EmissionModel):
         if not self.reprocessed:
             return None, None, None
 
-        return EmissionModel(
+        return StellarEmissionModel(
             label="reprocessed",
             combine=(self.transmitted, self.nebular),
         )
@@ -254,7 +254,7 @@ class PacmanEmission(EmissionModel):
         take into account an escape fraction.
 
         Returns:
-            EmissionModel:
+            StellarEmissionModel:
                 - intrinsic
         """
         return IncidentEmission(
@@ -265,13 +265,13 @@ class PacmanEmission(EmissionModel):
         # If fesc is zero then the intrinsic emission is the same as the
         # reprocessed emission
         if self._fesc == 0.0:
-            return EmissionModel(
+            return StellarEmissionModel(
                 label="intrinsic",
                 combine=(self.reprocessed, self.transmitted),
             )
 
         # Otherwise, intrinsic = reprocessed + escaped
-        return EmissionModel(
+        return StellarEmissionModel(
             label="intrinsic",
             combine=(self.reprocessed, self.escaped),
         )
@@ -295,7 +295,7 @@ class PacmanEmission(EmissionModel):
             )
         else:
             # Otherwise, emergent = attenuated + escaped
-            return EmissionModel(
+            return StellarEmissionModel(
                 label="emergent",
                 combine=(self.attenuated, self.escaped),
             )
@@ -327,7 +327,7 @@ class PacmanEmission(EmissionModel):
             related_models = [m for m in related_models if m is not None]
 
             # Call the parent constructor with everything we've made
-            EmissionModel.__init__(
+            StellarEmissionModel.__init__(
                 self,
                 grid=self._grid,
                 label="total",
@@ -351,7 +351,7 @@ class PacmanEmission(EmissionModel):
                 # Remove any None models
                 related_models = [m for m in related_models if m is not None]
 
-                EmissionModel.__init__(
+                StellarEmissionModel.__init__(
                     self,
                     grid=self._grid,
                     label="emergent",
@@ -378,7 +378,7 @@ class PacmanEmission(EmissionModel):
                 related_models = [m for m in related_models if m is not None]
 
                 # Call the parent constructor with everything we've made
-                EmissionModel.__init__(
+                StellarEmissionModel.__init__(
                     self,
                     grid=self._grid,
                     label="emergent",
@@ -386,7 +386,7 @@ class PacmanEmission(EmissionModel):
                 )
 
 
-class BimodalPacmanEmission(EmissionModel):
+class BimodalPacmanEmission(StellarEmissionModel):
     """
     A class defining the Pacman model split into young and old populations.
 
@@ -477,9 +477,9 @@ class BimodalPacmanEmission(EmissionModel):
             nebular.
         age_pivot (unyt.unyt_quantity): The age pivot between young and old
             populations, expressed in terms of log10(age) in Myr.
-        dust_emission_ism (synthesizer.dust.DustEmissionModel): The dust
+        dust_emission_ism (synthesizer.dust.EmissionModel): The dust
             emission for the ISM.
-        dust_emission_nebular (synthesizer.dust.DustEmissionModel): The dust
+        dust_emission_nebular (synthesizer.dust.EmissionModel): The dust
             emission for the nebular.
         fesc (float): The escape fraction.
         fesc_ly_alpha (float): The Lyman alpha escape fraction.
@@ -512,9 +512,9 @@ class BimodalPacmanEmission(EmissionModel):
                 the nebular.
             age_pivot (unyt.unyt_quantity): The age pivot between young and old
                 populations, expressed in terms of log10(age) in Myr.
-            dust_emission_ism (synthesizer.dust.DustEmissionModel): The dust
+            dust_emission_ism (synthesizer.dust.EmissionModel): The dust
                 emission model for the ISM.
-            dust_emission_nebular (synthesizer.dust.DustEmissionModel): The
+            dust_emission_nebular (synthesizer.dust.EmissionModel): The
                 dust emission model for the nebular.
             fesc (float): The escape fraction.
             fesc_ly_alpha (float): The Lyman alpha escape fraction.
@@ -617,7 +617,7 @@ class BimodalPacmanEmission(EmissionModel):
         incident onto the nebular, ism and dust components.
 
         Returns:
-            EmissionModel:
+            StellarEmissionModel:
                 - young_incident
                 - old_incident
                 - incident
@@ -636,7 +636,7 @@ class BimodalPacmanEmission(EmissionModel):
             mask_thresh=self.age_pivot,
             mask_op=">=",
         )
-        incident = EmissionModel(
+        incident = StellarEmissionModel(
             label="incident",
             combine=(young_incident, old_incident),
         )
@@ -651,7 +651,7 @@ class BimodalPacmanEmission(EmissionModel):
         components because the transmitted spectra won't exist.
 
         Returns:
-            EmissionModel:
+            StellarEmissionModel:
                 - young_transmitted
                 - old_transmitted
                 - transmitted
@@ -676,7 +676,7 @@ class BimodalPacmanEmission(EmissionModel):
             mask_op=">=",
             fesc=self._fesc,
         )
-        transmitted = EmissionModel(
+        transmitted = StellarEmissionModel(
             label="transmitted",
             combine=(young_transmitted, old_transmitted),
         )
@@ -698,7 +698,7 @@ class BimodalPacmanEmission(EmissionModel):
         components because the transmitted spectra won't exist.
 
         Returns:
-            EmissionModel:
+            StellarEmissionModel:
                 - young_escaped
                 - old_escaped
                 - escaped
@@ -727,7 +727,7 @@ class BimodalPacmanEmission(EmissionModel):
             mask_op=">=",
             fesc=self._fesc,
         )
-        escaped = EmissionModel(
+        escaped = StellarEmissionModel(
             label="escaped",
             combine=(young_escaped, old_escaped),
         )
@@ -797,7 +797,7 @@ class BimodalPacmanEmission(EmissionModel):
             linecont=old_line_cont,
             nebular_continuum=old_neb_cont,
         )
-        nebular = EmissionModel(
+        nebular = StellarEmissionModel(
             label="nebular",
             combine=(young_nebular, old_nebular),
         )
@@ -809,15 +809,15 @@ class BimodalPacmanEmission(EmissionModel):
         if not self.reprocessed:
             return None, None, None
 
-        young_reprocessed = EmissionModel(
+        young_reprocessed = StellarEmissionModel(
             label="young_reprocessed",
             combine=(self.young_transmitted, self.young_nebular),
         )
-        old_reprocessed = EmissionModel(
+        old_reprocessed = StellarEmissionModel(
             label="old_reprocessed",
             combine=(self.old_transmitted, self.old_nebular),
         )
-        reprocessed = EmissionModel(
+        reprocessed = StellarEmissionModel(
             label="reprocessed",
             combine=(young_reprocessed, old_reprocessed),
         )
@@ -833,7 +833,7 @@ class BimodalPacmanEmission(EmissionModel):
         take into account an escape fraction.
 
         Returns:
-            EmissionModel:
+            StellarEmissionModel:
                 - young_intrinsic
                 - old_intrinsic
                 - intrinsic
@@ -854,7 +854,7 @@ class BimodalPacmanEmission(EmissionModel):
             mask_op=">=",
             fesc=self._fesc,
         )
-        intrinsic = EmissionModel(
+        intrinsic = StellarEmissionModel(
             label="intrinsic",
             combine=(young_intrinsic, old_intrinsic),
         )
@@ -865,29 +865,29 @@ class BimodalPacmanEmission(EmissionModel):
         # If fesc is zero then the intrinsic emission is the same as the
         # reprocessed emission
         if self._fesc == 0.0:
-            young_intrinsic = EmissionModel(
+            young_intrinsic = StellarEmissionModel(
                 label="young_intrinsic",
                 combine=(self.young_nebular, self.young_transmitted),
             )
-            old_intrinsic = EmissionModel(
+            old_intrinsic = StellarEmissionModel(
                 label="old_intrinsic",
                 combine=(self.old_nebular, self.old_transmitted),
             )
-            intrinsic = EmissionModel(
+            intrinsic = StellarEmissionModel(
                 label="intrinsic",
                 combine=(young_intrinsic, old_intrinsic),
             )
         else:
             # Otherwise, intrinsic = reprocessed + escaped
-            young_intrinsic = EmissionModel(
+            young_intrinsic = StellarEmissionModel(
                 label="young_intrinsic",
                 combine=(self.young_reprocessed, self.young_escaped),
             )
-            old_intrinsic = EmissionModel(
+            old_intrinsic = StellarEmissionModel(
                 label="old_intrinsic",
                 combine=(self.old_reprocessed, self.old_escaped),
             )
-            intrinsic = EmissionModel(
+            intrinsic = StellarEmissionModel(
                 label="intrinsic",
                 combine=(young_intrinsic, old_intrinsic),
             )
@@ -919,7 +919,7 @@ class BimodalPacmanEmission(EmissionModel):
             dust_curve=self._dust_curve_ism,
             apply_dust_to=self.old_intrinsic,
         )
-        attenuated = EmissionModel(
+        attenuated = StellarEmissionModel(
             label="attenuated",
             combine=(young_attenuated, old_attenuated),
         )
@@ -947,21 +947,21 @@ class BimodalPacmanEmission(EmissionModel):
                 dust_curve=self._dust_curve_ism,
                 apply_dust_to=self.old_intrinsic,
             )
-            emergent = EmissionModel(
+            emergent = StellarEmissionModel(
                 label="emergent",
                 combine=(young_emergent, old_emergent),
             )
         else:
             # Otherwise, emergent = attenuated + escaped
-            young_emergent = EmissionModel(
+            young_emergent = StellarEmissionModel(
                 label="young_emergent",
                 combine=(self.young_attenuated, self.young_escaped),
             )
-            old_emergent = EmissionModel(
+            old_emergent = StellarEmissionModel(
                 label="old_emergent",
                 combine=(self.old_attenuated, self.old_escaped),
             )
-            emergent = EmissionModel(
+            emergent = StellarEmissionModel(
                 label="emergent",
                 combine=(young_emergent, old_emergent),
             )
@@ -987,7 +987,7 @@ class BimodalPacmanEmission(EmissionModel):
             mask_thresh=self.age_pivot,
             mask_op="<",
         )
-        young_dust_emission = EmissionModel(
+        young_dust_emission = StellarEmissionModel(
             label="young_dust_emission",
             combine=(young_dust_emission_nebular, young_dust_emission_ism),
         )
@@ -1000,7 +1000,7 @@ class BimodalPacmanEmission(EmissionModel):
             mask_thresh=self.age_pivot,
             mask_op=">=",
         )
-        dust_emission = EmissionModel(
+        dust_emission = StellarEmissionModel(
             label="dust_emission",
             combine=(young_dust_emission, old_dust_emission),
         )
@@ -1019,11 +1019,11 @@ class BimodalPacmanEmission(EmissionModel):
             and self.dust_emission_nebular is not None
         ):
             # Get the young and old total emission
-            young_total = EmissionModel(
+            young_total = StellarEmissionModel(
                 label="young_total",
                 combine=(self.young_dust_emission, self.young_emergent),
             )
-            old_total = EmissionModel(
+            old_total = StellarEmissionModel(
                 label="old_total",
                 combine=(self.old_dust_emission, self.old_emergent),
             )
@@ -1067,7 +1067,7 @@ class BimodalPacmanEmission(EmissionModel):
             related_models = [m for m in related_models if m is not None]
 
             # Call the parent constructor with everything we've made
-            EmissionModel.__init__(
+            StellarEmissionModel.__init__(
                 self,
                 grid=self._grid,
                 label="total",
@@ -1120,7 +1120,7 @@ class BimodalPacmanEmission(EmissionModel):
                 related_models = [m for m in related_models if m is not None]
 
                 # Call the parent constructor with everything we've made
-                EmissionModel.__init__(
+                StellarEmissionModel.__init__(
                     self,
                     grid=self._grid,
                     label="emergent",
@@ -1132,11 +1132,11 @@ class BimodalPacmanEmission(EmissionModel):
                 # Otherwise, emergent = attenuated + escaped
 
                 # Get the young and old emergent emission
-                young_total = EmissionModel(
+                young_total = StellarEmissionModel(
                     label="young_emergent",
                     combine=(self.young_attenuated, self.young_escaped),
                 )
-                old_total = EmissionModel(
+                old_total = StellarEmissionModel(
                     label="old_emergent",
                     combine=(self.old_attenuated, self.old_escaped),
                 )
@@ -1172,7 +1172,7 @@ class BimodalPacmanEmission(EmissionModel):
                 related_models = [m for m in related_models if m is not None]
 
                 # Call the parent constructor with everything we've made
-                EmissionModel.__init__(
+                StellarEmissionModel.__init__(
                     self,
                     grid=self._grid,
                     label="emergent",
@@ -1205,9 +1205,9 @@ class CharlotFall2000(BimodalPacmanEmission):
             nebular.
         age_pivot (unyt.unyt_quantity): The age pivot between young and old
             populations, expressed in terms of log10(age) in Myr.
-        dust_emission_ism (synthesizer.dust.DustEmissionModel): The dust
+        dust_emission_ism (synthesizer.dust.EmissionModel): The dust
             emission model for the ISM.
-        dust_emission_nebular (synthesizer.dust.DustEmissionModel): The dust
+        dust_emission_nebular (synthesizer.dust.EmissionModel): The dust
             emission model for the nebular.
     """
 
@@ -1235,9 +1235,9 @@ class CharlotFall2000(BimodalPacmanEmission):
                 the nebular.
             age_pivot (unyt.unyt_quantity): The age pivot between young and old
                 populations, expressed in terms of log10(age) in Myr.
-            dust_emission_ism (synthesizer.dust.DustEmissionModel): The dust
+            dust_emission_ism (synthesizer.dust.EmissionModel): The dust
                 emission model for the ISM.
-            dust_emission_nebular (synthesizer.dust.DustEmissionModel): The
+            dust_emission_nebular (synthesizer.dust.EmissionModel): The
                 dust emission model for the nebular.
         """
         # Call the parent constructor to intialise the model

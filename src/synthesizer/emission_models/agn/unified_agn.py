@@ -20,10 +20,10 @@ Example usage:
 
 from unyt import deg
 
-from synthesizer.emission_models.base_model import EmissionModel
+from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 
 
-class UnifiedAGN(EmissionModel):
+class UnifiedAGN(BlackHoleEmissionModel):
     """
     An emission model that defines the Unified AGN model.
 
@@ -32,25 +32,25 @@ class UnifiedAGN(EmissionModel):
     and torus.
 
     Attributes:
-        disc_incident_isotropic (EmissionModel):
+        disc_incident_isotropic (BlackHoleEmissionModel):
             The disc emission model assuming isotropic emission.
-        disc_incident (EmissionModel):
+        disc_incident (BlackHoleEmissionModel):
             The disc emission model accounting for the geometry but unmasked.
-        nlr_transmitted (EmissionModel):
+        nlr_transmitted (BlackHoleEmissionModel):
             The NLR transmitted emission
-        blr_transmitted (EmissionModel):
+        blr_transmitted (BlackHoleEmissionModel):
             The BLR transmitted emission
-        disc_transmitted (EmissionModel):
+        disc_transmitted (BlackHoleEmissionModel):
             The disc transmitted emission
-        disc_escaped (EmissionModel):
+        disc_escaped (BlackHoleEmissionModel):
             The disc escaped emission
-        disc (EmissionModel):
+        disc (BlackHoleEmissionModel):
             The disc emission model
-        nlr (EmissionModel):
+        nlr (BlackHoleEmissionModel):
             The NLR emission model
-        blr (EmissionModel):
+        blr (BlackHoleEmissionModel):
             The BLR emission model
-        torus (EmissionModel):
+        torus (BlackHoleEmissionModel):
             The torus emission model
     """
 
@@ -70,7 +70,7 @@ class UnifiedAGN(EmissionModel):
             blr_grid (synthesizer.grid.Grid): The grid for the BLR.
             covering_fraction_nlr (float): The covering fraction of the NLR.
             covering_fraction_blr (float): The covering fraction of the BLR.
-            torus_emission_model (synthesizer.dust.DustEmissionModel): The dust
+            torus_emission_model (synthesizer.dust.EmissionModel): The dust
                 emission model to use for the torus.
         """
         # Get the incident istropic disc emission model
@@ -110,7 +110,7 @@ class UnifiedAGN(EmissionModel):
         self.torus = self._make_torus(torus_emission_model)
 
         # Create the final model
-        EmissionModel.__init__(
+        BlackHoleEmissionModel.__init__(
             self,
             label="intrinsic",
             combine=(
@@ -127,7 +127,7 @@ class UnifiedAGN(EmissionModel):
 
     def _make_disc_incident_isotropic(self, grid):
         """Make the disc spectra assuming isotropic emission."""
-        model = EmissionModel(
+        model = BlackHoleEmissionModel(
             grid=grid,
             label="disc_incident_isotropic",
             extract="incident",
@@ -138,7 +138,7 @@ class UnifiedAGN(EmissionModel):
 
     def _make_disc_incident(self, grid):
         """Make the disc spectra."""
-        model = EmissionModel(
+        model = BlackHoleEmissionModel(
             grid=grid,
             label="disc_incident",
             extract="incident",
@@ -158,13 +158,13 @@ class UnifiedAGN(EmissionModel):
     ):
         """Make the disc transmitted spectra."""
         # Make the line regions
-        nlr = EmissionModel(
+        nlr = BlackHoleEmissionModel(
             grid=nlr_grid,
             label="nlr_transmitted",
             extract="transmitted",
             fesc=covering_fraction_nlr,
         )
-        blr = EmissionModel(
+        blr = BlackHoleEmissionModel(
             grid=blr_grid,
             label="blr_transmitted",
             extract="transmitted",
@@ -172,7 +172,7 @@ class UnifiedAGN(EmissionModel):
         )
 
         # Combine the models
-        model = EmissionModel(
+        model = BlackHoleEmissionModel(
             label="disc_transmitted",
             combine=(nlr, blr),
         )
@@ -191,7 +191,7 @@ class UnifiedAGN(EmissionModel):
         This model is the mirror of the transmitted with the reverse of the
         covering fraction being applied to the disc incident model.
         """
-        model = EmissionModel(
+        model = BlackHoleEmissionModel(
             grid=grid,
             label="disc_escaped",
             extract="incident",
@@ -205,7 +205,7 @@ class UnifiedAGN(EmissionModel):
 
     def _make_disc(self):
         """Make the disc spectra."""
-        return EmissionModel(
+        return BlackHoleEmissionModel(
             label="disc",
             combine=(self.disc_transmitted, self.disc_escaped),
         )
@@ -213,7 +213,7 @@ class UnifiedAGN(EmissionModel):
     def _make_line_regions(self, nlr_grid, blr_grid):
         """Make the line regions."""
         # Make the line regions with fixed inclination
-        nlr = EmissionModel(
+        nlr = BlackHoleEmissionModel(
             grid=nlr_grid,
             label="nlr",
             extract="transmitted",
@@ -222,7 +222,7 @@ class UnifiedAGN(EmissionModel):
             mask_thresh=90 * deg,
             mask_op="<",
         )
-        blr = EmissionModel(
+        blr = BlackHoleEmissionModel(
             grid=nlr_grid,
             label="blr",
             extract="transmitted",
@@ -235,7 +235,7 @@ class UnifiedAGN(EmissionModel):
 
     def _make_torus(self, torus_emission_model):
         """Make the torus spectra."""
-        return EmissionModel(
+        return BlackHoleEmissionModel(
             label="torus",
             generator=torus_emission_model,
             scale_by="torus_fraction",
