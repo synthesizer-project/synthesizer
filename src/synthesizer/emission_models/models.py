@@ -58,7 +58,7 @@ class DustEmission(EmissionModel):
         EmissionModel.__init__(
             self,
             label=label,
-            dust_emission_model=dust_emission_model,
+            generator=dust_emission_model,
             dust_lum_intrinsic=dust_lum_intrinsic,
             dust_lum_attenuated=dust_lum_attenuated,
             **kwargs,

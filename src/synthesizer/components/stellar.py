@@ -1665,7 +1665,7 @@ class StarsComponent:
         # Get the spectra
         self.spectra = emission_model._get_spectra(
             component=self,
-            generator=self.generate_lnu,
+            generator_func=self.generate_lnu,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=fesc,

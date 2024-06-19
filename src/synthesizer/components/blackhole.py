@@ -5,10 +5,9 @@ ever instantiated by the parametric/particle child classes.
 """
 
 import numpy as np
-from unyt import c, deg, rad
+from unyt import c, cm, deg, km, rad, s
 
 from synthesizer import exceptions
-from synthesizer.blackhole_emission_models import Template
 from synthesizer.sed import Sed, plot_spectra
 from synthesizer.units import Quantity
 
@@ -45,6 +44,30 @@ class BlackholesComponent:
         metallicity (array-like, float)
             The metallicity of the blackhole which is assumed for the line
             emitting regions.
+
+    Attributes (For EmissionModels):
+        ionisation_parameter_blr (array-like, float)
+            The ionisation parameter of the broad line region.
+        hydrogen_density_blr (array-like, float)
+            The hydrogen density of the broad line region.
+        covering_fraction_blr (array-like, float)
+            The covering fraction of the broad line region (effectively
+            the escape fraction).
+        velocity_dispersion_blr (array-like, float)
+            The velocity dispersion of the broad line region.
+        ionisation_parameter_nlr (array-like, float)
+            The ionisation parameter of the narrow line region.
+        hydrogen_density_nlr (array-like, float)
+            The hydrogen density of the narrow line region.
+        covering_fraction_nlr (array-like, float)
+            The covering fraction of the narrow line region (effectively
+            the escape fraction).
+        velocity_dispersion_nlr (array-like, float)
+            The velocity dispersion of the narrow line region.
+        theta_torus (array-like, float)
+            The angle of the torus.
+        torus_fraction (array-like, float)
+            The fraction of the torus angle to 90 degrees.
     """
 
     # Define class level Quantity attributes
@@ -61,17 +84,26 @@ class BlackholesComponent:
         accretion_rate=None,
         epsilon=0.1,
         accretion_rate_eddington=None,
-        inclination=None,
+        inclination=0.0 * deg,
         spin=None,
         bolometric_luminosity=None,
         metallicity=None,
+        ionisation_parameter_blr=0.1,
+        hydrogen_density_blr=1e9 / cm**3,
+        covering_fraction_blr=0.1,
+        velocity_dispersion_blr=2000 * km / s,
+        ionisation_parameter_nlr=0.01,
+        hydrogen_density_nlr=1e4 / cm**3,
+        covering_fraction_nlr=0.1,
+        velocity_dispersion_nlr=500 * km / s,
         theta_torus=60 * deg,
         **kwargs,
     ):
         """
-        Initialise the BlackholeComponent. Where they're not provided missing
-        quantities are automatically calcualted. Only some quantities are
-        needed for each emission model.
+        Initialise the BlackholeComponent.
+
+        Where they're not provided missing quantities are automatically
+        calcualted. Not all parameters need to be set for every emission model.
 
         Args:
             mass (array-like, float)
@@ -92,11 +124,30 @@ class BlackholesComponent:
             metallicity (array-like, float)
                 The metallicity of the blackhole which is assumed for the line
                 emitting regions.
+            ionisation_parameter_blr (array-like, float)
+                The ionisation parameter of the broad line region.
+            hydrogen_density_blr (array-like, float)
+                The hydrogen density of the broad line region.
+            covering_fraction_blr (array-like, float)
+                The covering fraction of the broad line region (effectively
+                the escape fraction).
+            velocity_dispersion_blr (array-like, float)
+                The velocity dispersion of the broad line region.
+            ionisation_parameter_nlr (array-like, float)
+                The ionisation parameter of the narrow line region.
+            hydrogen_density_nlr (array-like, float)
+                The hydrogen density of the narrow line region.
+            covering_fraction_nlr (array-like, float)
+                The covering fraction of the narrow line region (effectively
+                the escape fraction).
+            velocity_dispersion_nlr (array-like, float)
+                The velocity dispersion of the narrow line region.
+            theta_torus (array-like, float)
+                The angle of the torus.
             kwargs (dict)
-                Any parameter for the emission models can be provided as kwargs
-                here to override the defaults of the emission models.
+                Any other parameter for the emission models can be provided as
+                kwargs.
         """
-
         # Initialise spectra
         self.spectra = {}
 
@@ -113,9 +164,31 @@ class BlackholesComponent:
         self.bolometric_luminosity = bolometric_luminosity
         self.metallicity = metallicity
 
-        # Include any attributes needed for the emission models
-        self.inclination = inclination
+        # Below we attach all the possible attributes that could be needed by
+        # the emission models.
+
+        # Set BLR attributes
+        self.ionisation_parameter_blr = ionisation_parameter_blr
+        self.hydrogen_density_blr = hydrogen_density_blr
+        self.covering_fraction_blr = covering_fraction_blr
+        self.velocity_dispersion_blr = velocity_dispersion_blr
+
+        # Set NLR attributes
+        self.ionisation_parameter_nlr = ionisation_parameter_nlr
+        self.hydrogen_density_nlr = hydrogen_density_nlr
+        self.covering_fraction_nlr = covering_fraction_nlr
+        self.velocity_dispersion_nlr = velocity_dispersion_nlr
+
+        # The inclination of the black hole disc
+        self.inclination = (
+            inclination if inclination is not None else 0.0 * deg
+        )
+
+        # The angle of the torus
         self.theta_torus = theta_torus
+        self.torus_fraction = (self.theta_torus / (90 * deg)).value
+        print(self.inclination, self.theta_torus, self.torus_fraction)
+        self._torus_edgeon_cond = self.inclination + self.theta_torus
 
         # Set any of the extra attribute provided as kwargs
         for key, val in kwargs.items():
@@ -277,7 +350,8 @@ class BlackholesComponent:
         return compute_integrated_sed(*args)
 
     def __str__(self):
-        """Function to print a basic summary of the BlackHoles object.
+        """
+        Return a basic summary of the BlackHoles object.
 
         Returns a string containing the total mass formed and lists of the
         available SEDs, lines, and images.
@@ -287,7 +361,6 @@ class BlackholesComponent:
                 Summary string containing the total mass formed and lists
                 of the available SEDs, lines, and images.
         """
-
         # Define the width to print within
         width = 80
         pstr = ""
@@ -679,14 +752,6 @@ class BlackholesComponent:
             dict, Sed
                 A dictionary of Sed instances including the intrinsic emission.
         """
-
-        # Early exit if the emission model is a Template, for this we just
-        # return the template scaled by bolometric luminosity
-        if isinstance(emission_model, Template):
-            self.spectra["intrinsic"] = emission_model.get_spectra(
-                self.bolometric_luminosity
-            )
-            return self.spectra
 
         # Temporarily have the emission model adopt any vairable parameters
         # from this BlackHole/BlackHoles

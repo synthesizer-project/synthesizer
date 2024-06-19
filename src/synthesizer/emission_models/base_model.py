@@ -83,8 +83,9 @@ class EmissionModel:
             The optical depth to apply. Can be a float, ndarray, or a string
             to a component attribute. Can also be a tuple combining any of
             these.
-        dust_emission_model (EmissionModel):
-            The dust emission model to generate from.
+        generator (EmissionModel):
+            The emission generation model. This must define a get_spectra
+            method.
         combine (list):
             A list of models to combine.
         fesc (float):
@@ -104,7 +105,7 @@ class EmissionModel:
         apply_dust_to=None,
         dust_curve=None,
         tau_v=None,
-        dust_emission_model=None,
+        generator=None,
         dust_lum_intrinsic=None,
         dust_lum_attenuated=None,
         mask_attr=None,
@@ -113,6 +114,8 @@ class EmissionModel:
         fesc=None,
         related_models=None,
         component="stellar",
+        fixed_parameters={},
+        scale_by=None,
         **kwargs,
     ):
         """
@@ -125,7 +128,7 @@ class EmissionModel:
           of child emission models).
         - Applying a dust curve to the spectra. (dust_curve, apply_dust_to
           and tau_v must be set)
-        - Generating spectra from a dust emission model. (dust_emission_model
+        - Generating spectra from a dust emission model. (generator
           must be set)
 
         Within any of these steps a mask can be applied to the spectra to
@@ -148,8 +151,9 @@ class EmissionModel:
                 The optical depth to apply. Can be a float, ndarray, or a
                 string to a component attribute. Can also be a tuple combining
                 any of these.
-            dust_emission_model (EmissionModel):
-                The dust emission model to generate from.
+            generator (EmissionModel):
+                The emission generation model. This must define a get_spectra
+                method.
             dust_lum_intrinsic_key (EmissionModel):
                 The intrinsic model to use deriving the dust
                 luminosity when computing dust emission.
@@ -173,12 +177,29 @@ class EmissionModel:
             component (str):
                 The component this emission model acts on. Default is
                 "stellar".
+            fixed_parameters (dict):
+                A dictionary of parameters which are fixed and should not take
+                the value of the component attribute. This should take the form
+                {<parameter_name>: <value>}.
+            scale_by (str):
+                A component attribute to scale the resultant spectra by.
+            **kwargs:
+                Any additional keyword arguments to store. These can be used
+                to store additional information needed by the model.
         """
         # What is the key for the spectra that will be produced?
         self.label = label
 
         # Attach the grid
         self._grid = grid
+
+        # Store any extra kwargs this can either be used to store additional
+        # information needed by the model
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        # Store any fixed parameters
+        self.fixed_parameters = fixed_parameters
 
         # Attach what component we are working with
         self._component = component
@@ -196,8 +217,8 @@ class EmissionModel:
             else [tau_v]
         )
 
-        # Attach the dust emission model
-        self._dust_emission_model = dust_emission_model
+        # Attach the emission generation model
+        self._generator = generator
 
         # Attach the keys for the intrinsic and attenuated spectra to use when
         # computing the dust luminosity
@@ -213,6 +234,9 @@ class EmissionModel:
         # Containers for children and parents
         self._children = set()
         self._parents = set()
+
+        # Store the arribute to scale the spectra by
+        self.scale_by = scale_by
 
         # Define the container which will hold mask information
         self.masks = []
@@ -281,9 +305,9 @@ class EmissionModel:
         return self._tau_v
 
     @property
-    def dust_emission_model(self):
-        """Get the dust emission model to generate from."""
-        return self._dust_emission_model
+    def generator(self):
+        """Get the emission generation model."""
+        return self._generator
 
     @property
     def dust_lum_intrinsic(self):
@@ -320,22 +344,25 @@ class EmissionModel:
                     self._is_combining,
                     self._is_dust_attenuating,
                     self._is_dust_emitting,
+                    self._is_generating,
                 ]
             )
             == 0
         ):
             raise exceptions.InconsistentArguments(
-                "No valid operation found from the arguments given. "
+                "No valid operation found from the arguments given "
+                f"(label={self.label}). "
                 "Currently have:\n"
-                "\tFor extraction: "
-                f"(grid={self._grid.grid_name} extract={self._extract})\n"
+                "\tFor extraction: grid=("
+                f"{self._grid.grid_name if self._grid is not None else None}"
+                f" extract={self._extract})\n"
                 "\tFor combination: "
                 f"(combine={self._combine})\n"
                 "\tFor dust attenuation: "
                 f"(dust_curve={self._dust_curve} "
                 f"apply_dust_to={self._apply_dust_to} tau_v={self._tau_v})\n"
-                "\tFor dust emission: "
-                f"(dust_emission_model={self._dust_emission_model})"
+                "\tFor dust generation: "
+                f"(generator={self._generator})"
             )
 
         # Ensure only one type of operation is being done
@@ -346,27 +373,28 @@ class EmissionModel:
                     self._is_combining,
                     self._is_dust_attenuating,
                     self._is_dust_emitting,
+                    self._is_generating,
                 ]
             )
             > 1
         ):
             raise exceptions.InconsistentArguments(
-                "Can only extract, combine, or apply dust to spectra in one "
-                "model. (Attempting to: "
+                "Can only extract, combine, generate or apply dust to "
+                f"spectra in one model (label={self.label}). (Attempting to: "
                 f"extract: {self._is_extracting}, "
                 f"combine: {self._is_combining}, "
                 f"dust_attenuate: {self._is_dust_attenuating}, "
                 f"dust_emission: {self._is_dust_emitting})\n"
                 "Currently have:\n"
-                "\tFor extraction: "
-                f"(grid={self._grid.grid_name} extract={self._extract})\n"
+                "\tFor extraction: grid=("
+                f"{self._grid.grid_name if self._grid is not None else None}"
                 "\tFor combination: "
                 f"(combine={self._combine})\n"
                 "\tFor dust attenuation: "
                 f"(dust_curve={self._dust_curve} "
                 f"apply_dust_to={self._apply_dust_to} tau_v={self._tau_v})\n"
-                "\tFor dust emission: "
-                f"(dust_emission_model={self._dust_emission_model})"
+                "\tFor generation "
+                f"(generator={self._generator})"
             )
 
         # Ensure we have what we need for all operations
@@ -439,7 +467,7 @@ class EmissionModel:
 
             if model._is_dust_emitting:
                 parts.append(
-                    f"  Dust emission model: {model._dust_emission_model}"
+                    "  Emission generation model: " f"{model._generator}"
                 )
                 if (
                     model._dust_lum_intrinsic is not None
@@ -450,15 +478,18 @@ class EmissionModel:
                         f"{model._dust_lum_intrinsic.label} - "
                         f"{model._dust_lum_attenuated.label}"
                     )
+            if model._is_generating:
+                parts.append(
+                    "  Emission generation model: " f"{model._generator}"
+                )
+                if model.scale_by is not None:
+                    parts.append(f"  Scale by: {model.scale_by}")
 
-            if len(model._parents) > 0:
-                parts.append(
-                    f"  Parents: {[parent.label for parent in model._parents]}"
-                )
-            if len(model._children) > 0:
-                parts.append(
-                    f"  Children: {[child.label for child in model._children]}"
-                )
+            # Print any fixed parameters if there are any
+            if len(model.fixed_parameters) > 0:
+                parts.append("  Fixed parameters:")
+                for key, value in model.fixed_parameters.items():
+                    parts.append(f"    - {key}: {value}")
 
             if model._is_masked:
                 parts.append("  Masks:")
@@ -517,9 +548,15 @@ class EmissionModel:
             or self._apply_dust_to is not None
             or self._tau_v is not None
         )
-        self._is_dust_emitting = self._dust_emission_model is not None
+        self._is_dust_emitting = (
+            self._generator is not None
+            and self._dust_lum_attenuated is not None
+            and self._dust_lum_intrinsic is not None
+        )
+        self._is_generating = (
+            self._generator is not None and not self._is_dust_emitting
+        )
         self._is_masked = len(self.masks) > 0
-        self._is_template = False  # this is explictly set on any templates
 
     def _unpack_model_recursively(self, model):
         """
@@ -545,8 +582,8 @@ class EmissionModel:
             model.apply_dust_to._parents.add(model)
 
         # If we are applying a dust emission model, store the key
-        if model.dust_emission_model is not None:
-            self._dust_emission[model.label] = model.dust_emission_model
+        if model.generator is not None:
+            self._generator_models[model.label] = model.generator
             if model._dust_lum_attenuated is not None:
                 model._children.add(model._dust_lum_attenuated)
                 model._dust_lum_attenuated._parents.add(model)
@@ -586,7 +623,7 @@ class EmissionModel:
         # are dictionaries of the form {<result_label>: <operation props>}
         self._extract_keys = {}
         self._dust_attenuation = {}
-        self._dust_emission = {}
+        self._generator_models = {}
         self._combine_keys = {}
         self._mask_keys = {}
         self._models = {}
@@ -752,7 +789,7 @@ class EmissionModel:
         # Unpack the model now we're done
         self.unpack_model()
 
-    def set_dust_emission_model(self, dust_emission_model, label=None):
+    def set_generator(self, generator, label=None):
         """
         Set the dust emission model on this model.
 
@@ -760,8 +797,8 @@ class EmissionModel:
         models.
 
         Args:
-            dust_emission_model (EmissionModel):
-                The dust emission model to set.
+            generator (EmissionModel):
+                The emission generation model to set.
             label (str):
                 The label of the model to set the dust emission model on. If
                 None, sets the dust emission model on this model.
@@ -772,11 +809,15 @@ class EmissionModel:
                 f"Could not find a model with the label: {label}"
             )
 
-        # Ensure model is a dust emission model and change the model
-        if label is not None and self._models[label]._is_dust_emitting:
-            self._models[label]._dust_emission_model = dust_emission_model
-        elif self._is_dust_emitting:
-            self._dust_emission_model = dust_emission_model
+        # Ensure model is a emission generation model and change the model
+        if (
+            label is not None
+            and self._models[label]._is_dust_emitting
+            or self._models[label]._is_generating
+        ):
+            self._models[label]._generator = generator
+        elif self._is_dust_emitting or self._is_generating:
+            self._generator = generator
         else:
             raise exceptions.InconsistentArguments(
                 "Cannot set a dust emission model on a model that is not "
@@ -1513,7 +1554,7 @@ class EmissionModel:
     def _get_spectra(
         self,
         component,
-        generator,
+        generator_func,
         dust_curves=None,
         tau_v=None,
         fesc=None,
@@ -1525,12 +1566,14 @@ class EmissionModel:
         Generate stellar spectra as described by the emission model.
 
         If the emission model defines a dust_curve or fesc and no overide
-        is provided in the arguments to this function
+        is provided in the arguments to this function.
+
+        TODO: Apply any fixed parameters.
 
         Args:
             component (Stars/BlackHoles):
                 The component to generate the spectra for.
-            generator (function):
+            generator_func (function):
                 The generator function from the component (generate_lnu or
                 generate_particle_lnu).
             dust_curves (dict):
@@ -1624,7 +1667,7 @@ class EmissionModel:
             # Get this base spectra
             spectra[label] = Sed(
                 emission_model.grid.lam,
-                generator(
+                generator_func(
                     emission_model.grid,
                     spectra_key,
                     fesc=getattr(component, this_model.fesc)
@@ -1690,19 +1733,27 @@ class EmissionModel:
 
             elif this_model._is_dust_emitting:
                 # Unpack what we need for dust emission
-                dust_emission_model = this_model.dust_emission_model
-                if this_model.dust_lum_intrinsic is not None:
-                    intrinsic = spectra[this_model.dust_lum_intrinsic.label]
-                    attenuated = spectra[this_model.dust_lum_attenuated.label]
-                else:
-                    intrinsic = None
-                    attenuated = None
+                generator = this_model.generator
+                intrinsic = spectra[this_model.dust_lum_intrinsic.label]
+                attenuated = spectra[this_model.dust_lum_attenuated.label]
 
                 # Apply the dust emission model
-                spectra[label] = dust_emission_model.get_spectra(
+                spectra[label] = generator.get_spectra(
                     emission_model.grid.lam,
                     intrinsic,
                     attenuated,
                 )
+
+            elif this_model._is_generator:
+                generator = this_model.generator
+
+                # Apply the dust emission model
+                spectra[label] = generator.get_spectra(
+                    emission_model.grid.lam,
+                )
+
+            # Are we scaling the spectra?
+            if this_model.scale_by is not None:
+                spectra[label]._lnu *= getattr(component, this_model.scale_by)
 
         return spectra

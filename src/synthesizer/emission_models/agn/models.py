@@ -10,7 +10,7 @@ Example usage:
         grid=grid,
         dust_curve=dust_curve,
         tau_v=tau_v,
-        dust_emission_model=dust_emission_model,
+        generator=dust_emission_model,
         fesc=0.0,
     )
 
@@ -26,7 +26,7 @@ from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.sed import Sed
 
 
-class Template(EmissionModel):
+class Template:
     """
     Use a template for the emission model.
 
@@ -69,14 +69,6 @@ class Template(EmissionModel):
             **kwargs
 
         """
-        EmissionModel.__init__(
-            self,
-            grid=None,
-            label=label,
-            fesc=fesc,
-            **kwargs,
-        )
-
         # Ensure we have been given units
         if lam is not None and not isinstance(lam, unyt_array):
             raise exceptions.MissingUnits("lam must be provided with units")
@@ -105,10 +97,10 @@ class Template(EmissionModel):
                 "Either a filename or both lam and lnu must be provided!"
             )
 
-        # Flag that this is a template
-        self._is_template = True
+        # Set the escape fraction
+        self.fesc = fesc
 
-    def _scale_template(self, bolometric_luminosity):
+    def get_spectra(self, bolometric_luminosity):
         """
         Calculate the blackhole spectra by scaling the template.
 
@@ -129,6 +121,34 @@ class Template(EmissionModel):
             bolometric_luminosity.to(self.sed.lnu.units * Hz).value
             * self.sed
             * (1 - self.fesc)
+        )
+
+
+class TemplateEmission(EmissionModel):
+    """
+    An emission model that uses a template for the AGN emission.
+
+    This is a child of the EmisisonModel class, for a full description of the
+    parameters see the EmissionModel class.
+    """
+
+    def __init__(self, template, label="template", **kwargs):
+        """
+        Initialise the TemplateEmission model.
+
+        Args:
+            template (Template)
+                The template object containing the AGN emission.
+            label (str)
+                The label for the model.
+            **kwargs
+
+        """
+        EmissionModel.__init__(
+            self,
+            label=label,
+            generator=template,
+            **kwargs,
         )
 
 
@@ -162,9 +182,6 @@ class NLRIncidentEmission(EmissionModel):
             **kwargs,
         )
 
-        # Flag which line region this is
-        self.line_region = "nlr"
-
 
 class BLRIncidentEmission(EmissionModel):
     """
@@ -195,9 +212,6 @@ class BLRIncidentEmission(EmissionModel):
             extract="incident",
             **kwargs,
         )
-
-        # Flag which line region this is
-        self.line_region = "blr"
 
 
 class NLRTransmittedEmission(EmissionModel):
@@ -240,9 +254,6 @@ class NLRTransmittedEmission(EmissionModel):
             **kwargs,
         )
 
-        # Flag which line region this is
-        self.line_region = "nlr"
-
 
 class BLRTransmittedEmission(EmissionModel):
     """
@@ -284,9 +295,6 @@ class BLRTransmittedEmission(EmissionModel):
             **kwargs,
         )
 
-        # Flag which line region this is
-        self.line_region = "blr"
-
 
 class DiscIncidentEmission(EmissionModel):
     """
@@ -319,12 +327,8 @@ class DiscIncidentEmission(EmissionModel):
             **kwargs,
         )
 
-        # Flag which line region this is (needed for extraction and
-        # technically this is NLR)
-        self.line_region = "nlr"
 
-
-class DiscTranmittedEmission(EmissionModel):
+class DiscTransmittedEmission(EmissionModel):
     """
     An emission model that combines the transmitted disc emission.
 
@@ -337,7 +341,8 @@ class DiscTranmittedEmission(EmissionModel):
 
     def __init__(
         self,
-        grid,
+        nlr_grid,
+        blr_grid,
         label="disc_transmitted",
         covering_fraction_blr=0.1,
         covering_fraction_nlr=0.1,
@@ -347,8 +352,10 @@ class DiscTranmittedEmission(EmissionModel):
         Initialise the DiscTransmittedEmission model.
 
         Args:
-            grid (Grid)
-                The grid object containing the transmitted disc emission.
+            nlr_grid (Grid)
+                The grid object containing the NLR transmitted emission.
+            blr_grid (Grid)
+                The grid object containing the BLR transmitted emission.
             label (str)
                 The label for the model.
             **kwargs
@@ -356,13 +363,13 @@ class DiscTranmittedEmission(EmissionModel):
         """
         # Create the child models
         nlr = NLRTransmittedEmission(
-            grid=grid,
+            grid=nlr_grid,
             label="nlr_transmitted",
             covering_fraction=covering_fraction_nlr,
             **kwargs,
         )
         blr = BLRTransmittedEmission(
-            grid=grid,
+            grid=blr_grid,
             label="blr_transmitted",
             covering_fraction=covering_fraction_blr,
             **kwargs,
@@ -370,7 +377,6 @@ class DiscTranmittedEmission(EmissionModel):
 
         EmissionModel.__init__(
             self,
-            grid=grid,
             label=label,
             combine=(nlr, blr),
             **kwargs,
@@ -433,33 +439,35 @@ class DiscEmission(EmissionModel):
     description of the parameters see the EmissionModel class.
     """
 
-    def __init__(self, grid, label="disc", **kwargs):
+    def __init__(self, nlr_grid, blr_grid, label="disc", **kwargs):
         """
         Initialise the DiscEmission model.
 
         Args:
-            grid (Grid)
-                The grid object containing the disc emission.
+            nlr_grid (Grid)
+                The grid object containing the NLR emission.
+            blr_grid (Grid)
+                The grid object containing the BLR emission.
             label (str)
                 The label for the model.
             **kwargs
 
         """
         # Create the child models
-        transmitted = DiscTranmittedEmission(
-            grid=grid,
+        transmitted = DiscTransmittedEmission(
+            nlr_grid=nlr_grid,
+            blr_grid=blr_grid,
             label="disc_transmitted",
             **kwargs,
         )
         escaped = DiscEscapedEmission(
-            grid=grid,
+            grid=nlr_grid,
             label="disc_escaped",
             **kwargs,
         )
 
         EmissionModel.__init__(
             self,
-            grid=grid,
             label=label,
             combine=(transmitted, escaped),
             **kwargs,
@@ -476,9 +484,7 @@ class TorusEmission(EmissionModel):
     description of the parameters see the EmissionModel class.
     """
 
-    def __init__(
-        self, torus_emission_model, scale_by, label="torus", **kwargs
-    ):
+    def __init__(self, torus_emission_model, label="torus", **kwargs):
         """
         Initialise the TorusEmission model.
 
@@ -495,8 +501,8 @@ class TorusEmission(EmissionModel):
         EmissionModel.__init__(
             self,
             label=label,
-            dust_emission_model=torus_emission_model,
-            dust_lum_intrinsic=scale_by,
+            generator=torus_emission_model,
+            dust_lum_intrinsic="torus_fraction",
             **kwargs,
         )
 
@@ -514,7 +520,9 @@ class AGNIntrinsicEmission(EmissionModel):
 
     def __init__(
         self,
-        grid,
+        nlr_grid,
+        blr_grid,
+        torus_emission_model,
         label="intrinsic",
         covering_fraction_nlr=0.1,
         covering_fraction_blr=0.1,
@@ -524,8 +532,12 @@ class AGNIntrinsicEmission(EmissionModel):
         Initialise the AGNIntrinsicEmission model.
 
         Args:
-            grid (Grid)
-                The grid object containing the AGN intrinsic emission.
+            nlr_grid (Grid)
+                The grid object containing the NLR emission.
+            blr_grid (Grid)
+                The grid object containing the BLR emission.
+            torus_emission_model (dust.emission)
+                The dust emission model to use for the torus.
             label (str)
                 The label for the model.
             covering_fraction_nlr (float)
@@ -538,28 +550,23 @@ class AGNIntrinsicEmission(EmissionModel):
 
         """
         # Create the child models
-        incident = DiscIncidentEmission(
-            grid=grid,
-            label="disc_incident",
-            **kwargs,
-        )
         disc = DiscEmission(
-            grid=grid,
+            nlr_grid=nlr_grid,
+            blr_grid=blr_grid,
             label="disc",
             covering_fraction_nlr=covering_fraction_nlr,
             covering_fraction_blr=covering_fraction_blr,
             **kwargs,
         )
         torus = TorusEmission(
-            torus_emission_model=grid.dust_emission_model,
-            scale_by=incident,
+            torus_emission_model=torus_emission_model,
+            scale_by="torus_fraction",
             label="torus",
             **kwargs,
         )
 
         EmissionModel.__init__(
             self,
-            grid=grid,
             label=label,
             combine=(
                 disc,
