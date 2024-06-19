@@ -17,7 +17,7 @@ Contents
    
    getting_started/getting_started
    grids/grids
-   galaxies/galaxies
+   galaxy/galaxy
    components/components
    sed/sed
    lines

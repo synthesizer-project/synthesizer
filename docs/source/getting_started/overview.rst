@@ -63,8 +63,12 @@ These often take one of four forms: extraction, combinations, generation, and at
 Further details are provided in the 
 `Emission Models <../emission_models/emission_model.ipynb>`_ section.
 
-
 Observables
 ***********
 
-SED objects, filters, imaging, etc.
+Once the emission from a galaxy or component has been generated, typically through an emission model, it can be represented or transformed into a variety of different observables. The simplest is the full spectral energy distribution (SED), represented through an `sed` object. `sed` objects contain a variety of useful methods for accessing the luminosity, flux and wavelength, as well as other more specific properties of an SED, for example the strength of the Balmer break.
+
+An SED can be transformed into broad- or narrow-band photometry through filters, represented by a `filter` object, or a `filter_collection` if multiple filters are defined. 
+
+Images, either monochromatic, RGB, or integral field unit (IFU), can also be created, typically where spatial information on the emitting sources is provided. 
+Parametric morphologies can also be created for parametric galaxies.
