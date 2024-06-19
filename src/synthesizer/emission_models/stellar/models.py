@@ -19,11 +19,11 @@ Example usage:
 
 """
 
-from synthesizer.emission_models.base_model import EmissionModel
+from synthesizer.emission_models.base_model import StellarEmissionModel
 from synthesizer.emission_models.models import AttenuatedEmission, DustEmission
 
 
-class IncidentEmission(EmissionModel):
+class IncidentEmission(StellarEmissionModel):
     """
     An emission model that extracts the incident radiation field.
 
@@ -48,7 +48,7 @@ class IncidentEmission(EmissionModel):
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
         """
-        EmissionModel.__init__(
+        StellarEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -58,7 +58,7 @@ class IncidentEmission(EmissionModel):
         )
 
 
-class LineContinuumEmission(EmissionModel):
+class LineContinuumEmission(StellarEmissionModel):
     """
     An emission model that extracts the line continuum emission.
 
@@ -89,7 +89,7 @@ class LineContinuumEmission(EmissionModel):
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
         """
-        EmissionModel.__init__(
+        StellarEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -99,7 +99,7 @@ class LineContinuumEmission(EmissionModel):
         )
 
 
-class TransmittedEmission(EmissionModel):
+class TransmittedEmission(StellarEmissionModel):
     """
     An emission model that extracts the transmitted radiation field.
 
@@ -124,7 +124,7 @@ class TransmittedEmission(EmissionModel):
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
         """
-        EmissionModel.__init__(
+        StellarEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -134,7 +134,7 @@ class TransmittedEmission(EmissionModel):
         )
 
 
-class EscapedEmission(EmissionModel):
+class EscapedEmission(StellarEmissionModel):
     """
     An emission model that extracts the escaped radiation field.
 
@@ -171,7 +171,7 @@ class EscapedEmission(EmissionModel):
             fesc (float): The escape fraction of the emission. (Note that,
                           1-fesc will be used during generation).
         """
-        EmissionModel.__init__(
+        StellarEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -181,7 +181,7 @@ class EscapedEmission(EmissionModel):
         )
 
 
-class NebularContinuumEmission(EmissionModel):
+class NebularContinuumEmission(StellarEmissionModel):
     """
     An emission model that extracts the nebular continuum emission.
 
@@ -212,7 +212,7 @@ class NebularContinuumEmission(EmissionModel):
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
         """
-        EmissionModel.__init__(
+        StellarEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -222,7 +222,7 @@ class NebularContinuumEmission(EmissionModel):
         )
 
 
-class NebularEmission(EmissionModel):
+class NebularEmission(StellarEmissionModel):
     """
     An emission model that combines the nebular emission.
 
@@ -279,7 +279,7 @@ class NebularEmission(EmissionModel):
                     grid=grid, fesc=fesc, **kwargs
                 )
 
-            EmissionModel.__init__(
+            StellarEmissionModel.__init__(
                 self,
                 grid=grid,
                 label=label,
@@ -289,7 +289,7 @@ class NebularEmission(EmissionModel):
             )
         else:
             # Otherwise, we just need the nebular emission from the grid
-            EmissionModel.__init__(
+            StellarEmissionModel.__init__(
                 self,
                 grid=grid,
                 label=label,
@@ -299,7 +299,7 @@ class NebularEmission(EmissionModel):
             )
 
 
-class ReprocessedEmission(EmissionModel):
+class ReprocessedEmission(StellarEmissionModel):
     """
     An emission model that combines the reprocessed emission.
 
@@ -349,7 +349,7 @@ class ReprocessedEmission(EmissionModel):
         if transmitted is None:
             transmitted = TransmittedEmission(grid=grid, fesc=fesc)
 
-        EmissionModel.__init__(
+        StellarEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -359,7 +359,7 @@ class ReprocessedEmission(EmissionModel):
         )
 
 
-class EmergentEmission(EmissionModel):
+class EmergentEmission(StellarEmissionModel):
     """
     An emission model that defines the emergent emission.
 
@@ -418,7 +418,7 @@ class EmergentEmission(EmissionModel):
         if escaped is None:
             escaped = EscapedEmission(grid=grid, fesc=fesc)
 
-        EmissionModel.__init__(
+        StellarEmissionModel.__init__(
             self,
             grid=grid,
             label=label,
@@ -428,21 +428,21 @@ class EmergentEmission(EmissionModel):
         )
 
 
-class TotalEmission(EmissionModel):
+class TotalEmission(StellarEmissionModel):
     """
     An emission model that defines the total emission.
 
     This defines the combination of the emergent and dust emission components
     to produce the total emission.
 
-    This is a child of the EmissionModel class for a full description of the
-    parameters see the EmissionModel class.
+    This is a child of the EmissionModel class for a full description
+    of the parameters see the EmissionModel class.
 
     Attributes:
         grid (synthesizer.grid.Grid): The grid object to extract from.
         dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
         tau_v (float): The optical depth of the dust.
-        dust_emission_model (synthesizer.dust.DustEmissionModel): The dust
+        dust_emission_model (synthesizer.dust.EmissionModel): The dust
             emission model to use.
         label (str): The label for this emission model.
         fesc (float): The escape fraction of the emission.
@@ -466,7 +466,7 @@ class TotalEmission(EmissionModel):
             grid (synthesizer.grid.Grid): The grid object to extract from.
             dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
             tau_v (float): The optical depth of the dust.
-            dust_emission_model (synthesizer.dust.DustEmissionModel): The dust
+            dust_emission_model (synthesizer.dust.EmissionModel): The dust
                 emission model to use.
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
@@ -512,7 +512,7 @@ class TotalEmission(EmissionModel):
             )
 
             # Make the total emission model
-            EmissionModel.__init__(
+            StellarEmissionModel.__init__(
                 self,
                 grid=grid,
                 label=label,
@@ -525,7 +525,7 @@ class TotalEmission(EmissionModel):
             )
         else:
             # Otherwise, total == emergent
-            EmissionModel.__init__(
+            StellarEmissionModel.__init__(
                 self,
                 grid=grid,
                 label=label,
