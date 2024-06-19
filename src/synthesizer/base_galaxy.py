@@ -6,6 +6,7 @@ only contains common attributes and methods to reduce boilerplate.
 
 from synthesizer import exceptions
 from synthesizer.igm import Inoue14
+from synthesizer.line import LineCollection
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
 
 
@@ -676,7 +677,6 @@ class BaseGalaxy:
         """
         Generate spectra as described by the emission model.
 
-
         Args:
             emission_model (EmissionModel):
                 The emission model to use.
@@ -740,9 +740,7 @@ class BaseGalaxy:
 
         Returns:
             dict
-                A dictionary of spectra which can be attached to the
-                appropriate spectra attribute of the component
-                (spectra/particle_spectra)
+                The combined spectra for the galaxy.
         """
         # Get the stellar spectra
         self.stars.get_spectra(
@@ -769,6 +767,12 @@ class BaseGalaxy:
         # Define a dictionary to hold the combined spectra
         spectra = {}
 
+        # Temporarily include the stars and black hole spectra
+        for label, sed in self.stars.spectra.items():
+            spectra[label] = sed
+        for label, sed in self.black_holes.spectra.items():
+            spectra[label] = sed
+
         # The only thing left to do is combine any multi-component spectra
         for this_model in emission_model._models:
             # If we have a combined spectra from multiple components we need
@@ -780,7 +784,155 @@ class BaseGalaxy:
                     this_model,
                 )
 
+        # Remove the component spectra from the spectra dictionary
+        for label in spectra:
+            if (
+                label in self.stars.spectra
+                or label in self.black_holes.spectra
+            ):
+                del spectra[label]
+
         # Update the spectra dictionary
         self.spectra.update(spectra)
 
-        return self.spectra[emission_model.label]
+        return self.spectra
+
+    def get_lines(
+        self,
+        line_ids,
+        emission_model,
+        dust_curves=None,
+        tau_v=None,
+        fesc=None,
+        covering_fraction=None,
+        mask=None,
+        verbose=True,
+        **kwargs,
+    ):
+        """
+        Generate lines as described by the emission model.
+
+        Args:
+            line_ids (list):
+                A list of line ids to include in the spectra.
+            emission_model (EmissionModel):
+                The emission model to use.
+            dust_curves (dict):
+                An overide to the emisison model dust curves. Either:
+                    - None, indicating the dust_curves defined on the emission
+                      models should be used.
+                    - A single dust curve to apply to all emission models.
+                    - A dictionary of the form:
+                          {<label>: <dust_curve instance>}
+                      to use a specific dust curve instance with particular
+                      properties.
+            tau_v (dict):
+                An overide to the dust model optical depth. Either:
+                    - None, indicating the tau_v defined on the emission model
+                        should be used.
+                    - A float to use as the optical depth for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<tau_v>)}
+                        to use a specific optical depth with a particular
+                        model or
+                            {<label>: str(<attribute>)}
+                        to use an attribute of the component as the optical
+                        depth.
+            fesc (dict):
+                An overide to the emission model escape fraction. Either:
+                    - None, indicating the fesc defined on the emission model
+                      should be used.
+                    - A float to use as the escape fraction for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<fesc>)}
+                      to use a specific escape fraction with a particular
+                      model or
+                            {<label>: str(<attribute>)}
+                      to use an attribute of the component as the escape
+                      fraction.
+            covering_fraction (dict):
+                An overide to the emission model covering fraction. Either:
+                    - None, indicating the covering fraction defined on the
+                      emission model should be used.
+                    - A float to use as the covering fraction for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<covering_fraction>)}
+                      to use a specific covering fraction with a particular
+                      model or
+                            {<label>: str(<attribute>)}
+                      to use an attribute of the component as the covering
+                      fraction.
+            mask (dict):
+                An overide to the emission model mask. Either:
+                    - None, indicating the mask defined on the emission model
+                      should be used.
+                    - A dictionary of the form:
+                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
+                      to add a specific mask to a particular model.
+            verbose (bool)
+                Are we talking?
+            kwargs (dict)
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            dict
+                The combined lines for the galaxy.
+        """
+        # Get the stellar spectra
+        self.stars.get_lines(
+            line_ids=line_ids,
+            emission_model=emission_model,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            fesc=fesc,
+            mask=mask,
+            verbose=verbose,
+            **kwargs,
+        )
+
+        # Get the black hole spectra
+        self.black_holes.get_lines(
+            line_ids=line_ids,
+            emission_model=emission_model,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            verbose=verbose,
+            **kwargs,
+        )
+
+        # Define a dictionary to hold the combined lines
+        lines = {}
+
+        # Temporarily include the stars and black hole lines
+        for label, line_col in self.stars.lines.items():
+            lines[label] = {line.id: line for line in line_col}
+        for label, line_col in self.black_holes.lines.items():
+            lines[label] = {line.id: line for line in line_col}
+
+        # The only thing left to do is combine any multi-component lines
+        for this_model in emission_model._models:
+            # If we have a combined lines from multiple components we need
+            # to combine them
+            if this_model.combine and this_model.component is None:
+                lines = this_model._combine_lines(
+                    emission_model,
+                    lines,
+                    this_model,
+                )
+
+        # Remove the component lines from the lines dictionary
+        for label in lines:
+            if label in self.stars.lines or label in self.black_holes.lines:
+                del lines[label]
+
+        # Convert lines dictionary to a LineCollection object
+        for label, line_dict in lines.items():
+            lines[label] = LineCollection(line_dict)
+
+        # Update the lines dictionary
+        self.lines.update(lines)
+
+        return self.lines
