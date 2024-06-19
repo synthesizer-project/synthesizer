@@ -2391,7 +2391,7 @@ def sample_sfhz(
         # Get the spectra
         self.particle_spectra = emission_model._get_spectra(
             component=self,
-            generator=self.generate_partile_lnu,
+            generator_func=self.generate_particle_lnu,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=fesc,
