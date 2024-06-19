@@ -113,7 +113,7 @@ class EmissionModel:
         mask_op=None,
         fesc=None,
         related_models=None,
-        component="stellar",
+        component=None,
         fixed_parameters={},
         scale_by=None,
         **kwargs,
@@ -1918,3 +1918,29 @@ class BlackHoleEmissionModel(EmissionModel):
         """Instantiate a BlackHoleEmissionModel instance."""
         EmissionModel.__init__(self, *args, **kwargs)
         self._component = "blackhole"
+
+
+class GalaxyEmissionModel(EmissionModel):
+    """
+    An emission model for whole galaxy spectra.
+
+    A galaxy model sets component to None to flag to the get_spectra method
+    that the model is for a galaxy. By definition a galaxy level spectra can
+    only be a combination of component spectra or a dust attenuation.
+
+    Attributes:
+        component (str):
+            The component this model is for, None for a galaxy.
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Instantiate a GalaxyEmissionModel instance."""
+        EmissionModel.__init__(self, *args, **kwargs)
+        self._component = None
+
+        # Ensure we are only combining or dust attenuating
+        if not self._is_combining and not self._is_dust_attenuating:
+            raise exceptions.InconsistentArguments(
+                "A GalaxyEmissionModel must be either combining or dust "
+                "attenuating."
+            )
