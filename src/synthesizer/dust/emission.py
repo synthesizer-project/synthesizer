@@ -647,7 +647,7 @@ class IR_templates:
             func = partial(
                 solve_umin, umax=umax, u_avg=self.u_avg, gamma=self.gamma
             )
-            self.umin = fsolve(func, [10.0])
+            self.umin = fsolve(func, [1.0])
 
         qpah_id = qpahs == qpahs[np.argmin(np.abs(qpahs - self.qpah))]
         umin_id = umins == umins[np.argmin(np.abs(umins - self.umin))]
@@ -668,7 +668,6 @@ class IR_templates:
         intrinsic_sed=None,
         attenuated_sed=None,
         dust_components=False,
-        verbose=True,
         **kwargs,
     ):
         """
@@ -687,7 +686,7 @@ class IR_templates:
         """
 
         if self.template == "DL07":
-            if verbose:
+            if self.verbose:
                 print("Using the Draine & Li 2007 dust models")
             if intrinsic_sed is not None and attenuated_sed is not None:
                 if self.ldust is not None:
@@ -702,7 +701,7 @@ class IR_templates:
                     - attenuated_sed.measure_bolometric_luminosity()
                 )
                 self.ldust = ldust.to("Lsun")
-            self.dl07(self.grid)
+            self.dl07()
         else:
             raise exceptions.UnimplementedFunctionality(
                 f"{self.template} not a valid model!"
