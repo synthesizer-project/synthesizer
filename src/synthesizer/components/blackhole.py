@@ -282,7 +282,7 @@ class BlackholesComponent:
         grid,
         spectra_name,
         line_region,
-        fesc=0.0,
+        covering_fraction=0.0,
         mask=None,
         verbose=False,
         grid_assignment_method="cic",
@@ -297,7 +297,7 @@ class BlackholesComponent:
                 An instance of a blackhole emission model.
             grid (obj):
                 Spectral grid object.
-            fesc (float):
+            covering_fraction (float):
                 Fraction of emission that escapes unattenuated from
                 the birth cloud (defaults to 0.0).
             spectra_name (string)
@@ -338,7 +338,7 @@ class BlackholesComponent:
         args = self._prepare_sed_args(
             emission_model,
             grid,
-            fesc=fesc,
+            fesc=covering_fraction,
             spectra_type=spectra_name,
             line_region=line_region,
             mask=mask,
