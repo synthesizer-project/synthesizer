@@ -1785,6 +1785,7 @@ class EmissionModel:
         dust_curves=None,
         tau_v=None,
         fesc=None,
+        covering_fraction=None,
         mask=None,
         verbose=True,
         **kwargs,
@@ -1833,6 +1834,18 @@ class EmissionModel:
                       model or
                             {<label>: str(<attribute>)}
                       to use an attribute of the component as the escape
+                      fraction.
+            covering_fraction (dict):
+                An overide to the emission model covering fraction. Either:
+                    - None, indicating the covering fraction defined on the
+                      emission model should be used.
+                    - A float to use as the covering fraction for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<covering_fraction>)}
+                      to use a specific covering fraction with a particular
+                      model or
+                            {<label>: str(<attribute>)}
+                      to use an attribute of the component as the covering
                       fraction.
             mask (dict):
                 An overide to the emission model mask. Either:

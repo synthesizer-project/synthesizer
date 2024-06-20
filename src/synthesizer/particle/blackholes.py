@@ -521,7 +521,7 @@ class BlackHoles(Particles, BlackholesComponent):
             per_particle=True,
             dust_curves=dust_curves,
             tau_v=tau_v,
-            covering_fraction=covering_fraction,
+            fesc=covering_fraction,
             mask=mask,
             verbose=verbose,
             **kwargs,
