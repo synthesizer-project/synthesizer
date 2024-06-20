@@ -1234,7 +1234,7 @@ class Sed:
         if mask is None:
             spectra *= transmission
         else:
-            spectra[mask] *= transmission
+            spectra[mask] *= transmission[mask]
 
         return Sed(self.lam, lnu=spectra)
 
