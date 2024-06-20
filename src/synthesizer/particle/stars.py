@@ -1370,6 +1370,68 @@ class Stars(Particles, StarsComponent):
         # Set resampled flag
         self.resampled = True
 
+    def _prepare_sfzh_args(
+        self,
+        grid,
+        grid_assignment_method,
+        nthreads,
+    ):
+        """
+        Prepare the arguments for SFZH computation with the C functions.
+
+        Args:
+            grid (Grid)
+                The SPS grid object to extract spectra from.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+
+        Returns:
+            tuple
+                A tuple of all the arguments required by the C extension.
+        """
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(grid.log10age, dtype=np.float64),
+            np.ascontiguousarray(grid.metallicity, dtype=np.float64),
+        ]
+        part_props = [
+            np.ascontiguousarray(self.log10ages, dtype=np.float64),
+            np.ascontiguousarray(self.metallicities, dtype=np.float64),
+        ]
+        part_mass = np.ascontiguousarray(
+            self._initial_masses, dtype=np.float64
+        )
+
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(len(part_mass))
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props), dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(part_props)
+
+        # If nthreads = -1 we will use all available
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        return (
+            grid_props,
+            part_props,
+            part_mass,
+            grid_dims,
+            len(grid_props),
+            npart,
+            grid_assignment_method,
+            nthreads,
+        )
+
     def get_sfzh(
         self,
         grid,
