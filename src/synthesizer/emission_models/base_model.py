@@ -79,6 +79,8 @@ class EmissionModel:
             The key for the spectra that will be produced.
         grid (Grid):
             The grid to extract from.
+        lam (unyt_array):
+            The wavelength array.
         extract (str):
             The key for the spectra to extract.
         dust_curve (dust.attenuation.*):
@@ -198,6 +200,12 @@ class EmissionModel:
 
         # Attach the grid
         self._grid = grid
+
+        # Attach the wavelength array and store it on the model
+        if self._grid is not None:
+            self.lam = self._grid.lam
+        else:
+            self.lam = None
 
         # Store any extra kwargs this can either be used to store additional
         # information needed by the model
@@ -654,6 +662,22 @@ class EmissionModel:
         for model in self._models.values():
             for child in model._children:
                 child._parents.add(model)
+
+        # If we don't have a wavelength array, find one in the models
+        if self.lam is None:
+            for model in self._models.values():
+                if model.lam is not None:
+                    self.lam = model.lam
+
+                # Ensure the wavelength arrays agree for all models
+                if (
+                    self.lam is not None
+                    and model.lam is not None
+                    and not np.array_equal(self.lam, model.lam)
+                ):
+                    raise exceptions.InconsistentArguments(
+                        "Wavelength arrays do not match somewhere in the tree."
+                    )
 
     def set_grid(self, grid, label=None, set_all=False):
         """
@@ -1623,7 +1647,7 @@ class EmissionModel:
 
             # Get this base spectra
             spectra[label] = Sed(
-                emission_model.grid.lam,
+                emission_model.lam,
                 generator_func(
                     emission_model.grid,
                     spectra_key,
@@ -1661,7 +1685,7 @@ class EmissionModel:
         """
         # Create an empty spectra to add to
         spectra[this_model.label] = Sed(
-            emission_model.grid.lam,
+            emission_model.lam,
             lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
         )
 
@@ -1741,7 +1765,7 @@ class EmissionModel:
 
             # Apply the dust emission model
             spectra[this_model.label] = generator.get_spectra(
-                emission_model.grid.lam,
+                emission_model.lam,
                 intrinsic,
                 attenuated,
             )
@@ -1749,7 +1773,7 @@ class EmissionModel:
         else:
             # Otherwise we have a bog standard generation
             spectra[this_model.label] = generator.get_spectra(
-                emission_model.grid.lam,
+                emission_model.lam,
             )
 
         return spectra
