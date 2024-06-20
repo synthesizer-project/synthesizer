@@ -2,9 +2,10 @@
 
 Generating spectra involves the following steps:
 1. Extraction from a Grid.
-2. Attenuation due to dust in the ISM/nebular.
-3. Masking for different types of emission.
-4. Combination of different types of emission.
+2. Generation of spectra.
+3. Attenuation due to dust in the ISM/nebular.
+4. Masking for different types of emission.
+5. Combination of different types of emission.
 
 An emission model defines the parameters necessary to perform these steps and
 gives an interface for simply defining the construction of complex spectra.
@@ -17,16 +18,24 @@ Example usage:
     dust_curve = dust.attenuation.PowerLaw(...)
 
     # Define the emergent emission model
-    emergent_emission_model = EmergentEmission(
+    emergent_emission_model = EmissionModel(
+        label="emergent",
         grid=grid,
         dust_curve=dust_curve,
         apply_dust_to=dust_emission_model,
         tau_v=tau_v,
         fesc=fesc,
+        emitter="stellar",
     )
 
     # Generate the spectra
     spectra = stars.get_spectra(emergent_emission_model)
+
+    # Generate the lines
+    lines = stars.get_lines(
+                line_ids=("Ne 4 1601.45A, He 2 1640.41A", "O 3 1660.81A"),
+                emission_model=emergent_emission_model
+            )
 """
 
 import copy
@@ -110,7 +119,7 @@ class EmissionModel:
         mask_op=None,
         fesc=None,
         related_models=None,
-        component=None,
+        emitter=None,
         fixed_parameters={},
         scale_by=None,
         **kwargs,
@@ -171,8 +180,8 @@ class EmissionModel:
                 a model that is connected somwhere within the model tree but
                 is required in the construction of the "root" model
                 encapulated by self.
-            component (str):
-                The component this emission model acts on. Default is
+            emitter (str):
+                The emitter this emission model acts on. Default is
                 "stellar".
             fixed_parameters (dict):
                 A dictionary of component attributes/parameters which should be
@@ -198,8 +207,8 @@ class EmissionModel:
         # Store any fixed parameters
         self.fixed_parameters = fixed_parameters
 
-        # Attach what component we are working with
-        self._component = component
+        # Attach what emitter we are working with
+        self._emitter = emitter
 
         # What base key will we be extracting? (can be None if we're applying
         # a dust curve to an existing spectra)
@@ -322,9 +331,9 @@ class EmissionModel:
         return self._combine
 
     @property
-    def component(self):
-        """Get the component this emission model acts on."""
-        return self._component
+    def emitter(self):
+        """Get the emitter this emission model acts on."""
+        return self._emitter
 
     @property
     def fesc(self):
@@ -446,8 +455,8 @@ class EmissionModel:
             # Make the model title
             parts.append("-")
             parts.append(f"  {model.label}".upper())
-            if model._component is not None:
-                parts[-1] += f" ({model._component})"
+            if model._emitter is not None:
+                parts[-1] += f" ({model._emitter})"
             else:
                 parts[-1] += " (galaxy)"
             parts.append("-")
@@ -1555,7 +1564,7 @@ class EmissionModel:
     def _extract_spectra(
         self,
         emission_model,
-        components,
+        emitters,
         per_particle,
         spectra,
         verbose,
@@ -1567,8 +1576,8 @@ class EmissionModel:
         Args:
             emission_model (EmissionModel):
                 The emission model to extract from.
-            components (dict):
-                The components to extract the spectra for.
+            emitters (dict):
+                The emitters to extract the spectra for.
             per_particle (bool):
                 Are we extracting per particle?
             spectra (dict):
@@ -1588,29 +1597,29 @@ class EmissionModel:
             # Get this model
             this_model = emission_model._models[label]
 
-            # Skip models for a different component
-            if this_model.component not in components:
+            # Skip models for a different emitter
+            if this_model.emitter not in emitters:
                 continue
 
-            # Get the component
-            component = components[this_model.component]
+            # Get the emitter
+            emitter = emitters[this_model.emitter]
 
             # Do we have to define a mask?
             this_mask = None
             for mask_dict in this_model.masks:
-                this_mask = component.get_mask(**mask_dict, mask=this_mask)
+                this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
 
             # Fix any parameters we need to fix
             prev_properties = {}
             for prop in this_model.fixed_parameters:
-                prev_properties[prop] = getattr(component, prop, None)
-                setattr(component, prop, this_model.fixed_parameters[prop])
+                prev_properties[prop] = getattr(emitter, prop, None)
+                setattr(emitter, prop, this_model.fixed_parameters[prop])
 
             # Get the generator function
             if per_particle:
-                generator_func = component.generate_particle_lnu
+                generator_func = emitter.generate_particle_lnu
             else:
-                generator_func = component.generate_lnu
+                generator_func = emitter.generate_lnu
 
             # Get this base spectra
             spectra[label] = Sed(
@@ -1618,7 +1627,7 @@ class EmissionModel:
                 generator_func(
                     emission_model.grid,
                     spectra_key,
-                    fesc=getattr(component, this_model.fesc)
+                    fesc=getattr(emitter, this_model.fesc)
                     if isinstance(this_model.fesc, str)
                     else this_model.fesc,
                     mask=this_mask,
@@ -1629,7 +1638,7 @@ class EmissionModel:
 
             # Replace any fixed parameters
             for prop in prev_properties:
-                setattr(component, prop, prev_properties[prop])
+                setattr(emitter, prop, prev_properties[prop])
 
         return spectra
 
@@ -1666,7 +1675,7 @@ class EmissionModel:
         self,
         this_model,
         spectra,
-        component,
+        emitter,
         this_mask,
     ):
         """
@@ -1677,8 +1686,8 @@ class EmissionModel:
                 The model defining the dust attenuation.
             spectra (dict):
                 The dictionary of spectra.
-            component (Stars/BlackHoles):
-                The component to dust attenuate the spectra for.
+            emitter (Stars/BlackHoles):
+                The emitter to dust attenuate the spectra for.
             this_mask (dict):
                 The mask to apply to the spectra.
 
@@ -1687,11 +1696,11 @@ class EmissionModel:
                 The dictionary of spectra.
         """
         # Unpack the tau_v value unpacking any attributes we need
-        # to extract from the component
+        # to extract from the emitter
         tau_v = 1
         for tv in this_model.tau_v:
-            tau_v *= getattr(component, tv) if isinstance(tv, str) else tv
-            tau_v *= getattr(component, tv) if isinstance(tv, str) else tv
+            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
+            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
 
         # Get the spectra to apply dust to
         apply_dust_to = spectra[this_model.apply_dust_to.label]
@@ -1747,7 +1756,7 @@ class EmissionModel:
 
     def _get_spectra(
         self,
-        components,
+        emitters,
         per_particle,
         dust_curves=None,
         tau_v=None,
@@ -1763,9 +1772,9 @@ class EmissionModel:
         is provided in the arguments to this function.
 
         Args:
-            components (Stars/BlackHoles):
-                The components to generate the spectra for in the form of a
-                dictionary, {"stellar": <component>, "blackhole": <component>}.
+            emitters (Stars/BlackHoles):
+                The emitters to generate the spectra for in the form of a
+                dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
             per_particle (bool):
                 Are we generating per particle?
             dust_curves (dict):
@@ -1835,7 +1844,7 @@ class EmissionModel:
         # Perform all extractions
         spectra = self._extract_spectra(
             emission_model,
-            components,
+            emitters,
             per_particle,
             spectra,
             verbose,
@@ -1848,17 +1857,24 @@ class EmissionModel:
             # Get this model
             this_model = emission_model._models[label]
 
-            # Skip models for a different component
-            if this_model.component not in components:
+            # Skip models for a different emitters
+            if (
+                this_model.emitter not in emitters
+                and this_model.emitter != "galaxy"
+            ):
                 continue
 
-            # Get the component
-            component = components[this_model.component]
+            # Get the emitter (as long as we aren't doing a combination for a
+            # galaxy spectra
+            if this_model.emitter != "galaxy":
+                emitter = emitters[this_model.emitter]
+            else:
+                emitter = None
 
             # Do we have to define a mask?
             this_mask = None
             for mask_dict in this_model.masks:
-                this_mask = component.get_mask(**mask_dict, mask=this_mask)
+                this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
 
             # Are we doing a combination?
             if this_model._is_combining:
@@ -1872,7 +1888,7 @@ class EmissionModel:
                 spectra = self._dust_attenuate_spectra(
                     this_model,
                     spectra,
-                    component,
+                    emitter,
                     this_mask,
                 )
 
@@ -1885,7 +1901,7 @@ class EmissionModel:
 
             # Are we scaling the spectra?
             if this_model.scale_by is not None:
-                spectra[label]._lnu *= getattr(component, this_model.scale_by)
+                spectra[label]._lnu *= getattr(emitter, this_model.scale_by)
 
         return spectra
 
@@ -1893,7 +1909,7 @@ class EmissionModel:
         self,
         line_ids,
         emission_model,
-        components,
+        emitters,
         per_particle,
         lines,
         verbose,
@@ -1907,8 +1923,8 @@ class EmissionModel:
                 The line ids to extract.
             emission_model (EmissionModel):
                 The emission model to extract from.
-            components (dict):
-                The components to extract the lines for.
+            emitters (dict):
+                The emitters to extract the lines for.
             per_particle (bool):
                 Are we generating lines per particle?
             lines (dict):
@@ -1928,29 +1944,29 @@ class EmissionModel:
             # Get this model
             this_model = emission_model._models[label]
 
-            # Skip models for a different component
-            if this_model.component not in components:
+            # Skip models for a different emitter
+            if this_model.emitter not in emitters:
                 continue
 
-            # Get the component
-            component = components[this_model.component]
+            # Get the emitter
+            emitter = emitters[this_model.emitter]
 
             # Do we have to define a mask?
             this_mask = None
             for mask_dict in this_model.masks:
-                this_mask = component.get_mask(**mask_dict, mask=this_mask)
+                this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
 
             # Fix any parameters we need to fix
             prev_properties = {}
             for prop in this_model.fixed_parameters:
-                prev_properties[prop] = getattr(component, prop, None)
-                setattr(component, prop, this_model.fixed_parameters[prop])
+                prev_properties[prop] = getattr(emitter, prop, None)
+                setattr(emitter, prop, this_model.fixed_parameters[prop])
 
             # Get the generator function
             if per_particle:
-                generator_func = component.generate_particle_line
+                generator_func = emitter.generate_particle_line
             else:
-                generator_func = component.generate_line
+                generator_func = emitter.generate_line
 
             # Initialise the lines dictionary for this label
             lines[label] = {}
@@ -1961,7 +1977,7 @@ class EmissionModel:
                 lines[label][line_id] = generator_func(
                     grid=emission_model.grid,
                     line_id=line_id,
-                    fesc=getattr(component, this_model.fesc)
+                    fesc=getattr(emitter, this_model.fesc)
                     if isinstance(this_model.fesc, str)
                     else this_model.fesc,
                     mask=this_mask,
@@ -1971,7 +1987,7 @@ class EmissionModel:
 
             # Replace any fixed parameters
             for prop in prev_properties:
-                setattr(component, prop, prev_properties[prop])
+                setattr(emitter, prop, prev_properties[prop])
 
         return lines
 
@@ -2019,7 +2035,7 @@ class EmissionModel:
         line_ids,
         this_model,
         lines,
-        component,
+        emitter,
         this_mask,
     ):
         """
@@ -2032,8 +2048,8 @@ class EmissionModel:
                 The model defining the dust attenuation.
             lines (dict):
                 The dictionary of lines.
-            component (Stars/BlackHoles):
-                The component to dust attenuate the lines for.
+            emitter (Stars/BlackHoles):
+                The emitter to dust attenuate the lines for.
             this_mask (dict):
                 The mask to apply to the lines.
 
@@ -2042,11 +2058,11 @@ class EmissionModel:
                 The dictionary of lines.
         """
         # Unpack the tau_v value unpacking any attributes we need
-        # to extract from the component
+        # to extract from the emitter
         tau_v = 1
         for tv in this_model.tau_v:
-            tau_v *= getattr(component, tv) if isinstance(tv, str) else tv
-            tau_v *= getattr(component, tv) if isinstance(tv, str) else tv
+            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
+            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
 
         # Get the lines to apply dust to
         apply_dust_to = lines[this_model.apply_dust_to.label]
@@ -2071,7 +2087,7 @@ class EmissionModel:
     def _get_lines(
         self,
         line_ids,
-        components,
+        emitters,
         per_particle,
         dust_curves=None,
         tau_v=None,
@@ -2089,9 +2105,9 @@ class EmissionModel:
         Args:
             line_ids (list):
                 The line ids to extract.
-            components (Stars/BlackHoles):
-                The components to generate the lines for in the form of a
-                dictionary, {"stellar": <component>, "blackhole": <component>}.
+            emitters (Stars/BlackHoles):
+                The emitters to generate the lines for in the form of a
+                dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
             per_particle (bool):
                 Are we generating lines per particle?
             dust_curves (dict):
@@ -2162,7 +2178,7 @@ class EmissionModel:
         lines = self._extract_lines(
             line_ids,
             emission_model,
-            components,
+            emitters,
             per_particle,
             lines,
             verbose,
@@ -2175,17 +2191,24 @@ class EmissionModel:
             # Get this model
             this_model = emission_model._models[label]
 
-            # Skip models for a different component
-            if this_model.component not in components:
+            # Skip models for a different emitters
+            if (
+                this_model.emitter not in emitters
+                and this_model.emitter != "galaxy"
+            ):
                 continue
 
-            # Get the component
-            component = components[this_model.component]
+            # Get the emitter (as long as we aren't doing a combination for a
+            # galaxy spectra
+            if this_model.emitter != "galaxy":
+                emitter = emitters[this_model.emitter]
+            else:
+                emitter = None
 
             # Do we have to define a mask?
             this_mask = None
             for mask_dict in this_model.masks:
-                this_mask = component.get_mask(**mask_dict, mask=this_mask)
+                this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
 
             # Are we doing a combination?
             if this_model._is_combining:
@@ -2201,7 +2224,7 @@ class EmissionModel:
                     line_ids,
                     this_model,
                     lines,
-                    component,
+                    emitter,
                     this_mask,
                 )
 
@@ -2209,10 +2232,10 @@ class EmissionModel:
             if this_model.scale_by is not None:
                 for line_id in line_ids:
                     lines[label][line_id]._luminosity *= getattr(
-                        component, this_model.scale_by
+                        emitter, this_model.scale_by
                     )
                     lines[label][line_id]._continuum *= getattr(
-                        component, this_model.scale_by
+                        emitter, this_model.scale_by
                     )
 
         # Finally, loop over everything we've created and convert the nested
@@ -2227,55 +2250,55 @@ class StellarEmissionModel(EmissionModel):
     """
     An emission model for stellar components.
 
-    This is a simple wrapper to quickly apply that the component a model
+    This is a simple wrapper to quickly apply that the emitter a model
     should act on is stellar.
 
     Attributes:
-        component (str):
-            The component this model is for.
+        emitter (str):
+            The emitter this model is for.
     """
 
     def __init__(self, *args, **kwargs):
         """Instantiate a StellarEmissionModel instance."""
         EmissionModel.__init__(self, *args, **kwargs)
-        self._component = "stellar"
+        self._emitter = "stellar"
 
 
 class BlackHoleEmissionModel(EmissionModel):
     """
     An emission model for black hole components.
 
-    This is a simple wrapper to quickly apply that the component a model
+    This is a simple wrapper to quickly apply that the emitter a model
     should act on is a black hole.
 
     Attributes:
-        component (str):
-            The component this model is for.
+        emitter (str):
+            The emitter this model is for.
     """
 
     def __init__(self, *args, **kwargs):
         """Instantiate a BlackHoleEmissionModel instance."""
         EmissionModel.__init__(self, *args, **kwargs)
-        self._component = "blackhole"
+        self._emitter = "blackhole"
 
 
 class GalaxyEmissionModel(EmissionModel):
     """
-    An emission model for whole galaxy spectra.
+    An emission model for whole galaxy.
 
-    A galaxy model sets component to None to flag to the get_spectra method
+    A galaxy model sets emitter to "galaxy" to flag to the get_spectra method
     that the model is for a galaxy. By definition a galaxy level spectra can
-    only be a combination of component spectra or a dust attenuation.
+    only be a combination of component spectra.
 
     Attributes:
-        component (str):
-            The component this model is for, None for a galaxy.
+        emitter (str):
+            The emitter this model is for.
     """
 
     def __init__(self, *args, **kwargs):
         """Instantiate a GalaxyEmissionModel instance."""
         EmissionModel.__init__(self, *args, **kwargs)
-        self._component = None
+        self._emitter = "galaxy"
 
         # Ensure we are only combining
         if not self._is_combining:

@@ -709,7 +709,7 @@ class BaseGalaxy:
         """
         # Get the spectra
         spectra = emission_model._get_spectra(
-            components={"stellar": self.stars, "blackhole": self.black_holes},
+            emitters={"stellar": self.stars, "blackhole": self.black_holes},
             per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
@@ -819,7 +819,7 @@ class BaseGalaxy:
         # Get the lines
         lines = emission_model._get_lines(
             line_ids=line_ids,
-            components={"stellar": self.stars, "blackhole": self.black_holes},
+            emitters={"stellar": self.stars, "blackhole": self.black_holes},
             per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,

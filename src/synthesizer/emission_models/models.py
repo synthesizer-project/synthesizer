@@ -38,6 +38,7 @@ class DustEmission(EmissionModel):
     def __init__(
         self,
         dust_emission_model,
+        emitter,
         dust_lum_intrinsic=None,
         dust_lum_attenuated=None,
         label="dust_emission",
@@ -50,6 +51,7 @@ class DustEmission(EmissionModel):
         Args:
             dust_emission_model (synthesizer.dust.DustEmissionModel): The dust
                 emission model to use.
+            emitter (string): The emitter this model is associated with.
             dust_lum_intrinsic (EmissionModel): The intrinsic spectra to use
                 when calculating dust luminosity.
             dust_lum_attenuated (EmissionModel): The attenuated spectra to use
@@ -64,6 +66,7 @@ class DustEmission(EmissionModel):
             generator=dust_emission_model,
             dust_lum_intrinsic=dust_lum_intrinsic,
             dust_lum_attenuated=dust_lum_attenuated,
+            emitter=emitter,
             **kwargs,
         )
 
@@ -89,6 +92,7 @@ class AttenuatedEmission(EmissionModel):
         dust_curve,
         apply_dust_to,
         tau_v,
+        emitter,
         label="attenuated",
         grid=None,
         **kwargs,
@@ -100,6 +104,7 @@ class AttenuatedEmission(EmissionModel):
             dust_curve (synthesizer.dust.DustCurve): The dust curve to use.
             apply_dust_to (EmissionModel): The model to apply the dust to.
             tau_v (float): The optical depth of the dust.
+            emitter (string): The emitter this model is associated with.
             label (str): The label for this emission model.
             grid (synthesizer.grid.Grid): The grid object.
         """
@@ -110,5 +115,6 @@ class AttenuatedEmission(EmissionModel):
             dust_curve=dust_curve,
             apply_dust_to=apply_dust_to,
             tau_v=tau_v,
+            emitter=emitter,
             **kwargs,
         )
