@@ -45,7 +45,7 @@ jobs:
       run: |
         pytest
         # Test ipython notebooks
-        pytest --nbmake docs/source/*.ipynb docs/source/*/*.ipynb
+        pytest --nbmake docs/source/*/*.ipynb docs/source/*/*/*.ipynb
     - name: Sphinx Build
       run: |
         # Test sphinx build (runs all notebooks)
