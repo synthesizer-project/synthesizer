@@ -6,6 +6,7 @@ STELLAR_MODELS = [
     "NebularContinuumEmission",
     "NebularEmission",
     "ReprocessedEmission",
+    "IntrinsicEmission",
     "EmergentEmission",
     "TotalEmission",
     "CharlotFall2000",

@@ -15,6 +15,7 @@ from synthesizer.emission_models.stellar.models import (
     NebularContinuumEmission,
     NebularEmission,
     ReprocessedEmission,
+    IntrinsicEmission,
     EmergentEmission,
     TotalEmission,
 )
