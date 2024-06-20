@@ -299,6 +299,66 @@ class NebularEmission(StellarEmissionModel):
             )
 
 
+class IntrinsicEmission(StellarEmissionModel):
+    """
+    An emission model that defines the intrinsic emission.
+
+    This defines a combination of the reprocessed and escaped emission.
+
+    This is a child of the EmissionModel class for a full description of the
+    parameters see the EmissionModel class.
+
+    Attributes:
+        grid (synthesizer.grid.Grid): The grid object to extract from.
+        label (str): The label for this emission model.
+        combine (list): The emission models to combine.
+        fesc (float): The escape fraction of the emission.
+    """
+
+    def __init__(
+        self,
+        grid,
+        label="intrinsic",
+        fesc=0.0,
+        fesc_ly_alpha=1.0,
+        escaped=None,
+        reprocessed=None,
+        **kwargs,
+    ):
+        """
+        Initialise the IntrinsicEmission object.
+
+        Args:
+            grid (synthesizer.grid.Grid): The grid object to extract from.
+            label (str): The label for this emission model.
+            fesc (float): The escape fraction of the emission.
+            escaped (EmissionModel): The escaped model to use, if None then one
+                will be created.
+            reprocessed (EmissionModel): The reprocessed model to use, if None
+                then one will be created.
+        """
+        # Make an escaped model if we need one
+        if escaped is None:
+            escaped = EscapedEmission(grid=grid, fesc=fesc)
+
+        # Make a reprocessed model if we need one
+        if reprocessed is None:
+            reprocessed = ReprocessedEmission(
+                grid=grid,
+                fesc=fesc,
+                fesc_ly_alpha=fesc_ly_alpha,
+            )
+
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            combine=(escaped, reprocessed),
+            fesc=fesc,
+            **kwargs,
+        )
+
+
 class ReprocessedEmission(StellarEmissionModel):
     """
     An emission model that combines the reprocessed emission.
