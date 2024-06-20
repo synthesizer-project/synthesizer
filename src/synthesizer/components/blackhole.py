@@ -643,7 +643,7 @@ class BlackholesComponent:
         """
         # Get the spectra
         spectra = emission_model._get_spectra(
-            components={"blackhole": self},
+            emitters={"blackhole": self},
             per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
@@ -732,7 +732,7 @@ class BlackholesComponent:
         # Get the lines
         lines = emission_model._get_lines(
             line_ids=line_ids,
-            components={"blackhole": self},
+            emitters={"blackhole": self},
             per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,

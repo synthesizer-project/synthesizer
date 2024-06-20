@@ -1556,7 +1556,7 @@ class Stars(Particles, StarsComponent):
         """
         # Get the spectra
         spectra = emission_model._get_spectra(
-            components={"stellar": self},
+            emitters={"stellar": self},
             per_particle=True,
             dust_curves=dust_curves,
             tau_v=tau_v,
@@ -1645,7 +1645,7 @@ class Stars(Particles, StarsComponent):
         # Get the lines
         lines = emission_model._get_lines(
             line_ids=line_ids,
-            components={"stellar": self},
+            emitters={"stellar": self},
             per_particle=True,
             dust_curves=dust_curves,
             tau_v=tau_v,

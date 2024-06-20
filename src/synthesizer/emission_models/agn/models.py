@@ -6,16 +6,12 @@ to work from when creating more complex models.
 
 Example usage:
     # Create a simple emission model
-    model = TotalEmission(
-        grid=grid,
-        dust_curve=dust_curve,
-        tau_v=tau_v,
-        generator=dust_emission_model,
-        fesc=0.0,
+    model = TemplateEmission(
+        template=Template(lam=lam, lnu=lnu),
     )
 
     # Generate the spectra
-    spectra = stars.get_spectra(model)
+    spectra = blackholes.get_spectra(model)
 
 """
 
