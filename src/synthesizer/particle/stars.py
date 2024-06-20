@@ -887,10 +887,9 @@ class Stars(Particles, StarsComponent):
         grid,
         spectra_name,
         fesc=0.0,
-        young=None,
-        old=None,
         verbose=False,
         do_grid_check=False,
+        mask=None,
         grid_assignment_method="cic",
         nthreads=0,
     ):
@@ -1007,9 +1006,6 @@ class Stars(Particles, StarsComponent):
                     f"  {n_above_metal / self.nparticles * 100:.2f}% "
                     f"have metallicities > {grid.metallicity[-1]}"
                 )
-
-        # Get particle age masks
-        mask = self._get_masks(young, old)
 
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
