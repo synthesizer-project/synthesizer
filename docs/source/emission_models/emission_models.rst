@@ -4,12 +4,12 @@ Emission models
 Overview
 --------
 
-To simplify the construction of complex spectra with many contributing components and different operations involved in their construction Synthesizer uses ``EmissionModels``. These objects define the generation of a single spectra in the construction of a more complex whole. The possible operations that an ``EmissionModel`` can define are:
+To simplify the construction of complex emission (spectra and lines) with many contributing components and different operations involved in their construction Synthesizer uses ``EmissionModels``. These objects define the generation of a single emission in the construction of a more complex whole. The possible operations that an ``EmissionModel`` can define are:
 
-- Extraction of a spectra from a ``Grid`` (see the ``Grid`` `docs <grids/grids_example.ipynb>`_).
-- Generation of spectra, i.e. dust emission (see the dust emission `docs <dust_emission.ipynb>`_) or AGN torus emission (see the AGN models `docs <agn_models.ipynb>`_).
-- Combination of different spectra.
-- Attenuation of a spectra with a dust curve (see the dust attenuation docs `[WIP] <>`_).
+- Extraction of a spectra/line from a ``Grid`` (see the ``Grid`` `docs <../grids/grids_example.ipynb>`_).
+- Generation of spectra, i.e. dust emission (see the dust emission `docs <.../dust/dust_emission.ipynb>`_) or AGN torus emission (see the AGN models `docs <agn_models.ipynb>`_).
+- Combination of different emissions.
+- Attenuation of an emission with a dust curve (see the dust attenuation `docs <../dust/dust_attenuation.ipynb>`_).
 
 In addition any one of these operations can also be done in the presence of a mask to apply the operation to a subset of the components contents (either particles or a parametric model).
 
@@ -23,20 +23,20 @@ Each operation a model can define depends on different properties being set.
 For extraction operations you need:
 
 - A grid to extract from (``grid``).
-- A spectra key to extract (``extract``).
+- A key to extract (``extract``). For lines, ``line_ids`` must be passed to ``get_lines``, this key is then the label given to the ``LineCollection``. 
 - Optionally, an escape fraction to apply which defaults to 0.0 (``fesc`` or ``covering_fraction`` for AGN).
 
 For combination operations you need:
 
-- The a list of models which will be combined into the resultant spectra (``combine``).
+- The a list of models which will be combined (i.e. added) to give the resultant emission (``combine``).
 
 For generation you need:
 
-- A generator class (e.g. a `dust emission model <dust_emission.ipynb>`_) from which to generate spectra (``generator``).
+- A generator class (e.g. a `dust emission model <../dust/dust_emission.ipynb>`_) from which to generate spectra (``generator``). Note, this is not applicable to lines.
 
 For attenuation operations you need:
 
-- The `dust curve <>`_ to apply (``dust_curve``).
+- The `dust curve <../dust/dust_attenuation.ipynb>`_ to apply (``dust_curve``).
 - The model to apply the attenuation to (``apply_dust_to``).
 - The optical depth to use with the dust curve (``tau_v``).
 
@@ -89,10 +89,9 @@ Working with ``EmissionModels``
 In the sections linked below we detail the premade stellar and black hole emission models and how to customise a model or construct your own.
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
-   stellar_models
-   agn_models
-   combined_models
+   premade_models
    modify_models
    custom_models
+   combined_models
