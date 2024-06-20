@@ -75,7 +75,7 @@ The flowchart below shows how these different spectra are typically generated an
 
 * ``emergent`` is the combined emission including dust attenuation and is the sum of ``reprocessed_attenuated`` and ``escaped``. NOTE: this does not include thermal dust emission, so is only valid from the UV to near-IR.
 
-* ``dust`` is the thermal dust emission calculated using an energy balance approach, and assuming a dust emission model.
+* ``dust_emission`` is the thermal dust emission calculated using an energy balance approach, and assuming a dust emission model.
 
 * ``total`` is the sum of ``attenuated`` and ``dust``, i.e. it includes both the effect of dust attenuation and dust emission.
 
