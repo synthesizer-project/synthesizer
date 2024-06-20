@@ -1,7 +1,7 @@
 .. image:: img/synthesizer_text.png
     :alt: Synthesizer
 
-Synthesizer is an open-source python package for generating synthetic astrophysical spectra. It is modular, flexible and fast.
+Synthesizer is an open-source python package for generating synthetic astrophysical observables. It is modular, flexible and fast.
 
 This documentation provides a broad overview of the various components in synthesizer and how they interact.
 To get started please take a look at the `getting started guide <getting_started/getting_started>`_, which contains download and installation instructions, as well as an overview of the code.
