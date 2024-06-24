@@ -16,7 +16,7 @@ Example usages:
 import os
 
 import numpy as np
-from unyt import rad, unyt_array
+from unyt import cm, deg, km, rad, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.components import BlackholesComponent
@@ -82,6 +82,15 @@ class BlackHoles(Particles, BlackholesComponent):
         softening_length=None,
         smoothing_lengths=None,
         centre=None,
+        ionisation_parameter_blr=0.1,
+        hydrogen_density_blr=1e9 / cm**3,
+        covering_fraction_blr=0.1,
+        velocity_dispersion_blr=2000 * km / s,
+        ionisation_parameter_nlr=0.01,
+        hydrogen_density_nlr=1e4 / cm**3,
+        covering_fraction_nlr=0.1,
+        velocity_dispersion_nlr=500 * km / s,
+        theta_torus=60 * deg,
         **kwargs,
     ):
         """
@@ -101,7 +110,7 @@ class BlackHoles(Particles, BlackholesComponent):
                 models.
             redshift (float)
                 The redshift/s of the black hole particles.
-            accretion_rate (array-like, float)
+            accretion_rates (array-like, float)
                 The accretion rate of the/each black hole in Msun/yr.
             coordinates (array-like, float)
                 The 3D positions of the particles.
@@ -112,6 +121,26 @@ class BlackHoles(Particles, BlackholesComponent):
             smoothing_lengths (array-like, float)
                 The smoothing length describing the black holes neighbour
                 kernel.
+            ionisation_parameter_blr (array-like, float)
+                The ionisation parameter of the broad line region.
+            hydrogen_density_blr (array-like, float)
+                The hydrogen density of the broad line region.
+            covering_fraction_blr (array-like, float)
+                The covering fraction of the broad line region (effectively
+                the escape fraction).
+            velocity_dispersion_blr (array-like, float)
+                The velocity dispersion of the broad line region.
+            ionisation_parameter_nlr (array-like, float)
+                The ionisation parameter of the narrow line region.
+            hydrogen_density_nlr (array-like, float)
+                The hydrogen density of the narrow line region.
+            covering_fraction_nlr (array-like, float)
+                The covering fraction of the narrow line region (effectively
+                the escape fraction).
+            velocity_dispersion_nlr (array-like, float)
+                The velocity dispersion of the narrow line region.
+            theta_torus (array-like, float)
+                The angle of the torus.
             kwargs (dict)
                 Any parameter for the emission models can be provided as kwargs
                 here to override the defaults of the emission models.
@@ -211,11 +240,9 @@ class BlackHoles(Particles, BlackholesComponent):
 
     def _prepare_sed_args(
         self,
-        emission_model,
         grid,
         fesc,
         spectra_type,
-        line_region,
         mask,
         grid_assignment_method,
         nthreads,
@@ -225,9 +252,6 @@ class BlackHoles(Particles, BlackholesComponent):
         functions.
 
         Args:
-            emission_model (blackhole_emission_models.*)
-                Any instance of a blackhole emission model (e.g. Template
-                or UnifiedAGN).
             grid (Grid)
                 The SPS grid object to extract spectra from.
             fesc (float)
@@ -235,9 +259,7 @@ class BlackHoles(Particles, BlackholesComponent):
             spectra_type (str)
                 The type of spectra to extract from the Grid. This must match a
                 type of spectra stored in the Grid.
-            line_region (str)
-                The specific line region, i.e. 'nlr' or 'blr'.
-            mask (array-like, bool)
+            mask(array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
             grid_assignment_method (string)
@@ -253,6 +275,16 @@ class BlackHoles(Particles, BlackholesComponent):
             tuple
                 A tuple of all the arguments required by the C extension.
         """
+        # Which line region is this for?
+        if "nlr" in grid.grid_name:
+            line_region = "nlr"
+        elif "blr" in grid.grid_name:
+            line_region = "blr"
+        else:
+            raise exceptions.InconsistentArguments(
+                "Grid used for blackholes does not appear to be for"
+                " a line region (nlr or blr)."
+            )
 
         # Handle the case where mask is None
         if mask is None:
@@ -265,44 +297,37 @@ class BlackHoles(Particles, BlackholesComponent):
         ]
         props = []
         for axis in grid.axes:
-            # Source parameters from the appropriate place
-            if axis in emission_model.required_parameters:
-                # Parameters that need to be provided from the black hole
-                # (these already exclude any parameters fixed on the
-                # emission model)
-                props.append(getattr(self, axis))
+            # Parameters that need to be provided from the black hole
+            prop = getattr(self, axis, None)
 
-            elif (
-                axis in emission_model.variable_parameters
-                and getattr(self, axis, None) is not None
-            ):
-                # Variable parameters defined on the black hole (not including
-                # line region parameters)
-                props.append(getattr(self, axis))
+            # We might be trying to get a Quanitity, in which case we need
+            # a leading _
+            if prop is None:
+                prop = getattr(self, f"_{axis}", None)
 
-            elif (
-                f"{axis} {line_region}" in emission_model.variable_parameters
-                and getattr(self, axis + "_" + line_region, None) is not None
-            ):
-                # Variable line region parameters defined on the black hole
-                props.append(getattr(self, axis + "_" + line_region))
+            # We might be missing a line region suffix, if prop is
+            # None we need to try again with the suffix
+            if prop is None:
+                prop = getattr(self, f"{axis}_{line_region}", None)
 
-            elif getattr(emission_model, axis, None) is not None:
-                # Parameters required from the emission_model (not including
-                # line region parameters)
-                props.append(getattr(emission_model, axis))
+            # We could also be tripped up by plurals (TODO: stop this from
+            # happening!)
+            elif prop is None and axis == "mass":
+                prop = getattr(self, "masses", None)
+            elif prop is None and axis == "accretion_rate":
+                prop = getattr(self, "accretion_rates", None)
+            elif prop is None and axis == "metallicity":
+                prop = getattr(self, "metallicities", None)
 
-            elif (
-                getattr(emission_model, axis + "_" + line_region, None)
-                is not None
-            ):
-                # Line region parameters required from the emission_model
-                props.append(getattr(emission_model, axis + "_" + line_region))
-
-            else:
-                raise exceptions.MissingArgument(
-                    f"{axis} can't be sourced from emission_model or self."
+            # If we still have None here then our blackhole component doesn't
+            # have the required parameter
+            if prop is None:
+                raise exceptions.InconsistentArguments(
+                    f"Could not find {axis} or {axis}_{line_region} "
+                    f"on {type(self)}"
                 )
+
+            props.append(prop)
 
         # Calculate npart from the mask
         npart = np.sum(mask)
@@ -374,10 +399,8 @@ class BlackHoles(Particles, BlackholesComponent):
 
     def generate_particle_lnu(
         self,
-        emission_model,
         grid,
         spectra_name,
-        line_region,
         fesc=0.0,
         mask=None,
         verbose=False,
@@ -389,18 +412,14 @@ class BlackHoles(Particles, BlackholesComponent):
         spectra.
 
         Args:
-            emission_model (synthesizer.blackhole_emission_models.*)
-                An instance of a blackhole emission model.
             grid (obj):
                 Spectral grid object.
-            fesc (float):
-                Fraction of emission that escapes unattenuated from
-                the birth cloud (defaults to 0.0).
             spectra_name (string)
                 The name of the target spectra inside the grid file
                 (e.g. "incident", "transmitted", "nebular").
-            line_region (str)
-                The specific line region, i.e. 'nlr' or 'blr'.
+            fesc (float):
+                Fraction of emission that escapes unattenuated from
+                the birth cloud (defaults to 0.0).
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
@@ -425,11 +444,9 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
-            emission_model,
             grid,
             fesc=fesc,
             spectra_type=spectra_name,
-            line_region=line_region,
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
