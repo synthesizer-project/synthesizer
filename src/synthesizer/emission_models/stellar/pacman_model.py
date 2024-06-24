@@ -329,7 +329,11 @@ class PacmanEmission(StellarEmissionModel):
             ]
 
             # Remove any None models
-            related_models = [m for m in related_models if m is not None]
+            related_models = [
+                m
+                for m in related_models
+                if m is not None and not isinstance(m, tuple)
+            ]
 
             # Call the parent constructor with everything we've made
             StellarEmissionModel.__init__(
