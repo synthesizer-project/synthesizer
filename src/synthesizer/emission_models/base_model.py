@@ -47,11 +47,16 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.emission_models.operations import (
+    Combination,
+    DustAttenuation,
+    Extraction,
+    Generation,
+)
 from synthesizer.line import LineCollection
-from synthesizer.sed import Sed
 
 
-class EmissionModel:
+class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
     """
     A class to define the construction of a spectra from a grid.
 
@@ -198,12 +203,9 @@ class EmissionModel:
         # What is the key for the spectra that will be produced?
         self.label = label
 
-        # Attach the grid
-        self._grid = grid
-
         # Attach the wavelength array and store it on the model
-        if self._grid is not None:
-            self.lam = self._grid.lam
+        if grid is not None:
+            self.lam = grid.lam
         else:
             self.lam = None
 
@@ -215,35 +217,43 @@ class EmissionModel:
         # Store any fixed parameters
         self.fixed_parameters = fixed_parameters
 
-        # Attach what emitter we are working with
+        # Attach which emitter we are working with
         self._emitter = emitter
 
-        # What base key will we be extracting? (can be None if we're applying
-        # a dust curve to an existing spectra)
-        self._extract = extract
+        # Define the container which will hold mask information
+        self.masks = []
 
-        # Attach the dust attenuation properties
-        self._dust_curve = dust_curve
-        self._apply_dust_to = apply_dust_to
-        self._tau_v = (
-            tau_v
-            if isinstance(tau_v, (tuple, list)) or tau_v is None
-            else [tau_v]
+        # If we have been given a mask, add it
+        self._init_masks(mask_attr, mask_thresh, mask_op)
+
+        # Get operation flags
+        self._get_operation_flags(
+            grid=grid,
+            extract=extract,
+            combine=combine,
+            dust_curve=dust_curve,
+            apply_dust_to=apply_dust_to,
+            tau_v=tau_v,
+            generator=generator,
+            dust_lum_intrinsic=dust_lum_intrinsic,
+            dust_lum_attenuated=dust_lum_attenuated,
         )
 
-        # Attach the emission generation model
-        self._generator = generator
-
-        # Attach the keys for the intrinsic and attenuated spectra to use when
-        # computing the dust luminosity
-        self._dust_lum_intrinsic = dust_lum_intrinsic
-        self._dust_lum_attenuated = dust_lum_attenuated
-
-        # Initialise the container for combined spectra we'll add together
-        self._combine = list(combine) if combine is not None else combine
-
-        # Attach the escape fraction
-        self._fesc = fesc
+        # Initilaise the corresponding operation (also checks we have a
+        # valid set of arguments and also have everything we need for the
+        # operation
+        self._init_operations(
+            grid=grid,
+            extract=extract,
+            combine=combine,
+            apply_dust_to=apply_dust_to,
+            dust_curve=dust_curve,
+            tau_v=tau_v,
+            generator=generator,
+            dust_lum_intrinsic=dust_lum_intrinsic,
+            dust_lum_attenuated=dust_lum_attenuated,
+            fesc=fesc,
+        )
 
         # Containers for children and parents
         self._children = set()
@@ -252,9 +262,160 @@ class EmissionModel:
         # Store the arribute to scale the spectra by
         self.scale_by = scale_by
 
-        # Define the container which will hold mask information
-        self.masks = []
+        # Attach the related models
+        self.related_models = (
+            related_models if related_models is not None else []
+        )
 
+        # We're done with setup, so unpack the model
+        self.unpack_model()
+
+    def _init_operations(
+        self,
+        grid,
+        extract,
+        combine,
+        apply_dust_to,
+        dust_curve,
+        tau_v,
+        generator,
+        dust_lum_intrinsic,
+        dust_lum_attenuated,
+        fesc,
+    ):
+        """
+        Initialise the correct parent operation.
+
+        Args:
+            grid (Grid):
+                The grid to extract from.
+            extract (str):
+                The key for the spectra to extract.
+            combine (list):
+                A list of models to combine.
+            apply_dust_to (EmissionModel):
+                The model to apply the dust curve to.
+            dust_curve (dust.attenuation.*):
+                The dust curve to apply.
+            tau_v (float/ndarray/str/tuple):
+                The optical depth to apply. Can be a float, ndarray, or a
+                string to a component attribute. Can also be a tuple combining
+                any of these.
+            generator (EmissionModel):
+                The emission generation model. This must define a get_spectra
+                method.
+            dust_lum_intrinsic (EmissionModel):
+                The intrinsic model to use deriving the dust
+                luminosity when computing dust emission.
+            dust_lum_attenuated (EmissionModel):
+                The attenuated model to use deriving the dust
+                luminosity when computing dust emission.
+            fesc (float):
+                The escape fraction.
+        """
+        # Which operation are we doing?
+        if self._is_extracting:
+            Extraction.__init__(self, grid, extract, fesc)
+        elif self._is_combining:
+            Combination.__init__(self, combine)
+        elif self._is_dust_attenuating:
+            DustAttenuation.__init__(self, dust_curve, apply_dust_to, tau_v)
+        elif self._is_dust_emitting:
+            Generation.__init__(
+                self, generator, dust_lum_intrinsic, dust_lum_attenuated
+            )
+        elif self._is_generating:
+            Generation.__init__(self, generator, None, None)
+        else:
+            raise exceptions.InconsistentArguments(
+                "No valid operation found from the arguments given "
+                f"(label={self.label}). "
+                "Currently have:\n"
+                "\tFor extraction: grid=("
+                f"{grid.grid_name if grid is not None else None}"
+                f" extract={extract})\n"
+                "\tFor combination: "
+                f"(combine={combine})\n"
+                "\tFor dust attenuation: "
+                f"(dust_curve={dust_curve} "
+                f"apply_dust_to={apply_dust_to} tau_v={tau_v})\n"
+                "\tFor generation "
+                f"(generator={generator}, "
+                f"dust_lum_intrinsic={dust_lum_intrinsic}, "
+                f"dust_lum_attenuated={dust_lum_attenuated})"
+            )
+
+        # Double check we have been asked for only one operation
+        if (
+            sum(
+                [
+                    self._is_extracting,
+                    self._is_combining,
+                    self._is_dust_attenuating,
+                    self._is_dust_emitting,
+                    self._is_generating,
+                ]
+            )
+            != 1
+        ):
+            raise exceptions.InconsistentArguments(
+                "Can only extract, combine, generate or apply dust to "
+                f"spectra in one model (label={self.label}). (Attempting to: "
+                f"extract: {self._is_extracting}, "
+                f"combine: {self._is_combining}, "
+                f"dust_attenuate: {self._is_dust_attenuating}, "
+                f"dust_emission: {self._is_dust_emitting})\n"
+                "Currently have:\n"
+                "\tFor extraction: grid=("
+                f"{grid.grid_name if grid is not None else None}"
+                "\tFor combination: "
+                f"(combine={combine})\n"
+                "\tFor dust attenuation: "
+                f"(dust_curve={dust_curve} "
+                f"apply_dust_to={apply_dust_to} tau_v={tau_v})\n"
+                "\tFor generation "
+                f"(generator={generator}, "
+                f"dust_lum_intrinsic={dust_lum_intrinsic}, "
+                f"dust_lum_attenuated={dust_lum_attenuated})"
+            )
+
+        # Ensure we have what we need for all operations
+        if self._is_extracting and grid is None:
+            raise exceptions.InconsistentArguments(
+                "Must specify a grid to extract from."
+            )
+        if self._is_dust_attenuating and dust_curve is None:
+            raise exceptions.InconsistentArguments(
+                "Must specify a dust curve to apply."
+            )
+        if self._is_dust_attenuating and apply_dust_to is None:
+            raise exceptions.InconsistentArguments(
+                "Must specify where to apply the dust curve."
+            )
+        if self._is_dust_attenuating and tau_v is None:
+            raise exceptions.InconsistentArguments(
+                "Must specify an optical depth to apply."
+            )
+
+        # Ensure the grid contains any keys we want to extract
+        if self._is_extracting and extract not in grid.spectra.keys():
+            raise exceptions.InconsistentArguments(
+                f"Grid does not contain key: {extract}"
+            )
+
+    def _init_masks(self, mask_attr, mask_thresh, mask_op):
+        """
+        Initialise the mask operation.
+
+        Args:
+            mask_attr (str):
+                The component attribute to mask on.
+            mask_thresh (unyt_quantity):
+                The threshold for the mask.
+            mask_op (str):
+                The operation to apply. Can be "<", ">", "<=", ">=", "==",
+                or "!=".
+        """
         # If we have been given a mask, add it
         if (
             mask_attr is not None
@@ -279,175 +440,75 @@ class EmissionModel:
                     "must be passed."
                 )
 
-        # Attach the related models
-        self.related_models = (
-            related_models if related_models is not None else []
-        )
-
-        # Get operation flags
-        self._get_operation_flags()
-
-        # Check everything makes sense
-        self._check_args()
-
-        # We're done with setup, so unpack the model
-        self.unpack_model()
+    @property
+    def emitter(self):
+        """Get the emitter this emission model acts on."""
+        return getattr(self, "_emitter", None)
 
     @property
     def grid(self):
         """Get the Grid object used for extraction."""
-        return self._grid
+        return getattr(self, "_grid", None)
 
     @property
     def extract(self):
         """Get the key for the spectra to extract."""
-        return self._extract
-
-    @property
-    def dust_curve(self):
-        """Get the dust curve to apply."""
-        return self._dust_curve
-
-    @property
-    def apply_dust_to(self):
-        """Get the spectra to apply the dust curve to."""
-        return self._apply_dust_to
-
-    @property
-    def tau_v(self):
-        """Get the optical depth to apply."""
-        return self._tau_v
-
-    @property
-    def generator(self):
-        """Get the emission generation model."""
-        return self._generator
-
-    @property
-    def dust_lum_intrinsic(self):
-        """Get the intrinsic model for computing dust luminosity."""
-        return self._dust_lum_intrinsic
-
-    @property
-    def dust_lum_attenuated(self):
-        """Get the attenuated model for computing dust luminosity."""
-        return self._dust_lum_attenuated
-
-    @property
-    def combine(self):
-        """Get the models that will be combined."""
-        return self._combine
-
-    @property
-    def emitter(self):
-        """Get the emitter this emission model acts on."""
-        return self._emitter
+        return getattr(self, "_extract", None)
 
     @property
     def fesc(self):
         """Get the escape fraction."""
-        return self._fesc
+        return getattr(self, "_fesc", 0.0)
 
-    def _check_args(self):
-        """Ensure we have a valid model."""
-        # Ensure we have a valid operation
-        if (
-            sum(
-                [
-                    self._is_extracting,
-                    self._is_combining,
-                    self._is_dust_attenuating,
-                    self._is_dust_emitting,
-                    self._is_generating,
-                ]
-            )
-            == 0
-        ):
-            raise exceptions.InconsistentArguments(
-                "No valid operation found from the arguments given "
-                f"(label={self.label}). "
-                "Currently have:\n"
-                "\tFor extraction: grid=("
-                f"{self._grid.grid_name if self._grid is not None else None}"
-                f" extract={self._extract})\n"
-                "\tFor combination: "
-                f"(combine={self._combine})\n"
-                "\tFor dust attenuation: "
-                f"(dust_curve={self._dust_curve} "
-                f"apply_dust_to={self._apply_dust_to} tau_v={self._tau_v})\n"
-                "\tFor dust generation: "
-                f"(generator={self._generator})"
-            )
+    @property
+    def generator(self):
+        """Get the emission generation model."""
+        return getattr(self, "_generator", None)
 
-        # Ensure only one type of operation is being done
-        if (
-            sum(
-                [
-                    self._is_extracting,
-                    self._is_combining,
-                    self._is_dust_attenuating,
-                    self._is_dust_emitting,
-                    self._is_generating,
-                ]
-            )
-            > 1
-        ):
-            raise exceptions.InconsistentArguments(
-                "Can only extract, combine, generate or apply dust to "
-                f"spectra in one model (label={self.label}). (Attempting to: "
-                f"extract: {self._is_extracting}, "
-                f"combine: {self._is_combining}, "
-                f"dust_attenuate: {self._is_dust_attenuating}, "
-                f"dust_emission: {self._is_dust_emitting})\n"
-                "Currently have:\n"
-                "\tFor extraction: grid=("
-                f"{self._grid.grid_name if self._grid is not None else None}"
-                "\tFor combination: "
-                f"(combine={self._combine})\n"
-                "\tFor dust attenuation: "
-                f"(dust_curve={self._dust_curve} "
-                f"apply_dust_to={self._apply_dust_to} tau_v={self._tau_v})\n"
-                "\tFor generation "
-                f"(generator={self._generator})"
-            )
+    @property
+    def dust_lum_intrinsic(self):
+        """Get the intrinsic model for computing dust luminosity."""
+        return getattr(self, "_dust_lum_intrinsic", None)
 
-        # Ensure we have what we need for all operations
-        if self._is_extracting and self._grid is None:
-            raise exceptions.InconsistentArguments(
-                "Must specify a grid to extract from."
-            )
-        if self._is_dust_attenuating and self._dust_curve is None:
-            raise exceptions.InconsistentArguments(
-                "Must specify a dust curve to apply."
-            )
-        if self._is_dust_attenuating and self._apply_dust_to is None:
-            raise exceptions.InconsistentArguments(
-                "Must specify where to apply the dust curve."
-            )
-        if self._is_dust_attenuating and self._tau_v is None:
-            raise exceptions.InconsistentArguments(
-                "Must specify an optical depth to apply."
-            )
+    @property
+    def dust_lum_attenuated(self):
+        """Get the attenuated model for computing dust luminosity."""
+        return getattr(self, "_dust_lum_attenuated", None)
 
-        # Ensure the grid contains any keys we want to extract
-        if (
-            self._is_extracting
-            and self._extract not in self._grid.spectra.keys()
-        ):
-            raise exceptions.InconsistentArguments(
-                f"Grid does not contain key: {self._extract}"
-            )
+    @property
+    def dust_curve(self):
+        """Get the dust curve to apply."""
+        return getattr(self, "_dust_curve", None)
 
-        # If we haven't been given an escape fraction and we're extracting
-        # ensure it's 0.0
+    @property
+    def apply_dust_to(self):
+        """Get the spectra to apply the dust curve to."""
+        return getattr(self, "_apply_dust_to", None)
+
+    @property
+    def tau_v(self):
+        """Get the optical depth to apply."""
+        return getattr(self, "_tau_v", None)
+
+    @property
+    def combine(self):
+        """Get the models to combine."""
+        return getattr(self, "_combine", tuple())
+
+    def _summary(self):
+        """Call the correct summary method."""
         if self._is_extracting:
-            if self._fesc is None:
-                self._fesc = 0.0
-
-        # Now that we've checked everything is consistent we can make an empty
-        # list for combine if it is None
-        if self._combine is None:
-            self._combine = []
+            return self._extract_summary()
+        elif self._is_combining:
+            return self._combine_summary()
+        elif self._is_dust_attenuating:
+            return self._attenuate_summary()
+        elif self._is_dust_emitting:
+            return self._generate_summary()
+        elif self._is_generating:
+            return self._generate_summary()
+        else:
+            return []
 
     def __str__(self):
         """Return a string summarising the model."""
@@ -469,39 +530,8 @@ class EmissionModel:
                 parts[-1] += " (galaxy)"
             parts.append("-")
 
-            if model._is_extracting:
-                parts.append(f"  Grid: {model._grid.grid_name}")
-                parts.append(f"  Extract key: {model._extract}")
-                parts.append(f"  Escape fraction: {model._fesc}")
-
-            if model._is_combining:
-                combine_labels = [model.label for model in model._combine]
-                parts.append(f"  Combine models: {', '.join(combine_labels)}")
-
-            if model._is_dust_attenuating:
-                parts.append(f"  Dust curve: {model._dust_curve}")
-                parts.append(f"  Apply dust to: {model._apply_dust_to.label}")
-                parts.append(f"  Optical depth (tau_v): {model._tau_v}")
-
-            if model._is_dust_emitting:
-                parts.append(
-                    "  Emission generation model: " f"{model._generator}"
-                )
-                if (
-                    model._dust_lum_intrinsic is not None
-                    and model._dust_lum_attenuated is not None
-                ):
-                    parts.append(
-                        f"  Dust luminosity: "
-                        f"{model._dust_lum_intrinsic.label} - "
-                        f"{model._dust_lum_attenuated.label}"
-                    )
-            if model._is_generating:
-                parts.append(
-                    "  Emission generation model: " f"{model._generator}"
-                )
-                if model.scale_by is not None:
-                    parts.append(f"  Scale by: {model.scale_by}")
+            # Get this models summary
+            parts.extend(model._summary())
 
             # Print any fixed parameters if there are any
             if len(model.fixed_parameters) > 0:
@@ -554,25 +584,34 @@ class EmissionModel:
             )
         return self._models[label]
 
-    def _get_operation_flags(self):
+    def _get_operation_flags(
+        self,
+        grid=None,
+        extract=None,
+        combine=None,
+        dust_curve=None,
+        apply_dust_to=None,
+        tau_v=None,
+        generator=None,
+        dust_lum_attenuated=None,
+        dust_lum_intrinsic=None,
+    ):
         """Define the flags for what operation the model does."""
         # Define flags for what we're doing
-        self._is_extracting = self._extract is not None
-        self._is_combining = (
-            self._combine is not None and len(self._combine) > 0
-        )
+        self._is_extracting = extract is not None and grid is not None
+        self._is_combining = combine is not None and len(combine) > 0
         self._is_dust_attenuating = (
-            self._dust_curve is not None
-            or self._apply_dust_to is not None
-            or self._tau_v is not None
+            dust_curve is not None
+            or apply_dust_to is not None
+            or tau_v is not None
         )
         self._is_dust_emitting = (
-            self._generator is not None
-            and self._dust_lum_attenuated is not None
-            and self._dust_lum_intrinsic is not None
+            generator is not None
+            and dust_lum_attenuated is not None
+            and dust_lum_intrinsic is not None
         )
         self._is_generating = (
-            self._generator is not None and not self._is_dust_emitting
+            generator is not None and not self._is_dust_emitting
         )
         self._is_masked = len(self.masks) > 0
 
@@ -587,11 +626,11 @@ class EmissionModel:
         self._models[model.label] = model
 
         # If we are extracting a spectra, store the key
-        if model.extract is not None:
+        if model._is_extracting:
             self._extract_keys[model.label] = model.extract
 
         # If we are applying a dust curve, store the key
-        if model.dust_curve is not None:
+        if model._is_dust_attenuating:
             self._dust_attenuation[model.label] = (
                 model.apply_dust_to,
                 model.dust_curve,
@@ -600,7 +639,7 @@ class EmissionModel:
             model.apply_dust_to._parents.add(model)
 
         # If we are applying a dust emission model, store the key
-        if model.generator is not None:
+        if model._is_generating:
             self._generator_models[model.label] = model.generator
             if model._dust_lum_attenuated is not None:
                 model._children.add(model._dust_lum_attenuated)
@@ -610,11 +649,11 @@ class EmissionModel:
                 model._dust_lum_intrinsic._parents.add(model)
 
         # If we are masking, store the key
-        if len(model.masks):
+        if model._is_masked:
             self._mask_keys[model.label] = model.masks
 
         # If we are combining spectra, store the key
-        if len(model.combine) > 0:
+        if model._is_combining:
             self._combine_keys[model.label] = model.combine
             for child in model.combine:
                 model._children.add(child)
@@ -631,9 +670,6 @@ class EmissionModel:
             and model.label not in self._bottom_to_top
         ):
             self._bottom_to_top.append(model.label)
-
-        # Get operation flags
-        model._get_operation_flags()
 
     def unpack_model(self):
         """Unpack the model tree to get the order of operations."""
@@ -658,7 +694,7 @@ class EmissionModel:
             if model.label not in self._models:
                 self._unpack_model_recursively(model)
 
-        # Now we've worked the full tree we can set parent pointers
+        # Now we've worked through the full tree we can set parent pointers
         for model in self._models.values():
             for child in model._children:
                 child._parents.add(model)
@@ -1447,6 +1483,8 @@ class EmissionModel:
             for target, linestyle in targets:
                 if target is None:
                     continue
+                if target not in pos or source not in pos:
+                    continue
                 linestyles.add(linestyle)
                 sx, sy = pos[source]
                 tx, ty = pos[target]
@@ -1584,199 +1622,6 @@ class EmissionModel:
         if mask is not None:
             for label, mask in mask.items():
                 emission_model.add_mask(**mask, label=label)
-
-    def _extract_spectra(
-        self,
-        emission_model,
-        emitters,
-        per_particle,
-        spectra,
-        verbose,
-        **kwargs,
-    ):
-        """
-        Extract spectra from the grid.
-
-        Args:
-            emission_model (EmissionModel):
-                The emission model to extract from.
-            emitters (dict):
-                The emitters to extract the spectra for.
-            per_particle (bool):
-                Are we extracting per particle?
-            spectra (dict):
-                The dictionary to store the extracted spectra in.
-            verbose (bool):
-                Are we talking?
-            kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
-
-        Returns:
-            dict:
-                The dictionary of extracted spectra.
-        """
-        # First step we need to extract each base spectra
-        for label, spectra_key in emission_model._extract_keys.items():
-            # Get this model
-            this_model = emission_model._models[label]
-
-            # Skip models for a different emitter
-            if this_model.emitter not in emitters:
-                continue
-
-            # Get the emitter
-            emitter = emitters[this_model.emitter]
-
-            # Do we have to define a mask?
-            this_mask = None
-            for mask_dict in this_model.masks:
-                this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
-
-            # Fix any parameters we need to fix
-            prev_properties = {}
-            for prop in this_model.fixed_parameters:
-                prev_properties[prop] = getattr(emitter, prop, None)
-                setattr(emitter, prop, this_model.fixed_parameters[prop])
-
-            # Get the generator function
-            if per_particle:
-                generator_func = emitter.generate_particle_lnu
-            else:
-                generator_func = emitter.generate_lnu
-
-            # Get this base spectra
-            spectra[label] = Sed(
-                emission_model.lam,
-                generator_func(
-                    emission_model.grid,
-                    spectra_key,
-                    fesc=getattr(emitter, this_model.fesc)
-                    if isinstance(this_model.fesc, str)
-                    else this_model.fesc,
-                    mask=this_mask,
-                    verbose=verbose,
-                    **kwargs,
-                ),
-            )
-
-            # Replace any fixed parameters
-            for prop in prev_properties:
-                setattr(emitter, prop, prev_properties[prop])
-
-        return spectra
-
-    def _combine_spectra(self, emission_model, spectra, this_model):
-        """
-        Combine the extracted spectra.
-
-        Args:
-            emission_model (EmissionModel):
-                The root emission model. This is used to get a consistent
-                wavelength grid.
-            spectra (dict):
-                The dictionary of spectra.
-            this_model (EmissionModel):
-                The model defining the combination.
-
-        Returns:
-            dict:
-                The dictionary of spectra.
-        """
-        # Create an empty spectra to add to
-        spectra[this_model.label] = Sed(
-            emission_model.lam,
-            lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
-        )
-
-        # Combine the spectra
-        for combine_model in this_model.combine:
-            spectra[this_model.label]._lnu += spectra[combine_model.label]._lnu
-
-        return spectra
-
-    def _dust_attenuate_spectra(
-        self,
-        this_model,
-        spectra,
-        emitter,
-        this_mask,
-    ):
-        """
-        Dust attenuate the extracted spectra.
-
-        Args:
-            this_model (EmissionModel):
-                The model defining the dust attenuation.
-            spectra (dict):
-                The dictionary of spectra.
-            emitter (Stars/BlackHoles):
-                The emitter to dust attenuate the spectra for.
-            this_mask (dict):
-                The mask to apply to the spectra.
-
-        Returns:
-            dict:
-                The dictionary of spectra.
-        """
-        # Unpack the tau_v value unpacking any attributes we need
-        # to extract from the emitter
-        tau_v = 1
-        for tv in this_model.tau_v:
-            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
-            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
-
-        # Get the spectra to apply dust to
-        apply_dust_to = spectra[this_model.apply_dust_to.label]
-
-        # Otherwise, we are applying a dust curve (there's no
-        # alternative)
-        spectra[this_model.label] = apply_dust_to.apply_attenuation(
-            tau_v,
-            dust_curve=this_model.dust_curve,
-            mask=this_mask,
-        )
-
-        return spectra
-
-    def _generate_spectra(self, this_model, emission_model, spectra):
-        """
-        Generate the spectra for a given model.
-
-        Args:
-            this_model (EmissionModel):
-                The model to generate the spectra for.
-            emission_model (EmissionModel):
-                The root emission model.
-            spectra (dict):
-                The dictionary of spectra.
-
-        Returns:
-            dict:
-                The dictionary of spectra.
-        """
-        # Unpack what we need for dust emission
-        generator = this_model.generator
-
-        # Handle the dust emission case
-        if this_model._is_dust_emitting:
-            intrinsic = spectra[this_model.dust_lum_intrinsic.label]
-            attenuated = spectra[this_model.dust_lum_attenuated.label]
-
-            # Apply the dust emission model
-            spectra[this_model.label] = generator.get_spectra(
-                emission_model.lam,
-                intrinsic,
-                attenuated,
-            )
-
-        else:
-            # Otherwise we have a bog standard generation
-            spectra[this_model.label] = generator.get_spectra(
-                emission_model.lam,
-            )
-
-        return spectra
 
     def _get_spectra(
         self,
@@ -1929,7 +1774,7 @@ class EmissionModel:
                     this_mask,
                 )
 
-            elif this_model._is_dust_emitting or this_model._is_generator:
+            elif this_model._is_dust_emitting or this_model._is_generating:
                 spectra = self._generate_spectra(
                     this_model,
                     emission_model,
@@ -1941,185 +1786,6 @@ class EmissionModel:
                 spectra[label]._lnu *= getattr(emitter, this_model.scale_by)
 
         return spectra
-
-    def _extract_lines(
-        self,
-        line_ids,
-        emission_model,
-        emitters,
-        per_particle,
-        lines,
-        verbose,
-        **kwargs,
-    ):
-        """
-        Extract lines from the grid.
-
-        Args:
-            line_ids (list):
-                The line ids to extract.
-            emission_model (EmissionModel):
-                The emission model to extract from.
-            emitters (dict):
-                The emitters to extract the lines for.
-            per_particle (bool):
-                Are we generating lines per particle?
-            lines (dict):
-                The dictionary to store the extracted lines in.
-            verbose (bool):
-                Are we talking?
-            kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
-
-        Returns:
-            dict:
-                The dictionary of extracted lines.
-        """
-        # First step we need to extract each base lines
-        for label in emission_model._extract_keys.keys():
-            # Get this model
-            this_model = emission_model._models[label]
-
-            # Skip models for a different emitter
-            if this_model.emitter not in emitters:
-                continue
-
-            # Get the emitter
-            emitter = emitters[this_model.emitter]
-
-            # Do we have to define a mask?
-            this_mask = None
-            for mask_dict in this_model.masks:
-                this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
-
-            # Fix any parameters we need to fix
-            prev_properties = {}
-            for prop in this_model.fixed_parameters:
-                prev_properties[prop] = getattr(emitter, prop, None)
-                setattr(emitter, prop, this_model.fixed_parameters[prop])
-
-            # Get the generator function
-            if per_particle:
-                generator_func = emitter.generate_particle_line
-            else:
-                generator_func = emitter.generate_line
-
-            # Initialise the lines dictionary for this label
-            lines[label] = {}
-
-            # Loop over the line ids
-            for line_id in line_ids:
-                # Get this base lines
-                lines[label][line_id] = generator_func(
-                    grid=emission_model.grid,
-                    line_id=line_id,
-                    fesc=getattr(emitter, this_model.fesc)
-                    if isinstance(this_model.fesc, str)
-                    else this_model.fesc,
-                    mask=this_mask,
-                    verbose=verbose,
-                    **kwargs,
-                )
-
-            # Replace any fixed parameters
-            for prop in prev_properties:
-                setattr(emitter, prop, prev_properties[prop])
-
-        return lines
-
-    def _combine_lines(self, line_ids, emission_model, lines, this_model):
-        """
-        Combine the extracted lines.
-
-        Args:
-            line_ids (list):
-                The line ids to extract.
-            emission_model (EmissionModel):
-                The root emission model. This is used to get a consistent
-                wavelength grid.
-            lines (dict):
-                The dictionary of lines.
-            this_model (EmissionModel):
-                The model defining the combination.
-
-        Returns:
-            dict:
-                The dictionary of lines.
-        """
-        # Create dictionary to hold the combined lines
-        lines[this_model.label] = {}
-
-        # Loop over lines copying over the first set of lines
-        for line_id in line_ids:
-            lines[this_model.label][line_id] = copy.copy(
-                lines[this_model.combine[0].label][line_id]
-            )
-
-            # Combine the lines
-            for combine_model in this_model.combine[1:]:
-                lines[this_model.label][line_id]._luminosity += lines[
-                    combine_model.label
-                ][line_id]._luminosity
-                lines[this_model.label][line_id]._continuum += lines[
-                    combine_model.label
-                ][line_id]._continuum
-
-        return lines
-
-    def _dust_attenuate_lines(
-        self,
-        line_ids,
-        this_model,
-        lines,
-        emitter,
-        this_mask,
-    ):
-        """
-        Dust attenuate the extracted lines.
-
-        Args:
-            line_ids (list):
-                The line ids to extract.
-            this_model (EmissionModel):
-                The model defining the dust attenuation.
-            lines (dict):
-                The dictionary of lines.
-            emitter (Stars/BlackHoles):
-                The emitter to dust attenuate the lines for.
-            this_mask (dict):
-                The mask to apply to the lines.
-
-        Returns:
-            dict:
-                The dictionary of lines.
-        """
-        # Unpack the tau_v value unpacking any attributes we need
-        # to extract from the emitter
-        tau_v = 1
-        for tv in this_model.tau_v:
-            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
-            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
-
-        # Get the lines to apply dust to
-        apply_dust_to = lines[this_model.apply_dust_to.label]
-
-        # Create dictionary to hold the dust attenuated lines
-        lines[this_model.label] = {}
-
-        # Loop over the line ids
-        for line_id in line_ids:
-            # Otherwise, we are applying a dust curve (there's no
-            # alternative)
-            lines[this_model.label][line_id] = apply_dust_to[
-                line_id
-            ].apply_attenuation(
-                tau_v,
-                dust_curve=this_model.dust_curve,
-                mask=this_mask,
-            )
-
-        return lines
 
     def _get_lines(
         self,

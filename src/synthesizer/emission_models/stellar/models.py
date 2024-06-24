@@ -281,12 +281,11 @@ class NebularEmission(StellarEmissionModel):
 
             StellarEmissionModel.__init__(
                 self,
-                grid=grid,
                 label=label,
                 combine=(linecont, nebular_continuum),
-                fesc=fesc,
                 **kwargs,
             )
+
         else:
             # Otherwise, we just need the nebular emission from the grid
             StellarEmissionModel.__init__(
