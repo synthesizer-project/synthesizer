@@ -107,6 +107,22 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             A list of masks to apply.
         parents (list):
             A list of models which depend on this model.
+        children (list):
+            A list of models this model depends on.
+        related_models (list):
+            A list of related models to this model. A related model is a model
+            that is connected somewhere within the model tree but is required
+            in the construction of the "root" model encapulated by self.
+        fixed_parameters (dict):
+            A dictionary of component attributes/parameters which should be
+            fixed and thus ignore the value of the component attribute. This
+            should take the form {<parameter_name>: <value>}.
+        scale_by (str/list/tuple):
+            Either a component attribute to scale the resultant spectra by,
+            a spectra key to scale by (based on the bolometric luminosity). or
+            a tuple/list containing strings defining either of the former two
+            options. Instead of a string, an EmissionModel can also be passed
+            to scale by the luminosity of that model.
     """
 
     def __init__(
@@ -194,8 +210,12 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 A dictionary of component attributes/parameters which should be
                 fixed and thus ignore the value of the component attribute.
                 This should take the form {<parameter_name>: <value>}.
-            scale_by (str):
-                A component attribute to scale the resultant spectra by.
+            scale_by (str/list/tuple/EmissionModel):
+                Either a component attribute to scale the resultant spectra by,
+                a spectra key to scale by (based on the bolometric luminosity).
+                or a tuple/list containing strings defining either of the
+                former two options. Instead of a string, an EmissionModel can
+                be passed to scale by the luminosity of that model.
             **kwargs:
                 Any additional keyword arguments to store. These can be used
                 to store additional information needed by the model.
@@ -260,7 +280,15 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         self._parents = set()
 
         # Store the arribute to scale the spectra by
-        self.scale_by = scale_by
+        if isinstance(scale_by, (list, tuple)):
+            self._scale_by = scale_by
+            self._scale_by = [
+                s if isinstance(s, str) else s.label for s in scale_by
+            ]
+        elif isinstance(scale_by, EmissionModel):
+            self._scale_by = (scale_by.label,)
+        else:
+            self._scale_by = (scale_by,)
 
         # Attach the related models
         self.related_models = (
@@ -494,6 +522,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
     def combine(self):
         """Get the models to combine."""
         return getattr(self, "_combine", tuple())
+
+    @property
+    def scale_by(self):
+        """Get the attribute to scale the spectra by."""
+        return self._scale_by
 
     def _summary(self):
         """Call the correct summary method."""
@@ -1723,6 +1756,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Define a dictionary to hold the spectra
         spectra = {}
 
+        # Define a dictionary to keep track of any spectra that need scaling
+        # by other spectra
+        scale_later = {}
+
         # Perform all extractions
         spectra = self._extract_spectra(
             emission_model,
@@ -1782,8 +1819,34 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 )
 
             # Are we scaling the spectra?
-            if this_model.scale_by is not None:
-                spectra[label]._lnu *= getattr(emitter, this_model.scale_by)
+            for scaler in this_model.scale_by:
+                if scaler is None:
+                    continue
+                elif hasattr(emitter, scaler):
+                    # Scale the spectra by this attribute
+                    spectra[label]._lnu *= getattr(emitter, scaler)
+                elif scaler in spectra:
+                    # Compute the scaling
+                    scaling = (
+                        spectra[scaler].measure_bolometric_luminosity()
+                        / spectra[label].measure_bolometric_luminosity()
+                    )
+                    spectra[label]._lnu *= scaling
+                else:
+                    scale_later.setdefault(label, []).append(scaler)
+
+        # Handle any final scalings we need to do
+        for spec, scalers in scale_later.items():
+            for scaler in scalers:
+                if isinstance(scaler, EmissionModel):
+                    scaler = scaler.label
+                # Compute the scaling
+                scaling = (
+                    spectra[scaler].measure_bolometric_luminosity()
+                    / spectra[spec].measure_bolometric_luminosity()
+                )
+
+                spectra[spec] *= scaling
 
         return spectra
 
@@ -1877,6 +1940,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Define a dictionary to hold the lines
         lines = {}
 
+        # Define a dictionary to keep track of any spectra that need scaling
+        # by other spectra
+        scale_later = {}
+
         # Perform all extractions
         lines = self._extract_lines(
             line_ids,
@@ -1941,15 +2008,31 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     emitter,
                 )
 
-            # Are we scaling the lines?
-            if this_model.scale_by is not None:
+            # Are we scaling the spectra?
+            for scaler in this_model.scale_by:
+                if scaler is None:
+                    continue
+                elif hasattr(emitter, scaler):
+                    for line_id in line_ids:
+                        lines[label][line_id]._luminosity *= getattr(
+                            emitter, scaler
+                        )
+                        lines[label][line_id]._continuum *= getattr(
+                            emitter, scaler
+                        )
+                else:
+                    scale_later.setdeafault(label, []).append(scaler)
+
+        # Handle any final scalings we need to do
+        for spec, scalers in scale_later.items():
+            for scaler in scalers:
                 for line_id in line_ids:
-                    lines[label][line_id]._luminosity *= getattr(
-                        emitter, this_model.scale_by
+                    # Compute the scaling
+                    scaling = (
+                        lines[scaler]._luminosity / lines[spec]._luminosity
                     )
-                    lines[label][line_id]._continuum *= getattr(
-                        emitter, this_model.scale_by
-                    )
+
+                    lines[spec] *= scaling
 
         # Finally, loop over everything we've created and convert the nested
         # dictionaries to LineCollections

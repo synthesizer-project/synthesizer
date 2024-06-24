@@ -599,6 +599,11 @@ class Combination:
 
         # Combine the spectra
         for combine_model in this_model.combine:
+            print(
+                "Combining",
+                combine_model.label,
+                np.mean(spectra[combine_model.label]._lnu),
+            )
             spectra[this_model.label]._lnu += spectra[combine_model.label]._lnu
 
         return spectra
