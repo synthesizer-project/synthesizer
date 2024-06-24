@@ -1931,6 +1931,16 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     this_mask,
                 )
 
+            elif this_model._is_dust_emitting or this_model._is_generating:
+                lines = self._generate_lines(
+                    line_ids,
+                    this_model,
+                    emission_model,
+                    lines,
+                    per_particle,
+                    emitter,
+                )
+
             # Are we scaling the lines?
             if this_model.scale_by is not None:
                 for line_id in line_ids:
