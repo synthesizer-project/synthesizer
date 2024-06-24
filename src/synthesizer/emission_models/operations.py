@@ -10,7 +10,10 @@ These classes should not be used directly.
 import copy
 
 import numpy as np
+from unyt import Hz
 
+from synthesizer import exceptions
+from synthesizer.line import Line
 from synthesizer.sed import Sed
 
 
@@ -309,6 +312,72 @@ class Generation:
             )
 
         return spectra
+
+    def _generate_lines(
+        self,
+        line_ids,
+        this_model,
+        emission_model,
+        lines,
+        per_particle,
+        emitter,
+    ):
+        """
+        Generate the lines for a given model.
+
+        This involves first generating the spectra and then extracting the
+        emission at the line wavelengths.
+
+        Args:
+            line_ids (list):
+                The line ids to extract.
+            this_model (EmissionModel):
+                The model to generate the lines for.
+            emission_model (EmissionModel):
+                The root emission model.
+            lines (dict):
+                The dictionary of lines.
+            per_particle (bool):
+                Are we generating lines per particle?
+            emitter (Stars/BlackHoles/Galaxy):
+                The emitter to generate the lines for.
+
+        Returns:
+            dict:
+                The dictionary of lines.
+        """
+        # Do we already have the spectra?
+        if per_particle and this_model.label in emitter.particle_spectra:
+            spectra = emitter.particle_spectra[this_model.label]
+        elif this_model.label in emitter.spectra:
+            spectra = emitter.spectra[this_model.label]
+        else:
+            raise exceptions.MissingSpectraType(
+                "To generate a line using a generator the corresponding "
+                "spectra must be generated first."
+            )
+
+        # Now we have the spectra we can get the emission at each line
+        # and include it
+        lines[this_model.label] = {}
+        for line_id in line_ids:
+            # Get the emission at this lines wavelength
+            lam = lines[this_model.dust_lum_intrinsic.label][
+                line_id
+            ].wavelength
+
+            # Get the luminosity at this wavelength
+            luminosity = spectra.get_lnu_at_lam(lam)
+
+            # Create the line (luminoisty = continuum)
+            lines[this_model.label][line_id] = Line(
+                line_id=line_id,
+                wavelength=lam,
+                luminosity=luminosity * Hz,
+                continuum=luminosity,
+            )
+
+        return lines
 
     def _generate_summary(self):
         """Return a summary of a generation model."""
