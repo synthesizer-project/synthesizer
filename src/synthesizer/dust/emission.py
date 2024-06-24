@@ -125,14 +125,26 @@ class EmissionBase:
                 - attenuated_sed.measure_bolometric_luminosity()
             )
 
-            # Get the spectrum and normalise it properly
-            lnu = (
-                dust_bolometric_luminosity.to("erg/s").value
-                * self._get_spectra(_lam)._lnu
-                * erg
-                / s
-                / Hz
-            )
+            # Get the spectrum and normalise it properly (handling
+            # multidiensional arrays properly)
+            if dust_bolometric_luminosity.value.ndim == 0:
+                lnu = (
+                    dust_bolometric_luminosity.to("erg/s").value
+                    * self._get_spectra(_lam)._lnu
+                    * erg
+                    / s
+                    / Hz
+                )
+            else:
+                lnu = (
+                    np.expand_dims(
+                        dust_bolometric_luminosity.to("erg/s").value, axis=-1
+                    )
+                    * self._get_spectra(_lam)._lnu
+                    * erg
+                    / s
+                    / Hz
+                )
 
             # Create new Sed object containing dust emission spectra
             return Sed(_lam, lnu=lnu)
