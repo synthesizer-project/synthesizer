@@ -1233,8 +1233,10 @@ class Sed:
         # without applying a mask
         if mask is None:
             spectra *= transmission
-        else:
+        elif transmission.ndim == mask.ndim - 1:
             spectra[mask] *= transmission[mask]
+        else:
+            spectra[mask] *= transmission
 
         return Sed(self.lam, lnu=spectra)
 
