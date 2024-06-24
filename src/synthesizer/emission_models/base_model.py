@@ -1066,7 +1066,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Define the relation to all parents and children
         relations = {}
         for parent in parents:
-            if replace_model in parent._combine:
+            if replace_model in parent.combine:
                 relations[parent.label] = "combine"
             if parent.apply_dust_to == replace_model:
                 relations[parent.label] = "dust_attenuate"
