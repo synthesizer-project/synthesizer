@@ -75,7 +75,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         """
         # Get the incident istropic disc emission model
         self.disc_incident_isotropic = self._make_disc_incident_isotropic(
-            nlr_grid
+            nlr_grid,
         )
 
         # Get the incident model accounting for the geometry but unmasked

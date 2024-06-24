@@ -639,7 +639,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             model.apply_dust_to._parents.add(model)
 
         # If we are applying a dust emission model, store the key
-        if model._is_generating:
+        if model._is_generating or model._is_dust_emitting:
             self._generator_models[model.label] = model.generator
             if model._dust_lum_attenuated is not None:
                 model._children.add(model._dust_lum_attenuated)

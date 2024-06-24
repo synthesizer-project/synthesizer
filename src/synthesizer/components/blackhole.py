@@ -278,10 +278,8 @@ class BlackholesComponent:
 
     def generate_lnu(
         self,
-        emission_model,
         grid,
         spectra_name,
-        line_region,
         fesc=0.0,
         mask=None,
         verbose=False,
@@ -303,8 +301,6 @@ class BlackholesComponent:
             spectra_name (string)
                 The name of the target spectra inside the grid file
                 (e.g. "incident", "transmitted", "nebular").
-            line_region (str)
-                The specific line region, i.e. 'nlr' or 'blr'.
             mask (array-like, bool)
                 If not None this mask will be applied to the inputs to the
                 spectra creation.
@@ -336,11 +332,9 @@ class BlackholesComponent:
 
         # Prepare the arguments for the C function.
         args = self._prepare_sed_args(
-            emission_model,
             grid,
             fesc=fesc,
             spectra_type=spectra_name,
-            line_region=line_region,
             mask=mask,
             grid_assignment_method=grid_assignment_method.lower(),
             nthreads=nthreads,
