@@ -287,8 +287,7 @@ class BlackholesComponent:
         nthreads=0,
     ):
         """
-        Generate the integrated rest frame spectra for a given grid key
-        spectra.
+        Generate integrated rest frame spectra for a given key.
 
         Args:
             emission_model (synthesizer.blackhole_emission_models.*)

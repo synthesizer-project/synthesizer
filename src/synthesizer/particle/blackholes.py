@@ -408,8 +408,7 @@ class BlackHoles(Particles, BlackholesComponent):
         nthreads=0,
     ):
         """
-        Generate the integrated rest frame spectra for a given grid key
-        spectra.
+        Generate per particle rest frame spectra for a given key.
 
         Args:
             grid (obj):
