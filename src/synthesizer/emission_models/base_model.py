@@ -1068,20 +1068,20 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         for parent in parents:
             if replace_model in parent._combine:
                 relations[parent.label] = "combine"
-            if parent._apply_dust_to == replace_model:
+            if parent.apply_dust_to == replace_model:
                 relations[parent.label] = "dust_attenuate"
-            if parent._dust_lum_intrinsic == replace_model:
+            if parent.dust_lum_intrinsic == replace_model:
                 relations[parent.label] = "dust_intrinsic"
-            if parent._dust_lum_attenuated == replace_model:
+            if parent.dust_lum_attenuated == replace_model:
                 relations[parent.label] = "dust_attenuated"
         for child in children:
-            if child in replace_model._combine:
+            if child in replace_model.combine:
                 relations[child.label] = "combine"
-            if child._apply_dust_to == replace_model:
+            if child.apply_dust_to == replace_model:
                 relations[child.label] = "dust_attenuate"
-            if child._dust_lum_intrinsic == replace_model:
+            if child.dust_lum_intrinsic == replace_model:
                 relations[child.label] = "dust_intrinsic"
-            if child._dust_lum_attenuated == replace_model:
+            if child.dust_lum_attenuated == replace_model:
                 relations[child.label] = "dust_attenuated"
 
         # Remove the model we are replacing
