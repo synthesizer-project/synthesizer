@@ -84,6 +84,10 @@ class Extraction:
         """
         # First step we need to extract each base spectra
         for label, spectra_key in emission_model._extract_keys.items():
+            # Skip if we don't need to extract this spectra
+            if spectra_key in spectra:
+                continue
+
             # Get this model
             this_model = emission_model._models[label]
 
@@ -167,6 +171,10 @@ class Extraction:
         """
         # First step we need to extract each base lines
         for label in emission_model._extract_keys.keys():
+            # Skip it if we happen to already have the lines
+            if label in lines:
+                continue
+
             # Get this model
             this_model = emission_model._models[label]
 
@@ -274,7 +282,7 @@ class Generation:
         self._dust_lum_intrinsic = dust_lum_intrinsic
         self._dust_lum_attenuated = dust_lum_attenuated
 
-    def _generate_spectra(self, this_model, emission_model, spectra):
+    def _generate_spectra(self, this_model, emission_model, spectra, lam):
         """
         Generate the spectra for a given model.
 
@@ -285,6 +293,8 @@ class Generation:
                 The root emission model.
             spectra (dict):
                 The dictionary of spectra.
+            lam (ndarray):
+                The wavelength grid to generate the spectra on.
 
         Returns:
             dict:
@@ -300,7 +310,7 @@ class Generation:
 
             # Apply the dust emission model
             spectra[this_model.label] = generator.get_spectra(
-                emission_model.lam,
+                lam,
                 intrinsic,
                 attenuated,
             )
@@ -308,7 +318,7 @@ class Generation:
         else:
             # Otherwise we have a bog standard generation
             spectra[this_model.label] = generator.get_spectra(
-                emission_model.lam,
+                lam,
             )
 
         return spectra
@@ -599,11 +609,6 @@ class Combination:
 
         # Combine the spectra
         for combine_model in this_model.combine:
-            print(
-                "Combining",
-                combine_model.label,
-                np.mean(spectra[combine_model.label]._lnu),
-            )
             spectra[this_model.label]._lnu += spectra[combine_model.label]._lnu
 
         return spectra
