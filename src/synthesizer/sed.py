@@ -1203,7 +1203,7 @@ class Sed:
                     "Masks are only applicable for Seds containing "
                     "multiple spectra"
                 )
-            if self._lnu.shape[0] != mask.size:
+            if self._lnu.shape[: mask.ndim] != mask.shape:
                 raise exceptions.InconsistentArguments(
                     "Mask and spectra are incompatible shapes "
                     f"({mask.shape}, {self._lnu.shape})"
@@ -1233,7 +1233,7 @@ class Sed:
         # without applying a mask
         if mask is None:
             spectra *= transmission
-        elif transmission.ndim == mask.ndim - 1:
+        elif transmission[mask].shape == spectra[mask].shape:
             spectra[mask] *= transmission[mask]
         else:
             spectra[mask] *= transmission
