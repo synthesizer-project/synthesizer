@@ -96,7 +96,7 @@ class BlackholesComponent:
         hydrogen_density_nlr=1e4 / cm**3,
         covering_fraction_nlr=0.1,
         velocity_dispersion_nlr=500 * km / s,
-        theta_torus=60 * deg,
+        theta_torus=10 * deg,
         **kwargs,
     ):
         """
@@ -125,7 +125,7 @@ class BlackholesComponent:
                 The metallicity of the blackhole which is assumed for the line
                 emitting regions.
             ionisation_parameter_blr (array-like, float)
-                The ionisation parameter of the broad line region.
+                The ionisation parameter of the broadline region.
             hydrogen_density_blr (array-like, float)
                 The hydrogen density of the broad line region.
             covering_fraction_blr (array-like, float)
@@ -187,7 +187,6 @@ class BlackholesComponent:
         # The angle of the torus
         self.theta_torus = theta_torus
         self.torus_fraction = (self.theta_torus / (90 * deg)).value
-        print(self.inclination, self.theta_torus, self.torus_fraction)
         self._torus_edgeon_cond = self.inclination + self.theta_torus
 
         # Set any of the extra attribute provided as kwargs
