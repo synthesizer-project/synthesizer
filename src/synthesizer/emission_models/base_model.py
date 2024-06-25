@@ -1667,7 +1667,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         covering_fraction=None,
         mask=None,
         verbose=True,
-        spectra={},
+        spectra=None,
         **kwargs,
     ):
         """
@@ -1757,6 +1757,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         # Apply any overides we have
         self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
+
+        # Make a spectra dictionary if we haven't got one yet
+        if spectra is None:
+            spectra = {}
 
         # Define a dictionary to keep track of any spectra that need scaling
         # by other spectra
