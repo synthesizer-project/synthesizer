@@ -174,10 +174,12 @@ class EmissionBase:
 
         sed = Sed(lam=lam, lnu=lnu)
 
-        # normalise the spectrum
-        sed._lnu /= sed.measure_bolometric_luminosity().value
+        # Normalise the spectrum
+        sed._lnu /= np.expand_dims(
+            sed.measure_bolometric_luminosity().value, axis=-1
+        )
 
-        # apply heating due to CMB, if applicable
+        # Apply heating due to CMB, if applicable
         sed._lnu *= self.cmb_factor
 
         return sed
