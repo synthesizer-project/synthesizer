@@ -1835,7 +1835,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 )
 
             elif this_model._is_dust_attenuating:
-                print(spectra[this_model.apply_dust_to]._lnu.shape)
+                print(spectra[this_model.apply_dust_to.label]._lnu.shape)
                 spectra = self._dust_attenuate_spectra(
                     this_model,
                     spectra,
