@@ -56,7 +56,7 @@ class BlackHole(BlackholesComponent):
         hydrogen_density_nlr=1e4 / cm**3,
         covering_fraction_nlr=0.1,
         velocity_dispersion_nlr=500 * km / s,
-        theta_torus=60 * deg,
+        theta_torus=10 * deg,
         **kwargs,
     ):
         """
@@ -118,6 +118,15 @@ class BlackHole(BlackholesComponent):
             inclination=inclination,
             spin=spin,
             metallicity=metallicity,
+            ionisation_parameter_blr=ionisation_parameter_blr,
+            hydrogen_density_blr=hydrogen_density_blr,
+            covering_fraction_blr=covering_fraction_blr,
+            velocity_dispersion_blr=velocity_dispersion_blr,
+            ionisation_parameter_nlr=ionisation_parameter_nlr,
+            hydrogen_density_nlr=hydrogen_density_nlr,
+            covering_fraction_nlr=covering_fraction_nlr,
+            velocity_dispersion_nlr=velocity_dispersion_nlr,
+            theta_torus=theta_torus,
             **kwargs,
         )
 
