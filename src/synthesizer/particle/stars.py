@@ -127,6 +127,7 @@ class Stars(Particles, StarsComponent):
         softening_length=None,
         centre=None,
         metallicity_floor=1e-5,
+        **kwargs,
     ):
         """
         Intialise the Stars instance. The first 3 arguments are always
@@ -165,6 +166,10 @@ class Stars(Particles, StarsComponent):
             centre (array-like, float)
                 The centre of the star particle. Can be defined in
                 a number of way (e.g. centre of mass)
+            metallicity_floor (float)
+                The minimum metallicity allowed in the simulation.
+            **kwargs
+                Additional keyword arguments to be set as attributes.
         """
 
         # Instantiate parents
@@ -192,6 +197,10 @@ class Stars(Particles, StarsComponent):
         self.initial_masses = initial_masses
         self.ages = ages
         self.metallicities = metallicities
+
+        # Set the extra keyword arguments
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
         # Define the dictionary to hold particle spectra
         self.particle_spectra = {}
