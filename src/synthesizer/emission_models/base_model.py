@@ -1817,7 +1817,12 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             this_mask = None
             for mask_dict in this_model.masks:
                 this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
-                print(label, this_mask.shape, mask_dict)
+                print(
+                    label,
+                    this_mask.shape,
+                    mask_dict,
+                    emitter.nparticles,
+                )
 
             # Are we doing a combination?
             if this_model._is_combining:
