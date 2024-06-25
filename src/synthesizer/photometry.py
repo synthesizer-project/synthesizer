@@ -183,10 +183,17 @@ class PhotometryCollection:
         ]
 
         # Define the photometry value column
-        value_col = [
-            f"{str(format(self[key].value, '.2e'))} {str(self[key].units)}"
-            for key in self.filter_codes
-        ]
+        if self[self.filters[0]].value.ndim > 1:
+            value_col = [
+                f"{str(format(np.sum(self[key].value), '.2e'))} "
+                f"{str(self[key].units)}"
+                for key in self.filter_codes
+            ]
+        else:
+            value_col = [
+                f"{str(format(self[key].value, '.2e'))} {str(self[key].units)}"
+                for key in self.filter_codes
+            ]
 
         # Determine the width of each column
         filter_width = max([len(s) for s in filters_col]) + 2
