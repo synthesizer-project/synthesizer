@@ -270,13 +270,17 @@ class NebularEmission(StellarEmissionModel):
             # Make a line continuum model if we need one
             if linecont is None:
                 linecont = LineContinuumEmission(
-                    grid=grid, fesc=fesc_ly_alpha, **kwargs
+                    grid=grid,
+                    fesc=fesc_ly_alpha,
+                    **kwargs,
                 )
 
             # Make a nebular continuum model if we need one
             if nebular_continuum is None:
                 nebular_continuum = NebularContinuumEmission(
-                    grid=grid, fesc=fesc, **kwargs
+                    grid=grid,
+                    fesc=fesc,
+                    **kwargs,
                 )
 
             StellarEmissionModel.__init__(
@@ -338,7 +342,11 @@ class IntrinsicEmission(StellarEmissionModel):
         """
         # Make an escaped model if we need one
         if escaped is None:
-            escaped = EscapedEmission(grid=grid, fesc=fesc)
+            escaped = EscapedEmission(
+                grid=grid,
+                fesc=fesc,
+                **kwargs,
+            )
 
         # Make a reprocessed model if we need one
         if reprocessed is None:
@@ -346,6 +354,7 @@ class IntrinsicEmission(StellarEmissionModel):
                 grid=grid,
                 fesc=fesc,
                 fesc_ly_alpha=fesc_ly_alpha,
+                **kwargs,
             )
 
         StellarEmissionModel.__init__(
@@ -402,11 +411,16 @@ class ReprocessedEmission(StellarEmissionModel):
                 grid=grid,
                 fesc=fesc,
                 fesc_ly_alpha=fesc_ly_alpha,
+                **kwargs,
             )
 
         # Make a transmitted model if we need one
         if transmitted is None:
-            transmitted = TransmittedEmission(grid=grid, fesc=fesc)
+            transmitted = TransmittedEmission(
+                grid=grid,
+                fesc=fesc,
+                **kwargs,
+            )
 
         StellarEmissionModel.__init__(
             self,
@@ -472,11 +486,12 @@ class EmergentEmission(StellarEmissionModel):
                 apply_dust_to=apply_dust_to,
                 tau_v=tau_v,
                 emitter="stellar",
+                **kwargs,
             )
 
         # Make an escaped model if we need one
         if escaped is None:
-            escaped = EscapedEmission(grid=grid, fesc=fesc)
+            escaped = EscapedEmission(grid=grid, fesc=fesc, **kwargs)
 
         StellarEmissionModel.__init__(
             self,
