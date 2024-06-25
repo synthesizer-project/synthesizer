@@ -1504,8 +1504,10 @@ def plot_spectra(
                 xlimits[1] = x_up
 
     # Set the limits
-    ax.set_xlim(*xlimits)
-    ax.set_ylim(*ylimits)
+    if not np.isnan(xlimits[0]) and not np.isnan(xlimits[1]):
+        ax.set_xlim(*xlimits)
+    if not np.isnan(ylimits[0]) and not np.isnan(ylimits[1]):
+        ax.set_ylim(*ylimits)
 
     # Make the legend
     if draw_legend:
