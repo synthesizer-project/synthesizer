@@ -1244,7 +1244,7 @@ class Sed:
         self, ionisation_energy=13.6 * eV, limit=100, nthreads=1
     ):
         """
-        A function to calculate the ionising photon production rate.
+        Calculate the ionising photon production rate.
 
         Args:
             ionisation_energy (unyt_array)
@@ -1260,7 +1260,6 @@ class Sed:
             float
                 Ionising photon luminosity (s^-1).
         """
-
         # Convert lnu to llam
         llam = lnu_to_llam(self.lam, self.lnu)
 
