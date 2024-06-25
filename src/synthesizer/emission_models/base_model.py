@@ -1772,6 +1772,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             **kwargs,
         )
 
+        for key in spectra:
+            print("Spectra shape:", spectra[key]._lnu.shape)
+
         # With all base spectra extracted we can now loop from bottom to top
         # of the tree creating each spectra
         for label in emission_model._bottom_to_top:
@@ -1814,6 +1817,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             this_mask = None
             for mask_dict in this_model.masks:
                 this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
+                print(label, this_mask.shape, mask_dict)
 
             # Are we doing a combination?
             if this_model._is_combining:
