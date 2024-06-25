@@ -162,7 +162,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # Make the line regions
         nlr = BlackHoleEmissionModel(
             grid=nlr_grid,
-            label="nlr_transmitted",
+            label="disc_transmitted_nlr",
             extract="transmitted",
             fesc=covering_fraction_nlr,
             scale_by="intrinsic",
@@ -172,7 +172,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         )
         blr = BlackHoleEmissionModel(
             grid=blr_grid,
-            label="blr_transmitted",
+            label="disc_transmitted_blr",
             extract="transmitted",
             fesc=covering_fraction_blr,
             scale_by="intrinsic",
@@ -258,6 +258,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
             generator=torus_emission_model,
             scale_by=(
                 "torus_fraction",
-                self.disc_incident,
+                self.disc_incident_isotropic,
             ),
         )
