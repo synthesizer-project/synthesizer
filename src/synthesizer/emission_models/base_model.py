@@ -33,7 +33,7 @@ Example usage:
 
     # Generate the lines
     lines = stars.get_lines(
-                line_ids=("Ne 4 1601.45A, He 2 1640.41A", "O 3 1660.81A"),
+                line_ids=("Ne 4 1601.45A, He 2 1640.41A", "O3 1660.81A"),
                 emission_model=emergent_emission_model
             )
 """
@@ -54,6 +54,7 @@ from synthesizer.emission_models.operations import (
     Generation,
 )
 from synthesizer.line import LineCollection
+from synthesizer.warnings import warn
 
 
 class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
@@ -1144,7 +1145,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # Warn the user if they passed a new label, it won't be used
             if new_label is not None:
-                print(
+                warn(
                     "Warning: new_label is only used when multiple "
                     "replacements are passed."
                 )
@@ -1666,6 +1667,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         covering_fraction=None,
         mask=None,
         verbose=True,
+        spectra={},
         **kwargs,
     ):
         """
@@ -1734,6 +1736,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                       to add a specific mask to a particular model.
             verbose (bool)
                 Are we talking?
+            spectra (dict)
+                A dictionary of spectra to add to. This is used for recursive
+                calls to this function.
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -1752,9 +1757,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         # Apply any overides we have
         self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
-
-        # Define a dictionary to hold the spectra
-        spectra = {}
 
         # Define a dictionary to keep track of any spectra that need scaling
         # by other spectra
@@ -1775,6 +1777,24 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         for label in emission_model._bottom_to_top:
             # Get this model
             this_model = emission_model._models[label]
+
+            # Get the spectra for the related models that don't appear in the
+            # tree
+            for related_model in this_model.related_models:
+                if related_model.label not in spectra:
+                    spectra.update(
+                        related_model._get_spectra(
+                            emitters,
+                            per_particle,
+                            dust_curves=dust_curves,
+                            tau_v=tau_v,
+                            fesc=fesc,
+                            mask=mask,
+                            verbose=verbose,
+                            spectra=spectra,
+                            **kwargs,
+                        )
+                    )
 
             # Skip models for a different emitters
             if (
@@ -1816,6 +1836,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     this_model,
                     emission_model,
                     spectra,
+                    np.tile(self.lam, (emitter.nparticles, 1))
+                    if per_particle
+                    else self.lam,
                 )
 
             # Are we scaling the spectra?
@@ -1830,8 +1853,15 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     scaling = (
                         spectra[scaler].measure_bolometric_luminosity()
                         / spectra[label].measure_bolometric_luminosity()
-                    )
-                    spectra[label]._lnu *= scaling
+                    ).value
+
+                    print(label, scaler, spectra[label]._lnu.ndim)
+
+                    # Scale the spectra (handling 1D and 2D cases)
+                    if spectra[label]._lnu.ndim > 1:
+                        spectra[label]._lnu *= scaling[:, None]
+                    else:
+                        spectra[label]._lnu *= scaling
                 else:
                     scale_later.setdefault(label, []).append(scaler)
 
@@ -1860,6 +1890,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         fesc=None,
         mask=None,
         verbose=True,
+        lines={},
         **kwargs,
     ):
         """
@@ -1918,6 +1949,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                       to add a specific mask to a particular model.
             verbose (bool)
                 Are we talking?
+            lines (dict)
+                A dictionary of lines to add to. This is used for recursive
+                calls to this function.
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -1936,9 +1970,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         # Apply any overides we have
         self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
-
-        # Define a dictionary to hold the lines
-        lines = {}
 
         # Define a dictionary to keep track of any spectra that need scaling
         # by other spectra
@@ -1960,6 +1991,25 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         for label in emission_model._bottom_to_top:
             # Get this model
             this_model = emission_model._models[label]
+
+            # Get the spectra for the related models that don't appear in the
+            # tree
+            for related_model in this_model.related_models:
+                if related_model.label not in lines:
+                    lines.update(
+                        related_model._get_lines(
+                            line_ids,
+                            emitters,
+                            per_particle,
+                            dust_curves=dust_curves,
+                            tau_v=tau_v,
+                            fesc=fesc,
+                            mask=mask,
+                            verbose=verbose,
+                            lines=lines,
+                            **kwargs,
+                        )
+                    )
 
             # Skip models for a different emitters
             if (
