@@ -1762,6 +1762,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # by other spectra
         scale_later = {}
 
+        print("Spectra length:", len(spectra))
+
         # Perform all extractions
         spectra = self._extract_spectra(
             emission_model,
@@ -1833,6 +1835,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 )
 
             elif this_model._is_dust_attenuating:
+                print(spectra[this_model.apply_dust_to]._lnu.shape)
                 spectra = self._dust_attenuate_spectra(
                     this_model,
                     spectra,
