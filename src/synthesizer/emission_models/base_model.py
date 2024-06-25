@@ -1766,8 +1766,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # by other spectra
         scale_later = {}
 
-        print("Spectra length:", len(spectra))
-
         # Perform all extractions
         spectra = self._extract_spectra(
             emission_model,
@@ -1777,9 +1775,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             verbose,
             **kwargs,
         )
-
-        for key in spectra:
-            print("Spectra shape:", spectra[key]._lnu.shape)
 
         # With all base spectra extracted we can now loop from bottom to top
         # of the tree creating each spectra
@@ -1823,12 +1818,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             this_mask = None
             for mask_dict in this_model.masks:
                 this_mask = emitter.get_mask(**mask_dict, mask=this_mask)
-                print(
-                    label,
-                    this_mask.shape,
-                    mask_dict,
-                    emitter.nparticles,
-                )
 
             # Are we doing a combination?
             if this_model._is_combining:
@@ -1839,7 +1828,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 )
 
             elif this_model._is_dust_attenuating:
-                print(spectra[this_model.apply_dust_to.label]._lnu.shape)
                 spectra = self._dust_attenuate_spectra(
                     this_model,
                     spectra,
@@ -1870,8 +1858,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         spectra[scaler].measure_bolometric_luminosity()
                         / spectra[label].measure_bolometric_luminosity()
                     ).value
-
-                    print(label, scaler, spectra[label]._lnu.ndim)
 
                     # Scale the spectra (handling 1D and 2D cases)
                     if spectra[label]._lnu.ndim > 1:
@@ -1906,7 +1892,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         fesc=None,
         mask=None,
         verbose=True,
-        lines={},
+        lines=None,
         **kwargs,
     ):
         """
@@ -1986,6 +1972,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         # Apply any overides we have
         self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
+
+        # If we haven't got a lines dictionary yet we'll make one
+        if lines is None:
+            lines = {}
 
         # Define a dictionary to keep track of any spectra that need scaling
         # by other spectra
