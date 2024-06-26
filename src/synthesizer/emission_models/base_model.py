@@ -1238,6 +1238,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     The labels of models that are extracting.
                 masked_labels (list):
                     The labels of models that are masked.
+                components (dict):
+                    The component each model acts on.
                 model (EmissionModel):
                     The model to assign the level to.
                 level (int):
@@ -1252,6 +1254,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     The labels of models that are extracting.
                 masked_labels (list):
                     The labels of models that are masked.
+                components (dict):
+                    The component each model acts on.
             """
             # Get the model label
             label = model.label
@@ -1293,7 +1297,12 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # Recurse
             for child in model._children:
-                levels, links, extract_labels, masked_labels = _assign_levels(
+                (
+                    levels,
+                    links,
+                    extract_labels,
+                    masked_labels,
+                ) = _assign_levels(
                     levels,
                     links,
                     extract_labels,
@@ -1308,9 +1317,12 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         root_model = self._models[root]
 
         # Recursively assign levels
-        model_levels, links, extract_labels, masked_labels = _assign_levels(
-            {}, {}, set(), [], root_model, 0
-        )
+        (
+            model_levels,
+            links,
+            extract_labels,
+            masked_labels,
+        ) = _assign_levels({}, {}, set(), [], root_model, 0)
 
         # Unpack the levels
         levels = {}
@@ -1489,13 +1501,22 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             levels, root=root if root is not None else self.label
         )
 
+        # Keep track of which components are included
+        components = set()
+
         # Plot the tree using Matplotlib
         fig, ax = plt.subplots(figsize=(6, 6))
 
         # Draw nodes with different styles if they are masked
         for node, (x, y) in pos.items():
-            color = "lightgreen" if node in masked_labels else "lightblue"
-            ax.text(
+            components.add(self[node].emitter)
+            if self[node].emitter == "stellar":
+                color = "gold"
+            elif self[node].emitter == "blackhole":
+                color = "royalblue"
+            else:
+                color = "forestgreen"
+            text = ax.text(
                 x,
                 -y,  # Invert y-axis for bottom-to-top
                 node,
@@ -1510,6 +1531,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 ),
                 fontsize=fontsize,
             )
+
+            # Used a dashed outline for masked nodes
+            bbox = text.get_bbox_patch()
+            if node in masked_labels:
+                bbox.set_linestyle("dashed")
 
         # Draw edges with different styles based on link type
         linestyles = set()
@@ -1558,14 +1584,59 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     label="Dust Luminosity",
                 )
             )
-        if len(masked_labels) > 0:
-            handles.append(mpatches.Patch(color="lightgreen", label="Masked"))
-            handles.append(mpatches.Patch(color="lightblue", label="Unmasked"))
-        handles.append(
-            mpatches.Patch(
-                facecolor="none", edgecolor="black", label="Extraction"
+
+        # Include a component legend element
+        if "stellar" in components:
+            handles.append(
+                mpatches.FancyBboxPatch(
+                    (0.1, 0.1),
+                    width=0.5,
+                    height=0.1,
+                    facecolor="gold",
+                    edgecolor="black",
+                    label="Stellar",
+                    boxstyle="round,pad=0.3",
+                )
             )
-        )
+        if "blackhole" in components:
+            handles.append(
+                mpatches.FancyBboxPatch(
+                    (0.1, 0.1),
+                    width=0.5,
+                    height=0.1,
+                    facecolor="royalblue",
+                    edgecolor="black",
+                    label="Black Hole",
+                    boxstyle="round,pad=0.3",
+                )
+            )
+        if "galaxy" in components:
+            handles.append(
+                mpatches.FancyBboxPatch(
+                    (0.1, 0.1),
+                    width=0.5,
+                    height=0.1,
+                    facecolor="forestgreen",
+                    edgecolor="black",
+                    label="Galaxy",
+                    boxstyle="round,pad=0.3",
+                )
+            )
+
+        # Include a masked legend element if we have masked nodes
+        if len(masked_labels) > 0:
+            handles.append(
+                mpatches.FancyBboxPatch(
+                    (0.1, 0.1),
+                    width=0.5,
+                    height=0.1,
+                    facecolor="none",
+                    edgecolor="black",
+                    label="Masked",
+                    linestyle="dashed",
+                    boxstyle="round,pad=0.3",
+                )
+            )
 
         # Add legend to the bottom of the plot
         ax.legend(
