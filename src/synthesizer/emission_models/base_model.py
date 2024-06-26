@@ -288,6 +288,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             ]
         elif isinstance(scale_by, EmissionModel):
             self._scale_by = (scale_by.label,)
+        elif scale_by is None:
+            self._scale_by = ()
         else:
             self._scale_by = (scale_by,)
 
@@ -354,7 +356,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 self, generator, dust_lum_intrinsic, dust_lum_attenuated
             )
         elif self._is_generating:
-            Generation.__init__(self, generator, None, None)
+            Generation.__init__(self, generator, dust_lum_intrinsic, None)
         else:
             raise exceptions.InconsistentArguments(
                 "No valid operation found from the arguments given "
@@ -579,6 +581,12 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     parts.append(
                         f"    - {mask['attr']} {mask['op']} {mask['thresh']} "
                     )
+
+            # Report any attributes we are scaling by
+            if len(model.scale_by) > 0:
+                parts.append("  Scaling by:")
+                for scale_by in model._scale_by:
+                    parts.append(f"    - {scale_by}")
 
         # Get the length of the longest line
         longest = max(len(line) for line in parts) + 10
@@ -1921,6 +1929,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             for scaler in this_model.scale_by:
                 if scaler is None:
                     continue
+                elif hasattr(emitter, f"_{scaler}"):
+                    # Scale the spectra by this attribute
+                    spectra[label]._lnu *= getattr(emitter, f"_{scaler}")
                 elif hasattr(emitter, scaler):
                     # Scale the spectra by this attribute
                     spectra[label]._lnu *= getattr(emitter, scaler)
