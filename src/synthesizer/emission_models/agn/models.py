@@ -448,7 +448,7 @@ class TorusEmission(BlackHoleEmissionModel):
             self,
             label=label,
             generator=torus_emission_model,
-            dust_lum_intrinsic=disc_incident,
+            lum_intrinsic_model=disc_incident,
             scale_by="torus_fraction",
             **kwargs,
         )

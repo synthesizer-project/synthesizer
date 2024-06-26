@@ -64,8 +64,8 @@ class DustEmission(EmissionModel):
             grid=grid,
             label=label,
             generator=dust_emission_model,
-            dust_lum_intrinsic=dust_lum_intrinsic,
-            dust_lum_attenuated=dust_lum_attenuated,
+            lum_intrinsic_model=dust_lum_intrinsic,
+            lum_attenuated_model=dust_lum_attenuated,
             emitter=emitter,
             **kwargs,
         )
