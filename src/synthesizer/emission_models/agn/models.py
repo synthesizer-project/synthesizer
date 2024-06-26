@@ -162,6 +162,68 @@ class BLRTransmittedEmission(BlackHoleEmissionModel):
         )
 
 
+class NLREmission(BlackHoleEmissionModel):
+    """
+    An emission model that computes the NLR emission.
+
+    This defines the extraction of key "nebular" emission from the NLR grid.
+
+    This is a child of the EmisisonModel class, for a full
+    description of the parameters see the BlackHoleEmissionModel class.
+    """
+
+    def __init__(self, grid, label="nlr", **kwargs):
+        """
+        Initialise the NLREmission model.
+
+        Args:
+            grid (Grid)
+                The grid object containing the NLR emission.
+            label (str)
+                The label for the model.
+            **kwargs
+
+        """
+        BlackHoleEmissionModel.__init__(
+            self,
+            label=label,
+            extract="nebular",
+            grid=grid,
+            **kwargs,
+        )
+
+
+class BLREmission(BlackHoleEmissionModel):
+    """
+    An emission model that computes the BLR emission.
+
+    This defines the extraction of key "nebular" emission from the BLR grid.
+
+    This is a child of the EmisisonModel class, for a full
+    description of the parameters see the BlackHoleEmissionModel class.
+    """
+
+    def __init__(self, grid, label="blr", **kwargs):
+        """
+        Initialise the BLREmission model.
+
+        Args:
+            grid (Grid)
+                The grid object containing the BLR emission.
+            label (str)
+                The label for the model.
+            **kwargs
+
+        """
+        BlackHoleEmissionModel.__init__(
+            self,
+            label=label,
+            extract="nebular",
+            grid=grid,
+            **kwargs,
+        )
+
+
 class DiscIncidentEmission(BlackHoleEmissionModel):
     """
     An emission model that extracts the incident disc emission.
