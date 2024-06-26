@@ -412,25 +412,44 @@ class TorusEmission(BlackHoleEmissionModel):
     description of the parameters see the BlackHoleEmissionModel class.
     """
 
-    def __init__(self, torus_emission_model, label="torus", **kwargs):
+    def __init__(
+        self,
+        torus_emission_model,
+        grid=None,
+        label="torus",
+        disc_incident=None,
+        **kwargs,
+    ):
         """
         Initialise the TorusEmission model.
 
         Args:
             torus_emission_model (dust.emission)
                 The dust emission model to use for the torus.
-            scale_by (float)
-                The emission model to use for scaling of the torus emission.
+            grid (Grid)
+                The grid object to extract the disc incident emission from.
+                Only required if disc_incident is None.
             label (str)
                 The label for the model.
+            disc_incident (BlackHoleEmissionModel)
+                The disc incident emission model to use. If not provided
+                this will be generated from the grid.
             **kwargs
 
         """
+        # Make the disc incident model if not provided
+        if disc_incident is None:
+            disc_incident = DiscIncidentEmission(
+                grid=grid,
+                label="disc_incident",
+                **kwargs,
+            )
         BlackHoleEmissionModel.__init__(
             self,
             label=label,
             generator=torus_emission_model,
-            dust_lum_intrinsic="torus_fraction",
+            dust_lum_intrinsic=disc_incident,
+            scale_by="torus_fraction",
             **kwargs,
         )
 
@@ -488,7 +507,7 @@ class AGNIntrinsicEmission(BlackHoleEmissionModel):
         )
         torus = TorusEmission(
             torus_emission_model=torus_emission_model,
-            scale_by="torus_fraction",
+            grid=nlr_grid,
             label="torus",
             **kwargs,
         )
