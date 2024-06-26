@@ -323,7 +323,7 @@ class Generation:
             # scale the spectra by the intrinsic luminosity
             spectra[this_model.label]._lnu *= spectra[
                 this_model.lum_intrinsic_model.label
-            ].bolometric_luminosity
+            ].bolometric_luminosity.value
 
         else:
             # Otherwise we have a bog standard generation
