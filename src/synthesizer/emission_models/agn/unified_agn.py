@@ -255,8 +255,5 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="torus",
             generator=torus_emission_model,
             lum_intrinsic_model=self.disc_incident_isotropic,
-            scale_by=(
-                "torus_fraction",
-                "bolometric_luminosity",
-            ),
+            scale_by=("torus_fraction",),
         )

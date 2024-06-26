@@ -1929,12 +1929,37 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             for scaler in this_model.scale_by:
                 if scaler is None:
                     continue
-                elif hasattr(emitter, f"_{scaler}"):
+                if hasattr(emitter, scaler):
+                    # Ok, the emitter has this scaler, get it
+                    scaler_arr = getattr(emitter, f"_{scaler}", None)
+                    if scaler_arr is None:
+                        scaler_arr = getattr(emitter, scaler)
+
+                    # Ensure we can actually multiply the spectra by it
+                    if (
+                        scaler_arr.ndim == 1
+                        and spectra[label].shape[0] != scaler_arr.shape[0]
+                    ):
+                        raise exceptions.InconsistentArguments(
+                            f"Can't scale a spectra with shape "
+                            f"{spectra[label].shape} by an array of "
+                            f"shape {scaler_arr.shape}. Did you mean to "
+                            "make particle spectra?"
+                        )
+                    elif (
+                        scaler_arr.ndim == spectra[label].ndim
+                        and scaler_arr.shape != spectra[label].shape
+                    ):
+                        raise exceptions.InconsistentArguments(
+                            f"Can't scale a spectra with shape "
+                            f"{spectra[label].shape} by an array of "
+                            f"shape {scaler_arr.shape}. Did you mean to "
+                            "make particle spectra?"
+                        )
+
                     # Scale the spectra by this attribute
-                    spectra[label]._lnu *= getattr(emitter, f"_{scaler}")
-                elif hasattr(emitter, scaler):
-                    # Scale the spectra by this attribute
-                    spectra[label]._lnu *= getattr(emitter, scaler)
+                    spectra[label]._lnu *= scaler_arr
+
                 elif scaler in spectra:
                     # Compute the scaling
                     scaling = (
