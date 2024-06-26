@@ -6,6 +6,7 @@ from synthesizer.emission_models.base_model import (
 from synthesizer.emission_models.models import (
     DustEmission,
     AttenuatedEmission,
+    TemplateEmission,
 )
 from synthesizer.emission_models.stellar.models import (
     IncidentEmission,
@@ -25,7 +26,6 @@ from synthesizer.emission_models.stellar.pacman_model import (
     CharlotFall2000,
 )
 from synthesizer.emission_models.agn.models import (
-    TemplateEmission,
     NLRIncidentEmission,
     BLRIncidentEmission,
     NLRTransmittedEmission,
@@ -47,6 +47,7 @@ from synthesizer.emission_models.agn import AGN_MODELS
 COMMON_MODELS = [
     "AttenuatedEmission",
     "DustEmission",
+    "TemplateEmission",
 ]
 
 # List of premade models

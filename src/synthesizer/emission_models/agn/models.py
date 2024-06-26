@@ -18,34 +18,6 @@ Example usage:
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 
 
-class TemplateEmission(BlackHoleEmissionModel):
-    """
-    An emission model that uses a template for the AGN emission.
-
-    This is a child of the EmisisonModel class, for a full description of the
-    parameters see the BlackHoleEmissionModel class.
-    """
-
-    def __init__(self, template, label="template", **kwargs):
-        """
-        Initialise the TemplateEmission model.
-
-        Args:
-            template (Template)
-                The template object containing the AGN emission.
-            label (str)
-                The label for the model.
-            **kwargs
-
-        """
-        BlackHoleEmissionModel.__init__(
-            self,
-            label=label,
-            generator=template,
-            **kwargs,
-        )
-
-
 class NLRIncidentEmission(BlackHoleEmissionModel):
     """
     An emission model that extracts the NLR incident emission.

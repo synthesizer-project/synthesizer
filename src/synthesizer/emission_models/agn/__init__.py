@@ -1,5 +1,4 @@
 AGN_MODELS = [
-    "Template",
     "NLRIncidentEmission",
     "BLRIncidentEmission",
     "NLRTransmittedEmission",
