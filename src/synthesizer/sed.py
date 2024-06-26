@@ -455,6 +455,17 @@ class Sed:
         """
         return np.ndim(self.lnu)
 
+    @property
+    def shape(self):
+        """
+        Get the shape of the spectra array.
+
+        Returns
+            Tuple
+                The shape of self.lnu
+        """
+        return self.lnu.shape
+
     def get_lnu_at_nu(self, nu, kind=False):
         """
         Return lnu with units at a provided frequency using 1d interpolation.
