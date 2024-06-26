@@ -118,3 +118,34 @@ class AttenuatedEmission(EmissionModel):
             emitter=emitter,
             **kwargs,
         )
+
+
+class TemplateEmission(EmissionModel):
+    """
+    An emission model that uses a template for emission extraction.
+
+    This is a child of the EmisisonModel class, for a full description of the
+    parameters see the EmissionModel class.
+    """
+
+    def __init__(self, template, emitter, label="template", **kwargs):
+        """
+        Initialise the TemplateEmission model.
+
+        Args:
+            template (Template)
+                The template object containing the AGN emission.
+            emitter (str)
+                The emitter this model is associated with.
+            label (str)
+                The label for the model.
+            **kwargs
+
+        """
+        EmissionModel.__init__(
+            self,
+            label=label,
+            generator=template,
+            emitter=emitter,
+            **kwargs,
+        )
