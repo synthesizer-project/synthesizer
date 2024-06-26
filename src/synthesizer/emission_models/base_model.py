@@ -1139,6 +1139,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             new_model = EmissionModel(
                 label=replace_label if new_label is None else new_label,
                 combine=replacements,
+                emitter=self.emitter,
             )
         else:
             new_model = replacements[0]
