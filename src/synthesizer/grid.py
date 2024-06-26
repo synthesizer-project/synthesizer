@@ -1110,7 +1110,7 @@ class Template:
         if lam is not None and not isinstance(lam, unyt_array):
             raise exceptions.MissingUnits("lam must be provided with units")
         if lnu is not None and not isinstance(lnu, unyt_array):
-            raise exceptions.MissingUnits("lam must be provided with units")
+            raise exceptions.MissingUnits("lnu must be provided with units")
 
         if filename:
             raise exceptions.UnimplementedFunctionality(
