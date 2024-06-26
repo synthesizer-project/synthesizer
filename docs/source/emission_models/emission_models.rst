@@ -15,38 +15,6 @@ In addition any one of these operations can also be done in the presence of a ma
 
 Once an ``EmissionModel`` is constructed it can be passed to any ``get_spectra`` (or ``get_lines``) method on an emitter (a ``Galaxy`` or galaxy component) to get the spectra (lines) defined in the passed ``EmissionModel`` for that emitter. For more details see [generating a parametric spectra](parametric/generate_sed.ipynb) or generating a particle spectra [WIP]().
 
-Dependencies
-------------
-
-Each operation a model can define depends on different properties being set.
-
-For extraction operations you need:
-
-- A grid to extract from (``grid``).
-- A key to extract (``extract``). For lines, ``line_ids`` must be passed to ``get_lines``, this key is then the label given to the ``LineCollection``. 
-- Optionally, an escape fraction to apply which defaults to 0.0 (``fesc`` or ``covering_fraction`` for AGN).
-
-For combination operations you need:
-
-- The a list of models which will be combined (i.e. added) to give the resultant emission (``combine``).
-
-For generation you need:
-
-- A generator class (e.g. a `dust emission model <../dust/dust_emission.ipynb>`_) from which to generate spectra (``generator``). Note, this is not applicable to lines.
-
-For attenuation operations you need:
-
-- The `dust curve <../dust/dust_attenuation.ipynb>`_ to apply (``dust_curve``).
-- The model to apply the attenuation to (``apply_dust_to``).
-- The optical depth to use with the dust curve (``tau_v``).
-
-As mentioned, masking can be applied alongside any of these operations. Additionally, any number of masks can be combined on the same operation. Each mask is defined by:
-
-- The attribute of the component to mask on (``mask_attr``).
-- The threshold of the mask (``mask_thresh``).
-- The operator to use when generating the mask, i.e. ``"<"``, ``">"``, ``"<="``, ``">="``, ``"=="``, or ``"!="`` (``mask_op``).
-
-
 Named spectra
 -------------
 
@@ -86,11 +54,12 @@ All premade models follow these conventions and we encourage the user to employ 
 Working with ``EmissionModels``
 -------------------------------
 
-In the sections linked below we detail the premade stellar and black hole emission models and how to customise a model or construct your own.
+In the sections linked below we detail the basic functionality of an ``EmissionModel``, the premade stellar and black hole emission models, and how to customise a model or construct your own.
 
 .. toctree::
    :maxdepth: 2
 
+   model_usage
    premade_models
    modify_models
    custom_models
