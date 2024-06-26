@@ -314,6 +314,16 @@ class Generation:
                 intrinsic,
                 attenuated,
             )
+        elif this_model.dust_lum_intrinsic is not None:
+            # otherwise we are scaling by a single spectra
+            spectra[this_model.label] = generator.get_spectra(
+                lam,
+            )
+
+            # scale the spectra by the intrinsic luminosity
+            spectra[this_model.label]._lnu *= spectra[
+                this_model.dust_lum_intrinsic.label
+            ].bolometric_luminosity
 
         else:
             # Otherwise we have a bog standard generation
@@ -406,6 +416,8 @@ class Generation:
                 f"{self._dust_lum_intrinsic.label} - "
                 f"{self._dust_lum_attenuated.label}"
             )
+        elif self.dust_lum_intrinsic is not None:
+            summary.append(f"  Scale by: {self._dust_lum_intrinsic.label}")
 
         return summary
 
