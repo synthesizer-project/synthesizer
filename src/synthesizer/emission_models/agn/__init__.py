@@ -3,6 +3,8 @@ AGN_MODELS = [
     "BLRIncidentEmission",
     "NLRTransmittedEmission",
     "BLRTransmittedEmission",
+    "NLREmission",
+    "BLREmission",
     "DiscIncidentEmission",
     "DiscTransmittedEmission",
     "DiscEscapedEmission",

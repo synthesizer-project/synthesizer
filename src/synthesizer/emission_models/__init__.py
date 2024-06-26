@@ -30,6 +30,8 @@ from synthesizer.emission_models.agn.models import (
     BLRIncidentEmission,
     NLRTransmittedEmission,
     BLRTransmittedEmission,
+    NLREmission,
+    BLREmission,
     DiscIncidentEmission,
     DiscTransmittedEmission,
     DiscEscapedEmission,
