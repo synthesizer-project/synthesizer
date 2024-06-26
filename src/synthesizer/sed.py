@@ -1291,18 +1291,24 @@ class Sed:
 
     def plot_spectra(self, **kwargs):
         """
+        Plot the spectra.
+
         A wrapper for synthesizer.sed.plot_spectra()
         """
         return plot_spectra(self, **kwargs)
 
     def plot_observed_spectra(self, **kwargs):
         """
+        Plot the observed spectra.
+
         A wrapper for synthesizer.sed.plot_observed_spectra()
         """
         return plot_observed_spectra(self, **kwargs)
 
     def plot_spectra_as_rainbow(self, **kwargs):
         """
+        Plot the spectra as a rainbow.
+
         A wrapper for synthesizer.sed.plot_spectra_as_rainbow()
         """
         return plot_spectra_as_rainbow(self, **kwargs)
