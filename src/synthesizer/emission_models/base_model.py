@@ -1281,7 +1281,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 links.setdefault(label, []).extend(
                     [(child.label, "-") for child in model._combine]
                 )
-            if model._is_dust_emitting:
+            if model._is_dust_emitting or model._is_generating:
                 links.setdefault(label, []).extend(
                     [
                         (
