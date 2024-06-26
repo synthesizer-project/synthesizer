@@ -251,15 +251,15 @@ class Generation:
         generator (EmissionModel):
             The emission generation model. This must define a get_spectra
             method.
-        dust_lum_intrinsic (EmissionModel):
+        lum_intrinsic_model (EmissionModel):
             The intrinsic model to use deriving the dust
             luminosity when computing dust emission.
-        dust_lum_attenuated (EmissionModel):
+        lum_attenuated_model (EmissionModel):
             The attenuated model to use deriving the dust
             luminosity when computing dust emission.
     """
 
-    def __init__(self, generator, dust_lum_intrinsic, dust_lum_attenuated):
+    def __init__(self, generator, lum_intrinsic_model, lum_attenuated_model):
         """
         Initialise the generation model.
 
@@ -267,10 +267,10 @@ class Generation:
             generator (EmissionModel):
                 The emission generation model. This must define a get_spectra
                 method.
-            dust_lum_intrinsic (EmissionModel):
+            lum_intrinsic_model (EmissionModel):
                 The intrinsic model to use deriving the dust
                 luminosity when computing dust emission.
-            dust_lum_attenuated (EmissionModel):
+            lum_attenuated_model (EmissionModel):
                 The attenuated model to use deriving the dust
                 luminosity when computing dust emission.
         """
@@ -279,8 +279,8 @@ class Generation:
 
         # Attach the keys for the intrinsic and attenuated spectra to use when
         # computing the dust luminosity
-        self._dust_lum_intrinsic = dust_lum_intrinsic
-        self._dust_lum_attenuated = dust_lum_attenuated
+        self._lum_intrinsic_model = lum_intrinsic_model
+        self._lum_attenuated_model = lum_attenuated_model
 
     def _generate_spectra(self, this_model, emission_model, spectra, lam):
         """
@@ -305,8 +305,8 @@ class Generation:
 
         # Handle the dust emission case
         if this_model._is_dust_emitting:
-            intrinsic = spectra[this_model.dust_lum_intrinsic.label]
-            attenuated = spectra[this_model.dust_lum_attenuated.label]
+            intrinsic = spectra[this_model.lum_intrinsic_model.label]
+            attenuated = spectra[this_model.lum_attenuated_model.label]
 
             # Apply the dust emission model
             spectra[this_model.label] = generator.get_spectra(
@@ -314,7 +314,7 @@ class Generation:
                 intrinsic,
                 attenuated,
             )
-        elif this_model.dust_lum_intrinsic is not None:
+        elif this_model.lum_intrinsic_model is not None:
             # otherwise we are scaling by a single spectra
             spectra[this_model.label] = generator.get_spectra(
                 lam,
@@ -322,7 +322,7 @@ class Generation:
 
             # scale the spectra by the intrinsic luminosity
             spectra[this_model.label]._lnu *= spectra[
-                this_model.dust_lum_intrinsic.label
+                this_model.lum_intrinsic_model.label
             ].bolometric_luminosity
 
         else:
@@ -382,7 +382,7 @@ class Generation:
         lines[this_model.label] = {}
         for line_id in line_ids:
             # Get the emission at this lines wavelength
-            lam = lines[this_model.dust_lum_intrinsic.label][
+            lam = lines[this_model.lum_intrinsic_model.label][
                 line_id
             ].wavelength
 
@@ -408,16 +408,16 @@ class Generation:
         summary.append("Generation model:")
         summary.append(f"  Emission generation model: {self._generator}")
         if (
-            self.dust_lum_intrinsic is not None
-            and self.dust_lum_attenuated is not None
+            self.lum_intrinsic_model is not None
+            and self.lum_attenuated_model is not None
         ):
             summary.append(
                 f"  Dust luminosity: "
-                f"{self._dust_lum_intrinsic.label} - "
-                f"{self._dust_lum_attenuated.label}"
+                f"{self._lum_intrinsic_model.label} - "
+                f"{self._lum_attenuated_model.label}"
             )
-        elif self.dust_lum_intrinsic is not None:
-            summary.append(f"  Scale by: {self._dust_lum_intrinsic.label}")
+        elif self.lum_intrinsic_model is not None:
+            summary.append(f"  Scale by: {self._lum_intrinsic_model.label}")
 
         return summary
 

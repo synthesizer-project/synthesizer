@@ -136,8 +136,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         dust_curve=None,
         tau_v=None,
         generator=None,
-        dust_lum_intrinsic=None,
-        dust_lum_attenuated=None,
+        lum_intrinsic_model=None,
+        lum_attenuated_model=None,
         mask_attr=None,
         mask_thresh=None,
         mask_op=None,
@@ -184,10 +184,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             generator (EmissionModel):
                 The emission generation model. This must define a get_spectra
                 method.
-            dust_lum_intrinsic_key (EmissionModel):
+            lum_intrinsic_model_key (EmissionModel):
                 The intrinsic model to use deriving the dust
                 luminosity when computing dust emission.
-            dust_lum_attenuated_key (EmissionModel):
+            lum_attenuated_model_key (EmissionModel):
                 The attenuated model to use deriving the dust
                 luminosity when computing dust emission.
             mask_attr (str):
@@ -256,8 +256,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             apply_dust_to=apply_dust_to,
             tau_v=tau_v,
             generator=generator,
-            dust_lum_intrinsic=dust_lum_intrinsic,
-            dust_lum_attenuated=dust_lum_attenuated,
+            lum_intrinsic_model=lum_intrinsic_model,
+            lum_attenuated_model=lum_attenuated_model,
         )
 
         # Initilaise the corresponding operation (also checks we have a
@@ -271,8 +271,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             dust_curve=dust_curve,
             tau_v=tau_v,
             generator=generator,
-            dust_lum_intrinsic=dust_lum_intrinsic,
-            dust_lum_attenuated=dust_lum_attenuated,
+            lum_intrinsic_model=lum_intrinsic_model,
+            lum_attenuated_model=lum_attenuated_model,
             fesc=fesc,
         )
 
@@ -310,8 +310,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         dust_curve,
         tau_v,
         generator,
-        dust_lum_intrinsic,
-        dust_lum_attenuated,
+        lum_intrinsic_model,
+        lum_attenuated_model,
         fesc,
     ):
         """
@@ -335,10 +335,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             generator (EmissionModel):
                 The emission generation model. This must define a get_spectra
                 method.
-            dust_lum_intrinsic (EmissionModel):
+            lum_intrinsic_model (EmissionModel):
                 The intrinsic model to use deriving the dust
                 luminosity when computing dust emission.
-            dust_lum_attenuated (EmissionModel):
+            lum_attenuated_model (EmissionModel):
                 The attenuated model to use deriving the dust
                 luminosity when computing dust emission.
             fesc (float):
@@ -353,10 +353,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             DustAttenuation.__init__(self, dust_curve, apply_dust_to, tau_v)
         elif self._is_dust_emitting:
             Generation.__init__(
-                self, generator, dust_lum_intrinsic, dust_lum_attenuated
+                self, generator, lum_intrinsic_model, lum_attenuated_model
             )
         elif self._is_generating:
-            Generation.__init__(self, generator, dust_lum_intrinsic, None)
+            Generation.__init__(self, generator, lum_intrinsic_model, None)
         else:
             raise exceptions.InconsistentArguments(
                 "No valid operation found from the arguments given "
@@ -372,8 +372,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 f"apply_dust_to={apply_dust_to} tau_v={tau_v})\n"
                 "\tFor generation "
                 f"(generator={generator}, "
-                f"dust_lum_intrinsic={dust_lum_intrinsic}, "
-                f"dust_lum_attenuated={dust_lum_attenuated})"
+                f"lum_intrinsic_model={lum_intrinsic_model}, "
+                f"lum_attenuated_model={lum_attenuated_model})"
             )
 
         # Double check we have been asked for only one operation
@@ -406,8 +406,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 f"apply_dust_to={apply_dust_to} tau_v={tau_v})\n"
                 "\tFor generation "
                 f"(generator={generator}, "
-                f"dust_lum_intrinsic={dust_lum_intrinsic}, "
-                f"dust_lum_attenuated={dust_lum_attenuated})"
+                f"lum_intrinsic_model={lum_intrinsic_model}, "
+                f"lum_attenuated_model={lum_attenuated_model})"
             )
 
         # Ensure we have what we need for all operations
@@ -497,14 +497,14 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         return getattr(self, "_generator", None)
 
     @property
-    def dust_lum_intrinsic(self):
+    def lum_intrinsic_model(self):
         """Get the intrinsic model for computing dust luminosity."""
-        return getattr(self, "_dust_lum_intrinsic", None)
+        return getattr(self, "_lum_intrinsic_model", None)
 
     @property
-    def dust_lum_attenuated(self):
+    def lum_attenuated_model(self):
         """Get the attenuated model for computing dust luminosity."""
-        return getattr(self, "_dust_lum_attenuated", None)
+        return getattr(self, "_lum_attenuated_model", None)
 
     @property
     def dust_curve(self):
@@ -635,8 +635,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         apply_dust_to=None,
         tau_v=None,
         generator=None,
-        dust_lum_attenuated=None,
-        dust_lum_intrinsic=None,
+        lum_attenuated_model=None,
+        lum_intrinsic_model=None,
     ):
         """Define the flags for what operation the model does."""
         # Define flags for what we're doing
@@ -649,8 +649,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         )
         self._is_dust_emitting = (
             generator is not None
-            and dust_lum_attenuated is not None
-            and dust_lum_intrinsic is not None
+            and lum_attenuated_model is not None
+            and lum_intrinsic_model is not None
         )
         self._is_generating = (
             generator is not None and not self._is_dust_emitting
@@ -683,12 +683,12 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # If we are applying a dust emission model, store the key
         if model._is_generating or model._is_dust_emitting:
             self._generator_models[model.label] = model.generator
-            if model._dust_lum_attenuated is not None:
-                model._children.add(model._dust_lum_attenuated)
-                model._dust_lum_attenuated._parents.add(model)
-            if model._dust_lum_intrinsic is not None:
-                model._children.add(model._dust_lum_intrinsic)
-                model._dust_lum_intrinsic._parents.add(model)
+            if model._lum_attenuated_model is not None:
+                model._children.add(model._lum_attenuated_model)
+                model._lum_attenuated_model._parents.add(model)
+            if model._lum_intrinsic_model is not None:
+                model._children.add(model._lum_intrinsic_model)
+                model._lum_intrinsic_model._parents.add(model)
 
         # If we are masking, store the key
         if model._is_masked:
@@ -1112,18 +1112,18 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 relations[parent.label] = "combine"
             if parent.apply_dust_to == replace_model:
                 relations[parent.label] = "dust_attenuate"
-            if parent.dust_lum_intrinsic == replace_model:
+            if parent.lum_intrinsic_model == replace_model:
                 relations[parent.label] = "dust_intrinsic"
-            if parent.dust_lum_attenuated == replace_model:
+            if parent.lum_attenuated_model == replace_model:
                 relations[parent.label] = "dust_attenuated"
         for child in children:
             if child in replace_model.combine:
                 relations[child.label] = "combine"
             if child.apply_dust_to == replace_model:
                 relations[child.label] = "dust_attenuate"
-            if child.dust_lum_intrinsic == replace_model:
+            if child.lum_intrinsic_model == replace_model:
                 relations[child.label] = "dust_intrinsic"
-            if child.dust_lum_attenuated == replace_model:
+            if child.lum_attenuated_model == replace_model:
                 relations[child.label] = "dust_attenuated"
 
         # Remove the model we are replacing
@@ -1135,9 +1135,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             if relations[parent.label] == "dust_attenuate":
                 parent._apply_dust_to = None
             if relations[parent.label] == "dust_intrinsic":
-                parent._dust_lum_intrinsic = None
+                parent._lum_intrinsic_model = None
             if relations[parent.label] == "dust_attenuated":
-                parent._dust_lum_attenuated = None
+                parent._lum_attenuated_model = None
         for child in children:
             child._parents.remove(replace_model)
 
@@ -1171,9 +1171,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             if relations[parent.label] == "dust_attenuate":
                 parent._apply_dust_to = new_model
             if relations[parent.label] == "dust_intrinsic":
-                parent._dust_lum_intrinsic = new_model
+                parent._lum_intrinsic_model = new_model
             if relations[parent.label] == "dust_attenuated":
-                parent._dust_lum_attenuated = new_model
+                parent._lum_attenuated_model = new_model
 
         # Unpack now we're done
         self.unpack_model()
@@ -1285,14 +1285,14 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 links.setdefault(label, []).extend(
                     [
                         (
-                            model._dust_lum_intrinsic.label
-                            if model._dust_lum_intrinsic is not None
+                            model._lum_intrinsic_model.label
+                            if model._lum_intrinsic_model is not None
                             else None,
                             "dotted",
                         ),
                         (
-                            model._dust_lum_attenuated.label
-                            if model._dust_lum_attenuated is not None
+                            model._lum_attenuated_model.label
+                            if model._lum_attenuated_model is not None
                             else None,
                             "dotted",
                         ),
