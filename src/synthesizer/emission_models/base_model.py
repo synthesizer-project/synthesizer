@@ -54,6 +54,7 @@ from synthesizer.emission_models.operations import (
     Generation,
 )
 from synthesizer.line import LineCollection
+from synthesizer.units import Quantity
 from synthesizer.warnings import warn
 
 
@@ -125,6 +126,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             options. Instead of a string, an EmissionModel can also be passed
             to scale by the luminosity of that model.
     """
+
+    # Define quantities
+    lam = Quantity()
 
     def __init__(
         self,
@@ -794,6 +798,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Unpack the model now we're done
         self.unpack_model()
 
+        # Set the wavelength array at the root
+        self.lam = grid.lam
+
     def set_extract(self, extract, label=None):
         """
         Set the spectra to extract from the grid.
@@ -1068,6 +1075,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     )
         else:
             self.masks.append({"attr": attr, "thresh": thresh, "op": op})
+
+        # Flag that the models are now masked
+        for model in self._models.values():
+            if len(model.masks) > 0:
+                model._is_masked = True
 
         # Unpack now that we're done
         self.unpack_model()
