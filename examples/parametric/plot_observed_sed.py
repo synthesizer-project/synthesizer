@@ -11,6 +11,8 @@ including photometry. This example will:
 """
 
 from astropy.cosmology import Planck18 as cosmo
+from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.emission_models import PacmanEmission
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.igm import Madau96
@@ -27,6 +29,15 @@ if __name__ == "__main__":
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
+
+    # Define the emission model
+    model = PacmanEmission(
+        grid,
+        tau_v=0.1,
+        fesc=0.5,
+        fesc_LyA=0.5,
+        dust_curve=PowerLaw(slope=-1),
+    )
 
     # define filters
     filter_codes = [
@@ -74,12 +85,7 @@ if __name__ == "__main__":
     galaxy = Galaxy(stars, redshift=z)
 
     # generate spectra using pacman model (complex)
-    sed = galaxy.stars.get_spectra_pacman(
-        grid,
-        fesc=0.5,
-        fesc_LyA=0.5,
-        tau_v=0.1,
-    )
+    sed = galaxy.stars.get_spectra(model)
 
     # now calculate the observed frame spectra
     sed.get_fnu(

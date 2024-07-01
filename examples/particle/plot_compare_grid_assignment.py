@@ -8,6 +8,7 @@ spectra in the SPS grids.
 """
 
 import matplotlib.pyplot as plt
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
@@ -19,6 +20,9 @@ from unyt import Myr
 grid_name = "test_grid"
 grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
+
+# Define the emission model
+model = IncidentEmission(grid)
 
 # Define the SFH and metallicity distribution
 Z_p = {"metallicity": 0.01}
@@ -51,12 +55,12 @@ stars = sample_sfhz(
 particle_galaxy = ParticleGalaxy(stars=stars)
 
 # Calculate the stars SEDs using both grid assignment schemes
-cic_sed = particle_galaxy.stars.get_spectra_incident(
-    grid,
+cic_sed = particle_galaxy.stars.get_spectra(
+    model,
     grid_assignment_method="cic",
 )
-ngp_sed = particle_galaxy.stars.get_spectra_incident(
-    grid,
+ngp_sed = particle_galaxy.stars.get_spectra(
+    model,
     grid_assignment_method="ngp",
 )
 

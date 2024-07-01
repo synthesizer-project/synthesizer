@@ -8,23 +8,28 @@ including photometry. This example will:
 - calculate spectral luminosity density
 """
 
+from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.emission_models import (
+    AttenuatedEmission,
+    BimodalPacmanEmission,
+    CharlotFall2000,
+    IncidentEmission,
+    PacmanEmission,
+    ReprocessedEmission,
+)
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr, yr
+from unyt import Myr
 
 if __name__ == "__main__":
-    # Get the location of this script, __file__ is the absolute path of this
-    # script, however we just want to directory
-    # script_path = os.path.abspath(os.path.dirname(__file__))
-
     # Define the grid
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
-    # define the parameters of the star formation and metal enrichment
+    # Define the parameters of the star formation and metal enrichment
     # histories
     sfh_p = {"duration": 10 * Myr}
     Z_p = {
@@ -32,14 +37,14 @@ if __name__ == "__main__":
     }  # can also use linear metallicity e.g. {'Z': 0.01}
     stellar_mass = 1e8
 
-    # define the functional form of the star formation and metal enrichment
+    # Define the functional form of the star formation and metal enrichment
     # histories
     sfh = SFH.Constant(**sfh_p)  # constant star formation
     print(sfh)  # print sfh summary
 
     metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
 
-    # get the 2D star formation and metal enrichment history for the given SPS
+    # Get the 2D star formation and metal enrichment history for the given SPS
     # grid.
     stars = Stars(
         grid.log10age,
@@ -49,81 +54,115 @@ if __name__ == "__main__":
         initial_mass=stellar_mass,
     )
 
-    # create a galaxy object
+    # Create a galaxy object
     galaxy = Galaxy(stars)
 
-    # generate pure stellar spectra alone
-    galaxy.stars.get_spectra_incident(grid)
+    # Generate pure stellar spectra alone
+    incident = IncidentEmission(grid)
+    galaxy.stars.get_spectra(incident)
     print("Pure stellar spectra")
     galaxy.plot_spectra(
         show=True, combined_spectra=False, stellar_spectra=True
     )
 
-    # generate intrinsic spectra (which includes reprocessing by gas)
-    galaxy.stars.get_spectra_reprocessed(grid, fesc=0.5)
+    # Generate intrinsic spectra (which includes reprocessing by gas)
+    reprocessed = ReprocessedEmission(grid, fesc=0.5)
+    galaxy.stars.get_spectra(reprocessed)
     print("Intrinsic spectra")
     galaxy.plot_spectra(
         show=True, combined_spectra=False, stellar_spectra=True
     )
 
-    # # --- simple dust and gas screen
-    galaxy.stars.get_spectra_screen(grid, tau_v=0.1)
+    # Simple dust and gas screen
+    attenuated = AttenuatedEmission(
+        tau_v=0.1,
+        apply_dust_to=reprocessed,
+        dust_curve=PowerLaw(slope=-1),
+        emitter="stellar",
+    )
+    galaxy.stars.get_spectra(attenuated)
     print("Simple dust and gas screen")
     galaxy.plot_spectra(
         show=True, combined_spectra=False, stellar_spectra=True
     )
 
     # --- CF00 model
-    galaxy.stars.get_spectra_CharlotFall(
-        grid, tau_v_ISM=0.1, tau_v_BC=0.1, alpha_ISM=-0.7, alpha_BC=-1.3
+    cf00 = CharlotFall2000(
+        grid=grid,
+        tau_v_ism=0.1,
+        tau_v_nebular=0.1,
+        dust_curve_ism=PowerLaw(slope=-0.7),
+        dust_curve_nebular=PowerLaw(slope=-1.3),
     )
+    galaxy.stars.get_spectra(cf00)
     print("CF00 model")
     galaxy.plot_spectra(
         show=True, combined_spectra=False, stellar_spectra=True
     )
 
     # # --- pacman model
-    galaxy.stars.get_spectra_pacman(grid, tau_v=0.1, fesc=0.5)
+    pc_fesc = PacmanEmission(
+        grid,
+        tau_v=0.1,
+        dust_curve=PowerLaw(slope=-1),
+        fesc=0.5,
+    )
+    galaxy.stars.get_spectra(pc_fesc)
     print("Pacman model")
     galaxy.plot_spectra(
         show=True, combined_spectra=False, stellar_spectra=True
     )
 
-    # pacman model (no Lyman-alpha escape and no dust)
-    galaxy.stars.get_spectra_pacman(grid, fesc=0.0, fesc_LyA=0.0)
+    # Pacman model (no Lyman-alpha escape and no dust)
+    pc_lya = PacmanEmission(
+        grid,
+        tau_v=0.1,
+        dust_curve=PowerLaw(slope=-1),
+        fesc_lyman_alpha=0.0,
+    )
+    galaxy.stars.get_spectra(pc_lya)
     print("Pacman model (no Ly-alpha escape, and no dust)")
     galaxy.plot_spectra(
         show=True, combined_spectra=False, stellar_spectra=True
     )
 
     # # --- pacman model (complex)
-    galaxy.stars.get_spectra_pacman(grid, fesc=0.0, fesc_LyA=0.5, tau_v=0.6)
+    pc_complex = PacmanEmission(
+        grid,
+        tau_v=0.6,
+        dust_curve=PowerLaw(slope=-1),
+        fesc=0.0,
+        fesc_lyman_alpha=0.5,
+    )
+    galaxy.stars.get_spectra(pc_complex)
     print("Pacman model (complex)")
     galaxy.plot_spectra(
         show=True, combined_spectra=False, stellar_spectra=True
     )
 
     # --- CF00 model implemented within pacman model
-    galaxy.stars.get_spectra_pacman(
+    cf_with_fesc = BimodalPacmanEmission(
         grid,
+        tau_v_ism=0.1,
+        tau_v_nebular=0.1,
+        dust_curve_ism=PowerLaw(slope=-1),
+        dust_curve_nebular=PowerLaw(slope=-1),
         fesc=0.1,
-        fesc_LyA=0.1,
-        tau_v=[1.0, 1.0],
-        alpha=[-1, -1],
-        young_old_thresh=1e7 * yr,
+        fesc_lyman_alpha=0.1,
     )
+    galaxy.stars.get_spectra_pacman(cf_with_fesc)
     print("CF00 implemented within the Pacman model")
     galaxy.plot_spectra(
         show=True, combined_spectra=False, stellar_spectra=True
     )
 
-    # print galaxy summary
+    # Print galaxy summary
     print(galaxy)
 
     sed = galaxy.stars.spectra["attenuated"]
     print(sed)
 
-    # generate broadband photometry using 3 top-hat filters
+    # Generate broadband photometry using 3 top-hat filters
     tophats = {
         "U": {"lam_eff": 3650, "lam_fwhm": 660},
         "V": {"lam_eff": 5510, "lam_fwhm": 880},

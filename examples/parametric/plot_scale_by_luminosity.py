@@ -14,6 +14,8 @@ from astropy.cosmology import Planck18 as cosmo
 from matplotlib.lines import Line2D
 from synthesizer import galaxy
 from synthesizer.conversions import apparent_mag_to_fnu, fnu_to_lnu
+from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.emission_models import PacmanEmission
 from synthesizer.filters import Filter
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
@@ -35,6 +37,15 @@ grid_name = "test_grid"
 grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
+# Define the emission model
+model = PacmanEmission(
+    grid,
+    fesc=0.5,
+    fesc_ly_alpha=0.5,
+    tau_v=0.1,
+    dust_curve=PowerLaw(slope=-1),
+)
+
 # Set up the SFH
 sfh = SFH.Constant(duration=100 * Myr)
 
@@ -55,12 +66,7 @@ redshift = 12
 gal = galaxy(stars=stars, redshift=redshift)
 
 # Generate spectra using pacman model (complex)
-gal.stars.get_spectra_pacman(
-    grid,
-    fesc=0.5,
-    fesc_LyA=0.5,
-    tau_v=0.1,
-)
+gal.stars.get_spectra(model)
 
 # Get the observed spectra
 gal.get_observed_spectra(cosmo=cosmo)

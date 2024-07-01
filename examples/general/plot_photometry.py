@@ -15,6 +15,8 @@ including photometry. This example will:
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 from astropy.cosmology import Planck18 as cosmo
+from synthesizer.dust.attenuation import PowerLaw
+from synthesizer.emission_models import PacmanEmission
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.igm import Madau96
@@ -31,6 +33,15 @@ if __name__ == "__main__":
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
+
+    # Define the emission model
+    model = PacmanEmission(
+        grid,
+        tau_v=0.1,
+        dust_curve=PowerLaw(slope=-1),
+        fesc=0.5,
+        fesc_ly_alpha=0.5,
+    )
 
     # define the parameters of the star formation and metal
     # enrichment histories
@@ -85,9 +96,7 @@ if __name__ == "__main__":
     seds = {}
     for z in zs:
         # Generate spectra using pacman model (complex)
-        seds[z] = galaxy.stars.get_spectra_pacman(
-            grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1
-        )
+        seds[z] = galaxy.stars.get_spectra(model)
 
         # Generate observed frame spectra
         seds[z].get_fnu(cosmo, z, igm=Madau96)

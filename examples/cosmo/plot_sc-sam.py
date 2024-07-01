@@ -7,6 +7,8 @@ Load SC-SAM example data into a list of galaxy objects.
 
 import matplotlib.pyplot as plt
 import numpy as np
+from synthesizer.blackhole_emission_models import PacmanEmission
+from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_scsam import load_SCSAM
 
@@ -15,6 +17,15 @@ if __name__ == "__main__":
     grid_name = "test_grid.hdf5"
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
+
+    # Define the emission model
+    model = PacmanEmission(
+        grid,
+        tau_v=0.33,
+        dust_curve=PowerLaw(slope=-1),
+        fesc=0.1,
+        fesc_ly_alpha=0.5,
+    )
 
     # Load example SC-SAM SF history (just contains 10 galaxies)
     test_data = "../../tests/data/sc-sam_sfhist.dat"
@@ -45,25 +56,19 @@ if __name__ == "__main__":
     for i in range(len(particle_galaxies)):
         # Get SEDs for the particle galaxy object
         particle_galaxy = particle_galaxies[i]
-        particle_galaxy.stars.get_spectra_incident(grid)
-        particle_galaxy.stars.get_spectra_reprocessed(grid, fesc=0.1)
-        particle_galaxy.stars.get_spectra_screen(grid, tau_v=0.33)
+        particle_galaxy.stars.get_spectra(model)
         particle_sed = particle_galaxy.stars.spectra[spectrum]
         particle_SEDs.append(particle_sed.lnu)
 
         # Get SEDs for the parametric NNI galaxy object
         parametric_NNI_galaxy = parametric_NNI_galaxies[i]
-        parametric_NNI_galaxy.stars.get_spectra_incident(grid)
-        parametric_NNI_galaxy.stars.get_spectra_reprocessed(grid, fesc=0.1)
-        parametric_NNI_galaxy.stars.get_spectra_screen(grid, tau_v=0.33)
+        parametric_NNI_galaxy.stars.get_spectra(model)
         parametric_sed = parametric_NNI_galaxy.stars.spectra[spectrum]
         parametric_NNI_SEDs.append(parametric_sed.lnu)
 
         # Get SEDs for the parametric RGI galaxy object
         parametric_RGI_galaxy = parametric_RGI_galaxies[i]
-        parametric_RGI_galaxy.stars.get_spectra_incident(grid)
-        parametric_RGI_galaxy.stars.get_spectra_reprocessed(grid, fesc=0.1)
-        parametric_RGI_galaxy.stars.get_spectra_screen(grid, tau_v=0.33)
+        parametric_RGI_galaxy.stars.get_spectra(model)
         parametric_sed = parametric_RGI_galaxy.stars.spectra[spectrum]
         parametric_RGI_SEDs.append(parametric_sed.lnu)
 
