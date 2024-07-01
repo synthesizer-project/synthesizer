@@ -113,6 +113,7 @@ class PacmanEmission(StellarEmissionModel):
         dust_emission=None,
         fesc=0.0,
         fesc_ly_alpha=1.0,
+        label=None,
     ):
         """
         Initialize the PacmanEmission model.
@@ -125,6 +126,9 @@ class PacmanEmission(StellarEmissionModel):
                 emission.
             fesc (float): The escape fraction.
             fesc_ly_alpha (float): The Lyman alpha escape fraction.
+            label (str): The label for the total emission model. If None
+                this will be set to "total" or "emergent" if dust_emission is
+                None.
         """
         # Attach the grid
         self._grid = grid
@@ -161,7 +165,7 @@ class PacmanEmission(StellarEmissionModel):
         # Finally make the TotalEmission model, this is
         # dust_emission + emergent if dust_emission is not None, otherwise it
         # is just emergent
-        self._make_total()
+        self._make_total(label)
 
     def _make_incident(self):
         """
@@ -313,7 +317,7 @@ class PacmanEmission(StellarEmissionModel):
             emitter="stellar",
         )
 
-    def _make_total(self):
+    def _make_total(self, label):
         if self._dust_emission_model is not None:
             # Define the related models
             related_models = [
@@ -339,7 +343,7 @@ class PacmanEmission(StellarEmissionModel):
             StellarEmissionModel.__init__(
                 self,
                 grid=self._grid,
-                label="total",
+                label="total" if label is None else label,
                 combine=(self.dust_emission, self.emergent),
                 related_models=related_models,
             )
@@ -363,7 +367,7 @@ class PacmanEmission(StellarEmissionModel):
                 StellarEmissionModel.__init__(
                     self,
                     grid=self._grid,
-                    label="emergent",
+                    label="emergent" if label is None else label,
                     tau_v=self._tau_v,
                     dust_curve=self._dust_curve,
                     apply_dust_to=self.intrinsic,
@@ -390,7 +394,7 @@ class PacmanEmission(StellarEmissionModel):
                 StellarEmissionModel.__init__(
                     self,
                     grid=self._grid,
-                    label="emergent",
+                    label="emergent" if label is None else label,
                     combine=(self.attenuated, self.escaped),
                 )
 
@@ -507,6 +511,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         dust_emission_nebular=None,
         fesc=0.0,
         fesc_ly_alpha=1.0,
+        label=None,
     ):
         """
         Initialize the PacmanEmission model.
@@ -527,6 +532,9 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 dust emission model for the nebular.
             fesc (float): The escape fraction.
             fesc_ly_alpha (float): The Lyman alpha escape fraction.
+            label (str): The label for the total emission model. If None
+                this will be set to "total" or "emergent" if dust_emission is
+                None.
         """
         # Attach the grid
         self._grid = grid
@@ -616,7 +624,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         # Finally make the TotalEmission model, this is
         # dust_emission + emergent if dust_emission is not None, otherwise it
         # is just emergent
-        self._make_total()
+        self._make_total(label)
 
     def _make_incident(self):
         """
@@ -1031,7 +1039,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             dust_emission,
         )
 
-    def _make_total(self):
+    def _make_total(self, label):
         if (
             self.dust_emission_ism is not None
             and self.dust_emission_nebular is not None
@@ -1088,7 +1096,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             StellarEmissionModel.__init__(
                 self,
                 grid=self._grid,
-                label="total",
+                label="total" if label is None else label,
                 combine=(young_total, old_total),
                 related_models=related_models,
             )
@@ -1143,7 +1151,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 StellarEmissionModel.__init__(
                     self,
                     grid=self._grid,
-                    label="emergent",
+                    label="emergent" if label is None else label,
                     combine=(young_total, old_total),
                     related_models=related_models,
                 )
@@ -1195,7 +1203,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 StellarEmissionModel.__init__(
                     self,
                     grid=self._grid,
-                    label="emergent",
+                    label="emergent" if label is None else label,
                     combine=(young_total, old_total),
                     related_models=related_models,
                 )
@@ -1241,6 +1249,7 @@ class CharlotFall2000(BimodalPacmanEmission):
         age_pivot,
         dust_emission_ism=None,
         dust_emission_nebular=None,
+        label=None,
     ):
         """
         Initialize the PacmanEmission model.
@@ -1271,4 +1280,5 @@ class CharlotFall2000(BimodalPacmanEmission):
             age_pivot,
             dust_emission_ism,
             dust_emission_nebular,
+            label=label,
         )

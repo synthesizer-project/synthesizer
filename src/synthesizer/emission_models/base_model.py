@@ -203,7 +203,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 or "!=".
             fesc (float):
                 The escape fraction.
-            related_models (list):
+            related_models (set):
                 A list of related models to this model. A related model is
                 a model that is connected somwhere within the model tree but
                 is required in the construction of the "root" model
@@ -299,7 +299,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         # Attach the related models
         self.related_models = (
-            related_models if related_models is not None else []
+            set(related_models) if related_models is not None else set()
         )
 
         # We're done with setup, so unpack the model
@@ -657,6 +657,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Recurse over children
         for child in model._children:
             self._unpack_model_recursively(child)
+
+        # Collect any related models
+        self.related_models.update(model.related_models)
 
         # Populate the top to bottom list but ignoring extraction since
         # we do the all at once
@@ -1510,10 +1513,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         return _get_level_pos({root: (0.0, 0.0)}, 1, levels, xchunk, ychunk)
 
     def plot_emission_tree(
-        self,
-        root=None,
-        show=True,
-        fontsize=10,
+        self, root=None, show=True, fontsize=10, figsize=(6, 6)
     ):
         """
         Plot the tree defining the spectra.
@@ -1540,7 +1540,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         components = set()
 
         # Plot the tree using Matplotlib
-        fig, ax = plt.subplots(figsize=(6, 6))
+        fig, ax = plt.subplots(figsize=figsize)
 
         # Draw nodes with different styles if they are masked
         for node, (x, y) in pos.items():

@@ -61,6 +61,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         covering_fraction_nlr,
         covering_fraction_blr,
         torus_emission_model,
+        label="intrinsic",
     ):
         """
         Initialize the UnifiedAGN model.
@@ -112,7 +113,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         # Create the final model
         BlackHoleEmissionModel.__init__(
             self,
-            label="intrinsic",
+            label=label,
             combine=(
                 self.disc,
                 self.nlr,
