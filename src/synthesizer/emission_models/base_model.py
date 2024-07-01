@@ -1250,6 +1250,16 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         self._models[new_label] = model
         del self._models[old_label]
 
+    def fix_parameters(self, **kwargs):
+        """
+        Fix parameters of the model.
+
+        Args:
+            **kwargs:
+                The parameters to fix.
+        """
+        self.fixed_parameters.update(kwargs)
+
     def _get_tree_levels(self, root):
         """
         Get the levels of the tree.
