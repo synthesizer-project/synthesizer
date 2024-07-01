@@ -1969,9 +1969,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     this_model,
                     emission_model,
                     spectra,
-                    np.tile(self.lam, (emitter.nparticles, 1))
-                    if per_particle
-                    else self.lam,
+                    self.lam,
+                    per_particle,
                 )
 
             # Are we scaling the spectra?
@@ -2250,7 +2249,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Finally, loop over everything we've created and convert the nested
         # dictionaries to LineCollections
         for label in lines:
-            lines[label] = LineCollection(lines[label])
+            # If we are in a related model we might have already done this
+            # conversion
+            if isinstance(lines[label], dict):
+                lines[label] = LineCollection(lines[label])
 
         return lines
 

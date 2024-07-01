@@ -282,7 +282,9 @@ class Generation:
         self._lum_intrinsic_model = lum_intrinsic_model
         self._lum_attenuated_model = lum_attenuated_model
 
-    def _generate_spectra(self, this_model, emission_model, spectra, lam):
+    def _generate_spectra(
+        self, this_model, emission_model, spectra, lam, per_particle
+    ):
         """
         Generate the spectra for a given model.
 
@@ -295,6 +297,8 @@ class Generation:
                 The dictionary of spectra.
             lam (ndarray):
                 The wavelength grid to generate the spectra on.
+            per_particle (bool):
+                Are we generating per particle?
 
         Returns:
             dict:
@@ -318,20 +322,8 @@ class Generation:
             # otherwise we are scaling by a single spectra
             spectra[this_model.label] = generator.get_spectra(
                 lam,
+                spectra[this_model.lum_intrinsic_model.label],
             )
-
-            # scale the spectra by the intrinsic luminosity
-            if spectra[this_model.label].ndim == 2:
-                spectra[this_model.label]._lnu *= np.expand_dims(
-                    spectra[
-                        this_model.lum_intrinsic_model.label
-                    ].bolometric_luminosity.value,
-                    axis=1,
-                )
-            else:
-                spectra[this_model.label]._lnu *= spectra[
-                    this_model.lum_intrinsic_model.label
-                ].bolometric_luminosity.value
 
         else:
             # Otherwise we have a bog standard generation

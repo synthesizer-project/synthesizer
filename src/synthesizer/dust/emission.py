@@ -117,42 +117,47 @@ class EmissionBase:
         # If we have been given spectra to scale with dust, we need to scale
         # the dust spectra to the bolometric luminosity of the input spectra
         # and then add the input spectra to the dust spectra
-        if intrinsic_sed is not None and attenuated_sed is not None:
+        elif intrinsic_sed is not None and attenuated_sed is not None:
             # Calculate the bolometric dust luminosity as the difference
             # between the intrinsic and attenuated
-            dust_bolometric_luminosity = (
-                intrinsic_sed.measure_bolometric_luminosity()
-                - attenuated_sed.measure_bolometric_luminosity()
+            bolometric_luminosity = (
+                intrinsic_sed.bolometric_luminosity
+                - attenuated_sed.bolometric_luminosity
             )
 
-            # Get the spectrum and normalise it properly (handling
-            # multidiensional arrays properly)
-            if dust_bolometric_luminosity.value.ndim == 0:
-                lnu = (
-                    dust_bolometric_luminosity.to("erg/s").value
-                    * self._get_spectra(_lam)._lnu
-                    * erg
-                    / s
-                    / Hz
-                )
-            else:
-                lnu = (
-                    np.expand_dims(
-                        dust_bolometric_luminosity.to("erg/s").value, axis=-1
-                    )
-                    * self._get_spectra(_lam)._lnu
-                    * erg
-                    / s
-                    / Hz
-                )
+        # If we only have the intrinsic SED, we can just scale the emission
+        elif intrinsic_sed is not None:
+            bolometric_luminosity = intrinsic_sed.bolometric_luminosity
 
-            # Create new Sed object containing dust emission spectra
-            return Sed(_lam, lnu=lnu)
+        else:
+            raise exceptions.InvalidInput(
+                "Must provide either no scaling spectra, intrinsic_sed, or "
+                "intrinsic_sed and attenuated_sed"
+            )
 
-        # If we get here then an invalid set of arguments have been given
-        raise exceptions.InconsistentArguments(
-            "Both intrinsic and emergent SEDs must be provided"
-        )
+        # Get the spectrum and normalise it properly (handling
+        # multidiensional arrays properly)
+        if bolometric_luminosity.value.ndim == 0:
+            lnu = (
+                bolometric_luminosity.to("erg/s").value
+                * self._get_spectra(_lam)._lnu
+                * erg
+                / s
+                / Hz
+            )
+        else:
+            lnu = (
+                np.expand_dims(
+                    bolometric_luminosity.to("erg/s").value, axis=-1
+                )
+                * self._get_spectra(_lam)._lnu
+                * erg
+                / s
+                / Hz
+            )
+
+        # Create new Sed object containing dust emission spectra
+        return Sed(_lam, lnu=lnu)
 
     def _get_spectra(
         self, _lam: Union[NDArray[np.float64], unyt_array]
