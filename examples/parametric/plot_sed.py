@@ -150,7 +150,7 @@ if __name__ == "__main__":
         fesc=0.1,
         fesc_ly_alpha=0.1,
     )
-    galaxy.stars.get_spectra_pacman(cf_with_fesc)
+    galaxy.stars.get_spectra(cf_with_fesc)
     print("CF00 implemented within the Pacman model")
     galaxy.plot_spectra(
         show=True, combined_spectra=False, stellar_spectra=True
