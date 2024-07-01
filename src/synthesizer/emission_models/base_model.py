@@ -475,66 +475,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     "must be passed."
                 )
 
-    @property
-    def emitter(self):
-        """Get the emitter this emission model acts on."""
-        return getattr(self, "_emitter", None)
-
-    @property
-    def grid(self):
-        """Get the Grid object used for extraction."""
-        return getattr(self, "_grid", None)
-
-    @property
-    def extract(self):
-        """Get the key for the spectra to extract."""
-        return getattr(self, "_extract", None)
-
-    @property
-    def fesc(self):
-        """Get the escape fraction."""
-        return getattr(self, "_fesc", 0.0)
-
-    @property
-    def generator(self):
-        """Get the emission generation model."""
-        return getattr(self, "_generator", None)
-
-    @property
-    def lum_intrinsic_model(self):
-        """Get the intrinsic model for computing dust luminosity."""
-        return getattr(self, "_lum_intrinsic_model", None)
-
-    @property
-    def lum_attenuated_model(self):
-        """Get the attenuated model for computing dust luminosity."""
-        return getattr(self, "_lum_attenuated_model", None)
-
-    @property
-    def dust_curve(self):
-        """Get the dust curve to apply."""
-        return getattr(self, "_dust_curve", None)
-
-    @property
-    def apply_dust_to(self):
-        """Get the spectra to apply the dust curve to."""
-        return getattr(self, "_apply_dust_to", None)
-
-    @property
-    def tau_v(self):
-        """Get the optical depth to apply."""
-        return getattr(self, "_tau_v", None)
-
-    @property
-    def combine(self):
-        """Get the models to combine."""
-        return getattr(self, "_combine", tuple())
-
-    @property
-    def scale_by(self):
-        """Get the attribute to scale the spectra by."""
-        return self._scale_by
-
     def _summary(self):
         """Call the correct summary method."""
         if self._is_extracting:
@@ -761,39 +701,49 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         "Wavelength arrays do not match somewhere in the tree."
                     )
 
-    def set_grid(self, grid, label=None, set_all=False):
+    def _set_attr(self, attr, value):
+        """
+        Set an attribute on the model.
+
+        Args:
+            attr (str): The attribute to set.
+            value (Any): The value to set the attribute to.
+        """
+        if hasattr(self, attr):
+            setattr(self, "_" + attr, value)
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Cannot set attribute {attr} on model {self.label}. The "
+                "model is not compatible with this attribute."
+            )
+
+    @property
+    def grid(self):
+        """Get the Grid object used for extraction."""
+        return getattr(self, "_grid", None)
+
+    def set_grid(self, grid, set_all=False):
         """
         Set the grid to extract from.
 
         Args:
             grid (Grid):
                 The grid to extract from.
-            label (str):
-                The label of the model to set the grid on. If None, sets the
-                grid on this model.
             set_all (bool):
                 Whether to set the grid on all models.
         """
-        # Ensure the label exists (if not None)
-        if label is not None and label not in self._models:
-            raise exceptions.InconsistentArguments(
-                f"Could not find a model with the label: {label}"
-            )
-
         # Set the grid
-        if label is not None or set_all:
-            for model in self._models.values():
-                # Only set the grid if we're setting all and the model is
-                # extracting or the label matches
-                if label == model.label or set_all and model._is_extracting:
-                    model._grid = grid
-        else:
+        if not set_all:
             if self._is_extracting:
-                self._grid = grid
+                self._set_attr("grid", grid)
             else:
                 raise exceptions.InconsistentArguments(
                     "Cannot set a grid on a model that is not extracting."
                 )
+        else:
+            for model in self._models.values():
+                if self._is_extracting:
+                    model.set_grid(grid)
 
         # Unpack the model now we're done
         self.unpack_model()
@@ -801,59 +751,55 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Set the wavelength array at the root
         self.lam = grid.lam
 
-    def set_extract(self, extract, label=None):
+    @property
+    def extract(self):
+        """Get the key for the spectra to extract."""
+        return getattr(self, "_extract", None)
+
+    def set_extract(self, extract):
         """
         Set the spectra to extract from the grid.
-
-        Either sets the spectra to extract from a specific model or from all
-        models.
 
         Args:
             extract (str):
                 The key of the spectra to extract.
-            label (str):
-                The label of the model to set the extraction key on. If None,
-                sets the extraction key on this model.
         """
-        # Ensure the label exists (if not None)
-        if label is not None and label not in self._models:
-            raise exceptions.InconsistentArguments(
-                f"Could not find a model with the label: {label}"
-            )
-
         # Set the extraction key
-        if label is not None:
-            if self._models[label]._is_extracting:
-                self._models[label]._extract = extract
-            else:
-                raise exceptions.InconsistentArguments(
-                    "Cannot set an extraction key on a model that is not "
-                    "extracting."
-                )
+        if self._is_extracting:
+            self._extract = extract
         else:
-            if self._is_extracting:
-                self._extract = extract
-            else:
-                raise exceptions.InconsistentArguments(
-                    "Cannot set an extraction key on a model that is "
-                    "not extracting."
-                )
+            raise exceptions.InconsistentArguments(
+                "Cannot set an extraction key on a model that is "
+                "not extracting."
+            )
 
         # Unpack the model now we're done
         self.unpack_model()
 
+    @property
+    def dust_curve(self):
+        """Get the dust curve to apply."""
+        return getattr(self, "_dust_curve", None)
+
+    @property
+    def apply_dust_to(self):
+        """Get the spectra to apply the dust curve to."""
+        return getattr(self, "_apply_dust_to", None)
+
+    @property
+    def tau_v(self):
+        """Get the optical depth to apply."""
+        return getattr(self, "_tau_v", None)
+
     def set_dust_props(
         self,
-        dust_curve,
-        apply_dust_to,
-        tau_v,
-        label=None,
+        dust_curve=None,
+        apply_dust_to=None,
+        tau_v=None,
         set_all=False,
     ):
         """
         Set the dust attenuation properties on this model.
-
-        Either sets the properties on a specific model or on all models.
 
         Args:
             dust_curve (dust.attenuation.*):
@@ -865,55 +811,46 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 string to a component attribute. Can also be a tuple combining
                 any of these. If a tuple then the eventual tau_v will be the
                 product of all contributors.
-            label (str):
-                The label of the model to set the properties on. If
-                None, sets the properties on this model.
             set_all (bool):
                 Whether to set the properties on all models.
         """
-        # Ensure the label exists (if not None)
-        if label is not None and label not in self._models:
-            raise exceptions.InconsistentArguments(
-                f"Could not find a model with the label: {label}"
-            )
-
         # Set the properties
-        if label is not None or set_all:
-            for model in self._models.values():
-                # Only set the properties if we're setting all and the model is
-                # an attenuation step or the label matches
-                if (
-                    label == model.label
-                    or set_all
-                    and model._is_dust_attenuating
-                ):
-                    model._dust_curve = dust_curve
-                    model._apply_dust_to = apply_dust_to
-                    model._tau_v = (
-                        tau_v if isinstance(tau_v, (tuple, list)) else [tau_v]
+        if not set_all:
+            if self._is_dust_attenuating:
+                if dust_curve is not None:
+                    self._set_attr("dust_curve", dust_curve)
+                if apply_dust_to is not None:
+                    self._set_attr("apply_dust_to", apply_dust_to)
+                if tau_v is not None:
+                    self._set_attr(
+                        "tau_v",
+                        tau_v if isinstance(tau_v, (tuple, list)) else [tau_v],
                     )
-        else:
-            if self.is_dust_attenuating:
-                self._dust_curve = dust_curve
-                self._apply_dust_to = apply_dust_to
-                self._tau_v = (
-                    tau_v if isinstance(tau_v, (tuple, list)) else [tau_v]
-                )
             else:
                 raise exceptions.InconsistentArguments(
                     "Cannot set dust attenuation properties on a model that "
                     "is not dust attenuating."
                 )
+        else:
+            for model in self._models.values():
+                if self._is_dust_attenuating:
+                    model.set_dust_props(
+                        dust_curve=dust_curve,
+                        apply_dust_to=apply_dust_to,
+                        tau_v=tau_v,
+                    )
 
         # Unpack the model now we're done
         self.unpack_model()
 
-    def set_generator(self, generator, label=None):
+    @property
+    def generator(self):
+        """Get the emission generation model."""
+        return getattr(self, "_generator", None)
+
+    def set_generator(self, generator):
         """
         Set the dust emission model on this model.
-
-        Either sets the dust emission model on a specific model or on all
-        models.
 
         Args:
             generator (EmissionModel):
@@ -922,21 +859,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 The label of the model to set the dust emission model on. If
                 None, sets the dust emission model on this model.
         """
-        # Ensure the label exists (if not None)
-        if label is not None and label not in self._models:
-            raise exceptions.InconsistentArguments(
-                f"Could not find a model with the label: {label}"
-            )
-
         # Ensure model is a emission generation model and change the model
-        if (
-            label is not None
-            and self._models[label]._is_dust_emitting
-            or self._models[label]._is_generating
-        ):
-            self._models[label]._generator = generator
-        elif self._is_dust_emitting or self._is_generating:
-            self._generator = generator
+        if self._models._is_dust_emitting or self._models._is_generating:
+            self._set_attr("generator", generator)
         else:
             raise exceptions.InconsistentArguments(
                 "Cannot set a dust emission model on a model that is not "
@@ -946,25 +871,94 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Unpack the model now we're done
         self.unpack_model()
 
-    def set_combine(self, combine, label=None):
+    @property
+    def emitter(self):
+        """Get the emitter this emission model acts on."""
+        return getattr(self, "_emitter", None)
+
+    def set_emitter(self, emitter, set_all=False):
+        """
+        Set the emitter this emission model acts on.
+
+        Args:
+            emitter (str):
+                The emitter this emission model acts on.
+            set_all (bool):
+                Whether to set the emitter on all models.
+        """
+        # Set the emitter
+        if not set_all:
+            self._set_attr("emitter", emitter)
+        else:
+            for model in self._models.values():
+                model.set_emitter(emitter)
+
+        # Unpack the model now we're done
+        self.unpack_model()
+
+    @property
+    def lum_intrinsic_model(self):
+        """Get the intrinsic model for computing dust luminosity."""
+        return getattr(self, "_lum_intrinsic_model", None)
+
+    def set_lum_intrinsic_model(self, lum_intrinsic_model):
+        """
+        Set the intrinsic model for computing dust luminosity.
+
+        Args:
+            lum_intrinsic_model (EmissionModel):
+                The intrinsic model to set.
+        """
+        # Ensure model is a emission generation model and change the model
+        if self._models._is_dust_emitting:
+            self._set_attr("lum_intrinsic_model", lum_intrinsic_model)
+        else:
+            raise exceptions.InconsistentArguments(
+                "Cannot set an intrinsic model on a model that is not "
+                "dust emitting."
+            )
+
+        # Unpack the model now we're done
+        self.unpack_model()
+
+    @property
+    def lum_attenuated_model(self):
+        """Get the attenuated model for computing dust luminosity."""
+        return getattr(self, "_lum_attenuated_model", None)
+
+    def set_lum_attenuated_model(self, lum_attenuated_model):
+        """
+        Set the attenuated model for computing dust luminosity.
+
+        Args:
+            lum_attenuated_model (EmissionModel):
+                The attenuated model to set.
+        """
+        # Ensure model is a emission generation model and change the model
+        if self._models._is_dust_emitting:
+            self._set_attr("lum_attenuated_model", lum_attenuated_model)
+        else:
+            raise exceptions.InconsistentArguments(
+                "Cannot set an attenuated model on a model that is not "
+                "dust emitting."
+            )
+
+        # Unpack the model now we're done
+        self.unpack_model()
+
+    @property
+    def combine(self):
+        """Get the models to combine."""
+        return getattr(self, "_combine", tuple())
+
+    def set_combine(self, combine):
         """
         Set the models to combine on this model.
-
-        Either sets the models to combine on a specific model or on all models.
 
         Args:
             combine (list):
                 A list of models to combine.
-            label (str):
-                The label of the model to set the models to combine on. If
-                None, sets the models to combine on this model.
         """
-        # Ensure the label exists (if not None)
-        if label is not None and label not in self._models:
-            raise exceptions.InconsistentArguments(
-                f"Could not find a model with the label: {label}"
-            )
-
         # Ensure all models are EmissionModels
         for model in combine:
             if not isinstance(model, EmissionModel):
@@ -972,11 +966,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     "All models to combine must be EmissionModels."
                 )
 
-        # Set the models to combine ensure the model we are setting on is
+        # Set the models to combine ensurign the model we are setting on is
         # a combination step
-        if label is not None and self._models[label]._is_combining:
-            self._models[label]._combine = combine
-        elif self._is_combining:
+        if self._is_combining:
             self._combine = combine
         else:
             raise exceptions.InconsistentArguments(
@@ -987,35 +979,23 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Unpack the model now we're done
         self.unpack_model()
 
-    def set_fesc(self, fesc, label=None, set_all=False):
+    @property
+    def fesc(self):
+        """Get the escape fraction."""
+        return getattr(self, "_fesc", 0.0)
+
+    def set_fesc(self, fesc, set_all=False):
         """
         Set the escape fraction on this model.
-
-        Either sets the escape fraction on a specific model or on all models.
 
         Args:
             fesc (float):
                 The escape fraction to set.
-            label (str):
-                The label of the model to set the escape fraction on. If None,
-                sets the escape fraction on this model.
             set_all (bool):
                 Whether to set the escape fraction on all models.
         """
-        # Ensure the label exists (if not None)
-        if label is not None and label not in self._models:
-            raise exceptions.InconsistentArguments(
-                f"Could not find a model with the label: {label}"
-            )
-
         # Set the escape fraction
-        if label is not None or set_all:
-            for model in self._models.values():
-                # Only set the escape fraction if setting all or the
-                # label matches
-                if label == model.label or set_all and model._is_extracting:
-                    model._fesc = fesc
-        else:
+        if not set_all:
             if self._is_extracting:
                 self._fesc = fesc
             else:
@@ -1023,27 +1003,65 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     "Cannot set an escape fraction on a model that is not "
                     "extracting."
                 )
+        else:
+            for model in self._models.values():
+                if model._is_extracting or model._is_generating:
+                    model.set_fesc(fesc)
 
         # Unpack the model now we're done
         self.unpack_model()
 
-    def add_mask(self, attr, thresh, op, label=None, set_all=False):
+    @property
+    def scale_by(self):
+        """Get the attribute to scale the spectra by."""
+        return self._scale_by
+
+    def set_scale_by(self, scale_by, set_all=False):
+        """
+        Set the attribute to scale the spectra by.
+
+        Args:
+            scale_by (str/list/tuple/EmissionModel):
+                Either a component attribute to scale the resultant spectra by,
+                a spectra key to scale by (based on the bolometric luminosity).
+                or a tuple/list containing strings defining either of the
+                former two options. Instead of a string, an EmissionModel can
+                be passed to scale by the luminosity of that model.
+            set_all (bool):
+                Whether to set the scale by attribute on all models.
+        """
+        # Set the attribute to scale by
+        if not set_all:
+            if isinstance(scale_by, (list, tuple)):
+                self._scale_by = scale_by
+                self._scale_by = [
+                    s if isinstance(s, str) else s.label for s in scale_by
+                ]
+            elif isinstance(scale_by, EmissionModel):
+                self._scale_by = (scale_by.label,)
+            elif scale_by is None:
+                self._scale_by = ()
+            else:
+                self._scale_by = (scale_by,)
+        else:
+            for model in self._models.values():
+                model.set_scale_by(scale_by)
+
+        # Unpack the model now we're done
+        self.unpack_model()
+
+    def add_mask(self, attr, op, thresh, set_all=False):
         """
         Add a mask.
-
-        Either adds a mask to a specific model or to all models.
 
         Args:
             attr (str):
                 The component attribute to mask on.
-            thresh (unyt_quantity):
-                The threshold for the mask.
             op (str):
                 The operation to apply. Can be "<", ">", "<=", ">=", "==",
                 or "!=".
-            label (str):
-                The label of the model to add the mask to. If None, adds the
-                mask to this model.
+            thresh (unyt_quantity):
+                The threshold for the mask.
             set_all (bool):
                 Whether to add the mask to all models.
         """
@@ -1059,26 +1077,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 "Invalid mask operation. Must be one of: <, >, <=, >="
             )
 
-        # Ensure the label exists (if not None)
-        if label is not None and label not in self._models:
-            raise exceptions.InconsistentArguments(
-                f"Could not find a model with the label: {label}"
-            )
-
         # Add the mask
-        if label is not None or set_all:
-            for model in self._models.values():
-                # Only add the mask if we're setting all or the label matches
-                if label == model.label or set_all:
-                    model.masks.append(
-                        {"attr": attr, "thresh": thresh, "op": op}
-                    )
-        else:
+        if not set_all:
             self.masks.append({"attr": attr, "thresh": thresh, "op": op})
-
-        # Flag that the models are now masked
-        for model in self._models.values():
-            if len(model.masks) > 0:
+            self._is_masked = True
+        else:
+            for model in self._models.values():
+                model.masks.append({"attr": attr, "thresh": thresh, "op": op})
                 model._is_masked = True
 
         # Unpack now that we're done
@@ -1167,7 +1172,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             # Warn the user if they passed a new label, it won't be used
             if new_label is not None:
                 warn(
-                    "Warning: new_label is only used when multiple "
+                    "new_label is only used when multiple "
                     "replacements are passed."
                 )
 
@@ -1190,7 +1195,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Unpack now we're done
         self.unpack_model()
 
-    def relabel_model(self, old_label, new_label):
+    def relabel(self, old_label, new_label):
         """
         Change the label associated to an existing spectra.
 
