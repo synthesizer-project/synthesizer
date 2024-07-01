@@ -125,6 +125,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             a tuple/list containing strings defining either of the former two
             options. Instead of a string, an EmissionModel can also be passed
             to scale by the luminosity of that model.
+        post_processing (list):
+            A list of post processing functions to apply to the emission after
+            it has been generated. Each function must take a dict containing
+            the spectra/lines, the emitters, and the emission model, and
+            return the same dict with the post processing applied.
     """
 
     # Define quantities
@@ -150,6 +155,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         emitter=None,
         fixed_parameters={},
         scale_by=None,
+        post_processing=(),
         **kwargs,
     ):
         """
@@ -221,6 +227,12 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 or a tuple/list containing strings defining either of the
                 former two options. Instead of a string, an EmissionModel can
                 be passed to scale by the luminosity of that model.
+            post_processing (list):
+                A list of post processing functions to apply to the emission
+                after it has been generated. Each function must take a dict
+                containing the spectra/lines, the emitters, and the emission
+                model, and return the same dict with the post processing
+                applied.
             **kwargs:
                 Any additional keyword arguments to store. These can be used
                 to store additional information needed by the model.
@@ -296,6 +308,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             self._scale_by = ()
         else:
             self._scale_by = (scale_by,)
+
+        # Store the post processing functions
+        self._post_processing = post_processing
 
         # Attach the related models
         if related_models is None:
@@ -1075,6 +1090,36 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Unpack the model now we're done
         self.unpack_model()
 
+    @property
+    def post_processing(self):
+        """Get the post processing functions."""
+        return getattr(self, "_post_processing", [])
+
+    def set_post_processing(self, post_processing, set_all=False):
+        """
+        Set the post processing functions on this model.
+
+        Args:
+            post_processing (list):
+                A list of post processing functions to apply to the emission
+                after it has been generated. Each function must take a dict
+                containing the spectra/lines and return the same dict with the
+                post processing applied.
+            set_all (bool):
+                Whether to set the post processing functions on all models.
+        """
+        # Set the post processing functions
+        if not set_all:
+            self._post_processing = list(self._post_processing)
+            self._post_processing.extend(post_processing)
+            self._post_processing = tuple(set(self._post_processing))
+        else:
+            for model in self._models.values():
+                model.set_post_processing(post_processing)
+
+        # Unpack the model now we're done
+        self.unpack_model()
+
     def add_mask(self, attr, op, thresh, set_all=False):
         """
         Add a mask.
@@ -1802,8 +1847,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         """
         Generate stellar spectra as described by the emission model.
 
-        If the emission model defines a dust_curve or fesc and no overide
-        is provided in the arguments to this function.
+        NOTE: post processing methods defined on the model will be called
+        once all spectra are made (these models are preceeded by post_ and
+        take the dictionary of lines/spectra as an argument).
 
         Args:
             emitters (Stars/BlackHoles):
@@ -1890,10 +1936,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Make a spectra dictionary if we haven't got one yet
         if spectra is None:
             spectra = {}
-
-        # Define a dictionary to keep track of any spectra that need scaling
-        # by other spectra
-        scale_later = {}
 
         # Perform all extractions
         spectra = self._extract_spectra(
@@ -2021,20 +2063,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     else:
                         spectra[label]._lnu *= scaling
                 else:
-                    scale_later.setdefault(label, []).append(scaler)
+                    raise exceptions.InconsistentArguments(
+                        f"Can't scale spectra by {scaler}."
+                    )
 
-        # Handle any final scalings we need to do
-        for spec, scalers in scale_later.items():
-            for scaler in scalers:
-                if isinstance(scaler, EmissionModel):
-                    scaler = scaler.label
-                # Compute the scaling
-                scaling = (
-                    spectra[scaler].measure_bolometric_luminosity()
-                    / spectra[spec].measure_bolometric_luminosity()
-                )
-
-                spectra[spec] *= scaling
+        # Apply any post processing functions
+        for func in self._post_processing:
+            spectra = func(spectra, emitters, self)
 
         return spectra
 
@@ -2054,8 +2089,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         """
         Generate stellar lines as described by the emission model.
 
-        If the emission model defines a dust_curve or fesc and no overide
-        is provided in the arguments to this function.
+        NOTE: post processing methods defined on the model will be called
+        once all spectra are made (these models are preceeded by post_ and
+        take the dictionary of lines/spectra as an argument).
 
         Args:
             line_ids (list):
@@ -2132,10 +2168,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # If we haven't got a lines dictionary yet we'll make one
         if lines is None:
             lines = {}
-
-        # Define a dictionary to keep track of any spectra that need scaling
-        # by other spectra
-        scale_later = {}
 
         # Perform all extractions
         lines = self._extract_lines(
@@ -2233,18 +2265,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             emitter, scaler
                         )
                 else:
-                    scale_later.setdeafault(label, []).append(scaler)
-
-        # Handle any final scalings we need to do
-        for spec, scalers in scale_later.items():
-            for scaler in scalers:
-                for line_id in line_ids:
-                    # Compute the scaling
-                    scaling = (
-                        lines[scaler]._luminosity / lines[spec]._luminosity
+                    raise exceptions.InconsistentArguments(
+                        f"Can't scale lines by {scaler}."
                     )
-
-                    lines[spec] *= scaling
 
         # Finally, loop over everything we've created and convert the nested
         # dictionaries to LineCollections
@@ -2253,6 +2276,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             # conversion
             if isinstance(lines[label], dict):
                 lines[label] = LineCollection(lines[label])
+
+        # Apply any post processing functions
+        for func in self._post_processing:
+            lines = func(lines, emitters, self)
 
         return lines
 
