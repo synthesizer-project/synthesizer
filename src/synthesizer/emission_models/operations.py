@@ -85,7 +85,7 @@ class Extraction:
         # First step we need to extract each base spectra
         for label, spectra_key in emission_model._extract_keys.items():
             # Skip if we don't need to extract this spectra
-            if spectra_key in spectra:
+            if label in spectra:
                 continue
 
             # Get this model
