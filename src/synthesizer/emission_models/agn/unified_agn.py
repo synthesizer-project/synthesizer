@@ -57,11 +57,10 @@ def scale_by_incident_isotropic(emission, emitters, model):
             scaling = emitter._bolometric_luminosity / isotropic_bolo_lum
 
             # Scale the spectra
-            if scaling.ndim == 0:
-                spectra._lnu *= scaling
-            elif scaling.ndim == 1 and spectra.ndim == 1:
-                spectra._lnu = scaling * np.expand_dims(spectra._lnu, axis=0)
-                spectra._lnu = np.sum(spectra._lnu, axis=0)
+            if spectra.ndim == 1:
+                spectra._lnu = scaling * spectra._lnu
+            else:
+                spectra._lnu = spectra._lnu * np.expand_dims(scaling, axis=-1)
 
     else:
         # Loop over the different emissions
@@ -173,7 +172,12 @@ class UnifiedAGN(BlackHoleEmissionModel):
         self.disc = self._make_disc()
 
         # Get the line regions
-        self.nlr, self.blr = self._make_line_regions(nlr_grid, blr_grid)
+        self.nlr, self.blr = self._make_line_regions(
+            nlr_grid,
+            blr_grid,
+            covering_fraction_nlr,
+            covering_fraction_blr,
+        )
 
         # Get the torus emission model
         self.torus = self._make_torus(torus_emission_model)
@@ -232,7 +236,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             grid=nlr_grid,
             label="disc_transmitted_nlr",
             extract="transmitted",
-            fesc=covering_fraction_nlr,
+            fesc=1 - covering_fraction_nlr,
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
@@ -241,7 +245,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             grid=blr_grid,
             label="disc_transmitted_blr",
             extract="transmitted",
-            fesc=covering_fraction_blr,
+            fesc=1 - covering_fraction_blr,
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
@@ -274,7 +278,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             grid=grid,
             label="disc_escaped",
             extract="incident",
-            fesc=1.0 - covering_fraction_nlr - covering_fraction_blr,
+            fesc=(covering_fraction_nlr + covering_fraction_blr),
         )
 
         return model
@@ -289,13 +293,20 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_op="<",
         )
 
-    def _make_line_regions(self, nlr_grid, blr_grid):
+    def _make_line_regions(
+        self,
+        nlr_grid,
+        blr_grid,
+        covering_fraction_nlr,
+        covering_fraction_blr,
+    ):
         """Make the line regions."""
         # Make the line regions with fixed inclination
         nlr = BlackHoleEmissionModel(
             grid=nlr_grid,
             label="nlr",
             extract="nebular",
+            fesc=1 - covering_fraction_nlr,
             fixed_parameters={"cosine_inclination": 0.5},
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
@@ -305,6 +316,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             grid=blr_grid,
             label="blr",
             extract="nebular",
+            fesc=1 - covering_fraction_blr,
             fixed_parameters={"cosine_inclination": 0.5},
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
