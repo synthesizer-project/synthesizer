@@ -1244,7 +1244,7 @@ class Sed:
         # without applying a mask
         if mask is None:
             spectra *= transmission
-        elif transmission[mask].shape == spectra[mask].shape:
+        elif transmission.ndim > 1:
             spectra[mask] *= transmission[mask]
         else:
             spectra[mask] *= transmission
