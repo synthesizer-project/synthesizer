@@ -570,43 +570,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             )
         return self._models[label]
 
-    def __eq__(self, other):
-        """
-        Check if two models are equal.
-
-        Args:
-            other (EmissionModel): The model to compare to.
-        """
-        # Check the labels are the same
-        if self.label != other.label:
-            return False
-
-        # Check the attributes are the same
-        for attr in self.__dict__:
-            if attr in ["_models", "_children", "_parents"]:
-                continue
-            if getattr(self, attr) != getattr(other, attr):
-                return False
-
-        # Check the children are the same
-        if self._children != other._children:
-            return False
-
-        # Check the parents are the same
-        if self._parents != other._parents:
-            return False
-
-        return True
-
-    def __ne__(self, other):
-        """
-        Check if two models are not equal.
-
-        Args:
-            other (EmissionModel): The model to compare to.
-        """
-        return not self.__eq__(other)
-
     def _get_operation_flags(
         self,
         grid=None,
@@ -647,7 +610,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         """
         # Store the model (ensuring the label isn't already used for a
         # different model)
-        print("Unpacking model", model.label, self.label)
         if model.label not in self._models:
             self._models[model.label] = model
         elif self._models[model.label] == model:
