@@ -10,6 +10,7 @@ Example for generating a rest-frame physical scale image. This example will:
 """
 
 import matplotlib.pyplot as plt
+from synthesizer.emission_models import ReprocessedEmission
 from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
 from synthesizer.imaging import ImageCollection
@@ -31,6 +32,9 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
+    # Create the emission model
+    model = ReprocessedEmission(grid)
+
     # Define the SFZDist
     Z_p = {"metallicity": 0.01}
     metal_dist = ZDist.DeltaConstant(**Z_p)
@@ -49,13 +53,13 @@ if __name__ == "__main__":
     galaxy = Galaxy(sfzh)
 
     # Generate stellar spectra
-    galaxy.stars.get_spectra_incident(grid)
+    galaxy.stars.get_spectra(model)
 
     # Get a UVJ filter set
     filters = UVJ()
 
     # Get photometry
-    galaxy.stars.spectra["incident"].get_photo_luminosities(filters)
+    galaxy.stars.spectra["reprocessed"].get_photo_luminosities(filters)
 
     # Define geometry of the images
     resolution = 0.01 * kpc  # resolution in kpc
@@ -70,7 +74,7 @@ if __name__ == "__main__":
 
     # Get the photometric images
     img.get_imgs_smoothed(
-        photometry=galaxy.stars.spectra["incident"].photo_luminosities,
+        photometry=galaxy.stars.spectra["reprocessed"].photo_luminosities,
         density_grid=morph.get_density_grid(resolution, img.npix),
     )
 
@@ -83,7 +87,7 @@ if __name__ == "__main__":
     # We can also do the same with a helper function on the galaxy object
     img = galaxy.get_images_luminosity(
         resolution=resolution,
-        stellar_photometry="incident",
+        stellar_photometry="reprocessed",
         fov=fov,
     )
 
