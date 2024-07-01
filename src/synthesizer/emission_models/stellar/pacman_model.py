@@ -506,11 +506,11 @@ class BimodalPacmanEmission(StellarEmissionModel):
         tau_v_nebular,
         dust_curve_ism,
         dust_curve_nebular,
+        age_pivot=7 * dimensionless,
         dust_emission_ism=None,
         dust_emission_nebular=None,
         fesc=0.0,
         fesc_ly_alpha=1.0,
-        age_pivot=7 * dimensionless,
         label=None,
     ):
         """
@@ -524,14 +524,14 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 ISM.
             dust_curve_nebular (synthesizer.dust.DustCurve): The dust curve for
                 the nebular.
+            age_pivot (unyt.unyt_quantity): The age pivot between young and old
+                populations, expressed in terms of log10(age) in Myr.
             dust_emission_ism (synthesizer.dust.EmissionModel): The dust
                 emission model for the ISM.
             dust_emission_nebular (synthesizer.dust.EmissionModel): The
                 dust emission model for the nebular.
             fesc (float): The escape fraction.
             fesc_ly_alpha (float): The Lyman alpha escape fraction.
-            age_pivot (unyt.unyt_quantity): The age pivot between young and old
-                populations, expressed in terms of log10(age) in Myr.
             label (str): The label for the total emission model. If None
                 this will be set to "total" or "emergent" if dust_emission is
                 None.
