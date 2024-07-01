@@ -231,15 +231,22 @@ def get_roman_numeral(number):
 
 class LineCollection:
     """
-    A class holding a collection of emission lines. This enables additional
-    functionality such as quickly calculating line ratios or line diagrams.
+    A class holding a collection of emission lines.
 
-    Args
-        lines (dictionary of Line objects)
-            A dictionary of line objects.
+    This enables additional functionality such as quickly calculating
+    line ratios or line diagrams.
 
-    Methods
-
+    Attributes:
+        lines (dict)
+            A dictionary of synthesizer.line.Line objects.
+        line_ids (list)
+            A list of line ids.
+        wavelengths (unyt_array)
+            An array of line wavelengths.
+        available_ratios (list)
+            A list of available line ratios.
+        available_diagrams (list)
+            A list of available line diagrams.
     """
 
     def __init__(self, lines):
@@ -250,7 +257,6 @@ class LineCollection:
             lines (dict)
                 A dictionary of synthesizer.line.Line objects.
         """
-
         # Dictionary of synthesizer.line.Line objects.
         self.lines = lines
 
