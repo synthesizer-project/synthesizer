@@ -118,7 +118,7 @@ if __name__ == "__main__":
         grid,
         tau_v=0.1,
         dust_curve=PowerLaw(slope=-1),
-        fesc_lyman_alpha=0.0,
+        fesc_ly_alpha=0.0,
     )
     galaxy.stars.get_spectra(pc_lya)
     print("Pacman model (no Ly-alpha escape, and no dust)")
@@ -132,7 +132,7 @@ if __name__ == "__main__":
         tau_v=0.6,
         dust_curve=PowerLaw(slope=-1),
         fesc=0.0,
-        fesc_lyman_alpha=0.5,
+        fesc_ly_alpha=0.5,
     )
     galaxy.stars.get_spectra(pc_complex)
     print("Pacman model (complex)")
@@ -148,7 +148,7 @@ if __name__ == "__main__":
         dust_curve_ism=PowerLaw(slope=-1),
         dust_curve_nebular=PowerLaw(slope=-1),
         fesc=0.1,
-        fesc_lyman_alpha=0.1,
+        fesc_ly_alpha=0.1,
     )
     galaxy.stars.get_spectra_pacman(cf_with_fesc)
     print("CF00 implemented within the Pacman model")
