@@ -612,7 +612,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # different model)
         if model.label not in self._models:
             self._models[model.label] = model
-        elif self._models[model.label] == model:
+        elif self._models[model.label] is model:
             # The model is already in the tree so nothing to do
             pass
         else:
