@@ -35,7 +35,7 @@ if __name__ == "__main__":
         grid,
         tau_v=0.1,
         fesc=0.5,
-        fesc_LyA=0.5,
+        fesc_ly_alpha=0.5,
         dust_curve=PowerLaw(slope=-1),
     )
 
