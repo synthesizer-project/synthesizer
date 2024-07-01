@@ -203,11 +203,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 or "!=".
             fesc (float):
                 The escape fraction.
-            related_models (set):
-                A list of related models to this model. A related model is
-                a model that is connected somwhere within the model tree but
-                is required in the construction of the "root" model
-                encapulated by self.
+            related_models (set/list/EmissionModel):
+                A set of related models to this model. A related model is a
+                model that is connected somewhere within the model tree but is
+                required in the construction of the "root" model encapulated by
+                self.
             emitter (str):
                 The emitter this emission model acts on. Default is
                 "stellar".
@@ -298,9 +298,22 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             self._scale_by = (scale_by,)
 
         # Attach the related models
-        self.related_models = (
-            set(related_models) if related_models is not None else set()
-        )
+        if related_models is None:
+            self.related_models = set()
+        elif isinstance(related_models, set):
+            self.related_models = related_models
+        elif isinstance(related_models, list):
+            self.related_models = set(related_models)
+        elif isinstance(related_models, tuple):
+            self.related_models = set(related_models)
+        elif isinstance(related_models, EmissionModel):
+            self.related_models = {
+                related_models,
+            }
+        else:
+            raise exceptions.InconsistentArguments(
+                "related_models must be a set, list, tuple, or EmissionModel."
+            )
 
         # We're done with setup, so unpack the model
         self.unpack_model()
