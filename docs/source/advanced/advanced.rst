@@ -9,6 +9,7 @@ Contents
 .. toctree::
    :maxdepth: 1
    
+   config_options
    units
    abundances
    creating_grids/creating_grids
