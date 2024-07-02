@@ -28,5 +28,6 @@ repos:
       - id: nb-clean
         args:
           - --remove-empty-cells
-          - --preserve-cell-metadata tags
+          - --preserve-cell-metadata
+          - tags
           - --
