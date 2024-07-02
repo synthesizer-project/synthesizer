@@ -20,6 +20,6 @@ In the linked docs we demonstrate using ``EmissionModels`` in conjunction with t
 .. toctree::
    :maxdepth: 1
 
-    stars
-    blackholes
-    galaxy
+   stars
+   blackholes
+   galaxy
