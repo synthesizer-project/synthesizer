@@ -40,6 +40,7 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_gallery.gen_gallery",
     "sphinx_toolbox.collapse",
+    "sphinx_copybutton",  # Add a copy button to code blocks
 ]
 
 sphinx_gallery_conf = {

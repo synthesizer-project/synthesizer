@@ -35,6 +35,7 @@ Citation & Acknowledgement
 
 A code paper is currently in preparation. For now please cite `Vijayan et al. 2021 <https://ui.adsabs.harvard.edu/abs/2021MNRAS.501.3289V/abstract>`_ if you use the functionality for producing photometry, and `Wilkins et al. 2020 <https://ui.adsabs.harvard.edu/abs/2020MNRAS.493.6079W/abstract>`_ if you use the line emission functionality.
 
+.. code-block:: bibtex
 
     @article{10.1093/mnras/staa3715,
       author = {Vijayan, Aswin P and Lovell, Christopher C and Wilkins, Stephen M and Thomas, Peter A and Barnes, David J and Irodotou, Dimitrios and Kuusisto, Jussi and Roper, William J},
@@ -66,18 +67,15 @@ A code paper is currently in preparation. For now please cite `Vijayan et al. 20
       eprint = {https://academic.oup.com/mnras/article-pdf/493/4/6079/32980291/staa649.pdf},
     }
 
-
 Contributing
 ------------
 
 Please see `here <https://github.com/flaresimulations/synthesizer/blob/main/docs/CONTRIBUTING.md>`_ for contribution guidelines.
 
-
 Primary Contributors
 ---------------------
 
-.. include:: 
-  ../../AUTHORS.rst
+.. include:: ../../AUTHORS.rst
 
 License
 -------
