@@ -5,7 +5,7 @@ In ``synthesizer`` we encapsulate all filter based functionality in two objects:
 
 - A ``Filter``: Individual filters with methods and attributes to work with a filters wavelength coverage and transmission.
 
-- A ``FilterCollection``: A collection of ``Filter``'s that behaves like a list with extra attributes and methods to efficiently work with multiple `Filter`s.
+- A ``FilterCollection``: A collection of ``Filter``'s that behaves like a list with extra attributes and methods to efficiently work with multiple ``Filter``s.
 
 We provide a number of different ways to define a ``Filter`` or set of ``Filter``'s:
 
@@ -17,6 +17,6 @@ We provide a number of different ways to define a ``Filter`` or set of ``Filter`
 
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    filters_example

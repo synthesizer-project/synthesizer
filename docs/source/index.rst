@@ -20,7 +20,8 @@ Contents
    galaxy/galaxy
    components/components
    sed/sed
-   lines
+   spectra/spectra
+   lines/lines
    emission_models/emission_models
    filters/filters
    dust/dust
@@ -75,7 +76,8 @@ Please see `here <https://github.com/flaresimulations/synthesizer/blob/main/docs
 Primary Contributors
 ---------------------
 
-.. include:: ../../AUTHORS.rst
+.. include:: 
+  ../../AUTHORS.rst
 
 License
 -------
