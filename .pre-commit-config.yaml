@@ -30,4 +30,5 @@ repos:
           - --remove-empty-cells
           - --preserve-cell-metadata
           - tags
+          - -M
           - --
