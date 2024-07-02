@@ -6,10 +6,10 @@ Overview
 
 To simplify the construction of complex emission (spectra and lines) with many contributing components and different operations involved in their construction Synthesizer uses ``EmissionModels``. These objects define the generation of a single emission in the construction of a more complex whole. The possible operations that an ``EmissionModel`` can define are:
 
-- Extraction of a spectra/line from a ``Grid`` (see the ``Grid`` `docs <../grids/grids_example.ipynb>`_).
-- Generation of spectra, i.e. dust emission (see the dust emission `docs <.../dust/dust_emission.ipynb>`_) or AGN torus emission (see the AGN models `docs <agn_models.ipynb>`_).
+- Extraction of a spectra/line from a ``Grid`` (see the `grid docs <../grids/grids_example.ipynb>`_).
+- Generation of spectra, i.e. dust emission (see the `dust emission docs <.../dust/dust_emission.ipynb>`_) or AGN torus emission (see the `AGN models docs <agn_models.ipynb>`_).
 - Combination of different emissions.
-- Attenuation of an emission with a dust curve (see the dust attenuation `docs <../dust/dust_attenuation.ipynb>`_).
+- Attenuation of an emission with a dust curve (see the `dust attenuation docs <../dust/dust_attenuation.ipynb>`_).
 
 In addition any one of these operations can also be done in the presence of a mask to apply the operation to a subset of the components contents (either particles or a parametric model).
 
