@@ -720,19 +720,19 @@ class BaseGalaxy:
         )
 
         # Unpack the spectra to the right component
-        for model in emission_model._models:
-            if model.component is None:
+        for model in emission_model._models.values():
+            if model.emitter == "galaxy":
                 self.spectra[model.label] = spectra[model.label]
-            elif model.component == "stellar":
+            elif model.emitter == "stellar":
                 self.stars.spectra[model.label] = spectra[model.label]
-            elif model.component == "blackhole":
+            elif model.emitter == "blackhole":
                 self.black_holes.spectra[model.label] = spectra[model.label]
             else:
                 raise KeyError(
-                    f"Unknown component in emission model. ({model.component})"
+                    f"Unknown emitter in emission model. ({model.emitter})"
                 )
 
-        return self.spectra
+        return self.spectra[emission_model.label]
 
     def get_lines(
         self,
@@ -830,16 +830,16 @@ class BaseGalaxy:
         )
 
         # Unpack the lines to the right component
-        for model in emission_model._models:
-            if model.component is None:
+        for model in emission_model._models.values():
+            if model.emitter == "galaxy":
                 self.lines[model.label] = lines[model.label]
-            elif model.component == "stellar":
+            elif model.emitter == "stellar":
                 self.stars.lines[model.label] = lines[model.label]
-            elif model.component == "blackhole":
+            elif model.emitter == "blackhole":
                 self.black_holes.lines[model.label] = lines[model.label]
             else:
                 raise KeyError(
-                    f"Unknown component in emission model. ({model.component})"
+                    f"Unknown emitter in emission model. ({model.emitter})"
                 )
 
-        return self.lines
+        return self.lines[emission_model.label]
