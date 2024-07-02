@@ -21,3 +21,5 @@ Redshift in particular is of value when calculating the the emission of a galaxy
    :maxdepth: 1
 
    particle_parametric
+   generate_active_galaxy
+   generate_composite_galaxy
