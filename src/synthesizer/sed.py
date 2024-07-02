@@ -369,11 +369,18 @@ class Sed:
         # calculate it.
         if self.bolometric_luminosity is None:
             self.bolometric_luminosity = self.measure_bolometric_luminosity()
-        pstr += (
-            "log10(Bolometric luminosity/"
-            f"{str(self.bolometric_luminosity.units)}):"
-            f"{np.log10(self.bolometric_luminosity)}"
-        )
+        if self.ndim == 2:
+            pstr += (
+                "<log10(Bolometric luminosity/"
+                f"{str(self.bolometric_luminosity.units)})>:"
+                f"{np.mean(np.log10(self.bolometric_luminosity))}"
+            )
+        else:
+            pstr += (
+                "log10(Bolometric luminosity/"
+                f"{str(self.bolometric_luminosity.units)}):"
+                f"{np.log10(self.bolometric_luminosity)}"
+            )
         pstr += "-" * 10
 
         return pstr
