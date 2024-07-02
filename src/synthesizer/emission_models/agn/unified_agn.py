@@ -57,9 +57,16 @@ def scale_by_incident_isotropic(emission, emitters, model):
             scaling = emitter._bolometric_luminosity / isotropic_bolo_lum
 
             # Scale the spectra
-            if spectra.ndim == 1:
+            if spectra.ndim == 1 and scaling.ndim == 0:
+                spectra._lnu = scaling * spectra._lnu
+            elif spectra.ndim == 1 and scaling.ndim == 1:
+                # If we have integrated spectra and per particle scaling
+                # we need to sum the bolometric luminosity
+                scaling = np.sum(scaling)
                 spectra._lnu = scaling * spectra._lnu
             else:
+                # Otherwise we have multidimensional spectra and need to
+                # broadcast the scaling
                 spectra._lnu = spectra._lnu * np.expand_dims(scaling, axis=-1)
 
     else:
