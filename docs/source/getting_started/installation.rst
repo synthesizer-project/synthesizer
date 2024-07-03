@@ -34,32 +34,31 @@ Make sure you stay up to date with the latest versions through git::
     cd synthesizer
     git pull origin main
 
-Installing with optional flags
-##############################
+Installing with OpenMP
+######################
 
-DISCLAIMER: most users do not need to worry about this section. Synthesizer, by design, simplifies compilation so the user doesn't need to think about it.
+DISCLAIMER: This section is only important if you want to make use of shared memory parallelism for large calculations.
 
-Synthesizer uses C extensions for much of the heavy lifting done in the background to derive spectra. By default Synthesizer will use ``-std=c99 -Wall -O3 -ffast-math -g`` (on a unix-system) to optimise agressively. You can override this by modifying the compiler flags and linker arguments at the point of install, e.g.
+To make use of Synthesizer's `shared memory parallelism <../parallelism/openmp.rst>`_ you must first have OpenMP installed on your system. 
+Most compilers come with OpenMP baked in with a few exceptions. 
+This means installation with OpenMP is as simple as flagging it should be used.
 
-```
-CFLAGS=... LDFLAGS=... pip install .
-```
+.. code-block:: bash
 
-Setting these environment variables will override the default flags. Note that Synthesizer will santise any requested flags to ensure they are compatible with the compiler. For example, to compile with debugging symbols and no optimisation, you could use
+    WITH_OPENMP=1 pip install .
 
-```
-CFLAGS="-std=c99 -Wall -g" LDFLAGS="-g" pip install .
-```
+On Linux this approach should be sufficient in almost all cases. 
 
-which would be recommended if you are developing the code, particularly the C extensions. In addition to disabling optimisation and turning on debugging symbols, you can also turn on debugging checks by adding ``WITH_DEBUGGING_CHECKS=1``, e.g.
+On OSX OpenMP must be installed via `homebrew <https://brew.sh/>`_ and ``setuptools`` appears to struggle automatically finding the install location. 
+In this situation, and any others where the automatic locating of OpenMP fails, the path to the installation can be stated explicitly.
 
-```
-CFLAGS="-std=c99 -Wall -g" WITH_DEBUGGING_CHECKS=1 pip install .
-```
+.. code-block:: bash
 
-This will add additional checks to the code to help catch bugs, but will slow down the code. This is recommended if you are developing the code, but not for normal use.
+    WITH_OPENMP=/opt/homebrew/Cellar/libomp/18.1.6/ pip install .
 
-The build process will generate a log file (`build_synth.log`) which details the compilation process and any choices that were made about the requested flags. If you encounter any issues, please check this log file for more information.
+Note that the path should point to the directory containing the ``include`` and ``lib`` directories.
+
+For more details on configuration options see the `configuration options docs <../advanced/config_options.rst>`_.
 
 Downloading grids
 #################
