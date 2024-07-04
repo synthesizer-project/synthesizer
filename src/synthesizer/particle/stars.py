@@ -202,12 +202,6 @@ class Stars(Particles, StarsComponent):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        # Define the dictionary to hold particle spectra
-        self.particle_spectra = {}
-
-        # Define the dictionary to hold particle lines
-        self.particle_lines = {}
-
         # Set the optional keyword arguments
 
         # Set the SPH kernel smoothing lengths

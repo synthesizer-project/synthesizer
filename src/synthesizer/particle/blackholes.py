@@ -213,9 +213,6 @@ class BlackHoles(Particles, BlackholesComponent):
         # Check the arguments we've been given
         self._check_bh_args()
 
-        # Define the particle spectra dictionary
-        self.particle_spectra = {}
-
     def _check_bh_args(self):
         """
         Sanitizes the inputs ensuring all arguments agree and are compatible.

@@ -81,6 +81,12 @@ class Particles:
         self.coordinates = coordinates
         self.velocities = velocities
 
+        # Define the dictionary to hold particle spectra
+        self.particle_spectra = {}
+
+        # Define the dictionary to hold particle lines
+        self.particle_lines = {}
+
         # Initialise the particle photometry dictionaries
         self.particle_photo_luminosities = {}
         self.particle_photo_fluxes = {}
@@ -294,6 +300,68 @@ class Particles:
             # Sum the spectra
             self.spectra[key] = sed.sum()
 
+    def __str__(self):
+        """
+        Return a string representation of the particle object.
+
+        Returns:
+            table (str)
+                A string representation of the particle object.
+        """
+
+        def format_array(array):
+            return (
+                f"mean={np.mean(array):.3f}"
+                if isinstance(array, np.ndarray)
+                else str(array)
+            )
+
+        def format_dict(dictionary):
+            return ", ".join(
+                [
+                    f"{key}: {type(value).__name__}"
+                    for key, value in dictionary.items()
+                ]
+            )
+
+        # Construct the header and rows
+        header = f"{'Property':<30} {'Value':<50}"
+        separator = "-" * 80
+        rows = []
+
+        attributes = vars(self)
+        for attr, value in attributes.items():
+            if isinstance(value, dict):
+                formatted_value = format_dict(value)
+            elif isinstance(value, np.ndarray):
+                formatted_value = format_array(value)
+            else:
+                formatted_value = str(value)
+            if formatted_value == "None":
+                continue
+            rows.append(f"{attr:<30} {formatted_value:<50}")
+
+        # Combine the header, separator, and rows into a single string
+        table = "\n".join([header, separator] + rows)
+        return table
+
+    def calculate_centre_of_mass(self):
+        """Calculate the centre of mass of the collection
+        of particles.
+
+        Uses the `masses` and `coordinates` attributes,
+        and assigns the centre of mass to the `centre` attribute
+        """
+        total_mass = np.sum(self.masses)
+        com = np.array([0.0, 0.0, 0.0])
+
+        for i, coods in enumerate(self.coordinates):
+            com += coods * self.masses[i]
+
+        com /= total_mass
+
+        self.center = com
+
 
 class CoordinateGenerator:
     """
@@ -344,20 +412,3 @@ class CoordinateGenerator:
             "https://github.com/flaresimulations/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
-
-    def calculate_centre_of_mass(self):
-        """Calculate the centre of mass of the collection
-        of particles.
-
-        Uses the `masses` and `coordinates` attributes,
-        and assigns the centre of mass to the `centre` attribute
-        """
-        total_mass = np.sum(self.masses)
-        com = np.array([0.0, 0.0, 0.0])
-
-        for i, coods in enumerate(self.coordinates):
-            com += coods * self.masses[i]
-
-        com /= total_mass
-
-        self.center = com
