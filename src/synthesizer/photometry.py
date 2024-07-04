@@ -317,7 +317,7 @@ class PhotometryCollection:
             max_phot = np.max(photometry)
             ylimits = (
                 10 ** (np.log10(max_phot) - 5),
-                10 ** (np.log10(max_phot) * 1.1),
+                10 ** (np.log10(max_phot) + 0.9),
             )
 
         # Do we not have x limits?
