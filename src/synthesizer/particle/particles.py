@@ -42,6 +42,7 @@ class Particles:
     velocities = Quantity()
     masses = Quantity()
     softening_lengths = Quantity()
+    centre = Quantity()
 
     def __init__(
         self,
