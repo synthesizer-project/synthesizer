@@ -23,6 +23,7 @@ from spectres import spectres
 from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 
 from synthesizer import exceptions
+from synthesizer.ascii_table import TableFormatter
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.extensions.timers import tic, toc
@@ -349,41 +350,16 @@ class Sed:
 
     def __str__(self):
         """
-        Overloads the __str__ operator. A summary can be achieved by
-        print(sed) where sed is an instance of Sed.
+        Return a string representation of the particle object.
+
+        Returns:
+            table (str)
+                A string representation of the particle object.
         """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        # Set up string for printing
-        pstr = ""
-
-        # Add the content of the summary to the string to be printed
-        pstr += "-" * 10 + "\n"
-        pstr += "SUMMARY OF SED \n"
-        pstr += f"Number of wavelength points: {len(self._lam)} \n"
-        pstr += f"Wavelength range: [{np.min(self.lam):.2f}, \
-            {np.max(self.lam):.2f}] \n"
-        pstr += f"log10(Peak luminosity/{self.lnu.units}): \
-            {np.log10(np.max(self.lnu)):.2f} \n"
-
-        # if bolometric luminosity attribute has not been calculated,
-        # calculate it.
-        if self.bolometric_luminosity is None:
-            self.bolometric_luminosity = self.measure_bolometric_luminosity()
-        if self.ndim == 2:
-            pstr += (
-                "<log10(Bolometric luminosity/"
-                f"{str(self.bolometric_luminosity.units)})>:"
-                f"{np.mean(np.log10(self.bolometric_luminosity))}"
-            )
-        else:
-            pstr += (
-                "log10(Bolometric luminosity/"
-                f"{str(self.bolometric_luminosity.units)}):"
-                f"{np.log10(self.bolometric_luminosity)}"
-            )
-        pstr += "-" * 10
-
-        return pstr
+        return formatter.get_table("SED")
 
     @property
     def luminosity(self):
