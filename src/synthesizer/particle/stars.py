@@ -27,6 +27,7 @@ import numpy as np
 from unyt import Hz, angstrom, erg, kpc, s
 
 from synthesizer import exceptions
+from synthesizer.ascii_table import TableFormatter
 from synthesizer.components import StarsComponent
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line
@@ -288,28 +289,16 @@ class Stars(Particles, StarsComponent):
 
     def __str__(self):
         """
-        Overloads the __str__ operator, enabling the printing of a summary of
-        the Stars with print(stars) syntax, where stars is an instance of
-        Stars.
+        Return a string representation of the stars object.
 
         Returns:
-            pstr (str)
-                The summary string to be printed.
+            table (str)
+                A string representation of the particle object.
         """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        # Set up string for printing
-        pstr = ""
-
-        # Add the content of the summary to the string to be printed
-        pstr += "-" * 10 + "\n"
-        pstr += "SUMMARY OF STAR PARTICLES" + "\n"
-        pstr += f"N_stars: {self.nparticles}" + "\n"
-        pstr += "log10(total mass formed/Msol): "
-        pstr += f"{np.log10(np.sum(self.initial_masses)): .2f}" + "\n"
-        pstr += f"median(age/Myr): {np.median(self.ages)/1E6:.1f}" + "\n"
-        pstr += "-" * 10
-
-        return pstr
+        return formatter.get_table("Stars")
 
     def _prepare_sed_args(
         self,

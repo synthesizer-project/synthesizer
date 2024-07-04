@@ -10,6 +10,7 @@ from numpy.random import multivariate_normal
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.ascii_table import TableFormatter
 from synthesizer.units import Quantity
 
 
@@ -308,42 +309,10 @@ class Particles:
             table (str)
                 A string representation of the particle object.
         """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        def format_array(array):
-            return (
-                f"mean={np.mean(array):.3f}"
-                if isinstance(array, np.ndarray)
-                else str(array)
-            )
-
-        def format_dict(dictionary):
-            return ", ".join(
-                [
-                    f"{key}: {type(value).__name__}"
-                    for key, value in dictionary.items()
-                ]
-            )
-
-        # Construct the header and rows
-        header = f"{'Property':<30} {'Value':<50}"
-        separator = "-" * 80
-        rows = []
-
-        attributes = vars(self)
-        for attr, value in attributes.items():
-            if isinstance(value, dict):
-                formatted_value = format_dict(value)
-            elif isinstance(value, np.ndarray):
-                formatted_value = format_array(value)
-            else:
-                formatted_value = str(value)
-            if formatted_value == "None":
-                continue
-            rows.append(f"{attr:<30} {formatted_value:<50}")
-
-        # Combine the header, separator, and rows into a single string
-        table = "\n".join([header, separator] + rows)
-        return table
+        return formatter.get_table("Particles")
 
     def calculate_centre_of_mass(self):
         """Calculate the centre of mass of the collection
