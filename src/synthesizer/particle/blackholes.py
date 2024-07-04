@@ -19,6 +19,7 @@ import numpy as np
 from unyt import cm, deg, km, rad, s, unyt_array
 
 from synthesizer import exceptions
+from synthesizer.ascii_table import TableFormatter
 from synthesizer.components import BlackholesComponent
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
@@ -37,7 +38,7 @@ class BlackHoles(Particles, BlackholesComponent):
     helper methods.
 
     Note that due to the many possible operations, this class has a large
-    number of optional attributes which are set to None if not provided.
+    number ofoptional attributes which are set to None if not provided.
 
     Attributes:
         nbh (int)
@@ -232,6 +233,19 @@ class BlackHoles(Particles, BlackholesComponent):
                         "Inconsistent black hole array sizes! (nparticles=%d, "
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
+
+    def __str__(self):
+        """
+        Return a string representation of the particle object.
+
+        Returns:
+            table (str)
+                A string representation of the particle object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Black Holes")
 
     def calculate_random_inclination(self):
         """

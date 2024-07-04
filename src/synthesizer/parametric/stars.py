@@ -19,6 +19,7 @@ from scipy import integrate
 from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.ascii_table import TableFormatter
 from synthesizer.components import StarsComponent
 from synthesizer.line import Line
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
@@ -590,24 +591,16 @@ class Stars(StarsComponent):
 
     def __str__(self):
         """
-        Overload the print function to give a basic summary of the
-        stellar population
+        Return a string representation of the stars object.
+
+        Returns:
+            table (str)
+                A string representation of the particle object.
         """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        # Define the output string
-        pstr = ""
-        pstr += "-" * 10 + "\n"
-        pstr += "SUMMARY OF BINNED SFZH" + "\n"
-        pstr += (
-            f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
-        )
-        pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
-        pstr += (
-            f"mean metallicity: {self.calculate_mean_metallicity():.4f}" + "\n"
-        )
-        pstr += "-" * 10 + "\n"
-
-        return pstr
+        return formatter.get_table("Stars")
 
     def __add__(self, other_stars):
         """

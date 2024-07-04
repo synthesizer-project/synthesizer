@@ -16,6 +16,7 @@ Example usages:
 import numpy as np
 
 from synthesizer import exceptions
+from synthesizer.ascii_table import TableFormatter
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer.warnings import warn
@@ -206,3 +207,16 @@ class Gas(Particles):
         self.dust_masses = (
             self.masses * self.metallicities * self.dust_to_metal_ratio
         )
+
+    def __str__(self):
+        """
+        Return a string representation of the stars object.
+
+        Returns:
+            table (str)
+                A string representation of the particle object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Gas")
