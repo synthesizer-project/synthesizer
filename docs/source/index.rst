@@ -19,13 +19,15 @@ Contents
    grids/grids
    galaxy/galaxy
    components/components
+   emission_models/emission_models
    sed/sed
    spectra/spectra
    lines/lines
-   emission_models/emission_models
    filters/filters
+   photometry/photometry
    dust/dust
    imaging/imaging
+   parallelism/openmp
    advanced/advanced
    auto_examples/index
    API
