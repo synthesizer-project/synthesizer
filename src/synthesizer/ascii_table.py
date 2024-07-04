@@ -20,6 +20,7 @@ Example usage:
 """
 
 import numpy as np
+from unyt import unyt_array
 
 
 class TableFormatter:
@@ -91,7 +92,7 @@ class TableFormatter:
             (key, type(value).__name__) for key, value in dictionary.items()
         ]
 
-    def get_rows(self):
+    def get_value_rows(self):
         """
         Collect the object's attributes and formats them into rows.
 
@@ -106,6 +107,44 @@ class TableFormatter:
             if attr[0] == "_" and hasattr(self.obj, attr[1:]):
                 attr = attr[1:]
                 value = getattr(self.obj, attr)
+            if not (
+                isinstance(value, dict) or isinstance(value, np.ndarray)
+            ) or (isinstance(value, np.ndarray) and value.size <= 3):
+                formatted_value = str(value)
+                rows.append((attr, formatted_value))
+        return rows
+
+    def get_array_rows(self):
+        """
+        Collect the object's attributes and formats them into rows.
+
+        Returns:
+            list of tuple:
+                A list of tuples where each tuple contains the attribute
+                name and its formatted value.
+        """
+        rows = []
+        for attr, value in self.attributes.items():
+            # Handle Quantitys
+            if attr[0] == "_" and hasattr(self.obj, attr[1:]):
+                attr = attr[1:]
+                value = getattr(self.obj, attr)
+            if isinstance(value, (np.ndarray, unyt_array)) and value.size > 3:
+                formatted_value = self.format_array(value)
+                rows.append((f"<{attr}> {value.shape}", formatted_value))
+        return rows
+
+    def get_dict_rows(self):
+        """
+        Collect the object's attributes and formats them into rows.
+
+        Returns:
+            list of tuple:
+                A list of tuples where each tuple contains the attribute
+                name and its formatted value.
+        """
+        rows = []
+        for attr, value in self.attributes.items():
             if isinstance(value, dict):
                 formatted_values = self.format_dict(value)
                 for i, (key, formatted_value) in enumerate(formatted_values):
@@ -113,12 +152,6 @@ class TableFormatter:
                         rows.append((attr, f"{key}: {formatted_value}"))
                     else:
                         rows.append(("", f"{key}: {formatted_value}"))
-            elif isinstance(value, np.ndarray):
-                formatted_value = self.format_array(value)
-                rows.append((f"<{attr}> {value.shape}", formatted_value))
-            else:
-                formatted_value = str(value)
-                rows.append((attr, formatted_value))
         return rows
 
     def get_table(self, title_text):
@@ -134,7 +167,9 @@ class TableFormatter:
             str:
                 The formatted table as a string.
         """
-        rows = self.get_rows()
+        rows = self.get_value_rows()
+        rows.extend(self.get_array_rows())
+        rows.extend(self.get_dict_rows())
         col_widths = [
             max(len(str(item)) for item in col)
             for col in zip(*rows, ("Property", "Value"))
