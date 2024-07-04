@@ -80,6 +80,8 @@ class Gas(Particles):
         dust_masses=None,
         verbose=False,
         centre=None,
+        metallicity_floor=1e-5,
+        **kwargs,
     ):
         """
         Initialise the gas object.
@@ -106,6 +108,15 @@ class Gas(Particles):
                 values for each gas particle.
             dust_masses (array_like, float)
                 Mass of dust in each particle in Msun.
+            verbose (bool)
+                Whether to print extra information to the console.
+            centre (array-like, float)
+                The centre of the galaxy in simulation length units.
+            metallicity_floor (float)
+                The metallicity floor when using log properties (only matters
+                for baryons). This is used to avoid log(0) errors.
+            **kwargs
+                Extra optional properties to set on the gas object.
         """
 
         # Instantiate parent
@@ -118,6 +129,7 @@ class Gas(Particles):
             softening_length=softening_length,
             nparticles=len(masses),
             centre=centre,
+            metallicity_floor=metallicity_floor,
         )
 
         # Set the metallicites and log10 equivalent
@@ -161,6 +173,10 @@ class Gas(Particles):
 
         # Check the arguments we've been given
         self._check_gas_args()
+
+        # Set any extra properties
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def _check_gas_args(self):
         """
