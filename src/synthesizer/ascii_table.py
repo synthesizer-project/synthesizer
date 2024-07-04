@@ -103,7 +103,7 @@ class TableFormatter:
         rows = []
         for attr, value in self.attributes.items():
             # Handle Quantitys
-            if attr[0] == "_":
+            if attr[0] == "_" and hasattr(self.obj, attr[1:]):
                 attr = attr[1:]
                 value = getattr(self.obj, attr)
             if isinstance(value, dict):
