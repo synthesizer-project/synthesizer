@@ -70,9 +70,8 @@ class TableFormatter:
                 The formatted string showing the mean value of the array.
         """
         return (
-            f"{np.mean(array):.3f}"
-            if isinstance(array, np.ndarray)
-            else str(array)
+            f"{np.min(array):.2e} -> {np.max(array):.2e} "
+            f"(Mean: {np.mean(array):.2e})"
         )
 
     def format_dict(self, dictionary):
@@ -103,6 +102,8 @@ class TableFormatter:
         """
         rows = []
         for attr, value in self.attributes.items():
+            if value is None:
+                continue
             # Handle Quantitys
             if attr[0] == "_" and hasattr(self.obj, attr[1:]):
                 attr = attr[1:]
@@ -110,7 +111,16 @@ class TableFormatter:
             if not (
                 isinstance(value, dict) or isinstance(value, np.ndarray)
             ) or (isinstance(value, np.ndarray) and value.size <= 3):
-                formatted_value = str(value)
+                if isinstance(value, float) and (value >= 1e4 or value < 0.01):
+                    formatted_value = f"{value:.2e}"
+                elif isinstance(value, float):
+                    formatted_value = f"{value:.2f}"
+                elif isinstance(value, int):
+                    formatted_value = str(value)
+                elif isinstance(value, unyt_array):
+                    formatted_value = f"{value.value:.2e} {value.units}"
+                else:
+                    formatted_value = str(value)
                 rows.append((attr, formatted_value))
         return rows
 
@@ -131,7 +141,7 @@ class TableFormatter:
                 value = getattr(self.obj, attr)
             if isinstance(value, (np.ndarray, unyt_array)) and value.size > 3:
                 formatted_value = self.format_array(value)
-                rows.append((f"<{attr}> {value.shape}", formatted_value))
+                rows.append((f"{attr} {value.shape}", formatted_value))
         return rows
 
     def get_dict_rows(self):
