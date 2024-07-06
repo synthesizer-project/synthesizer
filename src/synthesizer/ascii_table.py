@@ -111,6 +111,7 @@ class TableFormatter:
             if not (
                 isinstance(value, dict) or isinstance(value, np.ndarray)
             ) or (isinstance(value, np.ndarray) and value.size <= 3):
+                # Handle the different situations
                 if isinstance(value, float) and (value >= 1e4 or value < 0.01):
                     formatted_value = f"{value:.2e}"
                 elif isinstance(value, float):
@@ -119,6 +120,8 @@ class TableFormatter:
                     formatted_value = str(value)
                 elif isinstance(value, unyt_array):
                     formatted_value = f"{value.value:.2e} {value.units}"
+                elif hasattr(value, "__str__"):
+                    formatted_value = value.__repr__()
                 else:
                     formatted_value = str(value)
                 rows.append((attr, formatted_value))
