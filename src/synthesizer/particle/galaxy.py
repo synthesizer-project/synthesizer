@@ -57,6 +57,7 @@ class Galaxy(BaseGalaxy):
         redshift=None,
         centre=None,
         verbose=True,
+        **kwargs,
     ):
         """Initialise a particle based Galaxy with objects derived from
            Particles.
@@ -79,6 +80,8 @@ class Galaxy(BaseGalaxy):
                 of ways (e.g. centre of mass)
             verbose (float)
                 Are we talking?
+            **kwargs
+                Arbitrary keyword arguments.
 
         Raises:
             InconsistentArguments
@@ -126,6 +129,10 @@ class Galaxy(BaseGalaxy):
                 getattr(self, attr)
             except AttributeError:
                 setattr(self, attr, None)
+
+        # Attach any additional keyword arguments
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def calculate_integrated_stellar_properties(self):
         """

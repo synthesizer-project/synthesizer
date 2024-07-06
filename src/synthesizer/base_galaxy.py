@@ -67,6 +67,10 @@ class BaseGalaxy:
                 "`parametric.galaxy.Galaxy`"
             )
 
+        # Attach any additional attributes
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
     def get_equivalent_width(self, feature, blue, red, spectra_to_plot=None):
         """
         Gets all equivalent widths associated with a sed object
