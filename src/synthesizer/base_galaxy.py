@@ -5,6 +5,7 @@ only contains common attributes and methods to reduce boilerplate.
 """
 
 from synthesizer import exceptions
+from synthesizer.ascii_table import TableFormatter
 from synthesizer.igm import Inoue14
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
 
@@ -40,7 +41,20 @@ class BaseGalaxy:
         regardless to unify the Galaxy syntax for both cases.
 
         Args:
-
+            stars (particle.Stars/parametric.Stars)
+                The Stars object holding information about the stellar
+                population.
+            gas (particle.Gas/parametric.Gas)
+                The Gas object holding information about the gas distribution.
+            black_holes (particle.BlackHoles/parametric.BlackHole)
+                The BlackHole/s object holding information about the
+                black hole/s.
+            redshift (float)
+                The redshift of the galaxy.
+            centre (array)
+                The centre of the galaxy.
+            **kwargs
+                Any additional attributes to attach to the galaxy object.
         """
         # Add some place holder attributes which are overloaded on the children
         self.spectra = {}
@@ -71,9 +85,22 @@ class BaseGalaxy:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+    def __str__(self):
+        """
+        Return a string representation of the galaxy object.
+
+        Returns:
+            table (str)
+                A string representation of the galaxy object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Galaxy")
+
     def get_equivalent_width(self, feature, blue, red, spectra_to_plot=None):
         """
-        Gets all equivalent widths associated with a sed object
+        Get all equivalent widths associated with a sed object
 
         Parameters
         ----------
@@ -87,7 +114,6 @@ class BaseGalaxy:
         equivalent_width : float
             The calculated equivalent width at the current index.
         """
-
         equivalent_width = None
 
         if not isinstance(spectra_to_plot, list):

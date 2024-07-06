@@ -56,7 +56,6 @@ class Galaxy(BaseGalaxy):
         black_holes=None,
         redshift=None,
         centre=None,
-        verbose=True,
         **kwargs,
     ):
         """Initialise a particle based Galaxy with objects derived from
@@ -78,8 +77,6 @@ class Galaxy(BaseGalaxy):
             centre (float)
                 Centre of the galaxy particles. Can be defined in a number
                 of ways (e.g. centre of mass)
-            verbose (float)
-                Are we talking?
             **kwargs
                 Arbitrary keyword arguments.
 
@@ -97,7 +94,6 @@ class Galaxy(BaseGalaxy):
 
         # Set the type of galaxy
         self.galaxy_type = "Particle"
-        self.verbose = verbose
 
         # Instantiate the parent (load stars and gas below)
         BaseGalaxy.__init__(
@@ -488,56 +484,6 @@ class Galaxy(BaseGalaxy):
         if self.gas is not None:
             # Nothing to do here... YET
             pass
-
-    def get_line_los():
-        """
-        ParticleGalaxy specific method for obtaining the line luminosities
-        subject to line of sight attenuation to each star particle.
-        """
-
-        pass
-
-    def get_particle_line_intrinsic(self, grid):
-        # """
-        # Calculate line luminosities from individual young stellar particles
-
-        # Warning: slower than calculating integrated line luminosities,
-        # particularly where young particles are resampled, as it does
-        # not use vectorisation.
-
-        # Args:
-        #     grid (object):
-        #         `Grid` object.
-        # """
-        # age_mask = self.stars.log10ages < grid.max_age
-        # lum = np.zeros((np.sum(age_mask), len(grid.lines)))
-
-        # if np.sum(age_mask) == 0:
-        #     return lum
-        # else:
-        #     for i, (mass, age, metal) in enumerate(zip(
-        #             self.stars.initial_masses[age_mask],
-        #             self.stars.log10ages[age_mask],
-        #             self.stars.log10metallicities[age_mask])):
-
-        #         weights_temp = self._calculate_weights(grid, metal, age,
-        #                                                mass,
-        #                                                young_stars=True)
-        #         lum[i] = np.sum(grid.line_luminosities * weights_temp,
-        #                         axis=(1, 2))
-
-        # return lum
-
-        pass
-
-    def get_particle_line_attenuated():
-        pass
-
-    def get_particle_line_screen():
-        pass
-
-    def get_particle_line_los():
-        pass
 
     def calculate_los_tau_v(
         self,
