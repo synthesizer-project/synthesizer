@@ -6,6 +6,13 @@ This includes installation instructions, guidance on downloading grid files, and
 
 Once you're finished here, you can check out the more detailed documentation on the various objects and how they interact, run some of the `Examples <../auto_examples/index>`_, and explore the `API <../API.rst>`_.
 
+.. toctree::
+   :maxdepth: 1
+   
+   installation
+   downloading_grids
+   overview
+
 Getting Help
 ^^^^^^^^^^^^
 
@@ -21,12 +28,4 @@ To be removed from this mailing list, please email <christopher dot lovell at po
     
     <iframe src="https://docs.google.com/forms/d/e/1FAIpQLSfDGq9oJiaCVxUEzyc3ZQVUZUtuG6ggy3-7Pd1em7Tuh6tZtA/viewform?embedded=true" width="640" height="527" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>
 
-Contents
-^^^^^^^^
 
-.. toctree::
-   :maxdepth: 1
-   
-   installation
-   downloading_grids
-   overview
