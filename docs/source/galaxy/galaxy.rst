@@ -23,5 +23,3 @@ This enables the storing of arbitrary data needed later in a pipeline (e.g. pred
    :maxdepth: 2
 
    particle_parametric
-   generate_active_galaxy
-   generate_composite_galaxy
