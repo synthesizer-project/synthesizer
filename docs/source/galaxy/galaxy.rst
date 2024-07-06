@@ -2,23 +2,25 @@ Galaxy
 ======
 
 One of the core objects in Synthesizer is the `Galaxy` object. 
-A `Galaxy` is essentially a container object for different `components <../components/components.rst>`_, such as its constituent stars, gas, and black holes, while providing methods for interacting with this data.
-Importantly, this include methods for predicting the emission, from the galaxy as a whole and from the individual components.
+A `Galaxy` is essentially a container object for different `components <../components/components.rst>`_ (stars, gas, and black holes), and provides methods for interacting with and combining these components.
+Importantly, this includes methods for computing the emission, from the galaxy as a whole and from the individual components.
 
 Particle vs Parametric
 ^^^^^^^^^^^^^^^^^^^^^^
 
 As described in the `overview <../getting_started/overview.rst>`_, galaxy objects can take two different forms depending on the data representation: *particle* or *parametric*.
-In the `example page <particle_parametric>`_` below, we demonstrate how to initialise galaxy objects of these two different types, and how the galaxy factory function handles this for you in the majority of cases.
+In the `example page <particle_parametric>`_` below, we demonstrate how to initialise galaxy objects of these two different types, and how the galaxy factory function can handle this for you.
 
 Global galaxy properties
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-A galaxy can also have a number of attributes deinfed at the global galaxy level. These include, but are not limited to, the redshift.
-Redshift in particular is of value when calculating the the emission of a galaxy in the observer frame.
+In addition to the component attributes, a galaxy can also hold galaxy level attributes. 
+These include a ``name`` for the galaxy, and more importantly the redshift of the galaxy, an attribute required to calculate the observer frame emission of the galaxy.
+Beyond the redshift, and like any other container object in Synthesizer, the user can provide additional kwargs to the galaxy object, which will be stored as galaxy level attributes. 
+This enables the storing of arbitrary data needed later in a pipeline (e.g. predefined optical depths).
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    particle_parametric
    generate_active_galaxy
