@@ -350,11 +350,11 @@ class Sed:
 
     def __str__(self):
         """
-        Return a string representation of the particle object.
+        Return a string representation of the SED object.
 
         Returns:
             table (str)
-                A string representation of the particle object.
+                A string representation of the SED object.
         """
         # Intialise the table formatter
         formatter = TableFormatter(self)
