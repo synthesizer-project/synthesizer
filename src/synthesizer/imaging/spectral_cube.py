@@ -38,7 +38,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
 
-import synthesizer.exceptions as exceptions
+from synthesizer import exceptions
 from synthesizer.units import Quantity
 
 
