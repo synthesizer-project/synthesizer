@@ -1,3 +1,22 @@
+"""A module for defining parametric morphologies for use in making images.
+
+This module provides a base class for defining parametric morphologies, and
+specific classes for the Sersic profile and point sources. The base class
+provides a common interface for defining morphologies, and the specific classes
+provide the functionality for the Sersic profile and point sources.
+
+Example usage::
+
+    # Import the module
+    from synthesizer import morphology
+
+    # Define a Sersic profile
+    sersic = morphology.Sersic(r_eff=10.0, sersic_index=4, ellipticity=0.5)
+
+    # Define a point source
+    point_source = morphology.PointSource(offset=[0.0, 0.0])
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.modeling.models import Sersic2D as Sersic2D_
@@ -9,18 +28,24 @@ from synthesizer import exceptions
 
 class MorphologyBase:
     """
-    A base class holding common methods for parametric morphology descriptions
+    A base class holding common methods for parametric morphology descriptions.
 
-
-    Methods
-    -------
-    plot_density_grid
-        shows a plot of the model for a given resolution and npix
+    Attributes:
+        r_eff_kpc (float): The effective radius in kpc.
+        r_eff_mas (float): The effective radius in milliarcseconds.
+        sersic_index (float): The Sersic index.
+        ellipticity (float): The ellipticity.
+        theta (float): The rotation angle.
+        cosmo (astropy.cosmology): The cosmology object.
+        redshift (float): The redshift.
+        model_kpc (astropy.modeling.models.Sersic2D): The Sersic2D model in
+            kpc.
+        model_mas (astropy.modeling.models.Sersic2D): The Sersic2D model in
     """
 
     def plot_density_grid(self, resolution, npix):
         """
-        A simple method to produce a quick density plot.
+        Make a quick density plot.
 
         Arguments
             resolution (float)
@@ -28,7 +53,6 @@ class MorphologyBase:
             npix (int)
                 The number of pixels.
         """
-
         bins = resolution * np.arange(-npix / 2, npix / 2)
 
         xx, yy = np.meshgrid(bins, bins)

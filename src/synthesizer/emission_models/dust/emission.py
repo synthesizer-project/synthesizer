@@ -528,7 +528,9 @@ class Casey12(EmissionBase):
 
 class IR_templates:
     """
-    A class to generate a dust emission spectrum using either:
+    A class to generate a dust emission spectrum.
+
+    Can use either:
     (i) Draine and Li model (2007) --
     DL07 - https://ui.adsabs.harvard.edu/abs/2007ApJ...657..810D/abstract
     Umax (Maximum radiation field heating the dust) is chosen as 1e7.
@@ -539,41 +541,30 @@ class IR_templates:
     Attributes:
         grid (Grid object)
             The dust grid to use
-
         mdust (float)
             The mass of dust in the galaxy (Msun).
-
         dgr (float)
             The dust-to-gas ratio of the galaxy
-
         MH (float)
             The mass in hydrogen of the galaxy
-
         template (string)
             The IR template model to be used
             (Currently only Draine and Li 2007 model implemented)
-
         ldust (float)
             The dust luminosity of the galaxy (integrated from 0 to inf),
             obtained using energy balance here.
-
         gamma (float)
             Fraction of the dust mass that is associated with the
             power-law part of the starlight intensity distribution.
-
         qpah (float)
             Fraction of dust mass in the form of PAHs [good value=2.5%]
-
         umin (float)
             Radiation field heating majority of the dust.
-
         alpha (float)
             The power law normalisation [good value = 2.].
-
         p0 (float)
             Power absorbed per unit dust mass in a radiation field
             with U = 1
-
     """
 
     grid: Grid
@@ -605,6 +596,39 @@ class IR_templates:
         p0: float = 125.0,
         verbose: bool = True,
     ) -> None:
+        """
+        Initialise the dust emission model.
+
+        Args:
+            grid (Grid object)
+                The dust grid to use
+            mdust (unyt_quantity)
+                The mass of dust in the galaxy (Msun).
+            dgr (float)
+                The dust-to-gas ratio of the galaxy
+            MH (unyt_quantity)
+                The mass in hydrogen
+            template (string)
+                The IR template model to be used
+                (Currently only Draine and Li 2007 model implemented)
+            ldust (unyt_quantity)
+                The dust luminosity of the galaxy (integrated from 0 to inf),
+                obtained using energy balance here.
+            gamma (float)
+                Fraction of the dust mass that is associated with the
+                power-law part of the starlight intensity distribution.
+            qpah (float)
+                Fraction of dust mass in the form of PAHs [good value=2.5%]
+            umin (float)
+                Radiation field heating majority of the dust.
+            alpha (float)
+                The power law normalisation [good value = 2.].
+            p0 (float)
+                Power absorbed per unit dust mass in a radiation field
+                with U = 1
+            verbose (bool)
+                Are we talking?
+        """
         self.grid: Grid = grid
         self.mdust: unyt_quantity = mdust
         self.dgr: float = dgr
@@ -620,15 +644,11 @@ class IR_templates:
 
     def dl07(self) -> None:
         """
-        Draine and Li models
+        Draine and Li models.
+
         For simplicity, only MW models are implemented
-        (SMC model has only qpah=0.1%)
-        These are the extended grids of DL07
-
-        Attributes:
-            grid: grid class
+        (SMC model has only qpah=0.1%). These are the extended grids of DL07.
         """
-
         # Define the models parameters
         qpahs: NDArray[np.float32] = self.grid.qpah
         umins: NDArray[np.float32] = self.grid.umin

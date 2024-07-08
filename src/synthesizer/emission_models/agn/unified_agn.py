@@ -4,7 +4,8 @@ This module contains the definition of the Unified AGN model that can be used
 to generate spectra from components or as a foundation to work from when
 creating more complex models.
 
-Example usage:
+Example usage::
+
     # Create the Unified AGN model
     model = UnifiedAGN(
         nlr_grid=nlr_grid,
@@ -16,6 +17,7 @@ Example usage:
 
     # Generate a spectra
     spectra = black_holes.get_spectra(model)
+
 """
 
 import numpy as np

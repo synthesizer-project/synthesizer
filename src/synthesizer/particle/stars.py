@@ -63,10 +63,6 @@ class Stars(Particles, StarsComponent):
             V-band dust optical depth of each stellar particle.
         alpha_enhancement (array-like, float)
             The alpha enhancement [alpha/Fe] of each stellar particle.
-        log10ages (array-like, float)
-            Convenience attribute containing log10(age in yr).
-        log10metallicities (array-like, float)
-            Convenience attribute containing log10(metallicity).
         resampled (bool)
             Flag for whether the young particles have been resampled.
         current_masses (array-like, float)
@@ -242,7 +238,7 @@ class Stars(Particles, StarsComponent):
     @property
     def log10ages(self):
         """
-        Return stellar particle ages in log (base 10)
+        Return stellar particle ages in log (base 10).
 
         Returns:
             log10ages (array)
@@ -254,6 +250,7 @@ class Stars(Particles, StarsComponent):
     def log10metallicities(self):
         """
         Return stellar particle ages in log (base 10).
+
         Zero valued metallicities are set to `metallicity_floor`,
         which is set on initialisation of this stars object. To
         check it, run `stars.metallicity_floor`.
@@ -441,13 +438,9 @@ class Stars(Particles, StarsComponent):
                 Flag for verbose output.
             do_grid_check (bool)
                 Whether to check how many particles lie outside the grid. This
-                is True by default and provides a vital sanity check. There
-                are instances when you may want to turn this off:
-                - You know particles will lie outside the grid and want
-                  this behaviour. In this case the check is redundant.
-                - You know your particle lie within the grid but don't
-                  want to waste compute checking. This case is useful when
-                  working with large particle counts.
+                is a sanity check that can be used to check the
+                consistency of your particles with the grid. It is False by
+                default because the check is extreme expensive.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -469,7 +462,8 @@ class Stars(Particles, StarsComponent):
                 all available threads are used.
 
         Returns:
-            Numpy array of integrated spectra in units of (erg / s / Hz).
+            numpy.ndarray:
+                Numpy array of integrated spectra in units of (erg / s / Hz).
         """
 
         # Ensure we have a key in the grid. If not error.
@@ -649,7 +643,8 @@ class Stars(Particles, StarsComponent):
                 The name of the target spectra inside the grid file.
 
         Returns:
-            Numpy array of integrated spectra in units of (erg / s / Hz).
+            numpy.ndarray:
+                Numpy array of integrated spectra in units of (erg / s / Hz).
         """
 
         # initialise SFH object
@@ -908,13 +903,9 @@ class Stars(Particles, StarsComponent):
                 Flag for verbose output. By default False.
             do_grid_check (bool)
                 Whether to check how many particles lie outside the grid. This
-                is True by default and provides a vital sanity check. There
-                are instances when you may want to turn this off:
-                    - You know particles will lie outside the grid and want
-                      this behaviour. In this case the check is redundant.
-                    - You know your particle lie within the grid but don't
-                      want to waste compute checking. This case is useful when
-                      working with large particle counts.
+                is a sanity check that can be used to check the
+                consistency of your particles with the grid. It is False by
+                default because the check is extreme expensive.
             grid_assignment_method (string)
                 The type of method used to assign particles to a SPS grid
                 point. Allowed methods are cic (cloud in cell) or nearest
@@ -925,7 +916,8 @@ class Stars(Particles, StarsComponent):
                 all available threads are used.
 
         Returns:
-            Numpy array of integrated spectra in units of (erg / s / Hz).
+            numpy.ndarray:
+                Numpy array of integrated spectra in units of (erg / s / Hz).
         """
 
         start = tic()
@@ -1445,7 +1437,8 @@ class Stars(Particles, StarsComponent):
                 all available threads will be used.
 
         Returns:
-            Numpy array of containing the SFZH.
+            numpy.ndarray:
+                Numpy array of containing the SFZH.
         """
 
         from synthesizer.extensions.sfzh import compute_sfzh
@@ -1553,56 +1546,48 @@ class Stars(Particles, StarsComponent):
             emission_model (EmissionModel):
                 The emission model to use.
             dust_curves (dict):
-                An overide to the emisison model dust curves. Either:
+                An override to the emission model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
                       models should be used.
                     - A single dust curve to apply to all emission models.
-                    - A dictionary of the form:
-                          {<label>: <dust_curve instance>}
+                    - A dictionary of the form {<label>: <dust_curve instance>}
                       to use a specific dust curve instance with particular
                       properties.
             tau_v (dict):
-                An overide to the dust model optical depth. Either:
+                An override to the dust model optical depth. Either:
                     - None, indicating the tau_v defined on the emission model
-                        should be used.
+                      should be used.
                     - A float to use as the optical depth for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<tau_v>)}
-                        to use a specific optical depth with a particular
-                        model or
-                            {<label>: str(<attribute>)}
-                        to use an attribute of the component as the optical
-                        depth.
+                    - A dictionary of the form {<label>: float(<tau_v>)}
+                      to use a specific optical depth with a particular
+                      model or {<label>: str(<attribute>)} to use an attribute
+                      of the component as the optical depth.
             fesc (dict):
-                An overide to the emission model escape fraction. Either:
+                An override to the emission model escape fraction. Either:
                     - None, indicating the fesc defined on the emission model
                       should be used.
                     - A float to use as the escape fraction for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<fesc>)}
+                    - A dictionary of the form {<label>: float(<fesc>)}
                       to use a specific escape fraction with a particular
-                      model or
-                            {<label>: str(<attribute>)}
-                      to use an attribute of the component as the escape
-                      fraction.
+                      model or {<label>: str(<attribute>)} to use an
+                      attribute of the component as the escape fraction.
             mask (dict):
-                An overide to the emission model mask. Either:
+                An override to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
                       should be used.
-                    - A dictionary of the form:
-                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
-                      to add a specific mask to a particular model.
-            verbose (bool)
+                    - A dictionary of the form {<label>: {"attr": attr,
+                      "thresh": thresh, "op": op}} to add a specific mask to
+                      a particular model.
+            verbose (bool):
                 Are we talking?
-            kwargs (dict)
+            kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
 
         Returns:
-            dict
-                A dictionary of spectra which can be attached to the
-                appropriate spectra attribute of the component
-                (spectra/particle_spectra)
+            dict: A dictionary of spectra which can be attached to the
+            appropriate spectra attribute of the component
+            (spectra/particle_spectra).
         """
         # Get the spectra
         spectra = emission_model._get_spectra(
@@ -1637,58 +1622,51 @@ class Stars(Particles, StarsComponent):
 
         Args:
             line_ids (list):
-                A list of line_ids. Doublets can be specified as a nested list
-                or using a comma (e.g. 'OIII4363,OIII4959').
+                A list of line_ids. Doublets can be specified as a nested
+                list or using a comma (e.g., 'OIII4363,OIII4959').
             emission_model (EmissionModel):
                 The emission model to use.
             dust_curves (dict):
-                An overide to the emisison model dust curves. Either:
+                An override to the emission model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
                       models should be used.
                     - A single dust curve to apply to all emission models.
-                    - A dictionary of the form:
-                          {<label>: <dust_curve instance>}
+                    - A dictionary of the form {<label>: <dust_curve instance>}
                       to use a specific dust curve instance with particular
                       properties.
             tau_v (dict):
-                An overide to the dust model optical depth. Either:
+                An override to the dust model optical depth. Either:
                     - None, indicating the tau_v defined on the emission model
-                        should be used.
+                      should be used.
                     - A float to use as the optical depth for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<tau_v>)}
-                        to use a specific optical depth with a particular
-                        model or
-                            {<label>: str(<attribute>)}
-                        to use an attribute of the component as the optical
-                        depth.
+                    - A dictionary of the form {<label>: float(<tau_v>)}
+                      to use a specific optical depth with a particular
+                      model or {<label>: str(<attribute>)} to use an attribute
+                      of the component as the optical depth.
             fesc (dict):
-                An overide to the emission model escape fraction. Either:
+                An override to the emission model escape fraction. Either:
                     - None, indicating the fesc defined on the emission model
                       should be used.
                     - A float to use as the escape fraction for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<fesc>)}
+                    - A dictionary of the form {<label>: float(<fesc>)}
                       to use a specific escape fraction with a particular
-                      model or
-                            {<label>: str(<attribute>)}
-                      to use an attribute of the component as the escape
-                      fraction.
+                      model or {<label>: str(<attribute>)} to use an
+                      attribute of the component as the escape fraction.
             mask (dict):
-                An overide to the emission model mask. Either:
+                An override to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
                       should be used.
-                    - A dictionary of the form:
-                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
-                      to add a specific mask to a particular model.
-            verbose (bool)
+                    - A dictionary of the form {<label>: {"attr": attr,
+                      "thresh": thresh, "op": op}} to add a specific mask to
+                      a particular model.
+            verbose (bool):
                 Are we talking?
-            kwargs (dict)
+            kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
 
         Returns:
-            LineCollection
+            LineCollection:
                 A LineCollection object containing the lines defined by the
                 root model.
         """

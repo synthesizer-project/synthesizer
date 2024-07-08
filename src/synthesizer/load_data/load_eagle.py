@@ -901,8 +901,8 @@ def assign_galaxy_prop(
     g_kwargs: Dict = {},
 ) -> Galaxy:
     """
-    A function to load stellar and gas particle data
-    into synthesizer galaxy object
+    Load stellar and gas particle data into synthesizer galaxy object.
+
     Arguments:
         ii (int)
             galaxy number
@@ -958,7 +958,8 @@ def assign_galaxy_prop(
             kwargs for gas
 
     Returns:
-        synthesizer galaxy object
+        Galaxy
+            synthesizer galaxy object
     """
 
     galaxy = Galaxy(redshift=zed, verbose=verbose)

@@ -255,45 +255,38 @@ class StarsComponent:
             emission_model (EmissionModel):
                 The emission model to use.
             dust_curves (dict):
-                An overide to the emisison model dust curves. Either:
+                An override to the emission model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
                       models should be used.
                     - A single dust curve to apply to all emission models.
-                    - A dictionary of the form:
-                          {<label>: <dust_curve instance>}
+                    - A dictionary of the form {<label>: <dust_curve instance>}
                       to use a specific dust curve instance with particular
                       properties.
             tau_v (dict):
-                An overide to the dust model optical depth. Either:
+                An override to the dust model optical depth. Either:
                     - None, indicating the tau_v defined on the emission model
-                        should be used.
+                      should be used.
                     - A float to use as the optical depth for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<tau_v>)}
-                        to use a specific optical depth with a particular
-                        model or
-                            {<label>: str(<attribute>)}
-                        to use an attribute of the component as the optical
-                        depth.
+                    - A dictionary of the form {<label>: float(<tau_v>)}
+                      to use a specific optical depth with a particular
+                      model or {<label>: str(<attribute>)} to use an attribute
+                      of the component as the optical depth.
             fesc (dict):
-                An overide to the emission model escape fraction. Either:
+                An override to the emission model escape fraction. Either:
                     - None, indicating the fesc defined on the emission model
                       should be used.
                     - A float to use as the escape fraction for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<fesc>)}
+                    - A dictionary of the form {<label>: float(<fesc>)}
                       to use a specific escape fraction with a particular
-                      model or
-                            {<label>: str(<attribute>)}
-                      to use an attribute of the component as the escape
-                      fraction.
+                      model or {<label>: str(<attribute>)} to use an
+                      attribute of the component as the escape fraction.
             mask (dict):
-                An overide to the emission model mask. Either:
+                An override to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
                       should be used.
-                    - A dictionary of the form:
-                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
-                      to add a specific mask to a particular model.
+                    - A dictionary of the form {<label>: {"attr": attr,
+                      "thresh": thresh, "op": op}} to add a specific mask to
+                      a particular model.
             verbose (bool)
                 Are we talking?
             kwargs (dict)
@@ -344,45 +337,38 @@ class StarsComponent:
             emission_model (EmissionModel):
                 The emission model to use.
             dust_curves (dict):
-                An overide to the emisison model dust curves. Either:
+                An override to the emission model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
                       models should be used.
                     - A single dust curve to apply to all emission models.
-                    - A dictionary of the form:
-                          {<label>: <dust_curve instance>}
+                    - A dictionary of the form {<label>: <dust_curve instance>}
                       to use a specific dust curve instance with particular
                       properties.
             tau_v (dict):
-                An overide to the dust model optical depth. Either:
+                An override to the dust model optical depth. Either:
                     - None, indicating the tau_v defined on the emission model
-                        should be used.
+                      should be used.
                     - A float to use as the optical depth for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<tau_v>)}
-                        to use a specific optical depth with a particular
-                        model or
-                            {<label>: str(<attribute>)}
-                        to use an attribute of the component as the optical
-                        depth.
+                    - A dictionary of the form {<label>: float(<tau_v>)}
+                      to use a specific optical depth with a particular
+                      model or {<label>: str(<attribute>)} to use an attribute
+                      of the component as the optical depth.
             fesc (dict):
-                An overide to the emission model escape fraction. Either:
+                An override to the emission model escape fraction. Either:
                     - None, indicating the fesc defined on the emission model
                       should be used.
                     - A float to use as the escape fraction for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<fesc>)}
+                    - A dictionary of the form {<label>: float(<fesc>)}
                       to use a specific escape fraction with a particular
-                      model or
-                            {<label>: str(<attribute>)}
-                      to use an attribute of the component as the escape
-                      fraction.
+                      model or {<label>: str(<attribute>)} to use an
+                      attribute of the component as the escape fraction.
             mask (dict):
-                An overide to the emission model mask. Either:
+                An override to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
                       should be used.
-                    - A dictionary of the form:
-                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
-                      to add a specific mask to a particular model.
+                    - A dictionary of the form {<label>: {"attr": attr,
+                      "thresh": thresh, "op": op}} to add a specific mask to
+                      a particular model.
             verbose (bool)
                 Are we talking?
             kwargs (dict)

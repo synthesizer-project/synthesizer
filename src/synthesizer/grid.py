@@ -67,10 +67,6 @@ class Grid:
             A list of lines on the Grid.
         available_spectra (bool/list)
             A list of spectra on the Grid.
-        reprocessed (bool)
-            Flag for whether the grid has been reprocessed through cloudy.
-        lines_available (bool)
-            Flag for whether lines are available on this grid.
         lam (Quantity, float)
             The wavelengths at which the spectra are defined.
         spectra (dict, array-like, float)
@@ -97,8 +93,6 @@ class Grid:
             of the spectral grid. These are read dynamically from the HDF5
             file so can be anything but usually contain at least stellar ages
             and stellar metallicity.
-        lam (array_like, float)
-            The wavelengths at which the spectra are defined.
     """
 
     # Define Quantities
@@ -500,7 +494,6 @@ class Grid:
         Returns:
             list:
                 List of available lines
-            list:
                 List of associated wavelengths.
         """
         with h5py.File(self.grid_filename, "r") as hf:
@@ -949,10 +942,8 @@ class Grid:
 
         This will:
         - Find the Grid wavelengths at which transmission is non-zero.
-        - Limit the Grid's spectra and wavelength array to where transmision
-          is non-zero.
-        - Interpolate the filter collection onto the Grid's new wavelength
-          array.
+        - Limit the spectra and wavelengths to where transmision is non-zero.
+        - Interpolate the filters onto the Grid's new wavelength array.
 
         Args:
             filters (synthesizer.filter.FilterCollection)

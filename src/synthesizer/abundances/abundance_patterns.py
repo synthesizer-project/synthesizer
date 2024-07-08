@@ -345,7 +345,8 @@ class Abundances:
         self, depletion=None, depletion_model=None, depletion_scale=None
     ):
         """
-        Method to add depletion using a provided depletion pattern or model.
+        Add depletion using a provided depletion pattern or model.
+
         This method creates the following attributes:
             gas (dict, float)
                 The logarithmic abundances of the gas, including depletion.
@@ -371,7 +372,6 @@ class Abundances:
                 The depletion scale factor. Sometimes this is linear, but for
                 some models (e.g. Jenkins (2009)) it's more complex.
         """
-
         # If depletion model is provided as a string use this to extract the
         # class.
         if isinstance(depletion_model, str):

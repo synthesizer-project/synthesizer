@@ -3,7 +3,7 @@
 Contains the BlackHole class for use with parametric systems. This houses
 all the attributes and functionality related to parametric black holes.
 
-Example usages:
+Example usages::
 
     bhs = BlackHole(
         bolometric_luminosity,
@@ -14,7 +14,7 @@ Example usages:
         spin,
         metallicity,
         offset,
-)
+    )
 """
 
 import os

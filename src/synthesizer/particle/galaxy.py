@@ -210,8 +210,10 @@ class Galaxy(BaseGalaxy):
         **kwargs,
     ):
         """
-        Load arrays for star properties into a `Stars`  object,
-        and attach to this galaxy object
+        Load arrays for star properties into a `Stars`  object.
+
+        This will populate the stars attribute with the instantiated Stars
+        object.
 
         Args:
             initial_masses (array_like, float)
@@ -265,8 +267,9 @@ class Galaxy(BaseGalaxy):
         **kwargs,
     ):
         """
-        Load arrays for gas particle properties into a `Gas` object,
-        and attach to this galaxy object
+        Load arrays for gas particle properties into a `Gas` object.
+
+        This will populate the gas attribute with the instantiated Gas object.
 
         Args:
             masses : array_like (float)
@@ -275,10 +278,8 @@ class Galaxy(BaseGalaxy):
                 gas particle metallicity (total metal fraction)
             gas (gas particle object)
                 A pre-existing gas particle object to use. Defaults to None.
-        **kwargs
-
-        Returns:
-            None
+            **kwargs
+                Arbitrary keyword arguments.
         """
         if gas is not None:
             # Add Gas particle object to this galaxy
