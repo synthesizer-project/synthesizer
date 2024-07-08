@@ -19,7 +19,13 @@ colors = cmr.take_cmap_colors("cmr.guppy", len(redshifts))
 for IGM, ls in zip([Inoue14, Madau96], ["-", ":"]):
     igm = IGM()
     for z, color in zip(redshifts, colors):
-        plt.plot(lam, igm.T(z, lam), ls=ls, c=color, label=f"{igm.name} z={z}")
+        plt.plot(
+            lam,
+            igm.get_transmission(z, lam),
+            ls=ls,
+            c=color,
+            label=f"{igm.name} z={z}",
+        )
 
 plt.legend()
 plt.xlabel(r"$\lambda_{obs}/\AA$")
