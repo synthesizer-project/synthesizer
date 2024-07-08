@@ -8,7 +8,6 @@ including photometry. This example will:
 - calculate spectral luminosity density
 """
 
-from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.emission_models import (
     AttenuatedEmission,
     BimodalPacmanEmission,
@@ -17,6 +16,7 @@ from synthesizer.emission_models import (
     PacmanEmission,
     ReprocessedEmission,
 )
+from synthesizer.emission_models.dust.attenuation import PowerLaw
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist

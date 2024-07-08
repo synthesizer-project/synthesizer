@@ -224,7 +224,7 @@ galaxy.stars.plot_spectra(
 # described in **insert referenc**.
 
 
-from synthesizer.dust.emission import Greybody, IR_templates
+from synthesizer.emission_models.dust.emission import Greybody, IR_templates
 from unyt import K
 
 # If we provide a single attenuation (and curve) we need to only provide
