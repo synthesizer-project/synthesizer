@@ -50,7 +50,7 @@ class IGMBase:
         self,
         redshift,
         lam_obs,
-        show=True,
+        show=False,
         fig=None,
         ax=None,
         figsize=(8, 6),

@@ -2,6 +2,7 @@
 
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 from dust_extinction.grain_models import WD01
 from scipy import interpolate
@@ -11,7 +12,192 @@ from synthesizer import exceptions
 
 this_dir, this_filename = os.path.split(__file__)
 
-__all__ = ["PowerLaw", "MWN18", "Calzetti2000", "GrainsWD01", "ParametricLI08"]
+__all__ = ["PowerLaw", "MWN18", "Calzetti2000", "GrainsWD01", "ParametricLi08"]
+
+
+class AttenuationLaw:
+    """
+    The base class for all attenuation laws.
+
+    A child of this class should define it's own get_tau method with any
+    model specific behaviours. This will be used by get_transmission (which
+    itself can be overloaded by the child if needed).
+
+    Attributes:
+        description (str)
+            A description of the type of model. Defined on children classes.
+    """
+
+    def __init__(self, description):
+        """
+        Initialise the parent and set common attributes.
+
+        Args:
+            description (str)
+                A description of the type of model.
+        """
+        # Store the description of the model.
+        self.description = description
+
+    def get_tau(self, *args):
+        """Compute the optical depth."""
+        raise exceptions.UnimplementedFunctionality(
+            "AttenuationLaw should not be instantiated directly!"
+            " Instead use one to child models (" + ", ".join(__all__) + ")"
+        )
+
+    def get_transmission(self, tau_v, lam):
+        """
+        Compute the transmission curve.
+
+        Returns the transmitted flux/luminosity fraction based on an optical
+        depth at a range of wavelengths.
+
+        Args:
+            tau_v (float/array-like, float)
+                Optical depth in the V-band. Can either be a single float or
+                array.
+
+            lam (array-like, float)
+                The wavelengths (with units) at which to calculate
+                transmission.
+
+        Returns:
+            array-like
+                The transmission at each wavelength. Either (lam.size,) in
+                shape for singular tau_v values or (tau_v.size, lam.size)
+                tau_v is an array.
+        """
+        # Get the optical depth at each wavelength
+        tau_x_v = self.get_tau(lam)
+
+        # Include the V band optical depth in the exponent
+        # For a scalar we can just multiply but for an array we need to
+        # broadcast
+        if np.isscalar(tau_v):
+            exponent = tau_v * tau_x_v
+        else:
+            if np.ndim(lam) == 0:
+                exponent = tau_v[:] * tau_x_v
+            else:
+                exponent = tau_v[:, None] * tau_x_v
+
+        return np.exp(-exponent)
+
+    def plot_transmission(
+        self,
+        tau_v,
+        lam,
+        fig=None,
+        ax=None,
+        label=None,
+        figsize=(8, 6),
+        show=True,
+    ):
+        """
+        Plot the transmission curve.
+
+        Args:
+            tau_v (float/array-like, float)
+                Optical depth in the V-band. Can either be a single float or
+                array.
+            lam (array-like, float)
+                The wavelengths (with units) at which to calculate
+                transmission.
+            fig (matplotlib.figure.Figure)
+                The figure to plot on. If None, a new figure will be created.
+            ax (matplotlib.axes.Axes)
+                The axis to plot on. If None, a new axis will be created.
+            label (str)
+                The label to use for the plot.
+            figsize (tuple)
+                The size of the figure to create if fig is None.
+            show (bool)
+                Whether to show the plot.
+
+        Returns:
+            fig, ax
+                The figure and axis objects.
+        """
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
+        if ax is None:
+            ax = fig.add_subplot(111)
+
+        # Get the transmission curve
+        transmission = self.get_transmission(tau_v, lam)
+
+        # Plot the transmission curve
+        ax.plot(lam, transmission, label=label)
+
+        # Add labels
+        ax.set_xlabel("Wavelength (Angstrom)")
+        ax.set_ylabel("Transmission")
+
+        # Add a legend if the ax has labels to plot
+        if any(ax.get_legend_handles_labels()[1]):
+            ax.legend()
+
+        # Show the plot
+        if show:
+            plt.show()
+
+        return fig, ax
+
+
+class PowerLaw(AttenuationLaw):
+    """
+    Custom power law dust curve.
+
+    Attributes:
+        slope (float)
+            The slope of the power law.
+    """
+
+    def __init__(self, slope=-1.0):
+        """
+        Initialise the power law slope of the dust curve.
+
+        Args:
+            params (dict)
+                A dictionary containing the parameters for the model.
+        """
+
+        description = "simple power law dust curve"
+        AttenuationLaw.__init__(self, description)
+        self.slope = slope
+
+    def get_tau_at_lam(self, lam):
+        """
+        Calculate optical depth at a wavelength.
+
+        Args:
+            lam (float/array-like, float)
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths.
+
+        Returns:
+            float/array-like, float
+                The optical depth.
+        """
+
+        return (lam / 5500.0) ** self.slope
+
+    def get_tau(self, lam):
+        """
+        Calculate V-band normalised optical depth.
+
+        Args:
+            lam (float/array-like, float)
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths.
+
+        Returns:
+            float/array-like, float
+                The optical depth.
+        """
+
+        return self.get_tau_at_lam(lam) / self.get_tau_at_lam(5500.0)
 
 
 def N09Tau(lam, slope, cent_lam, ampl, gamma):
@@ -91,186 +277,6 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     return tau_x_v * (lam_micron / lam_v) ** slope
 
 
-class AttenuationLaw:
-    """
-    A generic parent class for dust attenuation laws to hold common attributes
-    and methods
-
-    Attributes:
-        description (str)
-            A description of the type of model. Defined on children classes.
-    """
-
-    def __init__(self, description):
-        """
-        Initialise the parent and set common attributes.
-        """
-
-        # Store the description of the model.
-        self.description = description
-
-    def get_tau(self, *args):
-        """
-        A prototype method to be overloaded by the children defining various
-        models.
-        """
-        raise exceptions.UnimplementedFunctionality(
-            "AttenuationLaw should not be instantiated directly!"
-            " Instead use one to child models (" + ", ".join(__all__) + ")"
-        )
-
-    def get_transmission(self, tau_v, lam):
-        """
-        Returns the transmitted flux/luminosity fraction based on an optical
-        depth at a range of wavelengths.
-
-        Args:
-            tau_v (float/array-like, float)
-                Optical depth in the V-band. Can either be a single float or
-                array.
-
-            lam (array-like, float)
-                The wavelengths (with units) at which to calculate
-                transmission.
-
-        Returns:
-            array-like
-                The transmission at each wavelength. Either (lam.size,) in
-                shape for singular tau_v values or (tau_v.size, lam.size)
-                tau_v is an array.
-        """
-
-        # Get the optical depth at each wavelength
-        tau_x_v = self.get_tau(lam)
-
-        # Include the V band optical depth in the exponent
-        # For a scalar we can just multiply but for an array we need to
-        # broadcast
-        if np.isscalar(tau_v):
-            exponent = tau_v * tau_x_v
-        else:
-            if np.ndim(lam) == 0:
-                exponent = tau_v[:] * tau_x_v
-            else:
-                exponent = tau_v[:, None] * tau_x_v
-
-        return np.exp(-exponent)
-
-
-class PowerLaw(AttenuationLaw):
-    """
-    Custom power law dust curve.
-
-    Attributes:
-        slope (float)
-            The slope of the power law.
-    """
-
-    def __init__(self, slope=-1.0):
-        """
-        Initialise the power law slope of the dust curve.
-
-        Args:
-            params (dict)
-                A dictionary containing the parameters for the model.
-        """
-
-        description = "simple power law dust curve"
-        AttenuationLaw.__init__(self, description)
-        self.slope = slope
-
-    def get_tau_at_lam(self, lam):
-        """
-        Calculate optical depth at a wavelength.
-
-        Args:
-            lam (float/array-like, float)
-                An array of wavelengths or a single wavlength at which to
-                calculate optical depths.
-
-        Returns:
-            float/array-like, float
-                The optical depth.
-        """
-
-        return (lam / 5500.0) ** self.slope
-
-    def get_tau(self, lam):
-        """
-        Calculate V-band normalised optical depth.
-
-        Args:
-            lam (float/array-like, float)
-                An array of wavelengths or a single wavlength at which to
-                calculate optical depths.
-
-        Returns:
-            float/array-like, float
-                The optical depth.
-        """
-
-        return self.get_tau_at_lam(lam) / self.get_tau_at_lam(5500.0)
-
-
-class MWN18(AttenuationLaw):
-    """
-    Milky Way attenuation curve used in Narayanan+2018.
-
-    Attributes:
-        data (array-like, float)
-            The data describing the dust curve, loaded from MW_N18.npz.
-        tau_lam_v (float)
-            The V band optical depth.
-    """
-
-    def __init__(self):
-        """
-        Initialise the dust curve by loading the data and get the V band
-        optical depth by interpolation.
-        """
-
-        description = "MW extinction curve from Desika"
-        AttenuationLaw.__init__(self, description)
-        self.data = np.load(f"{this_dir}/../../data/MW_N18.npz")
-        self.tau_lam_v = np.interp(
-            5500.0, self.data.f.mw_df_lam[::-1], self.data.f.mw_df_chi[::-1]
-        )
-
-    def get_tau(self, lam, interp="cubic"):
-        """
-        Calculate V-band normalised optical depth.
-
-        Args:
-            lam (float/array, float)
-                An array of wavelengths or a single wavlength at which to
-                calculate optical depths (in AA, global unit).
-            interp (str)
-                The type of interpolation to use. Can be ‘linear’, ‘nearest’,
-                ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’,
-                ‘previous’, or ‘next’. ‘zero’, ‘slinear’, ‘quadratic’ and
-                ‘cubic’ refer to a spline interpolation of zeroth, first,
-                second or third order. Uses scipy.interpolate.interp1d.
-
-        Returns:
-            float/array, float
-                The optical depth.
-        """
-
-        func = interpolate.interp1d(
-            self.data.f.mw_df_lam[::-1],
-            self.data.f.mw_df_chi[::-1],
-            kind=interp,
-            fill_value="extrapolate",
-        )
-
-        if isinstance(lam, (unyt_quantity, unyt_array)):
-            lam = lam.to("Angstrom").v
-        else:
-            lam = lam
-
-        return func(lam) / self.tau_lam_v
-
-
 class Calzetti2000(AttenuationLaw):
     """
     Calzetti attenuation curve; with option for the slope and UV-bump
@@ -344,7 +350,66 @@ class Calzetti2000(AttenuationLaw):
         )
 
 
-class GrainsWD01:
+class MWN18(AttenuationLaw):
+    """
+    Milky Way attenuation curve used in Narayanan+2018.
+
+    Attributes:
+        data (array-like, float)
+            The data describing the dust curve, loaded from MW_N18.npz.
+        tau_lam_v (float)
+            The V band optical depth.
+    """
+
+    def __init__(self):
+        """
+        Initialise the dust curve by loading the data and get the V band
+        optical depth by interpolation.
+        """
+
+        description = "MW extinction curve from Desika"
+        AttenuationLaw.__init__(self, description)
+        self.data = np.load(f"{this_dir}/../../data/MW_N18.npz")
+        self.tau_lam_v = np.interp(
+            5500.0, self.data.f.mw_df_lam[::-1], self.data.f.mw_df_chi[::-1]
+        )
+
+    def get_tau(self, lam, interp="cubic"):
+        """
+        Calculate V-band normalised optical depth.
+
+        Args:
+            lam (float/array, float)
+                An array of wavelengths or a single wavlength at which to
+                calculate optical depths (in AA, global unit).
+            interp (str)
+                The type of interpolation to use. Can be ‘linear’, ‘nearest’,
+                ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’,
+                ‘previous’, or ‘next’. ‘zero’, ‘slinear’, ‘quadratic’ and
+                ‘cubic’ refer to a spline interpolation of zeroth, first,
+                second or third order. Uses scipy.interpolate.interp1d.
+
+        Returns:
+            float/array, float
+                The optical depth.
+        """
+
+        func = interpolate.interp1d(
+            self.data.f.mw_df_lam[::-1],
+            self.data.f.mw_df_chi[::-1],
+            kind=interp,
+            fill_value="extrapolate",
+        )
+
+        if isinstance(lam, (unyt_quantity, unyt_array)):
+            lam = lam.to("Angstrom").v
+        else:
+            lam = lam
+
+        return func(lam) / self.tau_lam_v
+
+
+class GrainsWD01(AttenuationLaw):
     """
     Weingarter and Draine 2001 dust grain extinction model
     for MW, SMC and LMC or any available in WD01.
@@ -368,10 +433,10 @@ class GrainsWD01:
                 The dust grain model to use.
 
         """
-
-        self.description = (
-            "Weingarter and Draine 2001 dust grain extinction"
-            " model for MW, SMC and LMC"
+        AttenuationLaw.__init__(
+            self,
+            "Weingarter and Draine 2001 dust grain model"
+            " for MW, SMC, and LMC",
         )
 
         # Get the correct model string
@@ -500,7 +565,7 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
     return AlamAV
 
 
-class ParametricLI08(AttenuationLaw):
+class ParametricLi08(AttenuationLaw):
     """
     Parametric, empirical attenuation curve;
     implemented in Li+08, Evolution of the parameters up to high-z

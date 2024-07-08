@@ -54,12 +54,14 @@ All premade models follow these conventions and we encourage the user to employ 
 Working with ``EmissionModels``
 -------------------------------
 
-In the sections linked below we detail the basic functionality of an ``EmissionModel``, the premade stellar and black hole emission models, and how to customise a model or construct your own.
+In the sections linked below we detail the basic functionality of an ``EmissionModel``, dust emission generators, the premade stellar and black hole emission models, and how to customise a model or construct your own.
 
 .. toctree::
    :maxdepth: 2
 
    model_usage
+   dust_emission
+   attenuation/attenuation
    premade_models
    modify_models
    custom_models
