@@ -857,7 +857,6 @@ class Sed:
             fnu (ndarray)
                 Spectral flux density calcualted at d=10 pc.
         """
-
         # Get the observed wavelength and frequency arrays
         self.obslam = self._lam
         self.obsnu = self._nu
@@ -889,7 +888,6 @@ class Sed:
                 Spectral flux density calcualted at d=10 pc
 
         """
-
         # Store the redshift for later use
         self.redshift = z
 
@@ -911,7 +909,7 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm:
-            self._fnu *= igm().T(z, self._obslam)
+            self._fnu *= igm().get_transmission(z, self._obslam)
 
         return self.fnu
 
