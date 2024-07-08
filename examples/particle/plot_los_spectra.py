@@ -11,7 +11,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 from synthesizer.emission_models import TotalEmission
-from synthesizer.emission_models.dust.attenuation import PowerLaw
+from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.grid import Grid
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist

@@ -15,7 +15,7 @@ from matplotlib.lines import Line2D
 from synthesizer import galaxy
 from synthesizer.conversions import apparent_mag_to_fnu, fnu_to_lnu
 from synthesizer.emission_models import PacmanEmission
-from synthesizer.emission_models.dust.attenuation import PowerLaw
+from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.filters import Filter
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist

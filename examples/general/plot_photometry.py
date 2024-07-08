@@ -16,7 +16,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 from astropy.cosmology import Planck18 as cosmo
 from synthesizer.emission_models import PacmanEmission
-from synthesizer.emission_models.dust.attenuation import PowerLaw
+from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.igm import Madau96
