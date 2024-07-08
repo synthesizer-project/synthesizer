@@ -1298,7 +1298,7 @@ class Sed:
 
         A wrapper for synthesizer.sed.plot_observed_spectra()
         """
-        return plot_observed_spectra(self, **kwargs)
+        return plot_observed_spectra(self, self.redshift, **kwargs)
 
     def plot_spectra_as_rainbow(self, **kwargs):
         """
