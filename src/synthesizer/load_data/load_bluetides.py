@@ -1,14 +1,26 @@
+"""A module to load Bluetides data into a galaxy object.
+
+Example usage::
+
+    from synthesizer.data import load_BlueTides
+
+    # Load Bluetides data for z=7
+    galaxies = load_BlueTides("7")
+"""
+
 import numpy as np
 import scipy.interpolate as interpolate
+
+from synthesizer.exceptions import UnmetDependency
 
 try:
     from bigfile import BigFile
 except ImportError:
-    print(
-        "bigfile.BigFile not found. Please install it using "
-        "'pip install bigfile'"
+    raise UnmetDependency(
+        "The `bigfile` module is required to load Bluetides data. "
+        "Install synthesizer with the `bluetides` extra dependencies:"
+        " `pip install.[bluetides]`."
     )
-    exit()
 from scipy import integrate
 from unyt import Msun, Myr, c, kpc, yr
 

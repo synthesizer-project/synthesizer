@@ -17,7 +17,7 @@ requires-python = ">=3.8"
 license = {file = "LICENSE.md"}
 
 # Project keywords
-keywords = [
+keywords =[
   "galaxy",
   "modelling",
   "smoothed particle hydrodynamics",
@@ -118,6 +118,18 @@ docs = [
     "sphinx-toolbox",
     "nbsphinx",
     "sphinx-copybutton",
+]
+
+# Simulation specifc loader dependancies
+bluetides = [
+    "cython",
+    "bigfile",
+]
+eagle = [
+    "schwimmbad",
+]
+illustris = [
+    "illustris_python @ git+https://github.com/illustristng/illustris_python.git@master",
 ]
 
 
