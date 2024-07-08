@@ -17,307 +17,297 @@ __all__ = ["Inoue14", "Madau96"]
 
 
 class Inoue14:
-    """
+    r"""
     IGM absorption from Inoue et al. (2014).
 
+    Adapted from py-eazy.
+
     Attributes:
-        scale_tau (float): Parameter multiplied to the IGM tau values
-                           (exponential in the linear absorption fraction).
-                           I.e., f_igm = e^(-scale_tau * tau).
-        name (str): Name of the IGM model.
+        scale_tau (float): Parameter multiplied to the IGM :math:`\tau` values
+            (exponential in the linear absorption fraction). I.e.,
+            :math:`f_{\\mathrm{igm}} = e^{-\\mathrm{scale_\tau} \tau}`.
+        name (str): Name of the model.
+        lam (array): Wavelengths for the model.
+        alf1 (array): Coefficients for the Lyman-alpha forest.
+        alf2 (array): Coefficients for the Lyman-alpha forest.
+        alf3 (array): Coefficients for the Lyman-alpha forest.
+        adla1 (array): Coefficients for the Damped Lyman-alpha absorption.
+        adla2 (array): Coefficients for the Damped Lyman-alpha absorption.
     """
 
     def __init__(self, scale_tau=1.0):
-        """
-        Initialize the Inoue14 class.
+        """Initialize the Inoue14 class with a scaling factor for tau."""
+        # Prepare attributes that will be loaded from data files
+        self.lam = None
+        self.alf1 = None
+        self.alf2 = None
+        self.alf3 = None
+        self.adla1 = None
+        self.adla2 = None
 
-        Args:
-            scale_tau (float): Parameter multiplied to the IGM tau values
-                               (exponential in the linear absorption fraction).
-                               I.e., f_igm = e^(-scale_tau * tau).
-        """
-        self.scale_tau = scale_tau
-        self.name = "Inoue14"
+        # Load the data
         self._load_data()
 
+        # Set the scale factor for the IGM absorption
+        self.scale_tau = scale_tau
+
+        # Set the name of the model
+        self.name = "Inoue14"
+
     def _load_data(self):
-        """Load the data required for calculations from text files."""
-        path = os.path.join(os.path.dirname(filepath), "../../data")
+        """
+        Load the coefficient data.
 
-        laf_file = os.path.join(path, "LAFcoeff.txt")
-        dla_file = os.path.join(path, "DLAcoeff.txt")
+        This will load the Lyman-alpha forest (LAF) and Damped
+        Lyman-alpha (DLA) coefficients from the data files.
+        """
+        data_path = os.path.join(os.path.dirname(filepath), "../../data")
 
-        # Load Lyman-alpha forest coefficients
-        laf_data = np.loadtxt(laf_file, unpack=True)
-        _, self.lambda_laf, self.a_laf1, self.a_laf2, self.a_laf3 = laf_data
+        # Load LAF coefficients
+        laf_file = os.path.join(data_path, "LAFcoeff.txt")
+        data = np.loadtxt(laf_file, unpack=True)
+        _, lam, alf1, alf2, alf3 = data
+        self.lam = lam[:, np.newaxis]
+        self.alf1 = alf1[:, np.newaxis]
+        self.alf2 = alf2[:, np.newaxis]
+        self.alf3 = alf3[:, np.newaxis]
 
-        # Load Damped Lyman-alpha coefficients
-        dla_data = np.loadtxt(dla_file, unpack=True)
-        _, self.lambda_dla, self.a_dla1, self.a_dla2 = dla_data
-
-        self.lambda_laf = self.lambda_laf[:, np.newaxis]
-        self.a_laf1 = self.a_laf1[:, np.newaxis]
-        self.a_laf2 = self.a_laf2[:, np.newaxis]
-        self.a_laf3 = self.a_laf3[:, np.newaxis]
-
-        self.lambda_dla = self.lambda_dla[:, np.newaxis]
-        self.a_dla1 = self.a_dla1[:, np.newaxis]
-        self.a_dla2 = self.a_dla2[:, np.newaxis]
+        # Load DLA coefficients
+        dla_file = os.path.join(data_path, "DLAcoeff.txt")
+        data = np.loadtxt(dla_file, unpack=True)
+        _, lam, adla1, adla2 = data
+        self.adla1 = adla1[:, np.newaxis]
+        self.adla2 = adla2[:, np.newaxis]
 
         return True
 
-    def t_lyman_series_laf(self, redshift_source, obs_wavelength):
+    def tau_laf(self, redshift, lam_obs):
         """
-        Lyman series, Lyman-alpha forest.
+        Compute the Lyman series and Lyman-alpha forest optical depth.
 
         Args:
-            redshift_source (float): Redshift of the source.
-            obs_wavelength (array): Observed-frame wavelengths in Angstroms.
+            redshift (float): Source redshift.
+            lam_obs (array): Observed-frame wavelengths in Angstroms.
 
         Returns:
-            array: Lyman-alpha forest absorption values.
+            array: Optical depth due to the Lyman-alpha forest.
         """
         z1_laf = 1.2
         z2_laf = 4.7
 
-        # Initialize absorption array
-        lambda_laf = self.lambda_laf
-        absorption = np.zeros_like(
-            obs_wavelength[:, np.newaxis] * lambda_laf.T
-        )
+        tau_laf_value = np.zeros_like(lam_obs * self.lam).T
 
-        # Condition checks for different redshift ranges
-        condition0 = obs_wavelength[:, np.newaxis] < lambda_laf * (
-            1 + redshift_source
+        # Conditions based on observed lam and redshift
+        cond0 = lam_obs < self.lam * (1 + redshift)
+        cond1 = cond0 & (lam_obs < self.lam * (1 + z1_laf))
+        cond2 = cond0 & (
+            (lam_obs >= self.lam * (1 + z1_laf))
+            & (lam_obs < self.lam * (1 + z2_laf))
         )
-        condition1 = condition0 & (
-            obs_wavelength[:, np.newaxis] < lambda_laf * (1 + z1_laf)
-        )
-        condition2 = condition0 & (
-            (obs_wavelength[:, np.newaxis] >= lambda_laf * (1 + z1_laf))
-            & (obs_wavelength[:, np.newaxis] < lambda_laf * (1 + z2_laf))
-        )
-        condition3 = condition0 & (
-            obs_wavelength[:, np.newaxis] >= lambda_laf * (1 + z2_laf)
-        )
+        cond3 = cond0 & (lam_obs >= self.lam * (1 + z2_laf))
 
-        # Calculate absorption values
-        absorption[condition1] += (
-            (self.a_laf1 / lambda_laf**1.2)
-            * obs_wavelength[:, np.newaxis] ** 1.2
-        )[condition1]
-        absorption[condition2] += (
-            (self.a_laf2 / lambda_laf**3.7)
-            * obs_wavelength[:, np.newaxis] ** 3.7
-        )[condition2]
-        absorption[condition3] += (
-            (self.a_laf3 / lambda_laf**5.5)
-            * obs_wavelength[:, np.newaxis] ** 5.5
-        )[condition3]
+        tau_laf_value = np.zeros_like(lam_obs * self.lam)
+        tau_laf_value[cond1] += ((self.alf1 / self.lam**1.2) * lam_obs**1.2)[
+            cond1
+        ]
+        tau_laf_value[cond2] += ((self.alf2 / self.lam**3.7) * lam_obs**3.7)[
+            cond2
+        ]
+        tau_laf_value[cond3] += ((self.alf3 / self.lam**5.5) * lam_obs**5.5)[
+            cond3
+        ]
 
-        return absorption.sum(axis=1)
+        return tau_laf_value.sum(axis=0)
 
-    def t_lyman_series_dla(self, redshift_source, obs_wavelength):
+    def tau_dla(self, redshift, lam_obs):
         """
-        Lyman Series, Damped Lyman-alpha absorption.
+        Compute the Lyman series and Damped Lyman-alpha (DLA) optical depth.
 
         Args:
-            redshift_source (float): Redshift of the source.
-            obs_wavelength (array): Observed-frame wavelengths in Angstroms.
+            redshift (float): Source redshift.
+            lam_obs (array): Observed-frame wavelengths in Angstroms.
 
         Returns:
-            array: Damped Lyman-alpha absorption values.
+            array: Optical depth due to DLA.
         """
         z1_dla = 2.0
 
-        # Initialize absorption array
-        lambda_dla = self.lambda_dla
-        absorption = np.zeros_like(
-            obs_wavelength[:, np.newaxis] * lambda_dla.T
+        tau_dla_value = np.zeros_like(lam_obs * self.lam)
+
+        # Conditions based on observed wavelength and redshift
+        cond0 = (lam_obs < self.lam * (1 + redshift)) & (
+            lam_obs < self.lam * (1.0 + z1_dla)
+        )
+        cond1 = (lam_obs < self.lam * (1 + redshift)) & ~(
+            lam_obs < self.lam * (1.0 + z1_dla)
         )
 
-        # Condition checks for different redshift ranges
-        condition0 = (
-            obs_wavelength[:, np.newaxis] < lambda_dla * (1 + redshift_source)
-        ) & (obs_wavelength[:, np.newaxis] < lambda_dla * (1.0 + z1_dla))
-        condition1 = (
-            obs_wavelength[:, np.newaxis] < lambda_dla * (1 + redshift_source)
-        ) & ~(obs_wavelength[:, np.newaxis] < lambda_dla * (1.0 + z1_dla))
+        tau_dla_value[cond0] += ((self.adla1 / self.lam**2) * lam_obs**2)[
+            cond0
+        ]
+        tau_dla_value[cond1] += ((self.adla2 / self.lam**3) * lam_obs**3)[
+            cond1
+        ]
 
-        # Calculate absorption values
-        absorption[condition0] += (
-            (self.a_dla1 / lambda_dla**2) * obs_wavelength[:, np.newaxis] ** 2
-        )[condition0]
-        absorption[condition1] += (
-            (self.a_dla2 / lambda_dla**3) * obs_wavelength[:, np.newaxis] ** 3
-        )[condition1]
+        return tau_dla_value.sum(axis=0)
 
-        return absorption.sum(axis=1)
-
-    def t_lyman_continuum_dla(self, redshift_source, obs_wavelength):
+    def tau_lc_dla(self, redshift, lam_obs):
         """
-        Lyman continuum, Damped Lyman-alpha absorption.
+        Compute the Lyman continuum optical depth for DLA.
 
         Args:
-            redshift_source (float): Redshift of the source.
-            obs_wavelength (array): Observed-frame wavelengths in Angstroms.
+            redshift (float): Source redshift.
+            lam_obs (array): Observed-frame wavelengths in Angstroms.
 
         Returns:
-            array: Lyman continuum absorption values for DLA.
+            array: Optical depth due to Lyman continuum for DLA.
         """
         z1_dla = 2.0
-        lambda_l = 911.8
+        lam_l = 911.8
 
-        absorption = np.zeros_like(obs_wavelength)
+        tau_lc_dla_value = np.zeros_like(lam_obs)
 
-        # Condition checks for different redshift ranges
-        condition0 = obs_wavelength < lambda_l * (1.0 + redshift_source)
-        if redshift_source < z1_dla:
-            absorption[condition0] = (
-                0.2113 * (1.0 + redshift_source) ** 2
+        cond0 = lam_obs < lam_l * (1.0 + redshift)
+        if redshift < z1_dla:
+            tau_lc_dla_value[cond0] = (
+                0.2113 * (1.0 + redshift) ** 2
                 - 0.07661
-                * (1.0 + redshift_source) ** 2.3
-                * (obs_wavelength[condition0] / lambda_l) ** -0.3
-                - 0.1347 * (obs_wavelength[condition0] / lambda_l) ** 2
+                * (1.0 + redshift) ** 2.3
+                * (lam_obs[cond0] / lam_l) ** (-0.3)
+                - 0.1347 * (lam_obs[cond0] / lam_l) ** 2
             )
         else:
-            condition1 = obs_wavelength >= lambda_l * (1.0 + z1_dla)
-            absorption[condition0 & condition1] = (
-                0.04696 * (1.0 + redshift_source) ** 3
+            cond1 = lam_obs >= lam_l * (1.0 + z1_dla)
+
+            tau_lc_dla_value[cond0 & cond1] = (
+                0.04696 * (1.0 + redshift) ** 3
                 - 0.01779
-                * (1.0 + redshift_source) ** 3.3
-                * (obs_wavelength[condition0 & condition1] / lambda_l) ** -0.3
-                - 0.02916
-                * (obs_wavelength[condition0 & condition1] / lambda_l) ** 3
+                * (1.0 + redshift) ** 3.3
+                * (lam_obs[cond0 & cond1] / lam_l) ** (-0.3)
+                - 0.02916 * (lam_obs[cond0 & cond1] / lam_l) ** 3
             )
-            absorption[condition0 & ~condition1] = (
+            tau_lc_dla_value[cond0 & ~cond1] = (
                 0.6340
-                + 0.04696 * (1.0 + redshift_source) ** 3
+                + 0.04696 * (1.0 + redshift) ** 3
                 - 0.01779
-                * (1.0 + redshift_source) ** 3.3
-                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** -0.3
-                - 0.1347
-                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** 2
-                - 0.2905
-                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** -0.3
+                * (1.0 + redshift) ** 3.3
+                * (lam_obs[cond0 & ~cond1] / lam_l) ** (-0.3)
+                - 0.1347 * (lam_obs[cond0 & ~cond1] / lam_l) ** 2
+                - 0.2905 * (lam_obs[cond0 & ~cond1] / lam_l) ** (-0.3)
             )
 
-        return absorption
+        return tau_lc_dla_value
 
-    def t_lyman_continuum_laf(self, redshift_source, obs_wavelength):
+    def tau_lc_laf(self, redshift, lam_obs):
         """
-        Lyman continuum, Lyman-alpha forest.
+        Compute the Lyman continuum optical depth for LAF.
 
         Args:
-            redshift_source (float): Redshift of the source.
-            obs_wavelength (array): Observed-frame wavelengths in Angstroms.
+            redshift (float): Source redshift.
+            lam_obs (array): Observed-frame wavelengths in Angstroms.
 
         Returns:
-            array: Lyman continuum absorption values for LAF.
+            array: Optical depth due to Lyman continuum for LAF.
         """
         z1_laf = 1.2
         z2_laf = 4.7
-        lambda_l = 911.8
+        lam_l = 911.8
 
-        absorption = np.zeros_like(obs_wavelength)
+        tau_lc_laf_value = np.zeros_like(lam_obs)
 
-        # Condition checks for different redshift ranges
-        condition0 = obs_wavelength < lambda_l * (1.0 + redshift_source)
+        cond0 = lam_obs < lam_l * (1.0 + redshift)
 
-        if redshift_source < z1_laf:
-            absorption[condition0] = 0.3248 * (
-                (obs_wavelength[condition0] / lambda_l) ** 1.2
-                - (1.0 + redshift_source) ** -0.9
-                * (obs_wavelength[condition0] / lambda_l) ** 2.1
+        if redshift < z1_laf:
+            tau_lc_laf_value[cond0] = 0.3248 * (
+                (lam_obs[cond0] / lam_l) ** 1.2
+                - (1.0 + redshift) ** -0.9 * (lam_obs[cond0] / lam_l) ** 2.1
             )
-        elif redshift_source < z2_laf:
-            condition1 = obs_wavelength >= lambda_l * (1 + z1_laf)
-            absorption[condition0 & condition1] = 2.545e-2 * (
-                (1.0 + redshift_source) ** 1.6
-                * (obs_wavelength[condition0 & condition1] / lambda_l) ** 2.1
-                - (obs_wavelength[condition0 & condition1] / lambda_l) ** 3.7
+        elif redshift < z2_laf:
+            cond1 = lam_obs >= lam_l * (1 + z1_laf)
+            tau_lc_laf_value[cond0 & cond1] = 2.545e-2 * (
+                (1.0 + redshift) ** 1.6
+                * (lam_obs[cond0 & cond1] / lam_l) ** 2.1
+                - (lam_obs[cond0 & cond1] / lam_l) ** 3.7
             )
-            absorption[condition0 & ~condition1] = (
+            tau_lc_laf_value[cond0 & ~cond1] = (
                 2.545e-2
-                * (1.0 + redshift_source) ** 1.6
-                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** 2.1
-                + 0.3248
-                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** 1.2
-                - 0.2496
-                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** 2.1
+                * (1.0 + redshift) ** 1.6
+                * (lam_obs[cond0 & ~cond1] / lam_l) ** 2.1
+                + 0.3248 * (lam_obs[cond0 & ~cond1] / lam_l) ** 1.2
+                - 0.2496 * (lam_obs[cond0 & ~cond1] / lam_l) ** 2.1
             )
         else:
-            condition1 = obs_wavelength > lambda_l * (1.0 + z2_laf)
-            condition2 = (obs_wavelength >= lambda_l * (1.0 + z1_laf)) & (
-                obs_wavelength < lambda_l * (1.0 + z2_laf)
+            cond1 = lam_obs > lam_l * (1.0 + z2_laf)
+            cond2 = (lam_obs >= lam_l * (1.0 + z1_laf)) & (
+                lam_obs < lam_l * (1.0 + z2_laf)
             )
-            condition3 = obs_wavelength < lambda_l * (1.0 + z1_laf)
+            cond3 = lam_obs < lam_l * (1.0 + z1_laf)
 
-            absorption[condition0 & condition1] = 5.221e-4 * (
-                (1.0 + redshift_source) ** 3.4
-                * (obs_wavelength[condition0 & condition1] / lambda_l) ** 2.1
-                - (obs_wavelength[condition0 & condition1] / lambda_l) ** 5.5
+            tau_lc_laf_value[cond0 & cond1] = 5.221e-4 * (
+                (1.0 + redshift) ** 3.4
+                * (lam_obs[cond0 & cond1] / lam_l) ** 2.1
+                - (lam_obs[cond0 & cond1] / lam_l) ** 5.5
             )
-            absorption[condition0 & condition2] = (
+            tau_lc_laf_value[cond0 & cond2] = (
                 5.221e-4
-                * (1.0 + redshift_source) ** 3.4
-                * (obs_wavelength[condition0 & condition2] / lambda_l) ** 2.1
-                + 0.2182
-                * (obs_wavelength[condition0 & condition2] / lambda_l) ** 2.1
-                - 2.545e-2
-                * (obs_wavelength[condition0 & condition2] / lambda_l) ** 3.7
+                * (1.0 + redshift) ** 3.4
+                * (lam_obs[cond0 & cond2] / lam_l) ** 2.1
+                + 0.2182 * (lam_obs[cond0 & cond2] / lam_l) ** 2.1
+                - 2.545e-2 * (lam_obs[cond0 & cond2] / lam_l) ** 3.7
             )
-            absorption[condition0 & condition3] = (
+            tau_lc_laf_value[cond0 & cond3] = (
                 5.221e-4
-                * (1.0 + redshift_source) ** 3.4
-                * (obs_wavelength[condition0 & condition3] / lambda_l) ** 2.1
-                + 0.3248
-                * (obs_wavelength[condition0 & condition3] / lambda_l) ** 1.2
-                - 3.140e-2
-                * (obs_wavelength[condition0 & condition3] / lambda_l) ** 2.1
+                * (1.0 + redshift) ** 3.4
+                * (lam_obs[cond0 & cond3] / lam_l) ** 2.1
+                + 0.3248 * (lam_obs[cond0 & cond3] / lam_l) ** 1.2
+                - 3.140e-2 * (lam_obs[cond0 & cond3] / lam_l) ** 2.1
             )
 
-        return absorption
+        return tau_lc_laf_value
 
-    def tau(self, redshift, obs_wavelength):
+    def tau(self, redshift, lam_obs):
         """
-        Get full Inoue IGM absorption.
+        Compute the total IGM optical depth.
 
         Args:
             redshift (float): Redshift to evaluate IGM absorption.
-            obs_wavelength (array): Observed-frame wavelength(s) in Angstroms.
+            lam_obs (array): Observed-frame wavelengths in Angstroms.
 
         Returns:
-            array: IGM absorption.
+            array: Total IGM absorption optical depth.
         """
-        tau_ls = self.t_lyman_series_laf(
-            redshift, obs_wavelength
-        ) + self.t_lyman_series_dla(redshift, obs_wavelength)
-        tau_lc = self.t_lyman_continuum_laf(
-            redshift, obs_wavelength
-        ) + self.t_lyman_continuum_dla(redshift, obs_wavelength)
+        tau_ls = self.tau_laf(redshift, lam_obs) + self.tau_dla(
+            redshift, lam_obs
+        )
+        tau_lc = self.tau_lc_laf(redshift, lam_obs) + self.tau_lc_dla(
+            redshift, lam_obs
+        )
 
-        # Upturn at short wavelengths, low-z (currently set to 0)
+        # Upturn at short wavelengths, low-z
+        # k = 1./100
+        # l0 = 600-6/k
+        # clip = lam_obs/(1+redshift) < 600.
+        # tau_clip = 100*(1-1./(1+np.exp(-k*(lam_obs/(1+redshift)-l0))))
         tau_clip = 0.0
 
         return self.scale_tau * (tau_lc + tau_ls + tau_clip)
 
-    def get_transmission(self, redshift, obs_wavelength):
+    def get_transmission(self, redshift, lam_obs):
         """
-        Get transmission curve.
+        Compute the IGM transmission.
 
         Args:
-            redshift (float): Redshift to evaluate transmission.
-            obs_wavelength (array): Observed-frame wavelength(s) in Angstroms.
+            redshift (float): Redshift to evaluate IGM absorption.
+            lam_obs (array): Observed-frame wavelengths in Angstroms.
 
         Returns:
-            array: Transmission values.
+            array: IGM transmission.
         """
-        tau = self.tau(redshift, obs_wavelength)
+        tau = self.tau(redshift, lam_obs)
         transmission = np.exp(-tau)
 
-        # Handle NaNs and ensure transmission values are within [0, 1]
-        transmission[np.isnan(transmission)] = 0.0
+        # Handle NaNs and values greater than 1
+        transmission[transmission != transmission] = 0.0  # squash NaNs
         transmission[transmission > 1] = 1
 
         return transmission
@@ -328,83 +318,81 @@ class Madau96:
     IGM absorption from Madau et al. (1996).
 
     Attributes:
-        wavelengths (array): Wavelengths of the transmission curve.
-        coefficients (array): Coefficients of the transmission curve.
+        lams (list): List of wavelengths for the model.
+        coefficients (list): List of coefficients for the model.
         name (str): Name of the model.
     """
 
     def __init__(self):
         """Initialize the Madau96 class."""
-        self.wavelengths = [1216.0, 1026.0, 973.0, 950.0]
+        self.lams = [1216.0, 1026.0, 973.0, 950.0]
         self.coefficients = [0.0036, 0.0017, 0.0012, 0.00093]
         self.name = "Madau96"
 
-    def get_transmission(self, redshift, obs_wavelength):
+    def get_transmission(self, redshift, lam_obs):
         """
-        Get transmission curve.
+        Compute the IGM transmission.
 
         Args:
-            redshift (float): Redshift to evaluate transmission.
-            obs_wavelength (array): Observed-frame wavelength(s) in Angstroms.
+            redshift (float): Redshift to evaluate IGM absorption.
+            lam_obs (array): Observed-frame wavelengths in Angstroms.
 
         Returns:
-            array: Transmission values.
+            array: IGM transmission.
         """
         exp_teff = np.array([])
-        for wavelength in obs_wavelength:
-            if wavelength > self.wavelengths[0] * (1 + redshift):
+        for wl in lam_obs:
+            if wl > self.lams[0] * (1 + redshift):
                 exp_teff = np.append(exp_teff, 1)
                 continue
 
-            if wavelength <= self.wavelengths[-1] * (1 + redshift) - 1500:
+            if wl <= self.lams[-1] * (1 + redshift) - 1500:
                 exp_teff = np.append(exp_teff, 0)
                 continue
 
             teff = 0
-            for i in range(len(self.wavelengths) - 1):
-                teff += (
-                    self.coefficients[i]
-                    * (wavelength / self.wavelengths[i]) ** 3.46
-                )
+            for i in range(0, len(self.lams) - 1, 1):
+                teff += self.coefficients[i] * (wl / self.lams[i]) ** 3.46
                 if (
-                    self.wavelengths[i + 1] * (1 + redshift)
-                    < wavelength
-                    <= self.wavelengths[i] * (1 + redshift)
+                    self.lams[i + 1] * (1 + redshift)
+                    < wl
+                    <= self.lams[i] * (1 + redshift)
                 ):
                     exp_teff = np.append(exp_teff, np.exp(-teff))
                     continue
 
-            if wavelength <= self.wavelengths[-1] * (1 + redshift):
+            if wl <= self.lams[-1] * (1 + redshift):
                 exp_teff = np.append(
                     exp_teff,
                     np.exp(
                         -(
                             teff
                             + 0.25
-                            * (wavelength / self.wavelengths[-1]) ** 3
+                            * (wl / self.lams[-1]) ** 3
                             * (
                                 (1 + redshift) ** 0.46
-                                - (wavelength / self.wavelengths[-1]) ** 0.46
+                                - (wl / self.lams[-1]) ** 0.46
                             )
                             + 9.4
-                            * (wavelength / self.wavelengths[-1]) ** 1.5
+                            * (wl / self.lams[-1]) ** 1.5
                             * (
                                 (1 + redshift) ** 0.18
-                                - (wavelength / self.wavelengths[-1]) ** 0.18
+                                - (wl / self.lams[-1]) ** 0.18
                             )
                             - 0.7
-                            * (wavelength / self.wavelengths[-1]) ** 3
+                            * (wl / self.lams[-1]) ** 3
                             * (
-                                (wavelength / self.wavelengths[-1]) ** -1.32
-                                - (1 + redshift) ** -1.32
+                                (wl / self.lams[-1]) ** (-1.32)
+                                - (1 + redshift) ** (-1.32)
                             )
                             + 0.023
                             * (
-                                (wavelength / self.wavelengths[-1]) ** 1.68
+                                (wl / self.lams[-1]) ** 1.68
                                 - (1 + redshift) ** 1.68
                             )
                         )
                     ),
                 )
+                continue
 
         return exp_teff
