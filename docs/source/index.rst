@@ -25,7 +25,6 @@ Contents
    lines/lines
    filters/filters
    photometry/photometry
-   dust/dust
    imaging/imaging
    parallelism/openmp
    advanced/advanced
