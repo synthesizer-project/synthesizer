@@ -16,6 +16,18 @@ from . import __file__ as filepath
 __all__ = ["Inoue14", "Madau96"]
 
 
+class IGMBase:
+    """
+    Base class for IGM absorption models.
+
+    Attributes:
+        name (str): Name of the model.
+    """
+
+    def __init__(self, name):
+        """Initialize the IGMBase class."""
+
+
 class Inoue14:
     r"""
     IGM absorption from Inoue et al. (2014).
