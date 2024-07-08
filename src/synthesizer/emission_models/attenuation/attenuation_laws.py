@@ -162,7 +162,6 @@ class PowerLaw(AttenuationLaw):
             params (dict)
                 A dictionary containing the parameters for the model.
         """
-
         description = "simple power law dust curve"
         AttenuationLaw.__init__(self, description)
         self.slope = slope
@@ -180,7 +179,6 @@ class PowerLaw(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-
         return (lam / 5500.0) ** self.slope
 
     def get_tau(self, lam):
@@ -196,12 +194,13 @@ class PowerLaw(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-
         return self.get_tau_at_lam(lam) / self.get_tau_at_lam(5500.0)
 
 
 def N09Tau(lam, slope, cent_lam, ampl, gamma):
     """
+    Generate the transmission curve for the Noll+2009 attenuation curve.
+
     Attenuation curve using a modified version of the Calzetti
     attenuation (Calzetti+2000) law allowing for a varying UV slope
     and the presence of a UV bump; from Noll+2009
@@ -227,7 +226,6 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
         (array-like, float)
             V-band normalised optical depth for given wavelength
     """
-
     # Wavelength in microns
     if isinstance(lam, (unyt_quantity, unyt_array)):
         lam_micron = lam.to("um").v
@@ -279,8 +277,10 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
 
 class Calzetti2000(AttenuationLaw):
     """
-    Calzetti attenuation curve; with option for the slope and UV-bump
-    implemented in Noll et al. 2009.
+    Calzetti attenuation curve.
+
+    This includes options for the slope and UV-bump implemented in
+    Noll et al. 2009.
 
     Attributes:
         slope (float)
@@ -329,8 +329,9 @@ class Calzetti2000(AttenuationLaw):
 
     def get_tau(self, lam):
         """
-        Calculate V-band normalised optical depth. (Uses the N09Tau function
-        defined above.)
+        Calculate V-band normalised optical depth.
+
+        (Uses the N09Tau function defined above.)
 
         Args:
             lam (float/array-like, float)
@@ -363,10 +364,11 @@ class MWN18(AttenuationLaw):
 
     def __init__(self):
         """
-        Initialise the dust curve by loading the data and get the V band
-        optical depth by interpolation.
-        """
+        Initialise the dust curve.
 
+        This will load the data and get the V band optical depth by
+        interpolation.
+        """
         description = "MW extinction curve from Desika"
         AttenuationLaw.__init__(self, description)
         self.data = np.load(f"{this_dir}/../../data/MW_N18.npz")
@@ -393,7 +395,6 @@ class MWN18(AttenuationLaw):
             float/array, float
                 The optical depth.
         """
-
         func = interpolate.interp1d(
             self.data.f.mw_df_lam[::-1],
             self.data.f.mw_df_chi[::-1],
@@ -411,11 +412,9 @@ class MWN18(AttenuationLaw):
 
 class GrainsWD01(AttenuationLaw):
     """
-    Weingarter and Draine 2001 dust grain extinction model
-    for MW, SMC and LMC or any available in WD01.
+    Weingarter and Draine 2001 dust grain extinction model.
 
-    NOTE: this model does not inherit from AttenuationLaw because it is
-          distinctly different.
+    Includes curves for MW, SMC and LMC or any available in WD01.
 
     Attributes:
         model (str)
@@ -426,12 +425,11 @@ class GrainsWD01(AttenuationLaw):
 
     def __init__(self, model="SMCBar"):
         """
-        Initialise the dust curve
+        Initialise the dust curve.
 
         Args:
             model (str)
                 The dust grain model to use.
-
         """
         AttenuationLaw.__init__(
             self,
@@ -471,8 +469,7 @@ class GrainsWD01(AttenuationLaw):
 
     def get_transmission(self, tau_v, lam):
         """
-        Returns the transmitted flux/luminosity fraction based on an optical
-        depth at a range of wavelengths.
+        Return the transmitted flux/luminosity fraction.
 
         Args:
             tau_v (float/array-like, float)
@@ -500,7 +497,7 @@ class GrainsWD01(AttenuationLaw):
 
 def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
     """
-    Drude-like parametric expression for the attenuation curve from Li+08
+    Drude-like parametric expression for the attenuation curve from Li+08.
 
     Args:
 
@@ -520,11 +517,9 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
             extinction/attenuation curves from: Calzetti, SMC, MW (R_V=3.1),
             and LMC
 
-    # Returns:
+    Returns:
             tau/tau_v at each input wavelength (lam)
-
     """
-
     # Empirical templates (Calzetti, SMC, MW RV=3.1, LMC)
     if model == "Calzetti":
         UV_slope, OPT_NIR_slope, FUV_slope, bump = 44.9, 7.56, 61.2, 0.0
@@ -567,8 +562,9 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
 
 class ParametricLi08(AttenuationLaw):
     """
-    Parametric, empirical attenuation curve;
-    implemented in Li+08, Evolution of the parameters up to high-z
+    Parametric, empirical attenuation curve.
+
+    Implemented in Li+08, Evolution of the parameters up to high-z
     (z=12) studied in: Markov+23a,b
 
     Attributes:
@@ -597,6 +593,20 @@ class ParametricLi08(AttenuationLaw):
     ):
         """
         Initialise the dust curve.
+
+        Args:
+            UV_slope (float)
+                Dimensionless parameter describing the UV-FUV slope
+            OPT_NIR_slope (float)
+                Dimensionless parameter describing the optical/NIR slope
+            FUV_slope (float)
+                Dimensionless parameter describing the FUV slope
+            bump (float)
+                Dimensionless parameter describing the UV bump
+                strength (0< bump <1)
+            model (string)
+                Fixing attenuation/extinction curve to one of the known
+                templates: MW, SMC, LMC, Calzetti
         """
         description = (
             "Parametric attenuation curve; with option"
@@ -629,8 +639,9 @@ class ParametricLi08(AttenuationLaw):
 
     def get_tau(self, lam):
         """
-        Calculate V-band normalised optical depth. (Uses the Li_08 function
-        defined above.)
+        Calculate V-band normalised optical depth.
+
+        (Uses the Li_08 function defined above.)
 
         Args:
             lam (float/array-like, float)
