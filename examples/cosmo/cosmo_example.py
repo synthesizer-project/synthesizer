@@ -18,7 +18,7 @@ from synthesizer.emission_models import (
     ReprocessedEmission,
     StellarEmissionModel,
 )
-from synthesizer.emission_models.dust.attenuation import PowerLaw
+from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
