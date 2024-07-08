@@ -16,7 +16,7 @@ from synthesizer.utils import exceptions
 from synthesizer.utils import integrate
 from synthesizer.utils import plt
 from synthesizer.utils import stats
-from synthesizer.utils import utils
+from synthesizer.utils import util_funcs
 from synthesizer.utils import units
 from synthesizer.utils import warnings
 
