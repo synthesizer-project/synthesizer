@@ -16,9 +16,9 @@ Example usages:
 import numpy as np
 
 from synthesizer import exceptions
-from synthesizer.ascii_table import TableFormatter
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
+from synthesizer.utils import TableFormatter
 from synthesizer.warnings import warn
 
 

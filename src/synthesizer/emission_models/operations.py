@@ -427,7 +427,7 @@ class DustAttenuation:
     A class to define the dust attenuation of spectra.
 
     Attributes:
-        dust_curve (dust.attenuation.*):
+        dust_curve (emission_models.attenuation.*):
             The dust curve to apply.
         apply_dust_to (EmissionModel):
             The model to apply the dust curve to.
@@ -442,7 +442,7 @@ class DustAttenuation:
         Initialise the dust attenuation model.
 
         Args:
-            dust_curve (dust.attenuation.*):
+            dust_curve (emission_models.attenuation.*):
                 The dust curve to apply.
             apply_dust_to (EmissionModel):
                 The model to apply the dust curve to.

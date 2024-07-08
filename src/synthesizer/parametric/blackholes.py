@@ -23,10 +23,9 @@ import numpy as np
 from unyt import cm, deg, km, kpc, s, unyt_array
 
 from synthesizer import exceptions
-from synthesizer.ascii_table import TableFormatter
 from synthesizer.components import BlackholesComponent
 from synthesizer.parametric.morphology import PointSource
-from synthesizer.utils import has_units
+from synthesizer.utils import TableFormatter, has_units
 
 
 class BlackHole(BlackholesComponent):

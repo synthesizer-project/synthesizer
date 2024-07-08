@@ -34,8 +34,8 @@ from unyt import Angstrom, Hz, c, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer._version import __version__
-from synthesizer.integrate import integrate_last_axis
 from synthesizer.units import Quantity
+from synthesizer.utils.integrate import integrate_last_axis
 from synthesizer.warnings import warn
 
 

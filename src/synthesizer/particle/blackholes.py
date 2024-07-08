@@ -19,11 +19,10 @@ import numpy as np
 from unyt import cm, deg, km, rad, s, unyt_array
 
 from synthesizer import exceptions
-from synthesizer.ascii_table import TableFormatter
 from synthesizer.components import BlackholesComponent
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
-from synthesizer.utils import value_to_array
+from synthesizer.utils import TableFormatter, value_to_array
 
 
 class BlackHoles(Particles, BlackholesComponent):

@@ -23,14 +23,17 @@ from spectres import spectres
 from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 
 from synthesizer import exceptions
-from synthesizer.ascii_table import TableFormatter
 from synthesizer.conversions import lnu_to_llam
-from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.extensions.timers import tic, toc
-from synthesizer.integrate import integrate_last_axis
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
-from synthesizer.utils import has_units, rebin_1d, wavelength_to_rgba
+from synthesizer.utils import (
+    TableFormatter,
+    has_units,
+    rebin_1d,
+    wavelength_to_rgba,
+)
+from synthesizer.utils.integrate import integrate_last_axis
 from synthesizer.warnings import warn
 
 
@@ -1168,7 +1171,7 @@ class Sed:
     def apply_attenuation(
         self,
         tau_v,
-        dust_curve=PowerLaw(slope=-1.0),
+        dust_curve,
         mask=None,
     ):
         """
@@ -1177,9 +1180,9 @@ class Sed:
         Args:
             tau_v (float/array-like, float)
                 The V-band optical depth for every star particle.
-            dust_curve (synthesizer.dust.attenuation.*)
+            dust_curve (synthesizer.emission_models.attenuation.*)
                 An instance of one of the dust attenuation models. (defined in
-                synthesizer/dust/attenuation.py)
+                synthesizer/emission_models.attenuation.py)
             mask (array-like, bool)
                 A mask array with an entry for each spectra. Masked out
                 spectra will be ignored when applying the attenuation. Only

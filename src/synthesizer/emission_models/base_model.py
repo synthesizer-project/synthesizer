@@ -90,7 +90,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             The wavelength array.
         extract (str):
             The key for the spectra to extract.
-        dust_curve (dust.attenuation.*):
+        dust_curve (emission_models.attenuation.*):
             The dust curve to apply.
         apply_dust_to (EmissionModel):
             The model to apply the dust curve to.
@@ -185,7 +185,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 A list of models to combine.
             apply_dust_to (EmissionModel):
                 The model to apply the dust curve to.
-            dust_curve (dust.attenuation.*):
+            dust_curve (emission_models.attenuation.*):
                 The dust curve to apply.
             tau_v (float/ndarray/str/tuple):
                 The optical depth to apply. Can be a float, ndarray, or a
@@ -358,7 +358,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 A list of models to combine.
             apply_dust_to (EmissionModel):
                 The model to apply the dust curve to.
-            dust_curve (dust.attenuation.*):
+            dust_curve (emission_models.attenuation.*):
                 The dust curve to apply.
             tau_v (float/ndarray/str/tuple):
                 The optical depth to apply. Can be a float, ndarray, or a
@@ -842,7 +842,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         Set the dust attenuation properties on this model.
 
         Args:
-            dust_curve (dust.attenuation.*):
+            dust_curve (emission_models.attenuation.*):
                 A dust curve instance to apply.
             apply_dust_to (EmissionModel):
                 The model to apply the dust curve to.
