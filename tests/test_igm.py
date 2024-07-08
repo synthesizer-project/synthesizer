@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from synthesizer.igm import Inoue14, Madau96
+from synthesizer.emission_models.attenuation.igm import Inoue14, Madau96
 
 
 @pytest.fixture
