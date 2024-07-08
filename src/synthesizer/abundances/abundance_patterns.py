@@ -15,7 +15,7 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 
-import synthesizer.exceptions as exceptions
+from synthesizer import exceptions
 from synthesizer.abundances import (
     abundance_scalings,
     depletion_models,

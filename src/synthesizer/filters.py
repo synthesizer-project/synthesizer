@@ -32,7 +32,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from unyt import Angstrom, Hz, c, unyt_array, unyt_quantity
 
-import synthesizer.exceptions as exceptions
+from synthesizer import exceptions
 from synthesizer._version import __version__
 from synthesizer.integrate import integrate_last_axis
 from synthesizer.units import Quantity
