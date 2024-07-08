@@ -9,7 +9,10 @@ and are not designed to be used directly by the user.
 
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
+
+from synthesizer.exceptions import UnimplementedFunctionality
 
 from . import __file__ as filepath
 
@@ -26,9 +29,69 @@ class IGMBase:
 
     def __init__(self, name):
         """Initialize the IGMBase class."""
+        self.name = name
+
+    def get_transmission(self, redshift, lam_obs):
+        """
+        Compute the IGM transmission.
+
+        Args:
+            redshift (float): Redshift to evaluate IGM absorption.
+            lam_obs (array): Observed-frame wavelengths in Angstroms.
+
+        Returns:
+            array: IGM transmission.
+        """
+        raise UnimplementedFunctionality(
+            "get_transmission() must be implemented in a subclass."
+        )
+
+    def plot_transmission(
+        self,
+        redshift,
+        lam_obs,
+        show=True,
+        fig=None,
+        ax=None,
+        figsize=(8, 6),
+    ):
+        """
+        Plot the IGM transmission.
+
+        Args:
+            redshift (float): Redshift to evaluate IGM absorption.
+            lam_obs (array): Observed-frame wavelengths in Angstroms.
+            show (bool): Whether to show the plot.
+            fig (matplotlib.figure.Figure): Figure to plot on.
+            ax (matplotlib.axes.Axes): Axes to plot on.
+            figsize (tuple): Figure size.
+
+        Returns:
+            tuple: Figure and Axes objects.
+        """
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
+        if ax is None:
+            ax = fig.add_subplot(111)
+
+        # Compute the transmission
+        transmission = self.get_transmission(redshift, lam_obs)
+
+        # Plot the transmission
+        ax.plot(lam_obs, transmission, label=self.name)
+
+        # Set the plot labels
+        ax.set_xlabel(r"Wavelength ($\AA$)")
+        ax.set_ylabel("Transmission")
+        ax.legend()
+
+        if show:
+            plt.show()
+
+        return fig, ax
 
 
-class Inoue14:
+class Inoue14(IGMBase):
     r"""
     IGM absorption from Inoue et al. (2014).
 
@@ -49,6 +112,9 @@ class Inoue14:
 
     def __init__(self, scale_tau=1.0):
         """Initialize the Inoue14 class with a scaling factor for tau."""
+        # Initialize the base class
+        IGMBase.__init__(self, "Inoue14")
+
         # Prepare attributes that will be loaded from data files
         self.lam = None
         self.alf1 = None
@@ -62,9 +128,6 @@ class Inoue14:
 
         # Set the scale factor for the IGM absorption
         self.scale_tau = scale_tau
-
-        # Set the name of the model
-        self.name = "Inoue14"
 
     def _load_data(self):
         """
@@ -325,7 +388,7 @@ class Inoue14:
         return transmission
 
 
-class Madau96:
+class Madau96(IGMBase):
     """
     IGM absorption from Madau et al. (1996).
 
@@ -337,9 +400,11 @@ class Madau96:
 
     def __init__(self):
         """Initialize the Madau96 class."""
+        # Initialize the base class
+        IGMBase.__init__(self, "Madau96")
+
         self.lams = [1216.0, 1026.0, 973.0, 950.0]
         self.coefficients = [0.0036, 0.0017, 0.0012, 0.00093]
-        self.name = "Madau96"
 
     def get_transmission(self, redshift, lam_obs):
         """
