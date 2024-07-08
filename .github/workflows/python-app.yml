@@ -33,8 +33,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install wheel
         sudo apt install pandoc
-        pip install cython # Needed by bluetides and requirements not set up correctly
-        WITH_OPENMP=1 pip install .[test,docs,bluetides,eagle,illutris]
+        WITH_OPENMP=1 pip install .[test,docs]
+        # Install loader dependencies (doing this separately because bigfile
+        # is not set up properly and depends on numpy and cython, the former
+        # we depend on, the latter we need to install)
+        pip install cython
+        WITH_OPENMP=1 pip install .[bluetides,eagle,illustris]
         # Output the compilation report so it can be viewed in an action log
         cat build_synth.log
     - uses: chartboost/ruff-action@v1  # Lint with Ruff
