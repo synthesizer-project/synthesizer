@@ -32,8 +32,8 @@ class Inoue14:
         path = os.path.join(os.path.dirname(filepath), "data")
         # print path
 
-        LAF_file = os.path.join(path, "LAFcoeff.txt")
-        DLA_file = os.path.join(path, "DLAcoeff.txt")
+        LAF_file = os.path.join(path, "../../data/LAFcoeff.txt")
+        DLA_file = os.path.join(path, "../../data/DLAcoeff.txt")
 
         data = np.loadtxt(LAF_file, unpack=True)
         ix, lam, ALAF1, ALAF2, ALAF3 = data
