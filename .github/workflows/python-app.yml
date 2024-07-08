@@ -33,6 +33,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install wheel
         sudo apt install pandoc
+        pip install cython # Needed by bluetides and requirements not set up correctly
         WITH_OPENMP=1 pip install .[test,docs,bluetides,eagle,illutris]
         # Output the compilation report so it can be viewed in an action log
         cat build_synth.log
