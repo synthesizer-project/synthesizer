@@ -122,7 +122,6 @@ docs = [
 
 # Simulation specifc loader dependancies
 bluetides = [
-    "cython",
     "bigfile",
 ]
 eagle = [
