@@ -1511,7 +1511,7 @@ def plot_spectra(
         ax.set_ylim(*ylimits)
 
     # Make the legend
-    if draw_legend:
+    if draw_legend and any(ax.get_legend_handles_labels()[1]):
         ax.legend(fontsize=8, labelspacing=0.0)
 
     # Parse the units for the labels and make them pretty
