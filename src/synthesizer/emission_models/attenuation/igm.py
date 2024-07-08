@@ -60,6 +60,7 @@ class Inoue14:
         self.a_laf2 = self.a_laf2[:, np.newaxis]
         self.a_laf3 = self.a_laf3[:, np.newaxis]
 
+        self.lambda_dla = self.lambda_dla[:, np.newaxis]
         self.a_dla1 = self.a_dla1[:, np.newaxis]
         self.a_dla2 = self.a_dla2[:, np.newaxis]
 
@@ -81,30 +82,40 @@ class Inoue14:
 
         # Initialize absorption array
         lambda_laf = self.lambda_laf
-        absorption = np.zeros_like(obs_wavelength * lambda_laf).T
+        absorption = np.zeros_like(
+            obs_wavelength[:, np.newaxis] * lambda_laf.T
+        )
 
         # Condition checks for different redshift ranges
-        condition0 = obs_wavelength < lambda_laf * (1 + redshift_source)
-        condition1 = condition0 & (obs_wavelength < lambda_laf * (1 + z1_laf))
-        condition2 = condition0 & (
-            (obs_wavelength >= lambda_laf * (1 + z1_laf))
-            & (obs_wavelength < lambda_laf * (1 + z2_laf))
+        condition0 = obs_wavelength[:, np.newaxis] < lambda_laf * (
+            1 + redshift_source
         )
-        condition3 = condition0 & (obs_wavelength >= lambda_laf * (1 + z2_laf))
+        condition1 = condition0 & (
+            obs_wavelength[:, np.newaxis] < lambda_laf * (1 + z1_laf)
+        )
+        condition2 = condition0 & (
+            (obs_wavelength[:, np.newaxis] >= lambda_laf * (1 + z1_laf))
+            & (obs_wavelength[:, np.newaxis] < lambda_laf * (1 + z2_laf))
+        )
+        condition3 = condition0 & (
+            obs_wavelength[:, np.newaxis] >= lambda_laf * (1 + z2_laf)
+        )
 
         # Calculate absorption values
-        absorption = np.zeros_like(obs_wavelength * lambda_laf)
         absorption[condition1] += (
-            (self.a_laf1 / lambda_laf**1.2) * obs_wavelength**1.2
+            (self.a_laf1 / lambda_laf**1.2)
+            * obs_wavelength[:, np.newaxis] ** 1.2
         )[condition1]
         absorption[condition2] += (
-            (self.a_laf2 / lambda_laf**3.7) * obs_wavelength**3.7
+            (self.a_laf2 / lambda_laf**3.7)
+            * obs_wavelength[:, np.newaxis] ** 3.7
         )[condition2]
         absorption[condition3] += (
-            (self.a_laf3 / lambda_laf**5.5) * obs_wavelength**5.5
+            (self.a_laf3 / lambda_laf**5.5)
+            * obs_wavelength[:, np.newaxis] ** 5.5
         )[condition3]
 
-        return absorption.sum(axis=0)
+        return absorption.sum(axis=1)
 
     def t_lyman_series_dla(self, redshift_source, obs_wavelength):
         """
@@ -121,25 +132,27 @@ class Inoue14:
 
         # Initialize absorption array
         lambda_dla = self.lambda_dla
-        absorption = np.zeros_like(obs_wavelength * lambda_dla)
+        absorption = np.zeros_like(
+            obs_wavelength[:, np.newaxis] * lambda_dla.T
+        )
 
         # Condition checks for different redshift ranges
-        condition0 = (obs_wavelength < lambda_dla * (1 + redshift_source)) & (
-            obs_wavelength < lambda_dla * (1.0 + z1_dla)
-        )
-        condition1 = (obs_wavelength < lambda_dla * (1 + redshift_source)) & ~(
-            obs_wavelength < lambda_dla * (1.0 + z1_dla)
-        )
+        condition0 = (
+            obs_wavelength[:, np.newaxis] < lambda_dla * (1 + redshift_source)
+        ) & (obs_wavelength[:, np.newaxis] < lambda_dla * (1.0 + z1_dla))
+        condition1 = (
+            obs_wavelength[:, np.newaxis] < lambda_dla * (1 + redshift_source)
+        ) & ~(obs_wavelength[:, np.newaxis] < lambda_dla * (1.0 + z1_dla))
 
         # Calculate absorption values
         absorption[condition0] += (
-            (self.a_dla1 / lambda_dla**2) * obs_wavelength**2
+            (self.a_dla1 / lambda_dla**2) * obs_wavelength[:, np.newaxis] ** 2
         )[condition0]
         absorption[condition1] += (
-            (self.a_dla2 / lambda_dla**3) * obs_wavelength**3
+            (self.a_dla2 / lambda_dla**3) * obs_wavelength[:, np.newaxis] ** 3
         )[condition1]
 
-        return absorption.sum(axis=0)
+        return absorption.sum(axis=1)
 
     def t_lyman_continuum_dla(self, redshift_source, obs_wavelength):
         """
@@ -169,7 +182,6 @@ class Inoue14:
             )
         else:
             condition1 = obs_wavelength >= lambda_l * (1.0 + z1_dla)
-
             absorption[condition0 & condition1] = (
                 0.04696 * (1.0 + redshift_source) ** 3
                 - 0.01779
