@@ -11,5 +11,5 @@ In the linked sections below we detail the basic functionality and usage of both
 .. toctree::
    :maxdepth: 1
 
-    dust_attenuation
-    igm
+   dust_attenuation
+   igm
