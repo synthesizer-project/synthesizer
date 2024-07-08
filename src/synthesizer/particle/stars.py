@@ -27,15 +27,15 @@ import numpy as np
 from unyt import Hz, angstrom, erg, kpc, s
 
 from synthesizer import exceptions
-from synthesizer.ascii_table import TableFormatter
 from synthesizer.components import StarsComponent
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
-from synthesizer.plt import single_histxy
 from synthesizer.units import Quantity
+from synthesizer.utils import TableFormatter
+from synthesizer.utils.plt import single_histxy
 from synthesizer.warnings import warn
 
 

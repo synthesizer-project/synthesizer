@@ -20,7 +20,6 @@ from unyt import Angstrom, cm, unyt_array, unyt_quantity
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
-from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.units import Quantity
 from synthesizer.warnings import deprecation
 
@@ -847,7 +846,7 @@ class Line:
     def apply_attenuation(
         self,
         tau_v,
-        dust_curve=PowerLaw(slope=-1.0),
+        dust_curve,
         mask=None,
     ):
         """
@@ -856,9 +855,9 @@ class Line:
         Args:
             tau_v (float/array-like, float)
                 The V-band optical depth for every star particle.
-            dust_curve (synthesizer.dust.attenuation.*)
+            dust_curve (synthesizer.emission_models.attenuation.*)
                 An instance of one of the dust attenuation models. (defined in
-                synthesizer/dust/attenuation.py)
+                synthesizer/emission_models.attenuation.py)
             mask (array-like, bool)
                 A mask array with an entry for each line. Masked out
                 spectra will be ignored when applying the attenuation. Only

@@ -19,15 +19,14 @@ from scipy import integrate
 from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.ascii_table import TableFormatter
 from synthesizer.components import StarsComponent
 from synthesizer.line import Line
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
-from synthesizer.plt import single_histxy
-from synthesizer.stats import weighted_mean, weighted_median
 from synthesizer.units import Quantity
-from synthesizer.utils import has_units
+from synthesizer.utils import TableFormatter, has_units
+from synthesizer.utils.plt import single_histxy
+from synthesizer.utils.stats import weighted_mean, weighted_median
 
 
 class Stars(StarsComponent):

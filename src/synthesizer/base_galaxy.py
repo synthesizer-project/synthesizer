@@ -5,9 +5,9 @@ only contains common attributes and methods to reduce boilerplate.
 """
 
 from synthesizer import exceptions
-from synthesizer.ascii_table import TableFormatter
-from synthesizer.igm import Inoue14
+from synthesizer.emission_models.attenuation.igm import Inoue14
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
+from synthesizer.utils import TableFormatter
 
 
 class BaseGalaxy:

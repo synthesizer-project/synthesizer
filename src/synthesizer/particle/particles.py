@@ -10,8 +10,8 @@ from numpy.random import multivariate_normal
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.ascii_table import TableFormatter
 from synthesizer.units import Quantity
+from synthesizer.utils import TableFormatter
 
 
 class Particles:
