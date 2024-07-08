@@ -8,7 +8,7 @@ Plot dust curves
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from synthesizer.dust import attenuation
+from synthesizer.emission_models.dust import attenuation
 from unyt import Angstrom
 
 models = [

@@ -10,7 +10,6 @@ photometry.
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology import Planck18 as cosmo
-from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.emission_models import (
     AttenuatedEmission,
     CharlotFall2000,
@@ -19,6 +18,7 @@ from synthesizer.emission_models import (
     ReprocessedEmission,
     StellarEmissionModel,
 )
+from synthesizer.emission_models.dust.attenuation import PowerLaw
 from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG

@@ -9,8 +9,8 @@ indistinguishable results.
 
 import matplotlib.pyplot as plt
 import numpy as np
-from synthesizer.dust.emission import Greybody
 from synthesizer.emission_models import UnifiedAGN
+from synthesizer.emission_models.dust.emission import Greybody
 from synthesizer.grid import Grid
 from synthesizer.parametric import BlackHole
 from synthesizer.particle import BlackHoles
