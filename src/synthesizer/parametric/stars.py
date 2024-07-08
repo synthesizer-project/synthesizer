@@ -4,10 +4,9 @@ This is the parametric analog of particle.Stars. It not only computes and holds
 the SFZH grid but everything describing a parametric Galaxy's stellar
 component.
 
-Example usage:
+Example usage::
 
-    stars = Stars(log10ages, metallicities,
-                  sfzh=sfzh)
+    stars = Stars(log10ages, metallicities, sfzh=sfzh)
     stars.get_spectra(emission_model)
     stars.plot_spectra()
 """

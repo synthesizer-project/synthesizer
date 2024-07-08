@@ -105,11 +105,11 @@ class DeltaConstant(Common):
     A single metallicity "distribution".
 
     Attributes:
-        metallicity (float)
+        metallicity_ (float)
             The single (linear) metallicity for all stellar mass in the
             distribution.
-        log10metallicity (float)
-            The log base 10 of metallicity_.
+        log10metallicity_ (float)
+            The log base 10 of metallicity.
     """
 
     def __init__(self, metallicity=None, log10metallicity=None):
@@ -119,13 +119,12 @@ class DeltaConstant(Common):
         Either metallicity or log10metallicity must be provided.
 
         Args:
-            metallicity_ (float)
+            metallicity (float)
                 The single (linear) metallicity for all stellar mass in the
                 distribution.
-            log10metallcity_ (float)
-                The log base 10 of metallicity_.
+            log10metallcity (float)
+                The log base 10 of metallicity.
         """
-
         # We need one metallicity definition
         if metallicity is None and log10metallicity is None:
             raise exceptions.InconsistentArguments(

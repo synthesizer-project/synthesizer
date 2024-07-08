@@ -10,7 +10,8 @@ Generating spectra involves the following steps:
 An emission model defines the parameters necessary to perform these steps and
 gives an interface for simply defining the construction of complex spectra.
 
-Example usage:
+Example usage::
+
     # Define the grid
     grid = Grid(...)
 
@@ -33,9 +34,9 @@ Example usage:
 
     # Generate the lines
     lines = stars.get_lines(
-                line_ids=("Ne 4 1601.45A, He 2 1640.41A", "O3 1660.81A"),
-                emission_model=emergent_emission_model
-            )
+        line_ids=("Ne 4 1601.45A, He 2 1640.41A", "O3 1660.81A"),
+        emission_model=emergent_emission_model
+    )
 """
 
 import copy
@@ -81,30 +82,16 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
     attributes are accessed through properties and set via setters to
     ensure the tree remains consistent.
 
+    A number of attributes are defined as properties to protect their values
+    and ensure the tree is correctly reconstructed when they are changed.
+    This also means the they are no included below in the Attributes section
+    to avoid duplication.
+
     Attributes:
         label (str):
             The key for the spectra that will be produced.
-        grid (Grid):
-            The grid to extract from.
         lam (unyt_array):
             The wavelength array.
-        extract (str):
-            The key for the spectra to extract.
-        dust_curve (emission_models.attenuation.*):
-            The dust curve to apply.
-        apply_dust_to (EmissionModel):
-            The model to apply the dust curve to.
-        tau_v (float/ndarray/str/tuple):
-            The optical depth to apply. Can be a float, ndarray, or a string
-            to a component attribute. Can also be a tuple combining any of
-            these.
-        generator (EmissionModel):
-            The emission generation model. This must define a get_spectra
-            method.
-        combine (list):
-            A list of models to combine.
-        fesc (float):
-            The escape fraction.
         masks (list):
             A list of masks to apply.
         parents (list):
@@ -119,17 +106,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             A dictionary of component attributes/parameters which should be
             fixed and thus ignore the value of the component attribute. This
             should take the form {<parameter_name>: <value>}.
-        scale_by (str/list/tuple):
-            Either a component attribute to scale the resultant spectra by,
-            a spectra key to scale by (based on the bolometric luminosity). or
-            a tuple/list containing strings defining either of the former two
-            options. Instead of a string, an EmissionModel can also be passed
-            to scale by the luminosity of that model.
-        post_processing (list):
-            A list of post processing functions to apply to the emission after
-            it has been generated. Each function must take a dict containing
-            the spectra/lines, the emitters, and the emission model, and
-            return the same dict with the post processing applied.
     """
 
     # Define quantities

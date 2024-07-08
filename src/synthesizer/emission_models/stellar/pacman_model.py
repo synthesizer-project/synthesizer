@@ -20,7 +20,8 @@ model and is also included. This model is identical to the
 BimodalPacmanEmission model but with a fixed age pivot of 10^7 Myr and no
 escaped emission.
 
-Example:
+Example::
+
     To create a PacmanEmission model for a grid with a V-band optical depth of
     0.1 and a dust curve, one would do the following:
 

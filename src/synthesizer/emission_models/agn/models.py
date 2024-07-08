@@ -6,9 +6,7 @@ to work from when creating more complex models.
 
 Example usage:
     # Create a simple emission model
-    model = TemplateEmission(
-        template=Template(lam=lam, lnu=lnu),
-    )
+    model = TemplateEmission(template=Template(lam=lam, lnu=lnu)
 
     # Generate the spectra
     spectra = blackholes.get_spectra(model)

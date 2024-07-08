@@ -4,13 +4,15 @@ This module contains classes for dust attenuation laws. These classes
 provide a way to calculate the optical depth and transmission curves
 for a given dust model.
 
-Example usage:
+Example usage::
+
     # Create a power law dust model with a slope of -1.0
     dust_model = PowerLaw(slope=-1.0)
 
     # Calculate the transmission curve
-    transmission
-        = dust_model.get_transmission(0.33, np.linspace(1000, 10000, 1000))
+    transmission = dust_model.get_transmission(
+        0.33, np.linspace(1000, 10000, 1000)
+    )
 """
 
 import os

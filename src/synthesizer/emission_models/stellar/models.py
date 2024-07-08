@@ -4,7 +4,8 @@ This module contains the definitions of commoon stellar emission models that
 can be used "out of the box" to generate spectra from components or as a
 foundation to work from when creating more complex models.
 
-Example usage:
+Example usage::
+
     # Create a simple emission model
     model = TotalEmission(
         grid=grid,
