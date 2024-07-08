@@ -18,10 +18,10 @@ models = [
     "GrainsWD01",
     "GrainsWD01",
     "GrainsWD01",
-    "ParametricLI08",
-    "ParametricLI08",
-    "ParametricLI08",
-    "ParametricLI08",
+    "ParametricLi08",
+    "ParametricLi08",
+    "ParametricLi08",
+    "ParametricLi08",
 ]
 
 params = [
