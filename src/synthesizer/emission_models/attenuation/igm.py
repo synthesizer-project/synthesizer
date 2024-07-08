@@ -1,5 +1,11 @@
-"""calculates the absorption due to the intergalactic medium
-using e.g. Madau et al. formalism."""
+"""A module for computing Intergalactic Medium (IGM) absorption.
+
+This module contains classes for computing IGM absorption from Inoue et al.
+(2014) and Madau et al. (1996) models.
+
+These are used when observer frame fluxes are computed using Sed.get_fnu(...)
+and are not designed to be used directly by the user.
+"""
 
 import os
 
@@ -12,269 +18,381 @@ __all__ = ["Inoue14", "Madau96"]
 
 class Inoue14:
     """
-    IGM absorption from Inoue et al. (2014)
+    IGM absorption from Inoue et al. (2014).
 
-    Taken from py-eazy.
-
-    Args:
-        scale_tau : float
-            Parameter multiplied to the IGM :math:`\tau` values (exponential
-            in the linear absorption fraction).
-            I.e., :math:`f_{\\mathrm{igm}} = e^{-\\mathrm{scale_\tau} \tau}`.
+    Attributes:
+        scale_tau (float): Parameter multiplied to the IGM tau values
+                           (exponential in the linear absorption fraction).
+                           I.e., f_igm = e^(-scale_tau * tau).
+        name (str): Name of the IGM model.
     """
 
     def __init__(self, scale_tau=1.0):
-        self._load_data()
+        """
+        Initialize the Inoue14 class.
+
+        Args:
+            scale_tau (float): Parameter multiplied to the IGM tau values
+                               (exponential in the linear absorption fraction).
+                               I.e., f_igm = e^(-scale_tau * tau).
+        """
         self.scale_tau = scale_tau
         self.name = "Inoue14"
+        self._load_data()
 
     def _load_data(self):
+        """Load the data required for calculations from text files."""
         path = os.path.join(os.path.dirname(filepath), "../../data")
-        # print path
 
-        LAF_file = os.path.join(path, "LAFcoeff.txt")
-        DLA_file = os.path.join(path, "DLAcoeff.txt")
+        laf_file = os.path.join(path, "LAFcoeff.txt")
+        dla_file = os.path.join(path, "DLAcoeff.txt")
 
-        data = np.loadtxt(LAF_file, unpack=True)
-        ix, lam, ALAF1, ALAF2, ALAF3 = data
-        self.lam = lam[:, np.newaxis]
-        self.ALAF1 = ALAF1[:, np.newaxis]
-        self.ALAF2 = ALAF2[:, np.newaxis]
-        self.ALAF3 = ALAF3[:, np.newaxis]
+        # Load Lyman-alpha forest coefficients
+        laf_data = np.loadtxt(laf_file, unpack=True)
+        _, self.lambda_laf, self.a_laf1, self.a_laf2, self.a_laf3 = laf_data
 
-        data = np.loadtxt(DLA_file, unpack=True)
-        ix, lam, ADLA1, ADLA2 = data
-        self.ADLA1 = ADLA1[:, np.newaxis]
-        self.ADLA2 = ADLA2[:, np.newaxis]
+        # Load Damped Lyman-alpha coefficients
+        dla_data = np.loadtxt(dla_file, unpack=True)
+        _, self.lambda_dla, self.a_dla1, self.a_dla2 = dla_data
+
+        self.lambda_laf = self.lambda_laf[:, np.newaxis]
+        self.a_laf1 = self.a_laf1[:, np.newaxis]
+        self.a_laf2 = self.a_laf2[:, np.newaxis]
+        self.a_laf3 = self.a_laf3[:, np.newaxis]
+
+        self.a_dla1 = self.a_dla1[:, np.newaxis]
+        self.a_dla2 = self.a_dla2[:, np.newaxis]
 
         return True
 
-    def tLSLAF(self, zS, lobs):
+    def t_lyman_series_laf(self, redshift_source, obs_wavelength):
         """
-        Lyman series, Lyman-alpha forest
+        Lyman series, Lyman-alpha forest.
+
+        Args:
+            redshift_source (float): Redshift of the source.
+            obs_wavelength (array): Observed-frame wavelengths in Angstroms.
+
+        Returns:
+            array: Lyman-alpha forest absorption values.
         """
-        z1LAF = 1.2
-        z2LAF = 4.7
+        z1_laf = 1.2
+        z2_laf = 4.7
 
-        l2 = self.lam  # [:, np.newaxis]
-        tLSLAF_value = np.zeros_like(lobs * l2).T
+        # Initialize absorption array
+        lambda_laf = self.lambda_laf
+        absorption = np.zeros_like(obs_wavelength * lambda_laf).T
 
-        x0 = lobs < l2 * (1 + zS)
-        x1 = x0 & (lobs < l2 * (1 + z1LAF))
-        x2 = x0 & ((lobs >= l2 * (1 + z1LAF)) & (lobs < l2 * (1 + z2LAF)))
-        x3 = x0 & (lobs >= l2 * (1 + z2LAF))
+        # Condition checks for different redshift ranges
+        condition0 = obs_wavelength < lambda_laf * (1 + redshift_source)
+        condition1 = condition0 & (obs_wavelength < lambda_laf * (1 + z1_laf))
+        condition2 = condition0 & (
+            (obs_wavelength >= lambda_laf * (1 + z1_laf))
+            & (obs_wavelength < lambda_laf * (1 + z2_laf))
+        )
+        condition3 = condition0 & (obs_wavelength >= lambda_laf * (1 + z2_laf))
 
-        tLSLAF_value = np.zeros_like(lobs * l2)
-        tLSLAF_value[x1] += ((self.ALAF1 / l2**1.2) * lobs**1.2)[x1]
-        tLSLAF_value[x2] += ((self.ALAF2 / l2**3.7) * lobs**3.7)[x2]
-        tLSLAF_value[x3] += ((self.ALAF3 / l2**5.5) * lobs**5.5)[x3]
+        # Calculate absorption values
+        absorption = np.zeros_like(obs_wavelength * lambda_laf)
+        absorption[condition1] += (
+            (self.a_laf1 / lambda_laf**1.2) * obs_wavelength**1.2
+        )[condition1]
+        absorption[condition2] += (
+            (self.a_laf2 / lambda_laf**3.7) * obs_wavelength**3.7
+        )[condition2]
+        absorption[condition3] += (
+            (self.a_laf3 / lambda_laf**5.5) * obs_wavelength**5.5
+        )[condition3]
 
-        return tLSLAF_value.sum(axis=0)
+        return absorption.sum(axis=0)
 
-    def tLSDLA(self, zS, lobs):
+    def t_lyman_series_dla(self, redshift_source, obs_wavelength):
         """
-        Lyman Series, DLA
+        Lyman Series, Damped Lyman-alpha absorption.
+
+        Args:
+            redshift_source (float): Redshift of the source.
+            obs_wavelength (array): Observed-frame wavelengths in Angstroms.
+
+        Returns:
+            array: Damped Lyman-alpha absorption values.
         """
-        z1DLA = 2.0
+        z1_dla = 2.0
 
-        l2 = self.lam  # [:, np.newaxis]
-        tLSDLA_value = np.zeros_like(lobs * l2)
+        # Initialize absorption array
+        lambda_dla = self.lambda_dla
+        absorption = np.zeros_like(obs_wavelength * lambda_dla)
 
-        x0 = (lobs < l2 * (1 + zS)) & (lobs < l2 * (1.0 + z1DLA))
-        x1 = (lobs < l2 * (1 + zS)) & ~(lobs < l2 * (1.0 + z1DLA))
+        # Condition checks for different redshift ranges
+        condition0 = (obs_wavelength < lambda_dla * (1 + redshift_source)) & (
+            obs_wavelength < lambda_dla * (1.0 + z1_dla)
+        )
+        condition1 = (obs_wavelength < lambda_dla * (1 + redshift_source)) & ~(
+            obs_wavelength < lambda_dla * (1.0 + z1_dla)
+        )
 
-        tLSDLA_value[x0] += ((self.ADLA1 / l2**2) * lobs**2)[x0]
-        tLSDLA_value[x1] += ((self.ADLA2 / l2**3) * lobs**3)[x1]
+        # Calculate absorption values
+        absorption[condition0] += (
+            (self.a_dla1 / lambda_dla**2) * obs_wavelength**2
+        )[condition0]
+        absorption[condition1] += (
+            (self.a_dla2 / lambda_dla**3) * obs_wavelength**3
+        )[condition1]
 
-        return tLSDLA_value.sum(axis=0)
+        return absorption.sum(axis=0)
 
-    def tLCDLA(self, zS, lobs):
+    def t_lyman_continuum_dla(self, redshift_source, obs_wavelength):
         """
-        Lyman continuum, DLA
+        Lyman continuum, Damped Lyman-alpha absorption.
+
+        Args:
+            redshift_source (float): Redshift of the source.
+            obs_wavelength (array): Observed-frame wavelengths in Angstroms.
+
+        Returns:
+            array: Lyman continuum absorption values for DLA.
         """
-        z1DLA = 2.0
-        lamL = 911.8
+        z1_dla = 2.0
+        lambda_l = 911.8
 
-        tLCDLA_value = np.zeros_like(lobs)
+        absorption = np.zeros_like(obs_wavelength)
 
-        x0 = lobs < lamL * (1.0 + zS)
-        if zS < z1DLA:
-            tLCDLA_value[x0] = (
-                0.2113 * _pow(1.0 + zS, 2)
+        # Condition checks for different redshift ranges
+        condition0 = obs_wavelength < lambda_l * (1.0 + redshift_source)
+        if redshift_source < z1_dla:
+            absorption[condition0] = (
+                0.2113 * (1.0 + redshift_source) ** 2
                 - 0.07661
-                * _pow(1.0 + zS, 2.3)
-                * _pow(lobs[x0] / lamL, (-3e-1))
-                - 0.1347 * _pow(lobs[x0] / lamL, 2)
+                * (1.0 + redshift_source) ** 2.3
+                * (obs_wavelength[condition0] / lambda_l) ** -0.3
+                - 0.1347 * (obs_wavelength[condition0] / lambda_l) ** 2
             )
         else:
-            x1 = lobs >= lamL * (1.0 + z1DLA)
+            condition1 = obs_wavelength >= lambda_l * (1.0 + z1_dla)
 
-            tLCDLA_value[x0 & x1] = (
-                0.04696 * _pow(1.0 + zS, 3)
+            absorption[condition0 & condition1] = (
+                0.04696 * (1.0 + redshift_source) ** 3
                 - 0.01779
-                * _pow(1.0 + zS, 3.3)
-                * _pow(lobs[x0 & x1] / lamL, (-3e-1))
-                - 0.02916 * _pow(lobs[x0 & x1] / lamL, 3)
+                * (1.0 + redshift_source) ** 3.3
+                * (obs_wavelength[condition0 & condition1] / lambda_l) ** -0.3
+                - 0.02916
+                * (obs_wavelength[condition0 & condition1] / lambda_l) ** 3
             )
-            tLCDLA_value[x0 & ~x1] = (
+            absorption[condition0 & ~condition1] = (
                 0.6340
-                + 0.04696 * _pow(1.0 + zS, 3)
+                + 0.04696 * (1.0 + redshift_source) ** 3
                 - 0.01779
-                * _pow(1.0 + zS, 3.3)
-                * _pow(lobs[x0 & ~x1] / lamL, (-3e-1))
-                - 0.1347 * _pow(lobs[x0 & ~x1] / lamL, 2)
-                - 0.2905 * _pow(lobs[x0 & ~x1] / lamL, (-3e-1))
+                * (1.0 + redshift_source) ** 3.3
+                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** -0.3
+                - 0.1347
+                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** 2
+                - 0.2905
+                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** -0.3
             )
 
-        return tLCDLA_value
+        return absorption
 
-    def tLCLAF(self, zS, lobs):
+    def t_lyman_continuum_laf(self, redshift_source, obs_wavelength):
         """
-        Lyman continuum, LAF
+        Lyman continuum, Lyman-alpha forest.
+
+        Args:
+            redshift_source (float): Redshift of the source.
+            obs_wavelength (array): Observed-frame wavelengths in Angstroms.
+
+        Returns:
+            array: Lyman continuum absorption values for LAF.
         """
-        z1LAF = 1.2
-        z2LAF = 4.7
-        lamL = 911.8
+        z1_laf = 1.2
+        z2_laf = 4.7
+        lambda_l = 911.8
 
-        tLCLAF_value = np.zeros_like(lobs)
+        absorption = np.zeros_like(obs_wavelength)
 
-        x0 = lobs < lamL * (1.0 + zS)
+        # Condition checks for different redshift ranges
+        condition0 = obs_wavelength < lambda_l * (1.0 + redshift_source)
 
-        if zS < z1LAF:
-            tLCLAF_value[x0] = 0.3248 * (
-                _pow(lobs[x0] / lamL, 1.2)
-                - _pow(1.0 + zS, -9e-1) * _pow(lobs[x0] / lamL, 2.1)
+        if redshift_source < z1_laf:
+            absorption[condition0] = 0.3248 * (
+                (obs_wavelength[condition0] / lambda_l) ** 1.2
+                - (1.0 + redshift_source) ** -0.9
+                * (obs_wavelength[condition0] / lambda_l) ** 2.1
             )
-        elif zS < z2LAF:
-            x1 = lobs >= lamL * (1 + z1LAF)
-            tLCLAF_value[x0 & x1] = 2.545e-2 * (
-                _pow(1.0 + zS, 1.6) * _pow(lobs[x0 & x1] / lamL, 2.1)
-                - _pow(lobs[x0 & x1] / lamL, 3.7)
+        elif redshift_source < z2_laf:
+            condition1 = obs_wavelength >= lambda_l * (1 + z1_laf)
+            absorption[condition0 & condition1] = 2.545e-2 * (
+                (1.0 + redshift_source) ** 1.6
+                * (obs_wavelength[condition0 & condition1] / lambda_l) ** 2.1
+                - (obs_wavelength[condition0 & condition1] / lambda_l) ** 3.7
             )
-            tLCLAF_value[x0 & ~x1] = (
+            absorption[condition0 & ~condition1] = (
                 2.545e-2
-                * _pow(1.0 + zS, 1.6)
-                * _pow(lobs[x0 & ~x1] / lamL, 2.1)
-                + 0.3248 * _pow(lobs[x0 & ~x1] / lamL, 1.2)
-                - 0.2496 * _pow(lobs[x0 & ~x1] / lamL, 2.1)
+                * (1.0 + redshift_source) ** 1.6
+                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** 2.1
+                + 0.3248
+                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** 1.2
+                - 0.2496
+                * (obs_wavelength[condition0 & ~condition1] / lambda_l) ** 2.1
             )
         else:
-            x1 = lobs > lamL * (1.0 + z2LAF)
-            x2 = (lobs >= lamL * (1.0 + z1LAF)) & (lobs < lamL * (1.0 + z2LAF))
-            x3 = lobs < lamL * (1.0 + z1LAF)
-
-            tLCLAF_value[x0 & x1] = 5.221e-4 * (
-                _pow(1.0 + zS, 3.4) * _pow(lobs[x0 & x1] / lamL, 2.1)
-                - _pow(lobs[x0 & x1] / lamL, 5.5)
+            condition1 = obs_wavelength > lambda_l * (1.0 + z2_laf)
+            condition2 = (obs_wavelength >= lambda_l * (1.0 + z1_laf)) & (
+                obs_wavelength < lambda_l * (1.0 + z2_laf)
             )
-            tLCLAF_value[x0 & x2] = (
+            condition3 = obs_wavelength < lambda_l * (1.0 + z1_laf)
+
+            absorption[condition0 & condition1] = 5.221e-4 * (
+                (1.0 + redshift_source) ** 3.4
+                * (obs_wavelength[condition0 & condition1] / lambda_l) ** 2.1
+                - (obs_wavelength[condition0 & condition1] / lambda_l) ** 5.5
+            )
+            absorption[condition0 & condition2] = (
                 5.221e-4
-                * _pow(1.0 + zS, 3.4)
-                * _pow(lobs[x0 & x2] / lamL, 2.1)
-                + 0.2182 * _pow(lobs[x0 & x2] / lamL, 2.1)
-                - 2.545e-2 * _pow(lobs[x0 & x2] / lamL, 3.7)
+                * (1.0 + redshift_source) ** 3.4
+                * (obs_wavelength[condition0 & condition2] / lambda_l) ** 2.1
+                + 0.2182
+                * (obs_wavelength[condition0 & condition2] / lambda_l) ** 2.1
+                - 2.545e-2
+                * (obs_wavelength[condition0 & condition2] / lambda_l) ** 3.7
             )
-            tLCLAF_value[x0 & x3] = (
+            absorption[condition0 & condition3] = (
                 5.221e-4
-                * _pow(1.0 + zS, 3.4)
-                * _pow(lobs[x0 & x3] / lamL, 2.1)
-                + 0.3248 * _pow(lobs[x0 & x3] / lamL, 1.2)
-                - 3.140e-2 * _pow(lobs[x0 & x3] / lamL, 2.1)
+                * (1.0 + redshift_source) ** 3.4
+                * (obs_wavelength[condition0 & condition3] / lambda_l) ** 2.1
+                + 0.3248
+                * (obs_wavelength[condition0 & condition3] / lambda_l) ** 1.2
+                - 3.140e-2
+                * (obs_wavelength[condition0 & condition3] / lambda_l) ** 2.1
             )
 
-        return tLCLAF_value
+        return absorption
 
-    def tau(self, z, lobs):
-        """Get full Inoue IGM absorption
-
-        Parameters
-        ----------
-        z : float
-            Redshift to evaluate IGM absorption
-
-        lobs : array
-            Observed-frame wavelength(s) in Angstroms.
-
-        Returns
-        -------
-        abs : array
-            IGM absorption
-
+    def tau(self, redshift, obs_wavelength):
         """
-        tau_LS = self.tLSLAF(z, lobs) + self.tLSDLA(z, lobs)
-        tau_LC = self.tLCLAF(z, lobs) + self.tLCDLA(z, lobs)
+        Get full Inoue IGM absorption.
 
-        # Upturn at short wavelengths, low-z
-        # k = 1./100
-        # l0 = 600-6/k
-        # clip = lobs/(1+z) < 600.
-        # tau_clip = 100*(1-1./(1+np.exp(-k*(lobs/(1+z)-l0))))
+        Args:
+            redshift (float): Redshift to evaluate IGM absorption.
+            obs_wavelength (array): Observed-frame wavelength(s) in Angstroms.
+
+        Returns:
+            array: IGM absorption.
+        """
+        tau_ls = self.t_lyman_series_laf(
+            redshift, obs_wavelength
+        ) + self.t_lyman_series_dla(redshift, obs_wavelength)
+        tau_lc = self.t_lyman_continuum_laf(
+            redshift, obs_wavelength
+        ) + self.t_lyman_continuum_dla(redshift, obs_wavelength)
+
+        # Upturn at short wavelengths, low-z (currently set to 0)
         tau_clip = 0.0
 
-        return self.scale_tau * (tau_LC + tau_LS + tau_clip)
+        return self.scale_tau * (tau_lc + tau_ls + tau_clip)
 
-    def T(self, z, lobs):
-        tau = self.tau(z, lobs)
-        t = np.exp(-tau)
+    def get_transmission(self, redshift, obs_wavelength):
+        """
+        Get transmission curve.
 
-        t[t != t] = 0.0  # squash NaNs
-        t[t > 1] = 1
+        Args:
+            redshift (float): Redshift to evaluate transmission.
+            obs_wavelength (array): Observed-frame wavelength(s) in Angstroms.
 
-        return t
+        Returns:
+            array: Transmission values.
+        """
+        tau = self.tau(redshift, obs_wavelength)
+        transmission = np.exp(-tau)
+
+        # Handle NaNs and ensure transmission values are within [0, 1]
+        transmission[np.isnan(transmission)] = 0.0
+        transmission[transmission > 1] = 1
+
+        return transmission
 
 
 class Madau96:
+    """
+    IGM absorption from Madau et al. (1996).
+
+    Attributes:
+        wavelengths (array): Wavelengths of the transmission curve.
+        coefficients (array): Coefficients of the transmission curve.
+        name (str): Name of the model.
+    """
+
     def __init__(self):
-        self.wvs = [1216.0, 1026.0, 973.0, 950.0]
-        self.a = [0.0036, 0.0017, 0.0012, 0.00093]
+        """Initialize the Madau96 class."""
+        self.wavelengths = [1216.0, 1026.0, 973.0, 950.0]
+        self.coefficients = [0.0036, 0.0017, 0.0012, 0.00093]
         self.name = "Madau96"
 
-    def T(self, z, lobs):
-        Expteff = np.array([])
-        for _l in lobs:
-            if _l > self.wvs[0] * (1 + z):
-                Expteff = np.append(Expteff, 1)
+    def get_transmission(self, redshift, obs_wavelength):
+        """
+        Get transmission curve.
+
+        Args:
+            redshift (float): Redshift to evaluate transmission.
+            obs_wavelength (array): Observed-frame wavelength(s) in Angstroms.
+
+        Returns:
+            array: Transmission values.
+        """
+        exp_teff = np.array([])
+        for wavelength in obs_wavelength:
+            if wavelength > self.wavelengths[0] * (1 + redshift):
+                exp_teff = np.append(exp_teff, 1)
                 continue
 
-            if _l <= self.wvs[-1] * (1 + z) - 1500:
-                Expteff = np.append(Expteff, 0)
+            if wavelength <= self.wavelengths[-1] * (1 + redshift) - 1500:
+                exp_teff = np.append(exp_teff, 0)
                 continue
 
             teff = 0
-            for i in range(0, len(self.wvs) - 1, 1):
-                teff += self.a[i] * (_l / self.wvs[i]) ** 3.46
-                if self.wvs[i + 1] * (1 + z) < _l <= self.wvs[i] * (1 + z):
-                    Expteff = np.append(Expteff, np.exp(-teff))
+            for i in range(len(self.wavelengths) - 1):
+                teff += (
+                    self.coefficients[i]
+                    * (wavelength / self.wavelengths[i]) ** 3.46
+                )
+                if (
+                    self.wavelengths[i + 1] * (1 + redshift)
+                    < wavelength
+                    <= self.wavelengths[i] * (1 + redshift)
+                ):
+                    exp_teff = np.append(exp_teff, np.exp(-teff))
                     continue
 
-            if _l <= self.wvs[-1] * (1 + z):
-                Expteff = np.append(
-                    Expteff,
+            if wavelength <= self.wavelengths[-1] * (1 + redshift):
+                exp_teff = np.append(
+                    exp_teff,
                     np.exp(
                         -(
                             teff
                             + 0.25
-                            * (_l / self.wvs[-1]) ** 3
-                            * ((1 + z) ** 0.46 - (_l / self.wvs[-1]) ** 0.46)
-                            + 9.4
-                            * (_l / self.wvs[-1]) ** 1.5
-                            * ((1 + z) ** 0.18 - (_l / self.wvs[-1]) ** 0.18)
-                            - 0.7
-                            * (_l / self.wvs[-1]) ** 3
+                            * (wavelength / self.wavelengths[-1]) ** 3
                             * (
-                                (_l / self.wvs[-1]) ** (-1.32)
-                                - (1 + z) ** (-1.32)
+                                (1 + redshift) ** 0.46
+                                - (wavelength / self.wavelengths[-1]) ** 0.46
+                            )
+                            + 9.4
+                            * (wavelength / self.wavelengths[-1]) ** 1.5
+                            * (
+                                (1 + redshift) ** 0.18
+                                - (wavelength / self.wavelengths[-1]) ** 0.18
+                            )
+                            - 0.7
+                            * (wavelength / self.wavelengths[-1]) ** 3
+                            * (
+                                (wavelength / self.wavelengths[-1]) ** -1.32
+                                - (1 + redshift) ** -1.32
                             )
                             + 0.023
-                            * ((_l / self.wvs[-1]) ** 1.68 - (1 + z) ** 1.68)
+                            * (
+                                (wavelength / self.wavelengths[-1]) ** 1.68
+                                - (1 + redshift) ** 1.68
+                            )
                         )
                     ),
                 )
-                continue
 
-        return Expteff
-
-
-def _pow(a, b):
-    """C-like power, a**b"""
-    return a**b
+        return exp_teff
