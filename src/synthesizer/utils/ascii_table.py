@@ -32,18 +32,6 @@ class TableFormatter:
             The object whose attributes are to be formatted into a table.
         attributes (dict):
             A dictionary of the object's attributes.
-
-    Methods:
-        format_array(array):
-            Formats numpy arrays to show their mean value.
-        format_dict(dictionary):
-            Formats dictionaries to show their keys and the types of
-            their values.
-        get_rows():
-            Collects the object's attributes and formats them into rows.
-        generate_table():
-            Generates a formatted table with edges, intersections, and
-            proper column widths.
     """
 
     def __init__(self, obj):
