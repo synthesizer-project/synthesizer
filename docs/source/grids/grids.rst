@@ -7,27 +7,30 @@ Introduction
 Most of the functionality of ``synthesizer`` is reliant on *grid files*. These are typically precomputed multi-dimensional arrays of spectra (and lines) from Stellar Population Synthesis (SPS) models for a range of ages and metallicities, and potentially other parameters (see below).
 Grids can also represent the emission from other sources, e.g. active galactic nuclei.
 
-There is a low-resolution test grid built into to ``synthesizer``, but for actual projects you will need to download one or more full production grids `from dropbox <https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&dl=0>`_. See details below on where on your system to download these grids and how to load them. 
-
-For advanced users, ``synthesizer`` contains scripts for creating your own grids from popular SPS codes, and running these through CLOUDY. These are contained within the `generate_grids` directory of synthesizer. You will need a working installation of synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. CLOUDY, python-FSPS). Please reach out to us if you have questions about the pre-computed grids or grid creation.
+There is a low-resolution test grid built into ``synthesizer``, but for actual projects you will need to download one or more full production grids `from dropbox <https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&dl=0>`_. See details below on where on your system to download these grids and how to load them. 
 
 The Grid Directory
 ------------------
 
-All ``synthesizer`` grids should be stored in a separate directory somewhere on your system. For example, we can create a folder::
+All ``synthesizer`` grids should be stored in a separate directory somewhere on your system. For example, we can create a folder:
+
+.. code-block:: bash
 
     mkdir /our/synthesizer/data_directory/synthesizer_data/
 
-Within this we will additionally create another directory to hold our grids::
+Within this we will additionally create another directory to hold our grids:
+
+.. code-block:: bash
 
     mkdir /our/synthesizer/data_directory/synthesizer_data/grids
 
 If you wish, you can set this grid directory as an environment variable.
 
-Available Grids
-===============
+Pre-Computed Grids
+==================
 
-A goal of ``synthesizer`` is to be **flexible**. With this in mind we have generated a variety of grids for different stellar population synthesis (SPS) models, initial mass functions (IMFs), and photoionisation modelling assumptions.
+A goal of ``synthesizer`` is to be **flexible**.
+With this in mind, we have generated a variety of grids for different SPS models, initial mass functions (IMFs), and photoionisation modelling assumptions.
 
 .. _grid-naming:
 
@@ -48,7 +51,9 @@ specifies that the grid is constructed using v2.2.1 of the `Binary Population an
 Initial Mass Function
 ---------------------
 
-Grids are constructed using various initial mass functions (IMFs), often depending on the availability in the specific SPS model. In most cases we recommend using the Chabrier (2003) IMF since this is available for most SPS models. If you're interested in exploring the systematic impact of changing the IMF, broken power law (bpl) IMFs may be suitable. These are named e.g. ::
+Grids are constructed using various initial mass functions (IMFs), often depending on the availability in the specific SPS model.
+In most cases we recommend using the Chabrier (2003) IMF since this is available for most SPS models, allowing a like-for-like comparison.
+If you're interested in exploring the systematic impact of changing the IMF, broken power law (bpl) IMFs may be suitable. These are named e.g. ::
 
     {imf_type}-{mass_boundaries}-{slopes}
 
@@ -56,24 +61,22 @@ e.g. for a Salpeter (1955) IMF (slope=2.35) between 0.1 and 100 Msol we would ha
 
     bpl-0.1,100-2.35
 
-For a more complext IMF, for example with two power-laws (2.0, 2.35) separated at 1 Msol we would have ::
+A more complex IMF, for example with two power-laws (2.0, 2.35) separated at 1 Msol, would have ::
 
     bpl-0.1,1.0,100-2.0,2.35
 
-If an IMF you need is missing please let us know by raising a feature request through an `issue <https://github.com/flaresimulations/synthesizer/issues/new?assignees=&labels=&projects=&template=feature_request.md&title=>`_.
+If an IMF you need is missing, please let us know by raising a feature request through an `issue <https://github.com/flaresimulations/synthesizer/issues/new?assignees=&labels=&projects=&template=feature_request.md&title=>`_.
+
 
 Photoionisation modelling
 -------------------------
-All the photoionisation modelling in `synthesizer` currently uses the `cloudy <https://trac.nublado.org>`_ photoionsation code. Our default assumptions are:
+All the photoionisation modelling in `synthesizer` currently uses the `cloudy <https://trac.nublado.org>`_ photoionisation code. Our default assumptions are:
 
 * `log10(U)=-2`
 
-..
-  Our photoionisation modelling is described in more detail in :ref:`grids-photoionisation`.
-
 
 Common variants
-^^^^^^^^^^^^^^^
+---------------
 
 * `resolution:0.1` outputs the spectra at 10x higher resolution than the `cloudy` default. Useful for looking at various absorption line indices. 
 * `log10U:X` assumes a different ionisation parameter.
@@ -83,10 +86,10 @@ Higher-dimensionality grids
 ---------------------------
 Most SPS grids are two-dimensional, with the dimensions being `log10(age)` and `metallicty`. However `synthesizer` can utlilise grids with higher dimensionality e.g. including varying alpha-abundance, or photoionisation parameters (e.g. `U`).
 
-
-
 Grid list
 =========
+
+Below is an incomplete list of the pre-computed grids available in the `dropbox <https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&dl=0>`_.
 
 .. collapse:: Bruzual & Charlot (2003, BC03)
 
@@ -218,13 +221,22 @@ Grid list
         - maraston-rhb_bpl-0.1,100-2.35 
 
 
-Creating your own grids
-=======================
+Exploring Grids
+===============
 
-Advanced users may wish to create their own grids. We provide scripts for doing this in the `synthesizer-grids` repository. Details are provided `here <../advanced/creating_grids>`_.
-
+Once you've downloaded a grid you can get started here:
 
 .. toctree::
    :maxdepth: 1
 
    grids_example
+
+
+Creating your own grids
+=======================
+
+For advanced users, ``synthesizer`` contains scripts for creating your own grids from popular SPS codes, and running these through CLOUDY.
+We provide scripts for doing this in the `synthesizer-grids` repository.
+Details are provided `here <../advanced/creating_grids>`_.
+You will need a working installation of synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. `CLOUDY`, `python-FSPS`).
+Please reach out to us if you have questions about the pre-computed grids or grid creation.

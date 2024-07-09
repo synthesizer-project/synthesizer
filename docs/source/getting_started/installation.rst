@@ -11,7 +11,9 @@ To get started with ``synthesizer`` you need to complete the following setup ste
 Creating a python environment
 #############################
 
-First create a virtual python environment. ``synthesizer`` has been tested with Python 3.10, 3.11 and 3.12. You should replace this path with where you wish to install your virtual environment::
+First create a virtual python environment. ``synthesizer`` has been tested with Python 3.10, 3.11 and 3.12. You should replace this path with where you wish to install your virtual environment:
+
+.. code-block:: bash
 
     python3 -m venv /path_to_new_virtual_environment
     source /path_to_new_virtual_environment/bin/activate
@@ -19,20 +21,26 @@ First create a virtual python environment. ``synthesizer`` has been tested with 
 Cloning and installing the code
 ###############################
 
-You can then clone the latest version of ``synthesizer`` from `github <https://github.com/flaresimulations/synthesizer>`_, and finally install it::
+You can then clone the latest version of ``synthesizer`` from `github <https://github.com/flaresimulations/synthesizer>`_, and finally install it:
+
+.. code-block:: bash
 
     git clone https://github.com/flaresimulations/synthesizer.git
     cd synthesizer
     pip install .
 
-If you want to install the code in *editable* mode, so any changes in the code base will be reflected in the installation::
+Make sure you stay up to date with the latest versions through git:
 
-    pip install -e .
-
-Make sure you stay up to date with the latest versions through git::
+.. code-block:: bash
 
     cd synthesizer
     git pull origin main
+
+If you are an advanced user directly developing the synthesizer code, and want to install the code in *editable* mode (so any changes in the code base will be reflected in the installation) please add the following flag:
+
+.. code-block:: bash
+
+    pip install -e .
 
 Installing with OpenMP
 ######################
@@ -41,7 +49,7 @@ DISCLAIMER: This section is only important if you want to make use of shared mem
 
 To make use of Synthesizer's `shared memory parallelism <../parallelism/openmp.rst>`_ you must first have OpenMP installed on your system. 
 Most compilers come with OpenMP baked in with a few exceptions. 
-This means installation with OpenMP is as simple as flagging it should be used.
+This means installation with OpenMP is as simple as setting a flag at installation:
 
 .. code-block:: bash
 
@@ -49,8 +57,8 @@ This means installation with OpenMP is as simple as flagging it should be used.
 
 On Linux this approach should be sufficient in almost all cases. 
 
-On OSX OpenMP must be installed via `homebrew <https://brew.sh/>`_ and ``setuptools`` appears to struggle automatically finding the install location. 
-In this situation, and any others where the automatic locating of OpenMP fails, the path to the installation can be stated explicitly.
+On OSX OpenMP must be installed via `homebrew <https://brew.sh/>`_ and ``setuptools`` appears to struggle automatically finding the install location.
+In this situation, and any others where the automatic locating of OpenMP fails, the path to the installation can be stated explicitly:
 
 .. code-block:: bash
 
@@ -58,7 +66,7 @@ In this situation, and any others where the automatic locating of OpenMP fails, 
 
 Note that the path should point to the directory containing the ``include`` and ``lib`` directories.
 
-For more details on configuration options see the `configuration options docs <../advanced/config_options.rst>`_.
+For more details on configuration options, see the `configuration options docs <../advanced/config_options.rst>`_.
 
 Downloading grids
 #################
