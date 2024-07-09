@@ -117,7 +117,7 @@ docs = [
     "pillow",
     "sphinx-toolbox",
     "nbsphinx",
-    "sphinx_copybutton",
+    "sphinx-copybutton",
 ]
 
 # Simulation specifc loader dependancies
