@@ -60,9 +60,9 @@ In the sections linked below we detail the basic functionality of an ``EmissionM
    :maxdepth: 2
 
    model_usage
-   dust_emission
+   premade_models/premade_models
    attenuation/attenuation
-   premade_models
+   dust_emission
    modify_models
    custom_models
    combined_models
