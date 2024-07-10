@@ -185,7 +185,7 @@ class PhotometryCollection:
         # Define the photometry value column
         value_col = []
         for key in self.filter_codes:
-            if self[key].value.ndim > 1:
+            if self[key].value.ndim > 0:
                 value_col.append(
                     f"{str(format(np.sum(self[key].value), '.2e'))} "
                     f"{str(self[key].units)}"
