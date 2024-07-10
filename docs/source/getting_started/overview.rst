@@ -8,7 +8,7 @@ In this section we briefly describe the main elements of the code, and the desig
 Grids
 *****
 
-```Grids`` are one of the fundamental components in synthesizer.
+``Grids`` are one of the fundamental components in synthesizer.
 At its simplest, a grid describes the emission as a function of some parameters.
 Typically these are the age and metallicity of a stellar population, and the emission is derived from a stellar population synthesis (SPS) model (see `Conroy 2013 <https://arxiv.org/abs/1301.7095>`_ for a review).
 
@@ -78,7 +78,7 @@ Parametric morphologies can also be created for parametric galaxies.
 Philosophy
 **********
 
-synthesizer is intended to be modular, flexible and fast.
+Synthesizer is intended to be modular, flexible and fast.
 The framework developed can be used for a number of tasks, not necessarily limited to generating observables from cosmological simulations.
 It is not intended as a replacement for detailed codes for generating synthetic galaxy emission that leverage radiative transfer techniques (e.g. `SKIRT <https://skirt.ugent.be/root/_home.html>`_, `Powderday <https://powderday.readthedocs.io/en/latest/>`_).
 Instead, synthesizer is intended to be much cheaper computationally, allowing an exploration of parameter and model dependencies.
