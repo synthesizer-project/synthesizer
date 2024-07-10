@@ -16,7 +16,7 @@ Once you're finished here, you can check out the more detailed documentation on 
 Getting Help
 ^^^^^^^^^^^^
 
-For updates and general help with ``synthesizer`` we have a dedicated Slack page. Please email <christopher dot lovell at port dot ac dot uk> for a sign up link.
+For updates and general help with synthesizer we have a dedicated Slack page. Please email <christopher dot lovell at port dot ac dot uk> for a sign up link.
 
 If you wish to report an issue with synthesizer, please `raise an issue <https://github.com/flaresimulations/synthesizer/issues>`_ on github.
 

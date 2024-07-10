@@ -4,7 +4,7 @@ Emission models
 Overview
 --------
 
-To simplify the calculation of complex emission, with many contributing components and different operations involved in their construction, ``Synthesizer`` provides ``EmissionModels``.
+To simplify the calculation of complex emission, with many contributing components and different operations involved in their construction, synthesizer provides ``EmissionModels``.
 At their simplest, ``EmissionModels`` define the generation of a single type of spectra, e.g. the incident emission from a population of stars.
 Hwoever, ``EmissionModels`` can be arbitrarily complex, defining multiple different types of spectra and lines from different components, and defining how they interact.
 The possible operations that ``EmissionModels`` can define are:

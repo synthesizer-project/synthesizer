@@ -4,7 +4,7 @@ Grids
 Introduction
 ============
 
-Most of the functionality of ``synthesizer`` is reliant on *grid files*. These are typically precomputed multi-dimensional arrays of spectra (and lines) from Stellar Population Synthesis (SPS) models for a range of ages and metallicities, and potentially other parameters (see below).
+Most of the functionality of synthesizer is reliant on *grid files*. These are typically precomputed multi-dimensional arrays of spectra (and lines) from Stellar Population Synthesis (SPS) models for a range of ages and metallicities, and potentially other parameters (see below).
 Grids can also represent the emission from other sources, e.g. active galactic nuclei.
 
 There is a low-resolution test grid available via the ``synthesizer-download`` command line tool, but for actual projects you will need to download one or more full production grids `from dropbox <https://www.dropbox.com/scl/fo/3n8v3o4m85b0t8fl8pm0n/h?rlkey=9x4cijjnmvw5m6plnyovywuva&dl=0>`_. See details below on where on your system to download these grids and how to load them. 
@@ -12,7 +12,7 @@ There is a low-resolution test grid available via the ``synthesizer-download`` c
 The Grid Directory
 ------------------
 
-All ``synthesizer`` grids should be stored in a separate directory somewhere on your system. For example, we can create a folder:
+All synthesizer grids should be stored in a separate directory somewhere on your system. For example, we can create a folder:
 
 .. code-block:: bash
 
@@ -29,7 +29,7 @@ If you wish, you can set this grid directory as an environment variable.
 Pre-Computed Grids
 ==================
 
-A goal of ``synthesizer`` is to be **flexible**.
+A goal of synthesizer is to be **flexible**.
 With this in mind, we have generated a variety of grids for different SPS models, initial mass functions (IMFs), and photoionisation modelling assumptions.
 
 .. _grid-naming:
@@ -70,7 +70,7 @@ If an IMF you need is missing, please let us know by raising a feature request t
 
 Photoionisation modelling
 -------------------------
-All the photoionisation modelling in `synthesizer` currently uses the `cloudy <https://trac.nublado.org>`_ photoionisation code. Our default assumptions are:
+All the photoionisation modelling in synthesizer currently uses the `cloudy <https://trac.nublado.org>`_ photoionisation code. Our default assumptions are:
 
 * `log10(U)=-2`
 
@@ -84,7 +84,7 @@ Common variants
 
 Higher-dimensionality grids
 ---------------------------
-Most SPS grids are two-dimensional, with the dimensions being `log10(age)` and `metallicty`. However `synthesizer` can utlilise grids with higher dimensionality e.g. including varying alpha-abundance, or photoionisation parameters (e.g. `U`).
+Most SPS grids are two-dimensional, with the dimensions being `log10(age)` and `metallicty`. However synthesizer can utlilise grids with higher dimensionality e.g. including varying alpha-abundance, or photoionisation parameters (e.g. `U`).
 
 Grid list
 =========
@@ -235,7 +235,7 @@ Once you've downloaded a grid you can get started here:
 Creating your own grids
 =======================
 
-For advanced users, ``synthesizer`` contains scripts for creating your own grids from popular SPS codes, and running these through CLOUDY.
+For advanced users, synthesizer contains scripts for creating your own grids from popular SPS codes, and running these through CLOUDY.
 We provide scripts for doing this in the `synthesizer-grids` repository.
 Details are provided `here <../advanced/creating_grids>`_.
 You will need a working installation of synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. `CLOUDY`, `python-FSPS`).

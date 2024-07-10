@@ -1,7 +1,7 @@
 Filters
 =======
 
-In ``synthesizer`` we encapsulate all filter based functionality in two objects: 
+In synthesizer we encapsulate all filter based functionality in two objects:
 
 - A ``Filter``: Individual filters with methods and attributes to work with a filters wavelength coverage and transmission.
 

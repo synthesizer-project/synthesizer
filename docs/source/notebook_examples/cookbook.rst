@@ -1,7 +1,7 @@
 Cookbook
 ========
 
-In this section we provide a series of specific examples that demonstrate how to use Synthesizer to generate synthetic observations of galaxies.  
+In this section we provide a series of specific examples that demonstrate how to use synthesizer to generate synthetic observations of galaxies.
 
 .. toctree::
     :maxdepth: 2
