@@ -11,7 +11,7 @@ To get started with synthesizer you need to complete the following setup steps.
 Creating a python environment
 #############################
 
-First create a virtual python environment. synthesizer has been tested with Python 3.10, 3.11 and 3.12. You should replace this path with where you wish to install your virtual environment:
+First create a virtual python environment. Synthesizer has been tested with Python 3.10, 3.11 and 3.12. You should replace this path with where you wish to install your virtual environment:
 
 .. code-block:: bash
 
