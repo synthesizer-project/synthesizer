@@ -39,6 +39,7 @@ from synthesizer import exceptions
 from synthesizer.line import Line, LineCollection, flatten_linelist
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
+from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.warnings import warn
 
 from . import __file__ as filepath
@@ -551,24 +552,17 @@ class Grid:
         self.lam = new_lam
 
     def __str__(self):
-        """Return a basic summary of the Grid object."""
-        # Set up the string for printing
-        pstr = ""
+        """
+        Return a string representation of the particle object.
 
-        # Add the content of the summary to the string to be printed
-        pstr += "-" * 30 + "\n"
-        pstr += "SUMMARY OF GRID" + "\n"
-        for axis in self.axes:
-            pstr += f"{axis}: {getattr(self, axis)} \n"
-        for k, v in self.parameters.items():
-            pstr += f"{k}: {v} \n"
-        if self.lines:
-            pstr += f"available lines: {self.available_lines}\n"
-        if self.spectra:
-            pstr += f"available spectra: {self.available_spectra}\n"
-        pstr += "-" * 30 + "\n"
+        Returns:
+            table (str)
+                A string representation of the particle object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        return pstr
+        return formatter.get_table("Grid")
 
     @property
     def shape(self):
