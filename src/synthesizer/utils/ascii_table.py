@@ -79,6 +79,38 @@ class TableFormatter:
             (key, type(value).__name__) for key, value in dictionary.items()
         ]
 
+    def format_list(self, lst):
+        """
+        Format lists content to spead out the values over multiple lines.
+
+        Args:
+            lst (list):
+                The list to be formatted.
+
+        Returns:
+            str:
+                The formatted string containing the list content.
+        """
+        # Populate each row of the output with 4 entries per line
+        out = []
+        line = []
+        for i, value in enumerate(lst):
+            if i == 0:
+                line.append(f"[{value}, ")
+            else:
+                line.append(f" {value}, ")
+            if len(line) == 4:
+                out.append("".join(line))
+                line = []
+
+        # Handle the edge case where line is empty (we don't want the closing
+        # bracket on a new line).
+        if len(line) > 0:
+            out.append("".join(line) + "]")
+        else:
+            out[-1] += "]"
+        return out
+
     def get_value_rows(self):
         """
         Collect the object's attributes and formats them into rows.
@@ -97,7 +129,9 @@ class TableFormatter:
                 attr = attr[1:]
                 value = getattr(self.obj, attr)
             if not (
-                isinstance(value, dict) or isinstance(value, np.ndarray)
+                isinstance(value, dict)
+                or isinstance(value, np.ndarray)
+                or isinstance(value, list)
             ) or (isinstance(value, np.ndarray) and value.size <= 3):
                 # Handle the different situations
                 if isinstance(value, float) and (value >= 1e4 or value < 0.01):
@@ -155,6 +189,26 @@ class TableFormatter:
                         rows.append(("", f"{key}: {formatted_value}"))
         return rows
 
+    def get_list_rows(self):
+        """
+        Collect the object's attributes and formats them into rows.
+
+        Returns:
+            list of tuple:
+                A list of tuples where each tuple contains the attribute
+                name and its formatted value.
+        """
+        rows = []
+        for attr, value in self.attributes.items():
+            if isinstance(value, list):
+                formatted_values = self.format_list(value)
+                for i, formatted_value in enumerate(formatted_values):
+                    if i == 0:
+                        rows.append((attr, formatted_value))
+                    else:
+                        rows.append(("", formatted_value))
+        return rows
+
     def get_table(self, title_text):
         """
         Generate a formatted table.
@@ -169,6 +223,7 @@ class TableFormatter:
                 The formatted table as a string.
         """
         rows = self.get_value_rows()
+        rows.extend(self.get_list_rows())
         rows.extend(self.get_array_rows())
         rows.extend(self.get_dict_rows())
         col_widths = [
