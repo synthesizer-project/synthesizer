@@ -1,11 +1,16 @@
 Sed
 *****
 
-Introduction
-============
-A Spectral Energy Distribution or SED describes the energy distribution of any emitting body as a function of frequency/wavelength. In `synthesizer`, spectra when generated are stored in `Sed` object. One can take spectra directly from a `Grid <../grids/grids.rst>`_,  computed from a `Galaxy <../galaxies/galaxies.rst>`_ or a Galaxy `Component <../components/components.rst>`_ the resulting calculated spectra are stored in `Sed` objects. `SED` object in synthesizer is generally agnostic of where the input spectra is coming from, and thus can be inititalised as a function of any arbitrary frequency/wavelength and the corresponding flux/luminosity density. The `Sed` object has the ability to contain multiple spectra (multiple galaxies or particles).
+A Spectral Energy Distribution, or SED, describes the energy distribution of an emitting body as a function of frequency / wavelength.
+In ``synthesizer``, generated spectra are stored in ``Sed`` objects.
 
-The `Sed` object contains the necessary functions to calculate broadband luminosities or fluxes (wavelength windows or on `filters <../filters/filters.rst>`_), different spectral indices (e.g. balmer break, UV-continuum slope) or apply attenuation by dust.
+There are a number of different ways to generate spectra in ``synthesizer``, but in every case the resulting SED is always stored in an ``Sed`` object.
+An ``Sed`` object in synthesizer is generally agnostic of where the input spectra comes from; they can therefore be inititalised provided any arbitrary frequency / wavelength and the corresponding flux / luminosity density.
+An ``Sed`` object has the ability to contain multiple spectra (multiple galaxies or particles).
+
+The ``Sed`` class contains a number of methods for calculating derived properties, such as broadband luminosities / fluxes (within wavelength windows or on `filters <../filters/filters.rst>`_) and spectral indices (e.g. balmer break, UV-continuum slope), and for modifying the spectra themselves, for example by applying an attenuation curve due to dust.
+
+In the following example we introduce the ``Sed`` class, and some simple functionality.
 
 .. toctree::
    :maxdepth: 1

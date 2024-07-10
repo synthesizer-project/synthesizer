@@ -19,8 +19,9 @@ Contents
    grids/grids
    galaxy/galaxy
    components/components
-   emission_models/emission_models
    sed/sed
+   emission_models/emission_models
+   attenuation/attenuation
    spectra/spectra
    lines/lines
    filters/filters

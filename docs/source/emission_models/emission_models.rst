@@ -4,28 +4,36 @@ Emission models
 Overview
 --------
 
-To simplify the construction of complex emission (spectra and lines) with many contributing components and different operations involved in their construction Synthesizer uses ``EmissionModels``. These objects define the generation of a single emission in the construction of a more complex whole. The possible operations that an ``EmissionModel`` can define are:
+To simplify the calculation of complex emission, with many contributing components and different operations involved in their construction, ``Synthesizer`` provides ``EmissionModels``.
+At their simplest, ``EmissionModels`` define the generation of a single type of spectra, e.g. the incident emission from a population of stars.
+Hwoever, ``EmissionModels`` can be arbitrarily complex, defining multiple different types of spectra and lines from different components, and defining how they interact.
+The possible operations that ``EmissionModels`` can define are:
 
-- Extraction of a spectra/line from a ``Grid`` (see the `grid docs <../grids/grids_example.ipynb>`_).
+- Extraction of spectra / lines from a ``Grid`` (see the `grid docs <../grids/grids_example.ipynb>`_).
 - Generation of spectra, i.e. dust emission (see the `dust emission docs <.../dust/dust_emission.ipynb>`_) or AGN torus emission (see the `AGN models docs <agn_models.ipynb>`_).
-- Combination of different emissions.
-- Attenuation of an emission with a dust curve (see the `dust attenuation docs <../dust/dust_attenuation.ipynb>`_).
+- Combination of spectra.
+- Attenuation of spectra with a dust curve (see the `dust attenuation docs <../dust/dust_attenuation.ipynb>`_).
 
-In addition any one of these operations can also be done in the presence of a mask to apply the operation to a subset of the components contents (either particles or a parametric model).
+Any of these operations can be done in the presence of a mask, to apply the operation to a subset of the components contents (e.g. applying dust attenuation only to young stars).
+These masks can be applied identically to particle or parametric models.
 
-Once an ``EmissionModel`` is constructed it can be passed to any ``get_spectra`` (or ``get_lines``) method on an emitter (a ``Galaxy`` or galaxy component) to get the spectra (lines) defined in the passed ``EmissionModel`` for that emitter. For more details see [generating a parametric spectra](parametric/generate_sed.ipynb) or generating a particle spectra [WIP]().
+Once an ``EmissionModel`` is constructed it can be used to generate spectra.
+This is done by passing the ``EmissionMmodel`` to the ``get_spectra`` or ``get_lines`` method on a ``Galaxy`` or galaxy component.
+This will then generate the spectra defined within the ``EmissionMmodel``, given the properties of the Galaxy or component.
+For more details see `Generating spectra <../spectra/spectra.rst>`_.
 
 Named spectra
 -------------
 
-Synthesizer enables the generation of many different spectra which are associated with ``Galaxy`` objects or their components. An ``EmissionModel`` is labeled with a label that represents the spectra it creates. Although these labels can be chosen freely, we provide a standard naming system for these different spectra to ensure consistency, which is used in the premade ``EmissionModels`` and can be found listed below.
-
-The flowchart below shows how these different spectra are typically generated and related by an emission model.
+Synthesizer enables the generation of many different spectra which are associated with ``Galaxy`` objects or their components through ``EmissionModels``.
+These spectra are given standard labels that reflect their origin and the masks that have been applied (though custom labels can be provided).
+The flowchart also shows how these different spectra are typically generated and related by an emission model.
 
 .. image:: ../img/synthesizer_flowchart.png
   :alt: Flowchart showing the different emission types in synthesizer
   :target: ../img/synthesizer_flowchart.png
 
+Our standard naming system, which is used in the premade ``EmissionModels``, is listed below.
 
 * ``incident`` spectra are the spectra that serve as an input to the photoionisation modelling. In the context of stellar population synthesis these are the spectra that are produced by these codes and equivalent to the "pure stellar" spectra.
 
@@ -54,14 +62,13 @@ All premade models follow these conventions and we encourage the user to employ 
 Working with ``EmissionModels``
 -------------------------------
 
-In the sections linked below we detail the basic functionality of an ``EmissionModel``, dust emission generators, the premade stellar and black hole emission models, and how to customise a model or construct your own.
+In the sections linked below we detail the basic functionality of an ``EmissionModel``, the premade stellar and black hole emission models, dust emission generators, and how to customise a model or construct your own.
 
 .. toctree::
    :maxdepth: 2
 
    model_usage
    premade_models/premade_models
-   attenuation/attenuation
    dust_emission
    modify_models
    custom_models
