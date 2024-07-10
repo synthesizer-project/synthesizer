@@ -1,14 +1,14 @@
 Parallelism
 ===========
 
-In Synthesizer we have implemented an optional model of parallelism where distributed memory parallelism (MPI) is left in the hands of the user, 
+In synthesizer we have implemented an optional model of parallelism where distributed memory parallelism (MPI) is left in the hands of the user,
 while shared memory parallelism (OpenMP) can be optional invoked at a function call level for specific intensive computations.
 This allows the user to have fine-grained control over parallelism in their code, and to avoid the overhead of parallelism in sections of the code where it is not needed.
 
 Shared Memory Parallelism (OpenMP)
 ----------------------------------
 
-To use OpenMP threading in Synthesizer, you need to first have OpenMP installed on your system and to compile the code with the appropriate flags. 
+To use OpenMP threading in synthesizer, you need to first have OpenMP installed on your system and to compile the code with the appropriate flags.
 For more details see the `installation instructions <../getting_started/installation.rst>`_ and the `configuration options <../advanced/config_options.rst>`_.
 
 Testing OpenMP

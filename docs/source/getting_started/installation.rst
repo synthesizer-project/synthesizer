@@ -1,7 +1,7 @@
 Installation
 ************
 
-To get started with ``synthesizer`` you need to complete the following setup steps.
+To get started with synthesizer you need to complete the following setup steps.
 
 - Create a python environment
 - Clone the code base
@@ -11,7 +11,7 @@ To get started with ``synthesizer`` you need to complete the following setup ste
 Creating a python environment
 #############################
 
-First create a virtual python environment. ``synthesizer`` has been tested with Python 3.10, 3.11 and 3.12. You should replace this path with where you wish to install your virtual environment:
+First create a virtual python environment. synthesizer has been tested with Python 3.10, 3.11 and 3.12. You should replace this path with where you wish to install your virtual environment:
 
 .. code-block:: bash
 
@@ -21,7 +21,7 @@ First create a virtual python environment. ``synthesizer`` has been tested with 
 Cloning and installing the code
 ###############################
 
-You can then clone the latest version of ``synthesizer`` from `github <https://github.com/flaresimulations/synthesizer>`_, and finally install it:
+You can then clone the latest version of synthesizer from `github <https://github.com/flaresimulations/synthesizer>`_, and finally install it:
 
 .. code-block:: bash
 
@@ -47,7 +47,7 @@ Installing with OpenMP
 
 DISCLAIMER: This section is only important if you want to make use of shared memory parallelism for large calculations.
 
-To make use of Synthesizer's `shared memory parallelism <../parallelism/openmp.rst>`_ you must first have OpenMP installed on your system. 
+To make use of synthesizer's `shared memory parallelism <../parallelism/openmp.rst>`_ you must first have OpenMP installed on your system.
 Most compilers come with OpenMP baked in with a few exceptions. 
 This means installation with OpenMP is as simple as setting a flag at installation:
 
@@ -71,4 +71,4 @@ For more details on configuration options, see the `configuration options docs <
 Downloading grids
 #################
 
-Once you've installed the code, you're almost ready to get started with Synthesizer. The last step is to download a *grid* file, described in the next section.
+Once you've installed the code, you're almost ready to get started with synthesizer. The last step is to download a *grid* file, described in the next section.

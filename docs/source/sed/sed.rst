@@ -2,9 +2,9 @@ Sed
 *****
 
 A Spectral Energy Distribution, or SED, describes the energy distribution of an emitting body as a function of frequency / wavelength.
-In ``synthesizer``, generated spectra are stored in ``Sed`` objects.
+In synthesizer, generated spectra are stored in ``Sed`` objects.
 
-There are a number of different ways to generate spectra in ``synthesizer``, but in every case the resulting SED is always stored in an ``Sed`` object.
+There are a number of different ways to generate spectra in synthesizer, but in every case the resulting SED is always stored in an ``Sed`` object.
 An ``Sed`` object in synthesizer is generally agnostic of where the input spectra comes from; they can therefore be inititalised provided any arbitrary frequency / wavelength and the corresponding flux / luminosity density.
 An ``Sed`` object has the ability to contain multiple spectra (multiple galaxies or particles).
 

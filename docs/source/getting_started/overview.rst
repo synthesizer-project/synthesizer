@@ -1,7 +1,7 @@
 Overview
 ========
 
-By now you have hopefully installed the code and downloaded a grid file. You're now ready to start using ``synthesizer``.
+By now you have hopefully installed the code and downloaded a grid file. You're now ready to start using synthesizer.
 
 In this section we briefly describe the main elements of the code, and the design philosophy.
 
@@ -37,27 +37,27 @@ This binning can be represented along different dimensions representing various 
 An example of this is the star formation history; a parametric galaxy would describe this history by dividing the mass formed into bins of age.
 
 Whilst both of these approaches may appear to be superficially similar, there are some important distinctions under the hood within synthesizer.
-In most use cases ``synthesizer`` will be smart enough to know what kind of data you are providing, and create the appropriate objects as required.
+In most use cases synthesizer will be smart enough to know what kind of data you are providing, and create the appropriate objects as required.
 However, it is worth understanding this distinction, particularly when debugging any issues.
 We provide examples for various tasks in synthesizer using both particle and parametric approaches where applicable.
 
 Galaxies & Components
 *********************
 
-The main object within ``synthesizer`` is a ``Galaxy``. A ``Galaxy`` object describes various discrete properties of a galaxy (e.g. its redshift), and also contains individual *components*.
+The main object within synthesizer is a ``Galaxy``. A ``Galaxy`` object describes various discrete properties of a galaxy (e.g. its redshift), and also contains individual *components*.
 These components can include:
 
 * A stellar component
 * A gas component
 * Black hole components
 
-A component in ``synthesizer`` can be initialised and used independently of a ``Galaxy`` object, and the emission from that individual component can also be generated.
+A component in synthesizer can be initialised and used independently of a ``Galaxy`` object, and the emission from that individual component can also be generated.
 However, much of the power of synthesizer comes from combining these components; a ``Galaxy`` object simplifies how they interact with one another, making the self-consistent generation of complex spectra from various components within a galaxy simpler and faster.
 
 Emission models
 ***************
 
-The generation of spectra in ``synthesizer`` is handled through *Emission Models*. 
+The generation of spectra in synthesizer is handled through *Emission Models*.
 An emission model is a set of standardised procedures for generating spectra from a ``Galaxy`` or a component.
 These often take one of four forms: extraction, combinations, generation, and attenuation.
 Further details are provided in the 
@@ -78,10 +78,10 @@ Parametric morphologies can also be created for parametric galaxies.
 Philosophy
 **********
 
-``synthesizer`` is intended to be modular, flexible and fast.
+synthesizer is intended to be modular, flexible and fast.
 The framework developed can be used for a number of tasks, not necessarily limited to generating observables from cosmological simulations.
 It is not intended as a replacement for detailed codes for generating synthetic galaxy emission that leverage radiative transfer techniques (e.g. `SKIRT <https://skirt.ugent.be/root/_home.html>`_, `Powderday <https://powderday.readthedocs.io/en/latest/>`_).
-Instead, ``synthesizer`` is intended to be much cheaper computationally, allowing an exploration of parameter and model dependencies.
+Instead, synthesizer is intended to be much cheaper computationally, allowing an exploration of parameter and model dependencies.
 We hope it is of value to the community, and welcome contributions.
 
-We hope you enjoy using ``synthesizer``!
+We hope you enjoy using synthesizer!
