@@ -1,8 +1,8 @@
 Galaxy
 ======
 
-One of the core objects in ``synthesizer`` is the `Galaxy` object. 
-A `Galaxy` is essentially a container object for different `components <../components/components.rst>`_ (stars, gas, and black holes), and provides methods for interacting with and combining these components.
+One of the core objects in ``synthesizer`` is the ``Galaxy`` object. 
+A ``Galaxy`` is essentially a container object for different `components <../components/components.rst>`_ (stars, gas, and black holes), and provides methods for interacting with and combining these components.
 Importantly, this includes methods for computing the emission, from the galaxy as a whole and from the individual components.
 
 Particle vs Parametric
