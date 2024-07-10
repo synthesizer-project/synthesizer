@@ -8,7 +8,7 @@ In this section we briefly describe the main elements of the code, and the desig
 Grids
 *****
 
-`Grids`` are one of the fundamental components in synthesizer.
+```Grids`` are one of the fundamental components in synthesizer.
 At its simplest, a grid describes the emission as a function of some parameters.
 Typically these are the age and metallicity of a stellar population, and the emission is derived from a stellar population synthesis (SPS) model (see `Conroy 2013 <https://arxiv.org/abs/1301.7095>`_ for a review).
 
@@ -67,10 +67,10 @@ Observables
 ***********
 
 Once the emission from a galaxy or component has been generated, typically through an emission model, it can be represented or transformed into a variety of different observables.
-The simplest is the full spectral energy distribution (SED), represented through an ``sed`` object.
-``sed`` objects contain a variety of useful methods for accessing the luminosity, flux and wavelength, as well as other more specific properties and derived properties (for example, the strength of the Balmer break).
+The simplest is the full spectral energy distribution (SED), represented through an ``Sed`` object.
+``Sed`` objects contain a variety of useful methods for accessing the luminosity, flux and wavelength, as well as other more specific properties and derived properties (for example, the strength of the Balmer break).
 
-An SED can be transformed into broad- or narrow-band photometry through filters, represented by a ``filter`` object, or a ``filter_collection`` if multiple filters are defined. 
+An ``Sed`` can be transformed into broad- or narrow-band photometry through filters, represented by a ``Filter`` object, or a ``FilterCollection`` if multiple filters are defined. 
 
 Images, either monochromatic, RGB, or integral field unit (IFU), can also be created, typically where spatial information on the emitting sources is provided. 
 Parametric morphologies can also be created for parametric galaxies.
@@ -81,7 +81,7 @@ Philosophy
 ``synthesizer`` is intended to be modular, flexible and fast.
 The framework developed can be used for a number of tasks, not necessarily limited to generating observables from cosmological simulations.
 It is not intended as a replacement for detailed codes for generating synthetic galaxy emission that leverage radiative transfer techniques (e.g. `SKIRT <https://skirt.ugent.be/root/_home.html>`_, `Powderday <https://powderday.readthedocs.io/en/latest/>`_).
-Instead, `synthesizer` is intended to be much cheaper computationally, allowing an exploration of parameter and model dependencies.
+Instead, ``synthesizer`` is intended to be much cheaper computationally, allowing an exploration of parameter and model dependencies.
 We hope it is of value to the community, and welcome contributions.
 
 We hope you enjoy using ``synthesizer``!
