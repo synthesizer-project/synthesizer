@@ -313,7 +313,7 @@ class PacmanEmission(StellarEmissionModel):
         return DustEmission(
             label="dust_emission",
             dust_emission_model=self._dust_emission_model,
-            dust_lum_intrinsic=self.incident,
+            dust_lum_intrinsic=self.intrinsic,
             dust_lum_attenuated=self.attenuated,
             emitter="stellar",
         )
@@ -996,7 +996,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         young_dust_emission_nebular = DustEmission(
             label="young_dust_emission_nebular",
             dust_emission_model=self.dust_emission_nebular,
-            dust_lum_intrinsic=self.young_incident,
+            dust_lum_intrinsic=self.young_intrinsic,
             dust_lum_attenuated=self.young_attenuated_nebular,
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
@@ -1006,7 +1006,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         young_dust_emission_ism = DustEmission(
             label="young_dust_emission_ism",
             dust_emission_model=self.dust_emission_ism,
-            dust_lum_intrinsic=self.young_incident,
+            dust_lum_intrinsic=self.young_intrinsic,
             dust_lum_attenuated=self.young_attenuated_ism,
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
@@ -1020,7 +1020,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         old_dust_emission = DustEmission(
             label="old_dust_emission",
             dust_emission_model=self.dust_emission_ism,
-            dust_lum_intrinsic=self.old_incident,
+            dust_lum_intrinsic=self.old_intrinsic,
             dust_lum_attenuated=self.old_attenuated,
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
