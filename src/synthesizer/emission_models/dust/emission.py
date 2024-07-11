@@ -118,6 +118,10 @@ class EmissionBase:
         # the dust spectra to the bolometric luminosity of the input spectra
         # and then add the input spectra to the dust spectra
         elif intrinsic_sed is not None and attenuated_sed is not None:
+            # Measure bolometric luminosities
+            intrinsic_sed.measure_bolometric_luminosity()
+            attenuated_sed.measure_bolometric_luminosity()
+
             # Calculate the bolometric dust luminosity as the difference
             # between the intrinsic and attenuated
             bolometric_luminosity = (
@@ -127,6 +131,8 @@ class EmissionBase:
 
         # If we only have the intrinsic SED, we can just scale the emission
         elif intrinsic_sed is not None:
+            # Measure bolometric luminosity
+            intrinsic_sed.measure_bolometric_luminosity()
             bolometric_luminosity = intrinsic_sed.bolometric_luminosity
 
         else:
