@@ -348,7 +348,7 @@ class Particles:
 
         self.center = com
 
-    def _get_radii(self):
+    def get_radii(self):
         """
         Calculate the radii of the particles.
 
@@ -381,7 +381,7 @@ class Particles:
         """
         # Get the radii if not already set
         if self.radii is None:
-            self._get_radii()
+            self.get_radii()
 
         # Strip units off the weights if they have them
         if hasattr(weights, "units"):
