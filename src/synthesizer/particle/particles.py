@@ -207,9 +207,11 @@ class Particles:
     @property
     def centered_coordinates(self):
         """Returns the coordinates centred on the geometric mean."""
-        return self.coordinates - np.average(
-            self.coordinates, axis=0, weights=self.masses
-        )
+        if self.centre is None:
+            raise exceptions.InconsistentArguments(
+                "Can't centre coordinates without a centre."
+            )
+        return self.coordinates - self.centre
 
     def get_particle_photo_luminosities(self, filters, verbose=True):
         """
@@ -361,7 +363,7 @@ class Particles:
             )
 
         # Calculate the radii
-        self.radii = np.linalg.norm(self.coordinates - self.centre, axis=1)
+        self.radii = np.linalg.norm(self.centered_coordinates, axis=1)
 
     def _get_radius(self, weights, frac):
         """
