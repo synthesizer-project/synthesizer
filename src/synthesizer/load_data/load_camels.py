@@ -1,8 +1,11 @@
+from functools import partial
+
 import h5py
 import numpy as np
 from astropy.cosmology import Planck15, Planck18
 from unyt import Msun, kpc, yr
 
+from synthesizer.exceptions import UnmetDependency
 from synthesizer.load_data.utils import get_len
 
 from ..particle.galaxy import Galaxy
@@ -115,8 +118,8 @@ def _load_CAMELS(
 def load_CAMELS_IllustrisTNG(
     _dir=".",
     snap_name="snap_033.hdf5",
-    fof_name="fof_subhalo_tab_033.hdf5",
-    fof_dir=None,
+    group_name="fof_subhalo_tab_033.hdf5",
+    group_dir=None,
     verbose=False,
     dtm=0.3,
     physical=True,
@@ -129,9 +132,9 @@ def load_CAMELS_IllustrisTNG(
             data location
         snap_name (string):
             snapshot filename
-        fof_name (string):
+        group_name (string):
             subfind / FOF filename
-        fof_dir (string):
+        group_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
         verbose (bool):
@@ -165,9 +168,9 @@ def load_CAMELS_IllustrisTNG(
         g_coods = hf["PartType0/Coordinates"][:]  # kpc (physical)
         g_hsml = hf["PartType0/SubfindHsml"][:]
 
-    if fof_dir:
-        _dir = fof_dir  # replace if symlinks for fof files are broken
-    with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
+    if group_dir:
+        _dir = group_dir  # replace if symlinks for fof files are broken
+    with h5py.File(f"{_dir}/{group_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
         pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
 
@@ -248,8 +251,8 @@ def load_CAMELS_IllustrisTNG(
 def load_CAMELS_Astrid(
     _dir=".",
     snap_name="snap_090.hdf5",
-    fof_name="fof_subhalo_tab_090.hdf5",
-    fof_dir=None,
+    group_name="fof_subhalo_tab_090.hdf5",
+    group_dir=None,
     dtm=0.3,
     physical=True,
 ):
@@ -261,9 +264,9 @@ def load_CAMELS_Astrid(
             data location
         snap_name (string):
             snapshot filename
-        fof_name (string):
+        group_name (string):
             subfind / FOF filename
-        fof_dir (string):
+        group_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
         dtm (float):
@@ -310,9 +313,9 @@ def load_CAMELS_Astrid(
     _ages = cosmo.age(1.0 / form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
-    if fof_dir:
-        _dir = fof_dir  # replace if symlinks for fof files are broken
-    with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
+    if group_dir:
+        _dir = group_dir  # replace if symlinks for fof files are broken
+    with h5py.File(f"{_dir}/{group_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
         pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
 
@@ -346,8 +349,8 @@ def load_CAMELS_Astrid(
 def load_CAMELS_Simba(
     _dir=".",
     snap_name="snap_033.hdf5",
-    fof_name="fof_subhalo_tab_033.hdf5",
-    fof_dir=None,
+    group_name="fof_subhalo_tab_033.hdf5",
+    group_dir=None,
     dtm=0.3,
     physical=True,
 ):
@@ -359,9 +362,9 @@ def load_CAMELS_Simba(
             data location
         snap_name (string):
             snapshot filename
-        fof_name (string):
+        group_name (string):
             subfind / FOF filename
-        fof_dir (string):
+        group_dir (string):
             optional argument specifying lcoation of fof file
             if different to snapshot
         dtm (float):
@@ -407,9 +410,9 @@ def load_CAMELS_Simba(
     _ages = cosmo.age(1.0 / form_time - 1)
     ages = (universe_age - _ages).value * 1e9  # yr
 
-    if fof_dir:
-        _dir = fof_dir  # replace if symlinks for fof files are broken
-    with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
+    if group_dir:
+        _dir = group_dir  # replace if symlinks for fof files are broken
+    with h5py.File(f"{_dir}/{group_name}", "r") as hf:
         lens = hf["Subhalo/SubhaloLenType"][:]
         pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
 
@@ -438,3 +441,258 @@ def load_CAMELS_Simba(
         dtm=dtm,
         centre=pos,
     )
+
+
+def load_CAMELS_SwiftEAGLE_subfind(
+    _dir=".",
+    snap_name="snapshot_033.hdf5",
+    group_name="groups_033.hdf5",
+    group_dir=None,
+    dtm=0.3,
+    physical=True,
+    cosmo=Planck15,
+    min_star_part=10,
+    num_threads=-1,
+):
+    """
+    Load CAMELS-Swift-EAGLE galaxies
+    Args:
+        dir (string):
+            data location
+        snap_name (string):
+            snapshot filename
+        group_name (string):
+            subfind / FOF filename
+        group_dir (string):
+            optional argument specifying lcoation of fof file
+            if different to snapshot
+        verbose (bool):
+            verbosity flag
+        dtm (float):
+            dust-to-metals ratio to apply to all gas particles
+        physical (bool):
+            Should the coordinates be converted to physical?
+        cosmo (astropy cosmology):
+            cosmology object to use for age calculation
+        min_star_part (int):
+            minimum number of star particles required to load galaxy
+        num_threads (int)
+            number of threads to use for multiprocessing.
+            Default is -1, i.e. use all available cores.
+    Returns:
+        galaxies (object):
+            `ParticleGalaxy` object containing star and gas particle
+    """
+
+    try:
+        import schwimmbad
+    except ImportError:
+        raise UnmetDependency(
+            "Loading Swift-EAGLE CAMELS data requires the `schwimmbad`"
+            "package. You currently do not have schwimmbad installed. "
+            "Install it via `pip install schwimmbad`"
+        )
+
+    if num_threads == 1:
+        pool = schwimmbad.SerialPool()
+    elif num_threads == -1:
+        pool = schwimmbad.MultiPool()
+    else:
+        pool = schwimmbad.MultiPool(processes=num_threads)
+
+    # Check if snapshot and subfind files in same directory
+    if group_dir is None:
+        group_dir = _dir
+
+    # Load cosmology information
+    with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
+        scale_factor = hf["Cosmology"].attrs["Scale-factor"]
+        redshift = hf["Cosmology"].attrs["Redshift"]
+
+    # get subfind particle info (lens and IDs) for subsetting snapshot info
+    with h5py.File(f'{group_dir}/{group_name}', 'r') as hf:
+        lentype = hf['Subhalo/SubhaloLenType'][:]
+        grp_lentype = hf['Group/GroupLenType'][:]
+        grpn = hf['Subhalo/SubhaloGrNr'][:]
+        grp_firstsub = hf['Group/GroupFirstSub'][:]
+        ids = hf['IDs/ID'][:]
+        pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
+
+    with h5py.File(f"{_dir}/{snap_name}", 'r') as hf:
+        # Load star particle information
+        star_ids = hf['PartType4/ParticleIDs'][:]
+        form_time = hf['PartType4/BirthScaleFactors'][:]
+        coods = hf['PartType4/Coordinates'][:]
+        masses = hf['PartType4/Masses'][:]
+        imasses = hf['PartType4/InitialMasses'][:]
+        _metals = hf['PartType4/SmoothedElementMassFractions'][:]
+        metallicity = hf['PartType4/SmoothedMetalMassFractions'][:]
+        hsml = hf['PartType4/SmoothingLengths'][:]
+
+        # Load gas particle information
+        gas_ids = hf['PartType0/ParticleIDs'][:]
+        g_sfr = hf['PartType0/StarFormationRates'][:]
+        g_masses = hf['PartType0/Masses'][:]
+        g_metals = hf['PartType0/SmoothedMetalMassFractions'][:]
+        g_coods = hf['PartType0/Coordinates'][:]
+        g_hsml = hf['PartType0/SmoothingLengths'][:]
+
+    masses = masses * 1e10
+    imasses = imasses * 1e10
+    g_masses = g_masses * 1e10
+
+    # Convert comoving coordinates to physical kpc
+    if physical:
+        coods *= scale_factor
+        g_coods *= scale_factor
+        hsml *= scale_factor
+        g_hsml *= scale_factor
+        pos *= scale_factor
+
+    # Get subhalos with minimum number of star particles
+    mask = np.where(lentype[:, 4] > min_star_part)[0]
+
+    def swifteagle_particle_assignment(
+        idx,
+        redshift,
+        grpn,
+        grp_lentype,
+        grp_firstsub,
+        lentype,
+        ids,
+        star_ids,
+        gas_ids,
+        form_time,
+        coods,
+        masses,
+        imasses,
+        metallicity,
+        hsml,
+        g_sfr,
+        g_masses,
+        g_metals,
+        g_coods,
+        g_hsml,
+    ):
+        gal = Galaxy()
+        gal.redshift = redshift
+
+        # Find star particles in this subhalo
+        ptype = 4
+
+        # First find group number for this subhalo
+        _grpn = grpn[idx]
+
+        # Find particle index for preceding groups
+        grp_lowi = np.sum(grp_lentype[:_grpn])
+
+        # Find particle index for preceding subhalos in same group
+        sh_lowi = np.sum(lentype[grp_firstsub[_grpn]:idx])
+
+        # Find particle index upto this subhalo
+        lowi = grp_lowi + sh_lowi + np.sum(lentype[idx, :ptype])
+
+        # Find upper index for this subhalo particle type
+        uppi = lowi + lentype[idx, ptype] + 1
+
+        # Filter particle IDs for this subhalo
+        part_ids = np.where(np.in1d(star_ids, ids[lowi:uppi]))[0]
+
+        # Filter particle arrays for this subhalo
+        sh_form_time = form_time[part_ids]
+        sh_coods = coods[part_ids]
+        sh_masses = masses[part_ids]
+        sh_imasses = imasses[part_ids]
+        sh_metallicity = metallicity[part_ids]
+        sh_hsml = hsml[part_ids]
+
+        # Get individual element abundances
+        s_oxygen = _metals[part_ids, 4]
+        s_hydrogen = 1.0 - np.sum(_metals[part_ids, 1:], axis=1)
+
+        # convert formation times to ages
+        universe_age = cosmo.age(redshift)
+        _ages = cosmo.age(1.0 / sh_form_time - 1)
+        ages = (universe_age - _ages).value * 1e9  # yr
+
+        # Check for smoothing lengths
+        if sh_hsml is None:
+            smoothing_lengths = sh_hsml
+        else:
+            smoothing_lengths = sh_hsml * kpc
+
+        gal.load_stars(
+            initial_masses=sh_imasses * Msun,
+            ages=ages * yr,
+            metallicities=sh_metallicity,
+            s_oxygen=s_oxygen,
+            s_hydrogen=s_hydrogen,
+            coordinates=sh_coods * kpc,
+            current_masses=sh_masses * Msun,
+            smoothing_lengths=smoothing_lengths,
+        )
+
+        # Check there are gas particles in this subhalo
+        if lentype[idx, 0] > 0:
+
+            # Find gas particles in this subhalo
+            ptype = 0
+
+            # Find particle index upto this subhalo
+            lowi = grp_lowi + sh_lowi + np.sum(lentype[idx, :ptype])
+
+            # Find upper index for this subhalo particle type
+            uppi = lowi + lentype[idx, ptype] + 1
+
+            # Filter particle IDs for this subhalo
+            part_ids = np.where(np.in1d(gas_ids, ids[lowi:uppi]))[0]
+
+            sh_g_sfr = g_sfr[part_ids]
+            sh_g_masses = g_masses[part_ids]
+            sh_g_metals = g_metals[part_ids]
+            sh_g_coods = g_coods[part_ids]
+            sh_g_hsml = g_hsml[part_ids]
+
+            star_forming = sh_g_sfr > 0.0
+
+            gal.load_gas(
+                coordinates=sh_g_coods * kpc,
+                masses=sh_g_masses * Msun,
+                metallicities=sh_g_metals,
+                star_forming=star_forming,
+                smoothing_lengths=sh_g_hsml * kpc,
+                dust_to_metal_ratio=dtm,
+            )
+
+        return gal
+
+    _f = partial(
+        swifteagle_particle_assignment,
+        redshift=redshift,
+        grpn=grpn,
+        grp_lentype=grp_lentype,
+        grp_firstsub=grp_firstsub,
+        lentype=lentype,
+        ids=ids,
+        star_ids=star_ids,
+        gas_ids=gas_ids,
+        form_time=form_time,
+        coods=coods,
+        masses=masses,
+        imasses=imasses,
+        metallicity=metallicity,
+        hsml=hsml,
+        g_sfr=g_sfr,
+        g_masses=g_masses,
+        g_metals=g_metals,
+        g_coods=g_coods,
+        g_hsml=g_hsml,
+    )
+
+    galaxies = pool.map(_f, mask)
+    pool.close()
+
+    for idx in np.arange(len(gals)):
+        galaxies[idx].centre = pos[idx] * kpc
+
+    return galaxies, mask
