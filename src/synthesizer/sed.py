@@ -1425,8 +1425,11 @@ def plot_spectra(
         # Set the scale to log log
         ax.loglog()
 
-    # Loop over the dict we have been handed
-    for key, sed in spectra.items():
+    # Loop over the dict we have been handed, we want to do this backwards
+    # to ensure the most recent spectra are on top
+    keys = list(spectra.keys())[::-1]
+    seds = list(spectra.values())[::-1]
+    for key, sed in zip(keys, seds):
         # Get the appropriate luminosity/flux and wavelengths
         if rest_frame:
             lam = sed.lam
