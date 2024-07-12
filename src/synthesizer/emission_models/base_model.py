@@ -545,6 +545,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 for scale_by in model._scale_by:
                     parts.append(f"    - {scale_by}")
 
+            # Report if the resulting emission will be saved
+            parts.append(f"  Save emission: {model._save}")
+
         # Get the length of the longest line
         longest = max(len(line) for line in parts) + 10
 
