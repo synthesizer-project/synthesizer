@@ -132,6 +132,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         fixed_parameters={},
         scale_by=None,
         post_processing=(),
+        save=True,
         **kwargs,
     ):
         """
@@ -209,6 +210,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 containing the spectra/lines, the emitters, and the emission
                 model, and return the same dict with the post processing
                 applied.
+            save (bool):
+                A flag for whether the emission produced by this model should
+                be "saved", i.e. attached to the emitter. If False, the
+                emission will be discarded after it has been used. Default is
+                True.
             **kwargs:
                 Any additional keyword arguments to store. These can be used
                 to store additional information needed by the model.
