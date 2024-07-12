@@ -232,7 +232,6 @@ class Galaxy(BaseGalaxy):
         """
         if stars is not None:
             # Add Stars particle object to this galaxy
-            print(stars)
             self.stars = stars
         else:
             # If nothing has been provided, just set to None and return
