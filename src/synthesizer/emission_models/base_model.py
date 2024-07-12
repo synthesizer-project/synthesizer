@@ -526,6 +526,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             # Get this models summary
             parts.extend(model._summary())
 
+            # Report if the resulting emission will be saved
+            parts.append(f"  Save emission: {model._save}")
+
             # Print any fixed parameters if there are any
             if len(model.fixed_parameters) > 0:
                 parts.append("  Fixed parameters:")
@@ -544,9 +547,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 parts.append("  Scaling by:")
                 for scale_by in model._scale_by:
                     parts.append(f"    - {scale_by}")
-
-            # Report if the resulting emission will be saved
-            parts.append(f"  Save emission: {model._save}")
 
         # Get the length of the longest line
         longest = max(len(line) for line in parts) + 10
@@ -2136,7 +2136,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # them (we have to this after post processing incase the deleted
         # spectra are needed during post processing)
         for model in emission_model._models.values():
-            if not model.save:
+            if not model.save and model.label in spectra:
                 del spectra[model.label]
 
         return spectra
@@ -2353,7 +2353,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # them (we have to this after post processing incase the deleted
         # lines are needed during post processing)
         for model in emission_model._models.values():
-            if not model.save:
+            if not model.save and model.label in lines:
                 del lines[model.label]
 
         return lines
