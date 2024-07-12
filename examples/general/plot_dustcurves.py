@@ -8,7 +8,7 @@ Plot dust curves
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from synthesizer.dust import attenuation
+from synthesizer.emission_models import attenuation
 from unyt import Angstrom
 
 models = [
@@ -18,10 +18,10 @@ models = [
     "GrainsWD01",
     "GrainsWD01",
     "GrainsWD01",
-    "ParametricLI08",
-    "ParametricLI08",
-    "ParametricLI08",
-    "ParametricLI08",
+    "ParametricLi08",
+    "ParametricLi08",
+    "ParametricLi08",
+    "ParametricLi08",
 ]
 
 params = [
@@ -41,19 +41,22 @@ colors = cmr.take_cmap_colors("cmr.guppy", len(models))
 
 lam = np.arange(1000, 10000, 10) * Angstrom
 
+fig = plt.figure(figsize=(8, 6))
+ax = fig.add_subplot(111)
+
 for ii, (model, param) in enumerate(zip(models, params)):
     emodel = getattr(attenuation, model)(**param)
 
-    plt.plot(
+    ax.plot(
         lam, emodel.get_tau(lam), color=colors[ii], label=f"{model}, {param}"
     )
 
-plt.xlabel(r"$\lambda/(\AA)$", fontsize=12)
-plt.ylabel(r"A$_{\lambda}/$A$_{V}$", fontsize=12)
-plt.yticks(np.arange(0, 10))
-plt.xlim(np.min(lam), np.max(lam))
+ax.set_xlabel(r"$\lambda/(\AA)$", fontsize=12)
+ax.set_ylabel(r"A$_{\lambda}/$A$_{V}$", fontsize=12)
+ax.set_yticks(np.arange(0, 14))
+ax.set_xlim(np.min(lam), np.max(lam))
 
-plt.legend(frameon=False, fontsize=10)
-plt.grid()
+ax.legend(fontsize=10)
+ax.grid(True)
 
 plt.show()

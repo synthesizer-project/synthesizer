@@ -11,6 +11,7 @@ from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity
+from synthesizer.utils import TableFormatter
 
 
 class Particles:
@@ -41,6 +42,7 @@ class Particles:
     velocities = Quantity()
     masses = Quantity()
     softening_lengths = Quantity()
+    centre = Quantity()
 
     def __init__(
         self,
@@ -80,6 +82,12 @@ class Particles:
         # Set phase space coordinates
         self.coordinates = coordinates
         self.velocities = velocities
+
+        # Define the dictionary to hold particle spectra
+        self.particle_spectra = {}
+
+        # Define the dictionary to hold particle lines
+        self.particle_lines = {}
 
         # Initialise the particle photometry dictionaries
         self.particle_photo_luminosities = {}
@@ -235,6 +243,53 @@ class Particles:
 
         return self.particle_photo_fluxes
 
+    def get_mask(self, attr, thresh, op, mask=None):
+        """
+        Create a mask using a threshold and attribute on which to mask.
+
+        Args:
+            attr (str)
+                The attribute to derive the mask from.
+            thresh (float)
+                The threshold value.
+            op (str)
+                The operation to apply. Can be '<', '>', '<=', '>=', "==",
+                or "!=".
+            mask (array)
+                Optionally, a mask to combine with the new mask.
+
+        Returns:
+            mask (array)
+                The mask array.
+        """
+        # Get the attribute
+        attr = getattr(self, attr)
+
+        # Apply the operator
+        if op == ">":
+            new_mask = attr > thresh
+        elif op == "<":
+            new_mask = attr < thresh
+        elif op == ">=":
+            new_mask = attr >= thresh
+        elif op == "<=":
+            new_mask = attr <= thresh
+        elif op == "==":
+            new_mask = attr == thresh
+        elif op == "!=":
+            new_mask = attr != thresh
+        else:
+            raise exceptions.InconsistentArguments(
+                "Masking operation must be '<', '>', '<=', '>=', '==', or "
+                f"'!=', not {op}"
+            )
+
+        # Combine with the existing mask
+        if mask is not None:
+            new_mask = np.logical_and(new_mask, mask)
+
+        return new_mask
+
     def integrate_particle_spectra(self):
         """
         Integrate any particle spectra to get integrated spectra.
@@ -246,6 +301,36 @@ class Particles:
         for key, sed in self.particle_spectra.items():
             # Sum the spectra
             self.spectra[key] = sed.sum()
+
+    def __str__(self):
+        """
+        Return a string representation of the particle object.
+
+        Returns:
+            table (str)
+                A string representation of the particle object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Particles")
+
+    def calculate_centre_of_mass(self):
+        """Calculate the centre of mass of the collection
+        of particles.
+
+        Uses the `masses` and `coordinates` attributes,
+        and assigns the centre of mass to the `centre` attribute
+        """
+        total_mass = np.sum(self.masses)
+        com = np.array([0.0, 0.0, 0.0])
+
+        for i, coods in enumerate(self.coordinates):
+            com += coods * self.masses[i]
+
+        com /= total_mass
+
+        self.center = com
 
 
 class CoordinateGenerator:
@@ -297,20 +382,3 @@ class CoordinateGenerator:
             "https://github.com/flaresimulations/synthesizer/blob/main/"
             "docs/CONTRIBUTING.md"
         )
-
-    def calculate_centre_of_mass(self):
-        """Calculate the centre of mass of the collection
-        of particles.
-
-        Uses the `masses` and `coordinates` attributes,
-        and assigns the centre of mass to the `centre` attribute
-        """
-        total_mass = np.sum(self.masses)
-        com = np.array([0.0, 0.0, 0.0])
-
-        for i, coods in enumerate(self.coordinates):
-            com += coods * self.masses[i]
-
-        com /= total_mass
-
-        self.center = com

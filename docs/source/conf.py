@@ -8,10 +8,12 @@
 import os
 import sys
 
+from synthesizer._version import __version__
+
 project = "synthesizer"
-copyright = "2024, Chris Lovell, Stephen Wilkins, Aswin Vijayan, Will Roper"
-author = "Chris Lovell, Stephen Wilkins, Aswin Vijayan, Will Roper"
-release = "0.3.0-beta"
+copyright = "2024, Chris Lovell, Will Roper, Aswin Vijayan, Stephen Wilkins"
+author = "Chris Lovell, Will Roper, Aswin Vijayan, Stephen Wilkins"
+release = __version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -38,6 +40,7 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_gallery.gen_gallery",
     "sphinx_toolbox.collapse",
+    "sphinx_copybutton",  # Add a copy button to code blocks
 ]
 
 sphinx_gallery_conf = {

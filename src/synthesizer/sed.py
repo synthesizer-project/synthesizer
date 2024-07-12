@@ -24,12 +24,16 @@ from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
-from synthesizer.dust.attenuation import PowerLaw
 from synthesizer.extensions.timers import tic, toc
-from synthesizer.integrate import integrate_last_axis
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.units import Quantity
-from synthesizer.utils import has_units, rebin_1d, wavelength_to_rgba
+from synthesizer.utils import (
+    TableFormatter,
+    has_units,
+    rebin_1d,
+    wavelength_to_rgba,
+)
+from synthesizer.utils.integrate import integrate_last_axis
 from synthesizer.warnings import warn
 
 
@@ -349,34 +353,16 @@ class Sed:
 
     def __str__(self):
         """
-        Overloads the __str__ operator. A summary can be achieved by
-        print(sed) where sed is an instance of Sed.
+        Return a string representation of the SED object.
+
+        Returns:
+            table (str)
+                A string representation of the SED object.
         """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        # Set up string for printing
-        pstr = ""
-
-        # Add the content of the summary to the string to be printed
-        pstr += "-" * 10 + "\n"
-        pstr += "SUMMARY OF SED \n"
-        pstr += f"Number of wavelength points: {len(self._lam)} \n"
-        pstr += f"Wavelength range: [{np.min(self.lam):.2f}, \
-            {np.max(self.lam):.2f}] \n"
-        pstr += f"log10(Peak luminosity/{self.lnu.units}): \
-            {np.log10(np.max(self.lnu)):.2f} \n"
-
-        # if bolometric luminosity attribute has not been calculated,
-        # calculate it.
-        if self.bolometric_luminosity is None:
-            self.bolometric_luminosity = self.measure_bolometric_luminosity()
-        pstr += (
-            "log10(Bolometric luminosity/"
-            f"{str(self.bolometric_luminosity.units)}):"
-            f"{np.log10(self.bolometric_luminosity)}"
-        )
-        pstr += "-" * 10
-
-        return pstr
+        return formatter.get_table("SED")
 
     @property
     def luminosity(self):
@@ -445,7 +431,7 @@ class Sed:
         return self.lam
 
     @property
-    def _spec_dims(self):
+    def ndim(self):
         """
         Get the dimensions of the spectra array.
 
@@ -454,6 +440,17 @@ class Sed:
                 The shape of self.lnu
         """
         return np.ndim(self.lnu)
+
+    @property
+    def shape(self):
+        """
+        Get the shape of the spectra array.
+
+        Returns
+            Tuple
+                The shape of self.lnu
+        """
+        return self.lnu.shape
 
     def get_lnu_at_nu(self, nu, kind=False):
         """
@@ -494,9 +491,7 @@ class Sed:
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
     def measure_bolometric_luminosity(
-        self,
-        integration_method="trapz",
-        nthreads=1
+        self, integration_method="trapz", nthreads=1
     ):
         """
         Calculate the bolometric luminosity of the SED.
@@ -538,10 +533,7 @@ class Sed:
         return self.bolometric_luminosity
 
     def measure_window_luminosity(
-        self,
-        window,
-        integration_method="trapz",
-        nthreads=1
+        self, window, integration_method="trapz", nthreads=1
     ):
         """
         Measure the luminosity in a spectral window.
@@ -586,10 +578,7 @@ class Sed:
         return luminosity
 
     def measure_window_lnu(
-        self,
-        window,
-        integration_method="trapz",
-        nthreads=1
+        self, window, integration_method="trapz", nthreads=1
     ):
         """
         Measure lnu in a spectral window.
@@ -620,7 +609,7 @@ class Sed:
         # Apply the correct method
         if integration_method == "average":
             # Apply to the correct axis of the spectra
-            if self._spec_dims == 2:
+            if self.ndim == 2:
                 lnu = (
                     np.array(
                         [
@@ -721,10 +710,7 @@ class Sed:
         red = (4150, 4250) * angstrom
 
         return self.measure_break(
-            blue,
-            red,
-            nthreads=nthreads,
-            integration_method=integration_method
+            blue, red, nthreads=nthreads, integration_method=integration_method
         )
 
     def measure_d4000(
@@ -809,7 +795,7 @@ class Sed:
             s = (self.lam > window[0]) & (self.lam < window[1])
 
             # Handle different spectra dimensions
-            if self._spec_dims == 2:
+            if self.ndim == 2:
                 beta = np.array(
                     [
                         linregress(
@@ -871,7 +857,6 @@ class Sed:
             fnu (ndarray)
                 Spectral flux density calcualted at d=10 pc.
         """
-
         # Get the observed wavelength and frequency arrays
         self.obslam = self._lam
         self.obsnu = self._nu
@@ -903,7 +888,6 @@ class Sed:
                 Spectral flux density calcualted at d=10 pc
 
         """
-
         # Store the redshift for later use
         self.redshift = z
 
@@ -925,7 +909,7 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm:
-            self._fnu *= igm().T(z, self._obslam)
+            self._fnu *= igm().get_transmission(z, self._obslam)
 
         return self.fnu
 
@@ -1075,7 +1059,7 @@ class Sed:
         mean_red = np.mean(red)
 
         # Handle different spectra shapes
-        if self._spec_dims == 2:
+        if self.ndim == 2:
             # Multiple spectra case
 
             # Perform polyfit for the continuum fit for all spectra
@@ -1185,7 +1169,7 @@ class Sed:
     def apply_attenuation(
         self,
         tau_v,
-        dust_curve=PowerLaw(slope=-1.0),
+        dust_curve,
         mask=None,
     ):
         """
@@ -1194,9 +1178,9 @@ class Sed:
         Args:
             tau_v (float/array-like, float)
                 The V-band optical depth for every star particle.
-            dust_curve (synthesizer.dust.attenuation.*)
+            dust_curve (synthesizer.emission_models.attenuation.*)
                 An instance of one of the dust attenuation models. (defined in
-                synthesizer/dust/attenuation.py)
+                synthesizer/emission_models.attenuation.py)
             mask (array-like, bool)
                 A mask array with an entry for each spectra. Masked out
                 spectra will be ignored when applying the attenuation. Only
@@ -1207,7 +1191,6 @@ class Sed:
                 A new Sed containing the rest frame spectra of self attenuated
                 by the transmission defined from tau_v and the dust curve.
         """
-
         # Ensure the mask is compatible with the spectra
         if mask is not None:
             if self._lnu.ndim < 2:
@@ -1215,7 +1198,7 @@ class Sed:
                     "Masks are only applicable for Seds containing "
                     "multiple spectra"
                 )
-            if self._lnu.shape[0] != mask.size:
+            if self._lnu.shape[: mask.ndim] != mask.shape:
                 raise exceptions.InconsistentArguments(
                     "Mask and spectra are incompatible shapes "
                     f"({mask.shape}, {self._lnu.shape})"
@@ -1245,6 +1228,8 @@ class Sed:
         # without applying a mask
         if mask is None:
             spectra *= transmission
+        elif transmission.ndim > 1:
+            spectra[mask] *= transmission[mask]
         else:
             spectra[mask] *= transmission
 
@@ -1254,7 +1239,7 @@ class Sed:
         self, ionisation_energy=13.6 * eV, limit=100, nthreads=1
     ):
         """
-        A function to calculate the ionising photon production rate.
+        Calculate the ionising photon production rate.
 
         Args:
             ionisation_energy (unyt_array)
@@ -1270,7 +1255,6 @@ class Sed:
             float
                 Ionising photon luminosity (s^-1).
         """
-
         # Convert lnu to llam
         llam = lnu_to_llam(self.lam, self.lnu)
 
@@ -1302,18 +1286,24 @@ class Sed:
 
     def plot_spectra(self, **kwargs):
         """
+        Plot the spectra.
+
         A wrapper for synthesizer.sed.plot_spectra()
         """
         return plot_spectra(self, **kwargs)
 
     def plot_observed_spectra(self, **kwargs):
         """
+        Plot the observed spectra.
+
         A wrapper for synthesizer.sed.plot_observed_spectra()
         """
-        return plot_observed_spectra(self, **kwargs)
+        return plot_observed_spectra(self, self.redshift, **kwargs)
 
     def plot_spectra_as_rainbow(self, **kwargs):
         """
+        Plot the spectra as a rainbow.
+
         A wrapper for synthesizer.sed.plot_spectra_as_rainbow()
         """
         return plot_spectra_as_rainbow(self, **kwargs)
@@ -1435,8 +1425,11 @@ def plot_spectra(
         # Set the scale to log log
         ax.loglog()
 
-    # Loop over the dict we have been handed
-    for key, sed in spectra.items():
+    # Loop over the dict we have been handed, we want to do this backwards
+    # to ensure the most recent spectra are on top
+    keys = list(spectra.keys())[::-1]
+    seds = list(spectra.values())[::-1]
+    for key, sed in zip(keys, seds):
         # Get the appropriate luminosity/flux and wavelengths
         if rest_frame:
             lam = sed.lam
@@ -1515,11 +1508,13 @@ def plot_spectra(
                 xlimits[1] = x_up
 
     # Set the limits
-    ax.set_xlim(*xlimits)
-    ax.set_ylim(*ylimits)
+    if not np.isnan(xlimits[0]) and not np.isnan(xlimits[1]):
+        ax.set_xlim(*xlimits)
+    if not np.isnan(ylimits[0]) and not np.isnan(ylimits[1]):
+        ax.set_ylim(*ylimits)
 
     # Make the legend
-    if draw_legend:
+    if draw_legend and any(ax.get_legend_handles_labels()[1]):
         ax.legend(fontsize=8, labelspacing=0.0)
 
     # Parse the units for the labels and make them pretty

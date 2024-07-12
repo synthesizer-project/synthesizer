@@ -5,7 +5,8 @@ provides the common functionality between particle and parametric imaging. The
 user should not use this class directly, but rather use the
 particle.imaging.Images and parametric.imaging.Images classes.
 
-Example usage:
+Example usage::
+
     # Create an image collection
     img_coll = ImageCollection(resolution=0.1 * unyt.arcsec, npix=100)
 

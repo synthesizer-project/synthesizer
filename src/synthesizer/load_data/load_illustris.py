@@ -1,18 +1,43 @@
+"""A module to load IllustrisTNG data into galaxy objects.
+
+This module provides a function to load particle data from the IllustrisTNG
+simulation into galaxy objects. The data is loaded from the group and particle
+files, and the particles associated with each subhalo are loaded individually.
+
+The module requires the `illustris_python` module, which must be installed
+manually. The `load_IllustrisTNG` function loads the particles associated with
+each subhalo individually, rather than the whole simulation volume particle
+arrays; this can be slower for certain volumes, but avoids memory issues for
+higher resolution boxes.
+
+Example usage::
+
+    galaxies, subhalo_mask = load_IllustrisTNG(
+        directory="path/to/data",
+        snap_number=99,
+        stellar_mass_limit=8.5e6,
+        verbose=True,
+        dtm=0.3,
+        physical=True,
+        metals=True,
+    )
+"""
+
 import numpy as np
 from astropy.cosmology import Planck15
 from tqdm import tqdm
 from unyt import Msun, kpc, yr
 
+from synthesizer.exceptions import UnmetDependency
+
 try:
     import illustris_python as il
 except ImportError:
-    print(
-        "The `illustris_python` module is not installed. "
-        "Please refer to the website for installation instructions: "
-        "https://github.com/illustristng/illustris_python"
-        "\nExiting..."
+    raise UnmetDependency(
+        "The `illustris_python` module is required to load IllustrisTNG data. "
+        "Install synthesizer with the `illustris` extra dependencies:"
+        " `pip install.[illustris]`."
     )
-    exit
 
 
 from ..particle.galaxy import Galaxy
@@ -28,7 +53,7 @@ def load_IllustrisTNG(
     metals=True,
 ):
     """
-    Load IllustrisTNG particle data into galaxy objects
+    Load IllustrisTNG particle data into galaxy objects.
 
     Uses the `illustris_python` module, which must be installed manually.
     Loads the particles associated with each subhalo individually, rather than
@@ -63,7 +88,6 @@ def load_IllustrisTNG(
         subhalo_mask (array, bool):
             Boolean array of selected galaxies from the subhalo catalogue.
     """
-
     # Do some simple argument preparation
     snap_number = int(snap_number)
 

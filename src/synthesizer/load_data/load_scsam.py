@@ -17,36 +17,36 @@ from synthesizer.particle.stars import Stars as ParticleStars
 
 
 def load_SCSAM(fname, method, grid=None, verbose=False):
-    """
-    Reads an SC-SAM sfhist_\\*-\\*.dat file. Returns a list of galaxy
-    objects, halo indices, and birth halo IDs. Adapted from code
-    by Aaron Yung.
+    r"""
+    Read an SC-SAM star formation data file.
+
+    Returns a list of galaxy objects, halo indices, and birth halo IDs.
+    Adapted from code by Aaron Yung.
 
     Args:
         fname (str):
-            SC-SAM sfhist_\\*-\\*.dat file to be read
+            The SC-SAM star formation data file to be read.
         method (str):
-            'particle', 'parametric_NNI' or 'parametric_RGI',
-            depending on how you wish to model your SFZH.
-            - 'particle' treats each age-Z bin as a particle
-            - 'parametric_NNI' uses scipy's nearest ND interpolator to
-              interpolate the grid for a parametric SFH
-            - 'parametric_RGI' uses scipy's regular grid interpolator to
-              interpolate the grid for a parametric SFH
+            'particle', 'parametric_NNI' or 'parametric_RGI', depending on how
+            you wish to model your SFZH. 'particle' treats each age-Z bin as a
+            particle. 'parametric_NNI' uses scipy's nearest ND interpolator to
+            interpolate the grid for a parametric SFH 'parametric_RGI' uses
+            scipy's regular grid interpolator to interpolate the grid for a
+            parametric SFH.
         grid (grid object):
-            synthesizer grid object (needed for parametric galaxies)
+            Grid object to extract from (needed for parametric galaxies).
         verbose (bool):
-            increase output verbosity
+            Are we talking?
 
     Returns:
-        galaxies (list):
-            list of galaxy objects
-        halo_ind_list (list):
-            list of halo indices
-        birthhalo_id_list (list):
-            birth halo indices
+        tuple:
+            galaxies (list):
+                list of galaxy objects
+            halo_ind_list (list):
+                list of halo indices
+            birthhalo_id_list (list):
+                birth halo indices
     """
-
     # Prepare to read SFHist file
     sfhist = open(fname, "r")
     lines = sfhist.readlines()

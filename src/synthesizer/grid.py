@@ -39,6 +39,7 @@ from synthesizer import exceptions
 from synthesizer.line import Line, LineCollection, flatten_linelist
 from synthesizer.sed import Sed
 from synthesizer.units import Quantity
+from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.warnings import warn
 
 from . import __file__ as filepath
@@ -67,10 +68,6 @@ class Grid:
             A list of lines on the Grid.
         available_spectra (bool/list)
             A list of spectra on the Grid.
-        reprocessed (bool)
-            Flag for whether the grid has been reprocessed through cloudy.
-        lines_available (bool)
-            Flag for whether lines are available on this grid.
         lam (Quantity, float)
             The wavelengths at which the spectra are defined.
         spectra (dict, array-like, float)
@@ -97,8 +94,6 @@ class Grid:
             of the spectral grid. These are read dynamically from the HDF5
             file so can be anything but usually contain at least stellar ages
             and stellar metallicity.
-        lam (array_like, float)
-            The wavelengths at which the spectra are defined.
     """
 
     # Define Quantities
@@ -500,7 +495,6 @@ class Grid:
         Returns:
             list:
                 List of available lines
-            list:
                 List of associated wavelengths.
         """
         with h5py.File(self.grid_filename, "r") as hf:
@@ -558,24 +552,17 @@ class Grid:
         self.lam = new_lam
 
     def __str__(self):
-        """Return a basic summary of the Grid object."""
-        # Set up the string for printing
-        pstr = ""
+        """
+        Return a string representation of the particle object.
 
-        # Add the content of the summary to the string to be printed
-        pstr += "-" * 30 + "\n"
-        pstr += "SUMMARY OF GRID" + "\n"
-        for axis in self.axes:
-            pstr += f"{axis}: {getattr(self, axis)} \n"
-        for k, v in self.parameters.items():
-            pstr += f"{k}: {v} \n"
-        if self.lines:
-            pstr += f"available lines: {self.available_lines}\n"
-        if self.spectra:
-            pstr += f"available spectra: {self.available_spectra}\n"
-        pstr += "-" * 30 + "\n"
+        Returns:
+            table (str)
+                A string representation of the particle object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        return pstr
+        return formatter.get_table("Grid")
 
     @property
     def shape(self):
@@ -949,10 +936,8 @@ class Grid:
 
         This will:
         - Find the Grid wavelengths at which transmission is non-zero.
-        - Limit the Grid's spectra and wavelength array to where transmision
-          is non-zero.
-        - Interpolate the filter collection onto the Grid's new wavelength
-          array.
+        - Limit the spectra and wavelengths to where transmision is non-zero.
+        - Interpolate the filters onto the Grid's new wavelength array.
 
         Args:
             filters (synthesizer.filter.FilterCollection)
@@ -1061,3 +1046,101 @@ class Grid:
             plt.close(fig)
 
         return anim
+
+
+class Template:
+    """
+    A simplified grid contain only a single template spectra.
+
+    The model is different to all other emission models in that it scales a
+    template by bolometric luminosity.
+
+    Attributes:
+        sed (Sed)
+            The template spectra for the AGN.
+        normalisation (unyt_quantity)
+            The normalisation for the spectra. In reality this is the
+            bolometric luminosity.
+    """
+
+    def __init__(
+        self,
+        label="template",
+        filename=None,
+        lam=None,
+        lnu=None,
+        fesc=0.0,
+        **kwargs,
+    ):
+        """
+        Initialise the Template.
+
+        Args:
+            label (str)
+                The label for the model.
+            filename (str)
+                The filename (including full path) to a file containing the
+                template. The file should contain two columns with wavelength
+                and luminosity (lnu).
+            lam (array)
+                Wavelength array.
+            lnu (array)
+                Luminosity array.
+            fesc (float)
+                The escape fraction of the AGN.
+            **kwargs
+
+        """
+        # Ensure we have been given units
+        if lam is not None and not isinstance(lam, unyt_array):
+            raise exceptions.MissingUnits("lam must be provided with units")
+        if lnu is not None and not isinstance(lnu, unyt_array):
+            raise exceptions.MissingUnits("lnu must be provided with units")
+
+        if filename:
+            raise exceptions.UnimplementedFunctionality(
+                "Not yet implemented! Feel free to implement and raise a "
+                "pull request. Guidance for contributing can be found at "
+                "https://github.com/flaresimulations/synthesizer/blob/main/"
+                "docs/CONTRIBUTING.md"
+            )
+
+        if lam is not None and lnu is not None:
+            # initialise a synthesizer Sed object
+            self.sed = Sed(lam=lam, lnu=lnu)
+
+            # normalise
+            # TODO: add a method to Sed that does this.
+            self.normalisation = self.sed.measure_bolometric_luminosity()
+            self.sed.lnu /= self.normalisation.value
+
+        else:
+            raise exceptions.MissingArgument(
+                "Either a filename or both lam and lnu must be provided!"
+            )
+
+        # Set the escape fraction
+        self.fesc = fesc
+
+    def get_spectra(self, bolometric_luminosity):
+        """
+        Calculate the blackhole spectra by scaling the template.
+
+        Args:
+            bolometric_luminosity (float)
+                The bolometric luminosity of the blackhole(s) for scaling.
+
+        """
+        # Ensure we have units for safety
+        if bolometric_luminosity is not None and not isinstance(
+            bolometric_luminosity, unyt_array
+        ):
+            raise exceptions.MissingUnits(
+                "bolometric luminosity must be provided with units"
+            )
+
+        return (
+            bolometric_luminosity.to(self.sed.lnu.units * Hz).value
+            * self.sed
+            * (1 - self.fesc)
+        )

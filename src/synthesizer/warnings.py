@@ -3,7 +3,7 @@
 This module contains functions and decorators for issuing warnings to the end
 user.
 
-Example usage:
+Example usage::
 
     deprecation("x will have to be a unyt_array in future versions.")
 

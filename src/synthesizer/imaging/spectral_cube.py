@@ -8,7 +8,8 @@ particles/a density grid over the data cube.
 This file is part of the synthesizer package and is distributed under the
 terms of the MIT license. See the LICENSE.md file for details.
 
-Example usage:
+Example usage::
+
     # Create a data cube
     cube = SpectralCube(
         resolution=0.1,
@@ -38,7 +39,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
 
-import synthesizer.exceptions as exceptions
+from synthesizer import exceptions
 from synthesizer.units import Quantity
 
 

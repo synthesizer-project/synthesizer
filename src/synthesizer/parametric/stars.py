@@ -4,11 +4,10 @@ This is the parametric analog of particle.Stars. It not only computes and holds
 the SFZH grid but everything describing a parametric Galaxy's stellar
 component.
 
-Example usage:
+Example usage::
 
-    stars = Stars(log10ages, metallicities,
-                  sfzh=sfzh)
-    stars.get_spectra_incident(grid)
+    stars = Stars(log10ages, metallicities, sfzh=sfzh)
+    stars.get_spectra(emission_model)
     stars.plot_spectra()
 """
 
@@ -23,10 +22,10 @@ from synthesizer.components import StarsComponent
 from synthesizer.line import Line
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
-from synthesizer.plt import single_histxy
-from synthesizer.stats import weighted_mean, weighted_median
 from synthesizer.units import Quantity
-from synthesizer.utils import has_units
+from synthesizer.utils import TableFormatter, has_units
+from synthesizer.utils.plt import single_histxy
+from synthesizer.utils.stats import weighted_mean, weighted_median
 
 
 class Stars(StarsComponent):
@@ -370,7 +369,88 @@ class Stars(StarsComponent):
         # ... and multiply it by the initial mass of stars
         self.sfzh *= self._initial_mass
 
-    def generate_lnu(self, grid, spectra_name, old=None, young=None):
+    def get_mask(self, attr, thresh, op, mask=None):
+        """
+        Create a mask using a threshold and attribute on which to mask.
+
+        Args:
+            attr (str)
+                The attribute to derive the mask from.
+            thresh (float)
+                The threshold value.
+            op (str)
+                The operation to apply. Can be '<', '>', '<=', '>=', "==",
+                or "!=".
+            mask (array)
+                Optionally, a mask to combine with the new mask.
+
+        Returns:
+            mask (array)
+                The mask array.
+        """
+        # Get the attribute
+        attr = getattr(self, attr)
+
+        # Apply the operator
+        if op == ">":
+            new_mask = attr > thresh
+        elif op == "<":
+            new_mask = attr < thresh
+        elif op == ">=":
+            new_mask = attr >= thresh
+        elif op == "<=":
+            new_mask = attr <= thresh
+        elif op == "==":
+            new_mask = attr == thresh
+        elif op == "!=":
+            new_mask = attr != thresh
+        else:
+            raise exceptions.InconsistentArguments(
+                "Masking operation must be '<', '>', '<=', '>=', '==', or "
+                f"'!=', not {op}"
+            )
+
+        # Broadcast the mask to get a mask for SFZH bins
+        if new_mask.size == self.sfzh.shape[0]:
+            new_mask = np.outer(
+                new_mask, np.ones(self.sfzh.shape[1], dtype=int)
+            )
+        elif new_mask.size == self.sfzh.shape[1]:
+            new_mask = np.outer(
+                np.ones(self.sfzh.shape[0], dtype=int), new_mask
+            )
+        elif new_mask.shape == self.sfzh.shape:
+            pass  # nothing to do here
+        else:
+            raise exceptions.InconsistentArguments(
+                "Masking array must be the same shape as the SFZH grid "
+                f"or an axis (mask.shape={new_mask.shape}, "
+                f"sfzh.shape={self.sfzh.shape})"
+            )
+
+        # Combine with the existing mask
+        if mask is not None:
+            if mask.shape == new_mask.shape:
+                new_mask = np.logical_and(new_mask, mask)
+            else:
+                raise exceptions.InconsistentArguments(
+                    "Masking array must be the same shape as the SFZH grid "
+                    f"or an axis (mask.shape={new_mask.shape}, "
+                    f"sfzh.shape={self.sfzh.shape})"
+                )
+
+        return new_mask
+
+    def generate_lnu(
+        self,
+        grid,
+        spectra_name,
+        old=None,
+        young=None,
+        mask=None,
+        fesc=0.0,
+        **kwargs,
+    ):
         """
         Calculate rest frame spectra from an SPS Grid.
 
@@ -397,38 +477,26 @@ class Stars(StarsComponent):
         Returns:
             The Stars's integrated rest frame spectra in erg / s / Hz.
         """
-
         # Ensure arguments make sense
         if old is not None and young is not None:
             raise ValueError("Cannot provide old and young stars together")
 
-        # Get the indices of non-zero entries in the SFZH
-        non_zero_inds = np.where(self.sfzh > 0)
+        # Get a mask for non-zero bins in the SFZH
+        mask = self.get_mask("sfzh", 0, ">", mask=mask)
 
-        # Make the mask for relevent SFZH bins
-        if old:
-            sfzh_mask = self.log10ages[non_zero_inds[0]] > old
-        elif young:
-            sfzh_mask = self.log10ages[non_zero_inds[0]] <= young
-        else:
-            sfzh_mask = np.ones(
-                len(self.log10ages[non_zero_inds[0]]),
-                dtype=bool,
-            )
+        # Make the mask for relevent SFZH bins if we haven't been handed one.
+        if mask is not None:
+            if old is not None:
+                mask = self.get_mask("log10ages", old, ">", mask=mask)
+            elif young is not None:
+                mask = self.get_mask("log10ages", young, "<=", mask=mask)
 
         # Add an extra dimension to enable later summation
         sfzh = np.expand_dims(self.sfzh, axis=2)
 
-        # Account for the SFZH mask in the non-zero indices
-        non_zero_inds = (
-            non_zero_inds[0][sfzh_mask],
-            non_zero_inds[1][sfzh_mask],
-        )
-
         # Compute the spectra
-        spectra = np.sum(
-            grid.spectra[spectra_name][non_zero_inds[0], non_zero_inds[1], :]
-            * sfzh[non_zero_inds[0], non_zero_inds[1], :],
+        spectra = (1 - fesc) * np.sum(
+            grid.spectra[spectra_name][mask] * sfzh[mask],
             axis=0,
         )
 
@@ -521,24 +589,16 @@ class Stars(StarsComponent):
 
     def __str__(self):
         """
-        Overload the print function to give a basic summary of the
-        stellar population
+        Return a string representation of the stars object.
+
+        Returns:
+            table (str)
+                A string representation of the particle object.
         """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        # Define the output string
-        pstr = ""
-        pstr += "-" * 10 + "\n"
-        pstr += "SUMMARY OF BINNED SFZH" + "\n"
-        pstr += (
-            f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
-        )
-        pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
-        pstr += (
-            f"mean metallicity: {self.calculate_mean_metallicity():.4f}" + "\n"
-        )
-        pstr += "-" * 10 + "\n"
-
-        return pstr
+        return formatter.get_table("Stars")
 
     def __add__(self, other_stars):
         """

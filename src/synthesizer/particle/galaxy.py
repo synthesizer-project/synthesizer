@@ -12,7 +12,7 @@ spectra for all particles in a simulation.)
 Example usage:
 
     galaxy = Galaxy(stars, gas, black_holes, ...)
-    galaxystars.get_spectra_incident(...)
+    galaxy.stars.get_spectra(...)
 
 """
 
@@ -56,7 +56,7 @@ class Galaxy(BaseGalaxy):
         black_holes=None,
         redshift=None,
         centre=None,
-        verbose=True,
+        **kwargs,
     ):
         """Initialise a particle based Galaxy with objects derived from
            Particles.
@@ -77,8 +77,8 @@ class Galaxy(BaseGalaxy):
             centre (float)
                 Centre of the galaxy particles. Can be defined in a number
                 of ways (e.g. centre of mass)
-            verbose (float)
-                Are we talking?
+            **kwargs
+                Arbitrary keyword arguments.
 
         Raises:
             InconsistentArguments
@@ -94,7 +94,6 @@ class Galaxy(BaseGalaxy):
 
         # Set the type of galaxy
         self.galaxy_type = "Particle"
-        self.verbose = verbose
 
         # Instantiate the parent (load stars and gas below)
         BaseGalaxy.__init__(
@@ -126,6 +125,10 @@ class Galaxy(BaseGalaxy):
                 getattr(self, attr)
             except AttributeError:
                 setattr(self, attr, None)
+
+        # Attach any additional keyword arguments
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def calculate_integrated_stellar_properties(self):
         """
@@ -207,8 +210,10 @@ class Galaxy(BaseGalaxy):
         **kwargs,
     ):
         """
-        Load arrays for star properties into a `Stars`  object,
-        and attach to this galaxy object
+        Load arrays for star properties into a `Stars`  object.
+
+        This will populate the stars attribute with the instantiated Stars
+        object.
 
         Args:
             initial_masses (array_like, float)
@@ -262,8 +267,9 @@ class Galaxy(BaseGalaxy):
         **kwargs,
     ):
         """
-        Load arrays for gas particle properties into a `Gas` object,
-        and attach to this galaxy object
+        Load arrays for gas particle properties into a `Gas` object.
+
+        This will populate the gas attribute with the instantiated Gas object.
 
         Args:
             masses : array_like (float)
@@ -272,10 +278,8 @@ class Galaxy(BaseGalaxy):
                 gas particle metallicity (total metal fraction)
             gas (gas particle object)
                 A pre-existing gas particle object to use. Defaults to None.
-        **kwargs
-
-        Returns:
-            None
+            **kwargs
+                Arbitrary keyword arguments.
         """
         if gas is not None:
             # Add Gas particle object to this galaxy
@@ -481,56 +485,6 @@ class Galaxy(BaseGalaxy):
         if self.gas is not None:
             # Nothing to do here... YET
             pass
-
-    def get_line_los():
-        """
-        ParticleGalaxy specific method for obtaining the line luminosities
-        subject to line of sight attenuation to each star particle.
-        """
-
-        pass
-
-    def get_particle_line_intrinsic(self, grid):
-        # """
-        # Calculate line luminosities from individual young stellar particles
-
-        # Warning: slower than calculating integrated line luminosities,
-        # particularly where young particles are resampled, as it does
-        # not use vectorisation.
-
-        # Args:
-        #     grid (object):
-        #         `Grid` object.
-        # """
-        # age_mask = self.stars.log10ages < grid.max_age
-        # lum = np.zeros((np.sum(age_mask), len(grid.lines)))
-
-        # if np.sum(age_mask) == 0:
-        #     return lum
-        # else:
-        #     for i, (mass, age, metal) in enumerate(zip(
-        #             self.stars.initial_masses[age_mask],
-        #             self.stars.log10ages[age_mask],
-        #             self.stars.log10metallicities[age_mask])):
-
-        #         weights_temp = self._calculate_weights(grid, metal, age,
-        #                                                mass,
-        #                                                young_stars=True)
-        #         lum[i] = np.sum(grid.line_luminosities * weights_temp,
-        #                         axis=(1, 2))
-
-        # return lum
-
-        pass
-
-    def get_particle_line_attenuated():
-        pass
-
-    def get_particle_line_screen():
-        pass
-
-    def get_particle_line_los():
-        pass
 
     def calculate_los_tau_v(
         self,

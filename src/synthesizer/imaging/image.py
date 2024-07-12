@@ -431,7 +431,7 @@ class Image:
             Image
                 The image including the noise array
             np.ndarray
-                The weight map, derived from 1 / std **2
+                The weight map, derived from 1 / std^2
         """
         # Add the noise array to the image
         if self.units is not None:

@@ -34,6 +34,11 @@ jobs:
         pip install wheel
         sudo apt install pandoc
         WITH_OPENMP=1 pip install .[test,docs]
+        # Install loader dependencies (doing this separately because bigfile
+        # is not set up properly and depends on numpy and cython, the former
+        # we depend on, the latter we need to install)
+        pip install cython
+        WITH_OPENMP=1 pip install .[bluetides,eagle,illustris]
         # Output the compilation report so it can be viewed in an action log
         cat build_synth.log
     - uses: chartboost/ruff-action@v1  # Lint with Ruff
@@ -45,7 +50,7 @@ jobs:
       run: |
         pytest
         # Test ipython notebooks
-        pytest --nbmake docs/source/*.ipynb docs/source/*/*.ipynb
+        pytest --nbmake docs/source/*/*.ipynb docs/source/*/*/*.ipynb
     - name: Sphinx Build
       run: |
         # Test sphinx build (runs all notebooks)

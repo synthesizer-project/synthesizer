@@ -95,6 +95,7 @@ default_units = {
     "centre": Mpc,
     "photo_luminosities": erg / s / Hz,
     "photo_fluxes": erg / s / cm**2 / Hz,
+    "softening_lengths": Mpc,
 }
 
 
@@ -214,6 +215,8 @@ class Units(metaclass=UnitSingleton):
 
         coordinates (unyt.unit_object.Unit)
             Particle coordinate unit.
+        centre (unyt.unit_object.Unit)
+            Galaxy/particle distribution centre unit.
         smoothing_lengths (unyt.unit_object.Unit)
             Particle smoothing length unit.
         softening_length (unyt.unit_object.Unit)
@@ -257,8 +260,9 @@ class Units(metaclass=UnitSingleton):
             Field of View unit.
         orig_resolution (unyt.unit_object.Unit)
             Original resolution (for resampling) unit.
-        centre (unyt.unit_object.Unit)
-            Centre of the image unit.
+
+        softening_lengths (unyt.unit_object.Unit)
+            Particle gravitational softening length unit.
     """
 
     def __init__(self, units=None, force=False):
@@ -324,6 +328,7 @@ class Units(metaclass=UnitSingleton):
 
         # Spatial quantities
         self.coordinates = Mpc
+        self.centre = Mpc
         self.smoothing_lengths = Mpc
         self.softening_length = Mpc
 
@@ -361,7 +366,9 @@ class Units(metaclass=UnitSingleton):
         self.resolution = Mpc
         self.fov = Mpc
         self.orig_resolution = Mpc
-        self.centre = Mpc
+
+        # Gravitational softening lengths
+        self.softening_lengths = Mpc
 
         # Do we have any modifications to the default unit system
         if units is not None:
@@ -371,9 +378,7 @@ class Units(metaclass=UnitSingleton):
                 setattr(self, key, units[key])
 
     def __str__(self):
-        """
-        Enables the printing of the current unit system.
-        """
+        """Enable printing of the current unit system."""
         out_str = "Unit System: \n"
         for key in default_units:
             out_str += (
