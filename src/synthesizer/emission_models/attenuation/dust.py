@@ -99,6 +99,66 @@ class AttenuationLaw:
 
         return np.exp(-exponent)
 
+    def plot_attenuation(
+        self,
+        lam,
+        fig=None,
+        ax=None,
+        label=None,
+        figsize=(8, 6),
+        show=True,
+    ):
+        """
+        Plot the attenuation curve.
+
+        Args:
+            lam (array-like, float)
+                The wavelengths (with units) at which to calculate
+                transmission.
+            fig (matplotlib.figure.Figure)
+                The figure to plot on. If None, a new figure will be created.
+            ax (matplotlib.axes.Axes)
+                The axis to plot on. If None, a new axis will be created.
+            label (str)
+                The label to use for the plot.
+            figsize (tuple)
+                The size of the figure to create if fig is None.
+            show (bool)
+                Whether to show the plot.
+
+        Returns:
+            fig, ax
+                The figure and axis objects.
+        """
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
+        if ax is None:
+            ax = fig.add_subplot(111)
+
+        # Get the attenuation curve
+        a_V = self.get_tau(lam)
+
+        # Plot the transmission curve
+        ax.plot(lam, a_V, label=label)
+
+        # Add labels
+        ax.set_xlabel(r"$\lambda/(\AA)$")
+        ax.set_ylabel(r"A$_{\lambda}/$A$_{V}$")
+
+        ax.set_yticks(np.arange(0, 10))
+        ax.set_xlim(np.min(lam), np.max(lam))
+        ax.set_ylim(0., 10)
+
+        # Add a legend if the ax has labels to plot
+        if any(ax.get_legend_handles_labels()[1]):
+            ax.legend()
+
+        # Show the plot
+        if show:
+            plt.show()
+
+        return fig, ax
+
     def plot_transmission(
         self,
         tau_v,

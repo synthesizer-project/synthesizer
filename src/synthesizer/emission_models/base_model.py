@@ -1906,6 +1906,16 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # only their reference)
         emission_model = copy.copy(self)
 
+        # Before we do anything, check that we have the emitters we need
+        for model in emission_model._models.values():
+            # Galaxy is always missing
+            if model.emitter == "galaxy":
+                continue
+            if emitters.get(model.emitter, None) is None:
+                raise exceptions.InconsistentArguments(
+                    f"Missing {model.emitter} in emitters."
+                )
+
         # Apply any overides we have
         self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
 
