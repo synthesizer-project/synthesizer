@@ -312,6 +312,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 "related_models must be a set, list, tuple, or EmissionModel."
             )
 
+        # Are we saving this emission?
+        self._save = save
+
         # We're done with setup, so unpack the model
         self.unpack_model()
 
@@ -1102,6 +1105,31 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Unpack the model now we're done
         self.unpack_model()
 
+    @property
+    def save(self):
+        """Get the flag for whether to save the emission."""
+        return getattr(self, "_save", True)
+
+    def set_save(self, save, set_all=False):
+        """
+        Set the flag for whether to save the emission.
+
+        Args:
+            save (bool):
+                Whether to save the emission.
+            set_all (bool):
+                Whether to set the save flag on all models.
+        """
+        # Set the save flag
+        if not set_all:
+            self._save = save
+        else:
+            for model in self._models.values():
+                model.set_save(save)
+
+        # Unpack the model now we're done
+        self.unpack_model()
+
     def add_mask(self, attr, op, thresh, set_all=False):
         """
         Add a mask.
@@ -1589,6 +1617,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Keep track of which components are included
         components = set()
 
+        # We need a flag for the for whether any models are discarded so we
+        # know whether to include it in the legend
+        some_discarded = False
+
         # Plot the tree using Matplotlib
         fig, ax = plt.subplots(figsize=figsize)
 
@@ -1601,6 +1633,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 color = "royalblue"
             else:
                 color = "forestgreen"
+
+            # If the model isn't saved apply some transparency
+            if not self[node].save:
+                alpha = 0.6
+                some_discarded = True
+            else:
+                alpha = 1.0
             text = ax.text(
                 x,
                 -y,  # Invert y-axis for bottom-to-top
@@ -1615,6 +1654,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     else "square,pad=0.3",
                 ),
                 fontsize=fontsize,
+                alpha=alpha,
             )
 
             # Used a dashed outline for masked nodes
@@ -1719,6 +1759,32 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     edgecolor="black",
                     label="Masked",
                     linestyle="dashed",
+                    boxstyle="round,pad=0.3",
+                )
+            )
+
+        # Include a transparent legend element for non-saved nodes if needed
+        if some_discarded:
+            handles.append(
+                mpatches.FancyBboxPatch(
+                    (0.1, 0.1),
+                    width=0.5,
+                    height=0.1,
+                    facecolor="grey",
+                    edgecolor="black",
+                    label="Saved",
+                    boxstyle="round,pad=0.3",
+                )
+            )
+            handles.append(
+                mpatches.FancyBboxPatch(
+                    (0.1, 0.1),
+                    width=0.5,
+                    height=0.1,
+                    facecolor="grey",
+                    edgecolor="black",
+                    label="Discarded",
+                    alpha=0.6,
                     boxstyle="round,pad=0.3",
                 )
             )
@@ -2063,6 +2129,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         for func in self._post_processing:
             spectra = func(spectra, emitters, self)
 
+        # Loop over all models and delete those spectra if we aren't saving
+        # them (we have to this after post processing incase the deleted
+        # spectra are needed during post processing)
+        for model in emission_model._models.values():
+            if not model.save:
+                del spectra[model.label]
+
         return spectra
 
     def _get_lines(
@@ -2272,6 +2345,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Apply any post processing functions
         for func in self._post_processing:
             lines = func(lines, emitters, self)
+
+        # Loop over all models and delete those lines if we aren't saving
+        # them (we have to this after post processing incase the deleted
+        # lines are needed during post processing)
+        for model in emission_model._models.values():
+            if not model.save:
+                del lines[model.label]
 
         return lines
 
