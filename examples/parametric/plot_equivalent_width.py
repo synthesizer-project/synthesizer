@@ -10,6 +10,7 @@ from a parametric galaxy
 
 import matplotlib.pyplot as plt
 import numpy as np
+from synthesizer.emission_models import IncidentEmission, ReprocessedEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
@@ -168,6 +169,9 @@ def measure_equivalent_width(
     Raises:
         ValueError: If mode is invalid.
     """
+    # Get the emission model
+    incident_model = IncidentEmission(grid)
+    model = ReprocessedEmission(grid, related_models=[incident_model])
 
     stellar_mass = smass
 
@@ -189,7 +193,7 @@ def measure_equivalent_width(
     # --- create a galaxy object
     galaxy = Galaxy(sfzh)
 
-    galaxy.stars.get_spectra_reprocessed(grid, fesc=0.0)
+    galaxy.stars.get_spectra(model)
 
     # --- generate spectra
     if mode == 0:

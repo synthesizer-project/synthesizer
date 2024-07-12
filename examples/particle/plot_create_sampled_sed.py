@@ -9,6 +9,7 @@ with constant star formation.
 
 import matplotlib.pyplot as plt
 import numpy as np
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
@@ -20,6 +21,9 @@ from unyt import Myr
 grid_name = "test_grid"
 grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
+
+# Define the emission model
+model = IncidentEmission(grid)
 
 # define the grid (normally this would be defined by an SPS grid)
 log10ages = np.arange(6.0, 10.5, 0.1)
@@ -51,7 +55,7 @@ galaxy = Galaxy(stars=stars)
 """ this generates stellar and intrinsic spectra
 galaxy.generate_intrinsic_spectra(grid, fesc=0.0)
 calculate only integrated SEDs """
-galaxy.stars.get_spectra_incident(grid)
+galaxy.stars.get_spectra(model)
 
 # --- generate dust screen
 # galaxy.get_screen(0.5) # tau_v

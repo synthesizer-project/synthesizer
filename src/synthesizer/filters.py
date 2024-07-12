@@ -5,10 +5,7 @@ described by a Filter object and Filters grouped into a FilterCollection.
 These objects house all the functionality for working with filters with and
 without a grid object.
 
-Typical usage examples where trans is a transmission curve array, lams is a
-wavelength array, fs is a list of SVO database filter codes, tophats is a
-dictionary defining top hot filters and generics is a dictionary of
-transmission curves:
+Example usage::
 
     filt = Filter("generic/filter.1", transmission=trans, new_lam=lams)
     filt = Filter("top_hat/filter.1", lam_min=3000, lam_max=5500)
@@ -32,10 +29,10 @@ import numpy as np
 from scipy.interpolate import interp1d
 from unyt import Angstrom, Hz, c, unyt_array, unyt_quantity
 
-import synthesizer.exceptions as exceptions
+from synthesizer import exceptions
 from synthesizer._version import __version__
-from synthesizer.integrate import integrate_last_axis
 from synthesizer.units import Quantity
+from synthesizer.utils.integrate import integrate_last_axis
 from synthesizer.warnings import warn
 
 

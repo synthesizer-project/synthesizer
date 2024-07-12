@@ -10,6 +10,7 @@ It includes the following steps:
 
 import matplotlib.pyplot as plt
 import numpy as np
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
@@ -20,6 +21,9 @@ if __name__ == "__main__":
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
+
+    # Define the emission model
+    model = IncidentEmission(grid)
 
     # define the parameters of the star formation and metal enrichment
     # histories
@@ -51,7 +55,7 @@ if __name__ == "__main__":
     galaxy = Galaxy(stars, redshift=z)
 
     # Delta lambda model for pure stellar spectra
-    galaxy.stars.get_spectra_incident(grid)
+    galaxy.stars.get_spectra(model)
     lam, delta_lam = Grid.get_delta_lambda(grid)
     print("Mean delta: ", np.mean(delta_lam))
 

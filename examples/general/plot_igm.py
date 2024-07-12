@@ -8,7 +8,7 @@ Plot IGM transmission curves (Inoue+14 & Madau+96
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from synthesizer.igm import Inoue14, Madau96
+from synthesizer.emission_models.attenuation.igm import Inoue14, Madau96
 
 lam = np.arange(0, 20000)
 
@@ -19,7 +19,13 @@ colors = cmr.take_cmap_colors("cmr.guppy", len(redshifts))
 for IGM, ls in zip([Inoue14, Madau96], ["-", ":"]):
     igm = IGM()
     for z, color in zip(redshifts, colors):
-        plt.plot(lam, igm.T(z, lam), ls=ls, c=color, label=f"{igm.name} z={z}")
+        plt.plot(
+            lam,
+            igm.get_transmission(z, lam),
+            ls=ls,
+            c=color,
+            label=f"{igm.name} z={z}",
+        )
 
 plt.legend()
 plt.xlabel(r"$\lambda_{obs}/\AA$")

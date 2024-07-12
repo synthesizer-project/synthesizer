@@ -16,13 +16,17 @@ available_patterns = [
 
 class Jenkins2009_Gunasekera2021:
     """
-    Implemention of the Jenkins (2009) depletion pattern that is built into
-    cloudy23 as described by Gunasekera (2021). This modification adds in
-    additional elements that were not considered by Jenkins (2009).
+    Implemention of the Jenkins (2009) depletion pattern.
+
+    This is the model that is built into cloudy23 as described by
+    Gunasekera (2021). This modification adds in additional elements that
+    were not considered by Jenkins (2009).
 
     In this model the depletion (D_x) is written as:
-        D_x = 10**(B_x +A_x (F_* − z_x ))
-    A_x, B_x, and z_X are the fitted parameters for each element while
+
+    D_x = 10**(B_x +A_x (F_* − z_x ))
+
+    where A_x, B_x, and z_X are the fitted parameters for each element while
     f_* (fstar) is the scaling parameter.
     """
 

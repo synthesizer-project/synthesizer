@@ -5,8 +5,9 @@ only contains common attributes and methods to reduce boilerplate.
 """
 
 from synthesizer import exceptions
-from synthesizer.igm import Inoue14
+from synthesizer.emission_models.attenuation.igm import Inoue14
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
+from synthesizer.utils import TableFormatter
 
 
 class BaseGalaxy:
@@ -40,7 +41,20 @@ class BaseGalaxy:
         regardless to unify the Galaxy syntax for both cases.
 
         Args:
-
+            stars (particle.Stars/parametric.Stars)
+                The Stars object holding information about the stellar
+                population.
+            gas (particle.Gas/parametric.Gas)
+                The Gas object holding information about the gas distribution.
+            black_holes (particle.BlackHoles/parametric.BlackHole)
+                The BlackHole/s object holding information about the
+                black hole/s.
+            redshift (float)
+                The redshift of the galaxy.
+            centre (array)
+                The centre of the galaxy.
+            **kwargs
+                Any additional attributes to attach to the galaxy object.
         """
         # Add some place holder attributes which are overloaded on the children
         self.spectra = {}
@@ -67,50 +81,26 @@ class BaseGalaxy:
                 "`parametric.galaxy.Galaxy`"
             )
 
-    def get_spectra_dust(self, emissionmodel):
-        """
-        Calculates dust emission spectra using the attenuated and intrinsic
-        spectra that have already been generated and an emission model.
+        # Attach any additional attributes
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
-        Args:
-            emissionmodel (synthesizer.dust.emission.*)
-                The emission model from the dust module used to create dust
-                emission.
+    def __str__(self):
+        """
+        Return a string representation of the galaxy object.
 
         Returns:
-            Sed
-                A Sed object containing the dust emission spectra
+            table (str)
+                A string representation of the galaxy object.
         """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        # Use wavelength grid from attenuated spectra
-        lam = self.stars.spectra["emergent"].lam
-
-        # Calculate the bolometric dust luminosity as the difference between
-        # the intrinsic and attenuated
-        dust_bolometric_luminosity = (
-            self.stars.spectra["intrinsic"].measure_bolometric_luminosity()
-            - self.stars.spectra["emergent"].measure_bolometric_luminosity()
-        )
-
-        # Get the spectrum and normalise it properly
-        lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(
-            lam
-        )
-
-        # Create new Sed object containing dust emission spectra
-        sed = Sed(lam, lnu=lnu)
-
-        # Associate that with the component's spectra dictionary
-        self.stars.spectra["dust"] = sed
-        self.stars.spectra["total"] = (
-            self.stars.spectra["dust"] + self.stars.spectra["emergent"]
-        )
-
-        return sed
+        return formatter.get_table("Galaxy")
 
     def get_equivalent_width(self, feature, blue, red, spectra_to_plot=None):
         """
-        Gets all equivalent widths associated with a sed object
+        Get all equivalent widths associated with a sed object
 
         Parameters
         ----------
@@ -124,7 +114,6 @@ class BaseGalaxy:
         equivalent_width : float
             The calculated equivalent width at the current index.
         """
-
         equivalent_width = None
 
         if not isinstance(spectra_to_plot, list):
@@ -668,3 +657,181 @@ class BaseGalaxy:
             filters=filters,
             quantity_to_plot=quantity_to_plot,
         )
+
+    def get_spectra(
+        self,
+        emission_model,
+        dust_curves=None,
+        tau_v=None,
+        fesc=None,
+        covering_fraction=None,
+        mask=None,
+        verbose=True,
+        **kwargs,
+    ):
+        """
+        Generate spectra as described by the emission model.
+
+        Args:
+            emission_model (EmissionModel):
+                The emission model to use.
+            dust_curves (dict):
+                An override to the emission model dust curves. Either:
+                    - None, indicating the dust_curves defined on the emission
+                      models should be used.
+                    - A single dust curve to apply to all emission models.
+                    - A dictionary of the form {<label>: <dust_curve instance>}
+                      to use a specific dust curve instance with particular
+                      properties.
+            tau_v (dict):
+                An override to the dust model optical depth. Either:
+                    - None, indicating the tau_v defined on the emission model
+                      should be used.
+                    - A float to use as the optical depth for all models.
+                    - A dictionary of the form {<label>: float(<tau_v>)}
+                      to use a specific optical depth with a particular
+                      model or {<label>: str(<attribute>)} to use an attribute
+                      of the component as the optical depth.
+            fesc (dict):
+                An override to the emission model escape fraction. Either:
+                    - None, indicating the fesc defined on the emission model
+                      should be used.
+                    - A float to use as the escape fraction for all models.
+                    - A dictionary of the form {<label>: float(<fesc>)}
+                      to use a specific escape fraction with a particular
+                      model or {<label>: str(<attribute>)} to use an
+                      attribute of the component as the escape fraction.
+            mask (dict):
+                An override to the emission model mask. Either:
+                    - None, indicating the mask defined on the emission model
+                      should be used.
+                    - A dictionary of the form {<label>: {"attr": attr,
+                      "thresh": thresh, "op": op}} to add a specific mask to
+                      a particular model.
+            verbose (bool)
+                Are we talking?
+            kwargs (dict)
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            dict
+                The combined spectra for the galaxy.
+        """
+        # Get the spectra
+        spectra = emission_model._get_spectra(
+            emitters={"stellar": self.stars, "blackhole": self.black_holes},
+            per_particle=False,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            verbose=verbose,
+            **kwargs,
+        )
+
+        # Unpack the spectra to the right component
+        for model in emission_model._models.values():
+            if model.emitter == "galaxy":
+                self.spectra[model.label] = spectra[model.label]
+            elif model.emitter == "stellar":
+                self.stars.spectra[model.label] = spectra[model.label]
+            elif model.emitter == "blackhole":
+                self.black_holes.spectra[model.label] = spectra[model.label]
+            else:
+                raise KeyError(
+                    f"Unknown emitter in emission model. ({model.emitter})"
+                )
+
+        return self.spectra[emission_model.label]
+
+    def get_lines(
+        self,
+        line_ids,
+        emission_model,
+        dust_curves=None,
+        tau_v=None,
+        fesc=None,
+        covering_fraction=None,
+        mask=None,
+        verbose=True,
+        **kwargs,
+    ):
+        """
+        Generate lines as described by the emission model.
+
+        Args:
+            line_ids (list):
+                A list of line ids to include in the spectra.
+            emission_model (EmissionModel):
+                The emission model to use.
+            dust_curves (dict):
+                An override to the emission model dust curves. Either:
+                    - None, indicating the dust_curves defined on the emission
+                      models should be used.
+                    - A single dust curve to apply to all emission models.
+                    - A dictionary of the form {<label>: <dust_curve instance>}
+                      to use a specific dust curve instance with particular
+                      properties.
+            tau_v (dict):
+                An override to the dust model optical depth. Either:
+                    - None, indicating the tau_v defined on the emission model
+                      should be used.
+                    - A float to use as the optical depth for all models.
+                    - A dictionary of the form {<label>: float(<tau_v>)}
+                      to use a specific optical depth with a particular
+                      model or {<label>: str(<attribute>)} to use an attribute
+                      of the component as the optical depth.
+            fesc (dict):
+                An override to the emission model escape fraction. Either:
+                    - None, indicating the fesc defined on the emission model
+                      should be used.
+                    - A float to use as the escape fraction for all models.
+                    - A dictionary of the form {<label>: float(<fesc>)}
+                      to use a specific escape fraction with a particular
+                      model or {<label>: str(<attribute>)} to use an
+                      attribute of the component as the escape fraction.
+            mask (dict):
+                An override to the emission model mask. Either:
+                    - None, indicating the mask defined on the emission model
+                      should be used.
+                    - A dictionary of the form {<label>: {"attr": attr,
+                      "thresh": thresh, "op": op}} to add a specific mask to
+                      a particular model.
+            verbose (bool)
+                Are we talking?
+            kwargs (dict)
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            dict
+                The combined lines for the galaxy.
+        """
+        # Get the lines
+        lines = emission_model._get_lines(
+            line_ids=line_ids,
+            emitters={"stellar": self.stars, "blackhole": self.black_holes},
+            per_particle=False,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            verbose=verbose,
+            **kwargs,
+        )
+
+        # Unpack the lines to the right component
+        for model in emission_model._models.values():
+            if model.emitter == "galaxy":
+                self.lines[model.label] = lines[model.label]
+            elif model.emitter == "stellar":
+                self.stars.lines[model.label] = lines[model.label]
+            elif model.emitter == "blackhole":
+                self.black_holes.lines[model.label] = lines[model.label]
+            else:
+                raise KeyError(
+                    f"Unknown emitter in emission model. ({model.emitter})"
+                )
+
+        return self.lines[emission_model.label]

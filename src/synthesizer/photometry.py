@@ -183,10 +183,18 @@ class PhotometryCollection:
         ]
 
         # Define the photometry value column
-        value_col = [
-            f"{str(format(self[key].value, '.2e'))} {str(self[key].units)}"
-            for key in self.filter_codes
-        ]
+        value_col = []
+        for key in self.filter_codes:
+            if self[key].value.ndim > 1:
+                value_col.append(
+                    f"{str(format(np.sum(self[key].value), '.2e'))} "
+                    f"{str(self[key].units)}"
+                )
+            else:
+                value_col.append(
+                    f"{str(format(self[key].value, '.2e'))} "
+                    f"{str(self[key].units)}"
+                )
 
         # Determine the width of each column
         filter_width = max([len(s) for s in filters_col]) + 2
@@ -309,7 +317,7 @@ class PhotometryCollection:
             max_phot = np.max(photometry)
             ylimits = (
                 10 ** (np.log10(max_phot) - 5),
-                10 ** (np.log10(max_phot) * 1.1),
+                10 ** (np.log10(max_phot) + 0.9),
             )
 
         # Do we not have x limits?

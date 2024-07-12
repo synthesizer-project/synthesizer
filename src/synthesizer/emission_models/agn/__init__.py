@@ -1,0 +1,15 @@
+AGN_MODELS = [
+    "NLRIncidentEmission",
+    "BLRIncidentEmission",
+    "NLRTransmittedEmission",
+    "BLRTransmittedEmission",
+    "NLREmission",
+    "BLREmission",
+    "DiscIncidentEmission",
+    "DiscTransmittedEmission",
+    "DiscEscapedEmission",
+    "DiscEmission",
+    "TorusEmission",
+    "AGNIntrinsicEmission",
+    "UnifiedAGN",
+]

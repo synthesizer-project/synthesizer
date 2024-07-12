@@ -230,15 +230,22 @@ def get_roman_numeral(number):
 
 class LineCollection:
     """
-    A class holding a collection of emission lines. This enables additional
-    functionality such as quickly calculating line ratios or line diagrams.
+    A class holding a collection of emission lines.
 
-    Args
-        lines (dictionary of Line objects)
-            A dictionary of line objects.
+    This enables additional functionality such as quickly calculating
+    line ratios or line diagrams.
 
-    Methods
-
+    Attributes:
+        lines (dict)
+            A dictionary of synthesizer.line.Line objects.
+        line_ids (list)
+            A list of line ids.
+        wavelengths (unyt_array)
+            An array of line wavelengths.
+        available_ratios (list)
+            A list of available line ratios.
+        available_diagrams (list)
+            A list of available line diagrams.
     """
 
     def __init__(self, lines):
@@ -249,7 +256,6 @@ class LineCollection:
             lines (dict)
                 A dictionary of synthesizer.line.Line objects.
         """
-
         # Dictionary of synthesizer.line.Line objects.
         self.lines = lines
 
@@ -836,3 +842,73 @@ class Line:
             )
 
         return Line(self, *lines)
+
+    def apply_attenuation(
+        self,
+        tau_v,
+        dust_curve,
+        mask=None,
+    ):
+        """
+        Apply attenuation to this line.
+
+        Args:
+            tau_v (float/array-like, float)
+                The V-band optical depth for every star particle.
+            dust_curve (synthesizer.emission_models.attenuation.*)
+                An instance of one of the dust attenuation models. (defined in
+                synthesizer/emission_models.attenuation.py)
+            mask (array-like, bool)
+                A mask array with an entry for each line. Masked out
+                spectra will be ignored when applying the attenuation. Only
+                applicable for multidimensional lines.
+
+        Returns:
+                Line
+                    A new Line object containing the attenuated line.
+        """
+        # Ensure the mask is compatible with the spectra
+        if mask is not None:
+            if self._luminosity.ndim < 2:
+                raise exceptions.InconsistentArguments(
+                    "Masks are only applicable for Lines containing "
+                    "multiple elements"
+                )
+            if self._luminosity.shape[0] != mask.size:
+                raise exceptions.InconsistentArguments(
+                    "Mask and lines are incompatible shapes "
+                    f"({mask.shape}, {self._lnu.shape})"
+                )
+
+        # If tau_v is an array it needs to match the spectra shape
+        if isinstance(tau_v, np.ndarray):
+            if self._luminosity.ndim < 2:
+                raise exceptions.InconsistentArguments(
+                    "Arrays of tau_v values are only applicable for Lines"
+                    " containing multiple elements"
+                )
+            if self._luminosity.shape[0] != tau_v.size:
+                raise exceptions.InconsistentArguments(
+                    "tau_v and lines are incompatible shapes "
+                    f"({tau_v.shape}, {self._lnu.shape})"
+                )
+
+        # Compute the transmission
+        transmission = dust_curve.get_transmission(tau_v, self._wavelength)
+
+        # Apply the transmision
+        att_lum = self.luminosity
+        att_cont = self.continuum
+        if mask is None:
+            att_lum *= transmission
+            att_cont *= transmission
+        else:
+            att_lum[mask] *= transmission[mask]
+            att_cont[mask] *= transmission[mask]
+
+        return Line(
+            line_id=self.id,
+            wavelength=self.wavelength,
+            luminosity=att_lum,
+            continuum=att_cont,
+        )

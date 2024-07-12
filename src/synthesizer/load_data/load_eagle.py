@@ -30,9 +30,9 @@ try:
     import schwimmbad
 except ImportError:
     raise UnmetDependency(
-        "Loading eagle data requires the schwimmbad package"
-        "You currently do not have schwimmbad installed."
-        "Install it via 'pip install schwimmbad'"
+        "The `schwimmbad` module is required to load eagle data. "
+        "Install synthesizer with the `eagle` extra dependencies:"
+        " `pip install .[eagle]`."
     )
 
 from unyt import Mpc, Msun, unyt_array, unyt_quantity, yr
@@ -901,8 +901,8 @@ def assign_galaxy_prop(
     g_kwargs: Dict = {},
 ) -> Galaxy:
     """
-    A function to load stellar and gas particle data
-    into synthesizer galaxy object
+    Load stellar and gas particle data into synthesizer galaxy object.
+
     Arguments:
         ii (int)
             galaxy number
@@ -958,7 +958,8 @@ def assign_galaxy_prop(
             kwargs for gas
 
     Returns:
-        synthesizer galaxy object
+        Galaxy
+            synthesizer galaxy object
     """
 
     galaxy = Galaxy(redshift=zed, verbose=verbose)
