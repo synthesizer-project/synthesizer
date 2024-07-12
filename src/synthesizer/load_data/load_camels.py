@@ -692,7 +692,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     galaxies = pool.map(_f, mask)
     pool.close()
 
-    for idx in np.arange(len(gals)):
+    for idx in np.arange(len(galaxies)):
         galaxies[idx].centre = pos[idx] * kpc
 
     return galaxies, mask
