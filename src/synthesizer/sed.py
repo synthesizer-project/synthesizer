@@ -118,7 +118,6 @@ class Sed:
         # lam.
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
-            self.bolometric_luminosity = None
         else:
             if isinstance(lnu, (unyt_array, np.ndarray)):
                 self.lnu = lnu
@@ -132,8 +131,8 @@ class Sed:
                     )
                 )
 
-        # Measure bolometric luminosity
-        self.bolometric_luminosity = self.measure_bolometric_luminosity()
+        # Prepare for bolometric luminosity calculation
+        self.bolometric_luminosity = None
 
         # Redshift of the SED
         self.redshift = 0
