@@ -517,6 +517,10 @@ class Sed:
         """
         start = tic()
 
+        # Don't duplicate the calculation if we already have it
+        if self.bolometric_luminosity is not None:
+            return self.bolometric_luminosity
+
         # Calculate the bolometric luminosity
         # NOTE: the integration is done "backwards" when integrating over
         # frequency. It's faster to just multiply by -1 than to reverse the
