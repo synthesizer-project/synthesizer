@@ -257,7 +257,8 @@ class Galaxy(BaseGalaxy):
 
         # Assign additional galaxy-level properties
         self.stars.redshift = self.redshift
-        self.stars.centre = self.centre
+        if self.centre is not None:
+            self.stars.centre = self.centre
 
     def load_gas(
         self,
@@ -302,7 +303,8 @@ class Galaxy(BaseGalaxy):
 
         # Assign additional galaxy-level properties
         self.gas.redshift = self.redshift
-        self.gas.centre = self.centre
+        if self.centre is not None:
+            self.gas.centre = self.centre
 
     def calculate_black_hole_metallicity(self, default_metallicity=0.012):
         """
