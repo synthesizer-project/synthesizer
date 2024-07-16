@@ -171,7 +171,6 @@ else:  # Unix-like systems (Linux)
     ]
     default_link_args = [
         "/usr/lib/",
-        "/usr/lib/x86_64-linux-gnu/",
         "/usr/lib64/",
     ]
     include_dirs = ["/usr/include"]
