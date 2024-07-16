@@ -131,10 +131,11 @@ logger.info(
 # Log the system platform
 logger.info(f"### System platform: {sys.platform}")
 
-# Report the environment variables
+# Report the environment variable
 logger.info(f"### CFLAGS: {CFLAGS}")
 logger.info(f"### LDFLAGS: {LDFLAGS}")
 logger.info(f"### WITH_OPENMP: {WITH_OPENMP}")
+logger.info(f"### EXTRA_INCLUDES: {INCLUDES}")
 if WITH_DEBUGGING_CHECKS:
     logger.info(f"### WITH_DEBUGGING_CHECKS: {WITH_DEBUGGING_CHECKS}")
 
@@ -220,6 +221,10 @@ if WITH_DEBUGGING_CHECKS == "1":
 if ATOMIC_TIMING:
     compile_flags.append("-DATOMIC_TIMING")
 
+# Report the flags we will use
+logger.info(f"### Using compile flags: {compile_flags}")
+logger.info(f"### Using link args: {link_args}")
+logger.info(f"### Using include directories: {include_dirs}")
 
 # Define the extension modules
 extensions = [
