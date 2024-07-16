@@ -92,6 +92,7 @@ def create_extension(
 # Get environment variables we'll need for optional features and flags
 CFLAGS = os.environ.get("CFLAGS", "")
 LDFLAGS = os.environ.get("LDFLAGS", "")
+INCLUDES = os.environ.get("EXTRA_INCLUDES", "")
 WITH_OPENMP = os.environ.get("WITH_OPENMP", "")
 WITH_DEBUGGING_CHECKS = "ENABLE_DEBUGGING_CHECKS" in os.environ
 RUTHLESS = "RUTHLESS" in os.environ
@@ -209,6 +210,9 @@ extra_link_args = LDFLAGS.split()
 # Set up the compile flags and link args we will use removing duplicates
 compile_flags = list(set(default_compile_flags + extra_compile_flags))
 link_args = list(set(default_link_args + extra_link_args))
+
+# Add the extra include directories
+include_dirs += INCLUDES.split()
 
 # Add preprocessor flags
 if WITH_DEBUGGING_CHECKS == "1":
