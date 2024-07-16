@@ -203,14 +203,12 @@ if RUTHLESS:
         default_compile_flags.append("-Wextra")
 
 # Get user specified flags
-compile_flags = CFLAGS.split()
-link_args = LDFLAGS.split()
+extra_compile_flags = CFLAGS.split()
+extra_link_args = LDFLAGS.split()
 
-# If no flags are specified, use the default flags
-if len(compile_flags) == 0:
-    compile_flags = default_compile_flags
-if len(link_args) == 0:
-    link_args = default_link_args
+# Set up the compile flags and link args we will use removing duplicates
+compile_flags = list(set(default_compile_flags + extra_compile_flags))
+link_args = list(set(default_link_args + extra_link_args))
 
 # Add preprocessor flags
 if WITH_DEBUGGING_CHECKS == "1":
