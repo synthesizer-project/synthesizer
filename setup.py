@@ -151,7 +151,7 @@ if sys.platform == "darwin":  # macOS
         "-ffast-math",
         "-g",
     ]
-    default_link_args = []
+    default_link_args = ["/usr/local/lib"]
     include_dirs = ["/usr/local/include"]
 elif sys.platform == "win32":  # windows
     default_compile_flags = [
@@ -169,7 +169,11 @@ else:  # Unix-like systems (Linux)
         "-ffast-math",
         "-g",
     ]
-    default_link_args = []
+    default_link_args = [
+        "/usr/lib/",
+        "/usr/lib/x86_64-linux-gnu/",
+        "/usr/lib64/",
+    ]
     include_dirs = ["/usr/include"]
 
 # Add OpenMP flags if requested
