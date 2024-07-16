@@ -51,7 +51,10 @@ Example::
 
 from unyt import dimensionless
 
-from synthesizer.emission_models.base_model import StellarEmissionModel
+from synthesizer.emission_models.base_model import (
+    EmissionModel,
+    StellarEmissionModel,
+)
 from synthesizer.emission_models.models import (
     AttenuatedEmission,
     DustEmission,
@@ -115,6 +118,7 @@ class PacmanEmission(StellarEmissionModel):
         fesc=0.0,
         fesc_ly_alpha=1.0,
         label=None,
+        stellar_dust=True,
     ):
         """
         Initialize the PacmanEmission model.
@@ -130,6 +134,9 @@ class PacmanEmission(StellarEmissionModel):
             label (str): The label for the total emission model. If None
                 this will be set to "total" or "emergent" if dust_emission is
                 None.
+            stellar_dust (bool): If True, the dust emission will be treated as
+                stellar emission, otherwise it will be treated as galaxy
+                emission.
         """
         # Attach the grid
         self._grid = grid
@@ -161,12 +168,12 @@ class PacmanEmission(StellarEmissionModel):
         self.attenuated = self._make_attenuated()
         if self._dust_emission_model is not None:
             self.emergent = self._make_emergent()
-            self.dust_emission = self._make_dust_emission()
+            self.dust_emission = self._make_dust_emission(stellar_dust)
 
         # Finally make the TotalEmission model, this is
         # dust_emission + emergent if dust_emission is not None, otherwise it
         # is just emergent
-        self._make_total(label)
+        self._make_total(label, stellar_dust)
 
     def _make_incident(self):
         """
@@ -288,7 +295,7 @@ class PacmanEmission(StellarEmissionModel):
             label="attenuated",
             tau_v=self._tau_v,
             dust_curve=self._dust_curve,
-            apply_dust_to=self.intrinsic,
+            apply_dust_to=self.reprocessed,
             emitter="stellar",
         )
 
@@ -299,7 +306,7 @@ class PacmanEmission(StellarEmissionModel):
                 label="emergent",
                 tau_v=self._tau_v,
                 dust_curve=self._dust_curve,
-                apply_dust_to=self.intrinsic,
+                apply_dust_to=self.reprocessed,
                 emitter="stellar",
             )
         else:
@@ -309,16 +316,16 @@ class PacmanEmission(StellarEmissionModel):
                 combine=(self.attenuated, self.escaped),
             )
 
-    def _make_dust_emission(self):
+    def _make_dust_emission(self, stellar_dust):
         return DustEmission(
             label="dust_emission",
             dust_emission_model=self._dust_emission_model,
             dust_lum_intrinsic=self.intrinsic,
             dust_lum_attenuated=self.attenuated,
-            emitter="stellar",
+            emitter="galaxy" if not stellar_dust else "stellar",
         )
 
-    def _make_total(self, label):
+    def _make_total(self, label, stellar_dust):
         if self._dust_emission_model is not None:
             # Define the related models
             related_models = [
@@ -341,12 +348,13 @@ class PacmanEmission(StellarEmissionModel):
             ]
 
             # Call the parent constructor with everything we've made
-            StellarEmissionModel.__init__(
+            EmissionModel.__init__(
                 self,
                 grid=self._grid,
                 label="total" if label is None else label,
                 combine=(self.dust_emission, self.emergent),
                 related_models=related_models,
+                emitter="galaxy" if not stellar_dust else "stellar",
             )
         else:
             # OK, total = emergent so we need to handle whether
@@ -513,6 +521,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         fesc=0.0,
         fesc_ly_alpha=1.0,
         label=None,
+        stellar_dust=True,
     ):
         """
         Initialize the PacmanEmission model.
@@ -536,6 +545,9 @@ class BimodalPacmanEmission(StellarEmissionModel):
             label (str): The label for the total emission model. If None
                 this will be set to "total" or "emergent" if dust_emission is
                 None.
+            stellar_dust (bool): If True, the dust emission will be treated as
+                stellar emission, otherwise it will be treated as galaxy
+                emission.
         """
         # Attach the grid
         self._grid = grid
@@ -620,12 +632,12 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 self.young_dust_emission,
                 self.old_dust_emission,
                 self.dust_emission,
-            ) = self._make_dust_emission()
+            ) = self._make_dust_emission(stellar_dust)
 
         # Finally make the TotalEmission model, this is
         # dust_emission + emergent if dust_emission is not None, otherwise it
         # is just emergent
-        self._make_total(label)
+        self._make_total(label, stellar_dust)
 
     def _make_incident(self):
         """
@@ -917,14 +929,14 @@ class BimodalPacmanEmission(StellarEmissionModel):
             label="young_attenuated_nebular",
             tau_v=self.tau_v_nebular,
             dust_curve=self._dust_curve_nebular,
-            apply_dust_to=self.young_intrinsic,
+            apply_dust_to=self.young_reprocessed,
             emitter="stellar",
         )
         young_attenuated_ism = AttenuatedEmission(
             label="young_attenuated_ism",
             tau_v=self.tau_v_ism,
             dust_curve=self._dust_curve_ism,
-            apply_dust_to=self.young_intrinsic,
+            apply_dust_to=self.young_reprocessed,
             emitter="stellar",
         )
         young_attenuated = AttenuatedEmission(
@@ -938,7 +950,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             label="old_attenuated",
             tau_v=self.tau_v_ism,
             dust_curve=self._dust_curve_ism,
-            apply_dust_to=self.old_intrinsic,
+            apply_dust_to=self.old_reprocessed,
             emitter="stellar",
         )
         attenuated = StellarEmissionModel(
@@ -992,7 +1004,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
 
         return young_emergent, old_emergent, emergent
 
-    def _make_dust_emission(self):
+    def _make_dust_emission(self, stellar_dust):
         young_dust_emission_nebular = DustEmission(
             label="young_dust_emission_nebular",
             dust_emission_model=self.dust_emission_nebular,
@@ -1001,7 +1013,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
             mask_op="<",
-            emitter="stellar",
+            emitter="stellar" if stellar_dust else "galaxy",
         )
         young_dust_emission_ism = DustEmission(
             label="young_dust_emission_ism",
@@ -1011,11 +1023,12 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
             mask_op="<",
-            emitter="stellar",
+            emitter="stellar" if stellar_dust else "galaxy",
         )
-        young_dust_emission = StellarEmissionModel(
+        young_dust_emission = EmissionModel(
             label="young_dust_emission",
             combine=(young_dust_emission_nebular, young_dust_emission_ism),
+            emitter="stellar" if stellar_dust else "galaxy",
         )
         old_dust_emission = DustEmission(
             label="old_dust_emission",
@@ -1025,11 +1038,12 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
             mask_op=">=",
-            emitter="stellar",
+            emitter="stellar" if stellar_dust else "galaxy",
         )
-        dust_emission = StellarEmissionModel(
+        dust_emission = EmissionModel(
             label="dust_emission",
             combine=(young_dust_emission, old_dust_emission),
+            emitter="stellar" if stellar_dust else "galaxy",
         )
 
         return (
@@ -1040,19 +1054,21 @@ class BimodalPacmanEmission(StellarEmissionModel):
             dust_emission,
         )
 
-    def _make_total(self, label):
+    def _make_total(self, label, stellar_dust):
         if (
             self.dust_emission_ism is not None
             and self.dust_emission_nebular is not None
         ):
             # Get the young and old total emission
-            young_total = StellarEmissionModel(
+            young_total = EmissionModel(
                 label="young_total",
                 combine=(self.young_dust_emission, self.young_emergent),
+                emitter="stellar" if stellar_dust else "galaxy",
             )
-            old_total = StellarEmissionModel(
+            old_total = EmissionModel(
                 label="old_total",
                 combine=(self.old_dust_emission, self.old_emergent),
+                emitter="stellar" if stellar_dust else "galaxy",
             )
 
             # Define the related models
@@ -1094,12 +1110,13 @@ class BimodalPacmanEmission(StellarEmissionModel):
             related_models = [m for m in related_models if m is not None]
 
             # Call the parent constructor with everything we've made
-            StellarEmissionModel.__init__(
+            EmissionModel.__init__(
                 self,
                 grid=self._grid,
                 label="total" if label is None else label,
                 combine=(young_total, old_total),
                 related_models=related_models,
+                emitter="stellar" if stellar_dust else "galaxy",
             )
         else:
             # OK, total = emergent so we need to handle whether
@@ -1251,6 +1268,7 @@ class CharlotFall2000(BimodalPacmanEmission):
         dust_emission_ism=None,
         dust_emission_nebular=None,
         label=None,
+        stellar_dust=True,
     ):
         """
         Initialize the PacmanEmission model.
@@ -1269,6 +1287,12 @@ class CharlotFall2000(BimodalPacmanEmission):
                 emission model for the ISM.
             dust_emission_nebular (synthesizer.dust.EmissionModel): The
                 dust emission model for the nebular.
+            label (str): The label for the total emission model. If None
+                this will be set to "total" or "emergent" if dust_emission is
+                None.
+            stellar_dust (bool): If True, the dust emission will be treated as
+                stellar emission, otherwise it will be treated as galaxy
+                emission.
         """
         # Call the parent constructor to intialise the model
         BimodalPacmanEmission.__init__(
@@ -1282,4 +1306,5 @@ class CharlotFall2000(BimodalPacmanEmission):
             dust_emission_ism,
             dust_emission_nebular,
             label=label,
+            stellar_dust=stellar_dust,
         )
