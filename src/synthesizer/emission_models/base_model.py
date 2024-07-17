@@ -1807,7 +1807,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         return fig, ax
 
-    def _apply_overrides(self, emission_model, dust_curves, tau_v, fesc, mask):
+    def _apply_overrides(
+        self, emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+    ):
         """
         Apply overrides to an emission model copy.
 
@@ -1854,6 +1856,18 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                           {<label>: str(<attribute>)}
                       to use an attribute of the component as the escape
                       fraction.
+            covering_fraction (dict):
+                An overide to the emission model covering fraction. Either:
+                    - None, indicating the covering fraction defined on the
+                      emission model should be used.
+                    - A float to use as the covering fraction for all models.
+                    - A dictionary of the form:
+                          {<label>: float(<covering_fraction>)}
+                      to use a specific covering fraction with a particular
+                      model or
+                          {<label>: str(<attribute>)}
+                      to use an attribute of the component as the covering
+                      fraction.
             mask (dict):
                 An overide to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
@@ -1892,6 +1906,15 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             else:
                 for model in emission_model._models.values():
                     model._fesc = fesc
+
+        # If we have covering fractions to apply, apply them
+        if covering_fraction is not None:
+            if isinstance(covering_fraction, dict):
+                for label, value in covering_fraction.items():
+                    emission_model._models[label]._covering_fraction = value
+            else:
+                for model in emission_model._models.values():
+                    model._covering_fraction = covering_fraction
 
         # If we have masks to apply, apply them
         if mask is not None:
@@ -2008,7 +2031,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 )
 
         # Apply any overides we have
-        self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
+        self._apply_overrides(
+            emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+        )
 
         # Make a spectra dictionary if we haven't got one yet
         if spectra is None:
