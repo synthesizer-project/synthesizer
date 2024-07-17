@@ -464,7 +464,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         group_name (string):
             subfind / FOF filename
         group_dir (string):
-            optional argument specifying lcoation of fof file
+            optional argument specifying location of fof file
             if different to snapshot
         verbose (bool):
             verbosity flag
