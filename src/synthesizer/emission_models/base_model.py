@@ -1864,18 +1864,34 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         """
         # If we have dust curves to apply, apply them
         if dust_curves is not None:
-            for label, dust_curve in dust_curves.items():
-                emission_model._models[label]._dust_curve = dust_curve
+            if isinstance(dust_curves, dict):
+                for label, dust_curve in dust_curves.items():
+                    emission_model._models[label]._dust_curve = dust_curve
+            else:
+                for model in emission_model._models.values():
+                    model._dust_curve = dust_curves
 
         # If we have optical depths to apply, apply them
         if tau_v is not None:
-            for label, value in tau_v.items():
-                emission_model._models[label]._tau_v = value
+            if isinstance(tau_v, dict):
+                for label, value in tau_v.items():
+                    emission_model._models[label]._tau_v = (
+                        (value,)
+                        if isinstance(value, (float, "str"))
+                        else value
+                    )
+            else:
+                for model in emission_model._models.values():
+                    model._tau_v = (tau_v,)
 
         # If we have escape fractions to apply, apply them
         if fesc is not None:
-            for label, value in fesc.items():
-                emission_model._models[label]._fesc = value
+            if isinstance(fesc, dict):
+                for label, value in fesc.items():
+                    emission_model._models[label]._fesc = value
+            else:
+                for model in emission_model._models.values():
+                    model._fesc = fesc
 
         # If we have masks to apply, apply them
         if mask is not None:
