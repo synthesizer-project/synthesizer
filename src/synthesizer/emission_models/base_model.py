@@ -2413,9 +2413,8 @@ class GalaxyEmissionModel(EmissionModel):
         EmissionModel.__init__(self, *args, **kwargs)
         self._emitter = "galaxy"
 
-        # Ensure we are only combining
-        if not self._is_combining:
+        # Ensure we aren't extracting, this cannot be done for a galaxy.
+        if self._is_extracting:
             raise exceptions.InconsistentArguments(
-                "A GalaxyEmissionModel must be either combining or dust "
-                "attenuating."
+                "A GalaxyEmissionModel cannot be an extraction model."
             )
