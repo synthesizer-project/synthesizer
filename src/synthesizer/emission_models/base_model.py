@@ -2190,6 +2190,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         dust_curves=None,
         tau_v=None,
         fesc=None,
+        covering_fraction=None,
         mask=None,
         verbose=True,
         lines=None,
@@ -2243,6 +2244,18 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             {<label>: str(<attribute>)}
                       to use an attribute of the component as the escape
                       fraction.
+            covering_fraction (dict):
+                An overide to the emission model covering fraction. Either:
+                    - None, indicating the covering fraction defined on the
+                      emission model should be used.
+                    - A float to use as the covering fraction for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<covering_fraction>)}
+                      to use a specific covering fraction with a particular
+                      model or
+                            {<label>: str(<attribute>)}
+                      to use an attribute of the component as the covering
+                      fraction.
             mask (dict):
                 An overide to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
@@ -2272,7 +2285,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         emission_model = copy.copy(self)
 
         # Apply any overides we have
-        self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
+        self._apply_overrides(
+            emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+        )
 
         # If we haven't got a lines dictionary yet we'll make one
         if lines is None:
