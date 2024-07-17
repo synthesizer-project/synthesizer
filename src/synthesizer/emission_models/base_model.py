@@ -1893,6 +1893,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         mask=None,
         verbose=True,
         spectra=None,
+        _is_related=False,
         **kwargs,
     ):
         """
@@ -1965,6 +1966,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             spectra (dict)
                 A dictionary of spectra to add to. This is used for recursive
                 calls to this function.
+            _is_related (bool)
+                Are we generating related model spectra? If so we don't want
+                to apply any post processing functions or delete any spectra,
+                this will be done outside the recursive call.
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -2028,6 +2033,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             mask=mask,
                             verbose=verbose,
                             spectra=spectra,
+                            _is_related=True,
                             **kwargs,
                         )
                     )
@@ -2128,16 +2134,19 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         f"Can't scale spectra by {scaler}."
                     )
 
-        # Apply any post processing functions
-        for func in self._post_processing:
-            spectra = func(spectra, emitters, self)
+        # Only apply post processing and deletion if we aren't in a recursive
+        # related model call
+        if not _is_related:
+            # Apply any post processing functions
+            for func in self._post_processing:
+                spectra = func(spectra, emitters, self)
 
-        # Loop over all models and delete those spectra if we aren't saving
-        # them (we have to this after post processing incase the deleted
-        # spectra are needed during post processing)
-        for model in emission_model._models.values():
-            if not model.save and model.label in spectra:
-                del spectra[model.label]
+            # Loop over all models and delete those spectra if we aren't saving
+            # them (we have to this after post processing incase the deleted
+            # spectra are needed during post processing)
+            for model in emission_model._models.values():
+                if not model.save and model.label in spectra:
+                    del spectra[model.label]
 
         return spectra
 
@@ -2152,6 +2161,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         mask=None,
         verbose=True,
         lines=None,
+        _is_related=False,
         **kwargs,
     ):
         """
@@ -2214,6 +2224,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             lines (dict)
                 A dictionary of lines to add to. This is used for recursive
                 calls to this function.
+            _is_related (bool)
+                Are we generating related model lines? If so we don't want
+                to apply any post processing functions or delete any lines,
+                this will be done outside the recursive call.
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -2269,6 +2283,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             mask=mask,
                             verbose=verbose,
                             lines=lines,
+                            _is_related=True,
                             **kwargs,
                         )
                     )
@@ -2337,24 +2352,27 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         f"Can't scale lines by {scaler}."
                     )
 
-        # Finally, loop over everything we've created and convert the nested
-        # dictionaries to LineCollections
-        for label in lines:
-            # If we are in a related model we might have already done this
-            # conversion
-            if isinstance(lines[label], dict):
-                lines[label] = LineCollection(lines[label])
+        # Only convert to LineCollections, apply post processing and deletion
+        # if we aren't in a recursive related model call
+        if not _is_related:
+            # Finally, loop over everything we've created and convert the
+            # nested dictionaries to LineCollections
+            for label in lines:
+                # If we are in a related model we might have already done this
+                # conversion
+                if isinstance(lines[label], dict):
+                    lines[label] = LineCollection(lines[label])
 
-        # Apply any post processing functions
-        for func in self._post_processing:
-            lines = func(lines, emitters, self)
+            # Apply any post processing functions
+            for func in self._post_processing:
+                lines = func(lines, emitters, self)
 
-        # Loop over all models and delete those lines if we aren't saving
-        # them (we have to this after post processing incase the deleted
-        # lines are needed during post processing)
-        for model in emission_model._models.values():
-            if not model.save and model.label in lines:
-                del lines[model.label]
+            # Loop over all models and delete those lines if we aren't saving
+            # them (we have to this after post processing incase the deleted
+            # lines are needed during post processing)
+            for model in emission_model._models.values():
+                if not model.save and model.label in lines:
+                    del lines[model.label]
 
         return lines
 
