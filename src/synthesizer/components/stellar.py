@@ -397,3 +397,34 @@ class StarsComponent:
         self.lines.update(lines)
 
         return self.lines[emission_model.label]
+
+    def clear_all_spectra(self):
+        """Clear all spectra from the component."""
+        self.spectra = {}
+        if hasattr(self, "particle_spectra"):
+            self.particle_spectra = {}
+
+    def clear_all_lines(self):
+        """Clear all lines from the component."""
+        self.lines = {}
+        if hasattr(self, "particle_lines"):
+            self.particle_lines = {}
+
+    def clear_all_photometry(self):
+        """Clear all photometry from the component."""
+        self.photo_luminosities = {}
+        self.photo_fluxes = {}
+        if hasattr(self, "particle_photo_luminosities"):
+            self.particle_photo_luminosities = {}
+        if hasattr(self, "particle_photo_fluxes"):
+            self.particle_photo_fluxes = {}
+
+    def clear_all_emissions(self):
+        """
+        Clear all emissions from the component.
+
+        This clears all spectra, lines, and photometry.
+        """
+        self.clear_all_spectra()
+        self.clear_all_lines()
+        self.clear_all_photometry()
