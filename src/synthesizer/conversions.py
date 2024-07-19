@@ -417,6 +417,7 @@ def vacuum_to_standard(wavelength):
     else:
         return vacuum_to_air(wavelength)
 
+
 def attenuation_to_optical_depth(attenuation):
     """
     Convert attenuation to optical depth.
@@ -429,7 +430,8 @@ def attenuation_to_optical_depth(attenuation):
         float
             The converted optical depth.
     """
-    return 1/(2.5*np.log10(np.e))
+    return 1 / (2.5 * np.log10(np.e))
+
 
 def optical_depth_to_attenuation(optical_depth):
     """
@@ -443,7 +445,8 @@ def optical_depth_to_attenuation(optical_depth):
         float
             The converted attenuation.
     """
-    return 2.5*np.log10(np.e)
+    return 2.5 * np.log10(np.e)
+
 
 def tau_lam_to_tau_v(dust_curve, tau_lam, lam):
     """
@@ -461,7 +464,5 @@ def tau_lam_to_tau_v(dust_curve, tau_lam, lam):
         float
             The converted optical depth.
     """
-	tau_norm = dust_curve.get_tau(lam)
-	return tau_lam / tau_norm
-	
- 
+    tau_norm = dust_curve.get_tau(lam)
+    return tau_lam / tau_norm
