@@ -1283,3 +1283,57 @@ class CharlotFall2000(BimodalPacmanEmission):
             dust_emission_nebular,
             label=label,
         )
+
+
+class ScreenEmission(PacmanEmission):
+    """
+    The ScreenEmission model.
+
+    This emission model is a simple dust screen model, where the dust is
+    assumed to be in a screen in front of the stars. The dust curve and
+    emission model can be specified, but the escape fraction is always zero.
+
+    This model is a simplified version of the PacmanEmission model, so in
+    reality is just a wrapper around that model. The only difference is that
+    fesc and fesc_ly_alpha are zero by definition.
+
+    Attributes:
+        grid (synthesizer.grid.Grid): The grid object.
+        tau_v (float): The V-band optical depth.
+        dust_curve (synthesizer.dust.DustCurve): The dust curve.
+        dust_emission (synthesizer.dust.EmissionModel): The dust emission
+            model.
+    """
+
+    def __init__(
+        self,
+        grid,
+        tau_v,
+        dust_curve,
+        dust_emission=None,
+        label=None,
+    ):
+        """
+        Initialize the ScreenEmission model.
+
+        Args:
+            grid (synthesizer.grid.Grid): The grid object.
+            tau_v (float): The V-band optical depth.
+            dust_curve (synthesizer.dust.DustCurve): The dust curve.
+            dust_emission (synthesizer.dust.EmissionModel): The dust emission
+                model.
+            label (str): The label for the total emission model. If None
+                this will be set to "total" or "emergent" if dust_emission is
+                None.
+        """
+        # Call the parent constructor to intialise the model
+        PacmanEmission.__init__(
+            self,
+            grid,
+            tau_v,
+            dust_curve,
+            dust_emission,
+            fesc=0.0,
+            fesc_ly_alpha=1.0,
+            label=label,
+        )
