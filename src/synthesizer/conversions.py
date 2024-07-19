@@ -457,12 +457,19 @@ def tau_lam_to_tau_v(dust_curve, tau_lam, lam):
             The attenutation law to use.
         tau_lam (float):
             The optical depth to convert.
-        lam (float):
+        lam (unyt_quantity):
             The wavelength at which tau_lam was calculated.
 
     Return:
         float
             The converted optical depth.
     """
+    # Ensure we have units
+    if not has_units(lam):
+        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
+
+    # Convert to angstrom
+    lam = lam.to("angstrom")
+
     tau_norm = dust_curve.get_tau(lam)
     return tau_lam / tau_norm
