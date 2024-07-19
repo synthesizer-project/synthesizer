@@ -194,7 +194,7 @@ class PacmanEmission(StellarEmissionModel):
         """
         # No spectra if grid hasn't been reprocessed
         if not self.reprocessed:
-            return None, None, None
+            return None
 
         return TransmittedEmission(
             grid=self._grid, label="transmitted", fesc=self._fesc
@@ -220,11 +220,11 @@ class PacmanEmission(StellarEmissionModel):
         """
         # No spectra if grid hasn't been reprocessed
         if not self.reprocessed:
-            return None, None, None
+            return None
 
         # No escaped emission if fesc is zero
         if self._fesc == 0.0:
-            return None, None, None
+            return None
 
         return EscapedEmission(
             grid=self._grid, label="escaped", fesc=self._fesc
@@ -233,7 +233,7 @@ class PacmanEmission(StellarEmissionModel):
     def _make_nebular(self):
         # No spectra if grid hasn't been reprocessed
         if not self.reprocessed:
-            return None, None, None
+            return None
 
         return NebularEmission(
             grid=self._grid,
@@ -245,7 +245,7 @@ class PacmanEmission(StellarEmissionModel):
     def _make_reprocessed(self):
         # No spectra if grid hasn't been reprocessed
         if not self.reprocessed:
-            return None, None, None
+            return None
 
         return StellarEmissionModel(
             label="reprocessed",
