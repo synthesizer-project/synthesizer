@@ -1133,6 +1133,21 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Unpack the model now we're done
         self.unpack_model()
 
+    def save_spectra(self, *args):
+        """
+        Set the save flag to True for the given spectra.
+
+        Args:
+            args (str):
+                The spectra to save.
+        """
+        # First set all models to not save
+        self.set_save(False, set_all=True)
+
+        # Now set the given spectra to save
+        for arg in args:
+            self[arg].set_save(True)
+
     def add_mask(self, attr, op, thresh, set_all=False):
         """
         Add a mask.
