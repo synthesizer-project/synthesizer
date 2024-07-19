@@ -24,6 +24,7 @@ from synthesizer.emission_models.stellar.pacman_model import (
     PacmanEmission,
     BimodalPacmanEmission,
     CharlotFall2000,
+    ScreenEmission,
 )
 from synthesizer.emission_models.agn.models import (
     NLRIncidentEmission,
