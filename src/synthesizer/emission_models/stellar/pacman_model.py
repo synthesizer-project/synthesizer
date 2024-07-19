@@ -155,7 +155,6 @@ class PacmanEmission(StellarEmissionModel):
         self.nebular = self._make_nebular()
         self.reprocessed = self._make_reprocessed()
         if not self.grid_reprocessed:
-            print("We should pass though here")
             self.intrinsic = self._make_intrinsic_no_reprocessing()
         else:
             self.intrinsic = self._make_intrinsic_reprocessed()
