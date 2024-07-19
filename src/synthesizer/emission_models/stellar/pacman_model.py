@@ -146,7 +146,7 @@ class PacmanEmission(StellarEmissionModel):
         self._fesc_ly_alpha = fesc_ly_alpha
 
         # Are we using a grid with reprocessing?
-        self.reprocessed = grid.reprocessed
+        self.grid_reprocessed = grid.reprocessed
 
         # Make the child emission models
         self.incident = self._make_incident()
@@ -154,7 +154,8 @@ class PacmanEmission(StellarEmissionModel):
         self.escaped = self._make_escaped()  # only if fesc > 0.0
         self.nebular = self._make_nebular()
         self.reprocessed = self._make_reprocessed()
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
+            print("We should pass though here")
             self.intrinsic = self._make_intrinsic_no_reprocessing()
         else:
             self.intrinsic = self._make_intrinsic_reprocessed()
@@ -193,7 +194,7 @@ class PacmanEmission(StellarEmissionModel):
                 - transmitted
         """
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None
 
         return TransmittedEmission(
@@ -219,7 +220,7 @@ class PacmanEmission(StellarEmissionModel):
                 - escaped
         """
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None
 
         # No escaped emission if fesc is zero
@@ -232,7 +233,7 @@ class PacmanEmission(StellarEmissionModel):
 
     def _make_nebular(self):
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None
 
         return NebularEmission(
@@ -244,7 +245,7 @@ class PacmanEmission(StellarEmissionModel):
 
     def _make_reprocessed(self):
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None
 
         return StellarEmissionModel(
@@ -558,7 +559,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         self._fesc_ly_alpha = fesc_ly_alpha
 
         # Are we using a grid with reprocessing?
-        self.reprocessed = grid.reprocessed
+        self.grid_reprocessed = grid.reprocessed
 
         # Make the child emission models
         (
@@ -586,7 +587,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             self.old_reprocessed,
             self.reprocessed,
         ) = self._make_reprocessed()
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             (
                 self.young_intrinsic,
                 self.old_intrinsic,
@@ -675,7 +676,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 - transmitted
         """
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None, None, None
 
         young_transmitted = TransmittedEmission(
@@ -722,7 +723,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 - escaped
         """
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None, None, None
 
         # No escaped emission if fesc is zero
@@ -754,7 +755,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
 
     def _make_nebular(self):
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None, None, None
 
         # Get the line continuum emission
@@ -824,7 +825,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
 
     def _make_reprocessed(self):
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None, None, None
 
         young_reprocessed = StellarEmissionModel(
