@@ -2,6 +2,7 @@ from synthesizer.emission_models.base_model import (
     EmissionModel,
     StellarEmissionModel,
     BlackHoleEmissionModel,
+    GalaxyEmissionModel,
 )
 from synthesizer.emission_models.models import (
     DustEmission,
