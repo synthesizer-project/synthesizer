@@ -430,7 +430,7 @@ def attenuation_to_optical_depth(attenuation):
         float
             The converted optical depth.
     """
-    return 1 / (2.5 * np.log10(np.e))
+    return attenuation / (2.5 * np.log10(np.e))
 
 
 def optical_depth_to_attenuation(optical_depth):
@@ -445,7 +445,7 @@ def optical_depth_to_attenuation(optical_depth):
         float
             The converted attenuation.
     """
-    return 2.5 * np.log10(np.e)
+    return 2.5 * np.log10(np.e) * optical_depth
 
 
 def tau_lam_to_tau_v(dust_curve, tau_lam, lam):
