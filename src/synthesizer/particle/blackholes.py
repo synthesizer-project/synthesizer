@@ -165,6 +165,7 @@ class BlackHoles(Particles, BlackholesComponent):
             softening_length=softening_length,
             nparticles=len(masses),
             centre=centre,
+            name="Black Holes",
         )
         BlackholesComponent.__init__(
             self,
