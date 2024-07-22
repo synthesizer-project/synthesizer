@@ -65,7 +65,10 @@ for n in [10, 100]:  # , 1000, 10000]:
         # First make the stars
 
         # Generate some random coordinates
-        coords = CoordinateGenerator.generate_3D_gaussian(n)
+        coords = CoordinateGenerator.generate_3D_gaussian(
+            n,
+            mean=np.array([50, 50, 50]),
+        )
 
         # Calculate the smoothing lengths from radii
         cent = np.mean(coords, axis=0)
@@ -93,7 +96,10 @@ for n in [10, 100]:  # , 1000, 10000]:
         # Now make the gas
 
         # Generate some random coordinates
-        coords = CoordinateGenerator.generate_3D_gaussian(ngas)
+        coords = CoordinateGenerator.generate_3D_gaussian(
+            ngas,
+            mean=np.array([50, 50, 50]),
+        )
 
         # Calculate the smoothing lengths from radii
         cent = np.mean(coords, axis=0)
@@ -114,6 +120,12 @@ for n in [10, 100]:  # , 1000, 10000]:
 
         # Create galaxy object
         galaxy = Galaxy("Galaxy", stars=stars, gas=gas, redshift=1)
+
+        print(
+            f"Created galaxy with {n} stars and {ngas} gas particles "
+            f"(dust_mass={np.sum(galaxy.gas.dust_masses):.2e})"
+        )
+        print(galaxy.stars.nparticles, galaxy.gas.nparticles)
 
         # Create a fake kernel
         kernel = np.random.normal(0.5, 0.25, 100)
