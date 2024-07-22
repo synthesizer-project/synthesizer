@@ -54,15 +54,16 @@ void low_mass_los_loop(const double *pos_i, const double *pos_j,
 
       /* Skip straight away if the surface density particle is behind the z
        * position. */
-      if (zj < z)
+      if (zj < z) {
         continue;
+      }
 
       /* Calculate the projected x and y separations. */
-      double x = xj - x;
-      double y = yj - y;
+      double dx = xj - x;
+      double dy = yj - y;
 
       /* Calculate the impact parameter. */
-      double b = sqrt(x * x + y * y);
+      double b = sqrt(dx * dx + dy * dy);
 
       /* Early skip if the star's line of sight doesn't fall in the gas
        * particles kernel. */
@@ -213,6 +214,9 @@ PyObject *compute_surface_density(PyObject *self, PyObject *args) {
                     "The kernel dimension must be greater than zero.");
     return NULL;
   }
+  printf("npart_i: %d\n", npart_i);
+  printf("npart_j: %d\n", npart_j);
+  printf("kdim: %d\n", kdim);
 
   /* Extract a pointers to the actual data in the numpy arrays. */
   const double *kernel = extract_data_double(np_kernel, "kernel");

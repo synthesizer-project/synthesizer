@@ -93,19 +93,30 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
   if (npart < 100)
     return;
 
+  printf(
+      "Populating cell at depth %d with %d particles (width=%f, max_sml=%f)\n",
+      depth, npart, c->width, sqrt(c->max_sml_squ));
+
   /* Compute the width at this level. */
   double width = c->width / 2;
 
   /* We need to split... get the progeny. */
   c->split = 1;
+  printf("Splitting cell at depth %d width %f (ncells=%d, tot_cells=%d)\n",
+         depth, width, *ncells, tot_cells);
   c->progeny = malloc(8 * sizeof(struct cell *));
+  printf("Allocated progeny\n");
   for (int ip = 0; ip < 8; ip++) {
+
+    printf("Splitting cell %d\n", ip);
 
     /* Ensure we have allocated cells. */
     if (*ncells >= tot_cells) {
 
+      printf("Allocating more cells...\n");
+
       /* Allocate the cells. */
-      struct cell *new_cells = malloc(8 * 8 * 8 * sizeof(struct cell));
+      struct cell *new_cells = malloc(8 * 8 * sizeof(struct cell));
       if (new_cells == NULL) {
         PyErr_SetString(
             PyExc_MemoryError,
@@ -114,7 +125,7 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
       }
 
       /* Intialise the cells at 0. */
-      bzero(new_cells, 8 * 8 * 8 * sizeof(struct cell));
+      bzero(new_cells, 8 * 8 * sizeof(struct cell));
 
       /* Attach the cells. */
       cells[*ncells] = *new_cells;
@@ -140,9 +151,11 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
     cp->part_count = 0;
     cp->max_sml_squ = 0;
     cp->depth = depth;
+    cp->particles = NULL;
   }
 
-  /* Loop over particles attaching them. */
+  /* Loop over particles first counting them. */
+  int part_count[8] = {0, 0, 0, 0, 0, 0, 0, 0};
   for (int igas = 0; igas < npart; igas++) {
 
     /* Get the position of the particle relative to the parent cell. */
@@ -159,6 +172,42 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
 
     /* Get the child index. */
     int child_index = k + 2 * (j + 2 * i);
+
+    /* Count the particles. */
+    part_count[child_index]++;
+  }
+
+  /* Allocate the particles. */
+  for (int ip = 0; ip < 8; ip++) {
+    /* Only allocate non-zero particle counts. */
+    if (part_count[ip] == 0) {
+      continue;
+    }
+
+    /* Allocate the particles. */
+    c->progeny[ip].particles = malloc(part_count[ip] * sizeof(struct particle));
+    c->progeny[ip].part_count = 0;
+  }
+
+  /* Loop over particles again, this time assigning them. */
+  for (int igas = 0; igas < npart; igas++) {
+
+    /* Get the position of the particle relative to the parent cell. */
+    double ipos[3] = {
+        particles[igas].pos[0] - c->loc[0],
+        particles[igas].pos[1] - c->loc[1],
+        particles[igas].pos[2] - c->loc[2],
+    };
+
+    /* Get the integer cell location. */
+    int i = ipos[0] > width;
+    int j = ipos[1] > width;
+    int k = ipos[2] > width;
+
+    /* Get the child index. */
+    int child_index = k + 2 * (j + 2 * i);
+
+    printf("Assigning particle %d to child %d\n", igas, child_index);
 
     /* Assign to the cell. */
     struct cell *cp = &c->progeny[child_index];
@@ -266,6 +315,7 @@ static void construct_particles(struct particle *particles, const double *pos,
 
   /* Attach the particles to the root. */
   root->particles = particles;
+  root->part_count = npart;
 
   toc("Particle construction and assignment", part_start);
 }
