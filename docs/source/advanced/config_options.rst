@@ -9,6 +9,7 @@ Synthesizer uses C extensions for much of the heavy lifting done in the backgrou
 - ``ATOMIC_TIMINGS`` turns on low level timings for expensive computations. This is required to use time related profiling scripts. 
 - ``CFLAGS`` allows the user to override the flags passed to the C compiler. Simply pass your desired flags to this variable.
 - ``LDFLAGS`` allows the user to override the directories used during linking.
+- ``EXTRA_INCLUDES`` allows the user to provide any extra include directories that fail to be automatically picked up.
 
 These environment variables can either be defined globally or passed on the command line when invoking ``pip install``.
 To define them globally simply export them into your environment, e.g.
