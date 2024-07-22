@@ -35,6 +35,13 @@ class Particles:
             The physical gravitational softening length.
         nparticle : int
             How many particles are there?
+        centre (array, float)
+            Centre of the particle distribution.
+        metallicity_floor (float)
+            The metallicity floor when using log properties (only matters for
+            baryons). This is used to avoid log(0) errors
+        radii (array-like, float)
+            The radii of the particles.
     """
 
     # Define class level Quantity attributes
@@ -43,6 +50,7 @@ class Particles:
     masses = Quantity()
     softening_lengths = Quantity()
     centre = Quantity()
+    radii = Quantity()
 
     def __init__(
         self,
@@ -110,6 +118,10 @@ class Particles:
         # Set the centre of the particle distribution
         self.centre = centre
 
+        # Set the radius to None, this will be populated when needed and
+        # can then be subsequently accessed
+        self.radii = None
+
         # Set the metallicity floor when using log properties (only matters for
         # baryons)
         self.metallicity_floor = metallicity_floor
@@ -118,14 +130,13 @@ class Particles:
         self, coordinates, velocities, masses, softening_length
     ):
         """
-        Sanitizes the inputs ensuring all arguments agree and are compatible.
+        Sanitize the inputs ensuring all arguments agree and are compatible.
 
         Raises:
             InconsistentArguments
                 If any arguments are incompatible or not as expected an error
                 is thrown.
         """
-
         # Ensure all quantities have units
         if not isinstance(coordinates, unyt_array):
             raise exceptions.InconsistentArguments(
@@ -145,6 +156,11 @@ class Particles:
             )
 
     def rotate_particles(self):
+        """
+        Rotate the particle distribution.
+
+        Not yet implemented.
+        """
         raise exceptions.UnimplementedFunctionality(
             "Not yet implemented! Feel free to implement and raise a "
             "pull request. Guidance for contributing can be found at "
@@ -156,8 +172,7 @@ class Particles:
         self,
     ):
         """
-        Converts comoving coordinates and velocities to physical coordinates
-        and velocties.
+        Convert comoving coordinates and velocities to physical.
 
         Note that redshift must be provided to perform this conversion.
 
@@ -175,8 +190,7 @@ class Particles:
         self,
     ):
         """
-        Converts comoving coordinates and velocities to physical coordinates
-        and velocties.
+        Convert physical coordinates and velocities to comoving.
 
         Note that redshift must be provided to perform this conversion.
 
@@ -193,9 +207,11 @@ class Particles:
     @property
     def centered_coordinates(self):
         """Returns the coordinates centred on the geometric mean."""
-        return self.coordinates - np.average(
-            self.coordinates, axis=0, weights=self.masses
-        )
+        if self.centre is None:
+            raise exceptions.InconsistentArguments(
+                "Can't centre coordinates without a centre."
+            )
+        return self.coordinates - self.centre
 
     def get_particle_photo_luminosities(self, filters, verbose=True):
         """
@@ -316,8 +332,8 @@ class Particles:
         return formatter.get_table("Particles")
 
     def calculate_centre_of_mass(self):
-        """Calculate the centre of mass of the collection
-        of particles.
+        """
+        Calculate the centre of mass of the collection of particles.
 
         Uses the `masses` and `coordinates` attributes,
         and assigns the centre of mass to the `centre` attribute
@@ -331,6 +347,203 @@ class Particles:
         com /= total_mass
 
         self.center = com
+
+    def get_radii(self):
+        """
+        Calculate the radii of the particles.
+
+        Returns:
+            radii (array-like, float)
+                The radii of the particles.
+        """
+        # Raise an error if the centre is not set
+        if self.centre is None:
+            raise exceptions.InconsistentArguments(
+                "Can't calculate radii without a centre."
+            )
+
+        # Calculate the radii
+        self.radii = np.linalg.norm(self.centered_coordinates, axis=1)
+
+    def _get_radius(self, weights, frac):
+        """
+        Calculate the radius of a particle distribution.
+
+        Args:
+            weights (array-like, float)
+                The weights to use to weight the particles.
+            frac (float)
+                The fraction of the total weight for the radius.
+
+        Returns:
+            radius (float)
+                The radius of the particle distribution.
+        """
+        # Get the radii if not already set
+        if self.radii is None:
+            self.get_radii()
+
+        # Strip units off the weights if they have them
+        if hasattr(weights, "units"):
+            weights = weights.value
+
+        # Sort the weights and radii by radius
+        sinds = np.argsort(self.radii)
+        weights = weights[sinds]
+        radii = self._radii[sinds]
+
+        # Get the total of the weights
+        total = np.sum(weights)
+
+        # Get the cumulative array for the weights
+        cum_weight = np.cumsum(weights)
+
+        # Interpolate to get an accurate radius
+        radius = np.interp(frac * total, cum_weight, radii)
+
+        return radius * self.radii.units
+
+    def get_attr_radius(self, weight_attr, frac=0.5):
+        """
+        Calculate the radius of a particle distribution.
+
+        By default this will return the "half attr radius."
+
+        Args:
+            weight_attr (str)
+                The attribute to use to weight the particles.
+            frac (float)
+                The fraction of the total attribute for the radius.
+
+        Returns:
+            radius (float)
+                The radius of the particle distribution.
+        """
+        # Get the weight attribute
+        weights = getattr(self, weight_attr, None)
+
+        # Ensure we found the attribute
+        if weights is None:
+            raise exceptions.InconsistentArguments(
+                f"{weight_attr} not found in particle object."
+            )
+
+        return self._get_radius(weights, frac)
+
+    def get_luminosity_radius(self, spectra_type, filter_code, frac=0.5):
+        """
+        Calculate the radius of a particle distribution based on luminoisty.
+
+        Args:
+            spectra_type (str)
+                The type of spectra to use to compute radius.
+            filter_code (str)
+                The filter code to compute the radius for.
+            frac (float)
+                The fraction of the total light for the radius.
+
+        Returns:
+            radius (float)
+                The radius of the particle distribution.
+        """
+        # Check we have that spectra type, if so unpack it
+        if spectra_type not in self.particle_photo_luminosities:
+            raise exceptions.InconsistentArguments(
+                f"{spectra_type} not found in particle photometry. "
+                "Call get_particle_photo_luminosities first."
+            )
+        else:
+            phot_collection = self.particle_photo_luminosities[spectra_type]
+
+        # Check we have the filter code
+        if filter_code not in phot_collection.filter_codes:
+            raise exceptions.InconsistentArguments(
+                f"{filter_code} not found in particle photometry. "
+                "Call get_particle_photo_luminosities first."
+            )
+        else:
+            light = phot_collection[filter_code]
+
+        return self._get_radius(light, frac)
+
+    def get_flux_radius(self, spectra_type, filter_code, frac=0.5):
+        """
+        Calculate the radius of a particle distribution based on flux.
+
+        Args:
+            spectra_type (str)
+                The type of spectra to use to compute radius.
+            filter_code (str)
+                The filter code to compute the radius for.
+            frac (float)
+                The fraction of the total light for the radius.
+
+        Returns:
+            radius (float)
+                The radius of the particle distribution.
+        """
+        # Check we have that spectra type, if so unpack it
+        if spectra_type not in self.particle_photo_fluxes:
+            raise exceptions.InconsistentArguments(
+                f"{spectra_type} not found in particle photometry. "
+                "Call get_particle_photo_fluxes first."
+            )
+        else:
+            phot_collection = self.particle_photo_fluxes[spectra_type]
+
+        # Check we have the filter code
+        if filter_code not in phot_collection.filter_codes:
+            raise exceptions.InconsistentArguments(
+                f"{filter_code} not found in particle photometry. "
+                "Call get_particle_photo_fluxes first."
+            )
+        else:
+            light = phot_collection[filter_code]
+
+        return self._get_radius(light, frac)
+
+    def get_half_mass_radius(self):
+        """
+        Calculate the half mass radius of the particle distribution.
+
+        Returns:
+            radius (float)
+                The half mass radius of the particle distribution.
+        """
+        # Hanlde
+        return self.get_attr_radius("masses", 0.5)
+
+    def get_half_luminosity_radius(self, spectra_type, filter_code):
+        """
+        Calculate the half luminosity radius of the particle distribution.
+
+        Args:
+            spectra_type (str)
+                The type of spectra to use to compute radius.
+            filter_code (str)
+                The filter code to compute the radius for.
+
+        Returns:
+            radius (float)
+                The half luminosity radius of the particle distribution.
+        """
+        return self.get_luminosity_radius(spectra_type, filter_code, 0.5)
+
+    def get_half_flux_radius(self, spectra_type, filter_code):
+        """
+        Calculate the half flux radius of the particle distribution.
+
+        Args:
+            spectra_type (str)
+                The type of spectra to use to compute radius.
+            filter_code (str)
+                The filter code to compute the radius for.
+
+        Returns:
+            radius (float)
+                The half flux radius of the particle distribution.
+        """
+        return self.get_flux_radius(spectra_type, filter_code, 0.5)
 
 
 class CoordinateGenerator:

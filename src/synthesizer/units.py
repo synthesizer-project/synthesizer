@@ -73,6 +73,7 @@ default_units = {
     "flam": erg / s / Angstrom / cm**2,
     "equivalent_width": Angstrom,
     "coordinates": Mpc,
+    "radii": Mpc,
     "smoothing_lengths": Mpc,
     "softening_length": Mpc,
     "velocities": km / s,
@@ -217,6 +218,8 @@ class Units(metaclass=UnitSingleton):
             Particle coordinate unit.
         centre (unyt.unit_object.Unit)
             Galaxy/particle distribution centre unit.
+        radii (unyt.unit_object.Unit)
+            Particle radii unit.
         smoothing_lengths (unyt.unit_object.Unit)
             Particle smoothing length unit.
         softening_length (unyt.unit_object.Unit)
@@ -280,7 +283,6 @@ class Units(metaclass=UnitSingleton):
             force (bool)
                 A flag for whether to force an update of the Units object.
         """
-
         # First define all possible units with their defaults
 
         # Wavelengths
@@ -329,6 +331,7 @@ class Units(metaclass=UnitSingleton):
         # Spatial quantities
         self.coordinates = Mpc
         self.centre = Mpc
+        self.radii = Mpc
         self.smoothing_lengths = Mpc
         self.softening_length = Mpc
 

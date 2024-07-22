@@ -146,7 +146,7 @@ class PacmanEmission(StellarEmissionModel):
         self._fesc_ly_alpha = fesc_ly_alpha
 
         # Are we using a grid with reprocessing?
-        self.reprocessed = grid.reprocessed
+        self.grid_reprocessed = grid.reprocessed
 
         # Make the child emission models
         self.incident = self._make_incident()
@@ -154,7 +154,7 @@ class PacmanEmission(StellarEmissionModel):
         self.escaped = self._make_escaped()  # only if fesc > 0.0
         self.nebular = self._make_nebular()
         self.reprocessed = self._make_reprocessed()
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             self.intrinsic = self._make_intrinsic_no_reprocessing()
         else:
             self.intrinsic = self._make_intrinsic_reprocessed()
@@ -193,8 +193,8 @@ class PacmanEmission(StellarEmissionModel):
                 - transmitted
         """
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
-            return None, None, None
+        if not self.grid_reprocessed:
+            return None
 
         return TransmittedEmission(
             grid=self._grid, label="transmitted", fesc=self._fesc
@@ -219,12 +219,12 @@ class PacmanEmission(StellarEmissionModel):
                 - escaped
         """
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
-            return None, None, None
+        if not self.grid_reprocessed:
+            return None
 
         # No escaped emission if fesc is zero
         if self._fesc == 0.0:
-            return None, None, None
+            return None
 
         return EscapedEmission(
             grid=self._grid, label="escaped", fesc=self._fesc
@@ -232,8 +232,8 @@ class PacmanEmission(StellarEmissionModel):
 
     def _make_nebular(self):
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
-            return None, None, None
+        if not self.grid_reprocessed:
+            return None
 
         return NebularEmission(
             grid=self._grid,
@@ -244,8 +244,8 @@ class PacmanEmission(StellarEmissionModel):
 
     def _make_reprocessed(self):
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
-            return None, None, None
+        if not self.grid_reprocessed:
+            return None
 
         return StellarEmissionModel(
             label="reprocessed",
@@ -558,7 +558,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         self._fesc_ly_alpha = fesc_ly_alpha
 
         # Are we using a grid with reprocessing?
-        self.reprocessed = grid.reprocessed
+        self.grid_reprocessed = grid.reprocessed
 
         # Make the child emission models
         (
@@ -586,7 +586,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             self.old_reprocessed,
             self.reprocessed,
         ) = self._make_reprocessed()
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             (
                 self.young_intrinsic,
                 self.old_intrinsic,
@@ -675,7 +675,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 - transmitted
         """
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None, None, None
 
         young_transmitted = TransmittedEmission(
@@ -722,7 +722,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 - escaped
         """
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None, None, None
 
         # No escaped emission if fesc is zero
@@ -754,7 +754,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
 
     def _make_nebular(self):
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None, None, None
 
         # Get the line continuum emission
@@ -824,7 +824,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
 
     def _make_reprocessed(self):
         # No spectra if grid hasn't been reprocessed
-        if not self.reprocessed:
+        if not self.grid_reprocessed:
             return None, None, None
 
         young_reprocessed = StellarEmissionModel(
@@ -1281,5 +1281,59 @@ class CharlotFall2000(BimodalPacmanEmission):
             age_pivot,
             dust_emission_ism,
             dust_emission_nebular,
+            label=label,
+        )
+
+
+class ScreenEmission(PacmanEmission):
+    """
+    The ScreenEmission model.
+
+    This emission model is a simple dust screen model, where the dust is
+    assumed to be in a screen in front of the stars. The dust curve and
+    emission model can be specified, but the escape fraction is always zero.
+
+    This model is a simplified version of the PacmanEmission model, so in
+    reality is just a wrapper around that model. The only difference is that
+    fesc and fesc_ly_alpha are zero by definition.
+
+    Attributes:
+        grid (synthesizer.grid.Grid): The grid object.
+        tau_v (float): The V-band optical depth.
+        dust_curve (synthesizer.dust.DustCurve): The dust curve.
+        dust_emission (synthesizer.dust.EmissionModel): The dust emission
+            model.
+    """
+
+    def __init__(
+        self,
+        grid,
+        tau_v,
+        dust_curve,
+        dust_emission=None,
+        label=None,
+    ):
+        """
+        Initialize the ScreenEmission model.
+
+        Args:
+            grid (synthesizer.grid.Grid): The grid object.
+            tau_v (float): The V-band optical depth.
+            dust_curve (synthesizer.dust.DustCurve): The dust curve.
+            dust_emission (synthesizer.dust.EmissionModel): The dust emission
+                model.
+            label (str): The label for the total emission model. If None
+                this will be set to "total" or "emergent" if dust_emission is
+                None.
+        """
+        # Call the parent constructor to intialise the model
+        PacmanEmission.__init__(
+            self,
+            grid,
+            tau_v,
+            dust_curve,
+            dust_emission,
+            fesc=0.0,
+            fesc_ly_alpha=1.0,
             label=label,
         )

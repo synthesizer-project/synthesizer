@@ -732,6 +732,9 @@ class BaseGalaxy:
 
         # Unpack the spectra to the right component
         for model in emission_model._models.values():
+            # Skip models we aren't saving
+            if not model.save:
+                continue
             if model.emitter == "galaxy":
                 self.spectra[model.label] = spectra[model.label]
             elif model.emitter == "stellar":
@@ -823,6 +826,9 @@ class BaseGalaxy:
 
         # Unpack the lines to the right component
         for model in emission_model._models.values():
+            # Skip models we aren't saving
+            if not model.save:
+                continue
             if model.emitter == "galaxy":
                 self.lines[model.label] = lines[model.label]
             elif model.emitter == "stellar":
