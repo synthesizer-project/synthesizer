@@ -2,6 +2,7 @@ from synthesizer.emission_models.base_model import (
     EmissionModel,
     StellarEmissionModel,
     BlackHoleEmissionModel,
+    GalaxyEmissionModel,
 )
 from synthesizer.emission_models.models import (
     DustEmission,
@@ -24,6 +25,7 @@ from synthesizer.emission_models.stellar.pacman_model import (
     PacmanEmission,
     BimodalPacmanEmission,
     CharlotFall2000,
+    ScreenEmission,
 )
 from synthesizer.emission_models.agn.models import (
     NLRIncidentEmission,
