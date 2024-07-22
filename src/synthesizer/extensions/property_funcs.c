@@ -3,8 +3,31 @@
  * numpy objects.
  *****************************************************************************/
 
+/* C headers. */
+#include <Python.h>
+#include <string.h>
+
 /* Header */
 #include "property_funcs.h"
+
+/**
+ * @brief Allocate an array.
+ *
+ * Just a wrapper around malloc with a check for NULL.
+ *
+ * @param n: The number of pointers to allocate.
+ */
+void *synth_malloc(size_t n, char *msg) {
+  void *ptr = malloc(n);
+  if (ptr == NULL) {
+    char error_msg[100];
+    snprintf(error_msg, sizeof(error_msg), "Failed to allocate memory for %s.",
+             msg);
+    PyErr_SetString(PyExc_MemoryError, error_msg);
+  }
+  bzero(ptr, n);
+  return ptr;
+}
 
 /**
  * @brief Extract double data from a numpy array.
