@@ -602,51 +602,48 @@ class Particles:
         kernel = np.ascontiguousarray(kernel, dtype=np.float64)
         kdim = kernel.size
 
-        # Set up the stellar inputs to the C function.
-        star_pos = np.ascontiguousarray(
-            self.stars._coordinates[mask, :], dtype=np.float64
-        )
-        nstar = self.stars._coordinates[mask, :].shape[0]
+        # Get particle counts
+        npart_i = self.nparticles
+        npart_j = other_parts.nparticles
 
-        # Set up the gas inputs to the C function.
-        gas_pos = np.ascontiguousarray(
+        # Set up the inputs from this particle instance.
+        pos_i = np.ascontiguousarray(
+            self._coordinates[mask, :], dtype=np.float64
+        )
+
+        # Set up the inputs from the other particle instance.
+        pos_j = np.ascontiguousarray(
             other_parts._coordinates, dtype=np.float64
         )
-        gas_sml = np.ascontiguousarray(
+        smls = np.ascontiguousarray(
             other_parts._smoothing_lengths, dtype=np.float64
         )
-        gas_met = np.ascontiguousarray(
-            other_parts.metallicities, dtype=np.float64
+        surf_den_vals = np.ascontiguousarray(
+            getattr(other_parts, attr), dtype=np.float64
         )
-        gas_mass = np.ascontiguousarray(other_parts._masses, dtype=np.float64)
-        if isinstance(other_parts.dust_to_metal_ratio, float):
-            gas_dtm = np.ascontiguousarray(
-                np.full_like(gas_mass, other_parts.dust_to_metal_ratio),
-                dtype=np.float64,
-            )
-        else:
-            gas_dtm = np.ascontiguousarray(
-                other_parts.dust_to_metal_ratio, dtype=np.float64
-            )
-        ngas = gas_mass.size
 
         return (
             kernel,
-            star_pos,
-            gas_pos,
-            gas_sml,
-            gas_met,
-            gas_mass,
-            gas_dtm,
-            nstar,
-            ngas,
+            pos_i,
+            pos_j,
+            smls,
+            surf_den_vals,
+            npart_i,
+            npart_j,
             kdim,
             threshold,
-            np.max(gas_sml),
             force_loop,
         )
 
-    def get_part_surface_density(self, other_parts, density_attr):
+    def get_los_surface_density(
+        self,
+        other_parts,
+        density_attr,
+        kernel,
+        mask=None,
+        threshold=1,
+        force_loop=0,
+    ):
         """
         Calculate the surface density of an attribute.
 
@@ -664,6 +661,25 @@ class Particles:
             surface_density (float)
                 The surface density of the particles.
         """
+        from synthesizer.extensions.surface_density import (
+            compute_surface_density,
+        )
+
+        # If we don't have a mask make a fake one for consistency
+        if mask is None:
+            mask = np.ones(self.nparticles, dtype=bool)
+
+        # Compute the surface density
+        return compute_surface_density(
+            *self._prepare_los_args(
+                other_parts,
+                density_attr,
+                kernel,
+                mask,
+                threshold,
+                force_loop,
+            )
+        )
 
 
 class CoordinateGenerator:
