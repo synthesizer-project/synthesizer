@@ -180,6 +180,7 @@ class Stars(Particles, StarsComponent):
             nparticles=len(initial_masses),
             centre=centre,
             metallicity_floor=metallicity_floor,
+            name="Stars",
         )
         StarsComponent.__init__(self, ages, metallicities)
 

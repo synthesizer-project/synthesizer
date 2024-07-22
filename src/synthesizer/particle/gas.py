@@ -131,6 +131,7 @@ class Gas(Particles):
             nparticles=len(masses),
             centre=centre,
             metallicity_floor=metallicity_floor,
+            name="Gas",
         )
 
         # Set the metallicites and log10 equivalent

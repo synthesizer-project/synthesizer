@@ -62,6 +62,7 @@ class Particles:
         nparticles,
         centre,
         metallicity_floor=1e-5,
+        name="Particles",
     ):
         """
         Intialise the Particles.
@@ -84,9 +85,9 @@ class Particles:
             metallicity_floor (float)
                 The metallicity floor when using log properties (only matters
                 for baryons). This is used to avoid log(0) errors.
+            name (str)
+                The name of the particle type.
         """
-        # Check arguments are valid
-
         # Set phase space coordinates
         self.coordinates = coordinates
         self.velocities = velocities
@@ -125,6 +126,9 @@ class Particles:
         # Set the metallicity floor when using log properties (only matters for
         # baryons)
         self.metallicity_floor = metallicity_floor
+
+        # Attach the name of the particle type
+        self.name = name
 
     def _check_part_args(
         self, coordinates, velocities, masses, softening_length
@@ -544,6 +548,122 @@ class Particles:
                 The half flux radius of the particle distribution.
         """
         return self.get_flux_radius(spectra_type, filter_code, 0.5)
+
+    def _prepare_los_args(
+        self,
+        other_parts,
+        attr,
+        kernel,
+        mask,
+        threshold,
+        force_loop,
+    ):
+        """
+        Prepare the arguments for line of sight surface density computation.
+
+        Args:
+            other_parts (Particles)
+                The other particles to compute the surface density with.
+            attr (str)
+                The attribute to compute the surface density of.
+            kernel (array_like, float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value
+                of impact parameter q via kernel[int(k*q)]. Note, this can be
+                an arbitrary kernel.
+            mask (bool)
+                A mask to be applied to the stars. Surface densities will only
+                be computed and returned for stars with True in the mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
+            force_loop (bool)
+                Whether to force the use of a simple loop rather than the tree.
+        """
+        # Ensure we actually have the properties needed
+        if self.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                f"{self.name} object is missing coordinates!"
+            )
+        if other_parts.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing coordinates!"
+            )
+        if other_parts.smoothing_lengths is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing smoothing lengths!"
+            )
+        if getattr(other_parts, attr, None) is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing {attr}!"
+            )
+
+        # Set up the kernel inputs to the C function.
+        kernel = np.ascontiguousarray(kernel, dtype=np.float64)
+        kdim = kernel.size
+
+        # Set up the stellar inputs to the C function.
+        star_pos = np.ascontiguousarray(
+            self.stars._coordinates[mask, :], dtype=np.float64
+        )
+        nstar = self.stars._coordinates[mask, :].shape[0]
+
+        # Set up the gas inputs to the C function.
+        gas_pos = np.ascontiguousarray(
+            other_parts._coordinates, dtype=np.float64
+        )
+        gas_sml = np.ascontiguousarray(
+            other_parts._smoothing_lengths, dtype=np.float64
+        )
+        gas_met = np.ascontiguousarray(
+            other_parts.metallicities, dtype=np.float64
+        )
+        gas_mass = np.ascontiguousarray(other_parts._masses, dtype=np.float64)
+        if isinstance(other_parts.dust_to_metal_ratio, float):
+            gas_dtm = np.ascontiguousarray(
+                np.full_like(gas_mass, other_parts.dust_to_metal_ratio),
+                dtype=np.float64,
+            )
+        else:
+            gas_dtm = np.ascontiguousarray(
+                other_parts.dust_to_metal_ratio, dtype=np.float64
+            )
+        ngas = gas_mass.size
+
+        return (
+            kernel,
+            star_pos,
+            gas_pos,
+            gas_sml,
+            gas_met,
+            gas_mass,
+            gas_dtm,
+            nstar,
+            ngas,
+            kdim,
+            threshold,
+            np.max(gas_sml),
+            force_loop,
+        )
+
+    def get_part_surface_density(self, other_parts, density_attr):
+        """
+        Calculate the surface density of an attribute.
+
+        This will calculate the surafce density of an attribute on another
+        Particles child instance at the positions of the particles in this
+        Particles instance.
+
+        Args:
+            other_parts (Particles)
+                The other particles to calculate the surface density with.
+            density_attr (str)
+                The attribute to use to calculate the surface density.
+
+        Returns:
+            surface_density (float)
+                The surface density of the particles.
+        """
 
 
 class CoordinateGenerator:
