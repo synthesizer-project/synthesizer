@@ -1934,7 +1934,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # If we have masks to apply, apply them
         if mask is not None:
             for label, mask in mask.items():
-                emission_model.add_mask(**mask, label=label)
+                emission_model[label].add_mask(**mask)
 
     def _get_spectra(
         self,
