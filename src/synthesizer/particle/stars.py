@@ -127,9 +127,10 @@ class Stars(Particles, StarsComponent):
         **kwargs,
     ):
         """
-        Intialise the Stars instance. The first 3 arguments are always
-        required. All other arguments are optional attributes applicable
-        in different situations.
+        Intialise the Stars instance.
+
+        The first 3 arguments are always required. All other arguments are
+        optional attributes applicable in different situations.
 
         Args:
             initial_masses (array-like, float)
@@ -168,7 +169,6 @@ class Stars(Particles, StarsComponent):
             **kwargs
                 Additional keyword arguments to be set as attributes.
         """
-
         # Instantiate parents
         Particles.__init__(
             self,

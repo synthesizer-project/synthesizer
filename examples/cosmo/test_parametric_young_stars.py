@@ -154,4 +154,3 @@ ax2.set_xlabel("$\\mathrm{log_{10} Age \\,/\\, yr}$")
 ax2.set_ylabel("$\\mathrm{log_{10} (Mass \\,/\\, M_{\\odot})}$")
 
 plt.show()
-# plt.savefig("young_star_parametric.png", dpi=200, bbox_inches="tight")

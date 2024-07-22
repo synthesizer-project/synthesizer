@@ -132,6 +132,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         fixed_parameters={},
         scale_by=None,
         post_processing=(),
+        save=True,
         **kwargs,
     ):
         """
@@ -209,6 +210,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 containing the spectra/lines, the emitters, and the emission
                 model, and return the same dict with the post processing
                 applied.
+            save (bool):
+                A flag for whether the emission produced by this model should
+                be "saved", i.e. attached to the emitter. If False, the
+                emission will be discarded after it has been used. Default is
+                True.
             **kwargs:
                 Any additional keyword arguments to store. These can be used
                 to store additional information needed by the model.
@@ -305,6 +311,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             raise exceptions.InconsistentArguments(
                 "related_models must be a set, list, tuple, or EmissionModel."
             )
+
+        # Are we saving this emission?
+        self._save = save
 
         # We're done with setup, so unpack the model
         self.unpack_model()
@@ -516,6 +525,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # Get this models summary
             parts.extend(model._summary())
+
+            # Report if the resulting emission will be saved
+            parts.append(f"  Save emission: {model._save}")
 
             # Print any fixed parameters if there are any
             if len(model.fixed_parameters) > 0:
@@ -1096,6 +1108,31 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Unpack the model now we're done
         self.unpack_model()
 
+    @property
+    def save(self):
+        """Get the flag for whether to save the emission."""
+        return getattr(self, "_save", True)
+
+    def set_save(self, save, set_all=False):
+        """
+        Set the flag for whether to save the emission.
+
+        Args:
+            save (bool):
+                Whether to save the emission.
+            set_all (bool):
+                Whether to set the save flag on all models.
+        """
+        # Set the save flag
+        if not set_all:
+            self._save = save
+        else:
+            for model in self._models.values():
+                model.set_save(save)
+
+        # Unpack the model now we're done
+        self.unpack_model()
+
     def add_mask(self, attr, op, thresh, set_all=False):
         """
         Add a mask.
@@ -1583,6 +1620,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Keep track of which components are included
         components = set()
 
+        # We need a flag for the for whether any models are discarded so we
+        # know whether to include it in the legend
+        some_discarded = False
+
         # Plot the tree using Matplotlib
         fig, ax = plt.subplots(figsize=figsize)
 
@@ -1595,6 +1636,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 color = "royalblue"
             else:
                 color = "forestgreen"
+
+            # If the model isn't saved apply some transparency
+            if not self[node].save:
+                alpha = 0.6
+                some_discarded = True
+            else:
+                alpha = 1.0
             text = ax.text(
                 x,
                 -y,  # Invert y-axis for bottom-to-top
@@ -1609,6 +1657,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     else "square,pad=0.3",
                 ),
                 fontsize=fontsize,
+                alpha=alpha,
             )
 
             # Used a dashed outline for masked nodes
@@ -1717,6 +1766,32 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 )
             )
 
+        # Include a transparent legend element for non-saved nodes if needed
+        if some_discarded:
+            handles.append(
+                mpatches.FancyBboxPatch(
+                    (0.1, 0.1),
+                    width=0.5,
+                    height=0.1,
+                    facecolor="grey",
+                    edgecolor="black",
+                    label="Saved",
+                    boxstyle="round,pad=0.3",
+                )
+            )
+            handles.append(
+                mpatches.FancyBboxPatch(
+                    (0.1, 0.1),
+                    width=0.5,
+                    height=0.1,
+                    facecolor="grey",
+                    edgecolor="black",
+                    label="Discarded",
+                    alpha=0.6,
+                    boxstyle="round,pad=0.3",
+                )
+            )
+
         # Add legend to the bottom of the plot
         ax.legend(
             handles=handles,
@@ -1732,7 +1807,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         return fig, ax
 
-    def _apply_overrides(self, emission_model, dust_curves, tau_v, fesc, mask):
+    def _apply_overrides(
+        self, emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+    ):
         """
         Apply overrides to an emission model copy.
 
@@ -1779,6 +1856,18 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                           {<label>: str(<attribute>)}
                       to use an attribute of the component as the escape
                       fraction.
+            covering_fraction (dict):
+                An overide to the emission model covering fraction. Either:
+                    - None, indicating the covering fraction defined on the
+                      emission model should be used.
+                    - A float to use as the covering fraction for all models.
+                    - A dictionary of the form:
+                          {<label>: float(<covering_fraction>)}
+                      to use a specific covering fraction with a particular
+                      model or
+                          {<label>: str(<attribute>)}
+                      to use an attribute of the component as the covering
+                      fraction.
             mask (dict):
                 An overide to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
@@ -1789,18 +1878,43 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         """
         # If we have dust curves to apply, apply them
         if dust_curves is not None:
-            for label, dust_curve in dust_curves.items():
-                emission_model._models[label]._dust_curve = dust_curve
+            if isinstance(dust_curves, dict):
+                for label, dust_curve in dust_curves.items():
+                    emission_model._models[label]._dust_curve = dust_curve
+            else:
+                for model in emission_model._models.values():
+                    model._dust_curve = dust_curves
 
         # If we have optical depths to apply, apply them
         if tau_v is not None:
-            for label, value in tau_v.items():
-                emission_model._models[label]._tau_v = value
+            if isinstance(tau_v, dict):
+                for label, value in tau_v.items():
+                    emission_model._models[label]._tau_v = (
+                        (value,)
+                        if isinstance(value, (float, "str"))
+                        else value
+                    )
+            else:
+                for model in emission_model._models.values():
+                    model._tau_v = (tau_v,)
 
         # If we have escape fractions to apply, apply them
         if fesc is not None:
-            for label, value in fesc.items():
-                emission_model._models[label]._fesc = value
+            if isinstance(fesc, dict):
+                for label, value in fesc.items():
+                    emission_model._models[label]._fesc = value
+            else:
+                for model in emission_model._models.values():
+                    model._fesc = fesc
+
+        # If we have covering fractions to apply, apply them
+        if covering_fraction is not None:
+            if isinstance(covering_fraction, dict):
+                for label, value in covering_fraction.items():
+                    emission_model._models[label]._covering_fraction = value
+            else:
+                for model in emission_model._models.values():
+                    model._covering_fraction = covering_fraction
 
         # If we have masks to apply, apply them
         if mask is not None:
@@ -1818,6 +1932,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         mask=None,
         verbose=True,
         spectra=None,
+        _is_related=False,
         **kwargs,
     ):
         """
@@ -1890,6 +2005,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             spectra (dict)
                 A dictionary of spectra to add to. This is used for recursive
                 calls to this function.
+            _is_related (bool)
+                Are we generating related model spectra? If so we don't want
+                to apply any post processing functions or delete any spectra,
+                this will be done outside the recursive call.
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -1917,7 +2036,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 )
 
         # Apply any overides we have
-        self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
+        self._apply_overrides(
+            emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+        )
 
         # Make a spectra dictionary if we haven't got one yet
         if spectra is None:
@@ -1953,6 +2074,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             mask=mask,
                             verbose=verbose,
                             spectra=spectra,
+                            _is_related=True,
                             **kwargs,
                         )
                     )
@@ -2053,9 +2175,19 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         f"Can't scale spectra by {scaler}."
                     )
 
-        # Apply any post processing functions
-        for func in self._post_processing:
-            spectra = func(spectra, emitters, self)
+        # Only apply post processing and deletion if we aren't in a recursive
+        # related model call
+        if not _is_related:
+            # Apply any post processing functions
+            for func in self._post_processing:
+                spectra = func(spectra, emitters, self)
+
+            # Loop over all models and delete those spectra if we aren't saving
+            # them (we have to this after post processing incase the deleted
+            # spectra are needed during post processing)
+            for model in emission_model._models.values():
+                if not model.save and model.label in spectra:
+                    del spectra[model.label]
 
         return spectra
 
@@ -2067,9 +2199,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         dust_curves=None,
         tau_v=None,
         fesc=None,
+        covering_fraction=None,
         mask=None,
         verbose=True,
         lines=None,
+        _is_related=False,
         **kwargs,
     ):
         """
@@ -2120,6 +2254,18 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             {<label>: str(<attribute>)}
                       to use an attribute of the component as the escape
                       fraction.
+            covering_fraction (dict):
+                An overide to the emission model covering fraction. Either:
+                    - None, indicating the covering fraction defined on the
+                      emission model should be used.
+                    - A float to use as the covering fraction for all models.
+                    - A dictionary of the form:
+                            {<label>: float(<covering_fraction>)}
+                      to use a specific covering fraction with a particular
+                      model or
+                            {<label>: str(<attribute>)}
+                      to use an attribute of the component as the covering
+                      fraction.
             mask (dict):
                 An overide to the emission model mask. Either:
                     - None, indicating the mask defined on the emission model
@@ -2132,6 +2278,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             lines (dict)
                 A dictionary of lines to add to. This is used for recursive
                 calls to this function.
+            _is_related (bool)
+                Are we generating related model lines? If so we don't want
+                to apply any post processing functions or delete any lines,
+                this will be done outside the recursive call.
             kwargs (dict)
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -2149,7 +2299,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         emission_model = copy.copy(self)
 
         # Apply any overides we have
-        self._apply_overrides(emission_model, dust_curves, tau_v, fesc, mask)
+        self._apply_overrides(
+            emission_model, dust_curves, tau_v, fesc, covering_fraction, mask
+        )
 
         # If we haven't got a lines dictionary yet we'll make one
         if lines is None:
@@ -2187,6 +2339,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             mask=mask,
                             verbose=verbose,
                             lines=lines,
+                            _is_related=True,
                             **kwargs,
                         )
                     )
@@ -2255,17 +2408,27 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         f"Can't scale lines by {scaler}."
                     )
 
-        # Finally, loop over everything we've created and convert the nested
-        # dictionaries to LineCollections
-        for label in lines:
-            # If we are in a related model we might have already done this
-            # conversion
-            if isinstance(lines[label], dict):
-                lines[label] = LineCollection(lines[label])
+        # Only convert to LineCollections, apply post processing and deletion
+        # if we aren't in a recursive related model call
+        if not _is_related:
+            # Finally, loop over everything we've created and convert the
+            # nested dictionaries to LineCollections
+            for label in lines:
+                # If we are in a related model we might have already done this
+                # conversion
+                if isinstance(lines[label], dict):
+                    lines[label] = LineCollection(lines[label])
 
-        # Apply any post processing functions
-        for func in self._post_processing:
-            lines = func(lines, emitters, self)
+            # Apply any post processing functions
+            for func in self._post_processing:
+                lines = func(lines, emitters, self)
+
+            # Loop over all models and delete those lines if we aren't saving
+            # them (we have to this after post processing incase the deleted
+            # lines are needed during post processing)
+            for model in emission_model._models.values():
+                if not model.save and model.label in lines:
+                    del lines[model.label]
 
         return lines
 
@@ -2324,9 +2487,8 @@ class GalaxyEmissionModel(EmissionModel):
         EmissionModel.__init__(self, *args, **kwargs)
         self._emitter = "galaxy"
 
-        # Ensure we are only combining
-        if not self._is_combining:
+        # Ensure we aren't extracting, this cannot be done for a galaxy.
+        if self._is_extracting:
             raise exceptions.InconsistentArguments(
-                "A GalaxyEmissionModel must be either combining or dust "
-                "attenuating."
+                "A GalaxyEmissionModel cannot be an extraction model."
             )

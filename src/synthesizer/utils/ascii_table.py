@@ -132,7 +132,7 @@ class TableFormatter:
                 isinstance(value, dict)
                 or isinstance(value, np.ndarray)
                 or isinstance(value, list)
-            ) or (isinstance(value, np.ndarray) and value.size <= 3):
+            ):
                 # Handle the different situations
                 if isinstance(value, float) and (value >= 1e4 or value < 0.01):
                     formatted_value = f"{value:.2e}"
@@ -164,7 +164,11 @@ class TableFormatter:
             if attr[0] == "_" and hasattr(self.obj, attr[1:]):
                 attr = attr[1:]
                 value = getattr(self.obj, attr)
-            if isinstance(value, (np.ndarray, unyt_array)) and value.size > 3:
+            # For short arrays, just show the values
+            if isinstance(value, (np.ndarray, unyt_array)) and value.size <= 3:
+                formatted_value = str(value)
+                rows.append((attr, formatted_value))
+            elif isinstance(value, (np.ndarray, unyt_array)):
                 formatted_value = self.format_array(value)
                 rows.append((f"{attr} {value.shape}", formatted_value))
         return rows
