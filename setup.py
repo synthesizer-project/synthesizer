@@ -286,12 +286,12 @@ extensions = [
         include_dirs=include_dirs,
     ),
     create_extension(
-        "synthesizer.extensions.los",
+        "synthesizer.extensions.surface_density",
         [
-            "src/synthesizer/extensions/los.c",
-            "src/synthesizer/extensions/weights.c",
+            "src/synthesizer/extensions/surface_density.c",
             "src/synthesizer/extensions/property_funcs.c",
             "src/synthesizer/extensions/timers.c",
+            "src/synthesizer/extensions/octree.c",
         ],
         compile_flags=compile_flags,
         links=link_args,
