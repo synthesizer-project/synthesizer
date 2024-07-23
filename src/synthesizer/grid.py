@@ -315,8 +315,8 @@ class Grid:
         if not self.lines_available:
             if not self.reprocessed:
                 raise exceptions.GridError(
-                    "Grid hasn't been reprocessed with cloudy and has no"
-                    "lines. Either pass `read_lines=False` or load a grid"
+                    "Grid hasn't been reprocessed with cloudy and has no "
+                    "lines. Either pass `read_lines=False` or load a grid "
                     "which has been run through cloudy."
                 )
 

@@ -3,7 +3,7 @@ import numpy as np
 
 _dir = "."
 snap_name = "LH_1_snap_031.hdf5"
-fof_name = "LH_1_fof_subhalo_tab_031.hdf5"
+group_name = "LH_1_fof_subhalo_tab_031.hdf5"
 N = 10  # number of galaxies to extract
 ignore_N = 1  # number of galaxies to ignore
 
@@ -27,7 +27,7 @@ with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
     h = hf["Header"].attrs["HubbleParam"]
 
 
-with h5py.File(f"{_dir}/{fof_name}", "r") as hf:
+with h5py.File(f"{_dir}/{group_name}", "r") as hf:
     lens = hf["Subhalo/SubhaloLenType"][:]
     pos = hf["Subhalo/SubhaloPos"][:]
 
