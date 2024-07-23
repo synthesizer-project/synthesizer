@@ -694,7 +694,6 @@ class Stars(Particles, StarsComponent):
         else:
             stars = stars[0]
 
-
         # Get the spectra for this parametric form
         return stars.generate_lnu(grid=grid, spectra_name=spectra_name)
 

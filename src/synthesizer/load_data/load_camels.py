@@ -510,32 +510,32 @@ def load_CAMELS_SwiftEAGLE_subfind(
         redshift = hf["Cosmology"].attrs["Redshift"]
 
     # get subfind particle info (lens and IDs) for subsetting snapshot info
-    with h5py.File(f'{group_dir}/{group_name}', 'r') as hf:
-        lentype = hf['Subhalo/SubhaloLenType'][:]
-        grp_lentype = hf['Group/GroupLenType'][:]
-        grpn = hf['Subhalo/SubhaloGrNr'][:]
-        grp_firstsub = hf['Group/GroupFirstSub'][:]
-        ids = hf['IDs/ID'][:]
+    with h5py.File(f"{group_dir}/{group_name}", "r") as hf:
+        lentype = hf["Subhalo/SubhaloLenType"][:]
+        grp_lentype = hf["Group/GroupLenType"][:]
+        grpn = hf["Subhalo/SubhaloGrNr"][:]
+        grp_firstsub = hf["Group/GroupFirstSub"][:]
+        ids = hf["IDs/ID"][:]
         pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
 
-    with h5py.File(f"{_dir}/{snap_name}", 'r') as hf:
+    with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
         # Load star particle information
-        star_ids = hf['PartType4/ParticleIDs'][:]
-        form_time = hf['PartType4/BirthScaleFactors'][:]
-        coods = hf['PartType4/Coordinates'][:]
-        masses = hf['PartType4/Masses'][:]
-        imasses = hf['PartType4/InitialMasses'][:]
-        _metals = hf['PartType4/SmoothedElementMassFractions'][:]
-        metallicity = hf['PartType4/SmoothedMetalMassFractions'][:]
-        hsml = hf['PartType4/SmoothingLengths'][:]
+        star_ids = hf["PartType4/ParticleIDs"][:]
+        form_time = hf["PartType4/BirthScaleFactors"][:]
+        coods = hf["PartType4/Coordinates"][:]
+        masses = hf["PartType4/Masses"][:]
+        imasses = hf["PartType4/InitialMasses"][:]
+        _metals = hf["PartType4/SmoothedElementMassFractions"][:]
+        metallicity = hf["PartType4/SmoothedMetalMassFractions"][:]
+        hsml = hf["PartType4/SmoothingLengths"][:]
 
         # Load gas particle information
-        gas_ids = hf['PartType0/ParticleIDs'][:]
-        g_sfr = hf['PartType0/StarFormationRates'][:]
-        g_masses = hf['PartType0/Masses'][:]
-        g_metals = hf['PartType0/SmoothedMetalMassFractions'][:]
-        g_coods = hf['PartType0/Coordinates'][:]
-        g_hsml = hf['PartType0/SmoothingLengths'][:]
+        gas_ids = hf["PartType0/ParticleIDs"][:]
+        g_sfr = hf["PartType0/StarFormationRates"][:]
+        g_masses = hf["PartType0/Masses"][:]
+        g_metals = hf["PartType0/SmoothedMetalMassFractions"][:]
+        g_coods = hf["PartType0/Coordinates"][:]
+        g_hsml = hf["PartType0/SmoothingLengths"][:]
 
     masses = masses * 1e10
     imasses = imasses * 1e10
@@ -587,7 +587,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         grp_lowi = np.sum(grp_lentype[:_grpn])
 
         # Find particle index for preceding subhalos in same group
-        sh_lowi = np.sum(lentype[grp_firstsub[_grpn]:idx])
+        sh_lowi = np.sum(lentype[grp_firstsub[_grpn] : idx])
 
         # Find particle index upto this subhalo
         lowi = grp_lowi + sh_lowi + np.sum(lentype[idx, :ptype])
@@ -634,7 +634,6 @@ def load_CAMELS_SwiftEAGLE_subfind(
 
         # Check there are gas particles in this subhalo
         if lentype[idx, 0] > 0:
-
             # Find gas particles in this subhalo
             ptype = 0
 
