@@ -10,7 +10,7 @@ from synthesizer.emission_models import IncidentEmission
 from synthesizer.exceptions import InconsistentAddition
 from synthesizer.filters import FilterCollection as Filters
 from synthesizer.grid import Grid
-from synthesizer.imaging.image import Image
+from synthesizer.imaging import Image, ImageCollection
 from synthesizer.parametric import Stars
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.parametric.morphology import Sersic2D
@@ -66,66 +66,34 @@ if __name__ == "__main__":
 
     fake_img = np.zeros((100, 100))
 
+    # Create fake dicts of images we'll put in image collections
+    fakes_imgs1 = {f: fake_img for f in filter_codes1}
+    fakes_imgs2 = {f: fake_img for f in filter_codes2}
+
     # Create fake image objects
-    img1 = Image(
-        resolution=0.5 * kpc,
-        npix=100,
-        fov=None,
-        filters=(),
-        positions=np.zeros((100, 3)) * kpc,
-        pixel_values=np.ones(100),
+    res1 = 0.5 * kpc
+    res2 = 0.4 * kpc
+    img1 = Image(resolution=res1, fov=100 * res1, img=fake_img)
+    img2 = Image(resolution=res2, fov=100 * res2, img=fake_img)
+    img_with_filters1 = ImageCollection(
+        resolution=res1,
+        fov=100 * res1,
+        imgs=fakes_imgs1,
     )
-    img2 = Image(
-        resolution=0.4 * kpc,
-        npix=100,
-        fov=None,
-        filters=(),
-        positions=np.zeros((100, 3)) * kpc,
-        pixel_values=np.ones(100),
+    img_with_filters2 = ImageCollection(
+        resolution=res1,
+        fov=100 * res1,
+        imgs=fakes_imgs2,
     )
-    img_with_filters1 = Image(
-        morphology=morph,
-        sed=sed,
-        resolution=0.5 * kpc,
-        npix=100,
-        fov=None,
-        filters=filters1,
-    )
-    img_with_filters2 = Image(
-        morphology=morph,
-        sed=sed,
-        resolution=0.5 * kpc,
-        npix=100,
-        fov=None,
-        filters=filters2,
-    )
-    img1.img = fake_img
-    img2.img = fake_img
-    for f in filter_codes1:
-        img_with_filters1.imgs[f] = fake_img
-    for f in filter_codes2:
-        img_with_filters2.imgs[f] = fake_img
 
     # Add images
     composite = img1 + img1 + img1
     composite_with_filters = img_with_filters1 + img_with_filters1
-    composite_mixed1 = img1 + img_with_filters1
-    composite_mixed2 = img_with_filters1 + img1
-
-    # Added images preserve a history of what objects were added
-    print(
-        "Example of image nesting from img1 + img2 + img3:",
-        composite.combined_imgs,
-    )
 
     print("Error Demonstration:")
 
     # Demonstrate errors
     try:
         broken = img1 + img2
-    except InconsistentAddition as e:
-        print(e)
-    try:
-        broken = img_with_filters1 + img_with_filters2
     except InconsistentAddition as e:
         print(e)
