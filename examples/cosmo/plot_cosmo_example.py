@@ -191,6 +191,7 @@ fig, ax = g.stars.plot_spectra(
 # dust attenuation docs.
 attenuated = AttenuatedEmission(
     grid=grid,
+    emitter="stellar",
     dust_curve=PowerLaw(slope=-1),
     apply_dust_to=reprocessed,
     tau_v=0.33,
