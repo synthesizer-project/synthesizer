@@ -114,53 +114,57 @@ double calculate_los_recursive(struct cell *c, const double x, const double y,
       struct cell *cp = &c->progeny[ip];
 
       /* Skip empty progeny. */
-      if (cp->part_count == 0)
+      if (cp->part_count == 0) {
         continue;
+      }
 
       /* Recurse... */
       surf_dens +=
           calculate_los_recursive(cp, x, y, z, threshold, kdim, kernel);
     }
 
-    return surf_dens;
+  } else {
+
+    /* We're in a leaf if we get here, unpack the particles. */
+    int npart_j = c->part_count;
+    struct particle *parts = c->particles;
+
+    /* Loop over the particles adding their contribution. */
+    for (int j = 0; j < npart_j; j++) {
+
+      /* Get the particle. */
+      struct particle *part = &parts[j];
+
+      /* Skip straight away if the gas particle is behind the star. */
+      if (part->pos[2] < z) {
+        continue;
+      }
+
+      /* Calculate the x and y separations. */
+      double dx = part->pos[0] - x;
+      double dy = part->pos[1] - y;
+
+      /* Calculate the impact parameter. */
+      double b = sqrt(dx * dx + dy * dy);
+
+      /* Early skip if the star's line of sight doesn't fall in the gas
+       * particles kernel. */
+      if (b > (threshold * part->sml)) {
+        continue;
+      }
+
+      /* Find fraction of smoothing length. */
+      double q = b / part->sml;
+
+      /* Get the value of the kernel at q. */
+      int index = kdim * q;
+      double kvalue = kernel[index];
+
+      /* Finally, compute the surface density itself. */
+      surf_dens += part->surf_den_var / (part->sml * part->sml) * kvalue;
+    }
   }
 
-  /* We're in a leaf if we get here, unpack the particles. */
-  int npart_j = c->part_count;
-  struct particle *parts = c->particles;
-
-  /* Loop over the particles adding their contribution. */
-  for (int j = 0; j < npart_j; j++) {
-
-    /* Get the particle. */
-    struct particle *part = &parts[j];
-
-    /* Skip straight away if the gas particle is behind the star. */
-    if (part->pos[2] < z)
-      continue;
-
-    /* Calculate the x and y separations. */
-    double dx = part->pos[0] - x;
-    double dy = part->pos[1] - y;
-
-    /* Calculate the impact parameter. */
-    double b = sqrt(x * x + y * y);
-
-    /* Early skip if the star's line of sight doesn't fall in the gas
-     * particles kernel. */
-    if (b > (threshold * part->sml))
-      continue;
-
-    /* Find fraction of smoothing length. */
-    double q = b / part->sml;
-
-    /* Get the value of the kernel at q. */
-    int index = kdim * q;
-    double kvalue = kernel[index];
-
-    /* Finally, compute the surface density itself. */
-    surf_dens += part->surf_den_var / (part->sml * part->sml) * kvalue;
-  }
   return surf_dens;
 }
 
@@ -214,9 +218,6 @@ PyObject *compute_surface_density(PyObject *self, PyObject *args) {
                     "The kernel dimension must be greater than zero.");
     return NULL;
   }
-  printf("npart_i: %d\n", npart_i);
-  printf("npart_j: %d\n", npart_j);
-  printf("kdim: %d\n", kdim);
 
   /* Extract a pointers to the actual data in the numpy arrays. */
   const double *kernel = extract_data_double(np_kernel, "kernel");
@@ -232,7 +233,7 @@ PyObject *compute_surface_density(PyObject *self, PyObject *args) {
 
   /* No point constructing cells if there isn't much gas (or we've been told to
    * loop). */
-  if (force_loop || npart_j < 1000) {
+  if (force_loop || npart_j < 100) {
 
     /* Use the simple loop over stars and gas. */
     low_mass_los_loop(pos_i, pos_j, smls, surf_den_val, kernel, surf_dens,
@@ -254,15 +255,11 @@ PyObject *compute_surface_density(PyObject *self, PyObject *args) {
    * dynamically nibble off cells for the progeny. We start with 8*8^3 cells but
    * when we need more cells we will dynamically allocate more memory. */
   int ncells = 1;
-  int tot_cells = 8 * pow(8, 3);
-  struct cell *cells = synth_malloc(tot_cells * sizeof(struct cell), "cells");
+  struct cell *root = synth_malloc(sizeof(struct cell), "root cell");
 
   /* Consturct the cell tree. */
-  construct_cell_tree(pos_j, smls, surf_den_val, npart_j, cells, ncells,
-                      tot_cells, MAX_DEPTH);
-
-  /* Get the root cell for convienence. */
-  struct cell *root = &cells[0];
+  construct_cell_tree(pos_j, smls, surf_den_val, npart_j, root, ncells,
+                      MAX_DEPTH);
 
   /* Loop over the particles we are calculating the surface density for. */
   for (int i = 0; i < npart_i; i++) {
@@ -275,8 +272,7 @@ PyObject *compute_surface_density(PyObject *self, PyObject *args) {
   }
 
   /* Clean up. */
-  free(cells[0].particles);
-  free(cells);
+  cleanup_cell_tree(root);
 
   /* Reconstruct the python array to return. */
   npy_intp np_dims[1] = {

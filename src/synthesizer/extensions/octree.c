@@ -64,14 +64,11 @@ int compare_particles_morton(const void *a, const void *b) {
  * @brief Recursively Populates the cell tree until maxdepth is reached.
  *
  * @param c The cell to populate.
- * @param cells The cells array.
  * @param ncells The number of cells.
- * @param tot_cells The total number of cells.
  * @param maxdepth The maximum depth of the tree.
  * @param depth The current depth.
  */
-static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
-                                         int *ncells, int tot_cells,
+static void populate_cell_tree_recursive(struct cell *c, int *ncells,
                                          int maxdepth, int depth) {
 
   /* Have we reached the bottom? */
@@ -89,43 +86,16 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
     return;
   }
 
-  /* Do we need to split? */
-  if (npart < 100)
-    return;
-
-  printf(
-      "Populating cell at depth %d with %d particles (width=%f, max_sml=%f)\n",
-      depth, npart, c->width, sqrt(c->max_sml_squ));
-
   /* Compute the width at this level. */
   double width = c->width / 2;
 
   /* We need to split... get the progeny. */
   c->split = 1;
-  printf("Splitting cell at depth %d width %f (ncells=%d, tot_cells=%d)\n",
-         depth, width, *ncells, tot_cells);
-  c->progeny = synth_malloc(8 * sizeof(struct cell *), "progeny");
-  printf("Allocated progeny\n");
+  c->progeny = synth_malloc(8 * sizeof(struct cell), "progeny");
+  *ncells += 8;
   for (int ip = 0; ip < 8; ip++) {
 
-    printf("Splitting cell %d\n", ip);
-
-    /* Ensure we have allocated cells. */
-    if (*ncells >= tot_cells) {
-
-      printf("Allocating more cells...\n");
-
-      /* Allocate the cells. */
-      struct cell *new_cells =
-          synth_malloc(8 * 8 * sizeof(struct cell), "new cells");
-
-      /* Attach the cells. */
-      cells[*ncells] = *new_cells;
-      tot_cells += 8 * 8 * 8;
-    }
-
-    /* Nibble off a cell */
-    c->progeny[ip] = cells[(*ncells)++];
+    /* Get this progeny cell. */
     struct cell *cp = &c->progeny[ip];
 
     /* Set the cell properties. */
@@ -145,6 +115,7 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
     cp->depth = depth;
     cp->particles = NULL;
     cp->progeny = NULL;
+    cp->maxdepth = depth;
   }
 
   /* Loop over particles first counting them. */
@@ -167,7 +138,6 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
     int child_index = k + 2 * (j + 2 * i);
 
     /* Count the particles. */
-    printf("Counting particle %d in child %d\n", igas, child_index);
     part_count[child_index]++;
   }
 
@@ -201,8 +171,6 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
     /* Get the child index. */
     int child_index = k + 2 * (j + 2 * i);
 
-    printf("Assigning particle %d to child %d\n", igas, child_index);
-
     /* Assign to the cell. */
     struct cell *cp = &c->progeny[child_index];
     cp->particles[cp->part_count++] = particles[igas];
@@ -217,12 +185,21 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
   for (int ip = 0; ip < 8; ip++) {
     struct cell *cp = &c->progeny[ip];
 
+    /* Skip any empty progeny. */
+    if (cp->part_count == 0) {
+      continue;
+    }
+
     /* Square the maximum smoothing length. */
     cp->max_sml_squ = cp->max_sml_squ * cp->max_sml_squ;
 
     /* Go to the next level */
-    populate_cell_tree_recursive(cp, cells, ncells, tot_cells, maxdepth,
-                                 depth + 1);
+    populate_cell_tree_recursive(cp, ncells, maxdepth, depth + 1);
+
+    /* Update the maximum depth. */
+    if (cp->maxdepth > c->maxdepth) {
+      c->maxdepth = cp->maxdepth;
+    }
   }
 }
 
@@ -332,13 +309,9 @@ static void construct_particles(struct particle *particles, const double *pos,
  */
 void construct_cell_tree(const double *pos, const double *sml,
                          const double *surf_den_val, const int npart,
-                         struct cell *cells, int ncells, int tot_cells,
-                         int maxdepth) {
+                         struct cell *root, int ncells, int maxdepth) {
 
   double cell_tree_start = tic();
-
-  /* Get the root cell. */
-  struct cell *root = &cells[0];
 
   /* Set the root cell properties. */
   root->loc[0] = 0;
@@ -358,9 +331,40 @@ void construct_cell_tree(const double *pos, const double *sml,
   construct_particles(parts, pos, sml, surf_den_val, npart, root);
 
   /* And recurse... */
-  populate_cell_tree_recursive(root, cells, &ncells, tot_cells, maxdepth, 1);
+  populate_cell_tree_recursive(root, &ncells, maxdepth, 1);
+
+#ifdef WITH_DEBUGGING_CHECKS
+  printf("Constructed cell tree with %d cells\n", ncells);
+  printf("Maximum depth: %d\n", root->maxdepth);
+  printf("Cell bounds: %f %f %f %f %f %f\n", root->loc[0],
+         root->loc[0] + root->width, root->loc[1], root->loc[1] + root->width,
+         root->loc[2], root->loc[2] + root->width);
+#endif
 
   toc("Cell tree construction", cell_tree_start);
+}
+
+/**
+ * @brief Clean up the cell tree recursively.
+ *
+ * @param c The cell to clean up.
+ */
+void cleanup_cell_tree(struct cell *c) {
+  if (c->split) {
+    for (int i = 0; i < 8; i++) {
+      cleanup_cell_tree(&c->progeny[i]);
+    }
+    free(c->progeny);
+  }
+
+  /* Clear up particles if we have them. */
+  if (c->part_count > 0) {
+    free(c->particles);
+  }
+
+  if (c->depth == 0) {
+    free(c);
+  }
 }
 
 /**
@@ -374,6 +378,12 @@ void construct_cell_tree(const double *pos, const double *sml,
  * @return The distance between the cells.
  */
 double min_projected_dist2(struct cell *c, double x, double y) {
+
+  /* If the position is inside the cell return 0. */
+  if (x >= c->loc[0] && x <= c->loc[0] + c->width && y >= c->loc[1] &&
+      y <= c->loc[1] + c->width) {
+    return 0;
+  }
 
   /* Get the minimum separation along each axis. */
   const double dx = fmin(fabs(c->loc[0] - x), fabs(c->loc[0] + c->width - x));

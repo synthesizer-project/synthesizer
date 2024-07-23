@@ -50,13 +50,16 @@ struct cell {
 
   /* Pointers to cells below this one. */
   struct cell *progeny;
+
+  /* The maximum depth in the cell tree. */
+  int maxdepth;
 };
 
 /* Prototypes. */
 void construct_cell_tree(const double *pos, const double *sml,
                          const double *surf_den_val, const int npart,
-                         struct cell *cells, int ncells, int tot_cells,
-                         int maxdepth);
+                         struct cell *root, int ncells, int maxdepth);
+void cleanup_cell_tree(struct cell *c);
 double min_projected_dist2(struct cell *c, double x, double y);
 
 #endif // OCTREE_H_
