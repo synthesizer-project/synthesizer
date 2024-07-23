@@ -174,6 +174,7 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
     int child_index = k + 2 * (j + 2 * i);
 
     /* Count the particles. */
+    printf("Counting particle %d in child %d\n", igas, child_index);
     part_count[child_index]++;
   }
 
