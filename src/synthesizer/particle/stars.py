@@ -585,7 +585,6 @@ class Stars(Particles, StarsComponent):
 
             if np.sum(mask) == 0:
                 warn("All particles replaced with parametric forms")
-
                 return lnu_parametric
 
         from ..extensions.integrated_spectra import compute_integrated_sed
@@ -694,6 +693,7 @@ class Stars(Particles, StarsComponent):
             stars = sum(stars[1:], stars[0])
         else:
             stars = stars[0]
+
 
         # Get the spectra for this parametric form
         return stars.generate_lnu(grid=grid, spectra_name=spectra_name)
