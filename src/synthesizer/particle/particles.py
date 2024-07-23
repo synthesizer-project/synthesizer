@@ -557,6 +557,7 @@ class Particles:
         mask,
         threshold,
         force_loop,
+        min_count,
     ):
         """
         Prepare the arguments for line of sight surface density computation.
@@ -579,6 +580,10 @@ class Particles:
                 at a value of the impact parameter of q = r / h = 1.
             force_loop (bool)
                 Whether to force the use of a simple loop rather than the tree.
+            min_count (int)
+                The minimum number of particles allowed in a leaf cell when
+                using the tree. This can be used for tuning the tree
+                performance.
         """
         # Ensure we actually have the properties needed
         if self.coordinates is None:
@@ -633,6 +638,7 @@ class Particles:
             kdim,
             threshold,
             force_loop,
+            min_count,
         )
 
     def get_los_surface_density(
@@ -643,6 +649,7 @@ class Particles:
         mask=None,
         threshold=1,
         force_loop=0,
+        min_count=100,
     ):
         """
         Calculate the surface density of an attribute.
@@ -656,6 +663,23 @@ class Particles:
                 The other particles to calculate the surface density with.
             density_attr (str)
                 The attribute to use to calculate the surface density.
+            kernel (array-like, float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value
+                of impact parameter q via kernel[int(k*q)]. Note, this can be
+                an arbitrary kernel.
+            mask (array-like, bool)
+                A mask to be applied to the stars. Surface densities will only
+                be computed and returned for stars with True in the mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
+            force_loop (bool)
+                Whether to force the use of a simple loop rather than the tree.
+            min_count (int)
+                The minimum number of particles allowed in a leaf cell when
+                using the tree. This can be used for tuning the tree
+                performance.
 
         Returns:
             surface_density (float)
@@ -678,6 +702,7 @@ class Particles:
                 mask,
                 threshold,
                 force_loop,
+                min_count,
             )
         )
 

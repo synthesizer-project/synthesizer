@@ -188,13 +188,13 @@ PyObject *compute_surface_density(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  int npart_i, npart_j, kdim, force_loop;
+  int npart_i, npart_j, kdim, force_loop, min_count;
   double threshold;
   PyArrayObject *np_kernel, *np_pos_i, *np_pos_j, *np_smls, *np_surf_den_val;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiidi", &np_kernel, &np_pos_i, &np_pos_j,
+  if (!PyArg_ParseTuple(args, "OOOOOiiidii", &np_kernel, &np_pos_i, &np_pos_j,
                         &np_smls, &np_surf_den_val, &npart_i, &npart_j, &kdim,
-                        &threshold, &force_loop))
+                        &threshold, &force_loop, &min_count))
     return NULL;
 
   double start = tic();
@@ -259,7 +259,7 @@ PyObject *compute_surface_density(PyObject *self, PyObject *args) {
 
   /* Consturct the cell tree. */
   construct_cell_tree(pos_j, smls, surf_den_val, npart_j, root, ncells,
-                      MAX_DEPTH);
+                      MAX_DEPTH, min_count);
 
   /* Loop over the particles we are calculating the surface density for. */
   for (int i = 0; i < npart_i; i++) {

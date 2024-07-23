@@ -19,57 +19,17 @@
 #include "timers.h"
 
 /**
- * @brief A function to compute the morton key for a 3D point.
- *
- * @param x The x-coordinate.
- * @param y The y-coordinate.
- * @param z The z-coordinate.
- * @return The morton key.
- */
-uint64_t morton3D(double x, double y, double z) {
-  uint64_t answer = 0;
-  uint64_t x_int = (uint64_t)x;
-  uint64_t y_int = (uint64_t)y;
-  uint64_t z_int = (uint64_t)z;
-
-  for (uint64_t i = 0; i < 21;
-       ++i) { // 21 bits from each coordinate fits into 64 bits
-    answer |= ((x_int & (1ULL << i)) << (2 * i)) |
-              ((y_int & (1ULL << i)) << (2 * i + 1)) |
-              ((z_int & (1ULL << i)) << (2 * i + 2));
-  }
-
-  return answer;
-}
-
-/**
- * @brief A function to compare particles by their morton key.
- *
- * @param a The first particle.
- * @param b The second particle.
- * @return The comparison.
- */
-int compare_particles_morton(const void *a, const void *b) {
-  struct particle *pa = (struct particle *)a;
-  struct particle *pb = (struct particle *)b;
-
-  if (pa->morton < pb->morton)
-    return -1;
-  if (pa->morton > pb->morton)
-    return 1;
-  return 0;
-}
-
-/**
  * @brief Recursively Populates the cell tree until maxdepth is reached.
  *
  * @param c The cell to populate.
  * @param ncells The number of cells.
  * @param maxdepth The maximum depth of the tree.
  * @param depth The current depth.
+ * @param min_count The minimum number of particles in a leaf cell.
  */
 static void populate_cell_tree_recursive(struct cell *c, int *ncells,
-                                         int maxdepth, int depth) {
+                                         int maxdepth, int depth,
+                                         int min_count) {
 
   /* Have we reached the bottom? */
   if (depth > maxdepth) {
@@ -81,8 +41,9 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   struct particle *particles = c->particles;
   int npart = c->part_count;
 
-  /* No point splitting below the maximum smoothing length. */
-  if (c->width < sqrt(c->max_sml_squ)) {
+  /* No point splitting below the maximum smoothing length or if we have too
+   * few particles. */
+  if (c->width < sqrt(c->max_sml_squ) || npart < min_count) {
     return;
   }
 
@@ -120,13 +81,13 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
 
   /* Loop over particles first counting them. */
   int part_count[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-  for (int igas = 0; igas < npart; igas++) {
+  for (int ipart = 0; ipart < npart; ipart++) {
 
     /* Get the position of the particle relative to the parent cell. */
     double ipos[3] = {
-        particles[igas].pos[0] - c->loc[0],
-        particles[igas].pos[1] - c->loc[1],
-        particles[igas].pos[2] - c->loc[2],
+        particles[ipart].pos[0] - c->loc[0],
+        particles[ipart].pos[1] - c->loc[1],
+        particles[ipart].pos[2] - c->loc[2],
     };
 
     /* Get the integer cell location. */
@@ -154,13 +115,13 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   }
 
   /* Loop over particles again, this time assigning them. */
-  for (int igas = 0; igas < npart; igas++) {
+  for (int ipart = 0; ipart < npart; ipart++) {
 
     /* Get the position of the particle relative to the parent cell. */
     double ipos[3] = {
-        particles[igas].pos[0] - c->loc[0],
-        particles[igas].pos[1] - c->loc[1],
-        particles[igas].pos[2] - c->loc[2],
+        particles[ipart].pos[0] - c->loc[0],
+        particles[ipart].pos[1] - c->loc[1],
+        particles[ipart].pos[2] - c->loc[2],
     };
 
     /* Get the integer cell location. */
@@ -173,11 +134,11 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
 
     /* Assign to the cell. */
     struct cell *cp = &c->progeny[child_index];
-    cp->particles[cp->part_count++] = particles[igas];
+    cp->particles[cp->part_count++] = particles[ipart];
 
     /* Updated the maximum smoothing length. */
-    if (particles[igas].sml > cp->max_sml_squ) {
-      cp->max_sml_squ = particles[igas].sml;
+    if (particles[ipart].sml > cp->max_sml_squ) {
+      cp->max_sml_squ = particles[ipart].sml;
     }
   }
 
@@ -193,8 +154,8 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   /* Ensure the cell and particle positions agree. */
   for (int ip = 0; ip < 8; ip++) {
     struct cell *cp = &c->progeny[ip];
-    for (int igas = 0; igas < cp->part_count; igas++) {
-      struct particle *pp = &cp->particles[igas];
+    for (int ipart = 0; ipart < cp->part_count; ipart++) {
+      struct particle *pp = &cp->particles[ipart];
 
       if (pp->pos[0] < cp->loc[0] || pp->pos[0] > cp->loc[0] + cp->width) {
         printf("Error: Particle outside cell bounds in x (c->loc[0] = %f, "
@@ -228,7 +189,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
     cp->max_sml_squ = cp->max_sml_squ * cp->max_sml_squ;
 
     /* Go to the next level */
-    populate_cell_tree_recursive(cp, ncells, maxdepth, depth + 1);
+    populate_cell_tree_recursive(cp, ncells, maxdepth, depth + 1, min_count);
 
     /* Update the maximum depth. */
     if (cp->maxdepth > c->maxdepth) {
@@ -268,8 +229,6 @@ static void construct_particles(struct particle *particles, const double *pos,
     particles[ip].pos[2] = pos[ip * 3 + 2];
     particles[ip].sml = sml[ip];
     particles[ip].surf_den_var = surf_den_vals[ip];
-    particles[ip].morton = morton3D(particles[ip].pos[0], particles[ip].pos[1],
-                                    particles[ip].pos[2]);
 
     /* Update the bounds. */
     for (int i = 0; i < 3; i++) {
@@ -284,9 +243,6 @@ static void construct_particles(struct particle *particles, const double *pos,
       root->max_sml_squ = particles[ip].sml;
     }
   }
-
-  /* Sort particles based on Morton code. */
-  qsort(particles, npart, sizeof(struct particle), compare_particles_morton);
 
   /* Get the cell width based on the bounds we have found. Note that
    * we are assuming a cubic domain so the maximum width is the width. */
@@ -340,10 +296,12 @@ static void construct_particles(struct particle *particles, const double *pos,
  * @param ncells The number of cells.
  * @param tot_cells The total number of cells.
  * @param maxdepth The maximum depth of the tree.
+ * @param min_count The minimum number of particles in a leaf cell.
  */
 void construct_cell_tree(const double *pos, const double *sml,
                          const double *surf_den_val, const int npart,
-                         struct cell *root, int ncells, int maxdepth) {
+                         struct cell *root, int ncells, int maxdepth,
+                         int min_count) {
 
   double cell_tree_start = tic();
 
@@ -365,7 +323,7 @@ void construct_cell_tree(const double *pos, const double *sml,
   construct_particles(parts, pos, sml, surf_den_val, npart, root);
 
   /* And recurse... */
-  populate_cell_tree_recursive(root, &ncells, maxdepth, 1);
+  populate_cell_tree_recursive(root, &ncells, maxdepth, 1, min_count);
 
 #ifdef WITH_DEBUGGING_CHECKS
   printf("Constructed cell tree with %d cells\n", ncells);
