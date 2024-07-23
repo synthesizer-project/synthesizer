@@ -207,10 +207,8 @@ compile_flags = CFLAGS.split()
 link_args = LDFLAGS.split()
 
 # If no flags are specified, use the default flags
-if len(compile_flags) == 0:
-    compile_flags = default_compile_flags
-if len(link_args) == 0:
-    link_args = default_link_args
+compile_flags.extend(default_compile_flags)
+link_args.extend(default_link_args)
 
 # Add preprocessor flags
 if WITH_DEBUGGING_CHECKS:
