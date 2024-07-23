@@ -23,20 +23,20 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid"
     grid_name = "test_grid"
     grid = Grid(grid_name, grid_dir=grid_dir)
-
+    
     gals = load_CAMELS_IllustrisTNG(
         "../../tests/data/",
         snap_name="camels_snap.hdf5",
         group_name="camels_subhalo.hdf5",
         group_dir="../../tests/data/",
     )
-
+  
     # Define the emission model
     model = IncidentEmission(grid)
-
+    
     # Select a single galaxy
     gal = gals[1]
-
+    
     # Age limit at which we replace star particles
     age_lim = 500 * Myr
 
@@ -47,13 +47,13 @@ if __name__ == "__main__":
     """
     # First, filter for star particles
     pmask = gal.stars.ages < age_lim
-
+    
     stars = []
     # Loop through each young star particle
     for _pmask in np.where(pmask)[0]:
         # Initialise SFH object
         sfh = SFH.Constant(duration=age_lim)
-
+    
         # Create a parametric stars object
         stars.append(
             Stars(
@@ -64,17 +64,17 @@ if __name__ == "__main__":
                 initial_mass=gal.stars.initial_masses[_pmask],
             )
         )
-
+    
     # Sum each individual Stars object
     stars = sum(stars[1:], stars[0])
-
+    
     # Create a parametric galaxy
     para_gal = Galaxy(stars)
-
+    
     para_spec = para_gal.stars.get_spectra(model)
     part_spec_old = gal.stars.get_spectra(
         model,
-        mask={'incident': {'attr': "ages", 'op': "<", 'thresh': age_lim}}
+        mask={'intrinsic': {'attr': "ages", 'op': "<", 'thresh': age_lim}}
     )
     part_spec = gal.stars.get_spectra(model)
 
@@ -84,19 +84,19 @@ if __name__ == "__main__":
     This shows an example on `get_spectra_incident`, supplying
     the optional `parametric_young_stars` keyword argument.
     """
-
+    
     combined_spec = gal.stars.get_spectra(
-        model, parametric_young_stars=age_lim
+        grid=grid, parametric_young_stars=age_lim
     )
-
+    
     assert (combined_spec.lnu == (part_spec_old.lnu + para_spec.lnu)).all()
-
+    
     """
     Plot intrinsic emission from pure particle, parametric
     and parametric + particle models
     """
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-
+    
     ax1.loglog(para_spec.lam, para_spec.lnu, label="Parametric young", color="C0")
     ax1.loglog(
         part_spec_old.lam, part_spec_old.lnu, label="Particle old", color="C3"
@@ -119,12 +119,12 @@ if __name__ == "__main__":
     ax1.legend()
     ax1.set_xlabel("$\\lambda \\,/\\, \\AA$")
     ax1.set_ylabel("$L_{\\lambda} / \\mathrm{erg / Hz / s}$")
-
+    
     """
     Plot SFH from particles and parametric
     """
     binLimits = np.linspace(5, 10, 30)
-
+    
     ax2.hist(
         np.log10(np.hstack([gal.stars.ages[~pmask].value, stars.ages.value])),
         histtype="step",
@@ -161,5 +161,5 @@ if __name__ == "__main__":
     # plt.show()
     ax2.set_xlabel("$\\mathrm{log_{10} Age \\,/\\, yr}$")
     ax2.set_ylabel("$\\mathrm{log_{10} (Mass \\,/\\, M_{\\odot})}$")
-
+    
     plt.show()
