@@ -137,8 +137,8 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
 
     /* Get this threads chunk of the results array to write to. We get a chunk
      * here to avoid cache locality issues. */
-    double *surf_dens_thread =
-        synth_malloc(end - start * sizeof(double), "surface densities thread");
+    double *surf_dens_thread = synth_malloc((end - start) * sizeof(double),
+                                            "surface densities thread");
 
     /* Loop over particle postions. */
     for (int i = start; i < end; i++) {
@@ -192,8 +192,9 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
     /* Copy the results back to the main array. */
 #pragma omp critical
     {
-      memcpy(&surf_dens[start], surf_dens_thread,
-             (end - start) * sizeof(double));
+      for (int i = start; i < end; i++) {
+        surf_dens[i] = surf_dens_thread[i - start];
+      }
     }
   }
 }
@@ -420,8 +421,8 @@ static void los_tree_omp(struct cell *root, const double *pos_i,
 
     /* Get this threads chunk of the results array to write to. We get a chunk
      * here to avoid cache locality issues. */
-    double *surf_dens_thread =
-        synth_malloc(end - start * sizeof(double), "surface densities thread");
+    double *surf_dens_thread = synth_malloc((end - start) * sizeof(double),
+                                            "surface densities thread");
 
     /* Loop over the particles we are calculating the surface density for. */
     for (int i = start; i < end; i++) {
