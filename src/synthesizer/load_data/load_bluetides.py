@@ -19,7 +19,7 @@ except ImportError:
     raise UnmetDependency(
         "The `bigfile` module is required to load Bluetides data. "
         "Install synthesizer with the `bluetides` extra dependencies:"
-        " `pip install.[bluetides]`."
+        " `pip install .[bluetides]`."
     )
 from scipy import integrate
 from unyt import Msun, Myr, c, kpc, yr
