@@ -50,13 +50,16 @@ sphinx_gallery_conf = {
     "nested_sections": True,
     # Directory where function/class granular galleries are stored
     "backreferences_dir": "_autosummary/backreferences",
-    # Modules for which function/class level galleries are created. In
-    # this case sphinx_gallery and numpy in a tuple of strings.
+    # Modules for which function/class level galleries are created
     "doc_module": ("synthesizer"),
-    #     # Regexes to match objects to exclude from implicit backreferences.
-    #     # The default option is an empty set, i.e. exclude nothing.
-    #     # To exclude everything, use: '.*'
-    #     # 'exclude_implicit_doc': {r'pyplot\.show'},
+    "abort_on_example_error": True,
+    # "show_memory": True,
+    # "recommender": {
+    #     "enable": True,
+    #     "n_examples": 5,
+    #     "min_df": 3,
+    #     "max_df": 0.9,
+    # },
 }
 
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
