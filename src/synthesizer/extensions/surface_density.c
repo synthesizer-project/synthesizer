@@ -365,7 +365,6 @@ static double calculate_los_recursive(struct cell *c, const double x,
  * @param threshold The threshold for the kernel.
  */
 static void los_tree_serial(struct cell *root, const double *pos_i,
-                            const double *smls, const double *surf_den_vals,
                             const double *kernel, double *surf_dens,
                             const int npart_i, const int kdim,
                             const double threshold) {
@@ -402,7 +401,6 @@ static void los_tree_serial(struct cell *root, const double *pos_i,
  */
 #ifdef WITH_OPENMP
 static void los_tree_omp(struct cell *root, const double *pos_i,
-                         const double *smls, const double *surf_den_vals,
                          const double *kernel, double *surf_dens,
                          const int npart_i, const int kdim,
                          const double threshold, const int nthreads) {
@@ -463,10 +461,10 @@ static void los_tree_omp(struct cell *root, const double *pos_i,
  * @param threshold The threshold for the kernel.
  * @param nthreads The number of threads to use.
  */
-static void los_tree(struct cell *root, const double *pos_i, const double *smls,
-                     const double *surf_den_vals, const double *kernel,
-                     double *surf_dens, const int npart_i, const int kdim,
-                     const double threshold, const int nthreads) {
+static void los_tree(struct cell *root, const double *pos_i,
+                     const double *kernel, double *surf_dens, const int npart_i,
+                     const int kdim, const double threshold,
+                     const int nthreads) {
 
   double start = tic();
 
@@ -474,11 +472,10 @@ static void los_tree(struct cell *root, const double *pos_i, const double *smls,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    los_tree_omp(root, pos_i, smls, surf_den_vals, kernel, surf_dens, npart_i,
-                 kdim, threshold, nthreads);
+    los_tree_omp(root, pos_i, kernel, surf_dens, npart_i, kdim, threshold,
+                 nthreads);
   } else {
-    los_tree_serial(root, pos_i, smls, surf_den_vals, kernel, surf_dens,
-                    npart_i, kdim, threshold);
+    los_tree_serial(root, pos_i, kernel, surf_dens, npart_i, kdim, threshold);
   }
 
 #else
@@ -587,8 +584,7 @@ PyObject *compute_surface_density(PyObject *self, PyObject *args) {
                       MAX_DEPTH, min_count);
 
   /* Calculate the surface densities. */
-  los_tree(root, pos_i, smls, surf_den_val, kernel, surf_dens, npart_i, kdim,
-           threshold, nthreads);
+  los_tree(root, pos_i, kernel, surf_dens, npart_i, kdim, threshold, nthreads);
 
   /* Clean up. */
   cleanup_cell_tree(root);
