@@ -8,7 +8,7 @@ You will need a working installation of synthesizer for these scripts to work, a
 
 Grids should follow the naming convention where possible, see :ref:`grid-naming`.
 
-Please see `here <../abundances.ipynb>`_ for details on how to modify the chemical abundance pattern of gas, stars and dust using the `abundances`` object, and use this when running `cloudy`.
+Please see `Abundances <../abundances.ipynb>`_ for details on how to modify the chemical abundance pattern of gas, stars and dust using the `abundances`` object, and use this when running `cloudy`.
 
 
 Running your own SPS grids 
