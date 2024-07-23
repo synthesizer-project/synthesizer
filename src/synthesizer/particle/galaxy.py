@@ -396,6 +396,7 @@ class Galaxy(BaseGalaxy):
         mask=None,
         threshold=1,
         force_loop=0,
+        min_count=100,
     ):
         """
         Calculate the LOS optical depth for each star particle.
@@ -426,6 +427,12 @@ class Galaxy(BaseGalaxy):
                 By default (False) the C function will only loop over nearby
                 gas particles to search for contributions to the LOS surface
                 density. This forces the loop over *all* gas particles.
+            min_count (int)
+                The minimum number of particles in a leaf cell of the tree
+                used to search for gas particles. Can be used to tune the
+                performance of the tree search in extreme cases. If there are
+                fewer particles in a leaf cell than this value, the search
+                will be performed with a brute force loop.
         """
         # Ensure we have stars and gas
         if self.stars is None:
@@ -449,6 +456,7 @@ class Galaxy(BaseGalaxy):
             mask=mask,
             threshold=threshold,
             force_loop=force_loop,
+            min_count=min_count,
         )  # Msun / Mpc**2
 
         los_dustsds /= (1e6) ** 2  # Msun / pc**2
