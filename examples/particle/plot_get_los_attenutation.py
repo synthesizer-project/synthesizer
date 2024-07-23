@@ -10,8 +10,10 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 from scipy.spatial import cKDTree
 from synthesizer.grid import Grid
+from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy
@@ -71,39 +73,43 @@ param_stars = ParametricStars(
     initial_mass=mass,
 )
 
+xs = {}
+loop_ys = {}
+tree_ys = {}
+precision = {}
+
 for n in [10, 100]:  # , 1000, 10000]:
-    xs = []
-    loop_ys = []
-    tree_ys = []
-    precision = []
-    for ngas in np.logspace(np.log10(n), 6, 20, dtype=int):
-        # Make a fake galaxy
+    xs.setdefault(n, [])
+    loop_ys.setdefault(n, [])
+    tree_ys.setdefault(n, [])
+    precision.setdefault(n, [])
 
-        # First make the stars
+    # First make the stars
 
-        # Generate some random coordinates
-        coords = CoordinateGenerator.generate_3D_gaussian(
-            n,
-            mean=np.array([50, 50, 50]),
-        )
+    # Generate some random coordinates
+    coords = CoordinateGenerator.generate_3D_gaussian(
+        n,
+        mean=np.array([50, 50, 50]),
+    )
 
-        # Calculate the smoothing lengths
-        smls = calculate_smoothing_lengths(coords, num_neighbors=56)
+    # Calculate the smoothing lengths
+    smls = calculate_smoothing_lengths(coords, num_neighbors=56)
 
-        # Sample the SFZH, producing a Stars object
-        # we will also pass some keyword arguments for attributes
-        # we will need for imaging
-        stars = sample_sfhz(
-            param_stars.sfzh,
-            param_stars.log10ages,
-            param_stars.log10metallicities,
-            n,
-            coordinates=coords,
-            current_masses=np.full(n, 10**8.7 / n),
-            smoothing_lengths=smls,
-            redshift=1,
-        )
+    # Sample the SFZH, producing a Stars object
+    # we will also pass some keyword arguments for attributes
+    # we will need for imaging
+    stars = sample_sfhz(
+        param_stars.sfzh,
+        param_stars.log10ages,
+        param_stars.log10metallicities,
+        n,
+        coordinates=coords,
+        current_masses=np.full(n, 10**8.7 / n),
+        smoothing_lengths=smls,
+        redshift=1,
+    )
 
+    for ngas in np.logspace(np.log10(n), 4, 20, dtype=int):
         # Now make the gas
 
         # Generate some random coordinates
@@ -126,16 +132,8 @@ for n in [10, 100]:  # , 1000, 10000]:
         # Create galaxy object
         galaxy = Galaxy("Galaxy", stars=stars, gas=gas, redshift=1)
 
-        print(
-            f"Created galaxy with {n} stars and {ngas} gas particles "
-            f"(dust_mass={np.sum(galaxy.gas.dust_masses):.2e})"
-        )
-        print(galaxy.stars.nparticles, galaxy.gas.nparticles)
-
         # Create a fake kernel
-        kernel = np.random.normal(0.5, 0.25, 100)
-        kernel = np.sort(kernel)[::-1]
-        kernel /= np.sum(kernel)
+        kernel = Kernel().get_kernel()
 
         # Calculate the tau_vs
         start = time.time()
@@ -151,10 +149,10 @@ for n in [10, 100]:  # , 1000, 10000]:
         tree_time = time.time() - start
         tree_sum = np.sum(tau_v)
 
-        xs.append(n * ngas)
-        loop_ys.append(loop_time)
-        tree_ys.append(tree_time)
-        precision.append(np.abs(tree_sum - loop_sum) / loop_sum * 100)
+        xs[n].append(ngas)
+        loop_ys[n].append(loop_time)
+        tree_ys[n].append(tree_time)
+        precision[n].append(np.abs(tree_sum - loop_sum) / loop_sum * 100)
 
         print(
             f"LOS calculation with tree took {tree_time:.4f} "
@@ -173,45 +171,69 @@ for n in [10, 100]:  # , 1000, 10000]:
             "Normalised residual="
             f"{np.abs(tree_sum - loop_sum) / loop_sum * 100:.4f}"
         )
+        print()
 
-    xs = np.array(xs)
-    sinds = np.argsort(xs)
-    xs = xs[sinds]
-    loop_ys = np.array(loop_ys)[sinds]
-    tree_ys = np.array(tree_ys)[sinds]
-    precision = np.array(precision)[sinds]
+# Convert to numpy arrays
+for n in xs.keys():
+    xs[n] = np.array(xs[n])
+    sinds = np.argsort(xs[n])
+    xs[n] = xs[n][sinds]
+    loop_ys[n] = np.array(loop_ys[n])[sinds]
+    tree_ys[n] = np.array(tree_ys[n])[sinds]
+    precision[n] = np.array(precision[n])[sinds]
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.loglog()
-    ax.grid()
+# Create lists of colours to use
+colours = ["b", "g", "r", "c", "m", "y", "k"]
 
-    ax.plot(xs, loop_ys, label="Loop")
-    ax.plot(xs, tree_ys, label="Tree")
+# Create the legend handles
+legend_handles = [
+    Line2D([0], [0], color="k", lw=2, label="Loop", linestyle="-"),
+    Line2D([0], [0], color="k", lw=2, label="Tree", linestyle="--"),
+]
 
-    ax.set_ylabel("Wallclock (s)")
-    ax.set_xlabel(r"$N_\star N_\mathrm{gas}$")
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.loglog()
+ax.grid()
 
-    ax.legend()
+# Plot for each star count
+for i, n in enumerate(xs.keys()):
+    ax.plot(xs[n], loop_ys[n], color=colours[i])
+    ax.plot(xs[n], tree_ys[n], color=colours[i], linestyle="--")
 
-    plt.show()
-    # fig.savefig("../los_timing_nstar%d.png" % n,
-    #     dpi=100, bbox_inches="tight")
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.semilogx()
-    ax.grid()
-
-    ax.plot(xs, precision, label="Loop / Tree")
-
-    ax.set_ylabel(
-        r"$|\tau_{V, tree} - \tau_{V, loop}|" r" / \tau_{V, loop}$ (%)"
+    # Add a handle for this star count
+    legend_handles.append(
+        Line2D(
+            [0],
+            [0],
+            color=colours[i],
+            lw=2,
+            label=f"$N_\\star={n}$",
+            linestyle="-",
+        )
     )
-    ax.set_xlabel("$N_\\star N_\\mathrm{gas}$")
 
-    ax.legend()
+ax.set_ylabel("Wallclock (s)")
+ax.set_xlabel(r"$N_\star N_\mathrm{gas}$")
 
-    # fig.savefig("../los_precision_nstar%d.png" % n,
-    #     dpi=100, bbox_inches="tight")
-    plt.show()
+ax.legend(handles=legend_handles)
+
+plt.show()
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.semilogx()
+ax.grid()
+
+
+# Plot for each star count
+for i, n in enumerate(xs.keys()):
+    ax.plot(xs[n], precision[n], color=colours[i], label=f"$N_\\star={n}$")
+
+
+ax.set_ylabel(r"$|\tau_{V, tree} - \tau_{V, loop}|" r" / \tau_{V, loop}$ (%)")
+ax.set_xlabel("$N_\\star N_\\mathrm{gas}$")
+
+ax.legend()
+
+plt.show()
