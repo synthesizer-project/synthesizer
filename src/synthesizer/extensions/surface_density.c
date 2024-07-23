@@ -97,8 +97,8 @@ double calculate_los_recursive(struct cell *c, const double x, const double y,
     return 0;
   }
 
-  /* Early exit if the projected distance between cells is more than the maximum
-   * smoothing length in the cell. */
+  /* Early exit if the projected distance between cells is more than the
+   * maximum smoothing length in the cell. */
   if (c->max_sml_squ < min_projected_dist2(c, x, y)) {
     return 0;
   }
