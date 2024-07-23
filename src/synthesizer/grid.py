@@ -171,10 +171,17 @@ class Grid:
         # Read in spectra
         if read_spectra:  # also True if read_spectra is a list
             self._get_spectra_grid(read_spectra)
+        else:
+            self.lam = None
+            self.spectra = None
+            self.available_spectra = []
 
         # Read in lines
         if read_lines:  # also True if read_lines is a list
             self._get_lines_grid(read_lines)
+        else:
+            self.lines = None
+            self.available_lines = []
 
         # Prepare the wavelength axis (if new_lam, lam_lims and filters are
         # all None, this will do nothing, leaving the grid's wavelength array
