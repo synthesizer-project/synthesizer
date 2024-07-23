@@ -231,9 +231,9 @@ PyObject *compute_surface_density(PyObject *self, PyObject *args) {
   double *surf_dens =
       synth_malloc(npart_i * sizeof(double), "surface densities");
 
-  /* No point constructing cells if there isn't much gas (or we've been told to
-   * loop). */
-  if (force_loop || npart_j < 100) {
+  /* No point constructing cells if there isn't enough gas to construct a tree
+   * below depth 0. (and loop if we've been told to) */
+  if (force_loop || npart_j < min_count) {
 
     /* Use the simple loop over stars and gas. */
     low_mass_los_loop(pos_i, pos_j, smls, surf_den_val, kernel, surf_dens,
