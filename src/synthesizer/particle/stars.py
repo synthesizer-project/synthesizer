@@ -210,6 +210,9 @@ class Stars(Particles, StarsComponent):
         # Set the V band optical depths
         self.tau_v = tau_v
 
+        # Set the metallicity floor when using log properties
+        self.metallicity_floor = metallicity_floor
+
         # Set the alpha enhancement [alpha/Fe] (only used for >2 dimensional
         # SPS grids)
         self.alpha_enhancement = alpha_enhancement

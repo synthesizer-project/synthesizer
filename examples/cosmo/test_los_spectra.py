@@ -12,8 +12,8 @@ from synthesizer.load_data import load_CAMELS_IllustrisTNG
 gals = load_CAMELS_IllustrisTNG(
     "../../tests/data/",
     snap_name="camels_snap.hdf5",
-    fof_name="camels_subhalo.hdf5",
-    fof_dir="../../tests/data/",
+    group_name="camels_subhalo.hdf5",
+    group_dir="../../tests/data/",
 )
 
 kernel = Kernel()

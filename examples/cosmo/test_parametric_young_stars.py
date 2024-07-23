@@ -24,8 +24,8 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 gals = load_CAMELS_IllustrisTNG(
     "../../tests/data/",
     snap_name="camels_snap.hdf5",
-    fof_name="camels_subhalo.hdf5",
-    fof_dir="../../tests/data/",
+    group_name="camels_subhalo.hdf5",
+    group_dir="../../tests/data/",
 )
 
 # Select a single galaxy
@@ -154,4 +154,3 @@ ax2.set_xlabel("$\\mathrm{log_{10} Age \\,/\\, yr}$")
 ax2.set_ylabel("$\\mathrm{log_{10} (Mass \\,/\\, M_{\\odot})}$")
 
 plt.show()
-# plt.savefig("young_star_parametric.png", dpi=200, bbox_inches="tight")

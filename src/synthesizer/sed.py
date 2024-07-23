@@ -75,8 +75,6 @@ class Sed:
     fnu = Quantity()
     obsnu = Quantity()
     obslam = Quantity()
-    luminosity = Quantity()
-    llam = Quantity()
     bolometric_luminosity = Quantity()
 
     def __init__(self, lam, lnu=None, description=None):
@@ -1449,8 +1447,9 @@ def plot_spectra(
 
         plt_spectra = getattr(sed, quantity_to_plot)
 
-        # Prettify the label
-        key = key.replace("_", " ").title()
+        # Prettify the label if not latex
+        if not any([c in key for c in ("$", "_")]):
+            key = key.replace("_", " ").title()
 
         # Plot this spectra
         ax.plot(lam, plt_spectra, lw=1, alpha=0.8, label=key)
