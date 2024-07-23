@@ -82,7 +82,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   int npart = c->part_count;
 
   /* No point splitting below the maximum smoothing length. */
-  if (c->width / 2 < sqrt(c->max_sml_squ)) {
+  if (c->width < sqrt(c->max_sml_squ)) {
     return;
   }
 
@@ -180,6 +180,40 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
       cp->max_sml_squ = particles[igas].sml;
     }
   }
+
+#ifdef WITH_DEBUGGING_CHECKS
+  /* Check that the particles have been assigned correctly. */
+  for (int ip = 0; ip < 8; ip++) {
+    struct cell *cp = &c->progeny[ip];
+    if (cp->part_count != part_count[ip]) {
+      printf("Error: Particles not assigned correctly!\n");
+    }
+  }
+
+  /* Ensure the cell and particle positions agree. */
+  for (int ip = 0; ip < 8; ip++) {
+    struct cell *cp = &c->progeny[ip];
+    for (int igas = 0; igas < cp->part_count; igas++) {
+      struct particle *pp = &cp->particles[igas];
+
+      if (pp->pos[0] < cp->loc[0] || pp->pos[0] > cp->loc[0] + cp->width) {
+        printf("Error: Particle outside cell bounds in x (c->loc[0] = %f, "
+               "c->loc[0] + c->width = %f, pp->pos[0] = %f)!\n",
+               cp->loc[0], cp->loc[0] + cp->width, pp->pos[0]);
+      }
+      if (pp->pos[1] < cp->loc[1] || pp->pos[1] > cp->loc[1] + cp->width) {
+        printf("Error: Particle outside cell bounds in y (c->loc[1] = %f, "
+               "c->loc[1] + c->width = %f, pp->pos[1] = %f)!\n",
+               cp->loc[1], cp->loc[1] + cp->width, pp->pos[1]);
+      }
+      if (pp->pos[2] < cp->loc[2] || pp->pos[2] > cp->loc[2] + cp->width) {
+        printf("Error: Particle outside cell bounds in z (c->loc[2] = %f, "
+               "c->loc[2] + c->width = %f, pp->pos[2] = %f)!\n",
+               cp->loc[2], cp->loc[2] + cp->width, pp->pos[2]);
+      }
+    }
+  }
+#endif
 
   /* Recurse... */
   for (int ip = 0; ip < 8; ip++) {
@@ -379,15 +413,16 @@ void cleanup_cell_tree(struct cell *c) {
  */
 double min_projected_dist2(struct cell *c, double x, double y) {
 
-  /* If the position is inside the cell return 0. */
-  if (x >= c->loc[0] && x <= c->loc[0] + c->width && y >= c->loc[1] &&
-      y <= c->loc[1] + c->width) {
-    return 0;
+  /* Get the minimum separation along each axis (if the point is within the cell
+   * along an axis then the separation should be 0). */
+  double dx = 0;
+  double dy = 0;
+  if (!(x > c->loc[0] && x < c->loc[0] + c->width)) {
+    dx = fmin(fabs(c->loc[0] - x), fabs(c->loc[0] + c->width - x));
   }
-
-  /* Get the minimum separation along each axis. */
-  const double dx = fmin(fabs(c->loc[0] - x), fabs(c->loc[0] + c->width - x));
-  const double dy = fmin(fabs(c->loc[1] - y), fabs(c->loc[1] + c->width - y));
+  if (!(y > c->loc[1] && y < c->loc[1] + c->width)) {
+    dy = fmin(fabs(c->loc[1] - y), fabs(c->loc[1] + c->width - y));
+  }
 
   return dx * dx + dy * dy;
 }
