@@ -104,7 +104,7 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
   c->split = 1;
   printf("Splitting cell at depth %d width %f (ncells=%d, tot_cells=%d)\n",
          depth, width, *ncells, tot_cells);
-  c->progeny = malloc(8 * sizeof(struct cell *));
+  c->progeny = synth_malloc(8 * sizeof(struct cell *), "progeny");
   printf("Allocated progeny\n");
   for (int ip = 0; ip < 8; ip++) {
 
@@ -116,16 +116,8 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
       printf("Allocating more cells...\n");
 
       /* Allocate the cells. */
-      struct cell *new_cells = malloc(8 * 8 * sizeof(struct cell));
-      if (new_cells == NULL) {
-        PyErr_SetString(
-            PyExc_MemoryError,
-            "Failed to dynamically allocate more cells in the tree!");
-        return;
-      }
-
-      /* Intialise the cells at 0. */
-      bzero(new_cells, 8 * 8 * sizeof(struct cell));
+      struct cell *new_cells =
+          synth_malloc(8 * 8 * sizeof(struct cell), "new cells");
 
       /* Attach the cells. */
       cells[*ncells] = *new_cells;
@@ -152,6 +144,7 @@ static void populate_cell_tree_recursive(struct cell *c, struct cell *cells,
     cp->max_sml_squ = 0;
     cp->depth = depth;
     cp->particles = NULL;
+    cp->progeny = NULL;
   }
 
   /* Loop over particles first counting them. */
