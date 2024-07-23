@@ -132,7 +132,7 @@ for n in [100, 1000, 10000]:
         # Create galaxy object
         galaxy = Galaxy("Galaxy", stars=stars, gas=gas, redshift=1)
 
-        # Create a fake kernel
+        # Get the kernel
         kernel = Kernel().get_kernel()
 
         # Calculate the tau_vs
