@@ -210,6 +210,9 @@ class Stars(Particles, StarsComponent):
         # Set the V band optical depths
         self.tau_v = tau_v
 
+        # Set the metallicity floor when using log properties
+        self.metallicity_floor = metallicity_floor
+
         # Set the alpha enhancement [alpha/Fe] (only used for >2 dimensional
         # SPS grids)
         self.alpha_enhancement = alpha_enhancement
@@ -434,6 +437,8 @@ class Stars(Particles, StarsComponent):
             old (bool/float)
                 If not None, specifies age in Myr at which to filter
                 for old star particles.
+            mask (array)
+                Boolean array of star particles to include
             verbose (bool)
                 Flag for verbose output.
             do_grid_check (bool)
@@ -562,16 +567,26 @@ class Stars(Particles, StarsComponent):
             # Get mask for particles we're going to replace with parametric
             pmask = self._get_masks(parametric_young_stars, None)
 
-            # Update the young/old mask to ignore those we're replacing
-            mask[pmask] = False
+            # Check we have particles to replace
+            if np.sum(pmask) == 0:
+                # Update the young/old mask to ignore those we're replacing
+                mask[pmask] = False
 
-            lnu_parametric = self._parametric_young_stars(
-                pmask=pmask & aperture_mask,
-                age=parametric_young_stars,
-                parametric_sfh=parametric_sfh,
-                grid=grid,
-                spectra_name=spectra_name,
-            )
+                lnu_parametric = self._parametric_young_stars(
+                    pmask=pmask & aperture_mask,
+                    age=parametric_young_stars,
+                    parametric_sfh=parametric_sfh,
+                    grid=grid,
+                    spectra_name=spectra_name,
+                )
+            else:
+                # Create a dummy empty array
+                lnu_parametric = np.zeros(len(grid.lam))
+
+            if np.sum(mask) == 0:
+                warn("All particles replaced with parametric forms")
+
+                return lnu_parametric
 
         from ..extensions.integrated_spectra import compute_integrated_sed
 
@@ -674,8 +689,9 @@ class Stars(Particles, StarsComponent):
                 initial_mass=self.initial_masses[_pmask],
             )
 
-        # Combine the individual parametric forms for each particle
-        stars = sum(stars[1:], stars[0])
+        if len(stars) > 1:
+            # Combine the individual parametric forms for each particle
+            stars = sum(stars[1:], stars[0])
 
         # Get the spectra for this parametric form
         return stars.generate_lnu(grid=grid, spectra_name=spectra_name)
