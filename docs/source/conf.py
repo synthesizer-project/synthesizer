@@ -54,7 +54,12 @@ sphinx_gallery_conf = {
     "doc_module": ("synthesizer"),
     "abort_on_example_error": True,
     # "show_memory": True,
-    # "recommender": {"enable": True, "n_examples": 5, "min_df": 3, "max_df": 0.9},
+    # "recommender": {
+    #     "enable": True,
+    #     "n_examples": 5,
+    #     "min_df": 3,
+    #     "max_df": 0.9,
+    # },
 }
 
 autosummary_generate = True  # Turn on sphinx.ext.autosummary

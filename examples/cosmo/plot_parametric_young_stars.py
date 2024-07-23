@@ -11,13 +11,12 @@ on a parametric stars object.
 
 import matplotlib.pyplot as plt
 import numpy as np
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
-from synthesizer.emission_models import IncidentEmission
 from synthesizer.parametric import SFH, Stars
 from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
-
 
 if __name__ == "__main__":
     grid_dir = "../../tests/test_grid"
@@ -75,7 +74,7 @@ if __name__ == "__main__":
     part_spec = gal.stars.get_spectra(model)
     part_spec_old = gal.stars.get_spectra(
         model,
-        mask={'incident': {'attr': "ages", 'op': ">", 'thresh': age_lim}}
+        mask={"incident": {"attr": "ages", "op": ">", "thresh": age_lim}},
     )
 
     """
@@ -97,7 +96,9 @@ if __name__ == "__main__":
     """
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
 
-    ax1.loglog(para_spec.lam, para_spec.lnu, label="Parametric young", color="C0")
+    ax1.loglog(
+        para_spec.lam, para_spec.lnu, label="Parametric young", color="C0"
+    )
     ax1.loglog(
         part_spec_old.lam, part_spec_old.lnu, label="Particle old", color="C3"
     )
@@ -128,7 +129,9 @@ if __name__ == "__main__":
     ax2.hist(
         np.log10(np.hstack([gal.stars.ages[~pmask].value, stars.ages.value])),
         histtype="step",
-        weights=np.hstack([gal.stars.initial_masses[~pmask].value, stars.sf_hist]),
+        weights=np.hstack(
+            [gal.stars.initial_masses[~pmask].value, stars.sf_hist]
+        ),
         bins=binLimits,
         log=True,
         label="Particle + Parametric",

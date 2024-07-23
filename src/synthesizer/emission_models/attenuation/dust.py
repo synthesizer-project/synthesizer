@@ -147,7 +147,7 @@ class AttenuationLaw:
 
         ax.set_yticks(np.arange(0, 10))
         ax.set_xlim(np.min(lam), np.max(lam))
-        ax.set_ylim(0., 10)
+        ax.set_ylim(0.0, 10)
 
         # Add a legend if the ax has labels to plot
         if any(ax.get_legend_handles_labels()[1]):
