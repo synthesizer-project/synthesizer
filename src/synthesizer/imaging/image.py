@@ -175,13 +175,13 @@ class Image:
         """
         # Ensure the images have the same resolution
         if self.resolution != other_img.resolution:
-            raise exceptions.InconsistentArguments(
+            raise exceptions.InconsistentAddition(
                 "The images must have the same resolution to be added."
             )
 
         # Ensure the images have the same fov
         if np.any(self.fov != other_img.fov):
-            raise exceptions.InconsistentArguments(
+            raise exceptions.InconsistentAddition(
                 "The images must have the same fov to be added."
             )
 

@@ -568,7 +568,7 @@ class Stars(Particles, StarsComponent):
             pmask = self._get_masks(parametric_young_stars, None)
 
             # Check we have particles to replace
-            if np.sum(pmask) == 0:
+            if np.sum(pmask) > 0:
                 # Update the young/old mask to ignore those we're replacing
                 mask[pmask] = False
 
@@ -585,7 +585,6 @@ class Stars(Particles, StarsComponent):
 
             if np.sum(mask) == 0:
                 warn("All particles replaced with parametric forms")
-
                 return lnu_parametric
 
         from ..extensions.integrated_spectra import compute_integrated_sed
@@ -692,6 +691,8 @@ class Stars(Particles, StarsComponent):
         if len(stars) > 1:
             # Combine the individual parametric forms for each particle
             stars = sum(stars[1:], stars[0])
+        else:
+            stars = stars[0]
 
         # Get the spectra for this parametric form
         return stars.generate_lnu(grid=grid, spectra_name=spectra_name)
