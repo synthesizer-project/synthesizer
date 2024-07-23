@@ -22,6 +22,7 @@ from unyt import Myr, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import Gas, Stars
@@ -397,6 +398,7 @@ class Galaxy(BaseGalaxy):
         threshold=1,
         force_loop=0,
         min_count=100,
+        nthreads=1,
     ):
         """
         Calculate the LOS optical depth for each star particle.
@@ -433,7 +435,11 @@ class Galaxy(BaseGalaxy):
                 performance of the tree search in extreme cases. If there are
                 fewer particles in a leaf cell than this value, the search
                 will be performed with a brute force loop.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
         """
+        start = tic()
+
         # Ensure we have stars and gas
         if self.stars is None:
             raise exceptions.InconsistentArguments(
@@ -457,6 +463,7 @@ class Galaxy(BaseGalaxy):
             threshold=threshold,
             force_loop=force_loop,
             min_count=min_count,
+            nthreads=nthreads,
         )  # Msun / Mpc**2
 
         los_dustsds /= (1e6) ** 2  # Msun / pc**2
@@ -468,6 +475,8 @@ class Galaxy(BaseGalaxy):
         if self.stars.tau_v is None:
             self.stars.tau_v = np.zeros(self.stars.nparticles)
         self.stars.tau_v[mask] = tau_v
+
+        toc("Calculating LOS tau_v", start)
 
         return tau_v
 

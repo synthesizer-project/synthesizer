@@ -558,6 +558,7 @@ class Particles:
         threshold,
         force_loop,
         min_count,
+        nthreads,
     ):
         """
         Prepare the arguments for line of sight surface density computation.
@@ -584,6 +585,8 @@ class Particles:
                 The minimum number of particles allowed in a leaf cell when
                 using the tree. This can be used for tuning the tree
                 performance.
+            nthreads (int)
+                The number of threads to use for the calculation.
         """
         # Ensure we actually have the properties needed
         if self.coordinates is None:
@@ -639,6 +642,7 @@ class Particles:
             threshold,
             force_loop,
             min_count,
+            nthreads,
         )
 
     def get_los_surface_density(
@@ -650,6 +654,7 @@ class Particles:
         threshold=1,
         force_loop=0,
         min_count=100,
+        nthreads=1,
     ):
         """
         Calculate the surface density of an attribute.
@@ -680,6 +685,8 @@ class Particles:
                 The minimum number of particles allowed in a leaf cell when
                 using the tree. This can be used for tuning the tree
                 performance.
+            nthreads (int)
+                The number of threads to use for the calculation.
 
         Returns:
             surface_density (float)
@@ -703,6 +710,7 @@ class Particles:
                 threshold,
                 force_loop,
                 min_count,
+                nthreads,
             )
         )
 
