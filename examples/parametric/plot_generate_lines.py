@@ -7,7 +7,8 @@ parametric galaxy.
 """
 
 import synthesizer.line_ratios as line_ratios
-from synthesizer.emission_models import IncidentEmission, AttenuatedEmission
+from synthesizer.emission_models import AttenuatedEmission, IncidentEmission
+from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
@@ -15,13 +16,14 @@ from unyt import Myr
 
 if __name__ == "__main__":
     # Begin by defining and initialising the grid. By setting `read_spectra`
-    # to `False` we can avoid reading in the spectra reducing the memory footprint.
+    # to `False` we can avoid reading in the spectra,
+    # reducing the memory footprint.
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)  # , read_spectra=False)
 
     # Define the emission model
-    model = IncidentEmission(grid)
+    incident = IncidentEmission(grid)
 
     # Let's now build a galaxy following the other tutorials:
     # Define the functional form of the star formation and metal
@@ -62,7 +64,7 @@ if __name__ == "__main__":
     ]
 
     # Next, let's get the intrinsic line properties:
-    lines = galaxy.stars.get_lines(line_ids, model)
+    lines = galaxy.stars.get_lines(line_ids, incident)
 
     # This produces a LineCollection object which has some useful methods and
     # information.
@@ -78,10 +80,10 @@ if __name__ == "__main__":
 
     # Next, lets get the attenuated line properties:
     model = AttenuatedEmission(
-        grid,
         emitter='stellar',
         tau_v=1.0,
-        apply_dust_to='intrinsic',
+        dust_curve=PowerLaw(slope=-1),
+        apply_dust_to=incident,
     )
 
     lines_att = galaxy.stars.get_lines(
