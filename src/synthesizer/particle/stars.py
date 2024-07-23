@@ -568,7 +568,7 @@ class Stars(Particles, StarsComponent):
             pmask = self._get_masks(parametric_young_stars, None)
 
             # Check we have particles to replace
-            if np.sum(pmask) == 0:
+            if np.sum(pmask) > 0:
                 # Update the young/old mask to ignore those we're replacing
                 mask[pmask] = False
 
