@@ -72,11 +72,11 @@ if __name__ == "__main__":
     para_gal = Galaxy(stars)
 
     para_spec = para_gal.stars.get_spectra(model)
+    part_spec = gal.stars.get_spectra(model)
     part_spec_old = gal.stars.get_spectra(
         model,
-        mask={'incident': {'attr': "ages", 'op': "<", 'thresh': age_lim}}
+        mask={'incident': {'attr': "ages", 'op': ">", 'thresh': age_lim}}
     )
-    part_spec = gal.stars.get_spectra(model)
 
     """
     We can also do this directly from call to `generate_lnu`,
