@@ -16,8 +16,8 @@ from unyt import Myr
 
 if __name__ == "__main__":
     # Begin by defining and initialising the grid. By setting `read_spectra`
-    # to `False` we can avoid reading in the spectra,
-    # reducing the memory footprint.
+    # to `False` we can avoid reading in the spectra reducing the
+    # memory footprint.
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)  # , read_spectra=False)
@@ -87,6 +87,7 @@ if __name__ == "__main__":
     )
 
     lines_att = galaxy.stars.get_lines(
-        line_ids, model,
+        line_ids,
+        model,
     )
     print(lines_att)
