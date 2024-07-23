@@ -456,6 +456,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
 ):
     """
     Load CAMELS-Swift-EAGLE galaxies
+
     Args:
         dir (string):
             data location
@@ -479,6 +480,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         num_threads (int)
             number of threads to use for multiprocessing.
             Default is -1, i.e. use all available cores.
+
     Returns:
         galaxies (object):
             `ParticleGalaxy` object containing star and gas particle
