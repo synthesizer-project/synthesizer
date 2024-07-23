@@ -10,6 +10,7 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.spatial import cKDTree
 from synthesizer.emission_models import TotalEmission
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.grid import Grid
@@ -24,6 +25,22 @@ from unyt import Myr
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
+
+
+def calculate_smoothing_lengths(positions, num_neighbors=56):
+    """Calculate the SPH smoothing lengths for a set of coordinates."""
+    tree = cKDTree(positions)
+    distances, _ = tree.query(positions, k=num_neighbors + 1)
+
+    # The k-th nearest neighbor distance (k = num_neighbors)
+    kth_distances = distances[:, num_neighbors]
+
+    # Set the smoothing length to the k-th nearest neighbor
+    # distance divided by 2.0
+    smoothing_lengths = kth_distances / 2.0
+
+    return smoothing_lengths
+
 
 # Set the seed
 np.random.seed(42)
@@ -72,14 +89,8 @@ ngas = 1000
 # Generate some random coordinates
 coords = CoordinateGenerator.generate_3D_gaussian(nstars)
 
-# Calculate the smoothing lengths from radii
-cent = np.mean(coords, axis=0)
-rs = np.sqrt(
-    (coords[:, 0] - cent[0]) ** 2
-    + (coords[:, 1] - cent[1]) ** 2
-    + (coords[:, 2] - cent[2]) ** 2
-)
-rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
+# Calculate smoothing lengths
+smls = calculate_smoothing_lengths(coords)
 
 # Sample the SFZH, producing a Stars object
 # we will also pass some keyword arguments for attributes
@@ -91,7 +102,7 @@ stars = sample_sfhz(
     nstars,
     coordinates=coords,
     current_masses=np.full(nstars, 10**8.7 / nstars),
-    smoothing_lengths=rs / 2,
+    smoothing_lengths=smls,
     redshift=1,
 )
 
@@ -100,20 +111,14 @@ stars = sample_sfhz(
 # Generate some random coordinates
 coords = CoordinateGenerator.generate_3D_gaussian(ngas)
 
-# Calculate the smoothing lengths from radii
-cent = np.mean(coords, axis=0)
-rs = np.sqrt(
-    (coords[:, 0] - cent[0]) ** 2
-    + (coords[:, 1] - cent[1]) ** 2
-    + (coords[:, 2] - cent[2]) ** 2
-)
-rs[rs < 0.2] = 0.6  # Set a lower bound on the "smoothing length"
+# Calculate the smoothing lengths
+smls = calculate_smoothing_lengths(coords)
 
 gas = Gas(
     masses=np.random.uniform(10**6, 10**6.5, ngas),
     metallicities=np.random.uniform(0.01, 0.05, ngas),
     coordinates=coords,
-    smoothing_lengths=rs / 4,
+    smoothing_lengths=smls,
     dust_to_metal_ratio=0.2,
 )
 
@@ -126,7 +131,11 @@ sph_kernel = Kernel()
 kernel_data = sph_kernel.get_kernel()
 
 # Calculate the tau_vs
-galaxy.calculate_los_tau_v(kappa=0.07, kernel=kernel_data, force_loop=True)
+galaxy.calculate_los_tau_v(
+    kappa=0.07,
+    kernel=kernel_data,
+    force_loop=False,
+)
 
 # Get the spectra (this will automatically use the tau_vs we just calculated
 # since the emission model has tau_v="tau_v")
