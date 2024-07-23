@@ -213,7 +213,7 @@ if len(link_args) == 0:
     link_args = default_link_args
 
 # Add preprocessor flags
-if WITH_DEBUGGING_CHECKS == "1":
+if WITH_DEBUGGING_CHECKS:
     compile_flags.append("-DWITH_DEBUGGING_CHECKS")
 if ATOMIC_TIMING:
     compile_flags.append("-DATOMIC_TIMING")
