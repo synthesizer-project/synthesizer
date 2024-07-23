@@ -7,7 +7,7 @@ parametric galaxy.
 """
 
 import synthesizer.line_ratios as line_ratios
-from synthesizer.emission_models import IncidentEmission, AttenuatedEmission
+from synthesizer.emission_models import AttenuatedEmission, IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
@@ -15,7 +15,8 @@ from unyt import Myr
 
 if __name__ == "__main__":
     # Begin by defining and initialising the grid. By setting `read_spectra`
-    # to `False` we can avoid reading in the spectra reducing the memory footprint.
+    # to `False` we can avoid reading in the spectra reducing the
+    # memory footprint.
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)  # , read_spectra=False)
@@ -79,12 +80,13 @@ if __name__ == "__main__":
     # Next, lets get the attenuated line properties:
     model = AttenuatedEmission(
         grid,
-        emitter='stellar',
+        emitter="stellar",
         tau_v=1.0,
-        apply_dust_to='intrinsic',
+        apply_dust_to="intrinsic",
     )
 
     lines_att = galaxy.stars.get_lines(
-        line_ids, model,
+        line_ids,
+        model,
     )
     print(lines_att)
