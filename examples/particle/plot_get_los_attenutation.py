@@ -78,7 +78,7 @@ loop_ys = {}
 tree_ys = {}
 precision = {}
 
-for n in [10, 100]:  # , 1000, 10000]:
+for n in [100, 1000, 10000]:
     xs.setdefault(n, [])
     loop_ys.setdefault(n, [])
     tree_ys.setdefault(n, [])
@@ -109,7 +109,7 @@ for n in [10, 100]:  # , 1000, 10000]:
         redshift=1,
     )
 
-    for ngas in np.logspace(np.log10(n), 4, 20, dtype=int):
+    for ngas in np.logspace(2, 5, 5, dtype=int):
         # Now make the gas
 
         # Generate some random coordinates
@@ -138,14 +138,20 @@ for n in [10, 100]:  # , 1000, 10000]:
         # Calculate the tau_vs
         start = time.time()
         tau_v = galaxy.calculate_los_tau_v(
-            kappa=0.07, kernel=kernel, force_loop=1
+            kappa=0.07,
+            kernel=kernel,
+            force_loop=1,
         )
         loop_time = time.time() - start
         loop_sum = np.sum(tau_v)
 
         # Calculate the tau_vs
         start = time.time()
-        tau_v = galaxy.calculate_los_tau_v(kappa=0.07, kernel=kernel)
+        tau_v = galaxy.calculate_los_tau_v(
+            kappa=0.07,
+            kernel=kernel,
+            min_count=100,
+        )
         tree_time = time.time() - start
         tree_sum = np.sum(tau_v)
 
@@ -214,7 +220,7 @@ for i, n in enumerate(xs.keys()):
     )
 
 ax.set_ylabel("Wallclock (s)")
-ax.set_xlabel(r"$N_\star N_\mathrm{gas}$")
+ax.set_xlabel(r"$N_\mathrm{gas}$")
 
 ax.legend(handles=legend_handles)
 
@@ -232,7 +238,7 @@ for i, n in enumerate(xs.keys()):
 
 
 ax.set_ylabel(r"$|\tau_{V, tree} - \tau_{V, loop}|" r" / \tau_{V, loop}$ (%)")
-ax.set_xlabel("$N_\\star N_\\mathrm{gas}$")
+ax.set_xlabel("$N_\\mathrm{gas}$")
 
 ax.legend()
 
