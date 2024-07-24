@@ -5,11 +5,13 @@ ever instantiated by the parametric/particle child classes.
 """
 
 import numpy as np
-from unyt import c, cm, deg, km, s
+from unyt import Hz, angstrom, c, cm, deg, erg, km, s
 
 from synthesizer import exceptions
+from synthesizer.line import Line
 from synthesizer.sed import plot_spectra
 from synthesizer.units import Quantity
+from synthesizer.warnings import warn
 
 
 class BlackholesComponent:
@@ -340,6 +342,115 @@ class BlackholesComponent:
 
         # Get the integrated spectra in grid units (erg / s / Hz)
         return compute_integrated_sed(*args)
+
+    def generate_line(
+        self,
+        grid,
+        line_id,
+        fesc,
+        mask=None,
+        method="cic",
+        nthreads=0,
+        verbose=False,
+    ):
+        """
+        Calculate rest frame line luminosity and continuum from an AGN Grid.
+
+        This is a flexible base method which extracts the rest frame line
+        luminosity of this stellar population from the AGN grid based on the
+        passed arguments.
+
+        Args:
+            grid (Grid):
+                A Grid object.
+            line_id (list/str):
+                A list of line_ids or a str denoting a single line.
+                Doublets can be specified as a nested list or using a
+                comma (e.g. 'OIII4363,OIII4959').
+            fesc (float/array-like, float)
+                Fraction of AGN emission that escapes unattenuated from
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
+            mask (array)
+                A mask to apply to the particles (only applicable to particle)
+            method (str)
+                The method to use for the interpolation. Options are:
+                'cic' - Cloud in cell
+                'ngp' - Nearest grid point
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
+
+        Returns:
+            Line
+                An instance of Line contain this lines wavelenth, luminosity,
+                and continuum.
+        """
+        from synthesizer.extensions.integrated_line import (
+            compute_integrated_line,
+        )
+
+        # Ensure line_id is a string
+        if not isinstance(line_id, str):
+            raise exceptions.InconsistentArguments("line_id must be a string")
+
+        # Ensure and warn that the masking hasn't removed everything
+        if mask is not None and np.sum(mask) == 0:
+            warn("Age mask has filtered out all particles")
+
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.lines[line_id_]["wavelength"]
+                        * angstrom,
+                        luminosity=0 * erg / s,
+                        continuum=0 * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
+
+        # Set up a list to hold each individual Line
+        lines = []
+
+        # Loop over the ids in this container
+        for line_id_ in line_id.split(","):
+            # Strip off any whitespace (can be left by split)
+            line_id_ = line_id_.strip()
+
+            # Get this line's wavelength
+            # TODO: The units here should be extracted from the grid but aren't
+            # yet stored.
+            lam = grid.lines[line_id_]["wavelength"] * angstrom
+
+            # Get the luminosity and continuum
+            lum, cont = compute_integrated_line(
+                *self._prepare_line_args(
+                    grid,
+                    line_id_,
+                    fesc,
+                    mask=mask,
+                    grid_assignment_method=method,
+                    nthreads=nthreads,
+                )
+            )
+
+            # Append this lines values to the containers
+            lines.append(
+                Line(
+                    line_id=line_id_,
+                    wavelength=lam,
+                    luminosity=lum * erg / s,
+                    continuum=cont * erg / s / Hz,
+                )
+            )
+
+        # Don't init another line if there was only 1 in the first place
+        if len(lines) == 1:
+            return lines[0]
+        else:
+            return Line(*lines)
 
     def __str__(self):
         """

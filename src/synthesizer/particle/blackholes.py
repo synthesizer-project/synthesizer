@@ -24,6 +24,7 @@ from synthesizer.line import Line
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer.utils import TableFormatter, value_to_array
+from synthesizer.warnings import warn
 
 
 class BlackHoles(Particles, BlackholesComponent):
@@ -534,6 +535,23 @@ class BlackHoles(Particles, BlackholesComponent):
         # Ensure line_id is a string
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
+
+        # Ensure and warn that the masking hasn't removed everything
+        if mask is not None and np.sum(mask) == 0:
+            warn("Age mask has filtered out all particles")
+
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.lines[line_id_]["wavelength"]
+                        * angstrom,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
 
         # Set up a list to hold each individual Line
         lines = []
