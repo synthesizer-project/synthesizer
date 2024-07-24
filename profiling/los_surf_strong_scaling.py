@@ -353,7 +353,7 @@ def los_surface_density_strong_scaling(
     ax_speedup.legend(handles=handles, loc="upper left")
 
     fig.savefig(
-        f"{basename}_particle_strong_scaling_NStars"
+        f"{basename}_los_surfden_scaling_NStars"
         f"{nstars}_NGas{ngas}_TotThreahs{max_threads}.png",
         dpi=300,
         bbox_inches="tight",
