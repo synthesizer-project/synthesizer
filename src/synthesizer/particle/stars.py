@@ -252,11 +252,10 @@ class Stars(Particles, StarsComponent):
     @property
     def log10metallicities(self):
         """
-        Return stellar particle ages in log (base 10).
+        Return stellar particle metallicities in log (base 10).
 
         Zero valued metallicities are set to `metallicity_floor`,
-        which is set on initialisation of this stars object. To
-        check it, run `stars.metallicity_floor`.
+        which is set on initialisation of this stars object.
 
         Returns:
             log10metallicities (array)
