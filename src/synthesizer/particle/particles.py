@@ -39,7 +39,9 @@ class Particles:
             Centre of the particle distribution.
         metallicity_floor (float)
             The metallicity floor when using log properties (only matters for
-            baryons). This is used to avoid log(0) errors
+            baryons). This is used to avoid log(0) errors.
+        tau_v (float)
+            The V band optical depth.
         radii (array-like, float)
             The radii of the particles.
     """
@@ -62,6 +64,7 @@ class Particles:
         nparticles,
         centre,
         metallicity_floor=1e-5,
+        tau_v=None,
         name="Particles",
     ):
         """
@@ -85,6 +88,8 @@ class Particles:
             metallicity_floor (float)
                 The metallicity floor when using log properties (only matters
                 for baryons). This is used to avoid log(0) errors.
+            tau_v (float)
+                The V band optical depth.
             name (str)
                 The name of the particle type.
         """
@@ -126,6 +131,9 @@ class Particles:
         # Set the metallicity floor when using log properties (only matters for
         # baryons)
         self.metallicity_floor = metallicity_floor
+
+        # Set the V band optical depths
+        self.tau_v = tau_v
 
         # Attach the name of the particle type
         self.name = name
@@ -561,13 +569,13 @@ class Particles:
         nthreads,
     ):
         """
-        Prepare the arguments for line of sight surface density computation.
+        Prepare the arguments for line of sight column density computation.
 
         Args:
             other_parts (Particles)
-                The other particles to compute the surface density with.
+                The other particles to compute the column density with.
             attr (str)
-                The attribute to compute the surface density of.
+                The attribute to compute the column density of.
             kernel (array_like, float)
                 A 1D description of the SPH kernel. Values must be in ascending
                 order such that a k element array can be indexed for the value
@@ -657,17 +665,17 @@ class Particles:
         nthreads=1,
     ):
         """
-        Calculate the surface density of an attribute.
+        Calculate the column density of an attribute.
 
-        This will calculate the surafce density of an attribute on another
+        This will calculate the column density of an attribute on another
         Particles child instance at the positions of the particles in this
         Particles instance.
 
         Args:
             other_parts (Particles)
-                The other particles to calculate the surface density with.
+                The other particles to calculate the column density with.
             density_attr (str)
-                The attribute to use to calculate the surface density.
+                The attribute to use to calculate the column density.
             kernel (array-like, float)
                 A 1D description of the SPH kernel. Values must be in ascending
                 order such that a k element array can be indexed for the value
@@ -690,7 +698,7 @@ class Particles:
 
         Returns:
             column_density (float)
-                The surface density of the particles.
+                The column density of the particles.
         """
         from synthesizer.extensions.column_density import (
             compute_column_density,
@@ -700,7 +708,7 @@ class Particles:
         if mask is None:
             mask = np.ones(self.nparticles, dtype=bool)
 
-        # Compute the surface density
+        # Compute the column density
         return compute_column_density(
             *self._prepare_los_args(
                 other_parts,

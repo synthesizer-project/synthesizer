@@ -82,6 +82,7 @@ class Gas(Particles):
         verbose=False,
         centre=None,
         metallicity_floor=1e-5,
+        tau_v=None,
         **kwargs,
     ):
         """
@@ -116,6 +117,8 @@ class Gas(Particles):
             metallicity_floor (float)
                 The metallicity floor when using log properties (only matters
                 for baryons). This is used to avoid log(0) errors.
+            tau_v (float)
+                The dust optical depth in the V band.
             **kwargs
                 Extra optional properties to set on the gas object.
         """
@@ -131,6 +134,7 @@ class Gas(Particles):
             nparticles=len(masses),
             centre=centre,
             metallicity_floor=metallicity_floor,
+            tau_v=tau_v,
             name="Gas",
         )
 
