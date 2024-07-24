@@ -455,7 +455,7 @@ class Galaxy(BaseGalaxy):
             )
 
         # Compute the dust surface densities
-        los_dustsds = self.stars.get_los_surface_density(
+        los_dustsds = self.stars.get_los_column_density(
             self.gas,
             "dust_masses",
             kernel,

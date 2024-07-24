@@ -505,7 +505,7 @@ static void los_tree(struct cell *root, const double *pos_i,
  * @param np_kernel The kernel to use for the calculation.
  * @param np_pos_i The positions of the star particles.
  */
-PyObject *compute_surface_density(PyObject *self, PyObject *args) {
+PyObject *compute_column_density(PyObject *self, PyObject *args) {
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -604,7 +604,7 @@ PyObject *compute_surface_density(PyObject *self, PyObject *args) {
 
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef LosMethods[] = {
-    {"compute_surface_density", (PyCFunction)compute_surface_density,
+    {"compute_column_density", (PyCFunction)compute_column_density,
      METH_VARARGS, "Method for calculating line of sight surface densities."},
     {NULL, NULL, 0, NULL}};
 
@@ -621,7 +621,7 @@ static struct PyModuleDef moduledef = {
     NULL,                                          /* m_free */
 };
 
-PyMODINIT_FUNC PyInit_surface_density(void) {
+PyMODINIT_FUNC PyInit_column_density(void) {
   PyObject *m = PyModule_Create(&moduledef);
   import_array();
   return m;

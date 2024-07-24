@@ -284,9 +284,9 @@ extensions = [
         include_dirs=include_dirs,
     ),
     create_extension(
-        "synthesizer.extensions.surface_density",
+        "synthesizer.extensions.column_density",
         [
-            "src/synthesizer/extensions/surface_density.c",
+            "src/synthesizer/extensions/column_density.c",
             "src/synthesizer/extensions/property_funcs.c",
             "src/synthesizer/extensions/timers.c",
             "src/synthesizer/extensions/octree.c",
