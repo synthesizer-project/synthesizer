@@ -645,7 +645,7 @@ class Particles:
             nthreads,
         )
 
-    def get_los_surface_density(
+    def get_los_column_density(
         self,
         other_parts,
         density_attr,
@@ -689,11 +689,11 @@ class Particles:
                 The number of threads to use for the calculation.
 
         Returns:
-            surface_density (float)
+            column_density (float)
                 The surface density of the particles.
         """
-        from synthesizer.extensions.surface_density import (
-            compute_surface_density,
+        from synthesizer.extensions.column_density import (
+            compute_column_density,
         )
 
         # If we don't have a mask make a fake one for consistency
@@ -701,7 +701,7 @@ class Particles:
             mask = np.ones(self.nparticles, dtype=bool)
 
         # Compute the surface density
-        return compute_surface_density(
+        return compute_column_density(
             *self._prepare_los_args(
                 other_parts,
                 density_attr,
