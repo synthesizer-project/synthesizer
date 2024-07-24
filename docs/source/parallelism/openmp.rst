@@ -38,7 +38,7 @@ The exact same would be true for any other function that supports OpenMP threadi
 
 .. code-block:: python
 
-    galaxy.get_los_surface_density(..., nthreads=4)
+    galaxy.stars.get_los_column_density(..., nthreads=4)
 
 Scaling Performance
 ^^^^^^^^^^^^^^^^^^^
@@ -49,5 +49,9 @@ Below is a plot showing the scaling of integrated spectra generation with the nu
 This test was run on an Apple Silicon M2 chip with 12 physical cores and 32GB of RAM.
 
 .. image:: ../img/integrated_spectra_scaling_test.png
+
+And also a plot showing the scaling of LOS column density calculations with the number of threads used.
+
+.. image:: ../img/los_strong_scaling.png
 
 
