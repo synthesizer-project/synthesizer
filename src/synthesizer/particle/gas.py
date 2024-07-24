@@ -135,7 +135,7 @@ class Gas(Particles):
 
         # Set the metallicites and log10 equivalent
         self.metallicities = metallicities
-        self.log10metallicities = np.log10(self.metallicities)
+        # self.log10metallicities = np.log10(self.metallicities)
 
         # Set the star forming boolean mask array
         self.star_forming = star_forming
@@ -178,6 +178,23 @@ class Gas(Particles):
         # Set any extra properties
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+    @property
+    def log10metallicities(self):
+        """
+        Return gas particle metallicites in log (base 10).
+
+        Zero valued metallicities are set to `metallicity_floor`,
+        which is set on initialisation of this gas object.
+
+        Returns:
+            log10metallicities (array)
+                log10 gas particle metallicities.
+        """
+        mets = self.metallicities
+        mets[mets == 0.0] = self.metallicity_floor
+
+        return np.log10(mets)
 
     def _check_gas_args(self):
         """

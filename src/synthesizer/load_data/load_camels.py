@@ -123,6 +123,7 @@ def load_CAMELS_IllustrisTNG(
     verbose=False,
     dtm=0.3,
     physical=True,
+    **kwargs
 ):
     """
     Load CAMELS-IllustrisTNG galaxies
@@ -255,6 +256,7 @@ def load_CAMELS_Astrid(
     group_dir=None,
     dtm=0.3,
     physical=True,
+    **kwargs
 ):
     """
     Load CAMELS-Astrid galaxies
@@ -353,6 +355,7 @@ def load_CAMELS_Simba(
     group_dir=None,
     dtm=0.3,
     physical=True,
+    **kwargs
 ):
     """
     Load CAMELS-SIMBA galaxies
@@ -453,6 +456,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     cosmo=Planck15,
     min_star_part=10,
     num_threads=-1,
+    **kwargs
 ):
     """
     Load CAMELS-Swift-EAGLE galaxies
@@ -695,5 +699,6 @@ def load_CAMELS_SwiftEAGLE_subfind(
 
     for idx in np.arange(len(galaxies)):
         galaxies[idx].centre = pos[idx] * kpc
+        galaxies[idx].index = mask[idx]
 
-    return galaxies, mask
+    return galaxies
