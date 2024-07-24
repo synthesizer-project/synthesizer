@@ -1110,7 +1110,7 @@ class Stars(Particles, StarsComponent):
             lam = grid.lines[line_id_]["wavelength"] * angstrom
 
             # Get the luminosity and continuum
-            lum, cont = compute_particle_line(
+            _lum, _cont = compute_particle_line(
                 *self._prepare_line_args(
                     grid,
                     line_id_,
@@ -1120,6 +1120,16 @@ class Stars(Particles, StarsComponent):
                     nthreads=nthreads,
                 )
             )
+
+            # Account for the mask
+            if mask is not None:
+                lum = np.zeros(self.nparticles)
+                cont = np.zeros(self.nparticles)
+                lum[mask] = _lum
+                cont[mask] = _cont
+            else:
+                lum = _lum
+                cont = _cont
 
             # Append this lines values to the containers
             lines.append(
