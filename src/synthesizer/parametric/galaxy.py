@@ -17,6 +17,7 @@ class Galaxy(BaseGalaxy):
         black_holes=None,
         redshift=None,
         centre=None,
+        **kwargs,
     ):
         """__init__ method for ParametricGalaxy
 
@@ -29,6 +30,14 @@ class Galaxy(BaseGalaxy):
                 labelling, has no internal use.
             redshift (float)
                 The redshift of the galaxy.
+            centre (unyt_array)
+                The centre of the galaxy.
+            black_holes (parametric.BlackHoles)
+                An instance of parametric.BlackHoles containing the black hole
+                particle data.
+            **kwargs
+                Additional keyword arguments to be passed to the BaseGalaxy
+                __init__ method.
 
         Raises:
             InconsistentArguments
@@ -58,6 +67,10 @@ class Galaxy(BaseGalaxy):
 
         # Define the dictionary to hold images
         self.images = {}
+
+        # Attach any additional keyword arguments
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def __add__(self, second_galaxy):
         """Allows two Galaxy objects to be added together.
