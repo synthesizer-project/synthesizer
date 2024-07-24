@@ -92,6 +92,7 @@ def create_extension(
 # Get environment variables we'll need for optional features and flags
 CFLAGS = os.environ.get("CFLAGS", "")
 LDFLAGS = os.environ.get("LDFLAGS", "")
+INCLUDES = os.environ.get("EXTRA_INCLUDES", "")
 WITH_OPENMP = os.environ.get("WITH_OPENMP", "")
 WITH_DEBUGGING_CHECKS = "ENABLE_DEBUGGING_CHECKS" in os.environ
 RUTHLESS = "RUTHLESS" in os.environ
@@ -130,10 +131,11 @@ logger.info(
 # Log the system platform
 logger.info(f"### System platform: {sys.platform}")
 
-# Report the environment variables
+# Report the environment variable
 logger.info(f"### CFLAGS: {CFLAGS}")
 logger.info(f"### LDFLAGS: {LDFLAGS}")
 logger.info(f"### WITH_OPENMP: {WITH_OPENMP}")
+logger.info(f"### EXTRA_INCLUDES: {INCLUDES}")
 if WITH_DEBUGGING_CHECKS:
     logger.info(f"### WITH_DEBUGGING_CHECKS: {WITH_DEBUGGING_CHECKS}")
 
@@ -149,7 +151,7 @@ if sys.platform == "darwin":  # macOS
         "-ffast-math",
         "-g",
     ]
-    default_link_args = []
+    default_link_args = ["-L/usr/local/lib"]
     include_dirs = ["/usr/local/include"]
 elif sys.platform == "win32":  # windows
     default_compile_flags = [
@@ -167,7 +169,10 @@ else:  # Unix-like systems (Linux)
         "-ffast-math",
         "-g",
     ]
-    default_link_args = []
+    default_link_args = [
+        "-L/usr/lib/",
+        "-L/usr/lib64/",
+    ]
     include_dirs = ["/usr/include"]
 
 # Add OpenMP flags if requested
@@ -210,12 +215,19 @@ link_args = LDFLAGS.split()
 compile_flags.extend(default_compile_flags)
 link_args.extend(default_link_args)
 
+# Add the extra include directories
+include_dirs += INCLUDES.split()
+
 # Add preprocessor flags
 if WITH_DEBUGGING_CHECKS:
     compile_flags.append("-DWITH_DEBUGGING_CHECKS")
 if ATOMIC_TIMING:
     compile_flags.append("-DATOMIC_TIMING")
 
+# Report the flags we will use
+logger.info(f"### Using compile flags: {compile_flags}")
+logger.info(f"### Using link args: {link_args}")
+logger.info(f"### Using include directories: {include_dirs}")
 
 # Define the extension modules
 extensions = [

@@ -1133,6 +1133,21 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Unpack the model now we're done
         self.unpack_model()
 
+    def save_spectra(self, *args):
+        """
+        Set the save flag to True for the given spectra.
+
+        Args:
+            args (str):
+                The spectra to save.
+        """
+        # First set all models to not save
+        self.set_save(False, set_all=True)
+
+        # Now set the given spectra to save
+        for arg in args:
+            self[arg].set_save(True)
+
     def add_mask(self, attr, op, thresh, set_all=False):
         """
         Add a mask.
@@ -1919,7 +1934,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # If we have masks to apply, apply them
         if mask is not None:
             for label, mask in mask.items():
-                emission_model.add_mask(**mask, label=label)
+                emission_model[label].add_mask(**mask)
 
     def _get_spectra(
         self,
@@ -2043,6 +2058,15 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Make a spectra dictionary if we haven't got one yet
         if spectra is None:
             spectra = {}
+
+        # We need to make sure the root is being saved, otherwise this is a bit
+        # nonsensical.
+        if not _is_related and not self.save:
+            raise exceptions.InconsistentArguments(
+                f"{self.label} is not being saved. There's no point in "
+                "generating at the root if they are not saved. Maybe you "
+                "want to use a child model you are saving instead?"
+            )
 
         # Perform all extractions
         spectra = self._extract_spectra(
@@ -2306,6 +2330,15 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # If we haven't got a lines dictionary yet we'll make one
         if lines is None:
             lines = {}
+
+        # We need to make sure the root is being saved, otherwise this is a bit
+        # nonsensical.
+        if not _is_related and not self.save:
+            raise exceptions.InconsistentArguments(
+                f"{self.label} is not being saved. There's no point in "
+                "generating at the root if they are not saved. Maybe you "
+                "want to use a child model you are saving instead?"
+            )
 
         # Perform all extractions
         lines = self._extract_lines(
