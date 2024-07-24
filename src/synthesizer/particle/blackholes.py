@@ -91,6 +91,7 @@ class BlackHoles(Particles, BlackholesComponent):
         covering_fraction_nlr=0.1,
         velocity_dispersion_nlr=500 * km / s,
         theta_torus=10 * deg,
+        tau_v=None,
         **kwargs,
     ):
         """
@@ -141,6 +142,8 @@ class BlackHoles(Particles, BlackholesComponent):
                 The velocity dispersion of the narrow line region.
             theta_torus (array-like, float)
                 The angle of the torus.
+            tau_v (array-like, float)
+                The optical depth of the dust model.
             kwargs (dict)
                 Any parameter for the emission models can be provided as kwargs
                 here to override the defaults of the emission models.
@@ -165,6 +168,7 @@ class BlackHoles(Particles, BlackholesComponent):
             softening_length=softening_length,
             nparticles=len(masses),
             centre=centre,
+            tau_v=tau_v,
             name="Black Holes",
         )
         BlackholesComponent.__init__(

@@ -180,6 +180,7 @@ class Stars(Particles, StarsComponent):
             nparticles=len(initial_masses),
             centre=centre,
             metallicity_floor=metallicity_floor,
+            tau_v=tau_v,
             name="Stars",
         )
         StarsComponent.__init__(self, ages, metallicities)
@@ -207,9 +208,6 @@ class Stars(Particles, StarsComponent):
 
         # Stellar particles also have a current mass, set it
         self.current_masses = self.masses
-
-        # Set the V band optical depths
-        self.tau_v = tau_v
 
         # Set the alpha enhancement [alpha/Fe] (only used for >2 dimensional
         # SPS grids)
