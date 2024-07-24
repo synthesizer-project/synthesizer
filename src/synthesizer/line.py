@@ -869,7 +869,7 @@ class Line:
         """
         # Ensure the mask is compatible with the spectra
         if mask is not None:
-            if self._luminosity.ndim < 2:
+            if self._luminosity.ndim < 1:
                 raise exceptions.InconsistentArguments(
                     "Masks are only applicable for Lines containing "
                     "multiple elements"
@@ -882,7 +882,7 @@ class Line:
 
         # If tau_v is an array it needs to match the spectra shape
         if isinstance(tau_v, np.ndarray):
-            if self._luminosity.ndim < 2:
+            if self._luminosity.ndim < 1:
                 raise exceptions.InconsistentArguments(
                     "Arrays of tau_v values are only applicable for Lines"
                     " containing multiple elements"

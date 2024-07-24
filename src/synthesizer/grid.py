@@ -106,7 +106,6 @@ class Grid:
         read_spectra=True,
         read_lines=True,
         new_lam=None,
-        filters=None,
         lam_lims=(),
     ):
         """
@@ -130,14 +129,10 @@ class Grid:
             new_lam (array-like, float)
                 An optional user defined wavelength array the spectra will be
                 interpolated onto, see Grid.interp_spectra.
-            filters (FilterCollection)
-                An optional FilterCollection object to unify the grids
-                wavelength grid with. If provided, this will override new_lam
-                whether passed or not.
             lam_lims (tuple, float)
                 A tuple of the lower and upper wavelength limits to truncate
-                the grid to (i.e. (lower_lam, upper_lam)). If new_lam or
-                filters are provided these limits will be ignored.
+                the grid to (i.e. (lower_lam, upper_lam)). If new_lam is
+                provided these limits will be ignored.
         """
         # Get the grid file path data
         self.grid_dir = ""
@@ -171,15 +166,22 @@ class Grid:
         # Read in spectra
         if read_spectra:  # also True if read_spectra is a list
             self._get_spectra_grid(read_spectra)
+        else:
+            self.lam = None
+            self.spectra = None
+            self.available_spectra = []
 
         # Read in lines
         if read_lines:  # also True if read_lines is a list
             self._get_lines_grid(read_lines)
+        else:
+            self.lines = None
+            self.available_lines = []
 
-        # Prepare the wavelength axis (if new_lam, lam_lims and filters are
+        # Prepare the wavelength axis (if new_lam and lam_lims are
         # all None, this will do nothing, leaving the grid's wavelength array
         # as it is in the HDF5 file)
-        self._prepare_lam_axis(new_lam, filters, lam_lims)
+        self._prepare_lam_axis(new_lam, lam_lims)
 
     def _parse_grid_path(self, grid_dir, grid_name):
         """Parse the grid path and set the grid directory and filename."""
@@ -353,23 +355,19 @@ class Grid:
     def _prepare_lam_axis(
         self,
         new_lam,
-        filters,
         lam_lims,
     ):
         """
         Modify the grid wavelength axis to adhere to user defined wavelengths.
 
-        This method will do nothing if the user has not provided new_lam,
-        filters, or lam_lims.
+        This method will do nothing if the user has not provided new_lam
+        or lam_lims.
 
         If the user has passed any of these the wavelength array will be
         limited and/or interpolated to match the user's input.
 
         - If new_lam is provided, the spectra will be interpolated onto this
           array.
-        - If filters are provided, the spectra will be limited wavelengths
-          with non-zero transmission and the filters will be interpolated
-          onto the grid's wavelength array in this non-zero range.
         - If lam_lims are provided, the grid will be truncated to these
           limits.
 
@@ -377,24 +375,21 @@ class Grid:
             new_lam (array-like, float)
                 An optional user defined wavelength array the spectra will be
                 interpolated onto.
-            filters (FilterCollection)
-                An optional FilterCollection object to unify the grids
-                wavelength grid with.
             lam_lims (tuple, float)
                 A tuple of the lower and upper wavelength limits to truncate
                 the grid to (i.e. (lower_lam, upper_lam)).
         """
-        # If we have both new_lam (or filters) and wavelength limits
+        # If we have both new_lam and wavelength limits
         # the limits become meaningless tell the user so.
-        if len(lam_lims) > 0 and (new_lam is not None or filters is not None):
+        if len(lam_lims) > 0 and (new_lam is not None):
             warn(
-                "Passing new_lam or filters and lam_lims is contradictory, "
+                "Passing new_lam and lam_lims is contradictory, "
                 "lam_lims will be ignored."
             )
 
         # Has a new wavelength grid been passed to interpolate
         # the spectra onto?
-        if new_lam is not None and filters is None:
+        if new_lam is not None:
             # Double check we aren't being asked to do something impossible.
             if self.spectra is None:
                 raise exceptions.InconsistentArguments(
@@ -405,28 +400,8 @@ class Grid:
             # Interpolate the spectra grid
             self.interp_spectra(new_lam)
 
-        # Are we unifying with a filter collection?
-        if filters is not None:
-            # Double check we aren't being asked to do something impossible.
-            if self.spectra is None:
-                raise exceptions.InconsistentArguments(
-                    "Can't interpolate spectra onto a FilterCollection "
-                    "wavelength array if no spectra have been read in! "
-                    "Set read_spectra=True."
-                )
-
-            # Warn the user the new_lam will be ignored
-            if new_lam is not None:
-                warn(
-                    "If a FilterCollection is defined alongside new_lam "
-                    "then FilterCollection.lam takes precedence and new_lam "
-                    "is ignored"
-                )
-
-            self.unify_with_filters(filters)
-
         # If we have been given wavelength limtis truncate the grid
-        if len(lam_lims) > 0 and filters is None and new_lam is None:
+        if len(lam_lims) > 0 and new_lam is None:
             self.truncate_grid_lam(*lam_lims)
 
     @property
@@ -929,33 +904,6 @@ class Grid:
             self.spectra[spectra_type] = self.spectra[spectra_type][
                 ..., okinds
             ]
-
-    def unify_with_filters(self, filters):
-        """
-        Unify the grid with a FilterCollection object.
-
-        This will:
-        - Find the Grid wavelengths at which transmission is non-zero.
-        - Limit the spectra and wavelengths to where transmision is non-zero.
-        - Interpolate the filters onto the Grid's new wavelength array.
-
-        Args:
-            filters (synthesizer.filter.FilterCollection)
-                The FilterCollection object to unify with this grid.
-        """
-        # Get the minimum and maximum wavelengths with non-zero transmission
-        min_lam, max_lam = filters.get_non_zero_lam_lims()
-
-        # Ensure we have at least 1 element with 0 transmission to solve
-        # any issues at the boundaries
-        min_lam -= 10 * angstrom
-        max_lam += 10 * angstrom
-
-        # Truncate the grid to these wavelength limits
-        self.truncate_grid_lam(min_lam, max_lam)
-
-        # Interpolate the filters onto this new wavelength range
-        filters.resample_filters(new_lam=self.lam)
 
     def animate_grid(
         self,

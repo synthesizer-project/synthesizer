@@ -8,6 +8,7 @@ when getting the emission from galaxy objects.
 
 import matplotlib.pyplot as plt
 import numpy as np
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 from unyt import kpc
@@ -19,9 +20,12 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 gals = load_CAMELS_IllustrisTNG(
     "../../tests/data/",
     snap_name="camels_snap.hdf5",
-    fof_name="camels_subhalo.hdf5",
-    fof_dir="../../tests/data/",
+    group_name="camels_subhalo.hdf5",
+    group_dir="../../tests/data/",
 )
+
+# Define an emission model
+model = IncidentEmission(grid)
 
 # Select a single galaxy
 gal = gals[1]
@@ -40,11 +44,10 @@ print("Stars centre of mass: gal.stars.centre = ", gal.stars.centre)
 
 print("Galaxy centre unchanged: gal.centre = ", gal.centre)
 
-
 fig, ax = plt.subplots(1, 1)
 
 for aperture_radius in np.array([30, 10, 5, 2, 1, 0.5]) * kpc:
-    spec = gal.stars.get_spectra_incident(grid=grid, aperture=aperture_radius)
+    spec = gal.stars.get_spectra(model, aperture=aperture_radius)
 
     ax.loglog(spec.lam, spec.lnu, label=f"Aperture: {aperture_radius.value}")
 

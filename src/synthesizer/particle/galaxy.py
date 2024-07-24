@@ -99,16 +99,12 @@ class Galaxy(BaseGalaxy):
         # Instantiate the parent (load stars and gas below)
         BaseGalaxy.__init__(
             self,
-            stars=None,
-            gas=None,
+            stars=stars,
+            gas=gas,
             black_holes=black_holes,
             redshift=redshift,
             centre=centre,
         )
-
-        # Manually load stars and gas at particle level
-        self.load_stars(stars=stars)
-        self.load_gas(gas=gas)
 
         # Define a name for this galaxy
         self.name = name

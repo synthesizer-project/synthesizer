@@ -75,8 +75,6 @@ class Sed:
     fnu = Quantity()
     obsnu = Quantity()
     obslam = Quantity()
-    luminosity = Quantity()
-    llam = Quantity()
     bolometric_luminosity = Quantity()
 
     def __init__(self, lam, lnu=None, description=None):

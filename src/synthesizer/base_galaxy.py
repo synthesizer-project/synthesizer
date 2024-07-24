@@ -841,3 +841,66 @@ class BaseGalaxy:
                 )
 
         return self.lines[emission_model.label]
+
+    def clear_all_spectra(self):
+        """
+        Clear all spectra.
+
+        This method is a quick helper to clear all spectra from the
+        galaxy object and its components. This will cover both integrated and
+        per particle spectra if present.
+        """
+        # Clear spectra
+        self.spectra = {}
+        if self.stars is not None:
+            self.stars.clear_all_spectra()
+        if self.black_holes is not None:
+            self.black_holes.clear_all_spectra()
+
+    def clear_all_lines(self):
+        """
+        Clear all lines.
+
+        This method is a quick helper to clear all lines from the galaxy object
+        and its components. This will cover both integrated and per particle
+        lines if present.
+        """
+        # Clear lines
+        self.lines = {}
+        if self.stars is not None:
+            self.stars.clear_all_lines()
+        if self.black_holes is not None:
+            self.black_holes.clear_all_lines()
+
+    def clear_all_photometry(self):
+        """
+        Clear all photometry.
+
+        This method is a quick helper to clear all photometry from the galaxy
+        object and its components. This will cover both integrated and per
+        particle photometry if present.
+        """
+        # Clear photometry
+        self.photo_luminosities = {}
+        self.photo_fluxes = {}
+        if self.stars is not None:
+            self.stars.clear_all_photometry()
+        if self.black_holes is not None:
+            self.black_holes.clear_all_photometry()
+
+    def clear_all_emissions(self):
+        """
+        Clear all spectra, lines and photometry.
+
+        This method is a quick helper to clear all spectra, lines, and
+        photometry from the galaxy object and its components. This will cover
+        both integrated and per particle emission.
+        """
+        # Clear spectra
+        self.clear_all_spectra()
+
+        # Clear lines
+        self.clear_all_lines()
+
+        # Clear photometry
+        self.clear_all_photometry()

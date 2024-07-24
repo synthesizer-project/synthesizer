@@ -40,7 +40,7 @@ grid = Grid(grid_name, grid_dir=grid_dir)
 gals = load_CAMELS_IllustrisTNG(
     "../../tests/data/",
     snap_name="camels_snap.hdf5",
-    fof_name="camels_subhalo.hdf5",
+    group_name="camels_subhalo.hdf5",
 )
 
 print(f"Loaded {len(gals)} galaxies")
@@ -191,6 +191,7 @@ fig, ax = g.stars.plot_spectra(
 # dust attenuation docs.
 attenuated = AttenuatedEmission(
     grid=grid,
+    emitter="stellar",
     dust_curve=PowerLaw(slope=-1),
     apply_dust_to=reprocessed,
     tau_v=0.33,
