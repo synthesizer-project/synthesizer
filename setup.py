@@ -208,18 +208,18 @@ if RUTHLESS:
         default_compile_flags.append("-Wextra")
 
 # Get user specified flags
-extra_compile_flags = CFLAGS.split()
-extra_link_args = LDFLAGS.split()
+compile_flags = CFLAGS.split()
+link_args = LDFLAGS.split()
 
-# Set up the compile flags and link args we will use removing duplicates
-compile_flags = list(set(default_compile_flags + extra_compile_flags))
-link_args = list(set(default_link_args + extra_link_args))
+# If no flags are specified, use the default flags
+compile_flags.extend(default_compile_flags)
+link_args.extend(default_link_args)
 
 # Add the extra include directories
 include_dirs += INCLUDES.split()
 
 # Add preprocessor flags
-if WITH_DEBUGGING_CHECKS == "1":
+if WITH_DEBUGGING_CHECKS:
     compile_flags.append("-DWITH_DEBUGGING_CHECKS")
 if ATOMIC_TIMING:
     compile_flags.append("-DATOMIC_TIMING")
@@ -296,12 +296,12 @@ extensions = [
         include_dirs=include_dirs,
     ),
     create_extension(
-        "synthesizer.extensions.los",
+        "synthesizer.extensions.column_density",
         [
-            "src/synthesizer/extensions/los.c",
-            "src/synthesizer/extensions/weights.c",
+            "src/synthesizer/extensions/column_density.c",
             "src/synthesizer/extensions/property_funcs.c",
             "src/synthesizer/extensions/timers.c",
+            "src/synthesizer/extensions/octree.c",
         ],
         compile_flags=compile_flags,
         links=link_args,

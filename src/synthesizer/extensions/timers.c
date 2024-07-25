@@ -39,11 +39,14 @@ void toc(const char *msg, double start_time) {
 
 /* Python wrapper for tic */
 static PyObject *py_tic(PyObject *self, PyObject *args) {
+  (void)self;
+  (void)args;
   return Py_BuildValue("d", tic());
 }
 
 /* Python wrapper for toc */
 static PyObject *py_toc(PyObject *self, PyObject *args) {
+  (void)self;
 #ifdef ATOMIC_TIMING
   char *msg;
   double start_time;
@@ -65,11 +68,16 @@ static PyMethodDef TimerMethods[] = {
 
 /* Module definition */
 static struct PyModuleDef timermodule = {
-    PyModuleDef_HEAD_INIT, "timer", /* name of module */
-    NULL,                           /* module documentation, may be NULL */
-    -1, /* size of per-interpreter state of the module,
-           or -1 if the module keeps state in global variables. */
-    TimerMethods};
+    PyModuleDef_HEAD_INIT,
+    "timer",                               /* name of module */
+    "A module containing timer functions", /* module documentation*/
+    -1,                                    /* m_size */
+    TimerMethods,                          /* m_methods */
+    NULL,                                  /* m_reload */
+    NULL,                                  /* m_traverse */
+    NULL,                                  /* m_clear */
+    NULL,                                  /* m_free */
+};
 
 /* Module initialization function */
 PyMODINIT_FUNC PyInit_timers(void) { return PyModule_Create(&timermodule); }
