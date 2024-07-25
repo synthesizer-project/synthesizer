@@ -808,6 +808,7 @@ class Galaxy(BaseGalaxy):
         blackhole_photometry=None,
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make an ImageCollection from luminosities.
@@ -845,6 +846,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image : array-like
@@ -883,6 +886,7 @@ class Galaxy(BaseGalaxy):
                     smoothing_lengths=self.stars.smoothing_lengths,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
+                    nthreads=nthreads,
                 )
 
             else:
@@ -920,6 +924,7 @@ class Galaxy(BaseGalaxy):
         blackhole_photometry=None,
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make an ImageCollection from fluxes.
@@ -957,6 +962,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image : array-like
@@ -995,6 +1002,7 @@ class Galaxy(BaseGalaxy):
                     smoothing_lengths=self.stars.smoothing_lengths,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
+                    nthreads=nthreads,
                 )
 
             else:
@@ -1030,6 +1038,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a mass map, either with or without smoothing.
@@ -1047,6 +1056,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1073,6 +1084,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1090,6 +1102,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a mass map, either with or without smoothing.
@@ -1107,6 +1120,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1133,6 +1148,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.gas.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1150,6 +1166,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make an age map, either with or without smoothing.
@@ -1170,6 +1187,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1196,6 +1215,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1226,6 +1246,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         # Divide out the mass contribution, handling zero contribution pixels
@@ -1246,6 +1267,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a stellar metal mass map, either with or without smoothing.
@@ -1263,6 +1285,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1289,6 +1313,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1306,6 +1331,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a gas metal mass map, either with or without smoothing.
@@ -1325,6 +1351,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1351,6 +1379,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.gas.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1368,6 +1397,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a stellar metallicity map, either with or without smoothing.
@@ -1388,6 +1418,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1399,11 +1431,12 @@ class Galaxy(BaseGalaxy):
             img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
         )
 
         # Make the mass image
         mass_img = self.get_map_stellar_mass(
-            resolution, fov, img_type, kernel, kernel_threshold
+            resolution, fov, img_type, kernel, kernel_threshold, nthreads
         )
 
         # Divide out the mass contribution, handling zero contribution pixels
@@ -1424,6 +1457,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a gas metallicity map, either with or without smoothing.
@@ -1446,6 +1480,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1457,11 +1493,12 @@ class Galaxy(BaseGalaxy):
             img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
         )
 
         # Make the mass image
         mass_img = self.get_map_gas_mass(
-            resolution, fov, img_type, kernel, kernel_threshold
+            resolution, fov, img_type, kernel, kernel_threshold, nthreads
         )
 
         # Divide out the mass contribution, handling zero contribution pixels
@@ -1483,6 +1520,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         age_bin=100 * Myr,
+        nthreads=1,
     ):
         """
         Make a SFR map, either with or without smoothing.
@@ -1507,6 +1545,8 @@ class Galaxy(BaseGalaxy):
             age_bin (unyt_quantity/float)
                 The size of the age bin used to calculate the star formation
                 rate. If supplied without units, the unit system is assumed.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1544,6 +1584,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths[mask],
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1566,6 +1607,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         age_bin=100 * Myr,
+        nthreads=1,
     ):
         """
         Make a SFR map, either with or without smoothing.
@@ -1591,6 +1633,8 @@ class Galaxy(BaseGalaxy):
             age_bin (unyt_quantity/float)
                 The size of the age bin used to calculate the star formation
                 rate. If supplied without units, the unit system is assumed.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1603,6 +1647,7 @@ class Galaxy(BaseGalaxy):
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             age_bin=age_bin,
+            nthreads=nthreads,
         )
 
         # Convert the SFR map to sSFR
@@ -1622,6 +1667,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         quantity="lnu",
+        nthreads=1,
     ):
         """
         Make a SpectralCube from an Sed held by this galaxy.
@@ -1658,6 +1704,8 @@ class Galaxy(BaseGalaxy):
             quantity (str):
                 The Sed attribute/quantity to sort into the data cube, i.e.
                 "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             SpectralCube
@@ -1694,6 +1742,7 @@ class Galaxy(BaseGalaxy):
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     quantity=quantity,
+                    nthreads=nthreads,
                 )
 
         # Make blackhole image if requested
@@ -1718,6 +1767,7 @@ class Galaxy(BaseGalaxy):
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     quantity=quantity,
+                    nthreads=nthreads,
                 )
 
         # Return the images, combining if there are multiple components
