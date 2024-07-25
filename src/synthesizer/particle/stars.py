@@ -615,6 +615,11 @@ class Stars(Particles, StarsComponent):
                 Radius of spherical aperture in kpc
         """
 
+        if self.centre is None:
+            raise ValueError(
+                "Centre of star particles must be set to use aperture mask."
+            )
+
         distance = np.sqrt(
             np.sum(
                 (self.coordinates - self.centre).to(kpc) ** 2,
