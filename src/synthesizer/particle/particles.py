@@ -39,7 +39,9 @@ class Particles:
             Centre of the particle distribution.
         metallicity_floor (float)
             The metallicity floor when using log properties (only matters for
-            baryons). This is used to avoid log(0) errors
+            baryons). This is used to avoid log(0) errors.
+        tau_v (float)
+            The V band optical depth.
         radii (array-like, float)
             The radii of the particles.
     """
@@ -62,6 +64,8 @@ class Particles:
         nparticles,
         centre,
         metallicity_floor=1e-5,
+        tau_v=None,
+        name="Particles",
     ):
         """
         Intialise the Particles.
@@ -84,9 +88,11 @@ class Particles:
             metallicity_floor (float)
                 The metallicity floor when using log properties (only matters
                 for baryons). This is used to avoid log(0) errors.
+            tau_v (float)
+                The V band optical depth.
+            name (str)
+                The name of the particle type.
         """
-        # Check arguments are valid
-
         # Set phase space coordinates
         self.coordinates = coordinates
         self.velocities = velocities
@@ -125,6 +131,12 @@ class Particles:
         # Set the metallicity floor when using log properties (only matters for
         # baryons)
         self.metallicity_floor = metallicity_floor
+
+        # Set the V band optical depths
+        self.tau_v = tau_v
+
+        # Attach the name of the particle type
+        self.name = name
 
     def _check_part_args(
         self, coordinates, velocities, masses, softening_length
@@ -544,6 +556,171 @@ class Particles:
                 The half flux radius of the particle distribution.
         """
         return self.get_flux_radius(spectra_type, filter_code, 0.5)
+
+    def _prepare_los_args(
+        self,
+        other_parts,
+        attr,
+        kernel,
+        mask,
+        threshold,
+        force_loop,
+        min_count,
+        nthreads,
+    ):
+        """
+        Prepare the arguments for line of sight column density computation.
+
+        Args:
+            other_parts (Particles)
+                The other particles to compute the column density with.
+            attr (str)
+                The attribute to compute the column density of.
+            kernel (array_like, float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value
+                of impact parameter q via kernel[int(k*q)]. Note, this can be
+                an arbitrary kernel.
+            mask (bool)
+                A mask to be applied to the stars. Surface densities will only
+                be computed and returned for stars with True in the mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
+            force_loop (bool)
+                Whether to force the use of a simple loop rather than the tree.
+            min_count (int)
+                The minimum number of particles allowed in a leaf cell when
+                using the tree. This can be used for tuning the tree
+                performance.
+            nthreads (int)
+                The number of threads to use for the calculation.
+        """
+        # Ensure we actually have the properties needed
+        if self.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                f"{self.name} object is missing coordinates!"
+            )
+        if other_parts.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing coordinates!"
+            )
+        if other_parts.smoothing_lengths is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing smoothing lengths!"
+            )
+        if getattr(other_parts, attr, None) is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing {attr}!"
+            )
+
+        # Set up the kernel inputs to the C function.
+        kernel = np.ascontiguousarray(kernel, dtype=np.float64)
+        kdim = kernel.size
+
+        # Get particle counts
+        npart_i = self.nparticles
+        npart_j = other_parts.nparticles
+
+        # Set up the inputs from this particle instance.
+        pos_i = np.ascontiguousarray(
+            self._coordinates[mask, :], dtype=np.float64
+        )
+
+        # Set up the inputs from the other particle instance.
+        pos_j = np.ascontiguousarray(
+            other_parts._coordinates, dtype=np.float64
+        )
+        smls = np.ascontiguousarray(
+            other_parts._smoothing_lengths, dtype=np.float64
+        )
+        surf_den_vals = np.ascontiguousarray(
+            getattr(other_parts, attr), dtype=np.float64
+        )
+
+        return (
+            kernel,
+            pos_i,
+            pos_j,
+            smls,
+            surf_den_vals,
+            npart_i,
+            npart_j,
+            kdim,
+            threshold,
+            force_loop,
+            min_count,
+            nthreads,
+        )
+
+    def get_los_column_density(
+        self,
+        other_parts,
+        density_attr,
+        kernel,
+        mask=None,
+        threshold=1,
+        force_loop=0,
+        min_count=100,
+        nthreads=1,
+    ):
+        """
+        Calculate the column density of an attribute.
+
+        This will calculate the column density of an attribute on another
+        Particles child instance at the positions of the particles in this
+        Particles instance.
+
+        Args:
+            other_parts (Particles)
+                The other particles to calculate the column density with.
+            density_attr (str)
+                The attribute to use to calculate the column density.
+            kernel (array-like, float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value
+                of impact parameter q via kernel[int(k*q)]. Note, this can be
+                an arbitrary kernel.
+            mask (array-like, bool)
+                A mask to be applied to the stars. Surface densities will only
+                be computed and returned for stars with True in the mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
+            force_loop (bool)
+                Whether to force the use of a simple loop rather than the tree.
+            min_count (int)
+                The minimum number of particles allowed in a leaf cell when
+                using the tree. This can be used for tuning the tree
+                performance.
+            nthreads (int)
+                The number of threads to use for the calculation.
+
+        Returns:
+            column_density (float)
+                The column density of the particles.
+        """
+        from synthesizer.extensions.column_density import (
+            compute_column_density,
+        )
+
+        # If we don't have a mask make a fake one for consistency
+        if mask is None:
+            mask = np.ones(self.nparticles, dtype=bool)
+
+        # Compute the column density
+        return compute_column_density(
+            *self._prepare_los_args(
+                other_parts,
+                density_attr,
+                kernel,
+                mask,
+                threshold,
+                force_loop,
+                min_count,
+                nthreads,
+            )
+        )
 
 
 class CoordinateGenerator:
