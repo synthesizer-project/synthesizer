@@ -331,6 +331,7 @@ class SpectralCube:
         kernel_threshold=1,
         density_grid=None,
         quantity="lnu",
+        nthreads=1,
     ):
         """
         Calculate a spectral data cube with smoothing.
@@ -359,6 +360,9 @@ class SpectralCube:
             quantity (str):
                 The Sed attribute/quantity to sort into the data cube, i.e.
                 "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
+            nthreads (int):
+                The number of threads to use for the C extensions. (particle
+                case only).
 
         Returns:
             array_like (float):
@@ -446,6 +450,7 @@ class SpectralCube:
             self.lam.size,
             kernel_threshold,
             kernel.size,
+            nthreads,
         )
 
         return self.arr * self.units
