@@ -288,6 +288,7 @@ class Image:
         kernel=None,
         kernel_threshold=1,
         density_grid=None,
+        nthreads=1,
     ):
         """
         Calculate a smoothed image.
@@ -312,6 +313,9 @@ class Image:
                 The threshold for the kernel. (particle case only)
             density_grid (array_like, float):
                 The density grid to smooth over. (parametric case only)
+            nthreads (int):
+                The number of threads to use for the C extension. (particle
+                case only)
 
         Returns:
             img : array_like (float)
@@ -390,6 +394,7 @@ class Image:
             coordinates.shape[0],
             kernel_threshold,
             kernel.size,
+            nthreads,
         )
 
         return self.arr * self.units if self.units is not None else self.arr
