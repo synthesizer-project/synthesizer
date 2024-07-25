@@ -22,10 +22,11 @@ from unyt import Myr, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import Gas, Stars
-from synthesizer.warnings import warn
+from synthesizer.warnings import deprecated, warn
 
 
 class Galaxy(BaseGalaxy):
@@ -370,105 +371,6 @@ class Galaxy(BaseGalaxy):
         # Assign the metallicity we have found
         self.black_holes.metallicities = metallicities
 
-    def _prepare_los_args(self, kernel, mask, threshold, force_loop):
-        """
-        A method to prepare the arguments for line of sight metal surface
-        density computation with the C function.
-
-        Args:
-            kernel (array_like, float)
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
-            mask (bool)
-                A mask to be applied to the stars. Surface densities will only
-                be computed and returned for stars with True in the mask.
-            threshold (float)
-                The threshold above which the SPH kernel is 0. This is normally
-                at a value of the impact parameter of q = r / h = 1.
-        """
-
-        # If we have no gas, throw an error
-        if self.gas is None:
-            raise exceptions.InconsistentArguments(
-                "No Gas object has been provided! We can't calculate line of "
-                "sight dust attenuation without a Gas object containing the "
-                "dust!"
-            )
-
-        # Ensure we actually have the properties needed
-        if self.stars.coordinates is None:
-            raise exceptions.InconsistentArguments(
-                "Star object is missing coordinates!"
-            )
-        if self.gas.coordinates is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing coordinates!"
-            )
-        if self.gas.smoothing_lengths is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing smoothing lengths!"
-            )
-        if self.gas.metallicities is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing metallicities!"
-            )
-        if self.gas.masses is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing masses!"
-            )
-        if self.gas.dust_to_metal_ratio is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing DTMs (dust_to_metal_ratio)!"
-            )
-
-        # Set up the kernel inputs to the C function.
-        kernel = np.ascontiguousarray(kernel, dtype=np.float64)
-        kdim = kernel.size
-
-        # Set up the stellar inputs to the C function.
-        star_pos = np.ascontiguousarray(
-            self.stars._coordinates[mask, :], dtype=np.float64
-        )
-        nstar = self.stars._coordinates[mask, :].shape[0]
-
-        # Set up the gas inputs to the C function.
-        gas_pos = np.ascontiguousarray(self.gas._coordinates, dtype=np.float64)
-        gas_sml = np.ascontiguousarray(
-            self.gas._smoothing_lengths, dtype=np.float64
-        )
-        gas_met = np.ascontiguousarray(
-            self.gas.metallicities, dtype=np.float64
-        )
-        gas_mass = np.ascontiguousarray(self.gas._masses, dtype=np.float64)
-        if isinstance(self.gas.dust_to_metal_ratio, float):
-            gas_dtm = np.ascontiguousarray(
-                np.full_like(gas_mass, self.gas.dust_to_metal_ratio),
-                dtype=np.float64,
-            )
-        else:
-            gas_dtm = np.ascontiguousarray(
-                self.gas.dust_to_metal_ratio, dtype=np.float64
-            )
-        ngas = gas_mass.size
-
-        return (
-            kernel,
-            star_pos,
-            gas_pos,
-            gas_sml,
-            gas_met,
-            gas_mass,
-            gas_dtm,
-            nstar,
-            ngas,
-            kdim,
-            threshold,
-            np.max(gas_sml),
-            force_loop,
-        )
-
     def integrate_particle_spectra(self):
         """Integrate all particle spectra on any attached components."""
         # Handle stellar spectra
@@ -484,24 +386,30 @@ class Galaxy(BaseGalaxy):
             # Nothing to do here... YET
             pass
 
-    def calculate_los_tau_v(
+    def get_stellar_los_tau_v(
         self,
         kappa,
         kernel,
         mask=None,
         threshold=1,
         force_loop=0,
+        min_count=100,
+        nthreads=1,
     ):
         """
-        Calculate tau_v for each star particle based on the distribution of
-        stellar and gas particles.
+        Calculate the LOS optical depth for each star particle.
+
+        This will calculate the optical depth for each star particle based on
+        the gas particle distribution. The stars are considered to interact
+        with a gas particle if gas_z > star_z and the star postion is within
+        the SPH kernel of the gas particle.
 
         Note: the resulting tau_vs will be associated to the stars object at
         self.stars.tau_v.
 
         Args:
             kappa (float)
-                ...
+                The dust opacity in units of Msun / pc**2.
             kernel (array_like/float)
                 A 1D description of the SPH kernel. Values must be in ascending
                 order such that a k element array can be indexed for the value
@@ -517,19 +425,42 @@ class Galaxy(BaseGalaxy):
                 By default (False) the C function will only loop over nearby
                 gas particles to search for contributions to the LOS surface
                 density. This forces the loop over *all* gas particles.
+            min_count (int)
+                The minimum number of particles in a leaf cell of the tree
+                used to search for gas particles. Can be used to tune the
+                performance of the tree search in extreme cases. If there are
+                fewer particles in a leaf cell than this value, the search
+                will be performed with a brute force loop.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
         """
+        start = tic()
 
-        from ..extensions.los import compute_dust_surface_dens
-
-        # If we don't have a mask make a fake one for consistency
-        if mask is None:
-            mask = np.ones(self.stars.nparticles, dtype=bool)
-
-        # Prepare the arguments
-        args = self._prepare_los_args(kernel, mask, threshold, force_loop)
+        # Ensure we have stars and gas
+        if self.stars is None:
+            raise exceptions.InconsistentArguments(
+                "No Stars object has been provided! We can't calculate line "
+                "of sight dust attenuation without a Stars object containing "
+                "the stellar particles!"
+            )
+        if self.gas is None:
+            raise exceptions.InconsistentArguments(
+                "No Gas object has been provided! We can't calculate line of "
+                "sight dust attenuation without a Gas object containing the "
+                "dust!"
+            )
 
         # Compute the dust surface densities
-        los_dustsds = compute_dust_surface_dens(*args)  # Msun / Mpc**2
+        los_dustsds = self.stars.get_los_column_density(
+            self.gas,
+            "dust_masses",
+            kernel,
+            mask=mask,
+            threshold=threshold,
+            force_loop=force_loop,
+            min_count=min_count,
+            nthreads=nthreads,
+        )  # Msun / Mpc**2
 
         los_dustsds /= (1e6) ** 2  # Msun / pc**2
 
@@ -540,6 +471,190 @@ class Galaxy(BaseGalaxy):
         if self.stars.tau_v is None:
             self.stars.tau_v = np.zeros(self.stars.nparticles)
         self.stars.tau_v[mask] = tau_v
+
+        toc("Calculating stellar LOS tau_v", start)
+
+        return tau_v
+
+    def get_black_hole_los_tau_v(
+        self,
+        kappa,
+        kernel,
+        mask=None,
+        threshold=1,
+        force_loop=0,
+        min_count=100,
+        nthreads=1,
+    ):
+        """
+        Calculate the LOS optical depth for each black hole particle.
+
+        This will calculate the optical depth for each black hole particle
+        based on the gas particle distribution. The black holes are considered
+        to interact with a gas particle if gas_z > black_hole_z and the black
+        hole postion is within the SPH kernel of the gas particle.
+
+        Note: the resulting tau_vs will be associated to the black_holes object
+        at self.black_holes.tau_v.
+
+        Args:
+            kappa (float)
+                The dust opacity in units of Msun / pc**2.
+            kernel (array_like/float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value
+                of impact parameter q via kernel[int(k*q)]. Note, this can be
+                an arbitrary kernel.
+            mask (bool)
+                A mask to be applied to the black holes. Surface densities will
+                only be computed and returned for black holes with True in the
+                mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
+            force_loop (bool)
+                By default (False) the C function will only loop over nearby
+                gas particles to search for contributions to the LOS surface
+                density. This forces the loop over *all* gas particles.
+            min_count (int)
+                The minimum number of particles in a leaf cell of the tree
+                used to search for gas particles. Can be used to tune the
+                performance of the tree search in extreme cases. If there are
+                fewer particles in a leaf cell than this value, the search
+                will be performed with a brute force loop.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
+        """
+        start = tic()
+
+        # Ensure we have black holes and gas
+        if self.black_holes is None:
+            raise exceptions.InconsistentArguments(
+                "No BlackHoles object has been provided! We can't calculate "
+                "line of sight dust attenuation without a BlackHoles object "
+                "containing the black hole particles!"
+            )
+        if self.gas is None:
+            raise exceptions.InconsistentArguments(
+                "No Gas object has been provided! We can't calculate line of "
+                "sight dust attenuation without a Gas object containing the "
+                "dust!"
+            )
+
+        # Compute the dust surface densities
+        los_dustsds = self.black_holes.get_los_column_density(
+            self.gas,
+            "dust_masses",
+            kernel,
+            mask=mask,
+            threshold=threshold,
+            force_loop=force_loop,
+            min_count=min_count,
+            nthreads=nthreads,
+        )
+
+        los_dustsds /= (1e6) ** 2  # Msun / pc**2
+
+        # Finalise the calculation
+        tau_v = kappa * los_dustsds
+
+        # Store the result in self.black_holes
+        if self.black_holes.tau_v is None:
+            self.black_holes.tau_v = np.zeros(self.black_holes.nbh)
+        self.black_holes.tau_v[mask] = tau_v
+
+        toc("Calculating black hole LOS tau_v", start)
+
+        return tau_v
+
+    @deprecated
+    def calculate_los_tau_v(
+        self,
+        kappa,
+        kernel,
+        mask=None,
+        threshold=1,
+        force_loop=0,
+        min_count=100,
+        nthreads=1,
+    ):
+        """
+        Calculate the LOS optical depth for each star particle.
+
+        This will calculate the optical depth for each star particle based on
+        the gas particle distribution. The stars are considered to interact
+        with a gas particle if gas_z > star_z and the star postion is within
+        the SPH kernel of the gas particle.
+
+        Note: the resulting tau_vs will be associated to the stars object at
+        self.stars.tau_v.
+
+        Args:
+            kappa (float)
+                The dust opacity in units of Msun / pc**2.
+            kernel (array_like/float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value
+                of impact parameter q via kernel[int(k*q)]. Note, this can be
+                an arbitrary kernel.
+            mask (bool)
+                A mask to be applied to the stars. Surface densities will only
+                be computed and returned for stars with True in the mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
+            force_loop (bool)
+                By default (False) the C function will only loop over nearby
+                gas particles to search for contributions to the LOS surface
+                density. This forces the loop over *all* gas particles.
+            min_count (int)
+                The minimum number of particles in a leaf cell of the tree
+                used to search for gas particles. Can be used to tune the
+                performance of the tree search in extreme cases. If there are
+                fewer particles in a leaf cell than this value, the search
+                will be performed with a brute force loop.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
+        """
+        start = tic()
+
+        # Ensure we have stars and gas
+        if self.stars is None:
+            raise exceptions.InconsistentArguments(
+                "No Stars object has been provided! We can't calculate line "
+                "of sight dust attenuation without a Stars object containing "
+                "the stellar particles!"
+            )
+        if self.gas is None:
+            raise exceptions.InconsistentArguments(
+                "No Gas object has been provided! We can't calculate line of "
+                "sight dust attenuation without a Gas object containing the "
+                "dust!"
+            )
+
+        # Compute the dust surface densities
+        los_dustsds = self.stars.get_los_column_density(
+            self.gas,
+            "dust_masses",
+            kernel,
+            mask=mask,
+            threshold=threshold,
+            force_loop=force_loop,
+            min_count=min_count,
+            nthreads=nthreads,
+        )  # Msun / Mpc**2
+
+        los_dustsds /= (1e6) ** 2  # Msun / pc**2
+
+        # Finalise the calculation
+        tau_v = kappa * los_dustsds
+
+        # Store the result in self.stars
+        if self.stars.tau_v is None:
+            self.stars.tau_v = np.zeros(self.stars.nparticles)
+        self.stars.tau_v[mask] = tau_v
+
+        toc("Calculating LOS tau_v", start)
 
         return tau_v
 
