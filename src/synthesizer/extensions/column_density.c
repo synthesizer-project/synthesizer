@@ -484,8 +484,7 @@ static void los_tree(struct cell *root, const double *pos_i,
   (void)nthreads;
 
   /* If we don't have OpenMP call the serial version. */
-  los_tree_serial(root, pos_i, smls, surf_den_vals, kernel, surf_dens, npart_i,
-                  kdim, threshold);
+  los_tree_serial(root, pos_i, kernel, surf_dens, npart_i, kdim, threshold);
 
 #endif
   toc("Recursive surface density calculation", start);
