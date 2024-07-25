@@ -128,6 +128,7 @@ PyObject *make_data_cube_hist(PyObject *self, PyObject *args) {
  * @param nlam: The number of wavelength elements in the SEDs.
  * @param threshold: The threshold of the SPH kernel.
  * @param kdim: The number of elements in the kernel.
+ * @param nthreads: The number of threads to use.
  */
 PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
 
@@ -136,13 +137,14 @@ PyObject *make_data_cube_smooth(PyObject *self, PyObject *args) {
   (void)self;
 
   double res, threshold;
-  int npix_x, npix_y, npart, nlam, kdim;
+  int npix_x, npix_y, npart, nlam, kdim, nthreads;
   PyArrayObject *np_sed_values, *np_kernel;
   PyArrayObject *np_smoothing_lengths, *np_xs, *np_ys;
 
-  if (!PyArg_ParseTuple(args, "OOOOOdiiiidi", &np_sed_values,
+  if (!PyArg_ParseTuple(args, "OOOOOdiiiidii", &np_sed_values,
                         &np_smoothing_lengths, &np_xs, &np_ys, &np_kernel, &res,
-                        &npix_x, &npix_y, &npart, &nlam, &threshold, &kdim))
+                        &npix_x, &npix_y, &npart, &nlam, &threshold, &kdim,
+                        &nthreads))
     return NULL;
 
   /* Get pointers to the actual data. */
