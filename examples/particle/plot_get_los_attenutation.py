@@ -1,16 +1,15 @@
 """
-Plot line of sight diagnostics
-==============================
+Plot line of sight optical depth calculations
+=============================================
 
-This example shows how to compute line of sight dust surface densities,
-and plots some diagnostics.
+This example shows how to compute line of sight optical depths and compares
+the simple loop method with the complex tree method.
 """
 
 import time
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.lines import Line2D
 from scipy.spatial import cKDTree
 from synthesizer.grid import Grid
 from synthesizer.kernel_functions import Kernel
@@ -78,168 +77,105 @@ loop_ys = {}
 tree_ys = {}
 precision = {}
 
-for n in [10, 100, 500]:
-    xs.setdefault(n, [])
-    loop_ys.setdefault(n, [])
-    tree_ys.setdefault(n, [])
-    precision.setdefault(n, [])
+n = 100
 
-    # First make the stars
+# First make the stars
 
-    # Generate some random coordinates
-    coords = CoordinateGenerator.generate_3D_gaussian(
-        n,
-        mean=np.array([50, 50, 50]),
-    )
+# Generate some random coordinates
+coords = CoordinateGenerator.generate_3D_gaussian(
+    n,
+    mean=np.array([50, 50, 50]),
+)
 
-    # Calculate the smoothing lengths
-    smls = calculate_smoothing_lengths(coords, num_neighbors=56)
+# Calculate the smoothing lengths
+smls = calculate_smoothing_lengths(coords, num_neighbors=56)
 
-    # Sample the SFZH, producing a Stars object
-    # we will also pass some keyword arguments for attributes
-    # we will need for imaging
-    stars = sample_sfhz(
-        param_stars.sfzh,
-        param_stars.log10ages,
-        param_stars.log10metallicities,
-        n,
-        coordinates=coords,
-        current_masses=np.full(n, 10**8.7 / n),
-        smoothing_lengths=smls,
-        redshift=1,
-    )
+# Sample the SFZH, producing a Stars object
+# we will also pass some keyword arguments for attributes
+# we will need for imaging
+stars = sample_sfhz(
+    param_stars.sfzh,
+    param_stars.log10ages,
+    param_stars.log10metallicities,
+    n,
+    coordinates=coords,
+    current_masses=np.full(n, 10**8.7 / n),
+    smoothing_lengths=smls,
+    redshift=1,
+)
 
-    for ngas in np.logspace(2, 3, 3, dtype=int):
-        # Now make the gas
+ngas = 1000
 
-        # Generate some random coordinates
-        coords = CoordinateGenerator.generate_3D_gaussian(
-            ngas,
-            mean=np.array([50, 50, 50]),
-        )
+# Now make the gas
 
-        # Calculate the smoothing lengths
-        smls = calculate_smoothing_lengths(coords, num_neighbors=56)
+# Generate some random coordinates
+coords = CoordinateGenerator.generate_3D_gaussian(
+    ngas,
+    mean=np.array([50, 50, 50]),
+)
 
-        gas = Gas(
-            masses=np.random.uniform(10**6, 10**6.5, ngas),
-            metallicities=np.random.uniform(0.01, 0.05, ngas),
-            coordinates=coords,
-            smoothing_lengths=smls,
-            dust_to_metal_ratio=0.2,
-        )
+# Calculate the smoothing lengths
+smls = calculate_smoothing_lengths(coords, num_neighbors=56)
 
-        # Create galaxy object
-        galaxy = Galaxy("Galaxy", stars=stars, gas=gas, redshift=1)
+gas = Gas(
+    masses=np.random.uniform(10**6, 10**6.5, ngas),
+    metallicities=np.random.uniform(0.01, 0.05, ngas),
+    coordinates=coords,
+    smoothing_lengths=smls,
+    dust_to_metal_ratio=0.2,
+)
 
-        # Get the kernel
-        kernel = Kernel().get_kernel()
+# Create galaxy object
+galaxy = Galaxy("Galaxy", stars=stars, gas=gas, redshift=1)
 
-        # Calculate the tau_vs
-        start = time.time()
-        tau_v = galaxy.calculate_los_tau_v(
-            kappa=0.07,
-            kernel=kernel,
-            force_loop=1,
-        )
-        loop_time = time.time() - start
-        loop_sum = np.sum(tau_v)
+# Get the kernel
+kernel = Kernel().get_kernel()
 
-        # Calculate the tau_vs
-        start = time.time()
-        tau_v = galaxy.calculate_los_tau_v(
-            kappa=0.07,
-            kernel=kernel,
-            min_count=100,
-        )
-        tree_time = time.time() - start
-        tree_sum = np.sum(tau_v)
+# Calculate the tau_vs
+start = time.time()
+loop_tau_v = galaxy.calculate_los_tau_v(
+    kappa=0.07,
+    kernel=kernel,
+    force_loop=1,
+)
+loop_time = time.time() - start
+loop_sum = np.sum(loop_tau_v)
 
-        xs[n].append(ngas)
-        loop_ys[n].append(loop_time)
-        tree_ys[n].append(tree_time)
-        precision[n].append(np.abs(tree_sum - loop_sum) / loop_sum * 100)
+# Calculate the tau_vs
+start = time.time()
+tree_tau_v = galaxy.calculate_los_tau_v(
+    kappa=0.07,
+    kernel=kernel,
+    min_count=100,
+)
+tree_time = time.time() - start
+tree_sum = np.sum(tree_tau_v)
 
-        print(
-            f"LOS calculation with tree took {tree_time:.4f} "
-            f"seconds for nstar={n} and ngas={ngas}"
-        )
-        print(
-            f"LOS calculation with loop took {loop_time:.4f} "
-            f"seconds for nstar={n} and ngas={ngas}"
-        )
-        print(
-            "Ratio in wallclock: "
-            f"Time_loop/Time_tree={loop_time / tree_time:.4f}"
-        )
-        print(
-            f"Tree gave={tree_sum:.2e} Loop gave={loop_sum:.2e} "
-            "Normalised residual="
-            f"{np.abs(tree_sum - loop_sum) / loop_sum * 100:.4f}"
-        )
-        print()
+print(
+    f"LOS calculation with tree took {tree_time:.4f} "
+    f"seconds for nstar={n} and ngas={ngas}"
+)
+print(
+    f"LOS calculation with loop took {loop_time:.4f} "
+    f"seconds for nstar={n} and ngas={ngas}"
+)
+print(
+    "Ratio in wallclock: " f"Time_loop/Time_tree={loop_time / tree_time:.4f}"
+)
+print(
+    f"Tree gave={tree_sum:.2e} Loop gave={loop_sum:.2e} "
+    "Normalised residual="
+    f"{np.abs(tree_sum - loop_sum) / loop_sum * 100:.4f}"
+)
+print()
 
-# Convert to numpy arrays
-for n in xs.keys():
-    xs[n] = np.array(xs[n])
-    sinds = np.argsort(xs[n])
-    xs[n] = xs[n][sinds]
-    loop_ys[n] = np.array(loop_ys[n])[sinds]
-    tree_ys[n] = np.array(tree_ys[n])[sinds]
-    precision[n] = np.array(precision[n])[sinds]
+# Plot the optical depths against each other.
+fig, ax = plt.subplots()
+ax.scatter(tree_tau_v, loop_tau_v, s=1)
 
-# Create lists of colours to use
-colours = ["b", "g", "r", "c", "m", "y", "k"]
-
-# Create the legend handles
-legend_handles = [
-    Line2D([0], [0], color="k", lw=2, label="Loop", linestyle="-"),
-    Line2D([0], [0], color="k", lw=2, label="Tree", linestyle="--"),
-]
-
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.loglog()
-ax.grid()
-
-# Plot for each star count
-for i, n in enumerate(xs.keys()):
-    ax.plot(xs[n], loop_ys[n], color=colours[i])
-    ax.plot(xs[n], tree_ys[n], color=colours[i], linestyle="--")
-
-    # Add a handle for this star count
-    legend_handles.append(
-        Line2D(
-            [0],
-            [0],
-            color=colours[i],
-            lw=2,
-            label=f"$N_\\star={n}$",
-            linestyle="-",
-        )
-    )
-
-ax.set_ylabel("Wallclock (s)")
-ax.set_xlabel(r"$N_\mathrm{gas}$")
-
-ax.legend(handles=legend_handles)
-
-plt.show()
-
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.semilogx()
-ax.grid()
-
-
-# Plot for each star count
-for i, n in enumerate(xs.keys()):
-    ax.plot(xs[n], precision[n], color=colours[i], label=f"$N_\\star={n}$")
-
-
-ax.set_ylabel(r"$|\tau_{V, tree} - \tau_{V, loop}|" r" / \tau_{V, loop}$ (%)")
-ax.set_xlabel("$N_\\mathrm{gas}$")
-
-ax.legend()
+ax.set_xscale("log")
+ax.set_yscale("log")
+ax.set_xlabel("Tree method")
+ax.set_ylabel("Loop method")
 
 plt.show()
