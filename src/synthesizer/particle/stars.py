@@ -841,6 +841,23 @@ class Stars(Particles, StarsComponent):
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
+        # Ensure and warn that the masking hasn't removed everything
+        if mask is not None and np.sum(mask) == 0:
+            warn("Age mask has filtered out all particles")
+
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.lines[line_id_]["wavelength"]
+                        * angstrom,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
+
         # Set up a list to hold each individual Line
         lines = []
 
@@ -1092,6 +1109,23 @@ class Stars(Particles, StarsComponent):
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
+        # Ensure and warn that the masking hasn't removed everything
+        if np.sum(mask) == 0:
+            warn("Age mask has filtered out all particles")
+
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.lines[line_id_]["wavelength"]
+                        * angstrom,
+                        luminosity=0 * erg / s,
+                        continuum=0 * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
+
         # Set up a list to hold each individual Line
         lines = []
 
@@ -1106,7 +1140,7 @@ class Stars(Particles, StarsComponent):
             lam = grid.lines[line_id_]["wavelength"] * angstrom
 
             # Get the luminosity and continuum
-            lum, cont = compute_particle_line(
+            _lum, _cont = compute_particle_line(
                 *self._prepare_line_args(
                     grid,
                     line_id_,
@@ -1116,6 +1150,16 @@ class Stars(Particles, StarsComponent):
                     nthreads=nthreads,
                 )
             )
+
+            # Account for the mask
+            if mask is not None:
+                lum = np.zeros(self.nparticles)
+                cont = np.zeros(self.nparticles)
+                lum[mask] = _lum
+                cont[mask] = _cont
+            else:
+                lum = _lum
+                cont = _cont
 
             # Append this lines values to the containers
             lines.append(
