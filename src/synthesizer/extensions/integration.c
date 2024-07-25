@@ -2,6 +2,7 @@
  * A C module containing helper functions for integration.
  *****************************************************************************/
 #include <Python.h>
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
 
 #ifdef WITH_OPENMP
@@ -244,7 +245,15 @@ static PyMethodDef IntegrationMethods[] = {
     {NULL, NULL, 0, NULL}};
 
 static struct PyModuleDef integrationmodule = {
-    PyModuleDef_HEAD_INIT, "integration", NULL, -1, IntegrationMethods};
+    PyModuleDef_HEAD_INIT,
+    "integration", /* name of module */
+    NULL,
+    -1,
+    IntegrationMethods,
+    NULL,
+    NULL,
+    NULL,
+    NULL};
 
 PyMODINIT_FUNC PyInit_integration(void) {
   import_array(); /* Initialize the NumPy C-API */

@@ -64,6 +64,7 @@ struct particles {
 };
 
 /* Prototypes */
+void *synth_malloc(size_t n, char *msg);
 double *extract_data_double(PyArrayObject *np_arr, char *name);
 int *extract_data_int(PyArrayObject *np_arr, char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
