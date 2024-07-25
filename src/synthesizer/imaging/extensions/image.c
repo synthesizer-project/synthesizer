@@ -15,8 +15,8 @@
 #include <numpy/ndarraytypes.h>
 
 /* Local includes. */
-#include "property_funcs.h"
-#include "timers.h"
+#include "../../extensions/property_funcs.h"
+#include "../../extensions/timers.h"
 
 #ifdef WITH_OPENMP
 #include <omp.h>
@@ -44,16 +44,17 @@
  * @param npix_x: The number of pixels along the x axis.
  * @param npix_y: The number of pixels along the y axis.
  * @param npart: The number of particles.
- * @param nlam: The number of wavelength elements in the SEDs.
  * @param threshold: The threshold of the SPH kernel.
  * @param kdim: The number of elements in the kernel.
  * @param img: The image to be populated.
  */
-void populate_smoothed_image_serial(
-    const double *pix_values, const double *smoothing_lengths, const double *xs,
-    const double *ys, const double *kernel, const double res, const int npix_x,
-    const int npix_y, const int npart, const int nlam, const double threshold,
-    const int kdim, double *img) {
+void populate_smoothed_image_serial(const double *pix_values,
+                                    const double *smoothing_lengths,
+                                    const double *xs, const double *ys,
+                                    const double *kernel, const double res,
+                                    const int npix_x, const int npix_y,
+                                    const int npart, const double threshold,
+                                    const int kdim, double *img) {
 
   /* Loop over positions including the sed */
   for (int ind = 0; ind < npart; ind++) {
@@ -184,7 +185,6 @@ void populate_smoothed_image_serial(
  * @param npix_x: The number of pixels along the x axis.
  * @param npix_y: The number of pixels along the y axis.
  * @param npart: The number of particles.
- * @param nlam: The number of wavelength elements in the SEDs.
  * @param threshold: The threshold of the SPH kernel.
  * @param kdim: The number of elements in the kernel.
  * @param img: The image to be populated.
@@ -193,8 +193,8 @@ void populate_smoothed_image_serial(
 void populate_smoothed_image_parallel(
     const double *pix_values, const double *smoothing_lengths, const double *xs,
     const double *ys, const double *kernel, const double res, const int npix_x,
-    const int npix_y, const int npart, const int nlam, const double threshold,
-    const int kdim, double *img, const int nthreads) {
+    const int npix_y, const int npart, const double threshold, const int kdim,
+    double *img, const int nthreads) {
 
   /* Loop over positions including the sed */
 #pragma omp parallel for num_threads(nthreads)
@@ -294,7 +294,7 @@ void populate_smoothed_image_parallel(
         if (part_kernel[iii * kernel_cdim + jjj] == 0)
           continue;
 
-#pragma omp atomic
+#pragma omp critical
         {
           /* Loop over the wavelength axis. */
           img[jj + npix_y * ii] +=
@@ -326,7 +326,6 @@ void populate_smoothed_image_parallel(
  * @param npix_x: The number of pixels along the x axis.
  * @param npix_y: The number of pixels along the y axis.
  * @param npart: The number of particles.
- * @param nlam: The number of wavelength elements in the SEDs.
  * @param threshold: The threshold of the SPH kernel.
  * @param kdim: The number of elements in the kernel.
  * @param img: The image to be populated.
@@ -336,7 +335,7 @@ void populate_smoothed_image(const double *pix_values,
                              const double *smoothing_lengths, const double *xs,
                              const double *ys, const double *kernel,
                              const double res, const int npix_x,
-                             const int npix_y, const int npart, const int nlam,
+                             const int npix_y, const int npart,
                              const double threshold, const int kdim,
                              double *img, const int nthreads) {
 
@@ -345,19 +344,19 @@ void populate_smoothed_image(const double *pix_values,
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
     populate_smoothed_image_parallel(pix_values, smoothing_lengths, xs, ys,
-                                     kernel, res, npix_x, npix_y, npart, nlam,
+                                     kernel, res, npix_x, npix_y, npart,
                                      threshold, kdim, img, nthreads);
   } else {
     populate_smoothed_image_serial(pix_values, smoothing_lengths, xs, ys,
-                                   kernel, res, npix_x, npix_y, npart, nlam,
+                                   kernel, res, npix_x, npix_y, npart,
                                    threshold, kdim, img);
   }
 #else
   populate_smoothed_image_serial(pix_values, smoothing_lengths, xs, ys, kernel,
-                                 res, npix_x, npix_y, npart, nlam, threshold,
-                                 kdim, img);
+                                 res, npix_x, npix_y, npart, threshold, kdim,
+                                 img);
 #endif
-  toc(start, "Populating smoothed image");
+  toc("Populating smoothed image", start);
 }
 
 /**
@@ -381,7 +380,6 @@ void populate_smoothed_image(const double *pix_values,
  * @param res: The pixel resolution.
  * @param npix: The number of pixels along an axis.
  * @param npart: The number of particles.
- * @param nlam: The number of wavelength elements in the SEDs.
  * @param threshold: The threshold of the SPH kernel.
  * @param kdim: The number of elements in the kernel.
  * @param nthreads: The number of threads to use.
@@ -416,7 +414,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   /* Populate the image. */
   populate_smoothed_image(pix_values, smoothing_lengths, xs, ys, kernel, res,
-                          npix_x, npix_y, npart, 1, threshold, kdim, img,
+                          npix_x, npix_y, npart, threshold, kdim, img,
                           nthreads);
 
   /* Construct a numpy python array to return the IFU. */
