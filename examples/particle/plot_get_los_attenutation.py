@@ -78,7 +78,7 @@ loop_ys = {}
 tree_ys = {}
 precision = {}
 
-for n in [100, 1000, 10000]:
+for n in [10, 100, 500]:
     xs.setdefault(n, [])
     loop_ys.setdefault(n, [])
     tree_ys.setdefault(n, [])
@@ -109,7 +109,7 @@ for n in [100, 1000, 10000]:
         redshift=1,
     )
 
-    for ngas in np.logspace(2, 5, 5, dtype=int):
+    for ngas in np.logspace(2, 3, 3, dtype=int):
         # Now make the gas
 
         # Generate some random coordinates
