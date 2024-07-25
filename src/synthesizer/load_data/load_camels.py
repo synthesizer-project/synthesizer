@@ -561,6 +561,8 @@ def load_CAMELS_SwiftEAGLE_subfind(
     def swifteagle_particle_assignment(
         idx,
         redshift,
+        pos,
+        mask,
         grpn,
         grp_lentype,
         grp_firstsub,
@@ -582,6 +584,8 @@ def load_CAMELS_SwiftEAGLE_subfind(
     ):
         gal = Galaxy()
         gal.redshift = redshift
+        gal.centre = pos[idx] * kpc
+        gal.index = mask[idx]
 
         # Find star particles in this subhalo
         ptype = 4
@@ -674,6 +678,8 @@ def load_CAMELS_SwiftEAGLE_subfind(
     _f = partial(
         swifteagle_particle_assignment,
         redshift=redshift,
+        pos=pos,
+        mask=mask,
         grpn=grpn,
         grp_lentype=grp_lentype,
         grp_firstsub=grp_firstsub,
@@ -697,8 +703,8 @@ def load_CAMELS_SwiftEAGLE_subfind(
     galaxies = pool.map(_f, mask)
     pool.close()
 
-    for idx in np.arange(len(galaxies)):
-        galaxies[idx].centre = pos[idx] * kpc
-        galaxies[idx].index = mask[idx]
+    # for idx in np.arange(len(galaxies)):
+    #     galaxies[idx].centre = pos[idx] * kpc
+    #     galaxies[idx].index = mask[idx]
 
     return galaxies
