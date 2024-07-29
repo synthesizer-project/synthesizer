@@ -551,8 +551,8 @@ class Stars(Particles, StarsComponent):
             aperture_mask = self._aperture_mask(aperture_radius=aperture)
 
             # Ensure and warn that the masking hasn't removed everything
-            if np.sum(aperture_mask) == 0:
-                warn("Aperture mask has filtered out all particles")
+            if np.sum(aperture_mask & mask) == 0:
+                warn("Aperture and age masks have filtered out all particles")
 
                 return np.zeros(len(grid.lam))
         else:
@@ -563,7 +563,7 @@ class Stars(Particles, StarsComponent):
             pmask = self._get_masks(parametric_young_stars, None)
 
             # Check we have particles to replace
-            if np.sum(pmask) > 0:
+            if np.sum(pmask & aperture_mask) > 0:
                 # Update the young/old mask to ignore those we're replacing
                 mask[pmask] = False
 
