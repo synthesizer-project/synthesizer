@@ -32,6 +32,7 @@ import numpy as np
 from matplotlib import cm
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import LogNorm
+from scipy.interpolate import interp1d
 from spectres import spectres
 from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 
@@ -356,7 +357,7 @@ class Grid:
 
             # We read the lines themselves into "nebular" so make sure this
             # exists
-            if "nebular" not in self.lines:
+            if "nebular" not in self.line_lums:
                 raise exceptions.GridError(
                     "No nebular spectra found. The nebular spectra is"
                     " required for storing lines. Either you have explictly"
@@ -395,21 +396,28 @@ class Grid:
                 ][:]
 
             # Now that we have read the line data itself we need to populate
-            # the other spectra entries. The line luminosities for all entries
+            # the other spectra entries. the line luminosities for all entries
             # other than nebular are 0 but the continuums need to be sampled
             # from the spectra.
             for spectra in self.available_spectra:
                 if spectra == "nebular":
                     continue
 
+                # Create an interpolation function for this spectra
+                interp_func = interp1d(
+                    self._lam,
+                    self.spectra[spectra],
+                    axis=-1,
+                    kind="linear",
+                    fill_value=0.0,
+                    bounds_error=False,
+                )
+
                 # Get the continuum luminosities by interpolating the to get
-                # the continuum at the line wavelengths
+                # the continuum at the line wavelengths (we use scipy here
+                # because spectres can't handle single value interpolation)
                 self.line_conts[spectra] = {
-                    line: spectres(
-                        self.line_lams[line],
-                        self.lam,
-                        self.spectra[spectra],
-                    )
+                    line: interp_func(self.line_lams[line])
                     for line in self.available_lines
                 }
 
@@ -516,7 +524,7 @@ class Grid:
     @property
     def has_lines(self):
         """Return whether the Grid has lines."""
-        return len(self.lines) > 0
+        return len(self.line_lums) > 0
 
     def _get_spectra_ids_from_file(self):
         """
@@ -706,7 +714,7 @@ class Grid:
                 f"grid_point={grid_point})"
             )
 
-    def get_line(self, grid_point, line_id):
+    def get_line(self, grid_point, line_id, spectra_type="nebular"):
         """
         Create a Line object for a given line_id and grid_point.
 
@@ -715,6 +723,10 @@ class Grid:
                 A tuple of integers specifying the closest grid point.
             line_id (str)
                 The id of the line.
+            spectra_type (str)
+                The spectra type to extract the line from. Default is
+                "nebular", all other spectra will have line luminosities of 0
+                by definition.
 
         Returns:
             line (synthesizer.line.Line)
@@ -744,13 +756,20 @@ class Grid:
             # Create the line
             # TODO: Need to use units from the grid file but they currently
             # aren't stored correctly.
-            line_ = self.lines[line_id_]
+            lam = self.line_lams[line_id_] * angstrom
+            lum = self.line_lums[spectra_type][line_id_][grid_point] * erg / s
+            cont = (
+                self.line_conts[spectra_type][line_id_][grid_point]
+                * erg
+                / s
+                / Hz
+            )
             lines.append(
                 Line(
                     line_id=line_id,
-                    wavelength=line_["wavelength"] * angstrom,
-                    luminosity=line_["luminosity"][grid_point] * erg / s,
-                    continuum=line_["continuum"][grid_point] * erg / s / Hz,
+                    wavelength=lam,
+                    luminosity=lum,
+                    continuum=cont,
                 )
             )
 
