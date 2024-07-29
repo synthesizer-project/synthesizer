@@ -281,7 +281,7 @@ class PacmanEmission(StellarEmissionModel):
         if self._fesc == 0.0:
             return StellarEmissionModel(
                 label="intrinsic",
-                combine=(self.reprocessed, self.transmitted),
+                combine=(self.nebular, self.transmitted),
             )
 
         # Otherwise, intrinsic = reprocessed + escaped
