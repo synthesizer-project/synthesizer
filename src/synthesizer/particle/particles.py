@@ -748,7 +748,7 @@ class CoordinateGenerator:
         """
 
         # If we haven't been passed a covariance make one
-        if not cov:
+        if cov is None:
             cov = np.zeros((3, 3))
             np.fill_diagonal(cov, 1.0)
 
