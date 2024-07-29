@@ -578,7 +578,7 @@ class Stars(Particles, StarsComponent):
                 # Create a dummy empty array
                 lnu_parametric = np.zeros(len(grid.lam))
 
-            if np.sum(mask) == 0:
+            if np.sum(mask & aperture_mask) == 0:
                 warn("All particles replaced with parametric forms")
                 return lnu_parametric
 
