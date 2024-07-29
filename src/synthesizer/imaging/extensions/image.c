@@ -196,13 +196,6 @@ void populate_smoothed_image_parallel(
     const int npix_y, const int npart, const double threshold, const int kdim,
     double *img, const int nthreads) {
 
-  /* Set up an array of locks. */
-  omp_lock_t *locks =
-      (omp_lock_t *)malloc(npix_x * npix_y * sizeof(omp_lock_t));
-  for (int i = 0; i < npix_x * npix_y; i++) {
-    omp_init_lock(&locks[i]);
-  }
-
   /* Loop over positions including the sed */
 #pragma omp parallel for num_threads(nthreads)
   for (int ind = 0; ind < npart; ind++) {
@@ -301,11 +294,10 @@ void populate_smoothed_image_parallel(
         if (part_kernel[iii * kernel_cdim + jjj] == 0)
           continue;
 
-        /* Loop over the wavelength axis. */
-        omp_set_lock(&locks[jj + npix_y * ii]);
+/* Loop over the wavelength axis. */
+#pragma omp atomic
         img[jj + npix_y * ii] +=
             part_kernel[iii * kernel_cdim + jjj] * pix_values[ind];
-        omp_unset_lock(&locks[jj + npix_y * ii]);
       }
     }
 
