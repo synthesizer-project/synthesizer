@@ -211,9 +211,9 @@ fig, ax = g.stars.plot_spectra(
 cf_model = CharlotFall2000(
     grid,
     tau_v_ism=0.33,
-    tau_v_nebular=0.67,
+    tau_v_birth=0.67,
     dust_curve_ism=PowerLaw(slope=-0.7),
-    dust_curve_nebular=PowerLaw(slope=-1.3),
+    dust_curve_birth=PowerLaw(slope=-1.3),
     age_pivot=10 * dimensionless,
 )
 spec = g.stars.get_spectra(cf_model)
