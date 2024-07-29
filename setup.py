@@ -271,7 +271,11 @@ extensions = [
     ),
     create_extension(
         "synthesizer.imaging.extensions.spectral_cube",
-        ["src/synthesizer/imaging/extensions/spectral_cube.c"],
+        [
+            "src/synthesizer/imaging/extensions/spectral_cube.c",
+            "src/synthesizer/extensions/property_funcs.c",
+            "src/synthesizer/extensions/timers.c",
+        ],
         compile_flags=compile_flags,
         links=link_args,
         include_dirs=include_dirs,
