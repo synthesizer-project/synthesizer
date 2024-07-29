@@ -252,6 +252,7 @@ class SpectralCube:
         sed,
         coordinates=None,
         quantity="lnu",
+        nthreads=1,
     ):
         """
         Calculate a spectral data cube with no smoothing.
@@ -267,6 +268,8 @@ class SpectralCube:
             quantity (str):
                 The Sed attribute/quantity to sort into the data cube, i.e.
                 "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
+            nthreads (int):
+                The number of threads to use for the C extensions.
 
         Returns:
             array_like (float):
@@ -318,6 +321,7 @@ class SpectralCube:
             self.npix[1],
             coordinates.shape[0],
             self.lam.size,
+            nthreads,
         )
 
         return self.arr * self.units
