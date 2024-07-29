@@ -74,10 +74,12 @@ class Grid:
             The spectra array from the grid. This is an N-dimensional
             grid where N is the number of axes of the SPS grid. The final
             dimension is always wavelength.
-        lines (array-like, float)
-            The lines array from the grid. This is an N-dimensional grid where
-            N is the number of axes of the SPS grid. The final dimension is
-            always wavelength.
+        line_lams (dict, dist, float)
+            A dictionary of line wavelengths.
+        line_lums (dict, dict, float)
+            A dictionary of line luminosities.
+        line_conts (dict, dict, float)
+            A dictionary of line continuum luminosities.
         parameters (dict)
             A dictionary containing the grid's parameters used in its
             generation.
@@ -152,7 +154,9 @@ class Grid:
         # Set up spectra and lines dictionaries (if we don't read them they'll
         # just stay as empty dicts)
         self.spectra = {}
-        self.lines = {}
+        self.line_lams = {}
+        self.line_lums = {}
+        self.line_conts = {}
 
         # Set up dictionary to hold parameters used in grid generation
         self.parameters = {}
@@ -165,12 +169,10 @@ class Grid:
 
         # We always read spectra, but can read a subset if requested
         self.lam = None
-        self.spectra = None
         self.available_spectra = None
         self._get_spectra_grid(spectra_to_read)
 
         # Prepare lines attributes
-        self.lines = None
         self.available_lines = []
 
         # Read in lines
@@ -345,20 +347,77 @@ class Grid:
                 self.available_lines = flatten_linelist(read_lines)
             else:
                 # If not, read all available lines
-                self.available_lines, _ = self.get_grid_line_ids()
+                self.available_lines, _ = self._get_line_ids_from_file()
 
-            # Read in the lines
+            # Create an entry for each spectra type
+            for spectra in self.available_spectra:
+                self.line_lums[spectra] = {}
+                self.line_conts[spectra] = {}
+
+            # We read the lines themselves into "nebular" so make sure this
+            # exists
+            if "nebular" not in self.lines:
+                raise exceptions.GridError(
+                    "No nebular spectra found. The nebular spectra is"
+                    " required for storing lines. Either you have explictly"
+                    " requested a subset of spectra without nebular, or "
+                    "something is wrong with the grid file."
+                )
+
+            # Read the line wavelengths
+            lines_outside_lam = []
             for line in self.available_lines:
-                self.lines[line] = {}
-                self.lines[line]["wavelength"] = hf["lines"][line].attrs[
-                    "wavelength"
-                ]
-                self.lines[line]["luminosity"] = hf["lines"][line][
+                self.line_lams[line] = hf["lines"][line].attrs["wavelength"]
+
+                # Ensure this wavelength is within the wavelength array of the
+                # grid
+                if (
+                    self.line_lams[line] < self.lam[0]
+                    or self.line_lams[line] > self.lam[-1]
+                ):
+                    lines_outside_lam.append(line)
+
+            # If we have lines outside the wavelength range of the grid
+            # warn the user
+            if len(lines_outside_lam) > 0:
+                warn(
+                    "The following lines are outside the wavelength "
+                    f"range of the grid: {lines_outside_lam}"
+                )
+
+            # Read the lines into the nebular entry
+            for line in self.available_lines:
+                self.line_lums["nebular"][line] = hf["lines"][line][
                     "luminosity"
                 ][:]
-                self.lines[line]["continuum"] = hf["lines"][line]["continuum"][
-                    :
-                ]
+                self.line_conts["nebular"][line] = hf["lines"][line][
+                    "continuum"
+                ][:]
+
+            # Now that we have read the line data itself we need to populate
+            # the other spectra entries. The line luminosities for all entries
+            # other than nebular are 0 but the continuums need to be sampled
+            # from the spectra.
+            for spectra in self.available_spectra:
+                if spectra == "nebular":
+                    continue
+
+                # Get the continuum luminosities by interpolating the to get
+                # the continuum at the line wavelengths
+                self.line_conts[spectra] = {
+                    line: spectres(
+                        self.line_lams[line],
+                        self.lam,
+                        self.spectra[spectra],
+                    )
+                    for line in self.available_lines
+                }
+
+                # Set the line luminosities to 0
+                self.line_lums[spectra] = {
+                    line: np.zeros(self.spectra[spectra].shape[:-1])
+                    for line in self.available_lines
+                }
 
     def _prepare_lam_axis(
         self,
@@ -479,7 +538,7 @@ class Grid:
 
         return spectra_keys
 
-    def get_grid_line_ids(self):
+    def _get_line_ids_from_file(self):
         """
         Get a list of the lines available on a grid.
 
