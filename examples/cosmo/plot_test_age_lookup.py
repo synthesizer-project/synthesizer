@@ -1,3 +1,14 @@
+"""
+Age lookup test
+===============
+
+Test using a lookup grid for particle ages (calculated
+from the scsale factor representation native to most
+cosmological snapshot outputs), and compare to the direct
+astropy calculation. Show dependence of relative error
+on lookup grid resolution.
+"""
+
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
