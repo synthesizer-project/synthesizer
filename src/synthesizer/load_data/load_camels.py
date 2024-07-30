@@ -3,18 +3,12 @@ from functools import partial
 import h5py
 import numpy as np
 from astropy.cosmology import Planck15, Planck18
-<<<<<<< Updated upstream
 from unyt import Msun, kpc, yr
-=======
-from unyt import Mpc, Msun, kpc, yr
->>>>>>> Stashed changes
 
 from synthesizer.exceptions import UnmetDependency
-from synthesizer.load_data.utils import get_len
-from synthesizer.load_data.utils import age_lookup_table, lookup_age
+from synthesizer.load_data.utils import age_lookup_table, get_len, lookup_age
 
 from ..particle.galaxy import Galaxy
-
 
 
 def _load_CAMELS(
@@ -129,12 +123,9 @@ def load_CAMELS_IllustrisTNG(
     verbose=False,
     dtm=0.3,
     physical=True,
-<<<<<<< Updated upstream
-=======
     age_lookup=True,
     age_lookup_resolution=2000,
     **kwargs
->>>>>>> Stashed changes
 ):
     """
     Load CAMELS-IllustrisTNG galaxies
@@ -286,12 +277,9 @@ def load_CAMELS_Astrid(
     group_dir=None,
     dtm=0.3,
     physical=True,
-<<<<<<< Updated upstream
-=======
     age_lookup=True,
     age_lookup_resolution=2000,
     **kwargs
->>>>>>> Stashed changes
 ):
     """
     Load CAMELS-Astrid galaxies
@@ -411,12 +399,9 @@ def load_CAMELS_Simba(
     group_dir=None,
     dtm=0.3,
     physical=True,
-<<<<<<< Updated upstream
-=======
     age_lookup=True,
     age_lookup_resolution=2000,
     **kwargs
->>>>>>> Stashed changes
 ):
     """
     Load CAMELS-SIMBA galaxies
@@ -538,12 +523,9 @@ def load_CAMELS_SwiftEAGLE_subfind(
     cosmo=Planck15,
     min_star_part=10,
     num_threads=-1,
-<<<<<<< Updated upstream
-=======
     age_lookup=True,
     age_lookup_resolution=2000,
     **kwargs
->>>>>>> Stashed changes
 ):
     """
     Load CAMELS-Swift-EAGLE galaxies
