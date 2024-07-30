@@ -347,6 +347,7 @@ class BlackholesComponent:
         self,
         grid,
         line_id,
+        line_type,
         fesc,
         mask=None,
         method="cic",
@@ -367,6 +368,9 @@ class BlackholesComponent:
                 A list of line_ids or a str denoting a single line.
                 Doublets can be specified as a nested list or using a
                 comma (e.g. 'OIII4363,OIII4959').
+            line_type (str)
+                The type of line to extract from the grid. Must match the
+                spectra/line type in the grid file.
             fesc (float/array-like, float)
                 Fraction of AGN emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
@@ -402,8 +406,7 @@ class BlackholesComponent:
                 *[
                     Line(
                         line_id=line_id_,
-                        wavelength=grid.lines[line_id_]["wavelength"]
-                        * angstrom,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
                         luminosity=0 * erg / s,
                         continuum=0 * erg / s / Hz,
                     )
@@ -422,13 +425,14 @@ class BlackholesComponent:
             # Get this line's wavelength
             # TODO: The units here should be extracted from the grid but aren't
             # yet stored.
-            lam = grid.lines[line_id_]["wavelength"] * angstrom
+            lam = grid.line_lams[line_id_] * angstrom
 
             # Get the luminosity and continuum
             lum, cont = compute_integrated_line(
                 *self._prepare_line_args(
                     grid,
                     line_id_,
+                    line_type,
                     fesc,
                     mask=mask,
                     grid_assignment_method=method,
