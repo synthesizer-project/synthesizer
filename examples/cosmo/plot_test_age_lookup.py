@@ -11,6 +11,8 @@ with h5py.File("../../tests/data/camels_snap.hdf5", "r") as hf:
 # Calculate ages of these explicitly using astropy
 part_ages_proper = Planck15.age(1.0 / form_time - 1)
 
+fig, ax = plt.subplots(1, 1)
+
 # Loop over different look up grid resolutions
 for resolution in [100, 500, 1000, 2000, 4000]:
     # create the lookup grid
@@ -19,7 +21,7 @@ for resolution in [100, 500, 1000, 2000, 4000]:
     # Look up the ages for the particles
     part_ages = lookup_age(form_time, scale_factors, ages)
 
-    plt.scatter(
+    ax.scatter(
         part_ages_proper,
         np.log10(np.abs((part_ages - part_ages_proper).value)),
         s=1,
@@ -27,6 +29,6 @@ for resolution in [100, 500, 1000, 2000, 4000]:
         label=resolution
     )
 
-plt.legend(title='Resolution:')
-plt.ylabel('$\Delta \mathrm{log_{10} \, age \;\; (Gyr)}$')
+ax.legend(title='Resolution:')
+ax.set_ylabel(r'$\Delta \mathrm{log_{10} \, age \;\; (Gyr)}$')
 plt.show()
