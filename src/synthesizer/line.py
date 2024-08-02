@@ -652,16 +652,12 @@ class Line:
 
     @property
     def continuum_lam(self):
-        """
-        Return the continuum in units of Llam (erg/s/AA).
-        """
+        """Return the continuum in units of Llam (erg/s/AA)."""
         return lnu_to_llam(self.wavelength, self.continuum)
 
     @property
     def equivalent_width(self):
-        """
-        Return the equivalent width.
-        """
+        """Return the equivalent width."""
         return self.luminosity / self.continuum_lam
 
     def _make_line_from_values(
