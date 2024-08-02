@@ -7,8 +7,6 @@ model. The correct operation is instantiated in EmissionMode._init_operations.
 These classes should not be used directly.
 """
 
-import copy
-
 import numpy as np
 
 from synthesizer import exceptions
@@ -649,18 +647,25 @@ class Combination:
 
         # Loop over lines copying over the first set of lines
         for line_id in line_ids:
-            lines[this_model.label][line_id] = copy.copy(
-                lines[this_model.combine[0].label][line_id]
-            )
+            # Initialise the combined luminosity and continuum for the line
+            lum = 0
+            cont = 0
+
+            # Get the wavelength of the line
+            lam = lines[this_model.combine[0].label][line_id].wavelength
 
             # Combine the lines
             for combine_model in this_model.combine[1:]:
-                lines[this_model.label][line_id]._luminosity += lines[
-                    combine_model.label
-                ][line_id]._luminosity
-                lines[this_model.label][line_id]._continuum += lines[
-                    combine_model.label
-                ][line_id]._continuum
+                lum += lines[combine_model.label][line_id]._luminosity
+                cont += lines[combine_model.label][line_id]._continuum
+
+            # Add the line to the dictionary
+            lines[this_model.label][line_id] = Line(
+                line_id=line_id,
+                wavelength=lam,
+                luminosity=lum,
+                continuum=cont,
+            )
 
         return lines
 
