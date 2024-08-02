@@ -10,7 +10,6 @@ These classes should not be used directly.
 import copy
 
 import numpy as np
-from unyt import Hz
 
 from synthesizer import exceptions
 from synthesizer.line import Line
@@ -394,7 +393,7 @@ class Generation:
             lines[this_model.label][line_id] = Line(
                 line_id=line_id,
                 wavelength=lam,
-                luminosity=luminosity * Hz,
+                luminosity=0,
                 continuum=luminosity,
             )
 
