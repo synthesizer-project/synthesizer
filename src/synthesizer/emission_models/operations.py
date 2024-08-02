@@ -385,15 +385,15 @@ class Generation:
                 line_id
             ].wavelength
 
-            # Get the luminosity at this wavelength
-            luminosity = spectra.get_lnu_at_lam(lam)
+            # Get the continuum at this wavelength
+            cont = spectra.get_lnu_at_lam(lam)
 
             # Create the line (luminoisty = continuum)
             lines[this_model.label][line_id] = Line(
                 line_id=line_id,
                 wavelength=lam,
-                luminosity=0,
-                continuum=luminosity,
+                luminosity=0 * erg / s,
+                continuum=cont,
             )
 
         return lines
