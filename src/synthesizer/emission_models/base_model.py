@@ -2038,7 +2038,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
         # only their reference)
-        emission_model = copy.copy(self)
+        emission_model = copy.deepcopy(self)
 
         # Before we do anything, check that we have the emitters we need
         for model in emission_model._models.values():
@@ -2320,7 +2320,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
         # only their reference)
-        emission_model = copy.copy(self)
+        emission_model = copy.deepcopy(self)
 
         # Apply any overides we have
         self._apply_overrides(
