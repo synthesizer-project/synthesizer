@@ -550,7 +550,7 @@ class Stars(StarsComponent):
             )
 
             # Continuum at line wavelength, erg/s/Hz
-            cont = np.sum(
+            cont = (1 - fesc) * np.sum(
                 grid.line_conts[line_type][line_id_] * self.sfzh, axis=(0, 1)
             )
 
