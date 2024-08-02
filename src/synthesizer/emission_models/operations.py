@@ -656,7 +656,7 @@ class Combination:
             lam = lines[this_model.combine[0].label][line_id].wavelength
 
             # Combine the lines
-            for combine_model in this_model.combine[1:]:
+            for combine_model in this_model.combine:
                 lum += lines[combine_model.label][line_id]._luminosity
                 cont += lines[combine_model.label][line_id]._continuum
 
