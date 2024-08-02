@@ -8,6 +8,7 @@ These classes should not be used directly.
 """
 
 import numpy as np
+from unyt import Hz, erg, s
 
 from synthesizer import exceptions
 from synthesizer.line import Line
@@ -663,8 +664,8 @@ class Combination:
             lines[this_model.label][line_id] = Line(
                 line_id=line_id,
                 wavelength=lam,
-                luminosity=lum,
-                continuum=cont,
+                luminosity=lum * erg / s,
+                continuum=cont * erg / s / Hz,
             )
 
         return lines
