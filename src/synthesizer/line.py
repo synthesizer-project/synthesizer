@@ -576,7 +576,6 @@ class Line:
     continuum = Quantity()
     luminosity = Quantity()
     flux = Quantity()
-    equivalent_width = Quantity()
 
     def __init__(
         self,
@@ -647,12 +646,18 @@ class Line:
         # Calculate the vacuum wavelength.
         self.vacuum_wavelength = standard_to_vacuum(self.wavelength)
 
-        # Continuum at line wavelength
-        self.continuum_lam = lnu_to_llam(self.wavelength, self.continuum)
-        self.equivalent_width = self.luminosity / self.continuum_lam
-
         # Element
         self.element = [li.strip().split(" ")[0] for li in self.id.split(",")]
+
+    @property
+    def continuum_llam(self):
+        """Return the continuum in units of Llam (erg/s/AA)."""
+        return lnu_to_llam(self.wavelength, self.continuum)
+
+    @property
+    def equivalent_width(self):
+        """Return the equivalent width."""
+        return self.luminosity / self.continuum_llam
 
     def _make_line_from_values(
         self, line_id, wavelength, luminosity, continuum
