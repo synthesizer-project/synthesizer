@@ -651,14 +651,14 @@ class Line:
         self.element = [li.strip().split(" ")[0] for li in self.id.split(",")]
 
     @property
-    def continuum_lam(self):
+    def continuum_llam(self):
         """Return the continuum in units of Llam (erg/s/AA)."""
         return lnu_to_llam(self.wavelength, self.continuum)
 
     @property
     def equivalent_width(self):
         """Return the equivalent width."""
-        return self.luminosity / self.continuum_lam
+        return self.luminosity / self.continuum_llam
 
     def _make_line_from_values(
         self, line_id, wavelength, luminosity, continuum
