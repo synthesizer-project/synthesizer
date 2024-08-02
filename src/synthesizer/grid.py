@@ -355,13 +355,17 @@ class Grid:
                 self.line_lums[spectra] = {}
                 self.line_conts[spectra] = {}
 
-            # We read the lines themselves into "nebular" so make sure this
-            # exists
-            if "nebular" not in self.line_lums:
+            # We read the lines themselves into "nebular" and "linecont"
+            # so make sure this exists
+            if (
+                "nebular" not in self.line_lums
+                or "linecont" not in self.line_lums
+            ):
                 raise exceptions.GridError(
-                    "No nebular spectra found. The nebular spectra is"
+                    "No nebular or linecont spectra found. "
+                    "The nebular and linecont spectra is"
                     " required for storing lines. Either you have explictly"
-                    " requested a subset of spectra without nebular, or "
+                    " requested a subset of spectra without these, or "
                     "something is wrong with the grid file."
                 )
 
@@ -386,27 +390,38 @@ class Grid:
                     f"range of the grid: {lines_outside_lam}"
                 )
 
-            # Read the lines into the nebular entry
+            # Read the lines into the nebular and linecont entries. The
+            # continuum for "linecont" is by definition 0 (we'll do all
+            # other continua below)
             for line in self.available_lines:
                 self.line_lums["nebular"][line] = hf["lines"][line][
                     "luminosity"
                 ][:]
-                self.line_conts["nebular"][line] = hf["lines"][line][
-                    "continuum"
+                self.line_lums["linecont"][line] = hf["lines"][line][
+                    "luminosity"
                 ][:]
+                self.line_conts["linecont"][line] = np.zeros(
+                    self.spectra["linecont"].shape[:-1]
+                )
 
             # Now that we have read the line data itself we need to populate
             # the other spectra entries. the line luminosities for all entries
             # other than nebular are 0 but the continuums need to be sampled
             # from the spectra.
             for spectra in self.available_spectra:
+                # Define the extraction key
+                extract = spectra
+
+                # For nebular the extraction key is "nebular_continuum",
+                # otherwise we would extract the line luminosity along with
+                # the continuum
                 if spectra == "nebular":
-                    continue
+                    extract = "nebular_continuum"
 
                 # Create an interpolation function for this spectra
                 interp_func = interp1d(
                     self._lam,
-                    self.spectra[spectra],
+                    self.spectra[extract],
                     axis=-1,
                     kind="linear",
                     fill_value=0.0,
@@ -415,17 +430,21 @@ class Grid:
 
                 # Get the continuum luminosities by interpolating the to get
                 # the continuum at the line wavelengths (we use scipy here
-                # because spectres can't handle single value interpolation)
-                self.line_conts[spectra] = {
-                    line: interp_func(self.line_lams[line])
-                    for line in self.available_lines
-                }
+                # because spectres can't handle single value interpolation).
+                # The linecont continuum is explicitly 0 and set above.
+                if spectra != "linecont":
+                    self.line_conts[spectra] = {
+                        line: interp_func(self.line_lams[line])
+                        for line in self.available_lines
+                    }
 
-                # Set the line luminosities to 0
-                self.line_lums[spectra] = {
-                    line: np.zeros(self.spectra[spectra].shape[:-1])
-                    for line in self.available_lines
-                }
+                # Set the line luminosities to 0 as long as they haven't
+                # already been set
+                if spectra != "nebular" and spectra != "linecont":
+                    self.line_lums[spectra] = {
+                        line: np.zeros(self.spectra[spectra].shape[:-1])
+                        for line in self.available_lines
+                    }
 
     def _prepare_lam_axis(
         self,
