@@ -2,6 +2,8 @@
 Utilities for data loading methods
 """
 
+import math
+
 import numpy as np
 
 
@@ -26,23 +28,26 @@ def get_len(Length):
     return begin, end
 
 
-def age_lookup_table(cosmo, low_lim=1e-4, resolution=2000):
+def age_lookup_table(cosmo, delta_a=1e-3, low_lim=1e-4):
     """
     Create a look-up table for age as a function of scale factor
 
     Args:
         cosmo (astropy.cosmology)
             astropy cosmology object
+        delta_a (int)
+            scale factor resolution to approximate
         low_lim (float)
             lower limit of scale factor
-        resolution (int)
-            number of scale factors to calculate
     Returns:
         scale_factor (array)
             array of scale factors
         age (array)
             array of ages (Gyr)
     """
+    resolution = (1.0 - low_lim) / delta_a
+    resolution = math.ceil(resolution)
+
     scale_factor = np.linspace(low_lim, 1.0, resolution)
     ages = cosmo.age(1.0 / scale_factor - 1)
     return scale_factor, ages
