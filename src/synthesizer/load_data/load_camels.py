@@ -3,7 +3,7 @@ from functools import partial
 import h5py
 import numpy as np
 from astropy.cosmology import FlatLambdaCDM
-from unyt import Msun, kpc, yr, Mpc
+from unyt import Mpc, Msun, kpc, yr
 
 from synthesizer.exceptions import UnmetDependency
 from synthesizer.load_data.utils import age_lookup_table, get_len, lookup_age
