@@ -40,6 +40,6 @@ for delta_a in [1e-2, 1e-3, 1e-4, 1e-5, 5e-6]:
         label=delta_a
     )
 
-ax.legend(title='$\Delta a$:')
+ax.legend(title=r'$\Delta a$:')
 ax.set_ylabel(r'$\Delta \mathrm{log_{10} \, age \;\; (Gyr)}$')
 plt.show()
