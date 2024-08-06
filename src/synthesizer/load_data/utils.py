@@ -3,6 +3,7 @@ Utilities for data loading methods
 """
 
 import numpy as np
+import math
 
 
 def get_len(Length):
@@ -44,6 +45,8 @@ def age_lookup_table(cosmo, delta_a=1e-3, low_lim=1e-4):
             array of ages (Gyr)
     """
     resolution = (1.0 - low_lim) / delta_a
+    resolution = math.ceil(resolution)
+
     scale_factor = np.linspace(low_lim, 1.0, resolution)
     ages = cosmo.age(1.0 / scale_factor - 1)
     return scale_factor, ages
