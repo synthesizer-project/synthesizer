@@ -112,6 +112,7 @@ class FilterCollection:
         path=None,
         new_lam=None,
         fill_gaps=True,
+        verbose=True,
     ):
         """
         Intialise the FilterCollection.
@@ -211,13 +212,13 @@ class FilterCollection:
             # If we weren't passed a wavelength grid we need to resample the
             # filters onto a universal wavelength grid.
             if self.lam is None:
-                self.resample_filters(fill_gaps=fill_gaps)
+                self.resample_filters(fill_gaps=fill_gaps, verbose=verbose)
 
         # If we were passed a wavelength array we need to resample on to
         # it. NOTE: this can also be done for a loaded FilterCollection
         # so we just do it here outside the logic
         if new_lam is not None:
-            self.resample_filters(new_lam)
+            self.resample_filters(new_lam, verbose=verbose)
 
         # Calculate mean and pivot wavelengths for each filter
         self.mean_lams = self.calc_mean_lams()

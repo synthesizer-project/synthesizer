@@ -90,9 +90,9 @@ if __name__ == "__main__":
     cf00 = CharlotFall2000(
         grid=grid,
         tau_v_ism=0.1,
-        tau_v_nebular=0.1,
+        tau_v_birth=0.1,
         dust_curve_ism=PowerLaw(slope=-0.7),
-        dust_curve_nebular=PowerLaw(slope=-1.3),
+        dust_curve_birth=PowerLaw(slope=-1.3),
     )
     galaxy.stars.get_spectra(cf00)
     print("CF00 model")
@@ -144,9 +144,9 @@ if __name__ == "__main__":
     cf_with_fesc = BimodalPacmanEmission(
         grid,
         tau_v_ism=0.1,
-        tau_v_nebular=0.1,
+        tau_v_birth=0.1,
         dust_curve_ism=PowerLaw(slope=-1),
-        dust_curve_nebular=PowerLaw(slope=-1),
+        dust_curve_birth=PowerLaw(slope=-1),
         fesc=0.1,
         fesc_ly_alpha=0.1,
     )
