@@ -3,7 +3,7 @@ from functools import partial
 import h5py
 import numpy as np
 from astropy.cosmology import FlatLambdaCDM
-from unyt import Msun, kpc, yr
+from unyt import Mpc, Msun, kpc, yr
 
 from synthesizer.exceptions import UnmetDependency
 from synthesizer.load_data.utils import age_lookup_table, get_len, lookup_age
@@ -597,7 +597,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         grpn = hf["Subhalo/SubhaloGrNr"][:]
         grp_firstsub = hf["Group/GroupFirstSub"][:]
         ids = hf["IDs/ID"][:]
-        pos = hf["Subhalo/SubhaloPos"][:]  # kpc (comoving)
+        pos = hf["Subhalo/SubhaloPos"][:] / h  # kpc (comoving)
 
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
         # Load star particle information
@@ -657,6 +657,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     def swifteagle_particle_assignment(
         idx,
         redshift,
+        pos,
         grpn,
         grp_lentype,
         grp_firstsub,
@@ -678,6 +679,8 @@ def load_CAMELS_SwiftEAGLE_subfind(
     ):
         gal = Galaxy()
         gal.redshift = redshift
+        gal.centre = pos[idx] * kpc
+        gal.index = idx
 
         # Find star particles in this subhalo
         ptype = 4
@@ -716,7 +719,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         if sh_hsml is None:
             smoothing_lengths = sh_hsml
         else:
-            smoothing_lengths = sh_hsml * kpc
+            smoothing_lengths = sh_hsml * Mpc
 
         gal.load_stars(
             initial_masses=sh_imasses * Msun,
@@ -724,7 +727,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
             metallicities=sh_metallicity,
             s_oxygen=s_oxygen,
             s_hydrogen=s_hydrogen,
-            coordinates=sh_coods * kpc,
+            coordinates=sh_coods * Mpc,
             current_masses=sh_masses * Msun,
             smoothing_lengths=smoothing_lengths,
         )
@@ -752,11 +755,11 @@ def load_CAMELS_SwiftEAGLE_subfind(
             star_forming = sh_g_sfr > 0.0
 
             gal.load_gas(
-                coordinates=sh_g_coods * kpc,
+                coordinates=sh_g_coods * Mpc,
                 masses=sh_g_masses * Msun,
                 metallicities=sh_g_metals,
                 star_forming=star_forming,
-                smoothing_lengths=sh_g_hsml * kpc,
+                smoothing_lengths=sh_g_hsml * Mpc,
                 dust_to_metal_ratio=dtm,
             )
 
@@ -765,6 +768,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     _f = partial(
         swifteagle_particle_assignment,
         redshift=redshift,
+        pos=pos,
         grpn=grpn,
         grp_lentype=grp_lentype,
         grp_firstsub=grp_firstsub,
@@ -788,7 +792,4 @@ def load_CAMELS_SwiftEAGLE_subfind(
     galaxies = pool.map(_f, mask)
     pool.close()
 
-    for idx in np.arange(len(galaxies)):
-        galaxies[idx].centre = pos[idx] * kpc
-
-    return galaxies, mask
+    return galaxies
