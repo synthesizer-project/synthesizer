@@ -2,8 +2,8 @@ from functools import partial
 
 import h5py
 import numpy as np
-from astropy.cosmology import Planck15, Planck18
-from unyt import Mpc, Msun, kpc, yr
+from astropy.cosmology import FlatLambdaCDM
+from unyt import Msun, kpc, yr
 
 from synthesizer.exceptions import UnmetDependency
 from synthesizer.load_data.utils import age_lookup_table, get_len, lookup_age
@@ -124,7 +124,7 @@ def load_CAMELS_IllustrisTNG(
     dtm=0.3,
     physical=True,
     age_lookup=True,
-    age_lookup_resolution=2000,
+    age_lookup_delta_a=1e-4,
     **kwargs
 ):
     """
@@ -148,8 +148,8 @@ def load_CAMELS_IllustrisTNG(
             Should the coordinates be converted to physical?
         age_lookup (bool):
             Create a lookup table for ages
-        age_lookup_resolution (int):
-            Resolution of the age lookup
+        age_lookup_delta_a (float):
+            Scale factor resolution of the age lookup
 
     Returns:
         galaxies (object):
@@ -160,6 +160,7 @@ def load_CAMELS_IllustrisTNG(
         scale_factor = hf["Header"].attrs["Time"]
         redshift = 1.0 / scale_factor - 1
         h = hf["Header"].attrs["HubbleParam"]
+        Om0 = hf["Header"].attrs["Omega0"]
 
         form_time = hf["PartType4/GFM_StellarFormationTime"][:]
         coods = hf["PartType4/Coordinates"][:]  # kpc (comoving)
@@ -229,7 +230,7 @@ def load_CAMELS_IllustrisTNG(
         pos *= scale_factor
 
     # convert formation times to ages
-    cosmo = Planck15
+    cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
     universe_age = cosmo.age(redshift)
 
     # Are we creating a lookup table for ages?
@@ -237,7 +238,7 @@ def load_CAMELS_IllustrisTNG(
         # Create the lookup grid
         scale_factors, ages = age_lookup_table(
             cosmo,
-            resolution=age_lookup_resolution
+            delta_a=age_lookup_delta_a
         )
 
         # Look up the ages for the particles
@@ -278,7 +279,7 @@ def load_CAMELS_Astrid(
     dtm=0.3,
     physical=True,
     age_lookup=True,
-    age_lookup_resolution=2000,
+    age_lookup_delta_a=1e-4,
     **kwargs
 ):
     """
@@ -300,8 +301,8 @@ def load_CAMELS_Astrid(
             Should properties be converted to physical?
         age_lookup (bool):
             Create a lookup table for ages
-        age_lookup_resolution (int):
-            Resolution of the age lookup
+        age_lookup_delta_a (float):
+            Scale factor resolution of the age lookup
 
     Returns:
         galaxies (object):
@@ -312,6 +313,7 @@ def load_CAMELS_Astrid(
         redshift = hf["Header"].attrs["Redshift"].astype(np.float32)
         scale_factor = hf["Header"].attrs["Time"][0].astype(np.float32)
         h = hf["Header"].attrs["HubbleParam"][0]
+        Om0 = hf["Header"].attrs["Omega0"][0]
 
         form_time = hf["PartType4/GFM_StellarFormationTime"][:]
         coods = hf["PartType4/Coordinates"][:]  # kpc (comoving)
@@ -339,7 +341,7 @@ def load_CAMELS_Astrid(
     s_hydrogen = 1 - np.sum(_metals[:, 1:], axis=1)
 
     # convert formation times to ages
-    cosmo = Planck18
+    cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
     universe_age = cosmo.age(redshift)
 
     # Are we creating a lookup table for ages?
@@ -347,7 +349,7 @@ def load_CAMELS_Astrid(
         # Create the lookup grid
         scale_factors, ages = age_lookup_table(
             cosmo,
-            resolution=age_lookup_resolution
+            delta_a=age_lookup_delta_a
         )
 
         # Look up the ages for the particles
@@ -400,7 +402,7 @@ def load_CAMELS_Simba(
     dtm=0.3,
     physical=True,
     age_lookup=True,
-    age_lookup_resolution=2000,
+    age_lookup_delta_a=1e-4,
     **kwargs
 ):
     """
@@ -422,8 +424,8 @@ def load_CAMELS_Simba(
             Should properties be converted to physical?
         age_lookup (bool):
             Create a lookup table for ages
-        age_lookup_resolution (int):
-            Resolution of the age lookup
+        age_lookup_delta_a (float):
+            Scale factor resolution of the age lookup
 
     Returns:
         galaxies (object):
@@ -434,6 +436,7 @@ def load_CAMELS_Simba(
         redshift = hf["Header"].attrs["Redshift"]
         scale_factor = hf["Header"].attrs["Time"]
         h = hf["Header"].attrs["HubbleParam"]
+        Om0 = hf["Header"].attrs["Omega0"]
 
         form_time = hf["PartType4/StellarFormationTime"][:]
         coods = hf["PartType4/Coordinates"][:]  # kpc (comoving)
@@ -460,7 +463,7 @@ def load_CAMELS_Simba(
     metallicity = _metals[:, 0]
 
     # convert formation times to ages
-    cosmo = Planck15
+    cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
     universe_age = cosmo.age(redshift)
 
     # Are we creating a lookup table for ages?
@@ -468,7 +471,7 @@ def load_CAMELS_Simba(
         # Create the lookup grid
         scale_factors, ages = age_lookup_table(
             cosmo,
-            resolution=age_lookup_resolution
+            delta_a=age_lookup_delta_a
         )
 
         # Look up the ages for the particles
@@ -520,11 +523,10 @@ def load_CAMELS_SwiftEAGLE_subfind(
     group_dir=None,
     dtm=0.3,
     physical=True,
-    cosmo=Planck15,
     min_star_part=10,
     num_threads=-1,
     age_lookup=True,
-    age_lookup_resolution=2000,
+    age_lookup_delta_a=1e-4,
     **kwargs
 ):
     """
@@ -546,8 +548,6 @@ def load_CAMELS_SwiftEAGLE_subfind(
             dust-to-metals ratio to apply to all gas particles
         physical (bool):
             Should the coordinates be converted to physical?
-        cosmo (astropy cosmology):
-            cosmology object to use for age calculation
         min_star_part (int):
             minimum number of star particles required to load galaxy
         num_threads (int)
@@ -555,8 +555,8 @@ def load_CAMELS_SwiftEAGLE_subfind(
             Default is -1, i.e. use all available cores.
         age_lookup (bool):
             Create a lookup table for ages
-        age_lookup_resolution (int):
-            Resolution of the age lookup
+        age_lookup_delta_a (int):
+            Scale factor resolution of the age lookup
 
     Returns:
         galaxies (object):
@@ -585,9 +585,10 @@ def load_CAMELS_SwiftEAGLE_subfind(
 
     # Load cosmology information
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
-        scale_factor = hf["Cosmology"].attrs["Scale-factor"]
-        redshift = hf["Cosmology"].attrs["Redshift"]
-        h = hf["Cosmology"].attrs["h"]
+        scale_factor = hf["Cosmology"].attrs["Scale-factor"][0]
+        redshift = hf["Cosmology"].attrs["Redshift"][0]
+        Om0 = hf["Cosmology"].attrs["Omega_m"][0]
+        h = hf["Cosmology"].attrs["h"][0]
 
     # get subfind particle info (lens and IDs) for subsetting snapshot info
     with h5py.File(f"{group_dir}/{group_name}", "r") as hf:
@@ -633,7 +634,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     mask = np.where(lentype[:, 4] > min_star_part)[0]
 
     # convert formation times to ages
-    cosmo = Planck18
+    cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
     universe_age = cosmo.age(redshift)
 
     # Are we creating a lookup table for ages?
@@ -641,7 +642,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         # Create the lookup grid
         scale_factors, ages = age_lookup_table(
             cosmo,
-            resolution=age_lookup_resolution
+            delta_a=age_lookup_delta_a
         )
 
         # Look up the ages for the particles
