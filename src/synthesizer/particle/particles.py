@@ -394,6 +394,26 @@ class Particles:
         # Calculate the radii
         self.radii = np.linalg.norm(self.centered_coordinates, axis=1)
 
+    def _aperture_mask(self, aperture_radius):
+        """
+        Mask for particles within spherical aperture.
+
+        Args:
+            aperture_radius (float)
+                Radius of spherical aperture in kpc
+        """
+
+        if self.centre is None:
+            raise ValueError(
+                "Centre of particles must be set to use aperture mask."
+            )
+
+        # Get the radii if not already set
+        if self.radii is None:
+            self.get_radii()
+
+        return self.radii < aperture_radius
+
     def _get_radius(self, weights, frac):
         """
         Calculate the radius of a particle distribution.

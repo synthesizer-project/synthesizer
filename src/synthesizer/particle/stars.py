@@ -585,29 +585,6 @@ class Stars(Particles, StarsComponent):
         else:
             return lnu_particle
 
-    def _aperture_mask(self, aperture_radius):
-        """
-        Mask for particles within spherical aperture.
-
-        Args:
-            aperture_radius (float)
-                Radius of spherical aperture in kpc
-        """
-
-        if self.centre is None:
-            raise ValueError(
-                "Centre of star particles must be set to use aperture mask."
-            )
-
-        distance = np.sqrt(
-            np.sum(
-                (self.coordinates - self.centre).to(kpc) ** 2,
-                axis=1,
-            )
-        )
-
-        return distance < aperture_radius
-
     def _parametric_young_stars(
         self,
         pmask,
