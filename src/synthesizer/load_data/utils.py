@@ -2,8 +2,9 @@
 Utilities for data loading methods
 """
 
-import numpy as np
 import math
+
+import numpy as np
 
 
 def get_len(Length):
