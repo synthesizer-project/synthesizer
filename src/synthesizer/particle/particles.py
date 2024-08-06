@@ -225,6 +225,23 @@ class Particles:
             )
         return self.coordinates - self.centre
 
+    @property
+    def log10metallicities(self):
+        """
+        Return particle metallicities in log (base 10).
+
+        Zero valued metallicities are set to `metallicity_floor`,
+        which is set on initialisation of this particle object.
+
+        Returns:
+            log10metallicities (array)
+                log10 particle metallicities.
+        """
+        mets = self.metallicities
+        mets[mets == 0.0] = self.metallicity_floor
+
+        return np.log10(mets)
+
     def get_particle_photo_luminosities(self, filters, verbose=True):
         """
         Calculate luminosity photometry using a FilterCollection object.

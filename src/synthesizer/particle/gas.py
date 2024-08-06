@@ -184,23 +184,6 @@ class Gas(Particles):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-    @property
-    def log10metallicities(self):
-        """
-        Return gas particle metallicites in log (base 10).
-
-        Zero valued metallicities are set to `metallicity_floor`,
-        which is set on initialisation of this gas object.
-
-        Returns:
-            log10metallicities (array)
-                log10 gas particle metallicities.
-        """
-        mets = self.metallicities
-        mets[mets == 0.0] = self.metallicity_floor
-
-        return np.log10(mets)
-
     def _check_gas_args(self):
         """
         Sanitizes the inputs ensuring all arguments agree and are compatible.

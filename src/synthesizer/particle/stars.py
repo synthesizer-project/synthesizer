@@ -245,23 +245,6 @@ class Stars(Particles, StarsComponent):
         """
         return np.log10(self.ages)
 
-    @property
-    def log10metallicities(self):
-        """
-        Return stellar particle metallicities in log (base 10).
-
-        Zero valued metallicities are set to `metallicity_floor`,
-        which is set on initialisation of this stars object.
-
-        Returns:
-            log10metallicities (array)
-                log10 stellar metallicities.
-        """
-        mets = self.metallicities
-        mets[mets == 0.0] = self.metallicity_floor
-
-        return np.log10(mets)
-
     def _check_star_args(self):
         """
         Sanitizes the inputs ensuring all arguments agree and are compatible.
