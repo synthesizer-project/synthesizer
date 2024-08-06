@@ -238,7 +238,9 @@ def load_CAMELS_IllustrisTNG(
         # Create the lookup grid
         scale_factors, ages = age_lookup_table(
             cosmo,
-            delta_a=age_lookup_delta_a
+            redshift=redshift,
+            delta_a=age_lookup_delta_a,
+            low_lim=1e-4,
         )
 
         # Look up the ages for the particles
@@ -349,6 +351,7 @@ def load_CAMELS_Astrid(
         # Create the lookup grid
         scale_factors, ages = age_lookup_table(
             cosmo,
+            redshift=redshift,
             delta_a=age_lookup_delta_a
         )
 
@@ -471,6 +474,7 @@ def load_CAMELS_Simba(
         # Create the lookup grid
         scale_factors, ages = age_lookup_table(
             cosmo,
+            redshift=redshift,
             delta_a=age_lookup_delta_a
         )
 
@@ -642,6 +646,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         # Create the lookup grid
         scale_factors, ages = age_lookup_table(
             cosmo,
+            redshift=redshift,
             delta_a=age_lookup_delta_a
         )
 
