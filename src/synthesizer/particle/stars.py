@@ -24,7 +24,7 @@ import os
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Hz, angstrom, erg, kpc, s
+from unyt import Hz, angstrom, erg, s
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
