@@ -192,6 +192,12 @@ class Stars(Particles, StarsComponent):
                 "Initial mass should be numpy or unyt array."
             )
 
+        if len(ages) > 0:
+            if ages.min() < 0.:
+                raise exceptions.InconsistentArguments(
+                    "Ages cannot be negative."
+                )
+
         # Set always required stellar particle properties
         self.initial_masses = initial_masses
         self.ages = ages
