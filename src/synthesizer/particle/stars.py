@@ -24,7 +24,7 @@ import os
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Hz, angstrom, erg, kpc, s
+from unyt import Hz, angstrom, erg, s
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
@@ -192,6 +192,12 @@ class Stars(Particles, StarsComponent):
                 "Initial mass should be numpy or unyt array."
             )
 
+        if len(ages) > 0:
+            if ages.min() < 0.:
+                raise exceptions.InconsistentArguments(
+                    "Ages cannot be negative."
+                )
+
         # Set always required stellar particle properties
         self.initial_masses = initial_masses
         self.ages = ages
@@ -244,24 +250,6 @@ class Stars(Particles, StarsComponent):
                 log10 stellar ages
         """
         return np.log10(self.ages)
-
-    @property
-    def log10metallicities(self):
-        """
-        Return stellar particle ages in log (base 10).
-
-        Zero valued metallicities are set to `metallicity_floor`,
-        which is set on initialisation of this stars object. To
-        check it, run `stars.metallicity_floor`.
-
-        Returns:
-            log10metallicities (array)
-                log10 stellar metallicities.
-        """
-        mets = self.metallicities
-        mets[mets == 0.0] = self.metallicity_floor
-
-        return np.log10(mets)
 
     def _check_star_args(self):
         """
@@ -552,8 +540,8 @@ class Stars(Particles, StarsComponent):
             aperture_mask = self._aperture_mask(aperture_radius=aperture)
 
             # Ensure and warn that the masking hasn't removed everything
-            if np.sum(aperture_mask) == 0:
-                warn("Aperture mask has filtered out all particles")
+            if np.sum(aperture_mask & mask) == 0:
+                warn("Aperture and age masks have filtered out all particles")
 
                 return np.zeros(len(grid.lam))
         else:
@@ -564,7 +552,7 @@ class Stars(Particles, StarsComponent):
             pmask = self._get_masks(parametric_young_stars, None)
 
             # Check we have particles to replace
-            if np.sum(pmask) > 0:
+            if np.sum(pmask & aperture_mask) > 0:
                 # Update the young/old mask to ignore those we're replacing
                 mask[pmask] = False
 
@@ -579,7 +567,7 @@ class Stars(Particles, StarsComponent):
                 # Create a dummy empty array
                 lnu_parametric = np.zeros(len(grid.lam))
 
-            if np.sum(mask) == 0:
+            if np.sum(mask & aperture_mask) == 0:
                 warn("All particles replaced with parametric forms")
                 return lnu_parametric
 
@@ -602,24 +590,6 @@ class Stars(Particles, StarsComponent):
             return lnu_particle + lnu_parametric
         else:
             return lnu_particle
-
-    def _aperture_mask(self, aperture_radius):
-        """
-        Mask for particles within spherical aperture.
-
-        Args:
-            aperture_radius (float)
-                Radius of spherical aperture in kpc
-        """
-
-        distance = np.sqrt(
-            np.sum(
-                (self.coordinates - self.centre).to(kpc) ** 2,
-                axis=1,
-            )
-        )
-
-        return distance < aperture_radius
 
     def _parametric_young_stars(
         self,
