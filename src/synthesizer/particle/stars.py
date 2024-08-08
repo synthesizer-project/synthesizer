@@ -667,6 +667,7 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         line_id,
+        line_type,
         fesc,
         mask,
         grid_assignment_method,
@@ -680,6 +681,9 @@ class Stars(Particles, StarsComponent):
                 The SPS grid object to extract spectra from.
             line_id (str)
                 The id of the line to extract.
+            line_type (str)
+                The type of line to extract from the Grid. This must match a
+                type of spectra/lines stored in the Grid.
             fesc (float/array-like, float)
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
@@ -721,11 +725,11 @@ class Stars(Particles, StarsComponent):
 
         # Get the line grid and continuum
         grid_line = np.ascontiguousarray(
-            grid.lines[line_id]["luminosity"],
+            grid.line_lums[line_type][line_id],
             np.float64,
         )
         grid_continuum = np.ascontiguousarray(
-            grid.lines[line_id]["continuum"],
+            grid.line_conts[line_type][line_id],
             np.float64,
         )
 
@@ -764,6 +768,7 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         line_id,
+        line_type,
         fesc,
         mask=None,
         method="cic",
@@ -784,6 +789,9 @@ class Stars(Particles, StarsComponent):
                 A list of line_ids or a str denoting a single line.
                 Doublets can be specified as a nested list or using a
                 comma (e.g. 'OIII4363,OIII4959').
+            line_type (str):
+                The type of line to extract from the Grid. This must match a
+                type of spectra/lines stored in the Grid.
             fesc (float/array-like, float)
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
@@ -819,8 +827,7 @@ class Stars(Particles, StarsComponent):
                 *[
                     Line(
                         line_id=line_id_,
-                        wavelength=grid.lines[line_id_]["wavelength"]
-                        * angstrom,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
                         luminosity=np.zeros(self.nparticles) * erg / s,
                         continuum=np.zeros(self.nparticles) * erg / s / Hz,
                     )
@@ -839,13 +846,14 @@ class Stars(Particles, StarsComponent):
             # Get this line's wavelength
             # TODO: The units here should be extracted from the grid but aren't
             # yet stored.
-            lam = grid.lines[line_id_]["wavelength"] * angstrom
+            lam = grid.line_lams[line_id_] * angstrom
 
             # Get the luminosity and continuum
             lum, cont = compute_integrated_line(
                 *self._prepare_line_args(
                     grid,
                     line_id_,
+                    line_type,
                     fesc,
                     mask=mask,
                     grid_assignment_method=method,
@@ -1031,6 +1039,7 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         line_id,
+        line_type,
         fesc,
         mask=None,
         method="cic",
@@ -1052,6 +1061,9 @@ class Stars(Particles, StarsComponent):
                 A list of line_ids or a str denoting a single line.
                 Doublets can be specified as a nested list or using a
                 comma (e.g. 'OIII4363,OIII4959').
+            line_type (str):
+                The type of line to extract from the Grid. This must match a
+                type of spectra/lines stored in the Grid.
             fesc (float/array-like, float)
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
@@ -1087,8 +1099,7 @@ class Stars(Particles, StarsComponent):
                 *[
                     Line(
                         line_id=line_id_,
-                        wavelength=grid.lines[line_id_]["wavelength"]
-                        * angstrom,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
                         luminosity=0 * erg / s,
                         continuum=0 * erg / s / Hz,
                     )
@@ -1107,13 +1118,14 @@ class Stars(Particles, StarsComponent):
             # Get this line's wavelength
             # TODO: The units here should be extracted from the grid but aren't
             # yet stored.
-            lam = grid.lines[line_id_]["wavelength"] * angstrom
+            lam = grid.line_lams[line_id_] * angstrom
 
             # Get the luminosity and continuum
             _lum, _cont = compute_particle_line(
                 *self._prepare_line_args(
                     grid,
                     line_id_,
+                    line_type,
                     fesc,
                     mask=mask,
                     grid_assignment_method=method,
