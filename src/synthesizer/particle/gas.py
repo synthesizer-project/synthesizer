@@ -140,7 +140,6 @@ class Gas(Particles):
 
         # Set the metallicites and log10 equivalent
         self.metallicities = metallicities
-        self.log10metallicities = np.log10(self.metallicities)
 
         # Set the star forming boolean mask array
         self.star_forming = star_forming
