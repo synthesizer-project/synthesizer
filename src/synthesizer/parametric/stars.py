@@ -502,7 +502,7 @@ class Stars(StarsComponent):
 
         return spectra
 
-    def generate_line(self, grid, line_id, fesc, **kwargs):
+    def generate_line(self, grid, line_id, line_type, fesc, **kwargs):
         """
         Calculate rest frame line luminosity and continuum from an SPS Grid.
 
@@ -516,6 +516,8 @@ class Stars(StarsComponent):
             line_id (str):
                 A str denoting a line. Doublets can be specified using a
                 comma (e.g. 'OIII4363,OIII4959').
+            line_type (str):
+                The type of line to extract. This must match a key in the Grid.
             fesc (float):
                 The Lyman continuum escaped fraction, the fraction of
                 ionising photons that entirely escaped.
@@ -537,21 +539,20 @@ class Stars(StarsComponent):
             # Strip off any whitespace (can be left by split)
             line_id_ = line_id_.strip()
 
-            # Get the line from the grid
-            grid_line = grid.lines[line_id_]
-
             # Get this line's wavelength
             # TODO: The units here should be extracted from the grid but aren't
             # yet stored.
-            lam = grid.lines[line_id_]["wavelength"] * angstrom
+            lam = grid.line_lams[line_id_] * angstrom
 
             # Line luminosity erg/s
             lum = (1 - fesc) * np.sum(
-                grid_line["luminosity"] * self.sfzh, axis=(0, 1)
+                grid.line_lums[line_type][line_id_] * self.sfzh, axis=(0, 1)
             )
 
             # Continuum at line wavelength, erg/s/Hz
-            cont = np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
+            cont = (1 - fesc) * np.sum(
+                grid.line_conts[line_type][line_id_] * self.sfzh, axis=(0, 1)
+            )
 
             # Append this lines values to the containers
             lines.append(
