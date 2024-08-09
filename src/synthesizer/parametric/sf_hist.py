@@ -26,6 +26,7 @@ from synthesizer.utils.stats import weighted_mean, weighted_median
 # Define a list of the available parametrisations
 parametrisations = (
     "Constant",
+    "Gaussian",
     "Exponential",
     "LogNormal",
     "DoublePowerLaw",
@@ -240,6 +241,65 @@ class Constant(Common):
         # Set the SFR based on the duration.
         if (age <= self.max_age) & (age > self.min_age):
             return 1.0
+        return 0.0
+
+
+class Gaussian(Common):
+    """
+    A Gaussian star formation history.
+
+    Attributes:
+        peak_age (unyt_quantity)
+            The age at which the star formation peaks, i.e. the age at which
+            the gaussian is centred.
+        sigma (unyt_quantity)
+            The standard deviation of the gaussian function.
+        max_age (unyt_quantity)
+            The age above which the star formation history is truncated.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
+    """
+
+    def __init__(self, peak_age, sigma, max_age=1e11 * yr, min_age=0 * yr):
+        """
+        Initialise the parent and this parametrisation of the SFH.
+
+        Args:
+            max_age (unyt_quantity)
+                The age above which the star formation history is truncated.
+                If min_age = 0 then this is the duration of star formation.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
+        """
+
+        # Initialise the parent
+        Common.__init__(
+            self,
+            name="Gaussian",
+            peak_age=peak_age,
+            sigma=sigma,
+            min_age=min_age,
+            max_age=max_age,
+        )
+
+        # Set the model parameters
+        self.peak_age = peak_age.to("yr").value
+        self.sigma = sigma.to("yr").value
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
+
+    def _sfr(self, age):
+        """
+        Get the amount SFR weight in a single age bin.
+
+        Args:
+            age (float)
+                The age (in years) at which to evaluate the SFR.
+        """
+
+        # Set the SFR based on the duration.
+        if (age <= self.max_age) & (age > self.min_age):
+            return np.exp(-np.power((age - self.peak_age) / self.sigma, 2.0))
         return 0.0
 
 
