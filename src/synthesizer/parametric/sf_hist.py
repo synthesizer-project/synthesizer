@@ -375,59 +375,6 @@ class LogNormal(Common):
         return 0.0
 
 
-class DelayedExponentiallyDeclining(Common):
-    """
-    A delayed exponentially declining star formation history.
-
-    This is effectively the same as ExponentiallyDeclining with an overloaded
-    _sfr method.
-
-    Attributes:
-        tau (float)
-            The "stretch" parameter of the exponential.
-        initial_age (unyt_quantity)
-            The "start age" of the exponential, i.e. the age where
-            star formation is maximal.
-    """
-
-    def __init__(self, initial_age, tau):
-        """
-        Initialise the parent and this parametrisation of the SFH.
-
-        Args:
-            tau (unyt_quantity)
-                The "stretch" parameter of the exponential.
-            initial_age (unyt_quantity)
-                The "start age" of the exponential, i.e. the age where
-                star formation is maximal.
-        """
-
-        # Initialise the parent
-        Common.__init__(
-            self,
-            name="DelayedExponentiallyDeclining",
-            tau=tau,
-            initial_age=initial_age,
-        )
-
-        # Set the model parameters
-        self.initial_age = initial_age.to("yr").value
-        self.tau = tau.to("yr").value
-
-    def _sfr(self, age):
-        """
-        Get the amount SFR weight in a single age bin.
-
-        Args:
-            age (float)
-                The age (in years) at which to evaluate the SFR.
-        """
-        if age < self.initial_age:
-            norm = self.initial_age - age
-            return norm * np.exp(-1 * (self.initial_age - age) / self.tau)
-        return 0.0
-
-
 class DoublePowerLaw(Common):
     """
     A double power law star formation history.
