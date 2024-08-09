@@ -239,41 +239,6 @@ class Constant(Common):
 
 class Exponential(Common):
     """
-    An exponential star formation history.
-
-    Attributes:
-        tau (float)
-            The "stretch" parameter of the exponential.
-    """
-
-    def __init__(self, tau):
-        """
-        Initialise the parent and this parametrisation of the SFH.
-
-        Args:
-            tau (unyt_quantity)
-                The "stretch" parameter of the exponential.
-        """
-
-        # Initialise the parent
-        Common.__init__(self, name="Exponential", tau=tau)
-
-        # Set the model parameters
-        self.tau = tau.to("yr").value
-
-    def _sfr(self, age):
-        """
-        Get the amount SFR weight in a single age bin.
-
-        Args:
-            age (float)
-                The age (in years) at which to evaluate the SFR.
-        """
-        return np.exp(-age / self.tau)
-
-
-class TruncatedExponential(Common):
-    """
     A truncated exponential star formation history.
 
     Attributes:
@@ -319,6 +284,10 @@ class TruncatedExponential(Common):
         if age < self.max_age:
             return np.exp(-age / self.tau)
         return 0.0
+
+
+# included for backwards compatability
+TruncatedExponential = Exponential
 
 
 class LogNormal(Common):
