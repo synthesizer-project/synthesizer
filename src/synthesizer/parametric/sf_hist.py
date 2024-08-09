@@ -380,40 +380,54 @@ class DoublePowerLaw(Common):
     A double power law star formation history.
 
     Attributes:
-        tau (float)
-            The normalisation of age before raising to the powers.
+        peak_age (unyt_quantity)
+            The age at which the star formation history peaks.
         alpha (float)
             The first power.
         beta (float)
             The second power.
+        max_age (unyt_quantity)
+            The age above which the star formation history is truncated.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
     """
 
-    def __init__(self, tau, alpha, beta):
+    def __init__(
+        self, peak_age, alpha, beta, min_age=0 * yr, max_age=1e11 * yr
+    ):
         """
         Initialise the parent and this parametrisation of the SFH.
 
         Args:
-            tau (unyt_quantity)
-                The normalisation of age before raising to the powers.
+            peak_age (unyt_quantity)
+                The age at which the star formation history peaks.
             alpha (float)
                 The first power.
             beta (float)
                 The second power.
+            max_age (unyt_quantity)
+                The age above which the star formation history is truncated.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
         """
 
         # Initialise the parent
         Common.__init__(
             self,
             name="DoublePowerLaw",
-            tau=tau,
+            peak_age=peak_age,
             alpha=alpha,
             beta=beta,
+            max_age=max_age,
+            min_age=min_age,
         )
 
         # Set the model parameters
-        self.tau = tau.to("yr").value
+        self.peak_age = peak_age.to("yr").value
         self.alpha = alpha
         self.beta = beta
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """
@@ -423,6 +437,10 @@ class DoublePowerLaw(Common):
             age (float)
                 The age (in years) at which to evaluate the SFR.
         """
-        term1 = (age / self.tau) ** self.alpha
-        term2 = (age / self.tau) ** self.beta
-        return (term1 + term2) ** -1
+
+        if (age < self.max_age) & (age > self.min_age):
+            term1 = (age / self.peak_age) ** self.alpha
+            term2 = (age / self.peak_age) ** self.beta
+            return (term1 + term2) ** -1
+
+        return 0.0
