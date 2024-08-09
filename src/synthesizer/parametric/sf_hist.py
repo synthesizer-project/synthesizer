@@ -312,11 +312,15 @@ class LogNormal(Common):
             The dimensionless "width" of the log normal distribution.
         peak_age (float)
             The peak of the log normal distribution.
-        max_age (float)
-            The maximum age of the log normal distribution.
+        max_age (unyt_quantity)
+            The maximum age of the log normal distribution. In addition to
+            truncating the star formation history this is used to define
+            the peak.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
     """
 
-    def __init__(self, tau, peak_age, max_age):
+    def __init__(self, tau, peak_age, max_age, min_age=0 * yr):
         """
         Initialise the parent and this parametrisation of the SFH.
 
@@ -326,7 +330,11 @@ class LogNormal(Common):
             peak_age (unyt_quantity)
                 The peak of the log normal distribution.
             max_age (unyt_quantity)
-                The maximum age of the log normal distribution.
+                The maximum age of the log normal distribution. In addition to
+                truncating the star formation history this is used to define
+                the peak.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
         """
 
         # Initialise the parent
@@ -336,12 +344,14 @@ class LogNormal(Common):
             tau=tau,
             peak_age=peak_age,
             max_age=max_age,
+            min_age=min_age,
         )
 
         # Set the model parameters
         self.peak_age = peak_age.to("yr").value
         self.tau = tau
         self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
         # Calculate the relative ages and peak for the calculation
         self.tpeak = self.max_age - self.peak_age
@@ -355,7 +365,7 @@ class LogNormal(Common):
             age (float)
                 The age (in years) at which to evaluate the SFR.
         """
-        if age < self.max_age:
+        if (age < self.max_age) & (age > self.min_age):
             norm = 1.0 / (self.max_age - age)
             exponent = (
                 (np.log(self.max_age - age) - self.t_0) ** 2 / 2 / self.tau**2
