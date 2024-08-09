@@ -26,10 +26,8 @@ from synthesizer.utils.stats import weighted_mean, weighted_median
 # Define a list of the available parametrisations
 parametrisations = (
     "Constant",
-    "Exponential" "TruncatedExponential",
+    "Exponential",
     "LogNormal",
-    "ExponentiallyyDeclining",
-    "DelayedExponentiallyDeclining",
     "DoublePowerLaw",
 )
 
