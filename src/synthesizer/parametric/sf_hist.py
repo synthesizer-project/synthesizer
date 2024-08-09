@@ -199,28 +199,36 @@ class Constant(Common):
     A constant star formation history.
 
     The SFR is defined such that:
-        sfr = 1; t<=duration
-        sfr = 0; t>duration
+        sfr = 1; min_age<t<=max_age
+        sfr = 0; t>max_age, t<min_age
 
     Attributes:
-        duration (float)
-            The duration of the period of constant star formation.
+       max_age (unyt_quantity)
+            The age above which the star formation history is truncated.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
     """
 
-    def __init__(self, duration):
+    def __init__(self, max_age, min_age=0 * yr):
         """
         Initialise the parent and this parametrisation of the SFH.
 
         Args:
-            duration (unyt_quantity)
-                The duration of the period of constant star formation.
+            max_age (unyt_quantity)
+                The age above which the star formation history is truncated.
+                If min_age = 0 then this is the duration of star formation.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
         """
 
         # Initialise the parent
-        Common.__init__(self, name="Constant", duration=duration)
+        Common.__init__(
+            self, name="Constant", min_age=min_age, max_age=max_age
+        )
 
         # Set the model parameters
-        self.duration = duration.to("yr").value
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """
@@ -232,7 +240,7 @@ class Constant(Common):
         """
 
         # Set the SFR based on the duration.
-        if age <= self.duration:
+        if (age <= self.max_age) & (age > self.min_age):
             return 1.0
         return 0.0
 
@@ -245,11 +253,12 @@ class Exponential(Common):
         tau (unyt_quantity)
             The "stretch" parameter of the exponential.
         max_age (unyt_quantity)
-            The age at which the exponential is truncated. Above this age
-            the SFR is 0.
+            The age above which the star formation history is truncated.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
     """
 
-    def __init__(self, tau, max_age):
+    def __init__(self, tau, max_age=1e11 * yr, min_age=0.0 * yr):
         """
         Initialise the parent and this parametrisation of the SFH.
 
@@ -257,21 +266,24 @@ class Exponential(Common):
             tau (unyt_quantity)
                 The "stretch" parameter of the exponential.
             max_age (unyt_quantity)
-                The age at which the exponential is truncated. Above this age
-                the SFR is 0.
+                The age above which the star formation history is truncated.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
         """
 
         # Initialise the parent
         Common.__init__(
             self,
-            name="TruncatedExponential",
+            name="Exponential",
             tau=tau,
             max_age=max_age,
+            min_age=min_age,
         )
 
         # Set the model parameters
         self.tau = tau.to("yr").value
         self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """
@@ -281,7 +293,8 @@ class Exponential(Common):
             age (float)
                 The age (in years) at which to evaluate the SFR.
         """
-        if age < self.max_age:
+
+        if (age < self.max_age) and (age > self.min_age):
             return np.exp(-age / self.tau)
         return 0.0
 
