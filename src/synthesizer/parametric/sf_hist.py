@@ -17,6 +17,8 @@ Example usage:
 
 """
 
+from warnings import warn
+
 import matplotlib.pyplot as plt
 import numpy as np
 from unyt import yr
@@ -223,13 +225,13 @@ class Constant(Common):
         sfr = 0; t>max_age, t<min_age
 
     Attributes:
-       max_age (unyt_quantity)
+        max_age (unyt_quantity)
             The age above which the star formation history is truncated.
         min_age (unyt_quantity)
             The age below which the star formation history is truncated.
     """
 
-    def __init__(self, max_age, min_age=0 * yr):
+    def __init__(self, max_age=100 * yr, min_age=0 * yr, duration=None):
         """
         Initialise the parent and this parametrisation of the SFH.
 
@@ -239,7 +241,17 @@ class Constant(Common):
                 If min_age = 0 then this is the duration of star formation.
             min_age (unyt_quantity)
                 The age below which the star formation history is truncated.
+            duration (unyt_quantity)
+
         """
+
+        if duration is not None:
+            warn(
+                "The use of duration is deprecated in favour of max_age",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            max_age = duration
 
         # Initialise the parent
         Common.__init__(
