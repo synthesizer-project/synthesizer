@@ -17,6 +17,7 @@ Example usage:
 
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
 from unyt import yr
 
@@ -94,7 +95,7 @@ class Common:
 
     def calculate_sfh(self, t_range=(0, 10**10), dt=10**6):
         """
-        Calcualte the age of a given star formation history.
+        Calculate the age of a given star formation history.
 
         Args:
             t_range (tuple, float)
@@ -117,9 +118,29 @@ class Common:
 
         return t, sfh
 
+    def plot_sfh(self, t_range=(0, 10**10), dt=10**6, log=False):
+        """
+        Create a quick plot of the star formation history.
+
+        Args:
+            t_range (tuple, float)
+                The age limits over which to calculate the SFH.
+            dt (float)
+                The interval between age bins.
+        """
+
+        t, sfr = self.calculate_sfh(t_range=t_range, dt=dt)
+        plt.plot(t, sfr)
+
+        if log:
+            plt.xscale("log")
+            plt.yscale("log")
+
+        plt.show()
+
     def calculate_median_age(self, t_range=(0, 10**10), dt=10**6):
         """
-        Calcualte the median age of a given star formation history.
+        Calculate the median age of a given star formation history.
 
         Args:
             t_range (tuple, float)
@@ -239,7 +260,7 @@ class Constant(Common):
         """
 
         # Set the SFR based on the duration.
-        if (age <= self.max_age) & (age > self.min_age):
+        if (age <= self.max_age) & (age >= self.min_age):
             return 1.0
         return 0.0
 
@@ -298,7 +319,7 @@ class Gaussian(Common):
         """
 
         # Set the SFR based on the duration.
-        if (age <= self.max_age) & (age > self.min_age):
+        if (age <= self.max_age) & (age >= self.min_age):
             return np.exp(-np.power((age - self.peak_age) / self.sigma, 2.0))
         return 0.0
 
@@ -352,7 +373,7 @@ class Exponential(Common):
                 The age (in years) at which to evaluate the SFR.
         """
 
-        if (age < self.max_age) and (age > self.min_age):
+        if (age < self.max_age) and (age >= self.min_age):
             return np.exp(-age / self.tau)
         return 0.0
 
@@ -423,7 +444,7 @@ class LogNormal(Common):
             age (float)
                 The age (in years) at which to evaluate the SFR.
         """
-        if (age < self.max_age) & (age > self.min_age):
+        if (age < self.max_age) & (age >= self.min_age):
             norm = 1.0 / (self.max_age - age)
             exponent = (
                 (np.log(self.max_age - age) - self.t_0) ** 2 / 2 / self.tau**2
@@ -496,7 +517,7 @@ class DoublePowerLaw(Common):
                 The age (in years) at which to evaluate the SFR.
         """
 
-        if (age < self.max_age) & (age > self.min_age):
+        if (age < self.max_age) & (age >= self.min_age):
             term1 = (age / self.peak_age) ** self.alpha
             term2 = (age / self.peak_age) ** self.beta
             return (term1 + term2) ** -1
