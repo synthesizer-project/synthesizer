@@ -337,7 +337,7 @@ class Gaussian(Common):
 
 class Exponential(Common):
     """
-    A truncated exponential star formation history.
+    A exponential star formation history that can be truncated.
 
     Attributes:
         tau (unyt_quantity)
@@ -363,6 +363,10 @@ class Exponential(Common):
             min_age (unyt_quantity)
                 The age below which the star formation history is truncated.
         """
+
+        # Raise exception if tau is zero
+        if tau == 0.0:
+            raise exceptions.InconsistentArguments("tau must be non-zero!")
 
         # Initialise the parent
         Common.__init__(
@@ -393,14 +397,43 @@ class Exponential(Common):
 
 
 class TruncatedExponential(Exponential):
-    # @deprecated(message="Deprecated in favour of Exponential")
-    def __init__(self, *args, **kwargs):
-        Exponential.__init__(self, *args, **kwargs)
+    """
+    A truncated exponential star formation history.
+
+    Attributes:
+        tau (unyt_quantity)
+            The "stretch" parameter of the exponential.
+        max_age (unyt_quantity)
+            The age above which the star formation history is truncated.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
+    """
+
+    def __init__(self, tau, max_age, min_age):
+        """
+        Initialise the parent and this parametrisation of the SFH.
+
+        Args:
+            tau (unyt_quantity)
+                The "stretch" parameter of the exponential. Here a positive
+                tau produces a declining exponential, i.e. the star formation
+                rate decreases with time, but decreases with age. A negative
+                tau indicates an increasing star formation history.
+            max_age (unyt_quantity)
+                The age above which the star formation history is truncated.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
+        """
+        Exponential.__init__(self, tau, max_age, min_age=min_age)
 
 
 class DecliningExponential(Exponential):
-    def __init__(self, *args, **kwargs):
-        Exponential.__init__(self, *args, **kwargs)
+    def __init__(self, tau, max_age, min_age=0.0 * yr):
+        if tau <= 0.0:
+            raise exceptions.InconsistentArguments(
+                "For a declining exponential tau must be positive!"
+            )
+        Exponential.__init__(self, tau, max_age, min_age=min_age)
 
 
 class LogNormal(Common):
