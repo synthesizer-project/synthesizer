@@ -19,7 +19,6 @@ Example usage:
 
 import matplotlib.pyplot as plt
 import numpy as np
-from deprecated import deprecated
 from unyt import yr
 
 from synthesizer import exceptions
@@ -394,7 +393,12 @@ class Exponential(Common):
 
 
 class TruncatedExponential(Exponential):
-    @deprecated(reason="Deprecated in favour of Exponential")
+    # @deprecated(message="Deprecated in favour of Exponential")
+    def __init__(self, *args, **kwargs):
+        Exponential.__init__(self, *args, **kwargs)
+
+
+class DecliningExponential(Exponential):
     def __init__(self, *args, **kwargs):
         Exponential.__init__(self, *args, **kwargs)
 
