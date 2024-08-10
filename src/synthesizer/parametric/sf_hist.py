@@ -17,8 +17,6 @@ Example usage:
 
 """
 
-from warnings import warn
-
 import matplotlib.pyplot as plt
 import numpy as np
 from deprecated import deprecated
@@ -26,6 +24,7 @@ from unyt import yr
 
 from synthesizer import exceptions
 from synthesizer.utils.stats import weighted_mean, weighted_median
+from synthesizer.warnings import warn
 
 # Define a list of the available parametrisations
 parametrisations = (
