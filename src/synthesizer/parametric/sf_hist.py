@@ -21,6 +21,7 @@ from warnings import warn
 
 import matplotlib.pyplot as plt
 import numpy as np
+from deprecated import deprecated
 from unyt import yr
 
 from synthesizer import exceptions
@@ -390,8 +391,10 @@ class Exponential(Common):
         return 0.0
 
 
-# included for backwards compatability
-TruncatedExponential = Exponential
+class TruncatedExponential(Exponential):
+    @deprecated(reason="Deprecated in favour of Exponential")
+    def __init__(self, *args, **kwargs):
+        Exponential.__init__(self, *args, **kwargs)
 
 
 class LogNormal(Common):
