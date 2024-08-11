@@ -54,7 +54,7 @@ def deprecated(message=None, category=FutureWarning):
 
     """
 
-    def _deprecated(func):
+    def _deprecated(func, *args, **kwargs):
         def wrapped(*args, **kwargs):
             # Determine the specific deprecation message
             if message is None:
