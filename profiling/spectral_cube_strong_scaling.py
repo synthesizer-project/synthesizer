@@ -54,6 +54,7 @@ def cube_strong_scaling(
     max_threads=8,
     nstars=10**4,
     average_over=10,
+    type="smoothed",
 ):
     """Profile the cpu time usage of the data cube calculation."""
     # Define the grid
@@ -141,7 +142,7 @@ def cube_strong_scaling(
         resolution,
         fov=width,
         lam=grid.lam,
-        cube_type="smoothed",
+        cube_type=type,
         stellar_spectra="incident",
         blackhole_spectra=None,
         kernel=kernel,
@@ -170,7 +171,7 @@ def cube_strong_scaling(
                     resolution,
                     fov=width,
                     lam=grid.lam,
-                    cube_type="smoothed",
+                    cube_type=type,
                     stellar_spectra="incident",
                     blackhole_spectra=None,
                     kernel=kernel,
@@ -199,7 +200,7 @@ def cube_strong_scaling(
                         resolution,
                         fov=width,
                         lam=grid.lam,
-                        cube_type="smoothed",
+                        cube_type=type,
                         stellar_spectra="incident",
                         blackhole_spectra=None,
                         kernel=kernel,
@@ -425,6 +426,13 @@ if __name__ == "__main__":
         help="The number of times to average over.",
     )
 
+    args.add_argument(
+        "--type",
+        type=str,
+        default="smoothed",
+        help="What type of spectral data cube to make, smoothed or hist.",
+    )
+
     args = args.parse_args()
 
     cube_strong_scaling(
@@ -432,4 +440,5 @@ if __name__ == "__main__":
         args.max_threads,
         args.nstars,
         args.average_over,
+        args.type,
     )
