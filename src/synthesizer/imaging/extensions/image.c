@@ -197,7 +197,9 @@ void populate_smoothed_image_parallel(
     double *img, const int nthreads) {
 
   /* Loop over positions including the sed */
-#pragma omp parallel for num_threads(nthreads)
+#pragma omp parallel for num_threads(nthreads)                                 \
+    shared(pix_values, smoothing_lengths, xs, ys, kernel, res, npix_x, npix_y, \
+               npart, threshold, kdim, img)
   for (int ind = 0; ind < npart; ind++) {
 
     /* Get this particles smoothing length and position */
