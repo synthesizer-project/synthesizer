@@ -29,7 +29,8 @@ from synthesizer.warnings import warn
 parametrisations = (
     "Constant",
     "Gaussian",
-    "Exponential" "TruncatedExponential",
+    "Exponential",
+    "TruncatedExponential",
     "DecliningExponential",
     "DelayedExponential" "LogNormal",
     "DoublePowerLaw",
