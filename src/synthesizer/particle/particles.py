@@ -225,6 +225,23 @@ class Particles:
             )
         return self.coordinates - self.centre
 
+    @property
+    def log10metallicities(self):
+        """
+        Return particle metallicities in log (base 10).
+
+        Zero valued metallicities are set to `metallicity_floor`,
+        which is set on initialisation of this particle object.
+
+        Returns:
+            log10metallicities (array)
+                log10 particle metallicities.
+        """
+        mets = self.metallicities
+        mets[mets == 0.0] = self.metallicity_floor
+
+        return np.log10(mets)
+
     def get_particle_photo_luminosities(self, filters, verbose=True):
         """
         Calculate luminosity photometry using a FilterCollection object.
@@ -376,6 +393,26 @@ class Particles:
 
         # Calculate the radii
         self.radii = np.linalg.norm(self.centered_coordinates, axis=1)
+
+    def _aperture_mask(self, aperture_radius):
+        """
+        Mask for particles within spherical aperture.
+
+        Args:
+            aperture_radius (float)
+                Radius of spherical aperture in kpc
+        """
+
+        if self.centre is None:
+            raise ValueError(
+                "Centre of particles must be set to use aperture mask."
+            )
+
+        # Get the radii if not already set
+        if self.radii is None:
+            self.get_radii()
+
+        return self.radii < aperture_radius
 
     def _get_radius(self, weights, frac):
         """

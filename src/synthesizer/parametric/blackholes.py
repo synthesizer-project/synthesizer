@@ -324,6 +324,168 @@ class BlackHole(BlackholesComponent):
             nthreads,
         )
 
+    def _prepare_line_args(
+        self,
+        grid,
+        line_id,
+        line_type,
+        fesc,
+        mask,
+        grid_assignment_method,
+        nthreads,
+    ):
+        """
+        Generate the arguments for the C extension to compute lines.
+
+        Args:
+            grid (Grid)
+                The AGN grid object to extract lines from.
+            line_id (str)
+                The id of the line to extract.
+            line_type (str)
+                The type of line to extract from the grid. This must match a
+                type of line stored in the grid.
+            fesc (float/array-like, float)
+                Fraction of stellar emission that escapes unattenuated from
+                the birth cloud. Can either be a single value
+                or an value per star (defaults to 0.0).
+            mask (bool)
+                A mask to be applied to the stars. Spectra will only be
+                computed and returned for stars with True in the mask.
+            grid_assignment_method (string)
+                The type of method used to assign particles to a SPS grid
+                point. Allowed methods are cic (cloud in cell) or nearest
+                grid point (ngp) or there uppercase equivalents (CIC, NGP).
+                Defaults to cic.
+            nthreads (int)
+                The number of threads to use in the C extension. If -1 then
+                all available threads are used.
+        """
+        # Which line region is this for?
+        if "nlr" in grid.grid_name:
+            line_region = "nlr"
+        elif "blr" in grid.grid_name:
+            line_region = "blr"
+        else:
+            raise exceptions.InconsistentArguments(
+                "Grid used for blackholes does not appear to be for"
+                " a line region (nlr or blr)."
+            )
+
+        # Handle the case where mask is None
+        if mask is None:
+            mask = np.ones(self.nbh, dtype=bool)
+
+        # Set up the inputs to the C function.
+        grid_props = [
+            np.ascontiguousarray(getattr(grid, axis), dtype=np.float64)
+            for axis in grid.axes
+        ]
+        props = []
+        for axis in grid.axes:
+            # Parameters that need to be provided from the black hole
+            prop = getattr(self, axis, None)
+
+            # We might be trying to get a Quanitity, in which case we need
+            # a leading _
+            if prop is None:
+                prop = getattr(self, f"_{axis}", None)
+
+            # We might be missing a line region suffix, if prop is
+            # None we need to try again with the suffix
+            if prop is None:
+                prop = getattr(self, f"{axis}_{line_region}", None)
+
+            # We could also be tripped up by plurals (TODO: stop this from
+            # happening!)
+            elif prop is None and axis == "mass":
+                prop = getattr(self, "masses", None)
+            elif prop is None and axis == "accretion_rate":
+                prop = getattr(self, "accretion_rates", None)
+            elif prop is None and axis == "metallicity":
+                prop = getattr(self, "metallicities", None)
+
+            # If we still have None here then our blackhole component doesn't
+            # have the required parameter
+            if prop is None:
+                raise exceptions.InconsistentArguments(
+                    f"Could not find {axis} or {axis}_{line_region} "
+                    f"on {type(self)}"
+                )
+
+            props.append(prop)
+
+        # Calculate npart from the mask
+        npart = np.sum(mask)
+
+        # Remove units from any unyt_arrays
+        props = [
+            prop.value if isinstance(prop, unyt_array) else prop
+            for prop in props
+        ]
+
+        # Ensure any parameters inherited from the emission model have
+        # as many values as particles
+        for ind, prop in enumerate(props):
+            if isinstance(prop, float):
+                props[ind] = np.full(self.nbh, prop)
+            elif prop.size == 1:
+                props[ind] = np.full(self.nbh, prop)
+
+        # Apply the mask to each property and make contiguous
+        props = [
+            np.ascontiguousarray(prop[mask], dtype=np.float64)
+            for prop in props
+        ]
+
+        # For black holes mass is a grid parameter but we still need to
+        # multiply by mass in the extensions so just multiply by 1
+        part_mass = np.ones(npart, dtype=np.float64)
+
+        # Make sure we set the number of particles to the size of the mask
+        npart = np.int32(np.sum(mask))
+
+        # Get the line grid and continuum
+        grid_line = np.ascontiguousarray(
+            grid.line_lums[line_type][line_id],
+            np.float64,
+        )
+        grid_continuum = np.ascontiguousarray(
+            grid.line_conts[line_type][line_id],
+            np.float64,
+        )
+
+        # Get the grid dimensions after slicing what we need
+        grid_dims = np.zeros(len(grid_props) + 1, dtype=np.int32)
+        for ind, g in enumerate(grid_props):
+            grid_dims[ind] = len(g)
+
+        # If fesc isn't an array make it one
+        if not isinstance(fesc, np.ndarray):
+            fesc = np.ascontiguousarray(np.full(npart, fesc))
+
+        # Convert inputs to tuples
+        grid_props = tuple(grid_props)
+        part_props = tuple(props)
+
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        return (
+            grid_line,
+            grid_continuum,
+            grid_props,
+            part_props,
+            part_mass,
+            fesc,
+            grid_dims,
+            len(grid_props),
+            npart,
+            grid_assignment_method,
+            nthreads,
+        )
+
     def __str__(self):
         """
         Return a string representation of the particle object.

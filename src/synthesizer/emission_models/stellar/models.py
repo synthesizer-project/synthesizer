@@ -153,7 +153,9 @@ class EscapedEmission(StellarEmissionModel):
         grid (synthesizer.grid.Grid): The grid object to extract from.
         label (str): The label for this emission model.
         extract (str): The key to extract from the grid.
-        fesc (float): The escape fraction of the emission.
+        fesc (float): The escape fraction of the emission. Note that this will
+                        be set to 1 - fesc during generation, i.e. it is the
+                        fraction that does not escape that should be passed.
     """
 
     def __init__(

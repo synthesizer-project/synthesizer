@@ -31,21 +31,21 @@ Example::
     To create a CharlotFall2000 model, you can use the following code:
 
     tau_v_ism = 0.5
-    tau_v_nebular = 0.5
+    tau_v_birth = 0.5
     dust_curve_ism = PowerLaw(...)
-    dust_curve_nebular = PowerLaw(...)
+    dust_curve_birth = PowerLaw(...)
     age_pivot = 7 * dimensionless
     dust_emission_ism = BlackBody(...)
-    dust_emission_nebular = GreyBody(...)
+    dust_emission_birth = GreyBody(...)
     model = CharlotFall2000(
         grid,
         tau_v_ism,
-        tau_v_nebular,
+        tau_v_birth,
         dust_curve_ism,
-        dust_curve_nebular,
+        dust_curve_birth,
         age_pivot,
         dust_emission_ism,
-        dust_emission_nebular,
+        dust_emission_birth,
     )
 """
 
@@ -281,7 +281,7 @@ class PacmanEmission(StellarEmissionModel):
         if self._fesc == 0.0:
             return StellarEmissionModel(
                 label="intrinsic",
-                combine=(self.reprocessed, self.transmitted),
+                combine=(self.nebular, self.transmitted),
             )
 
         # Otherwise, intrinsic = reprocessed + escaped
@@ -477,7 +477,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             including any escaped emission for the combined population.
 
     if dust_emission is not None:
-        - young_dust_emission_nebular: the emission from dust for the young
+        - young_dust_emission_birth: the emission from dust for the young
             population.
         - young_dust_emission_ism: the emission from dust for the young
             population.
@@ -492,16 +492,16 @@ class BimodalPacmanEmission(StellarEmissionModel):
     Attributes:
         grid (synthesizer.grid.Grid): The grid object.
         tau_v_ism (float): The V-band optical depth for the ISM.
-        tau_v_nebular (float): The V-band optical depth for the nebular.
+        tau_v_birth (float): The V-band optical depth for the nebular.
         dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
             ISM.
-        dust_curve_nebular (synthesizer.dust.DustCurve): The dust curve for the
+        dust_curve_birth (synthesizer.dust.DustCurve): The dust curve for the
             nebular.
         age_pivot (unyt.unyt_quantity): The age pivot between young and old
             populations, expressed in terms of log10(age) in Myr.
         dust_emission_ism (synthesizer.dust.EmissionModel): The dust
             emission for the ISM.
-        dust_emission_nebular (synthesizer.dust.EmissionModel): The dust
+        dust_emission_birth (synthesizer.dust.EmissionModel): The dust
             emission for the nebular.
         fesc (float): The escape fraction.
         fesc_ly_alpha (float): The Lyman alpha escape fraction.
@@ -512,12 +512,12 @@ class BimodalPacmanEmission(StellarEmissionModel):
         self,
         grid,
         tau_v_ism,
-        tau_v_nebular,
+        tau_v_birth,
         dust_curve_ism,
-        dust_curve_nebular,
+        dust_curve_birth,
         age_pivot=7 * dimensionless,
         dust_emission_ism=None,
-        dust_emission_nebular=None,
+        dust_emission_birth=None,
         fesc=0.0,
         fesc_ly_alpha=1.0,
         label=None,
@@ -529,16 +529,16 @@ class BimodalPacmanEmission(StellarEmissionModel):
         Args:
             grid (synthesizer.grid.Grid): The grid object.
             tau_v_ism (float): The V-band optical depth for the ISM.
-            tau_v_nebular (float): The V-band optical depth for the nebular.
+            tau_v_birth (float): The V-band optical depth for the nebular.
             dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
                 ISM.
-            dust_curve_nebular (synthesizer.dust.DustCurve): The dust curve for
+            dust_curve_birth (synthesizer.dust.DustCurve): The dust curve for
                 the nebular.
             age_pivot (unyt.unyt_quantity): The age pivot between young and old
                 populations, expressed in terms of log10(age) in Myr.
             dust_emission_ism (synthesizer.dust.EmissionModel): The dust
                 emission model for the ISM.
-            dust_emission_nebular (synthesizer.dust.EmissionModel): The
+            dust_emission_birth (synthesizer.dust.EmissionModel): The
                 dust emission model for the nebular.
             fesc (float): The escape fraction.
             fesc_ly_alpha (float): The Lyman alpha escape fraction.
@@ -554,16 +554,16 @@ class BimodalPacmanEmission(StellarEmissionModel):
 
         # Attach the dust properties
         self.tau_v_ism = tau_v_ism
-        self.tau_v_nebular = tau_v_nebular
+        self.tau_v_birth = tau_v_birth
         self._dust_curve_ism = dust_curve_ism
-        self._dust_curve_nebular = dust_curve_nebular
+        self._dust_curve_birth = dust_curve_birth
 
         # Attach the age pivot
         self.age_pivot = age_pivot
 
         # Attach the dust emission properties
         self.dust_emission_ism = dust_emission_ism
-        self.dust_emission_nebular = dust_emission_nebular
+        self.dust_emission_birth = dust_emission_birth
 
         # Attach the escape fraction properties
         self._fesc = fesc
@@ -619,7 +619,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         ) = self._make_attenuated()
         if (
             self.dust_emission_ism is not None
-            and self.dust_emission_nebular is not None
+            and self.dust_emission_birth is not None
         ):
             (
                 self.young_emergent,
@@ -627,7 +627,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 self.emergent,
             ) = self._make_emergent()
             (
-                self.young_dust_emission_nebular,
+                self.young_dust_emission_birth,
                 self.young_dust_emission_ism,
                 self.young_dust_emission,
                 self.old_dust_emission,
@@ -927,8 +927,8 @@ class BimodalPacmanEmission(StellarEmissionModel):
     def _make_attenuated(self):
         young_attenuated_nebular = AttenuatedEmission(
             label="young_attenuated_nebular",
-            tau_v=self.tau_v_nebular,
-            dust_curve=self._dust_curve_nebular,
+            tau_v=self.tau_v_birth,
+            dust_curve=self._dust_curve_birth,
             apply_dust_to=self.young_reprocessed,
             emitter="stellar",
         )
@@ -1005,9 +1005,9 @@ class BimodalPacmanEmission(StellarEmissionModel):
         return young_emergent, old_emergent, emergent
 
     def _make_dust_emission(self, stellar_dust):
-        young_dust_emission_nebular = DustEmission(
-            label="young_dust_emission_nebular",
-            dust_emission_model=self.dust_emission_nebular,
+        young_dust_emission_birth = DustEmission(
+            label="young_dust_emission_birth",
+            dust_emission_model=self.dust_emission_birth,
             dust_lum_intrinsic=self.young_intrinsic,
             dust_lum_attenuated=self.young_attenuated_nebular,
             mask_attr="log10ages",
@@ -1027,7 +1027,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         )
         young_dust_emission = EmissionModel(
             label="young_dust_emission",
-            combine=(young_dust_emission_nebular, young_dust_emission_ism),
+            combine=(young_dust_emission_birth, young_dust_emission_ism),
             emitter="stellar" if stellar_dust else "galaxy",
         )
         old_dust_emission = DustEmission(
@@ -1047,7 +1047,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         )
 
         return (
-            young_dust_emission_nebular,
+            young_dust_emission_birth,
             young_dust_emission_ism,
             young_dust_emission,
             old_dust_emission,
@@ -1057,7 +1057,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
     def _make_total(self, label, stellar_dust):
         if (
             self.dust_emission_ism is not None
-            and self.dust_emission_nebular is not None
+            and self.dust_emission_birth is not None
         ):
             # Get the young and old total emission
             young_total = EmissionModel(
@@ -1099,7 +1099,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 self.young_emergent,
                 self.old_emergent,
                 self.emergent,
-                self.young_dust_emission_nebular,
+                self.young_dust_emission_birth,
                 self.young_dust_emission_ism,
                 self.young_dust_emission,
                 self.old_dust_emission,
@@ -1244,16 +1244,16 @@ class CharlotFall2000(BimodalPacmanEmission):
     Attributes:
         grid (synthesizer.grid.Grid): The grid object.
         tau_v_ism (float): The V-band optical depth for the ISM.
-        tau_v_nebular (float): The V-band optical depth for the nebular.
+        tau_v_birth (float): The V-band optical depth for the nebular.
         dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
             ISM.
-        dust_curve_nebular (synthesizer.dust.DustCurve): The dust curve for the
+        dust_curve_birth (synthesizer.dust.DustCurve): The dust curve for the
             nebular.
         age_pivot (unyt.unyt_quantity): The age pivot between young and old
             populations, expressed in terms of log10(age) in Myr.
         dust_emission_ism (synthesizer.dust.EmissionModel): The dust
             emission model for the ISM.
-        dust_emission_nebular (synthesizer.dust.EmissionModel): The dust
+        dust_emission_birth (synthesizer.dust.EmissionModel): The dust
             emission model for the nebular.
     """
 
@@ -1261,12 +1261,12 @@ class CharlotFall2000(BimodalPacmanEmission):
         self,
         grid,
         tau_v_ism,
-        tau_v_nebular,
+        tau_v_birth,
         dust_curve_ism,
-        dust_curve_nebular,
+        dust_curve_birth,
         age_pivot=7 * dimensionless,
         dust_emission_ism=None,
-        dust_emission_nebular=None,
+        dust_emission_birth=None,
         label=None,
         stellar_dust=True,
     ):
@@ -1276,16 +1276,16 @@ class CharlotFall2000(BimodalPacmanEmission):
         Args:
             grid (synthesizer.grid.Grid): The grid object.
             tau_v_ism (float): The V-band optical depth for the ISM.
-            tau_v_nebular (float): The V-band optical depth for the nebular.
+            tau_v_birth (float): The V-band optical depth for the nebular.
             dust_curve_ism (synthesizer.dust.DustCurve): The dust curve for the
                 ISM.
-            dust_curve_nebular (synthesizer.dust.DustCurve): The dust curve for
+            dust_curve_birth (synthesizer.dust.DustCurve): The dust curve for
                 the nebular.
             age_pivot (unyt.unyt_quantity): The age pivot between young and old
                 populations, expressed in terms of log10(age) in Myr.
             dust_emission_ism (synthesizer.dust.EmissionModel): The dust
                 emission model for the ISM.
-            dust_emission_nebular (synthesizer.dust.EmissionModel): The
+            dust_emission_birth (synthesizer.dust.EmissionModel): The
                 dust emission model for the nebular.
             label (str): The label for the total emission model. If None
                 this will be set to "total" or "emergent" if dust_emission is
@@ -1299,12 +1299,12 @@ class CharlotFall2000(BimodalPacmanEmission):
             self,
             grid,
             tau_v_ism,
-            tau_v_nebular,
+            tau_v_birth,
             dust_curve_ism,
-            dust_curve_nebular,
+            dust_curve_birth,
             age_pivot,
             dust_emission_ism,
-            dust_emission_nebular,
+            dust_emission_birth,
             label=label,
             stellar_dust=stellar_dust,
         )
