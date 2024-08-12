@@ -59,14 +59,14 @@ def cube_strong_scaling(
     # Define the grid
     grid_name = "test_grid"
     grid_dir = "../tests/test_grid/"
-    grid = Grid(grid_name, grid_dir=grid_dir)
+    grid = Grid(grid_name, grid_dir=grid_dir, lam_lims=(1000, 100000))
 
     # Define the width of the data cube
     width = 30 * kpc
 
     # Define data cube resolution (here we arbitrarily set it to 100
     # pixels along an axis)
-    resolution = width / 1000
+    resolution = width / 100
 
     # Define the grid (normally this would be defined by an SPS grid)
     log10ages = np.arange(6.0, 10.5, 0.1)
@@ -414,7 +414,7 @@ if __name__ == "__main__":
     args.add_argument(
         "--nstars",
         type=int,
-        default=10**5,
+        default=10**4,
         help="The number of stars to use in the simulation.",
     )
 
