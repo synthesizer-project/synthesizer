@@ -153,8 +153,8 @@ void populate_smoothed_data_cube_serial(
 
         /* Loop over the wavelength axis. */
         for (int ilam = 0; ilam < nlam; ilam++) {
-          int data_cube_ind = ilam + nlam * (jj + npix_y * ii);
-          int sed_ind = (ind * nlam) + ilam;
+          unsigned long long data_cube_ind = ilam + nlam * (jj + npix_y * ii);
+          unsigned long long sed_ind = (ind * nlam) + ilam;
           data_cube[data_cube_ind] +=
               part_kernel[iii * kernel_cdim + jjj] * sed_values[sed_ind];
         }
@@ -175,6 +175,10 @@ void populate_smoothed_data_cube_serial(
  *
  * NOTE: the implementation uses the exact position of a particle, thus
  * accounting for sub pixel positioning.
+ *
+ * We use locks here to avoid cache clashes. This is not the most efficient
+ * method, unlike the imaging the setting of a spaxels value is sufficiently
+ * costly that the overhead of the locks is not a problem.
  *
  * @param sed_values: The particle SEDs.
  * @param smoothing_lengths: The stellar particle smoothing lengths.
@@ -206,7 +210,9 @@ void populate_smoothed_data_cube_parallel(
   }
 
   /* Loop over positions including the sed */
-#pragma omp parallel for num_threads(nthreads)
+#pragma omp parallel for num_threads(nthreads)                                 \
+    shared(data_cube, sed_values, smoothing_lengths, xs, ys, kernel, res,      \
+               npix_x, npix_y, npart, nlam, threshold, kdim, data_cube)
   for (int ind = 0; ind < npart; ind++) {
 
     /* Get this particles smoothing length and position */
@@ -306,8 +312,8 @@ void populate_smoothed_data_cube_parallel(
         /* Loop over the wavelength axis. */
         omp_set_lock(&locks[jj + npix_y * ii]);
         for (int ilam = 0; ilam < nlam; ilam++) {
-          int data_cube_ind = ilam + nlam * (jj + npix_y * ii);
-          int sed_ind = (ind * nlam) + ilam;
+          unsigned long long data_cube_ind = ilam + nlam * (jj + npix_y * ii);
+          unsigned long long sed_ind = (ind * nlam) + ilam;
           data_cube[data_cube_ind] +=
               part_kernel[iii * kernel_cdim + jjj] * sed_values[sed_ind];
         }
@@ -392,8 +398,9 @@ void populate_smoothed_data_cube(
  */
 void populate_hist_data_cube_serial(const double *sed_values, const double *xs,
                                     const double *ys, const double res,
-                                    const int npix_y, const int npart,
-                                    const int nlam, double *data_cube) {
+                                    const int npix_x, const int npix_y,
+                                    const int npart, const int nlam,
+                                    double *data_cube) {
 
   /* Loop over positions including the sed */
   for (int ind = 0; ind < npart; ind++) {
@@ -406,10 +413,14 @@ void populate_hist_data_cube_serial(const double *sed_values, const double *xs,
     const int i = x / res;
     const int j = y / res;
 
+    /* Skip if outside the FOV. */
+    if (i < 0 || i >= npix_x || j < 0 || j >= npix_y)
+      continue;
+
     /* Loop over the wavelength axis. */
     for (int ilam = 0; ilam < nlam; ilam++) {
-      int data_cube_ind = ilam + nlam * (j + npix_y * i);
-      int sed_ind = (ind * nlam) + ilam;
+      unsigned long long data_cube_ind = ilam + nlam * (j + npix_y * i);
+      unsigned long long sed_ind = (ind * nlam) + ilam;
       data_cube[data_cube_ind] += sed_values[sed_ind];
     }
   }
@@ -453,7 +464,9 @@ void populate_hist_data_cube_parallel(const double *sed_values,
   }
 
   /* Loop over positions including the sed */
-#pragma omp parallel for num_threads(nthreads)
+#pragma omp parallel for num_threads(nthreads)                                 \
+    shared(data_cube, sed_values, xs, ys, res, npix_x, npix_y, npart, nlam,    \
+               data_cube)
   for (int ind = 0; ind < npart; ind++) {
 
     /* Get this particle's position */
@@ -464,11 +477,15 @@ void populate_hist_data_cube_parallel(const double *sed_values,
     const int i = x / res;
     const int j = y / res;
 
+    /* Skip if outside the FOV. */
+    if (i < 0 || i >= npix_x || j < 0 || j >= npix_y)
+      continue;
+
     /* Loop over the wavelength axis. */
     omp_set_lock(&locks[j + npix_y * i]);
     for (int ilam = 0; ilam < nlam; ilam++) {
-      int data_cube_ind = ilam + nlam * (j + npix_y * i);
-      int sed_ind = (ind * nlam) + ilam;
+      unsigned long long data_cube_ind = ilam + nlam * (j + npix_y * i);
+      unsigned long long sed_ind = (ind * nlam) + ilam;
       data_cube[data_cube_ind] += sed_values[sed_ind];
     }
     omp_unset_lock(&locks[j + npix_y * i]);
@@ -507,12 +524,12 @@ void populate_hist_data_cube(const double *sed_values, const double *xs,
     populate_hist_data_cube_parallel(sed_values, xs, ys, res, npix_x, npix_y,
                                      npart, nlam, data_cube, nthreads);
   } else {
-    populate_hist_data_cube_serial(sed_values, xs, ys, res, npix_y, npart, nlam,
-                                   data_cube);
+    populate_hist_data_cube_serial(sed_values, xs, ys, res, npix_x, npix_y,
+                                   npart, nlam, data_cube);
   }
 #else
-  populate_hist_data_cube_serial(sed_values, xs, ys, res, npix_y, npart, nlam,
-                                 data_cube);
+  populate_hist_data_cube_serial(sed_values, xs, ys, res, npix_x, npix_y, npart,
+                                 nlam, data_cube);
 #endif
   toc("Populating histogram data_cube", start);
 }
