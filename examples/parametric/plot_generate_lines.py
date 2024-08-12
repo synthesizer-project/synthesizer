@@ -28,7 +28,7 @@ if __name__ == "__main__":
     # enrichment histories
 
     # Constant star formation
-    sfh = SFH.Constant(duration=100 * Myr)
+    sfh = SFH.Constant(max_age=100 * Myr)
 
     # Constant metallicity
     metal_dist = ZDist.DeltaConstant(log10metallicity=-2.0)
