@@ -86,6 +86,52 @@ def download_test_grids(destination):
         _download(base_url + f, destination, outf)
 
 
+def download_stellar_test_grids(destination):
+    """
+    Download the SPS test grids for synthesizer.
+
+    Args:
+        destination (str)
+            The path to the destination directory.
+    """
+    url = (
+        "https://xcs-host.phys.sussex.ac.uk/html/sym_links/synthesizer_data/"
+        "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5"
+    )
+
+    # Download each file
+    _download(url, destination, "test_grid.hdf5")
+
+
+def download_agn_test_grids(destination):
+    """
+    Download the AGN test grids for synthesizer.
+
+    Args:
+        destination (str)
+            The path to the destination directory.
+    """
+    base_url = (
+        "https://xcs-host.phys.sussex.ac.uk/html/sym_links/synthesizer_data/"
+    )
+
+    # Define the files to get
+    files = [
+        "agnsed-limited_cloudy-c23.01-blr.hdf5",
+        "agnsed-limited_cloudy-c23.01-nlr.hdf5",
+    ]
+
+    # Define the file names the downloads will be saved as
+    out_files = [
+        "test_grid_agn-blr.hdf5",
+        "test_grid_agn-nlr.hdf5",
+    ]
+
+    # Download each file
+    for f, outf in zip(files, out_files):
+        _download(base_url + f, destination, outf)
+
+
 def download_dust_grid(destination):
     """
     Download the Drain and Li (2007) dust emission grid for synthesizer.
@@ -134,6 +180,18 @@ def download():
         "-t",
         action="store_true",
         help="Download the test data for synthesizer",
+    )
+    parser.add_argument(
+        "--stellar-test-grids",
+        "-s",
+        action="store_true",
+        help="Download only the stellar test data for synthesizer",
+    )
+    parser.add_argument(
+        "--agn-test-grids",
+        "-a",
+        action="store_true",
+        help="Download only the AGN test data for synthesizer",
     )
 
     # Add the flag for dust data
@@ -189,6 +247,8 @@ def download():
 
     # Extract flags
     test = args.test_grids
+    stellar = args.stellar_test_grids
+    agn = args.agn_test_grids
     dust = args.dust_grid
     camels = args.camels_data
     everything = args.all
@@ -204,6 +264,11 @@ def download():
     # Test data?
     if test:
         download_test_grids(dest)
+    else:
+        if stellar:
+            download_stellar_test_grids(dest)
+        if agn:
+            download_agn_test_grids(dest)
 
     # Dust data?
     if dust:

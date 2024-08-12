@@ -15,12 +15,10 @@ from synthesizer.parametric.galaxy import Galaxy
 from unyt import Myr
 
 if __name__ == "__main__":
-    # Begin by defining and initialising the grid. By setting `read_spectra`
-    # to `False` we can avoid reading in the spectra reducing the
-    # memory footprint.
+    # Begin by defining and initialising the grid.
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
-    grid = Grid(grid_name, grid_dir=grid_dir)  # , read_spectra=False)
+    grid = Grid(grid_name, grid_dir=grid_dir)
 
     # Define the emission model
     incident = IncidentEmission(grid)
@@ -80,7 +78,7 @@ if __name__ == "__main__":
 
     # Next, lets get the attenuated line properties:
     model = AttenuatedEmission(
-        emitter='stellar',
+        emitter="stellar",
         tau_v=1.0,
         dust_curve=PowerLaw(slope=-1),
         apply_dust_to=incident,

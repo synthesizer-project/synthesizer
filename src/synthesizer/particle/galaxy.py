@@ -567,7 +567,7 @@ class Galaxy(BaseGalaxy):
 
         return tau_v
 
-    @deprecated
+    @deprecated()
     def calculate_los_tau_v(
         self,
         kappa,
