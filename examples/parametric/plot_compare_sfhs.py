@@ -1,3 +1,10 @@
+"""
+Compare different parametric star formation history models
+===========================
+
+Example comparing different parametric star formation histories.
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 from synthesizer.parametric.sf_hist import (
