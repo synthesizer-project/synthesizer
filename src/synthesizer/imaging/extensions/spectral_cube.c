@@ -212,7 +212,7 @@ void populate_smoothed_data_cube_parallel(
   /* Loop over positions including the sed */
 #pragma omp parallel for num_threads(nthreads)                                 \
     shared(data_cube, sed_values, smoothing_lengths, xs, ys, kernel, res,      \
-               npix_x, npix_y, npart, nlam, threshold, kdim, data_cube)
+               npix_x, npix_y, npart, nlam, threshold, kdim)
   for (int ind = 0; ind < npart; ind++) {
 
     /* Get this particles smoothing length and position */
@@ -465,8 +465,7 @@ void populate_hist_data_cube_parallel(const double *sed_values,
 
   /* Loop over positions including the sed */
 #pragma omp parallel for num_threads(nthreads)                                 \
-    shared(data_cube, sed_values, xs, ys, res, npix_x, npix_y, npart, nlam,    \
-               data_cube)
+    shared(data_cube, sed_values, xs, ys, res, npix_x, npix_y, npart, nlam)
   for (int ind = 0; ind < npart; ind++) {
 
     /* Get this particle's position */
