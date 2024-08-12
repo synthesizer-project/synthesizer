@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # Loop through each young star particle
     for _pmask in np.where(pmask)[0]:
         # Initialise SFH object
-        sfh = SFH.Constant(duration=age_lim)
+        sfh = SFH.Constant(max_age=age_lim)
 
         # Create a parametric stars object
         stars.append(
