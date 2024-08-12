@@ -193,7 +193,7 @@ class Stars(Particles, StarsComponent):
             )
 
         if len(ages) > 0:
-            if ages.min() < 0.:
+            if ages.min() < 0.0:
                 raise exceptions.InconsistentArguments(
                     "Ages cannot be negative."
                 )
