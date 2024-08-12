@@ -7,9 +7,15 @@ Example usage::
 
     deprecation("x will have to be a unyt_array in future versions.")
 
-    @deprecated
+    @deprecated()
     def old_function():
         pass
+
+    @deprecated("will be removed in v2.0")
+    def old_function():
+        pass
+
+    warn("This is a warning message.")
 
 """
 
@@ -54,7 +60,7 @@ def deprecated(message=None, category=FutureWarning):
 
     """
 
-    def _deprecated(func, *args, **kwargs):
+    def _deprecated(func):
         def wrapped(*args, **kwargs):
             # Determine the specific deprecation message
             if message is None:
