@@ -276,8 +276,9 @@ class SpectralCube:
                 A 3D array containing particle spectra sorted into the data
                 cube. (npix[0], npix[1], lam.size)
         """
-        # Sample the spectra onto the wavelength grid
-        sed = sed.get_resampled_sed(new_lam=self.lam)
+        # Sample the spectra onto the wavelength grid if we need to
+        if not np.array_equal(self.lam, sed.lam):
+            sed = sed.get_resampled_sed(new_lam=self.lam)
 
         # Store the Sed and quantity
         self.sed = sed
@@ -397,8 +398,9 @@ class SpectralCube:
                 "smoothing_lengths, and kernel arguments to be passed."
             )
 
-        # Sample the spectra onto the wavelength grid
-        sed = sed.get_resampled_sed(new_lam=self.lam)
+        # Sample the spectra onto the wavelength grid if we need to
+        if not np.array_equal(self.lam, sed.lam):
+            sed = sed.get_resampled_sed(new_lam=self.lam)
 
         # Store the Sed and quantity
         self.sed = sed
