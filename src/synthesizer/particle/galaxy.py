@@ -1712,6 +1712,8 @@ class Galaxy(BaseGalaxy):
                 The spectral data cube object containing the derived
                 data cube.
         """
+        start = tic()
+
         # Make sure we have an image to make
         if stellar_spectra is None and blackhole_spectra is None:
             raise exceptions.InconsistentArguments(
@@ -1772,7 +1774,10 @@ class Galaxy(BaseGalaxy):
 
         # Return the images, combining if there are multiple components
         if stellar_spectra is not None and blackhole_spectra is not None:
+            toc("Computing stellar and blackhole spectral data cubes", start)
             return stellar_cube + blackhole_cube
         elif stellar_spectra is not None:
+            toc("Computing stellar spectral data cube", start)
             return stellar_cube
+        toc("Computing blackhole spectral data cube", start)
         return blackhole_cube
