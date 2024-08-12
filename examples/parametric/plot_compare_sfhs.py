@@ -1,6 +1,6 @@
 """
 Compare different parametric star formation history models
-===========================
+==========================================================
 
 Example comparing different parametric star formation histories.
 """
