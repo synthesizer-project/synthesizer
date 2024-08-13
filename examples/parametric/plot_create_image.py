@@ -59,7 +59,7 @@ if __name__ == "__main__":
     filters = UVJ()
 
     # Get photometry
-    galaxy.stars.spectra["reprocessed"].get_photo_luminosities(filters)
+    galaxy.stars.spectra["reprocessed"].get_photo_lnu(filters)
 
     # Define geometry of the images
     resolution = 0.01 * kpc  # resolution in kpc
@@ -74,7 +74,7 @@ if __name__ == "__main__":
 
     # Get the photometric images
     img.get_imgs_smoothed(
-        photometry=galaxy.stars.spectra["reprocessed"].photo_luminosities,
+        photometry=galaxy.stars.spectra["reprocessed"].photo_lnu,
         density_grid=morph.get_density_grid(resolution, img.npix),
     )
 

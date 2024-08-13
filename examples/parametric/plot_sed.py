@@ -170,5 +170,5 @@ if __name__ == "__main__":
     }
     fc = FilterCollection(tophat_dict=tophats, new_lam=grid.lam)
 
-    bb_lnu = sed.get_photo_luminosities(fc)
+    bb_lnu = sed.get_photo_lnu(fc)
     print(bb_lnu)
