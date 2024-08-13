@@ -47,7 +47,7 @@ model = PacmanEmission(
 )
 
 # Set up the SFH
-sfh = SFH.Constant(duration=100 * Myr)
+sfh = SFH.Constant(max_age=100 * Myr)
 
 # Set up the metallicity distribution
 metal_dist = ZDist.Normal(mean=0.01, sigma=0.005)
