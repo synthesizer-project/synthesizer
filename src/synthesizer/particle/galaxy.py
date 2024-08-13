@@ -869,7 +869,7 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_hist(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_luminosities,
+                    ].photo_lnu,
                     coordinates=self.stars.centered_coordinates,
                 )
 
@@ -878,7 +878,7 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_smoothed(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_luminosities,
+                    ].photo_lnu,
                     coordinates=self.stars.centered_coordinates,
                     smoothing_lengths=self.stars.smoothing_lengths,
                     kernel=kernel,
@@ -900,7 +900,7 @@ class Galaxy(BaseGalaxy):
             blackhole_imgs.get_imgs_hist(
                 photometry=self.black_holes.particle_spectra[
                     blackhole_photometry
-                ].photo_luminosities,
+                ].photo_lnu,
                 coordinates=self.black_holes.centered_coordinates,
             )
 
@@ -981,7 +981,7 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_hist(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_fluxes,
+                    ].photo_fnu,
                     coordinates=self.stars.centered_coordinates,
                 )
 
@@ -990,7 +990,7 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_smoothed(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_fluxes,
+                    ].photo_fnu,
                     coordinates=self.stars.centered_coordinates,
                     smoothing_lengths=self.stars.smoothing_lengths,
                     kernel=kernel,
@@ -1012,7 +1012,7 @@ class Galaxy(BaseGalaxy):
             blackhole_imgs.get_imgs_hist(
                 photometry=self.black_holes.particle_spectra[
                     blackhole_photometry
-                ].photo_fluxes,
+                ].photo_fnu,
                 coordinates=self.black_holes.centered_coordinates,
             )
 

@@ -10,6 +10,7 @@ from unyt import unyt_quantity
 from synthesizer import exceptions
 from synthesizer.sed import plot_spectra
 from synthesizer.units import Quantity
+from synthesizer.warnings import deprecated, deprecation
 
 
 class StarsComponent:
@@ -51,12 +52,42 @@ class StarsComponent:
         self.lines = {}
 
         # Define the photometry dictionaries to hold the stellar photometry
-        self.photo_luminosities = {}
-        self.photo_fluxes = {}
+        self.photo_lnu = {}
+        self.photo_fnu = {}
 
         # The common stellar attributes between particle and parametric stars
         self.ages = ages
         self.metallicities = metallicities
+
+    @property
+    def photo_fluxes(self):
+        """
+        Get the photometry fluxes.
+
+        Returns:
+            dict
+                The photometry fluxes.
+        """
+        deprecation(
+            "The `photo_fluxes` attribute is deprecated. Use "
+            "`photo_fnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_fnu
+
+    @property
+    def photo_luminosities(self):
+        """
+        Get the photometry luminosities.
+
+        Returns:
+            dict
+                The photometry luminosities.
+        """
+        deprecation(
+            "The `photo_fluxes` attribute is deprecated. Use "
+            "`photo_fnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_lnu
 
     def generate_lnu(self, *args, **kwargs):
         """
@@ -117,7 +148,7 @@ class StarsComponent:
 
         return young, old
 
-    def get_photo_luminosities(self, filters, verbose=True):
+    def get_photo_lnu(self, filters, verbose=True):
         """
         Calculate luminosity photometry using a FilterCollection object.
 
@@ -128,19 +159,44 @@ class StarsComponent:
                 Are we talking?
 
         Returns:
-            photo_luminosities (dict)
+            photo_lnu (dict)
                 A dictionary of rest frame broadband luminosities.
         """
         # Loop over spectra in the component
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
-            self.photo_luminosities[spectra] = self.spectra[
-                spectra
-            ].get_photo_luminosities(filters, verbose)
+            self.photo_lnu[spectra] = self.spectra[spectra].get_photo_lnu(
+                filters, verbose
+            )
 
-        return self.photo_luminosities
+        return self.photo_lnu
 
-    def get_photo_fluxes(self, filters, verbose=True):
+    @deprecated(
+        "The `get_photo_luminosities` method is deprecated. Use "
+        "`get_photo_lnu` instead. Will be removed in v1.0.0"
+    )
+    def get_photo_luminosities(self, filters, verbose=True):
+        """
+        Calculate luminosity photometry using a FilterCollection object.
+
+        Alias to get_photo_lnu.
+
+        Photometry is calculated in spectral luminosity density units.
+
+        Args:
+            filters (filters.FilterCollection)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            PhotometryCollection
+                A PhotometryCollection object containing the luminosity
+                photometry in each filter in filters.
+        """
+        return self.get_photo_lnu(filters, verbose)
+
+    def get_photo_fnu(self, filters, verbose=True):
         """
         Calculate flux photometry using a FilterCollection object.
 
@@ -157,11 +213,36 @@ class StarsComponent:
         # Loop over spectra in the component
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
-            self.photo_fluxes[spectra] = self.spectra[
-                spectra
-            ].get_photo_fluxes(filters, verbose)
+            self.photo_fnu[spectra] = self.spectra[spectra].get_photo_fnu(
+                filters, verbose
+            )
 
-        return self.photo_fluxes
+        return self.photo_fnu
+
+    @deprecated(
+        "The `get_photo_fluxes` method is deprecated. Use "
+        "`get_photo_fnu` instead. Will be removed in v1.0.0"
+    )
+    def get_photo_fluxes(self, filters, verbose=True):
+        """
+        Calculate flux photometry using a FilterCollection object.
+
+        Alias to get_photo_fnu.
+
+        Photometry is calculated in spectral flux density units.
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            PhotometryCollection
+                A PhotometryCollection object containing the flux photometry
+                in each filter in filters.
+        """
+        return self.get_photo_fnu(filters, verbose)
 
     def plot_spectra(
         self,
@@ -412,12 +493,12 @@ class StarsComponent:
 
     def clear_all_photometry(self):
         """Clear all photometry from the component."""
-        self.photo_luminosities = {}
-        self.photo_fluxes = {}
-        if hasattr(self, "particle_photo_luminosities"):
-            self.particle_photo_luminosities = {}
-        if hasattr(self, "particle_photo_fluxes"):
-            self.particle_photo_fluxes = {}
+        self.photo_lnu = {}
+        self.photo_fnu = {}
+        if hasattr(self, "particle_photo_lnu"):
+            self.particle_photo_lnu = {}
+        if hasattr(self, "particle_photo_fnu"):
+            self.particle_photo_fnu = {}
 
     def clear_all_emissions(self):
         """
