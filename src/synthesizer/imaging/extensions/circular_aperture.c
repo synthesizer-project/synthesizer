@@ -396,13 +396,13 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
   return np_signal;
 }
 
-// Define module methods
+/* Define the methods for the module */
 static PyMethodDef CircularOverlapMethods[] = {
     {"calculate_circular_overlap", calculate_circular_overlap, METH_VARARGS,
      "Calculate the overlap area between a circle and a pixel grid."},
     {NULL, NULL, 0, NULL}};
 
-// Define the module
+/* Define the module */
 static struct PyModuleDef circularoverlapmodule = {
     PyModuleDef_HEAD_INIT,
     "circular_aperture", // name of module
@@ -415,7 +415,7 @@ static struct PyModuleDef circularoverlapmodule = {
     NULL,
     NULL};
 
-// Module initialization function
+/* Define the initialisation function */
 PyMODINIT_FUNC PyInit_circular_aperture(void) {
   import_array(); // Initialize numpy API
   return PyModule_Create(&circularoverlapmodule);
