@@ -430,6 +430,7 @@ class ImageCollection:
         kernel=None,
         kernel_threshold=1,
         density_grid=None,
+        nthreads=1,
     ):
         """
         Calculate an images from a smoothed distribution.
@@ -460,6 +461,9 @@ class ImageCollection:
             density_grid (np.ndarray)
                 The density grid to be smoothed over. (Only applicable to
                 parametric imaging).
+            nthreads (int)
+                The number of threads to use when smoothing the image. This
+                only applies to particle imaging.
         """
         # Loop over filters in the photometry making an image for each.
         for f in photometry.filter_codes:
@@ -474,6 +478,7 @@ class ImageCollection:
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
                 density_grid=density_grid,
+                nthreads=nthreads,
             )
             self.filter_codes.append(f)
 
