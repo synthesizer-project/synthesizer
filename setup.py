@@ -349,6 +349,17 @@ extensions = [
         links=link_args,
         include_dirs=include_dirs,
     ),
+    create_extension(
+        "synthesizer.imaging.extensions.circular_aperture",
+        [
+            "src/synthesizer/imaging/extensions/circular_aperture.c",
+            "src/synthesizer/extensions/property_funcs.c",
+            "src/synthesizer/extensions/timers.c",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
 ]
 
 # Setup configuration
