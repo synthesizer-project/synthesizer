@@ -81,7 +81,7 @@ class Particles:
                 The redshift/s of the particles.
             softening_length (float)
                 The physical gravitational softening length.
-            nparticle (int)
+            nparticles (int)
                 How many particles are there?
             centre (array, float)
                 Centre of the particle distribution.
