@@ -1100,8 +1100,8 @@ class Stars(Particles, StarsComponent):
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
-                        luminosity=0 * erg / s,
-                        continuum=0 * erg / s / Hz,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
                     )
                     for line_id_ in line_id.split(",")
                 ]
