@@ -553,7 +553,7 @@ def spatial_to_angular_at_z(spatial, cosmo, redshift):
     return spatial_kpc * arcsec_per_kpc_at_z
 
 
-def angular_to_spacial_at_z(angular, cosmo, redshift):
+def angular_to_spatial_at_z(angular, cosmo, redshift):
     """
     Convert angular distance to spatial distance at a specified redshift.
 
