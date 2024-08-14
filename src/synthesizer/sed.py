@@ -1134,6 +1134,7 @@ class Sed:
                 Either resample factor or new_lam must be supplied. If neither
                 or both are passed an error is raised.
         """
+        start = tic()
 
         # Ensure we have what we need
         if resample_factor is None and new_lam is None:
@@ -1162,6 +1163,8 @@ class Sed:
             sed.obsnu = sed._nu / (1.0 + self.redshift)
             sed.fnu = spectres(sed._obslam, self._obslam, self._fnu)
             sed.redshift = self.redshift
+
+        toc("Resampling Sed", start)
 
         return sed
 
