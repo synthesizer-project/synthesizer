@@ -192,6 +192,18 @@ static double circular_overlap_single_exact(double pix_xmin, double pix_ymin,
   }
 }
 
+/**
+ * @brief Calculates the signal inside the aperture in serial.
+ *
+ * @param res - Pixel resolution.
+ * @param xmin, ymin - Lower-left corner of the image.
+ * @param r - Radius of the aperture.
+ * @param nx, ny - Image dimensions.
+ * @param img - Image data.
+ * @param pixel_radius - Radius of a pixel.
+ *
+ * @return The signal inside the aperture.
+ */
 static double calculate_overlap_serial(const double res, const double xmin,
                                        const double ymin, const double r,
                                        const int nx, const int ny,
@@ -231,6 +243,19 @@ static double calculate_overlap_serial(const double res, const double xmin,
   return signal;
 }
 
+/**
+ * @brief Calculates the signal inside the aperture in parallel.
+ *
+ * @param res - Pixel resolution.
+ * @param xmin, ymin - Lower-left corner of the image.
+ * @param r - Radius of the aperture.
+ * @param nx, ny - Image dimensions.
+ * @param img - Image data.
+ * @param pixel_radius - Radius of a pixel.
+ * @param nthreads - Number of threads to use.
+ *
+ * @return The signal inside the aperture.
+ */
 static double calculate_overlap_omp(const double res, const double xmin,
                                     const double ymin, const double r,
                                     const int nx, const int ny,
@@ -273,6 +298,18 @@ static double calculate_overlap_omp(const double res, const double xmin,
   return signal;
 }
 
+/**
+ * @brief Calculates the signal inside the aperture.
+ *
+ * @param res - Pixel resolution.
+ * @param r - Radius of the aperture.
+ * @param nx, ny - Image dimensions.
+ * @param img - Image data.
+ * @param cent - Centre of the aperture.
+ * @param nthreads - Number of threads to use.
+ *
+ * @return The signal inside the aperture.
+ */
 static double calculate_overlap(const double res, const double r, const int nx,
                                 const int ny, const double *img,
                                 const double cent[2], const int nthreads) {
@@ -299,8 +336,12 @@ static double calculate_overlap(const double res, const double r, const int nx,
 /**
  * @brief Calculates the area of overlap between a circle and a pixel grid.
  *
+ * @param res - Pixel resolution.
  * @param nx, ny - Grid dimensions.
  * @param r - Radius of the circle.
+ * @param np_img - Numpy array representing the image.
+ * @param np_cent - Numpy array representing the centre of the circle.
+ * @param nthreads - Number of threads to use.
  *
  * @return A numpy array representing the fraction of overlap for each grid
  * cell.
