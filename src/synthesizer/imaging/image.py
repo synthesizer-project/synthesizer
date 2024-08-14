@@ -804,3 +804,55 @@ class Image:
             )
 
         return fig, ax
+
+    def get_signal_in_aperture(
+        self,
+        aperture_radius,
+        aperture_cent=None,
+        nthreads=1,
+    ):
+        """
+        Return the sum of the image within an aperture.
+
+        This uses fractional pixel coverage to calculate the overlap between
+        the aperture and each pixel.
+
+        Args:
+            aperture_radius (unyt_quantity, float)
+                The radius of the aperture.
+            aperture_cent (unyt_array, float)
+                The centre of the aperture (in pixel coordinates, i.e. the
+                centre is [npix/2, npix/2], top left is [0, 0], and bottom
+                right is [npix, npix]). If None then the centre is assumed to
+                be the centre of the image.
+            nthreads (int)
+                The number of threads to use for the calculation. Default is 1.
+
+        Returns:
+            float
+                The sum of the image within the aperture.
+        """
+        # Convert the aperture radius to the correct units
+        aperture_radius = aperture_radius.to(self.resolution.units).value
+
+        # If the aperture centre isn't passed, assume it's the centre of the
+        # image
+        if aperture_cent is None:
+            aperture_cent = np.array(self.npix, dtype=np.float64) / 2
+
+        from synthesizer.imaging.extensions.circular_aperture import (
+            calculate_circular_overlap,
+        )
+
+        return (
+            calculate_circular_overlap(
+                self._resolution,
+                self.npix[0],
+                self.npix[1],
+                np.float64(aperture_radius),
+                self.arr,
+                np.float64(aperture_cent),
+                nthreads,
+            )
+            * self.units
+        )
