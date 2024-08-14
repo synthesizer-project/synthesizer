@@ -84,8 +84,8 @@ class StarsComponent:
                 The photometry luminosities.
         """
         deprecation(
-            "The `photo_fluxes` attribute is deprecated. Use "
-            "`photo_fnu` instead. Will be removed in v1.0.0"
+            "The `photo_luminosities` attribute is deprecated. Use "
+            "`photo_lnu` instead. Will be removed in v1.0.0"
         )
         return self.photo_lnu
 
