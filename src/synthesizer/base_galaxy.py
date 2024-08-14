@@ -8,6 +8,7 @@ from synthesizer import exceptions
 from synthesizer.emission_models.attenuation.igm import Inoue14
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.utils import TableFormatter
+from synthesizer.warnings import deprecated, deprecation
 
 
 class BaseGalaxy:
@@ -60,8 +61,8 @@ class BaseGalaxy:
         self.spectra = {}
 
         # Initialise the photometry dictionaries
-        self.photo_luminosities = {}
-        self.photo_fluxes = {}
+        self.photo_lnu = {}
+        self.photo_fnu = {}
 
         # Attach the components
         self.stars = stars
@@ -84,6 +85,36 @@ class BaseGalaxy:
         # Attach any additional attributes
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+    @property
+    def photo_fluxes(self):
+        """
+        Get the photometry fluxes.
+
+        Returns:
+            dict
+                The photometry fluxes.
+        """
+        deprecation(
+            "The `photo_fluxes` attribute is deprecated. Use "
+            "`photo_fnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_fnu
+
+    @property
+    def photo_luminosities(self):
+        """
+        Get the photometry luminosities.
+
+        Returns:
+            dict
+                The photometry luminosities.
+        """
+        deprecation(
+            "The `photo_fluxes` attribute is deprecated. Use "
+            "`photo_fnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_lnu
 
     def __str__(self):
         """
@@ -254,46 +285,78 @@ class BaseGalaxy:
             if len(lst) > 1:
                 self.spectra[key] = sum(lst)
 
-    def get_photo_luminosities(self, filters, verbose=True):
+    def get_photo_lnu(self, filters, verbose=True):
         """
         Calculate luminosity photometry using a FilterCollection object.
+
+        Photometry is calculated in spectral luminosity density units.
 
         Args:
             filters (filters.FilterCollection)
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+
+        Returns:
+            PhotometryCollection
+                A PhotometryCollection object containing the luminosity
+                photometry in each filter in filters.
         """
         # Get stellar photometry
         if self.stars is not None:
-            self.stars.get_photo_luminosities(filters, verbose)
+            self.stars.get_photo_lnu(filters, verbose)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.stars, "particle_spectra", None) is not None:
-                self.stars.get_particle_photo_luminosities(filters, verbose)
+                self.stars.get_particle_photo_lnu(filters, verbose)
 
         # Get black hole photometry
         if self.black_holes is not None:
-            self.black_holes.get_photo_luminosities(filters, verbose)
+            self.black_holes.get_photo_lnu(filters, verbose)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.black_holes, "particle_spectra", None) is not None:
-                self.black_holes.get_particle_photo_luminosities(
-                    filters, verbose
-                )
+                self.black_holes.get_particle_photo_lnu(filters, verbose)
 
         # Get the combined photometry
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
-            self.photo_luminosities[spectra] = self.spectra[
-                spectra
-            ].get_photo_luminosities(filters, verbose)
+            self.photo_lnu[spectra] = self.spectra[spectra].get_photo_lnu(
+                filters, verbose
+            )
 
-    def get_photo_fluxes(self, filters, verbose=True):
+    @deprecated(
+        "The `get_photo_luminosities` method is deprecated. Use "
+        "`get_photo_lnu` instead. Will be removed in v1.0.0"
+    )
+    def get_photo_luminosities(self, filters, verbose=True):
+        """
+        Calculate luminosity photometry using a FilterCollection object.
+
+        Alias to get_photo_lnu.
+
+        Photometry is calculated in spectral luminosity density units.
+
+        Args:
+            filters (filters.FilterCollection)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            PhotometryCollection
+                A PhotometryCollection object containing the luminosity
+                photometry in each filter in filters.
+        """
+        return self.get_photo_lnu(filters, verbose)
+
+    def get_photo_fnu(self, filters, verbose=True):
         """
         Calculate flux photometry using a FilterCollection object.
+
+        Photometry is calculated in spectral flux density units.
 
         Args:
             filters (object)
@@ -302,33 +365,59 @@ class BaseGalaxy:
                 Are we talking?
 
         Returns:
-            (dict)
-                A dictionary of fluxes in each filter in filters.
+            PhotometryCollection
+                A PhotometryCollection object containing the flux photometry
+                in each filter in filters.
         """
         # Get stellar photometry
         if self.stars is not None:
-            self.stars.get_photo_fluxes(filters, verbose)
+            self.stars.get_photo_fnu(filters, verbose)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.stars, "particle_spectra", None) is not None:
-                self.stars.get_particle_photo_fluxes(filters, verbose)
+                self.stars.get_particle_photo_fnu(filters, verbose)
 
         # Get black hole photometry
         if self.black_holes is not None:
-            self.black_holes.get_photo_fluxes(filters, verbose)
+            self.black_holes.get_photo_fnu(filters, verbose)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.black_holes, "particle_spectra", None) is not None:
-                self.black_holes.get_particle_photo_fluxes(filters, verbose)
+                self.black_holes.get_particle_photo_fnu(filters, verbose)
 
         # Get the combined photometry
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
-            self.photo_fluxes[spectra] = self.spectra[
-                spectra
-            ].get_photo_fluxes(filters, verbose)
+            self.photo_fnu[spectra] = self.spectra[spectra].get_photo_fnu(
+                filters, verbose
+            )
+
+    @deprecated(
+        "The `get_photo_fluxes` method is deprecated. Use "
+        "`get_photo_fnu` instead. Will be removed in v1.0.0"
+    )
+    def get_photo_fluxes(self, filters, verbose=True):
+        """
+        Calculate flux photometry using a FilterCollection object.
+
+        Alias to get_photo_fnu.
+
+        Photometry is calculated in spectral flux density units.
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            PhotometryCollection
+                A PhotometryCollection object containing the flux photometry
+                in each filter in filters.
+        """
+        return self.get_photo_fnu(filters, verbose)
 
     def plot_spectra(
         self,
@@ -881,8 +970,8 @@ class BaseGalaxy:
         particle photometry if present.
         """
         # Clear photometry
-        self.photo_luminosities = {}
-        self.photo_fluxes = {}
+        self.photo_lnu = {}
+        self.photo_fnu = {}
         if self.stars is not None:
             self.stars.clear_all_photometry()
         if self.black_holes is not None:
