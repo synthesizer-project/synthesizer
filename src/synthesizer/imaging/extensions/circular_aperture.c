@@ -25,6 +25,11 @@
 #include "../../extensions/property_funcs.h"
 #include "../../extensions/timers.h"
 
+/* It's possible we don't have PI... if so define it. */
+#ifndef M_PI
+#define M_PI 3.141592653589793238462643383279502884
+#endif
+
 /**
  * @brief Calculates the square root of a number, treating small negative values
  * as zero.
