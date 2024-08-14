@@ -79,7 +79,7 @@ spec.get_fnu0()
 fc = UVJ(new_lam=grid.lam)
 
 # And then we can apply it using the `Sed` helper function.
-_UVJ = spec.get_photo_fluxes(fc)
+_UVJ = spec.get_photo_fnu(fc)
 print(_UVJ)
 
 # ## Young and old stellar populations
@@ -261,7 +261,7 @@ spec.get_fnu0()
 
 fc = UVJ(new_lam=grid.lam)
 
-_UVJ = spec.get_photo_fluxes(fc)
+_UVJ = spec.get_photo_fnu(fc)
 print(_UVJ)
 _UVJ.plot_photometry(show=True)
 
@@ -275,7 +275,7 @@ mstar = np.log10(
 
 
 specs.get_fnu0()
-_UVJ = specs.get_photo_fluxes(fc)
+_UVJ = specs.get_photo_fnu(fc)
 
 UV = _UVJ["U"] / _UVJ["V"]
 VJ = _UVJ["V"] / _UVJ["J"]
@@ -299,10 +299,8 @@ plt.colorbar(
 g.get_observed_spectra(cosmo=cosmo)
 
 # Get UVJ photometry for all spectra
-g.get_photo_luminosities(fc)
-g.get_photo_fluxes(fc)
+g.get_photo_lnu(fc)
+g.get_photo_fnu(fc)
 
-print(
-    "Stellar luminosities available:", list(g.stars.photo_luminosities.keys())
-)
-print("Stellar fluxes available:", list(g.stars.photo_fluxes.keys()))
+print("Stellar luminosities available:", list(g.stars.photo_lnu.keys()))
+print("Stellar fluxes available:", list(g.stars.photo_fnu.keys()))

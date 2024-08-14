@@ -104,8 +104,8 @@ class Particles:
         self.particle_lines = {}
 
         # Initialise the particle photometry dictionaries
-        self.particle_photo_luminosities = {}
-        self.particle_photo_fluxes = {}
+        self.particle_photo_lnu = {}
+        self.particle_photo_fnu = {}
 
         # Set unit information
 
@@ -242,7 +242,7 @@ class Particles:
 
         return np.log10(mets)
 
-    def get_particle_photo_luminosities(self, filters, verbose=True):
+    def get_particle_photo_lnu(self, filters, verbose=True):
         """
         Calculate luminosity photometry using a FilterCollection object.
 
@@ -253,19 +253,19 @@ class Particles:
                 Are we talking?
 
         Returns:
-            photo_luminosities (dict)
+            photo_lnu (dict)
                 A dictionary of rest frame broadband luminosities.
         """
         # Loop over spectra in the component
         for spectra in self.particle_spectra:
             # Create the photometry collection and store it in the object
-            self.particle_photo_luminosities[spectra] = self.particle_spectra[
+            self.particle_photo_lnu[spectra] = self.particle_spectra[
                 spectra
-            ].get_photo_luminosities(filters, verbose)
+            ].get_photo_lnu(filters, verbose)
 
-        return self.particle_photo_luminosities
+        return self.particle_photo_lnu
 
-    def get_particle_photo_fluxes(self, filters, verbose=True):
+    def get_particle_photo_fnu(self, filters, verbose=True):
         """
         Calculate flux photometry using a FilterCollection object.
 
@@ -282,11 +282,11 @@ class Particles:
         # Loop over spectra in the component
         for spectra in self.particle_spectra:
             # Create the photometry collection and store it in the object
-            self.particle_photo_fluxes[spectra] = self.particle_spectra[
+            self.particle_photo_fnu[spectra] = self.particle_spectra[
                 spectra
-            ].get_photo_fluxes(filters, verbose)
+            ].get_photo_fnu(filters, verbose)
 
-        return self.particle_photo_fluxes
+        return self.particle_photo_fnu
 
     def get_mask(self, attr, thresh, op, mask=None):
         """
@@ -496,19 +496,19 @@ class Particles:
                 The radius of the particle distribution.
         """
         # Check we have that spectra type, if so unpack it
-        if spectra_type not in self.particle_photo_luminosities:
+        if spectra_type not in self.particle_photo_lnu:
             raise exceptions.InconsistentArguments(
                 f"{spectra_type} not found in particle photometry. "
-                "Call get_particle_photo_luminosities first."
+                "Call get_particle_photo_lnu first."
             )
         else:
-            phot_collection = self.particle_photo_luminosities[spectra_type]
+            phot_collection = self.particle_photo_lnu[spectra_type]
 
         # Check we have the filter code
         if filter_code not in phot_collection.filter_codes:
             raise exceptions.InconsistentArguments(
                 f"{filter_code} not found in particle photometry. "
-                "Call get_particle_photo_luminosities first."
+                "Call get_particle_photo_lnu first."
             )
         else:
             light = phot_collection[filter_code]
@@ -532,19 +532,19 @@ class Particles:
                 The radius of the particle distribution.
         """
         # Check we have that spectra type, if so unpack it
-        if spectra_type not in self.particle_photo_fluxes:
+        if spectra_type not in self.particle_photo_fnu:
             raise exceptions.InconsistentArguments(
                 f"{spectra_type} not found in particle photometry. "
-                "Call get_particle_photo_fluxes first."
+                "Call get_particle_photo_fnu first."
             )
         else:
-            phot_collection = self.particle_photo_fluxes[spectra_type]
+            phot_collection = self.particle_photo_fnu[spectra_type]
 
         # Check we have the filter code
         if filter_code not in phot_collection.filter_codes:
             raise exceptions.InconsistentArguments(
                 f"{filter_code} not found in particle photometry. "
-                "Call get_particle_photo_fluxes first."
+                "Call get_particle_photo_fnu first."
             )
         else:
             light = phot_collection[filter_code]
