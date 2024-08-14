@@ -12,6 +12,7 @@ from unyt import unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.units import Quantity
 from synthesizer.utils import TableFormatter
+from synthesizer.warnings import deprecation
 
 
 class Particles:
@@ -137,6 +138,36 @@ class Particles:
 
         # Attach the name of the particle type
         self.name = name
+
+    @property
+    def particle_photo_fluxes(self):
+        """
+        Get the particle photometry fluxes.
+
+        Returns:
+            dict
+                The photometry fluxes.
+        """
+        deprecation(
+            "The `particle_photo_fluxes` attribute is deprecated. Use "
+            "`particle_photo_fnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_fnu
+
+    @property
+    def photo_luminosities(self):
+        """
+        Get the photometry luminosities.
+
+        Returns:
+            dict
+                The photometry luminosities.
+        """
+        deprecation(
+            "The `particle_photo_luminosities` attribute is deprecated. Use "
+            "`particle_photo_lnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_lnu
 
     def _check_part_args(
         self, coordinates, velocities, masses, softening_length
