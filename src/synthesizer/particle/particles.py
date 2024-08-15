@@ -14,6 +14,7 @@ from unyt import rad, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.units import Quantity
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.geometry import get_rotation_matrix
 
 
 class Particles:
@@ -712,21 +713,34 @@ class Particles:
             )
         )
 
-    def rotate_particles(self, phi, theta, inplace=True):
+    def rotate_particles(
+        self,
+        phi=0 * rad,
+        theta=0 * rad,
+        rot_matrix=None,
+        inplace=True,
+    ):
         """
-        Rotate coordinates by phi and theta.
+        Rotate coordinates.
 
-        Phi is the rotation around the z-axis while theta is the rotation
-        around the y-axis.
+        This method can either use angles or a provided rotation matrix.
+
+        When using angles phi is the rotation around the z-axis while theta
+        is the rotation around the y-axis.
 
         This can both be done in place or return a new instance, by default
         this will be done in place.
 
         Args:
             phi (unyt_quantity):
-                The angle in radians to rotate around the z-axis.
+                The angle in radians to rotate around the z-axis. If rot_matrix
+                is defined this will be ignored.
             theta (unyt_quantity):
-                The angle in radians to rotate around the y-axis.
+                The angle in radians to rotate around the y-axis. If rot_matrix
+                is defined this will be ignored.
+            rot_matrix (array-like, float):
+                A 3x3 rotation matrix to apply to the coordinates
+                instead of phi and theta.
             inplace (bool):
                 Whether to perform the rotation in place or return a new
                 instance.
@@ -736,47 +750,49 @@ class Particles:
                 A new instance of the particles with the rotated coordinates,
                 if inplace is False.
         """
-        # Ensure we have units and convert to radians
-        if isinstance(phi, unyt_quantity):
-            phi = phi.to("rad").value
-        else:
-            raise exceptions.InconsistentArguments(
-                "phi must have units associated to "
-                f"it (type(phi)={type(phi)})"
+        # Are we using angles?
+        if rot_matrix is None:
+            # Ensure we have units and convert to radians
+            if isinstance(phi, unyt_quantity):
+                phi = phi.to("rad").value
+            else:
+                raise exceptions.InconsistentArguments(
+                    "phi must have units associated to "
+                    f"it (type(phi)={type(phi)})"
+                )
+            if isinstance(theta, unyt_quantity):
+                theta = theta.to("rad").value
+            else:
+                raise exceptions.InconsistentArguments(
+                    "theta must have units associated to "
+                    f"it (type(theta)={type(theta)})"
+                )
+
+            # Rotation matrix around z-axis (phi)
+            rot_matrix_z = np.array(
+                [
+                    [np.cos(phi), -np.sin(phi), 0],
+                    [np.sin(phi), np.cos(phi), 0],
+                    [0, 0, 1],
+                ]
             )
-        if isinstance(theta, unyt_quantity):
-            theta = theta.to("rad").value
-        else:
-            raise exceptions.InconsistentArguments(
-                "theta must have units associated to "
-                f"it (type(theta)={type(theta)})"
+
+            # Rotation matrix around y-axis (theta)
+            rot_matrix_y = np.array(
+                [
+                    [np.cos(theta), 0, np.sin(theta)],
+                    [0, 1, 0],
+                    [-np.sin(theta), 0, np.cos(theta)],
+                ]
             )
 
-        # Rotation matrix around z-axis (phi)
-        R_z = np.array(
-            [
-                [np.cos(phi), -np.sin(phi), 0],
-                [np.sin(phi), np.cos(phi), 0],
-                [0, 0, 1],
-            ]
-        )
-
-        # Rotation matrix around y-axis (theta)
-        R_y = np.array(
-            [
-                [np.cos(theta), 0, np.sin(theta)],
-                [0, 1, 0],
-                [-np.sin(theta), 0, np.cos(theta)],
-            ]
-        )
-
-        # Combined rotation matrix
-        R = np.dot(R_y, R_z)
+            # Combined rotation matrix
+            rot_matrix = np.dot(rot_matrix_y, rot_matrix_z)
 
         # Are we rotating in place or returning a new instance?
         if inplace:
             # Rotate the coordinates
-            self.coordinates = np.dot(self.coordinates, R.T)
+            self.coordinates = np.dot(self.coordinates, rot_matrix.T)
 
             return
 
@@ -784,7 +800,7 @@ class Particles:
         new_parts = copy.deepcopy(self)
 
         # Rotate the coordinates
-        new_parts.coordinates = np.dot(new_parts.coordinates, R.T)
+        new_parts.coordinates = np.dot(new_parts.coordinates, rot_matrix.T)
 
         # Return the new one
         return new_parts
@@ -841,16 +857,11 @@ class Particles:
         # Normalize the angular momentum vector
         ang_mom_hat = ang_mom / np.linalg.norm(ang_mom)
 
-        # Calculate the angle phi (rotate around z-axis to align
-        # L's projection with the x-axis)
-        phi = np.arctan2(ang_mom_hat[1], ang_mom_hat[0]) * rad
-
-        # Calculate the angle theta (rotate around x-axis to align L
-        # with the y-axis)
-        theta = -np.arcsin(ang_mom_hat[2]) * rad
+        # Get the rotation matrix to rotate ang_mom_hat to the y-axis
+        rot_matrix = get_rotation_matrix(ang_mom_hat, np.array([0, 1, 0]))
 
         # Call the rotate_particles method with the computed angles
-        return self.rotate_particles(phi, theta, inplace=inplace)
+        return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
 
     def rotate_face_on(self, inplace=True):
         """
@@ -875,16 +886,11 @@ class Particles:
         # Normalize the angular momentum vector
         ang_mom_hat = ang_mom / np.linalg.norm(ang_mom)
 
-        # Calculate the angle phi (rotate around z-axis to align L's
-        # projection with the x-axis)
-        phi = np.arctan2(ang_mom_hat[1], ang_mom_hat[0]) * rad
-
-        # Calculate the angle theta (rotate around y-axis to align L with
-        # the negative z-axis)
-        theta = np.arccos(-ang_mom_hat[2]) * rad
+        # Get the rotation matrix to rotate ang_mom_hat to the z-axis
+        rot_matrix = get_rotation_matrix(ang_mom_hat, np.array([0, 0, 1]))
 
         # Call the rotate_particles method with the computed angles
-        return self.rotate_particles(phi, theta, inplace=inplace)
+        return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
 
 
 class CoordinateGenerator:
