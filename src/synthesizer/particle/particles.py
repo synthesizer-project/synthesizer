@@ -5,6 +5,8 @@ methods common to all child particle types. It should rarely if ever be
 directly instantiated.
 """
 
+import copy
+
 import numpy as np
 from numpy.random import multivariate_normal
 from unyt import unyt_array, unyt_quantity
@@ -166,55 +168,6 @@ class Particles:
             raise exceptions.InconsistentArguments(
                 "softening_length must have unyt units associated to them."
             )
-
-    def rotate_particles(self):
-        """
-        Rotate the particle distribution.
-
-        Not yet implemented.
-        """
-        raise exceptions.UnimplementedFunctionality(
-            "Not yet implemented! Feel free to implement and raise a "
-            "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
-            "docs/CONTRIBUTING.md"
-        )
-
-    def convert_to_physical_properties(
-        self,
-    ):
-        """
-        Convert comoving coordinates and velocities to physical.
-
-        Note that redshift must be provided to perform this conversion.
-
-        Since smoothing lengths are not universal quantities their existence is
-        checked before trying to convert them.
-        """
-        raise exceptions.UnimplementedFunctionality(
-            "Not yet implemented! Feel free to implement and raise a "
-            "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
-            "docs/CONTRIBUTING.md"
-        )
-
-    def convert_to_comoving_properties(
-        self,
-    ):
-        """
-        Convert physical coordinates and velocities to comoving.
-
-        Note that redshift must be provided to perform this conversion.
-
-        Since smoothing lengths are not universal quantities their existence is
-        checked before trying to convert them.
-        """
-        raise exceptions.UnimplementedFunctionality(
-            "Not yet implemented! Feel free to implement and raise a "
-            "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
-            "docs/CONTRIBUTING.md"
-        )
 
     @property
     def centered_coordinates(self):
@@ -758,6 +711,180 @@ class Particles:
                 nthreads,
             )
         )
+
+    def rotate_particles(self, phi, theta, inplace=True):
+        """
+        Rotate coordinates by phi and theta.
+
+        Phi is the rotation around the z-axis while theta is the rotation
+        around the y-axis.
+
+        This can both be done in place or return a new instance, by default
+        this will be done in place.
+
+        Args:
+            phi (unyt_quantity):
+                The angle in radians to rotate around the z-axis.
+            theta (unyt_quantity):
+                The angle in radians to rotate around the y-axis.
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with the rotated coordinates,
+                if inplace is False.
+        """
+        # Ensure we have units and convert to radians
+        if isinstance(phi, unyt_quantity):
+            phi = phi.to("rad").value
+        else:
+            raise exceptions.InconsistentArguments(
+                "phi must have units associated to "
+                f"it (type(phi)={type(phi)})"
+            )
+        if isinstance(theta, unyt_quantity):
+            theta = theta.to("rad").value
+        else:
+            raise exceptions.InconsistentArguments(
+                "theta must have units associated to "
+                f"it (type(theta)={type(theta)})"
+            )
+
+        # Rotation matrix around z-axis (phi)
+        R_z = np.array(
+            [
+                [np.cos(phi), -np.sin(phi), 0],
+                [np.sin(phi), np.cos(phi), 0],
+                [0, 0, 1],
+            ]
+        )
+
+        # Rotation matrix around y-axis (theta)
+        R_y = np.array(
+            [
+                [np.cos(theta), 0, np.sin(theta)],
+                [0, 1, 0],
+                [-np.sin(theta), 0, np.cos(theta)],
+            ]
+        )
+
+        # Combined rotation matrix
+        R = np.dot(R_y, R_z)
+
+        # Are we rotating in place or returning a new instance?
+        if inplace:
+            # Rotate the coordinates
+            self.coordinates = np.dot(self.coordinates, R.T)
+
+            return
+
+        # Ok, we're returning a new one, make a copy
+        new_parts = copy.deepcopy(self)
+
+        # Rotate the coordinates
+        new_parts.coordinates = np.dot(new_parts.coordinates, R.T)
+
+        # Return the new one
+        return new_parts
+
+    @property
+    def angular_momentum(self):
+        """
+        Calculate the total angular momentum vector of the particles.
+
+        Returns:
+            unyt_array
+                The angular momentum vector of the particle system.
+        """
+        # Ensure we have all the attributes we need
+        if self.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                "Can't calculate angular momentum without coordinates."
+            )
+        if self.velocities is None:
+            raise exceptions.InconsistentArguments(
+                "Can't calculate angular momentum without velocities."
+            )
+        if self.masses is None:
+            raise exceptions.InconsistentArguments(
+                "Can't calculate angular momentum without masses."
+            )
+
+        # Cross product of position and velocity, weighted by mass
+        return np.sum(
+            np.cross(self.coordinates, self.velocities) * self.masses,
+            axis=0,
+        )
+
+    def rotate_edge_on(self, inplace=True):
+        """
+        Rotate the particle distribution to edge-on.
+
+        This will rotate the particle distribution such that the angular
+        momentum vector is aligned with the y-axis.
+
+        Args:
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with rotated coordinates,
+                if inplace is False.
+        """
+        # Calculate the angular momentum vector
+        ang_mom = self.angular_momentum
+
+        # Normalize the angular momentum vector
+        ang_mom_hat = ang_mom / np.linalg.norm(ang_mom)
+
+        # Calculate the angle phi (rotate around z-axis to align
+        # L's projection with the x-axis)
+        phi = np.arctan2(ang_mom_hat[1], ang_mom_hat[0])
+
+        # Calculate the angle theta (rotate around x-axis to align L
+        # with the y-axis)
+        theta = -np.arcsin(ang_mom_hat[2])
+
+        # Call the rotate_particles method with the computed angles
+        return self.rotate_particles(phi, theta, inplace=inplace)
+
+    def rotate_face_on(self, inplace=True):
+        """
+        Rotate the particle distribution to face-on.
+
+        This will rotate the particle distribution such that the angular
+        momentum vector is aligned with the z-axis.
+
+        Args:
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with rotated coordinates,
+                if inplace is False.
+        """
+        # Calculate the angular momentum vector
+        ang_mom = self.angular_momentum
+
+        # Normalize the angular momentum vector
+        ang_mom_hat = ang_mom / np.linalg.norm(ang_mom)
+
+        # Calculate the angle phi (rotate around z-axis to align L's
+        # projection with the x-axis)
+        phi = np.arctan2(ang_mom_hat[1], ang_mom_hat[0])
+
+        # Calculate the angle theta (rotate around y-axis to align L with
+        # the negative z-axis)
+        theta = np.arccos(-ang_mom_hat[2])
+
+        # Call the rotate_particles method with the computed angles
+        return self.rotate_particles(phi, theta, inplace=inplace)
 
 
 class CoordinateGenerator:
