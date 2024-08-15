@@ -9,7 +9,7 @@ import copy
 
 import numpy as np
 from numpy.random import multivariate_normal
-from unyt import unyt_array, unyt_quantity
+from unyt import rad, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity
@@ -814,7 +814,7 @@ class Particles:
 
         # Cross product of position and velocity, weighted by mass
         return np.sum(
-            np.cross(self.coordinates, self.velocities) * self.masses,
+            np.cross(self.coordinates, self.velocities) * self.masses[:, None],
             axis=0,
         )
 
@@ -843,11 +843,11 @@ class Particles:
 
         # Calculate the angle phi (rotate around z-axis to align
         # L's projection with the x-axis)
-        phi = np.arctan2(ang_mom_hat[1], ang_mom_hat[0])
+        phi = np.arctan2(ang_mom_hat[1], ang_mom_hat[0]) * rad
 
         # Calculate the angle theta (rotate around x-axis to align L
         # with the y-axis)
-        theta = -np.arcsin(ang_mom_hat[2])
+        theta = -np.arcsin(ang_mom_hat[2]) * rad
 
         # Call the rotate_particles method with the computed angles
         return self.rotate_particles(phi, theta, inplace=inplace)
@@ -877,11 +877,11 @@ class Particles:
 
         # Calculate the angle phi (rotate around z-axis to align L's
         # projection with the x-axis)
-        phi = np.arctan2(ang_mom_hat[1], ang_mom_hat[0])
+        phi = np.arctan2(ang_mom_hat[1], ang_mom_hat[0]) * rad
 
         # Calculate the angle theta (rotate around y-axis to align L with
         # the negative z-axis)
-        theta = np.arccos(-ang_mom_hat[2])
+        theta = np.arccos(-ang_mom_hat[2]) * rad
 
         # Call the rotate_particles method with the computed angles
         return self.rotate_particles(phi, theta, inplace=inplace)
