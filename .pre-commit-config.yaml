@@ -15,11 +15,9 @@ repos:
     hooks:
       # Run the linter.
       - id: ruff
-        types_or: [ python, pyi, jupyter ]
         args: [ --fix ]
       # Run the formatter.
       - id: ruff-format
-        types_or: [ python, pyi, jupyter ]
 
   # Sanitise Jupyter notebooks.
   - repo: https://github.com/srstevenson/nb-clean
