@@ -830,11 +830,20 @@ class Particles:
                 "Can't calculate angular momentum without masses."
             )
 
+        # We have to do some unit gymnastics to make sure we return sensible
+        # units. Since coordinates and velocities won't necessarily agree
+        # on the length unit we adopt the velocity length unit which we can
+        # extract with some simple string manipulation.
+        distance_unit = str(self.velocities.units).split("/")[0]
+        ang_mom_unit = (
+            f"{distance_unit} * {self.masses.units} * {self.velocities.units}"
+        )
+
         # Cross product of position and velocity, weighted by mass
         return np.sum(
             np.cross(self.coordinates, self.velocities) * self.masses[:, None],
             axis=0,
-        )
+        ).to(ang_mom_unit)
 
     def rotate_edge_on(self, inplace=True):
         """
