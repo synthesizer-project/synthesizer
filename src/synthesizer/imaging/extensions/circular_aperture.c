@@ -233,10 +233,10 @@ static double calculate_overlap_serial(const double res, const double xmin,
 
       double d = sqrt(pxcen * pxcen + pycen * pycen);
       if (d < r - pixel_radius) {
-        frac = 1.0 / (res * res);
+        frac = 1.0;
       } else if (d < r + pixel_radius) {
         frac = circular_overlap_single_exact(pxmin, pymin, pxmax, pymax, r) /
-               (res * res) / (res * res);
+               (res * res);
       } else {
         /* Nothing to do, pixel is outside the aperture. */
         continue;
@@ -288,10 +288,10 @@ static double calculate_overlap_omp(const double res, const double xmin,
 
       double d = sqrt(pxcen * pxcen + pycen * pycen);
       if (d < r - pixel_radius) {
-        frac = 1.0 / (res * res);
+        frac = 1.0;
       } else if (d < r + pixel_radius) {
         frac = circular_overlap_single_exact(pxmin, pymin, pxmax, pymax, r) /
-               (res * res) / (res * res);
+               (res * res);
       } else {
         /* Nothing to do, pixel is outside the aperture. */
         continue;
@@ -374,7 +374,7 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
   const double *cent = extract_data_double(np_cent, "cent");
 
   /* Is the aperture smaller than a pixel? */
-  if (r < 0.5) {
+  if (r < 0.5 * res) {
     /* Compute the areas. */
     const double app_area = M_PI * r * r;
     const double pix_area = res * res;
@@ -383,8 +383,7 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
     signal = app_area / pix_area * img[(int)cent[0] * ny + (int)cent[1]];
   }
 
-  /* Calculate the signal inside the aperture. (Only if we haven't just above
-   * ). Note that we need to divide by the area of the aperture.*/
+  /* Calculate the signal inside the aperture. */
   if (signal == 0) {
     signal = calculate_overlap(res, r, nx, ny, img, cent, nthreads);
   }
