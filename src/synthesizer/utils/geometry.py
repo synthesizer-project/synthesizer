@@ -24,6 +24,10 @@ def get_rotation_matrix(vector, unit=None):
 
     This uses the Rodrigues' rotation formula for the re-projection.
 
+    Adapted from:
+    https://stackoverflow.com/questions/43507491/imprecision-with-rotation-
+    matrix-to-align-a-vector-to-an-axis
+
     Args:
         vector (array-like, float)
             The vector to rotate.
