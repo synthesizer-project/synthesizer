@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology import Planck15 as cosmo
 from scipy.spatial import cKDTree
+from unyt import Myr, kpc
+
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.filters import FilterCollection as Filters
 from synthesizer.grid import Grid
@@ -25,7 +27,6 @@ from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfhz
-from unyt import Myr, kpc
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
