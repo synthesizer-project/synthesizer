@@ -16,9 +16,11 @@ Example usage:
 
 """
 
+import copy
+
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Myr, unyt_quantity
+from unyt import Myr, rad, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -26,6 +28,7 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import Gas, Stars
+from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.warnings import deprecated, warn
 
 
@@ -1781,3 +1784,142 @@ class Galaxy(BaseGalaxy):
             return stellar_cube
         toc("Computing blackhole spectral data cube", start)
         return blackhole_cube
+
+    def rotate_particles(
+        self,
+        phi=0 * rad,
+        theta=0 * rad,
+        rot_matrix=None,
+        inplace=True,
+    ):
+        """
+        Rotate coordinates.
+
+        This method can either use angles or a provided rotation matrix.
+
+        When using angles phi is the rotation around the z-axis while theta
+        is the rotation around the y-axis.
+
+        This can both be done in place or return a new instance, by default
+        this will be done in place.
+
+        Args:
+            phi (unyt_quantity):
+                The angle in radians to rotate around the z-axis. If rot_matrix
+                is defined this will be ignored.
+            theta (unyt_quantity):
+                The angle in radians to rotate around the y-axis. If rot_matrix
+                is defined this will be ignored.
+            rot_matrix (array-like, float):
+                A 3x3 rotation matrix to apply to the coordinates
+                instead of phi and theta.
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with the rotated coordinates,
+                if inplace is False.
+        """
+        # Are we rotating in place?
+        if inplace:
+            gal = self
+        else:
+            gal = copy.deepcopy(self)
+
+        # Do the stars
+        if gal.stars is not None:
+            gal.stars.rotate_particles(
+                phi=phi,
+                theta=theta,
+                rot_matrix=rot_matrix,
+                inplace=True,
+            )
+
+        # Do the gas
+        if gal.gas is not None:
+            gal.gas.rotate_particles(
+                phi=phi,
+                theta=theta,
+                rot_matrix=rot_matrix,
+                inplace=True,
+            )
+
+        # Do the black holes
+        if gal.black_holes is not None:
+            gal.black_holes.rotate_particles(
+                phi=phi,
+                theta=theta,
+                rot_matrix=rot_matrix,
+                inplace=True,
+            )
+
+        # If we aren't rotating in place we need to return a new instance
+        if not inplace:
+            return gal
+        return
+
+    def rotate_edge_on(self, component="stars", inplace=True):
+        """
+        Rotate the particle distribution to edge-on.
+
+        This will rotate the particle distribution such that the angular
+        momentum vector is aligned with the y-axis in an image
+
+        Args:
+            component (str):
+                The component whose angular momentum vector should be used for
+                the rotation. Options are "stars", "gas" and "black_holes".
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with rotated coordinates,
+                if inplace is False.
+        """
+        # Get the angular momentum to rotate towards
+        angular_momentum = getattr(self, component).angular_momentum
+
+        # Get the rotation matrix to rotate ang_mom_hat to the y-axis
+        rot_matrix = get_rotation_matrix(
+            angular_momentum,
+            np.array([1, 0, 0]),
+        )
+
+        # Call the rotate_particles method with the computed angles
+        return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
+
+    def rotate_face_on(self, component="stars", inplace=True):
+        """
+        Rotate the particle distribution to face-on.
+
+        This will rotate the particle distribution such that the angular
+        momentum vector is aligned with the z-axis in an image.
+
+        Args:
+            component (str):
+                The component whose angular momentum vector should be used for
+                the rotation. Options are "stars", "gas" and "black_holes".
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with rotated coordinates,
+                if inplace is False.
+        """
+        # Get the angular momentum to rotate towards
+        angular_momentum = getattr(self, component).angular_momentum
+
+        # Get the rotation matrix to rotate ang_mom_hat to the z-axis
+        rot_matrix = get_rotation_matrix(
+            angular_momentum,
+            np.array([0, 0, -1]),
+        )
+
+        # Call the rotate_particles method with the computed angles
+        return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)

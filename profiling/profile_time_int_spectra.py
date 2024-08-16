@@ -9,11 +9,12 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+from unyt import Myr
+
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfhz
-from unyt import Myr
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]

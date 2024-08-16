@@ -8,6 +8,7 @@ Plot IGM transmission curves (Inoue+14 & Madau+96
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
+
 from synthesizer.emission_models.attenuation.igm import Inoue14, Madau96
 
 lam = np.arange(0, 20000)

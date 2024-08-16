@@ -10,6 +10,8 @@ photometry.
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology import Planck18 as cosmo
+from unyt import Myr, dimensionless
+
 from synthesizer.emission_models import (
     AttenuatedEmission,
     CharlotFall2000,
@@ -23,7 +25,6 @@ from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 from synthesizer.sed import Sed
-from unyt import Myr, dimensionless
 
 # Get the grid
 grid_dir = "../../tests/test_grid"

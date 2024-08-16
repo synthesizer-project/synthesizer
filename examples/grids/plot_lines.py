@@ -10,6 +10,7 @@ This example demonstrates how to:
 """
 
 import matplotlib.pyplot as plt
+
 from synthesizer.grid import Grid
 from synthesizer.line import get_diagram_labels, get_ratio_label
 
