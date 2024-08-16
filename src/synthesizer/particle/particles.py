@@ -855,7 +855,7 @@ class Particles:
         """
         # Get the rotation matrix to rotate ang_mom_hat to the y-axis
         rot_matrix = get_rotation_matrix(
-            self.angular_momentum, np.array([0, 1, 0])
+            self.angular_momentum, np.array([1, 0, 0])
         )
 
         # Call the rotate_particles method with the computed angles
@@ -880,7 +880,7 @@ class Particles:
         """
         # Get the rotation matrix to rotate ang_mom_hat to the z-axis
         rot_matrix = get_rotation_matrix(
-            self.angular_momentum, np.array([0, 0, 1])
+            self.angular_momentum, np.array([0, 0, -1])
         )
 
         # Call the rotate_particles method with the computed angles
