@@ -6,13 +6,14 @@ In this example we're going to generate emission line predictions for a
 parametric galaxy.
 """
 
+from unyt import Myr
+
 import synthesizer.line_ratios as line_ratios
 from synthesizer.emission_models import AttenuatedEmission, IncidentEmission
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr
 
 if __name__ == "__main__":
     # Begin by defining and initialising the grid.

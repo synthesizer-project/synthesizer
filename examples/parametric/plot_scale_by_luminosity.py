@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology import Planck18 as cosmo
 from matplotlib.lines import Line2D
+from unyt import Hz, Msun, Myr, erg, nJy, s
+
 from synthesizer import galaxy
 from synthesizer.conversions import apparent_mag_to_fnu, fnu_to_lnu
 from synthesizer.emission_models import PacmanEmission
@@ -19,7 +21,6 @@ from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.filters import Filter
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
-from unyt import Hz, Msun, Myr, erg, nJy, s
 
 # Set up a figure to plot on
 fig = plt.figure()

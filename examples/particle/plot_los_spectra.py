@@ -11,6 +11,8 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import cKDTree
+from unyt import Myr
+
 from synthesizer.emission_models import TotalEmission
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.grid import Grid
@@ -21,7 +23,6 @@ from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfhz
-from unyt import Myr
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
