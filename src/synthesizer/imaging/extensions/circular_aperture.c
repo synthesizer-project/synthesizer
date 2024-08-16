@@ -236,7 +236,7 @@ static double calculate_overlap_serial(const double res, const double xmin,
         frac = 1.0 / (res * res);
       } else if (d < r + pixel_radius) {
         frac = circular_overlap_single_exact(pxmin, pymin, pxmax, pymax, r) /
-               (res * res);
+               (res * res) / (res * res);
       } else {
         /* Nothing to do, pixel is outside the aperture. */
         continue;
@@ -291,7 +291,7 @@ static double calculate_overlap_omp(const double res, const double xmin,
         frac = 1.0 / (res * res);
       } else if (d < r + pixel_radius) {
         frac = circular_overlap_single_exact(pxmin, pymin, pxmax, pymax, r) /
-               (res * res);
+               (res * res) / (res * res);
       } else {
         /* Nothing to do, pixel is outside the aperture. */
         continue;
