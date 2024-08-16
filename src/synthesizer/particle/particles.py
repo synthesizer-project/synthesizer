@@ -793,6 +793,7 @@ class Particles:
         if inplace:
             # Rotate the coordinates
             self.coordinates = np.dot(self.coordinates, rot_matrix.T)
+            self.velocities = np.dot(self.velocities, rot_matrix.T)
 
             return
 
@@ -801,6 +802,7 @@ class Particles:
 
         # Rotate the coordinates
         new_parts.coordinates = np.dot(new_parts.coordinates, rot_matrix.T)
+        new_parts.velocities = np.dot(new_parts.velocities, rot_matrix.T)
 
         # Return the new one
         return new_parts
@@ -851,14 +853,10 @@ class Particles:
                 A new instance of the particles with rotated coordinates,
                 if inplace is False.
         """
-        # Calculate the angular momentum vector
-        ang_mom = self.angular_momentum
-
-        # Normalize the angular momentum vector
-        ang_mom_hat = ang_mom / np.linalg.norm(ang_mom)
-
         # Get the rotation matrix to rotate ang_mom_hat to the y-axis
-        rot_matrix = get_rotation_matrix(ang_mom_hat, np.array([0, 1, 0]))
+        rot_matrix = get_rotation_matrix(
+            self.angular_momentum, np.array([0, 1, 0])
+        )
 
         # Call the rotate_particles method with the computed angles
         return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
@@ -880,14 +878,10 @@ class Particles:
                 A new instance of the particles with rotated coordinates,
                 if inplace is False.
         """
-        # Calculate the angular momentum vector
-        ang_mom = self.angular_momentum
-
-        # Normalize the angular momentum vector
-        ang_mom_hat = ang_mom / np.linalg.norm(ang_mom)
-
         # Get the rotation matrix to rotate ang_mom_hat to the z-axis
-        rot_matrix = get_rotation_matrix(ang_mom_hat, np.array([0, 0, 1]))
+        rot_matrix = get_rotation_matrix(
+            self.angular_momentum, np.array([0, 0, 1])
+        )
 
         # Call the rotate_particles method with the computed angles
         return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
