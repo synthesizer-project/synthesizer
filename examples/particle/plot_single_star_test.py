@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 from synthesizer.emission_models import TransmittedEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import Stars as ParametricStars

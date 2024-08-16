@@ -14,6 +14,7 @@ import matplotlib as mpl
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
+
 from synthesizer.grid import Grid
 
 # colourmap to use

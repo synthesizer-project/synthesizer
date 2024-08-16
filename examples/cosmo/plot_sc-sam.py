@@ -7,6 +7,7 @@ Load SC-SAM example data into a list of galaxy objects.
 
 import matplotlib.pyplot as plt
 import numpy as np
+
 from synthesizer.emission_models import PacmanEmission
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.grid import Grid

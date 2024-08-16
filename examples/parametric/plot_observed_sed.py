@@ -11,6 +11,8 @@ including photometry. This example will:
 """
 
 from astropy.cosmology import Planck18 as cosmo
+from unyt import Myr
+
 from synthesizer.emission_models import PacmanEmission
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emission_models.attenuation.igm import Madau96
@@ -18,7 +20,6 @@ from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr
 
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this

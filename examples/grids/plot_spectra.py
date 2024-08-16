@@ -12,6 +12,7 @@ import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
+
 from synthesizer.grid import Grid
 
 if __name__ == "__main__":

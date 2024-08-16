@@ -8,6 +8,7 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
+
 from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
 

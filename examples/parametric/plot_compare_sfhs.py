@@ -7,6 +7,8 @@ Example comparing different parametric star formation histories.
 
 import matplotlib.pyplot as plt
 import numpy as np
+from unyt import Myr
+
 from synthesizer.parametric.sf_hist import (
     Constant,
     DelayedExponential,
@@ -15,7 +17,6 @@ from synthesizer.parametric.sf_hist import (
     Gaussian,
     LogNormal,
 )
-from unyt import Myr
 
 models = [
     [Constant, {"max_age": 500 * Myr}],

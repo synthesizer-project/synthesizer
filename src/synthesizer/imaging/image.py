@@ -572,6 +572,8 @@ class Image:
         show=False,
         cmap="Greys_r",
         norm=None,
+        fig=None,
+        ax=None,
     ):
         """
         Plot an image.
@@ -590,6 +592,10 @@ class Image:
             tick_formatter (matplotlib.ticker.FuncFormatter)
                 An instance of the tick formatter for formatting the colorbar
                 ticks.
+            fig (matplotlib.pyplot.figure)
+                The figure object to plot on. If None a new figure is created.
+            ax (matplotlib.pyplot.figure.axis)
+                The axis object to plot on. If None a new axis is created.
 
         Returns:
             matplotlib.pyplot.figure
@@ -601,11 +607,13 @@ class Image:
         img = self.arr
 
         # Set up the figure
-        fig = plt.figure(figsize=(3.5, 3.5))
+        if fig is None:
+            fig = plt.figure(figsize=(3.5, 3.5))
 
         # Create the axis and turn off the ticks and frame
-        ax = fig.add_subplot(111)
-        ax.axis("off")
+        if ax is None:
+            ax = fig.add_subplot(111)
+            ax.axis("off")
 
         # Plot the image and remove the surrounding axis
         ax.imshow(
@@ -627,6 +635,8 @@ class Image:
         cbar_label=None,
         norm=None,
         tick_formatter=None,
+        fig=None,
+        ax=None,
     ):
         """
         Plot a map.
@@ -651,6 +661,10 @@ class Image:
             tick_formatter (matplotlib.ticker.FuncFormatter)
                 An instance of the tick formatter for formatting the colorbar
                 ticks.
+            fig (matplotlib.pyplot.figure)
+                The figure object to plot on. If None a new figure is created.
+            ax (matplotlib.pyplot.figure.axis)
+                The axis object to plot on. If None a new axis is created.
 
         Returns:
             matplotlib.pyplot.figure
@@ -662,10 +676,12 @@ class Image:
         img = self.arr
 
         # Set up the figure
-        fig = plt.figure(figsize=(3.5, 3.5))
+        if fig is None:
+            fig = plt.figure(figsize=(3.5, 3.5))
 
         # Create the axis
-        ax = fig.add_subplot(111)
+        if ax is None:
+            ax = fig.add_subplot(111)
 
         # Plot the image and remove the surrounding axis
         im = ax.imshow(

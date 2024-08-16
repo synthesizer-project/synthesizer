@@ -11,8 +11,9 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
-from synthesizer.imaging.image import Image
 from unyt import Hz, Mpc, erg, s
+
+from synthesizer.imaging.image import Image
 
 # Define the resolution of the image
 res = 100
