@@ -841,7 +841,7 @@ class Particles:
         Rotate the particle distribution to edge-on.
 
         This will rotate the particle distribution such that the angular
-        momentum vector is aligned with the y-axis.
+        momentum vector is aligned with the y-axis in an image.
 
         Args:
             inplace (bool):
@@ -866,7 +866,7 @@ class Particles:
         Rotate the particle distribution to face-on.
 
         This will rotate the particle distribution such that the angular
-        momentum vector is aligned with the z-axis.
+        momentum vector is aligned with the z-axis in an image.
 
         Args:
             inplace (bool):
