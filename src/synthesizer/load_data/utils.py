@@ -28,7 +28,7 @@ def get_len(Length):
     return begin, end
 
 
-def age_lookup_table(cosmo, redshift=0., delta_a=1e-3, low_lim=1e-4):
+def age_lookup_table(cosmo, redshift=0.0, delta_a=1e-3, low_lim=1e-4):
     """
     Create a look-up table for age as a function of scale factor.
 
@@ -53,7 +53,7 @@ def age_lookup_table(cosmo, redshift=0., delta_a=1e-3, low_lim=1e-4):
     """
 
     # Find the scale factor for the input snapshot
-    root_scale_factor = 1. / (1. + redshift)
+    root_scale_factor = 1.0 / (1.0 + redshift)
 
     # Find the (integer) resolution of the grid
     resolution = (root_scale_factor - low_lim) / delta_a
@@ -61,9 +61,7 @@ def age_lookup_table(cosmo, redshift=0., delta_a=1e-3, low_lim=1e-4):
 
     # Create the (linear) scale factor array
     scale_factor = np.linspace(
-        delta_a,
-        root_scale_factor - low_lim,
-        resolution
+        delta_a, root_scale_factor - low_lim, resolution
     )
 
     # Find the ages at these scale factors
