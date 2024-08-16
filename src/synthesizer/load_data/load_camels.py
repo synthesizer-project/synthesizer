@@ -125,7 +125,7 @@ def load_CAMELS_IllustrisTNG(
     physical=True,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
-    **kwargs
+    **kwargs,
 ):
     """
     Load CAMELS-IllustrisTNG galaxies
@@ -250,7 +250,7 @@ def load_CAMELS_IllustrisTNG(
         _ages = cosmo.age(1.0 / form_time - 1)
 
     # Calculate ages at snapshot redshift
-    ages = (universe_age - _ages).to('yr').value
+    ages = (universe_age - _ages).to("yr").value
 
     return _load_CAMELS(
         lens=lens,
@@ -282,7 +282,7 @@ def load_CAMELS_Astrid(
     physical=True,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
-    **kwargs
+    **kwargs,
 ):
     """
     Load CAMELS-Astrid galaxies
@@ -350,9 +350,7 @@ def load_CAMELS_Astrid(
     if age_lookup:
         # Create the lookup grid
         scale_factors, ages = age_lookup_table(
-            cosmo,
-            redshift=redshift,
-            delta_a=age_lookup_delta_a
+            cosmo, redshift=redshift, delta_a=age_lookup_delta_a
         )
 
         # Look up the ages for the particles
@@ -362,7 +360,7 @@ def load_CAMELS_Astrid(
         _ages = cosmo.age(1.0 / form_time - 1)
 
     # Calculate ages at snapshot redshift
-    ages = (universe_age - _ages).to('yr').value
+    ages = (universe_age - _ages).to("yr").value
 
     if group_dir:
         _dir = group_dir  # replace if symlinks for fof files are broken
@@ -406,7 +404,7 @@ def load_CAMELS_Simba(
     physical=True,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
-    **kwargs
+    **kwargs,
 ):
     """
     Load CAMELS-SIMBA galaxies
@@ -473,9 +471,7 @@ def load_CAMELS_Simba(
     if age_lookup:
         # Create the lookup grid
         scale_factors, ages = age_lookup_table(
-            cosmo,
-            redshift=redshift,
-            delta_a=age_lookup_delta_a
+            cosmo, redshift=redshift, delta_a=age_lookup_delta_a
         )
 
         # Look up the ages for the particles
@@ -485,7 +481,7 @@ def load_CAMELS_Simba(
         _ages = cosmo.age(1.0 / form_time - 1)
 
     # Calculate ages at snapshot redshift
-    ages = (universe_age - _ages).to('yr').value
+    ages = (universe_age - _ages).to("yr").value
 
     if group_dir:
         _dir = group_dir  # replace if symlinks for fof files are broken
@@ -531,7 +527,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     num_threads=-1,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
-    **kwargs
+    **kwargs,
 ):
     """
     Load CAMELS-Swift-EAGLE galaxies
@@ -645,9 +641,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     if age_lookup:
         # Create the lookup grid
         scale_factors, ages = age_lookup_table(
-            cosmo,
-            redshift=redshift,
-            delta_a=age_lookup_delta_a
+            cosmo, redshift=redshift, delta_a=age_lookup_delta_a
         )
 
         # Look up the ages for the particles
@@ -657,7 +651,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         _ages = cosmo.age(1.0 / form_time - 1)
 
     # Calculate ages at snapshot redshift
-    ages = (universe_age - _ages).to('yr').value
+    ages = (universe_age - _ages).to("yr").value
 
     def swifteagle_particle_assignment(
         idx,
