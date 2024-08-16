@@ -16,9 +16,10 @@ galaxy.
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import cKDTree
+from unyt import Myr, degree, kpc
+
 from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import CoordinateGenerator, Galaxy, Gas, Stars
-from unyt import Myr, degree, kpc
 
 
 def calculate_smoothing_lengths(positions, num_neighbors=56):

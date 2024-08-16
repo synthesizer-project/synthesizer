@@ -13,6 +13,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology import Planck15
+
 from synthesizer.load_data.utils import age_lookup_table, lookup_age
 
 # get scale factors from test file

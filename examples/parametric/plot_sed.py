@@ -8,6 +8,8 @@ including photometry. This example will:
 - calculate spectral luminosity density
 """
 
+from unyt import Myr
+
 from synthesizer.emission_models import (
     AttenuatedEmission,
     BimodalPacmanEmission,
@@ -21,7 +23,6 @@ from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr
 
 if __name__ == "__main__":
     # Define the grid

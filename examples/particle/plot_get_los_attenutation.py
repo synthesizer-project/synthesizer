@@ -11,6 +11,8 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import cKDTree
+from unyt import Myr
+
 from synthesizer.grid import Grid
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
@@ -19,7 +21,6 @@ from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfhz
-from unyt import Myr
 
 
 def calculate_smoothing_lengths(positions, num_neighbors=56):
