@@ -296,7 +296,7 @@ static double calculate_overlap_omp(const double res, const double xmin,
         /* Nothing to do, pixel is outside the aperture. */
         continue;
       }
-      signal += frac * img[i * ny + j];
+      signal += frac / (res * res) * img[i * ny + j];
     }
   }
 
