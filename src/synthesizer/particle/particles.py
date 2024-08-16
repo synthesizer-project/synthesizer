@@ -15,6 +15,7 @@ from synthesizer import exceptions
 from synthesizer.units import Quantity
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
+from synthesizer.warnings import deprecation
 
 
 class Particles:
@@ -84,7 +85,7 @@ class Particles:
                 The redshift/s of the particles.
             softening_length (float)
                 The physical gravitational softening length.
-            nparticle (int)
+            nparticles (int)
                 How many particles are there?
             centre (array, float)
                 Centre of the particle distribution.
@@ -140,6 +141,36 @@ class Particles:
 
         # Attach the name of the particle type
         self.name = name
+
+    @property
+    def particle_photo_fluxes(self):
+        """
+        Get the particle photometry fluxes.
+
+        Returns:
+            dict
+                The photometry fluxes.
+        """
+        deprecation(
+            "The `particle_photo_fluxes` attribute is deprecated. Use "
+            "`particle_photo_fnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_fnu
+
+    @property
+    def photo_luminosities(self):
+        """
+        Get the photometry luminosities.
+
+        Returns:
+            dict
+                The photometry luminosities.
+        """
+        deprecation(
+            "The `particle_photo_luminosities` attribute is deprecated. Use "
+            "`particle_photo_lnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_lnu
 
     def _check_part_args(
         self, coordinates, velocities, masses, softening_length
