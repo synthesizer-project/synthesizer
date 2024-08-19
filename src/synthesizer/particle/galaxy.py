@@ -760,6 +760,9 @@ class Galaxy(BaseGalaxy):
 
         Vijayan+19: https://arxiv.org/abs/1904.02196
 
+        Note this will recalculate the dust masses based on the new dust-to-
+        metal ratio.
+
         Args:
             stellar_mass_weighted_age (float)
                 Mass weighted age of stars in Myr. Defaults to None,
@@ -801,6 +804,13 @@ class Galaxy(BaseGalaxy):
 
         # Save under gas properties
         self.gas.dust_to_metal_ratio = dtm
+
+        # We need to recalculate the dust masses so things don't end up
+        # inconsistent (dust_masses are automatically calculated at
+        # intialisation). If the user handed dust masses and then called this
+        # function, they will be overwritten and it will be confusing but
+        # that's so unlikely and they'll work out when they see this comment.
+        self.gas.dust_masses = self.gas.masses * self.gas.dust_to_metal_ratio
 
         return dtm
 
