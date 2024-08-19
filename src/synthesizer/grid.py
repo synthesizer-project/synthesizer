@@ -1193,8 +1193,9 @@ class Template:
                 "bolometric luminosity must be provided with units"
             )
 
-        return (
+        return Sed(
+            self.lam,
             bolometric_luminosity.to(self.sed.lnu.units * Hz).value
             * self.sed
-            * (1 - self.fesc)
+            * (1 - self.fesc),
         )
