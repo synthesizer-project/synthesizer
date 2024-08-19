@@ -1189,15 +1189,19 @@ class Template:
 
         # Handle the dimensions of the bolometric luminosity
         if bolometric_luminosity.ndim == 0:
-            return Sed(
+            sed = Sed(
                 self.lam,
                 bolometric_luminosity.to(self.lnu.units * Hz).value
                 * self.lnu
                 * (1 - self.fesc),
             )
-        return Sed(
-            self.lam,
-            bolometric_luminosity.to(self.lnu.units * Hz).value[:, None]
-            * self.lnu
-            * (1 - self.fesc),
-        )
+        else:
+            sed = Sed(
+                self.lam,
+                bolometric_luminosity.to(self.lnu.units * Hz).value[:, None]
+                * self.lnu
+                * (1 - self.fesc),
+            )
+
+        print(sed.shape)
+        return sed
