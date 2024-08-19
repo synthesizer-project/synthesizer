@@ -167,8 +167,8 @@ class Gas(Particles):
         else:  # if dust_masses is not None:
             self.dust_masses = dust_masses
 
-            # TODO: this should be removed when dust masses are
-            # properly propagated to LOS calculation
+            # Calculate the dust to metal ratio from the dust mass and
+            # metallicity
             self.dust_to_metal_ratio = self.dust_masses / (
                 self.masses * self.metallicities
             )
