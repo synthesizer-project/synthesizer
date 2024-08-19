@@ -1152,7 +1152,7 @@ class Template:
             raise exceptions.MissingUnits("lnu must be provided with units")
 
         # It's convenient to have an sed object for the next steps
-        sed = Sed(self.lam, self.lnu)
+        sed = Sed(lam, lnu)
 
         # Before we do anything, do we have a grid we need to unify with?
         if unify_with_grid is not None:
