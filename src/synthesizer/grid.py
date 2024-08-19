@@ -1189,7 +1189,7 @@ class Template:
 
         return Sed(
             self.lam,
-            bolometric_luminosity.to(self.lnu.units * Hz)
-            * self._lnu
+            bolometric_luminosity.to(self.lnu.units * Hz).value
+            * self.lnu
             * (1 - self.fesc),
         )
