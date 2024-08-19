@@ -117,6 +117,46 @@ def fnu_to_lnu(fnu, cosmo, redshift):
     return lnu.to(erg / s / Hz)
 
 
+def lnu_to_fnu(lnu, cosmo, redshift):
+    """
+    Convert spectral luminosity density to spectral flux density.
+
+    The conversion is done using the formula:
+
+            F_nu = L_nu * (1 + z) / 4 / pi / D_L**2
+
+    The result will be in units of nJy.
+
+    Args:
+        lnu (unyt_quantity/unyt_array)
+            The spectral luminosity density to be converted to flux, can
+            either be a singular value or array.
+        cosmo (astropy.cosmology)
+            The cosmology object used to calculate luminosity distance.
+        redshift (float)
+            The redshift of the rest frame.
+
+    Returns:
+        unyt_quantity/unyt_array
+            The converted spectral flux density.
+
+    Raises:
+        IncorrectUnits
+            If units are missing an error is raised.
+    """
+    # Ensure we have units
+    if not has_units(lnu):
+        raise exceptions.IncorrectUnits("lnu must be given with unyt units.")
+
+    # Calculate the luminosity distance (need to convert from astropy to unyt)
+    lum_dist = cosmo.luminosity_distance(redshift).to("cm").value * cm
+
+    # Calculate the flux in interim units
+    fnu = lnu * (1 + redshift) / 4 / np.pi / lum_dist**2
+
+    return fnu.to(nJy)
+
+
 def fnu_to_apparent_mag(fnu):
     """
     Convert flux to apparent AB magnitude.
