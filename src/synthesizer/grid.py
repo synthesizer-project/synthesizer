@@ -1126,6 +1126,7 @@ class Template:
         lam,
         lnu,
         fesc=0.0,
+        unify_with_grid=None,
         **kwargs,
     ):
         """
@@ -1138,6 +1139,9 @@ class Template:
                 Luminosity array.
             fesc (float)
                 The escape fraction of the AGN.
+            unify_with_grid (Grid)
+                A grid object to unify the template with. This will ensure
+                the template has the same wavelength array as the grid.
             **kwargs
 
         """
@@ -1147,9 +1151,17 @@ class Template:
         if not isinstance(lnu, unyt_array):
             raise exceptions.MissingUnits("lnu must be provided with units")
 
-        # Attach the template itself
-        self.lnu = lnu
-        self.lam = lam
+        # It's convenient to have an sed object for the next steps
+        sed = Sed(self.lam, self.lnu)
+
+        # Before we do anything, do we have a grid we need to unify with?
+        if unify_with_grid is not None:
+            # Interpolate the template Sed onto the grid wavelength array
+            sed = sed.get_resampled_sed(new_lam=unify_with_grid.lam)
+
+        # Attach the template now we've done the interpolation (if needed)
+        self.lnu = sed.lnu
+        self.lam = sed.lam
 
         # Normalise, just in case
         self.normalisation = self.sed.measure_bolometric_luminosity()
