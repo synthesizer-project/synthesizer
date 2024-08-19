@@ -296,7 +296,7 @@ static double calculate_overlap_omp(const double res, const double xmin,
         /* Nothing to do, pixel is outside the aperture. */
         continue;
       }
-      signal += frac / (res * res) * img[i * ny + j];
+      signal += frac * img[i * ny + j];
     }
   }
 
@@ -374,7 +374,7 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
   const double *cent = extract_data_double(np_cent, "cent");
 
   /* Is the aperture smaller than a pixel? */
-  if (r < 0.5) {
+  if (r < 0.5 * res) {
     /* Compute the areas. */
     const double app_area = M_PI * r * r;
     const double pix_area = res * res;

@@ -845,7 +845,7 @@ class Image:
                 The centre of the aperture (in pixel coordinates, i.e. the
                 centre is [npix/2, npix/2], top left is [0, 0], and bottom
                 right is [npix, npix]). If None then the centre is assumed to
-                be the centre of the image.
+                be the maximum pixel.
             nthreads (int)
                 The number of threads to use for the calculation. Default is 1.
 
@@ -856,10 +856,11 @@ class Image:
         # Convert the aperture radius to the correct units
         aperture_radius = aperture_radius.to(self.resolution.units).value
 
-        # If the aperture centre isn't passed, assume it's the centre of the
-        # image
+        # If the aperture centre isn't passed, assume it's the maximum
+        # pixel
         if aperture_cent is None:
-            aperture_cent = np.array(self.npix, dtype=np.float64) / 2
+            max_pixel = np.unravel_index(self.arr.argmax(), self.arr.shape)
+            aperture_cent = np.array(max_pixel) + 0.5
 
         from synthesizer.imaging.extensions.circular_aperture import (
             calculate_circular_overlap,
