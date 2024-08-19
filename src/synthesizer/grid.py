@@ -1188,7 +1188,7 @@ class Template:
             )
 
         # Handle the dimensions of the bolometric luminosity
-        if bolometric_luminosity.ndim == 0:
+        if bolometric_luminosity.shape[0] == 1:
             sed = Sed(
                 self.lam,
                 bolometric_luminosity.to(self.lnu.units * Hz).value
