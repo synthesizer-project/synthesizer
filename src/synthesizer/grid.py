@@ -1117,12 +1117,14 @@ class Template:
             bolometric luminosity.
     """
 
+    # Define Quantities
+    lam = Quantity()
+    lnu = Quantity()
+
     def __init__(
         self,
-        label="template",
-        filename=None,
-        lam=None,
-        lnu=None,
+        lam,
+        lnu,
         fesc=0.0,
         **kwargs,
     ):
@@ -1130,12 +1132,6 @@ class Template:
         Initialise the Template.
 
         Args:
-            label (str)
-                The label for the model.
-            filename (str)
-                The filename (including full path) to a file containing the
-                template. The file should contain two columns with wavelength
-                and luminosity (lnu).
             lam (array)
                 Wavelength array.
             lnu (array)
@@ -1146,32 +1142,18 @@ class Template:
 
         """
         # Ensure we have been given units
-        if lam is not None and not isinstance(lam, unyt_array):
+        if not isinstance(lam, unyt_array):
             raise exceptions.MissingUnits("lam must be provided with units")
-        if lnu is not None and not isinstance(lnu, unyt_array):
+        if not isinstance(lnu, unyt_array):
             raise exceptions.MissingUnits("lnu must be provided with units")
 
-        if filename:
-            raise exceptions.UnimplementedFunctionality(
-                "Not yet implemented! Feel free to implement and raise a "
-                "pull request. Guidance for contributing can be found at "
-                "https://github.com/flaresimulations/synthesizer/blob/main/"
-                "docs/CONTRIBUTING.md"
-            )
+        # Attach the template itself
+        self.lnu = lnu
+        self.lam = lam
 
-        if lam is not None and lnu is not None:
-            # initialise a synthesizer Sed object
-            self.sed = Sed(lam=lam, lnu=lnu)
-
-            # normalise
-            # TODO: add a method to Sed that does this.
-            self.normalisation = self.sed.measure_bolometric_luminosity()
-            self.sed.lnu /= self.normalisation.value
-
-        else:
-            raise exceptions.MissingArgument(
-                "Either a filename or both lam and lnu must be provided!"
-            )
+        # Normalise, just in case
+        self.normalisation = self.sed.measure_bolometric_luminosity()
+        self.lnu /= self.normalisation.value
 
         # Set the escape fraction
         self.fesc = fesc
@@ -1195,7 +1177,7 @@ class Template:
 
         return Sed(
             self.lam,
-            bolometric_luminosity.to(self.sed.lnu.units * Hz).value
-            * self.sed
+            bolometric_luminosity.to(self.lnu.units * Hz)
+            * self._lnu
             * (1 - self.fesc),
         )
