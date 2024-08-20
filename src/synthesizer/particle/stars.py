@@ -1635,8 +1635,9 @@ class Stars(Particles, StarsComponent):
             appropriate spectra attribute of the component
             (spectra/particle_spectra).
         """
+        previous_per_part = emission_model.per_particle
         emission_model.set_per_particle(True, set_all=True)
-        return self.get_spectra(
+        spectra = self.get_spectra(
             emission_model,
             dust_curves=dust_curves,
             tau_v=tau_v,
@@ -1645,6 +1646,8 @@ class Stars(Particles, StarsComponent):
             verbose=verbose,
             **kwargs,
         )
+        emission_model.set_per_particle(previous_per_part, set_all=True)
+        return spectra
 
     @deprecated(
         message="get_particle_lines is now just a wrapper "
@@ -1717,8 +1720,9 @@ class Stars(Particles, StarsComponent):
                 A LineCollection object containing the lines defined by the
                 root model.
         """
+        previous_per_part = emission_model.per_particle
         emission_model.set_per_particle(True, set_all=True)
-        return self.get_lines(
+        lines = self.get_lines(
             line_ids,
             emission_model,
             dust_curves=dust_curves,
@@ -1728,6 +1732,8 @@ class Stars(Particles, StarsComponent):
             verbose=verbose,
             **kwargs,
         )
+        emission_model.set_per_particle(previous_per_part, set_all=True)
+        return lines
 
 
 def sample_sfhz(
