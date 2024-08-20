@@ -461,6 +461,10 @@ class Stars(Particles, StarsComponent):
                 "The Grid does not contain the key '%s'" % spectra_name
             )
 
+        # If we have no stars just return zeros
+        if self.nstars == 0:
+            return np.zeros(len(grid.lam))
+
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
             # How many particles lie below the grid limits?
@@ -819,6 +823,20 @@ class Stars(Particles, StarsComponent):
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
+        # If we have no stars just return zeros
+        if self.nstars == 0:
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
+
         # Ensure and warn that the masking hasn't removed everything
         if mask is not None and np.sum(mask) == 0:
             warn("Age mask has filtered out all particles")
@@ -935,6 +953,10 @@ class Stars(Particles, StarsComponent):
             raise exceptions.MissingSpectraType(
                 f"The Grid does not contain the key '{spectra_name}'"
             )
+
+        # If we have no stars just return zeros
+        if self.nstars == 0:
+            return np.zeros((self.nstars, len(grid.lam)))
 
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
@@ -1090,6 +1112,20 @@ class Stars(Particles, StarsComponent):
         # Ensure line_id is a string
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
+
+        # If we have no stars just return zeros
+        if self.nstars == 0:
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
 
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:

@@ -229,6 +229,10 @@ class BlackHoles(Particles, BlackholesComponent):
                 If any arguments are incompatible or not as expected an error
                 is thrown.
         """
+        # Need an early exit if we have no black holes since any
+        # multidimensional  attributes will trigger the error below erroneously
+        if self.nbh == 0:
+            return
 
         # Ensure all arrays are the expected length
         for key in self.attrs:
@@ -627,6 +631,10 @@ class BlackHoles(Particles, BlackholesComponent):
                 f"The Grid does not contain the key '{spectra_name}'"
             )
 
+        # If we have no black holes return zeros
+        if self.nbh == 0:
+            return np.zeros((self.nbh, len(grid.lam)))
+
         from ..extensions.particle_spectra import compute_particle_seds
 
         # Prepare the arguments for the C function.
@@ -706,6 +714,20 @@ class BlackHoles(Particles, BlackholesComponent):
         # Ensure line_id is a string
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
+
+        # If we have no black holes return zeros
+        if self.nbh == 0:
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
 
         # Ensure and warn that the masking hasn't removed everything
         if mask is not None and np.sum(mask) == 0:
