@@ -808,9 +808,8 @@ class BaseGalaxy:
                 The combined spectra for the galaxy.
         """
         # Get the spectra
-        spectra = emission_model._get_spectra(
+        spectra, particle_spectra = emission_model._get_spectra(
             emitters={"stellar": self.stars, "blackhole": self.black_holes},
-            per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
             covering_fraction=covering_fraction,
@@ -834,6 +833,23 @@ class BaseGalaxy:
                 raise KeyError(
                     f"Unknown emitter in emission model. ({model.emitter})"
                 )
+
+            # If the model is particle based then we need to save the particle
+            # spectra
+            if model.per_particle:
+                if model.emitter == "stellar":
+                    self.stars.particle_spectra[model.label] = (
+                        particle_spectra[model.label]
+                    )
+                elif model.emitter == "blackhole":
+                    self.black_holes.particle_spectra[model.label] = (
+                        particle_spectra[model.label]
+                    )
+                else:
+                    raise KeyError(
+                        "Unknown emitter in per particle "
+                        f"emission model. ({model.emitter})"
+                    )
 
         return self.spectra[emission_model.label]
 
@@ -901,10 +917,9 @@ class BaseGalaxy:
                 The combined lines for the galaxy.
         """
         # Get the lines
-        lines = emission_model._get_lines(
+        lines, particle_lines = emission_model._get_lines(
             line_ids=line_ids,
             emitters={"stellar": self.stars, "blackhole": self.black_holes},
-            per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
             covering_fraction=covering_fraction,
@@ -928,6 +943,23 @@ class BaseGalaxy:
                 raise KeyError(
                     f"Unknown emitter in emission model. ({model.emitter})"
                 )
+
+            # If the model is particle based then we need to save the particle
+            # lines
+            if model.per_particle:
+                if model.emitter == "stellar":
+                    self.stars.particle_lines[model.label] = particle_lines[
+                        model.label
+                    ]
+                elif model.emitter == "blackhole":
+                    self.black_holes.particle_lines[model.label] = (
+                        particle_lines[model.label]
+                    )
+                else:
+                    raise KeyError(
+                        "Unknown emitter in per particle "
+                        f"emission model. ({model.emitter})"
+                    )
 
         return self.lines[emission_model.label]
 
