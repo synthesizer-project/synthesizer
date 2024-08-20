@@ -11,6 +11,7 @@ import numpy as np
 from unyt import Hz, erg, s
 
 from synthesizer import exceptions
+from synthesizer.grid import Template
 from synthesizer.line import Line
 from synthesizer.sed import Sed
 
@@ -282,7 +283,13 @@ class Generation:
         self._lum_attenuated_model = lum_attenuated_model
 
     def _generate_spectra(
-        self, this_model, emission_model, spectra, lam, per_particle
+        self,
+        this_model,
+        emission_model,
+        spectra,
+        lam,
+        per_particle,
+        emitter,
     ):
         """
         Generate the spectra for a given model.
@@ -298,6 +305,8 @@ class Generation:
                 The wavelength grid to generate the spectra on.
             per_particle (bool):
                 Are we generating per particle?
+            emitter (dict):
+                The emitter to generate the spectra for.
 
         Returns:
             dict:
@@ -322,6 +331,12 @@ class Generation:
             spectra[this_model.label] = generator.get_spectra(
                 lam,
                 spectra[this_model.lum_intrinsic_model.label],
+            )
+        elif isinstance(generator, Template):
+            # If we have a template we need to generate the spectra
+            # for each model
+            spectra[this_model.label] = generator.get_spectra(
+                emitter.bolometric_luminosity,
             )
 
         else:
