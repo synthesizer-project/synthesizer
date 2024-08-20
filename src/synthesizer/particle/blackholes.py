@@ -217,6 +217,8 @@ class BlackHoles(Particles, BlackholesComponent):
         # Set the smoothing lengths
         self.smoothing_lengths = smoothing_lengths
 
+        print(self)
+
         # Check the arguments we've been given
         self._check_bh_args()
 
@@ -239,7 +241,6 @@ class BlackHoles(Particles, BlackholesComponent):
             attr = getattr(self, key)
             if isinstance(attr, np.ndarray):
                 if attr.shape[0] != self.nparticles:
-                    print(key, attr.shape, self.nparticles)
                     raise exceptions.InconsistentArguments(
                         "Inconsistent black hole array sizes! (nparticles=%d, "
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
