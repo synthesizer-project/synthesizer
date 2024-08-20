@@ -2175,20 +2175,24 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             # tree
             for related_model in this_model.related_models:
                 if related_model.label not in spectra:
-                    spectra.update(
-                        related_model._get_spectra(
-                            emitters,
-                            dust_curves=dust_curves,
-                            tau_v=tau_v,
-                            fesc=fesc,
-                            mask=mask,
-                            verbose=verbose,
-                            spectra=spectra,
-                            particle_spectra=particle_spectra,
-                            _is_related=True,
-                            **kwargs,
-                        )
+                    (
+                        rel_spectra,
+                        rel_particle_spectra,
+                    ) = related_model._get_spectra(
+                        emitters,
+                        dust_curves=dust_curves,
+                        tau_v=tau_v,
+                        fesc=fesc,
+                        mask=mask,
+                        verbose=verbose,
+                        spectra=spectra,
+                        particle_spectra=particle_spectra,
+                        _is_related=True,
+                        **kwargs,
                     )
+
+                    spectra.update(rel_particle_spectra)
+                    particle_spectra.update(rel_particle_spectra)
 
             # Skip models for a different emitters
             if (
@@ -2470,21 +2474,22 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             # tree
             for related_model in this_model.related_models:
                 if related_model.label not in lines:
-                    lines.update(
-                        related_model._get_lines(
-                            line_ids,
-                            emitters,
-                            dust_curves=dust_curves,
-                            tau_v=tau_v,
-                            fesc=fesc,
-                            mask=mask,
-                            verbose=verbose,
-                            lines=lines,
-                            particle_lines=particle_lines,
-                            _is_related=True,
-                            **kwargs,
-                        )
+                    rel_lines, rel_particle_lines = related_model._get_lines(
+                        line_ids,
+                        emitters,
+                        dust_curves=dust_curves,
+                        tau_v=tau_v,
+                        fesc=fesc,
+                        mask=mask,
+                        verbose=verbose,
+                        lines=lines,
+                        particle_lines=particle_lines,
+                        _is_related=True,
+                        **kwargs,
                     )
+
+                    lines.update(rel_lines)
+                    particle_lines.update(rel_particle_lines)
 
             # Skip models for a different emitters
             if (
