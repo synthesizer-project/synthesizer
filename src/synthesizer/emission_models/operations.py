@@ -54,8 +54,8 @@ class Extraction:
         self,
         emission_model,
         emitters,
-        per_particle,
         spectra,
+        particle_spectra,
         verbose,
         **kwargs,
     ):
@@ -67,10 +67,10 @@ class Extraction:
                 The emission model to extract from.
             emitters (dict):
                 The emitters to extract the spectra for.
-            per_particle (bool):
-                Are we extracting per particle?
             spectra (dict):
                 The dictionary to store the extracted spectra in.
+            particle_spectra (dict):
+                The dictionary to store the extracted particle spectra in.
             verbose (bool):
                 Are we talking?
             kwargs (dict):
@@ -108,13 +108,13 @@ class Extraction:
                 setattr(emitter, prop, this_model.fixed_parameters[prop])
 
             # Get the generator function
-            if per_particle:
+            if this_model.per_particle:
                 generator_func = emitter.generate_particle_lnu
             else:
                 generator_func = emitter.generate_lnu
 
             # Get this base spectra
-            spectra[label] = Sed(
+            sed = Sed(
                 emission_model.lam,
                 generator_func(
                     this_model.grid,
@@ -128,19 +128,27 @@ class Extraction:
                 ),
             )
 
+            # Store the spectra in the right place (integrating if we
+            # need to)
+            if this_model.per_particle:
+                particle_spectra[label] = sed
+                spectra[label] = sed.sum()
+            else:
+                spectra[label] = sed
+
             # Replace any fixed parameters
             for prop in prev_properties:
                 setattr(emitter, prop, prev_properties[prop])
 
-        return spectra
+        return spectra, particle_spectra
 
     def _extract_lines(
         self,
         line_ids,
         emission_model,
         emitters,
-        per_particle,
         lines,
+        particle_lines,
         verbose,
         **kwargs,
     ):
@@ -158,6 +166,8 @@ class Extraction:
                 Are we generating lines per particle?
             lines (dict):
                 The dictionary to store the extracted lines in.
+            particle_lines (dict):
+                The dictionary to store the extracted particle lines in.
             verbose (bool):
                 Are we talking?
             kwargs (dict):
@@ -196,18 +206,18 @@ class Extraction:
                 setattr(emitter, prop, this_model.fixed_parameters[prop])
 
             # Get the generator function
-            if per_particle:
+            if this_model.per_particle:
                 generator_func = emitter.generate_particle_line
             else:
                 generator_func = emitter.generate_line
 
             # Initialise the lines dictionary for this label
-            lines[label] = {}
+            out_lines = {}
 
             # Loop over the line ids
             for line_id in line_ids:
                 # Get this base lines
-                lines[label][line_id] = generator_func(
+                out_lines[line_id] = generator_func(
                     grid=this_model.grid,
                     line_id=line_id,
                     line_type=this_model.extract,
@@ -219,11 +229,20 @@ class Extraction:
                     **kwargs,
                 )
 
+            # Store the lines in the right place (integrating if we need to)
+            if this_model.per_particle:
+                particle_lines[label] = out_lines
+                lines[label] = {
+                    line_id: line.sum() for line_id, line in out_lines.items()
+                }
+            else:
+                lines[label] = out_lines
+
             # Replace any fixed parameters
             for prop in prev_properties:
                 setattr(emitter, prop, prev_properties[prop])
 
-        return lines
+        return lines, particle_lines
 
     def _extract_summary(self):
         """Return a summary of an extraction model."""
@@ -287,8 +306,8 @@ class Generation:
         this_model,
         emission_model,
         spectra,
+        particle_spectra,
         lam,
-        per_particle,
         emitter,
     ):
         """
@@ -301,10 +320,10 @@ class Generation:
                 The root emission model.
             spectra (dict):
                 The dictionary of spectra.
+            particle_spectra (dict):
+                The dictionary of particle
             lam (ndarray):
                 The wavelength grid to generate the spectra on.
-            per_particle (bool):
-                Are we generating per particle?
             emitter (dict):
                 The emitter to generate the spectra for.
 
@@ -314,38 +333,57 @@ class Generation:
         """
         # Unpack what we need for dust emission
         generator = this_model.generator
+        per_particle = this_model.per_particle
 
         # Handle the dust emission case
         if this_model._is_dust_emitting:
-            intrinsic = spectra[this_model.lum_intrinsic_model.label]
-            attenuated = spectra[this_model.lum_attenuated_model.label]
+            # Get the right spectra
+            if per_particle:
+                intrinsic = particle_spectra[
+                    this_model.lum_intrinsic_model.label
+                ]
+                attenuated = particle_spectra[
+                    this_model.lum_attenuated_model.label
+                ]
+            else:
+                intrinsic = spectra[this_model.lum_intrinsic_model.label]
+                attenuated = spectra[this_model.lum_attenuated_model.label]
 
             # Apply the dust emission model
-            spectra[this_model.label] = generator.get_spectra(
+            sed = generator.get_spectra(
                 lam,
                 intrinsic,
                 attenuated,
             )
         elif this_model.lum_intrinsic_model is not None:
             # otherwise we are scaling by a single spectra
-            spectra[this_model.label] = generator.get_spectra(
+            sed = generator.get_spectra(
                 lam,
-                spectra[this_model.lum_intrinsic_model.label],
+                particle_spectra[this_model.lum_intrinsic_model.label]
+                if per_particle
+                else spectra[this_model.lum_intrinsic_model.label],
             )
         elif isinstance(generator, Template):
             # If we have a template we need to generate the spectra
             # for each model
-            spectra[this_model.label] = generator.get_spectra(
+            sed = generator.get_spectra(
                 emitter.bolometric_luminosity,
             )
 
         else:
             # Otherwise we have a bog standard generation
-            spectra[this_model.label] = generator.get_spectra(
+            sed = generator.get_spectra(
                 lam,
             )
 
-        return spectra
+        # Store the spectra in the right place (integrating if we need to)
+        if per_particle:
+            particle_spectra[this_model.label] = sed
+            spectra[this_model.label] = sed.sum()
+        else:
+            spectra[this_model.label] = sed
+
+        return spectra, particle_spectra
 
     def _generate_lines(
         self,
@@ -353,7 +391,7 @@ class Generation:
         this_model,
         emission_model,
         lines,
-        per_particle,
+        particle_lines,
         emitter,
     ):
         """
@@ -371,8 +409,8 @@ class Generation:
                 The root emission model.
             lines (dict):
                 The dictionary of lines.
-            per_particle (bool):
-                Are we generating lines per particle?
+            particle_lines (dict):
+                The dictionary of particle lines.
             emitter (Stars/BlackHoles/Galaxy):
                 The emitter to generate the lines for.
 
@@ -380,6 +418,9 @@ class Generation:
             dict:
                 The dictionary of lines.
         """
+        # Unpack what we need for dust emission
+        per_particle = this_model.per_particle
+
         # Do we already have the spectra?
         if per_particle and this_model.label in emitter.particle_spectra:
             spectra = emitter.particle_spectra[this_model.label]
@@ -393,7 +434,7 @@ class Generation:
 
         # Now we have the spectra we can get the emission at each line
         # and include it
-        lines[this_model.label] = {}
+        out_lines = {}
         for line_id in line_ids:
             # Get the emission at this lines wavelength
             lam = lines[this_model.lum_intrinsic_model.label][
@@ -404,14 +445,23 @@ class Generation:
             cont = spectra.get_lnu_at_lam(lam)
 
             # Create the line (luminoisty = continuum)
-            lines[this_model.label][line_id] = Line(
+            out_lines[line_id] = Line(
                 line_id=line_id,
                 wavelength=lam,
                 luminosity=0 * erg / s,
                 continuum=cont,
             )
 
-        return lines
+        # Store the lines in the right place (integrating if we need to)
+        if per_particle:
+            particle_lines[this_model.label] = out_lines
+            lines[this_model.label] = {
+                line_id: line.sum() for line_id, line in out_lines.items()
+            }
+        else:
+            lines[this_model.label] = out_lines
+
+        return lines, particle_lines
 
     def _generate_summary(self):
         """Return a summary of a generation model."""
@@ -482,6 +532,7 @@ class DustAttenuation:
         self,
         this_model,
         spectra,
+        particle_spectra,
         emitter,
         this_mask,
     ):
@@ -493,6 +544,8 @@ class DustAttenuation:
                 The model defining the dust attenuation.
             spectra (dict):
                 The dictionary of spectra.
+            particle_spectra (dict):
+                The dictionary of particle spectra.
             emitter (Stars/BlackHoles):
                 The emitter to dust attenuate the spectra for.
             this_mask (dict):
@@ -510,23 +563,34 @@ class DustAttenuation:
             tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
 
         # Get the spectra to apply dust to
-        apply_dust_to = spectra[this_model.apply_dust_to.label]
+        if this_model.per_particle:
+            apply_dust_to = particle_spectra[this_model.apply_dust_to.label]
+        else:
+            apply_dust_to = spectra[this_model.apply_dust_to.label]
 
         # Otherwise, we are applying a dust curve (there's no
         # alternative)
-        spectra[this_model.label] = apply_dust_to.apply_attenuation(
+        sed = apply_dust_to.apply_attenuation(
             tau_v,
             dust_curve=this_model.dust_curve,
             mask=this_mask,
         )
 
-        return spectra
+        # Store the spectra in the right place (integrating if we need to)
+        if this_model.per_particle:
+            particle_spectra[this_model.label] = sed
+            spectra[this_model.label] = sed.sum()
+        else:
+            spectra[this_model.label] = sed
+
+        return spectra, particle_spectra
 
     def _dust_attenuate_lines(
         self,
         line_ids,
         this_model,
         lines,
+        particle_lines,
         emitter,
         this_mask,
     ):
@@ -540,6 +604,8 @@ class DustAttenuation:
                 The model defining the dust attenuation.
             lines (dict):
                 The dictionary of lines.
+            particle_lines (dict):
+                The dictionary of particle lines.
             emitter (Stars/BlackHoles):
                 The emitter to dust attenuate the lines for.
             this_mask (dict):
@@ -557,24 +623,34 @@ class DustAttenuation:
             tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
 
         # Get the lines to apply dust to
-        apply_dust_to = lines[this_model.apply_dust_to.label]
+        if this_model.per_particle:
+            apply_dust_to = particle_lines[this_model.apply_dust_to.label]
+        else:
+            apply_dust_to = lines[this_model.apply_dust_to.label]
 
         # Create dictionary to hold the dust attenuated lines
-        lines[this_model.label] = {}
+        out_lines = {}
 
         # Loop over the line ids
         for line_id in line_ids:
             # Otherwise, we are applying a dust curve (there's no
             # alternative)
-            lines[this_model.label][line_id] = apply_dust_to[
-                line_id
-            ].apply_attenuation(
+            out_lines[line_id] = apply_dust_to[line_id].apply_attenuation(
                 tau_v,
                 dust_curve=this_model.dust_curve,
                 mask=this_mask,
             )
 
-        return lines
+        # Store the lines in the right place (integrating if we need to)
+        if this_model.per_particle:
+            particle_lines[this_model.label] = out_lines
+            lines[this_model.label] = {
+                line_id: line.sum() for line_id, line in out_lines.items()
+            }
+        else:
+            lines[this_model.label] = out_lines
+
+        return lines, particle_lines
 
     def _attenuate_summary(self):
         """Return a summary of a dust attenuation model."""
@@ -610,7 +686,13 @@ class Combination:
         # Attach the models to combine
         self._combine = list(combine) if combine is not None else combine
 
-    def _combine_spectra(self, emission_model, spectra, this_model):
+    def _combine_spectra(
+        self,
+        emission_model,
+        spectra,
+        particle_spectra,
+        this_model,
+    ):
         """
         Combine the extracted spectra.
 
@@ -620,6 +702,8 @@ class Combination:
                 wavelength grid.
             spectra (dict):
                 The dictionary of spectra.
+            particle_spectra (dict):
+                The dictionary of particle spectra.
             this_model (EmissionModel):
                 The model defining the combination.
 
@@ -628,18 +712,40 @@ class Combination:
                 The dictionary of spectra.
         """
         # Create an empty spectra to add to
-        spectra[this_model.label] = Sed(
-            emission_model.lam,
-            lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
-        )
+        if this_model.per_particle:
+            particle_spectra[this_model.label] = Sed(
+                emission_model.lam,
+                lnu=np.zeros_like(
+                    particle_spectra[this_model.combine[0].label]._lnu
+                ),
+            )
+        else:
+            spectra[this_model.label] = Sed(
+                emission_model.lam,
+                lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
+            )
 
         # Combine the spectra
         for combine_model in this_model.combine:
-            spectra[this_model.label]._lnu += spectra[combine_model.label]._lnu
+            if this_model.per_particle:
+                particle_spectra[this_model.label]._lnu += particle_spectra[
+                    combine_model.label
+                ]._lnu
+            else:
+                spectra[this_model.label]._lnu += spectra[
+                    combine_model.label
+                ]._lnu
 
-        return spectra
+        return spectra, particle_spectra
 
-    def _combine_lines(self, line_ids, emission_model, lines, this_model):
+    def _combine_lines(
+        self,
+        line_ids,
+        emission_model,
+        lines,
+        particle_lines,
+        this_model,
+    ):
         """
         Combine the extracted lines.
 
@@ -651,6 +757,8 @@ class Combination:
                 wavelength grid.
             lines (dict):
                 The dictionary of lines.
+            particle_lines (dict):
+                The dictionary of particle lines.
             this_model (EmissionModel):
                 The model defining the combination.
 
@@ -658,8 +766,14 @@ class Combination:
             dict:
                 The dictionary of lines.
         """
-        # Create dictionary to hold the combined lines
-        lines[this_model.label] = {}
+        # Get the right out lines dict and create the right entry
+        out_lines = {}
+
+        # Get the right exist lines dict
+        if this_model.per_particle:
+            in_lines = particle_lines
+        else:
+            in_lines = lines
 
         # Loop over lines copying over the first set of lines
         for line_id in line_ids:
@@ -668,22 +782,31 @@ class Combination:
             cont = 0
 
             # Get the wavelength of the line
-            lam = lines[this_model.combine[0].label][line_id].wavelength
+            lam = in_lines[this_model.combine[0].label][line_id].wavelength
 
             # Combine the lines
             for combine_model in this_model.combine:
-                lum += lines[combine_model.label][line_id]._luminosity
-                cont += lines[combine_model.label][line_id]._continuum
+                lum += in_lines[combine_model.label][line_id]._luminosity
+                cont += in_lines[combine_model.label][line_id]._continuum
 
             # Add the line to the dictionary
-            lines[this_model.label][line_id] = Line(
+            out_lines[line_id] = Line(
                 line_id=line_id,
                 wavelength=lam,
                 luminosity=lum * erg / s,
                 continuum=cont * erg / s / Hz,
             )
 
-        return lines
+        # Store the lines in the right place (integrating if we need to)
+        if this_model.per_particle:
+            particle_lines[this_model.label] = out_lines
+            lines[this_model.label] = {
+                line_id: line.sum() for line_id, line in out_lines.items()
+            }
+        else:
+            lines[this_model.label] = out_lines
+
+        return lines, particle_lines
 
     def _combine_summary(self):
         """Return a summary of a combination model."""
