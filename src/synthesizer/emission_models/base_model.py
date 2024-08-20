@@ -2591,3 +2591,9 @@ class GalaxyEmissionModel(EmissionModel):
             raise exceptions.InconsistentArguments(
                 "A GalaxyEmissionModel cannot be an extraction model."
             )
+
+        # Ensure we aren't trying to make a per particle galaxy emission
+        if self.per_particle:
+            raise exceptions.InconsistentArguments(
+                "A GalaxyEmissionModel cannot be a per particle model."
+            )
