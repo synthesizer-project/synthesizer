@@ -2319,7 +2319,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     if model.per_particle and model.label in particle_spectra:
                         del particle_spectra[model.label]
 
-        return spectra
+        return spectra, particle_spectra
 
     def _get_lines(
         self,
@@ -2589,7 +2589,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     if model.per_particle and model.label in particle_lines:
                         del particle_lines[model.label]
 
-        return lines
+        return lines, particle_lines
 
 
 class StellarEmissionModel(EmissionModel):
