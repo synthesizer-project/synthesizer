@@ -256,6 +256,13 @@ class Image:
             self.units = signal.units
             signal = signal.value
 
+        # Return an empty image if there are no particles
+        if signal.size == 0:
+            self.arr = np.zeros(self.npix)
+            return (
+                self.arr * self.units if self.units is not None else self.arr
+            )
+
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
         coordinates = coordinates.to(self.resolution.units).value
@@ -356,6 +363,13 @@ class Image:
             # Multiply the density grid by the sed to get the IFU
             self.arr = density_grid[:, :] * signal
 
+            return (
+                self.arr * self.units if self.units is not None else self.arr
+            )
+
+        # Return an empty image if there are no particles
+        if signal.size == 0:
+            self.arr = np.zeros(self.npix)
             return (
                 self.arr * self.units if self.units is not None else self.arr
             )
