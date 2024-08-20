@@ -353,7 +353,7 @@ class BlackholesComponent:
 
         # If we have have 0 particles (regardless of mask) just return an
         # array of zeros
-        if self.nbh == 0:
+        if hasattr(self, "nbh") and self.nbh == 0:
             return np.zeros(len(grid.lam))
 
         # If the mask is False (parametric case) or contains only
@@ -435,7 +435,7 @@ class BlackholesComponent:
 
         # If we have have 0 particles (regardless of mask) just return a line
         # containing zeros
-        if self.nbh == 0:
+        if hasattr(self, "nbh") and self.nbh == 0:
             return Line(
                 *[
                     Line(
