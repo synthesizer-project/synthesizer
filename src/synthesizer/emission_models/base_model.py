@@ -106,6 +106,49 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             A dictionary of component attributes/parameters which should be
             fixed and thus ignore the value of the component attribute. This
             should take the form {<parameter_name>: <value>}.
+        emitter (str):
+            The emitter this emission model acts on. Default is "stellar".
+        apply_dust_to (EmissionModel):
+            The model to apply the dust curve to.
+        dust_curve (emission_models.attenuation.*):
+            The dust curve to apply.
+        tau_v (float/ndarray/str/tuple):
+            The optical depth to apply. Can be a float, ndarray, or a string
+            to a component attribute. Can also be a tuple combining any of
+            these.
+        generator (EmissionModel):
+            The emission generation model. This must define a get_spectra
+            method.
+        lum_intrinsic_model (EmissionModel):
+            The intrinsic model to use deriving the dust luminosity when
+            computing dust emission.
+        lum_attenuated_model (EmissionModel):
+            The attenuated model to use deriving the dust luminosity when
+            computing dust emission.
+        mask_attr (str):
+            The component attribute to mask on.
+        mask_thresh (unyt_quantity):
+            The threshold for the mask.
+        mask_op (str):
+            The operation to apply. Can be "<", ">", "<=", ">=", "==", or "!=".
+        fesc (float):
+            The escape fraction.
+        scale_by (list):
+            A list of attributes to scale the spectra by.
+        post_processing (list):
+            A list of post processing functions to apply to the emission after
+            it has been generated. Each function must take a dict containing
+            the spectra/lines, the emitters, and the emission model, and return
+            the same dict with the post processing applied.
+        save (bool):
+            A flag for whether the emission produced by this model should be
+            "saved", i.e. attached to the emitter. If False, the emission will
+            be discarded after it has been used. Default is True.
+        per_particle (bool):
+            A flag for whether the emission produced by this model should be
+            "per particle". If True, the spectra and lines will be stored per
+            particle. Integrated spectra are made automatically by summing the
+            per particle spectra. Default is False.
     """
 
     # Define quantities
@@ -133,6 +176,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         scale_by=None,
         post_processing=(),
         save=True,
+        per_particle=False,
         **kwargs,
     ):
         """
@@ -215,6 +259,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 be "saved", i.e. attached to the emitter. If False, the
                 emission will be discarded after it has been used. Default is
                 True.
+            per_particle (bool):
+                A flag for whether the emission produced by this model should
+                be "per particle". If True, the spectra and lines will be
+                stored per particle. Integrated spectra are made automatically
+                by summing the per particle spectra. Default is False.
             **kwargs:
                 Any additional keyword arguments to store. These can be used
                 to store additional information needed by the model.
@@ -238,6 +287,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         # Attach which emitter we are working with
         self._emitter = emitter
+
+        # Are we making per particle emission?
+        self._per_particle = per_particle
 
         # Define the container which will hold mask information
         self.masks = []
@@ -920,6 +972,31 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         else:
             for model in self._models.values():
                 model.set_emitter(emitter)
+
+        # Unpack the model now we're done
+        self.unpack_model()
+
+    @property
+    def per_particle(self):
+        """Get the per particle flag."""
+        return self._per_particle
+
+    def set_per_particle(self, per_particle, set_all=False):
+        """
+        Set the per particle flag.
+
+        Args:
+            per_particle (bool):
+                Whether to set the per particle flag.
+            set_all (bool):
+                Whether to set the per particle flag on all models.
+        """
+        # Set the per particle flag
+        if not set_all:
+            self._per_particle = per_particle
+        else:
+            for model in self._models.values():
+                model.set_per_particle(per_particle)
 
         # Unpack the model now we're done
         self.unpack_model()
@@ -1939,7 +2016,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
     def _get_spectra(
         self,
         emitters,
-        per_particle,
         dust_curves=None,
         tau_v=None,
         fesc=None,
@@ -1961,8 +2037,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             emitters (Stars/BlackHoles):
                 The emitters to generate the spectra for in the form of a
                 dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
-            per_particle (bool):
-                Are we generating per particle?
             dust_curves (dict):
                 An overide to the emisison model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
@@ -2072,7 +2146,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         spectra = self._extract_spectra(
             emission_model,
             emitters,
-            per_particle,
             spectra,
             verbose,
             **kwargs,
@@ -2091,7 +2164,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     spectra.update(
                         related_model._get_spectra(
                             emitters,
-                            per_particle,
                             dust_curves=dust_curves,
                             tau_v=tau_v,
                             fesc=fesc,
@@ -2144,7 +2216,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     emission_model,
                     spectra,
                     self.lam,
-                    per_particle,
                     emitter,
                 )
 
@@ -2220,7 +2291,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         self,
         line_ids,
         emitters,
-        per_particle,
         dust_curves=None,
         tau_v=None,
         fesc=None,
@@ -2244,8 +2314,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             emitters (Stars/BlackHoles):
                 The emitters to generate the lines for in the form of a
                 dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
-            per_particle (bool):
-                Are we generating lines per particle?
             dust_curves (dict):
                 An overide to the emisison model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
@@ -2346,7 +2414,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             line_ids,
             emission_model,
             emitters,
-            per_particle,
             lines,
             verbose,
             **kwargs,
@@ -2366,7 +2433,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         related_model._get_lines(
                             line_ids,
                             emitters,
-                            per_particle,
                             dust_curves=dust_curves,
                             tau_v=tau_v,
                             fesc=fesc,
@@ -2421,7 +2487,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     this_model,
                     emission_model,
                     lines,
-                    per_particle,
                     emitter,
                 )
 
