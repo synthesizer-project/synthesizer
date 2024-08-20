@@ -753,21 +753,26 @@ class Galaxy(BaseGalaxy):
         self, stellar_mass_weighted_age=None, ism_metallicity=None
     ):
         """
-        Fitting function for the dust-to-metals ratio based on
+        Calculate the dust to metal ratio based on stellar age and metallicity.
+
+        This uses a fitting function for the dust-to-metals ratio based on
         galaxy properties, from L-GALAXIES dust modeling.
 
         Vijayan+19: https://arxiv.org/abs/1904.02196
+
+        Note this will recalculate the dust masses based on the new dust-to-
+        metal ratio.
 
         Args:
             stellar_mass_weighted_age (float)
                 Mass weighted age of stars in Myr. Defaults to None,
                 and uses value provided on this galaxy object (in Gyr)
-                ism_metallicity (float)
+            ism_metallicity (float)
                 Mass weighted gas-phase metallicity. Defaults to None,
                 and uses value provided on this galaxy object
                 (dimensionless)
         """
-
+        # Ensure we have what we need for the calculation
         if stellar_mass_weighted_age is None:
             if self.stellar_mass_weighted_age is None:
                 raise ValueError("No stellar_mass_weighted_age provided")
@@ -799,6 +804,13 @@ class Galaxy(BaseGalaxy):
 
         # Save under gas properties
         self.gas.dust_to_metal_ratio = dtm
+
+        # We need to recalculate the dust masses so things don't end up
+        # inconsistent (dust_masses are automatically calculated at
+        # intialisation). If the user handed dust masses and then called this
+        # function, they will be overwritten and it will be confusing but
+        # that's so unlikely and they'll work out when they see this comment.
+        self.gas.dust_masses = self.gas.masses * self.gas.dust_to_metal_ratio
 
         return dtm
 
