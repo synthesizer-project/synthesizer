@@ -1117,61 +1117,55 @@ class Template:
             bolometric luminosity.
     """
 
+    # Define Quantities
+    lam = Quantity()
+    lnu = Quantity()
+
     def __init__(
         self,
-        label="template",
-        filename=None,
-        lam=None,
-        lnu=None,
+        lam,
+        lnu,
         fesc=0.0,
+        unify_with_grid=None,
         **kwargs,
     ):
         """
         Initialise the Template.
 
         Args:
-            label (str)
-                The label for the model.
-            filename (str)
-                The filename (including full path) to a file containing the
-                template. The file should contain two columns with wavelength
-                and luminosity (lnu).
             lam (array)
                 Wavelength array.
             lnu (array)
                 Luminosity array.
             fesc (float)
                 The escape fraction of the AGN.
+            unify_with_grid (Grid)
+                A grid object to unify the template with. This will ensure
+                the template has the same wavelength array as the grid.
             **kwargs
 
         """
         # Ensure we have been given units
-        if lam is not None and not isinstance(lam, unyt_array):
+        if not isinstance(lam, unyt_array):
             raise exceptions.MissingUnits("lam must be provided with units")
-        if lnu is not None and not isinstance(lnu, unyt_array):
+        if not isinstance(lnu, unyt_array):
             raise exceptions.MissingUnits("lnu must be provided with units")
 
-        if filename:
-            raise exceptions.UnimplementedFunctionality(
-                "Not yet implemented! Feel free to implement and raise a "
-                "pull request. Guidance for contributing can be found at "
-                "https://github.com/flaresimulations/synthesizer/blob/main/"
-                "docs/CONTRIBUTING.md"
-            )
+        # It's convenient to have an sed object for the next steps
+        sed = Sed(lam, lnu)
 
-        if lam is not None and lnu is not None:
-            # initialise a synthesizer Sed object
-            self.sed = Sed(lam=lam, lnu=lnu)
+        # Before we do anything, do we have a grid we need to unify with?
+        if unify_with_grid is not None:
+            # Interpolate the template Sed onto the grid wavelength array
+            sed = sed.get_resampled_sed(new_lam=unify_with_grid.lam)
 
-            # normalise
-            # TODO: add a method to Sed that does this.
-            self.normalisation = self.sed.measure_bolometric_luminosity()
-            self.sed.lnu /= self.normalisation.value
+        # Attach the template now we've done the interpolation (if needed)
+        self.lnu = sed.lnu
+        self.lam = sed.lam
 
-        else:
-            raise exceptions.MissingArgument(
-                "Either a filename or both lam and lnu must be provided!"
-            )
+        # Normalise, just in case
+        self.normalisation = sed.measure_bolometric_luminosity()
+        self.lnu /= self.normalisation.value
 
         # Set the escape fraction
         self.fesc = fesc
@@ -1193,8 +1187,20 @@ class Template:
                 "bolometric luminosity must be provided with units"
             )
 
-        return (
-            bolometric_luminosity.to(self.sed.lnu.units * Hz).value
-            * self.sed
-            * (1 - self.fesc)
-        )
+        # Handle the dimensions of the bolometric luminosity
+        if bolometric_luminosity.shape[0] == 1:
+            sed = Sed(
+                self.lam,
+                bolometric_luminosity.to(self.lnu.units * Hz).value
+                * self.lnu
+                * (1 - self.fesc),
+            )
+        else:
+            sed = Sed(
+                self.lam,
+                bolometric_luminosity.to(self.lnu.units * Hz).value[:, None]
+                * self.lnu
+                * (1 - self.fesc),
+            )
+
+        return sed

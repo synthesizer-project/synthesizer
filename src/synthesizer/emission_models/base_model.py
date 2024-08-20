@@ -2145,6 +2145,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     spectra,
                     self.lam,
                     per_particle,
+                    emitter,
                 )
 
             # Are we scaling the spectra?
