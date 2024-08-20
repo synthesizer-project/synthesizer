@@ -2574,7 +2574,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 # conversion
                 if isinstance(lines[label], dict):
                     lines[label] = LineCollection(lines[label])
-                if isinstance(particle_lines[label], dict):
+                if this_model.per_particle and isinstance(
+                    particle_lines[label], dict
+                ):
                     particle_lines[label] = LineCollection(
                         particle_lines[label]
                     )
