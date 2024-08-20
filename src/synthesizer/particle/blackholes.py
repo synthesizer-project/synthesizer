@@ -168,7 +168,7 @@ class BlackHoles(Particles, BlackholesComponent):
             masses=masses,
             redshift=redshift,
             softening_length=softening_length,
-            nparticles=masses.size,
+            nparticles=masses.shape[0],
             centre=centre,
             tau_v=tau_v,
             name="Black Holes",

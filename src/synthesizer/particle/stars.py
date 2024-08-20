@@ -177,7 +177,7 @@ class Stars(Particles, StarsComponent):
             masses=current_masses,
             redshift=redshift,
             softening_length=softening_length,
-            nparticles=len(initial_masses),
+            nparticles=initial_masses.shape[0],
             centre=centre,
             metallicity_floor=metallicity_floor,
             tau_v=tau_v,
