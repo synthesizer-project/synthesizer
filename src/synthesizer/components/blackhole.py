@@ -822,9 +822,8 @@ class BlackholesComponent:
                 (spectra/particle_spectra)
         """
         # Get the spectra
-        spectra = emission_model._get_spectra(
+        spectra, particle_spectra = emission_model._get_spectra(
             emitters={"blackhole": self},
-            per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=covering_fraction,
@@ -835,6 +834,11 @@ class BlackholesComponent:
 
         # Update the spectra dictionary
         self.spectra.update(spectra)
+
+        # If we have particle spectra update the particle_spectra dictionary
+        # too
+        if hasattr(self, "particle_spectra"):
+            self.particle_spectra.update(particle_spectra)
 
         return self.spectra[emission_model.label]
 
@@ -903,10 +907,9 @@ class BlackholesComponent:
                 root model.
         """
         # Get the lines
-        lines = emission_model._get_lines(
+        lines, particle_lines = emission_model._get_lines(
             line_ids=line_ids,
             emitters={"blackhole": self},
-            per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=covering_fraction,
@@ -917,6 +920,10 @@ class BlackholesComponent:
 
         # Update the lines dictionary
         self.lines.update(lines)
+
+        # Update the particle lines dictionary if it exists
+        if hasattr(self, "particle_lines"):
+            self.particle_lines.update(particle_lines)
 
         return self.lines[emission_model.label]
 
