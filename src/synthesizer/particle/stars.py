@@ -1635,6 +1635,7 @@ class Stars(Particles, StarsComponent):
             appropriate spectra attribute of the component
             (spectra/particle_spectra).
         """
+        emission_model.set_per_particle(True, set_all=True)
         return self.get_spectra(
             emission_model,
             dust_curves=dust_curves,
@@ -1716,6 +1717,7 @@ class Stars(Particles, StarsComponent):
                 A LineCollection object containing the lines defined by the
                 root model.
         """
+        emission_model.set_per_particle(True, set_all=True)
         return self.get_lines(
             line_ids,
             emission_model,

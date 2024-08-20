@@ -398,6 +398,9 @@ class StarsComponent:
         if hasattr(self, "particle_spectra"):
             self.particle_spectra.update(particle_spectra)
 
+        # Return the spectra the user wants
+        if emission_model.per_particle:
+            return self.particle_spectra[emission_model.label]
         return self.spectra[emission_model.label]
 
     def get_lines(
@@ -483,6 +486,9 @@ class StarsComponent:
         if hasattr(self, "particle_lines"):
             self.particle_lines.update(particle_lines)
 
+        # Return the lines the user wants
+        if emission_model.per_particle:
+            return self.particle_lines[emission_model.label]
         return self.lines[emission_model.label]
 
     def clear_all_spectra(self):
