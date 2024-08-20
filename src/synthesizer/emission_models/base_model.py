@@ -225,6 +225,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Attach the wavelength array and store it on the model
         if grid is not None:
             self.lam = grid.lam
+        elif generator is not None and hasattr(generator, "lam"):
+            self.lam = generator.lam
         else:
             self.lam = None
 

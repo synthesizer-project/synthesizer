@@ -319,7 +319,7 @@ class Generation:
         # when nparticles exists in the emitter)
         if getattr(emitter, "nparticles", 1) == 0:
             spectra[this_model.label] = Sed(
-                lam, np.zeros(emitter.nparticles, lam.size)
+                lam, np.zeros(emitter.nparticles, emission_model.lam.size)
             )
             return spectra
 
