@@ -840,6 +840,7 @@ class BlackHoles(Particles, BlackholesComponent):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
+        emission_model.set_per_particle(True, set_all=True)
         return self.get_spectra(
             emission_model=emission_model,
             dust_curves=dust_curves,
@@ -918,6 +919,7 @@ class BlackHoles(Particles, BlackholesComponent):
                 A LineCollection object containing the lines defined by the
                 root model.
         """
+        emission_model.set_per_particle(True, set_all=True)
         return self.get_lines(
             line_ids=line_ids,
             emission_model=emission_model,
