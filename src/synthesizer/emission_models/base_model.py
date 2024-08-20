@@ -581,6 +581,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             # Report if the resulting emission will be saved
             parts.append(f"  Save emission: {model._save}")
 
+            # Report if the resulting emission will be per particle
+            if model._per_particle:
+                parts.append("  Per particle emission: True")
+
             # Print any fixed parameters if there are any
             if len(model.fixed_parameters) > 0:
                 parts.append("  Fixed parameters:")
