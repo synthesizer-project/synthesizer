@@ -36,7 +36,7 @@ from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.plt import single_histxy
-from synthesizer.warnings import warn
+from synthesizer.warnings import deprecated, warn
 
 
 class Stars(Particles, StarsComponent):
@@ -1568,6 +1568,10 @@ class Stars(Particles, StarsComponent):
 
         return fig, ax
 
+    @deprecated(
+        message="get_particle_spectra is now just a wrapper "
+        "around get_spectra. It will be removed by v1.0.0."
+    )
     def get_particle_spectra(
         self,
         emission_model,
@@ -1580,6 +1584,9 @@ class Stars(Particles, StarsComponent):
     ):
         """
         Generate stellar spectra as described by the emission model.
+
+        Note: Now deprecated in favour of get_spectra and emission models
+        knowing which spectra should be per particle.
 
         Args:
             emission_model (EmissionModel):
@@ -1628,10 +1635,8 @@ class Stars(Particles, StarsComponent):
             appropriate spectra attribute of the component
             (spectra/particle_spectra).
         """
-        # Get the spectra
-        spectra = emission_model._get_spectra(
-            emitters={"stellar": self},
-            per_particle=True,
+        return self.get_spectra(
+            emission_model,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=fesc,
@@ -1640,11 +1645,10 @@ class Stars(Particles, StarsComponent):
             **kwargs,
         )
 
-        # Update the spectra dictionary
-        self.particle_spectra.update(spectra)
-
-        return self.particle_spectra[emission_model.label]
-
+    @deprecated(
+        message="get_particle_lines is now just a wrapper "
+        "around get_lines. It will be removed by v1.0.0."
+    )
     def get_particle_lines(
         self,
         line_ids,
@@ -1658,6 +1662,9 @@ class Stars(Particles, StarsComponent):
     ):
         """
         Generate stellar lines as described by the emission model.
+
+        Note: Now deprecated in favour of get_lines and emission models
+        knowing which lines should be per particle.
 
         Args:
             line_ids (list):
@@ -1709,11 +1716,9 @@ class Stars(Particles, StarsComponent):
                 A LineCollection object containing the lines defined by the
                 root model.
         """
-        # Get the lines
-        lines = emission_model._get_lines(
-            line_ids=line_ids,
-            emitters={"stellar": self},
-            per_particle=True,
+        return self.get_lines(
+            line_ids,
+            emission_model,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=fesc,
@@ -1721,11 +1726,6 @@ class Stars(Particles, StarsComponent):
             verbose=verbose,
             **kwargs,
         )
-
-        # Update the lines dictionary
-        self.particle_lines.update(lines)
-
-        return self.particle_lines[emission_model.label]
 
 
 def sample_sfhz(
