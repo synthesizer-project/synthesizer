@@ -131,7 +131,7 @@ class Gas(Particles):
             masses=masses,
             redshift=redshift,
             softening_length=softening_length,
-            nparticles=len(masses),
+            nparticles=masses.shape[0],
             centre=centre,
             metallicity_floor=metallicity_floor,
             tau_v=tau_v,
