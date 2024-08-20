@@ -217,8 +217,6 @@ class BlackHoles(Particles, BlackholesComponent):
         # Set the smoothing lengths
         self.smoothing_lengths = smoothing_lengths
 
-        print(self)
-
         # Check the arguments we've been given
         self._check_bh_args()
 
