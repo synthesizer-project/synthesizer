@@ -726,6 +726,14 @@ class Particles:
             compute_column_density,
         )
 
+        # If have no particles return 0
+        if self.nparticles == 0:
+            return np.zeros(self.nparticles)
+
+        # If the other particles have no particles return 0
+        if other_parts.nparticles == 0:
+            return np.zeros(self.nparticles)
+
         # If we don't have a mask make a fake one for consistency
         if mask is None:
             mask = np.ones(self.nparticles, dtype=bool)
