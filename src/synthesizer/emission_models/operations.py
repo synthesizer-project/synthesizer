@@ -315,6 +315,14 @@ class Generation:
         # Unpack what we need for dust emission
         generator = this_model.generator
 
+        # If we have an empty emitter we can just return zeros (only applicable
+        # when nparticles exists in the emitter)
+        if getattr(emitter, "nparticles", 1) == 0:
+            spectra[this_model.label] = Sed(
+                lam, np.zeros(emitter.nparticles, lam.size)
+            )
+            return spectra
+
         # Handle the dust emission case
         if this_model._is_dust_emitting:
             intrinsic = spectra[this_model.lum_intrinsic_model.label]
@@ -390,6 +398,24 @@ class Generation:
                 "To generate a line using a generator the corresponding "
                 "spectra must be generated first."
             )
+
+        # If the emitter is empty we can just return zeros. This is only
+        # applicable when nparticles exists in the emitter
+        if getattr(emitter, "nparticles", 1) == 0:
+            lines[this_model.label] = {}
+            for line_id in line_ids:
+                # Get the emission at this lines wavelength
+                lam = lines[this_model.lum_intrinsic_model.label][
+                    line_id
+                ].wavelength
+
+                lines[this_model.label][line_id] = Line(
+                    line_id=line_id,
+                    wavelength=lam * Hz,
+                    luminosity=np.zeros(emitter.nparticles),
+                    continuum=np.zeros(emitter.nparticles),
+                )
+            return lines
 
         # Now we have the spectra we can get the emission at each line
         # and include it
