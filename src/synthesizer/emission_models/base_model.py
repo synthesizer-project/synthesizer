@@ -1000,6 +1000,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             self._per_particle = per_particle
         else:
             for model in self._models.values():
+                # Galaxy models are never per particle by definition
+                if model.emitter == "galaxy":
+                    continue
                 model.set_per_particle(per_particle)
 
         # Unpack the model now we're done
