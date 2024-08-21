@@ -133,6 +133,12 @@ class Extraction:
             if this_model.per_particle:
                 particle_spectra[label] = sed
                 spectra[label] = sed.sum()
+                print(
+                    "Extracting:",
+                    label,
+                    spectra[label].shape,
+                    particle_spectra[label].shape,
+                )
             else:
                 spectra[label] = sed
 
@@ -338,11 +344,11 @@ class Generation:
         # If we have an empty emitter we can just return zeros (only applicable
         # when nparticles exists in the emitter)
         if getattr(emitter, "nparticles", 1) == 0:
-            spectra[this_model.label] = Sed(
-                lam, np.zeros((emitter.nparticles, lam.size))
-            )
+            spectra[this_model.label] = Sed(lam, np.zeros(lam.size))
             if per_particle:
-                particle_spectra[this_model.label] = spectra[this_model.label]
+                particle_spectra[this_model.label] = spectra[this_model.label][
+                    None, :
+                ]
             return spectra, particle_spectra
 
         # Handle the dust emission case
