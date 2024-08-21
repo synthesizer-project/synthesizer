@@ -118,8 +118,8 @@ def image_strong_scaling(
     print(gal.stars.radii.max())
 
     # Calculate the stellar rest frame SEDs for all particles in erg / s / Hz
-    model = IncidentEmission(grid)
-    sed = gal.stars.get_particle_spectra(model)
+    model = IncidentEmission(grid, per_particle=True)
+    sed = gal.stars.get_spectra(model)
 
     # Calculate the observed SED in nJy
     sed.get_fnu(cosmo, gal.redshift, igm=None)

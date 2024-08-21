@@ -96,7 +96,7 @@ dependencies = [
 [project.optional-dependencies]
 # Development
 dev = [
-    "ruff>=0.3.0",
+    "ruff==0.6.0",
 ]
 # Testing
 test = [
