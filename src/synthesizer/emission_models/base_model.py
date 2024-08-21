@@ -2388,6 +2388,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     if model.per_particle and model.label in particle_spectra:
                         del particle_spectra[model.label]
 
+        for key, spec in spectra.items():
+            print(spec.shape, particle_spectra[key].shape)
+
         return spectra, particle_spectra
 
     def _get_lines(
