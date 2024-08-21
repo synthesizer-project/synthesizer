@@ -133,12 +133,6 @@ class Extraction:
             if this_model.per_particle:
                 particle_spectra[label] = sed
                 spectra[label] = sed.sum()
-                print(
-                    "Extracting:",
-                    label,
-                    spectra[label].shape,
-                    particle_spectra[label].shape,
-                )
             else:
                 spectra[label] = sed
 
@@ -396,12 +390,6 @@ class Generation:
         if per_particle:
             particle_spectra[this_model.label] = sed
             spectra[this_model.label] = sed.sum()
-            print(
-                "Generating:",
-                this_model.label,
-                spectra[this_model.label].shape,
-                particle_spectra[this_model.label].shape,
-            )
         else:
             spectra[this_model.label] = sed
 
@@ -626,13 +614,6 @@ class DustAttenuation:
         if this_model.per_particle:
             particle_spectra[this_model.label] = sed
             spectra[this_model.label] = sed.sum()
-            print(
-                "Dust attenuating:",
-                this_model.label,
-                spectra[this_model.label].shape,
-                particle_spectra[this_model.label].shape,
-                apply_dust_to.shape,
-            )
         else:
             spectra[this_model.label] = sed
 
@@ -777,24 +758,6 @@ class Combination:
                 emission_model.lam,
                 lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
             )
-            print(
-                "Not a per particle model",
-                out_spec.shape,
-                spectra[this_model.combine[0].label]._lnu,
-            )
-
-        print(
-            "Combining:",
-            this_model.label,
-            out_spec.shape,
-            this_model.emitter,
-            [
-                this_model.combine[i].label
-                for i in range(len(this_model.combine))
-            ],
-            spectra[this_model.combine[0].label].shape,
-            this_model.per_particle,
-        )
 
         # Combine the spectra
         for combine_model in this_model.combine:
@@ -807,12 +770,6 @@ class Combination:
         if this_model.per_particle:
             particle_spectra[this_model.label] = out_spec
             spectra[this_model.label] = out_spec.sum()
-            print(
-                "Combining:",
-                this_model.label,
-                spectra[this_model.label].shape,
-                particle_spectra[this_model.label].shape,
-            )
         else:
             spectra[this_model.label] = out_spec
 
