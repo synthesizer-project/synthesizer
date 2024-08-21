@@ -351,6 +351,11 @@ class BlackholesComponent:
                 f"The Grid does not contain the key '{spectra_name}'"
             )
 
+        # If we have have 0 particles (regardless of mask) just return an
+        # array of zeros
+        if hasattr(self, "nbh") and self.nbh == 0:
+            return np.zeros(len(grid.lam))
+
         # If the mask is False (parametric case) or contains only
         # 0 (particle case) just return an array of zeros
         if isinstance(mask, bool) and not mask:
@@ -427,6 +432,21 @@ class BlackholesComponent:
         # Ensure line_id is a string
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
+
+        # If we have have 0 particles (regardless of mask) just return a line
+        # containing zeros
+        if hasattr(self, "nbh") and self.nbh == 0:
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
+                        luminosity=0 * erg / s,
+                        continuum=0 * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
 
         # Ensure and warn that the masking hasn't removed everything
         if mask is not None and np.sum(mask) == 0:
