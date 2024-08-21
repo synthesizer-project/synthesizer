@@ -777,6 +777,11 @@ class Combination:
                 emission_model.lam,
                 lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
             )
+            print(
+                "Not a per particle model",
+                out_spec.shape,
+                spectra[this_model.combine[0].label]._lnu,
+            )
 
         print(
             "Combining:",
