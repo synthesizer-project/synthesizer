@@ -786,7 +786,7 @@ class Combination:
                 this_model.combine[i].label
                 for i in range(len(this_model.combine))
             ],
-            spectra[this_model.combine[0].label],
+            spectra[this_model.combine[0].label].shape,
             this_model.per_particle,
         )
 
