@@ -346,9 +346,9 @@ class Generation:
         if getattr(emitter, "nparticles", 1) == 0:
             spectra[this_model.label] = Sed(lam, np.zeros(lam.size))
             if per_particle:
-                particle_spectra[this_model.label] = spectra[this_model.label][
-                    None, :
-                ]
+                particle_spectra[this_model.label] = Sed(
+                    lam, np.zeros((emitter.nparticles, lam.size))
+                )
             return spectra, particle_spectra
 
         # Handle the dust emission case
