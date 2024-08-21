@@ -631,6 +631,7 @@ class DustAttenuation:
                 this_model.label,
                 spectra[this_model.label].shape,
                 particle_spectra[this_model.label].shape,
+                apply_dust_to.shape,
             )
         else:
             spectra[this_model.label] = sed
