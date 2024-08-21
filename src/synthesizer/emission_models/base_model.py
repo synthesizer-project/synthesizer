@@ -2244,7 +2244,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         **kwargs,
                     )
 
-                    spectra.update(rel_particle_spectra)
+                    spectra.update(rel_spectra)
                     particle_spectra.update(rel_particle_spectra)
 
             # Skip models for a different emitters
