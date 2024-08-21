@@ -841,7 +841,7 @@ class BlackHoles(Particles, BlackholesComponent):
                 (spectra/particle_spectra)
         """
         previous_per_part = emission_model.per_particle
-        emission_model.set_per_particle(True, set_all=True)
+        emission_model.set_per_particle(True)
         spectra = self.get_spectra(
             emission_model=emission_model,
             dust_curves=dust_curves,
@@ -851,7 +851,7 @@ class BlackHoles(Particles, BlackholesComponent):
             verbose=verbose,
             **kwargs,
         )
-        emission_model.set_per_particle(previous_per_part, set_all=True)
+        emission_model.set_per_particle(previous_per_part)
         return spectra
 
     @deprecated(
@@ -923,7 +923,7 @@ class BlackHoles(Particles, BlackholesComponent):
                 root model.
         """
         previous_per_part = emission_model.per_particle
-        emission_model.set_per_particle(True, set_all=True)
+        emission_model.set_per_particle(True)
         lines = self.get_lines(
             line_ids=line_ids,
             emission_model=emission_model,
@@ -934,5 +934,5 @@ class BlackHoles(Particles, BlackholesComponent):
             verbose=verbose,
             **kwargs,
         )
-        emission_model.set_per_particle(previous_per_part, set_all=True)
+        emission_model.set_per_particle(previous_per_part)
         return lines

@@ -985,9 +985,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         """Get the per particle flag."""
         return self._per_particle
 
-    def set_per_particle(self, per_particle, set_all=False):
+    def set_per_particle(self, per_particle):
         """
         Set the per particle flag.
+
+        For per particle spectra we need all children to also be per particle.
 
         Args:
             per_particle (bool):
@@ -995,15 +997,14 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             set_all (bool):
                 Whether to set the per particle flag on all models.
         """
-        # Set the per particle flag
-        if not set_all:
+        # Set the per particle flag (but we don't want to set it on a
+        # galaxy model since they are never per particle by definition)
+        if self.emitter != "galaxy":
             self._per_particle = per_particle
-        else:
-            for model in self._models.values():
-                # Galaxy models are never per particle by definition
-                if model.emitter == "galaxy":
-                    continue
-                model.set_per_particle(per_particle)
+
+        # Set the per particle flag on all children
+        for model in self._children:
+            model.set_per_particle(per_particle)
 
         # Unpack the model now we're done
         self.unpack_model()
