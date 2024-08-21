@@ -1791,7 +1791,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         alpha=0.3,
                     ),
                     fontsize=fontsize,
-                    alpha=1.0,
+                    alpha=alpha,
                     zorder=2,
                 )
 
