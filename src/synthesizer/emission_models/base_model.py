@@ -1806,7 +1806,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 tx, ty = pos[target]
                 ax.plot(
                     [sx, tx],
-                    [-sy - 1, -ty + 1],  # Invert y-axis for bottom-to-top
+                    [-sy, -ty],  # Invert y-axis for bottom-to-top
                     linestyle=linestyle,
                     color="black",
                     lw=1,
