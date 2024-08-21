@@ -119,6 +119,7 @@ class PacmanEmission(StellarEmissionModel):
         fesc_ly_alpha=1.0,
         label=None,
         stellar_dust=True,
+        **kwargs,
     ):
         """
         Initialize the PacmanEmission model.
@@ -137,6 +138,7 @@ class PacmanEmission(StellarEmissionModel):
             stellar_dust (bool): If True, the dust emission will be treated as
                 stellar emission, otherwise it will be treated as galaxy
                 emission.
+            **kwargs: Additional keyword arguments to pass to the models.
         """
         # Attach the grid
         self._grid = grid
@@ -156,26 +158,28 @@ class PacmanEmission(StellarEmissionModel):
         self.grid_reprocessed = grid.reprocessed
 
         # Make the child emission models
-        self.incident = self._make_incident()
-        self.transmitted = self._make_transmitted()
-        self.escaped = self._make_escaped()  # only if fesc > 0.0
-        self.nebular = self._make_nebular()
-        self.reprocessed = self._make_reprocessed()
+        self.incident = self._make_incident(**kwargs)
+        self.transmitted = self._make_transmitted(**kwargs)
+        self.escaped = self._make_escaped(**kwargs)  # only if fesc > 0.0
+        self.nebular = self._make_nebular(**kwargs)
+        self.reprocessed = self._make_reprocessed(**kwargs)
         if not self.grid_reprocessed:
-            self.intrinsic = self._make_intrinsic_no_reprocessing()
+            self.intrinsic = self._make_intrinsic_no_reprocessing(**kwargs)
         else:
-            self.intrinsic = self._make_intrinsic_reprocessed()
-        self.attenuated = self._make_attenuated()
+            self.intrinsic = self._make_intrinsic_reprocessed(**kwargs)
+        self.attenuated = self._make_attenuated(**kwargs)
         if self._dust_emission_model is not None:
-            self.emergent = self._make_emergent()
-            self.dust_emission = self._make_dust_emission(stellar_dust)
+            self.emergent = self._make_emergent(**kwargs)
+            self.dust_emission = self._make_dust_emission(
+                stellar_dust, **kwargs
+            )
 
         # Finally make the TotalEmission model, this is
         # dust_emission + emergent if dust_emission is not None, otherwise it
         # is just emergent
-        self._make_total(label, stellar_dust)
+        self._make_total(label, stellar_dust, **kwargs)
 
-    def _make_incident(self):
+    def _make_incident(self, **kwargs):
         """
         Make the incident emission model.
 
@@ -186,9 +190,9 @@ class PacmanEmission(StellarEmissionModel):
             StellarEmissionModel:
                 - incident
         """
-        return IncidentEmission(grid=self._grid, label="incident")
+        return IncidentEmission(grid=self._grid, label="incident", **kwargs)
 
-    def _make_transmitted(self):
+    def _make_transmitted(self, **kwargs):
         """
         Make the transmitted emission model.
 
@@ -204,10 +208,13 @@ class PacmanEmission(StellarEmissionModel):
             return None
 
         return TransmittedEmission(
-            grid=self._grid, label="transmitted", fesc=self._fesc
+            grid=self._grid,
+            label="transmitted",
+            fesc=self._fesc,
+            **kwargs,
         )
 
-    def _make_escaped(self):
+    def _make_escaped(self, **kwargs):
         """
         Make the escaped emission model.
 
@@ -234,10 +241,13 @@ class PacmanEmission(StellarEmissionModel):
             return None
 
         return EscapedEmission(
-            grid=self._grid, label="escaped", fesc=self._fesc
+            grid=self._grid,
+            label="escaped",
+            fesc=self._fesc,
+            **kwargs,
         )
 
-    def _make_nebular(self):
+    def _make_nebular(self, **kwargs):
         # No spectra if grid hasn't been reprocessed
         if not self.grid_reprocessed:
             return None
@@ -247,9 +257,10 @@ class PacmanEmission(StellarEmissionModel):
             label="nebular",
             fesc=self._fesc,
             fesc_ly_alpha=self._fesc_ly_alpha,
+            **kwargs,
         )
 
-    def _make_reprocessed(self):
+    def _make_reprocessed(self, **kwargs):
         # No spectra if grid hasn't been reprocessed
         if not self.grid_reprocessed:
             return None
@@ -257,9 +268,10 @@ class PacmanEmission(StellarEmissionModel):
         return StellarEmissionModel(
             label="reprocessed",
             combine=(self.transmitted, self.nebular),
+            **kwargs,
         )
 
-    def _make_intrinsic_no_reprocessing(self):
+    def _make_intrinsic_no_reprocessing(self, **kwargs):
         """
         Make the intrinsic emission model for an un-reprocessed grid.
 
@@ -272,34 +284,40 @@ class PacmanEmission(StellarEmissionModel):
                 - intrinsic
         """
         return IncidentEmission(
-            grid=self._grid, label="intrinsic", fesc=self._fesc
+            grid=self._grid,
+            label="intrinsic",
+            fesc=self._fesc,
+            **kwargs,
         )
 
-    def _make_intrinsic_reprocessed(self):
+    def _make_intrinsic_reprocessed(self, **kwargs):
         # If fesc is zero then the intrinsic emission is the same as the
         # reprocessed emission
         if self._fesc == 0.0:
             return StellarEmissionModel(
                 label="intrinsic",
                 combine=(self.nebular, self.transmitted),
+                **kwargs,
             )
 
         # Otherwise, intrinsic = reprocessed + escaped
         return StellarEmissionModel(
             label="intrinsic",
             combine=(self.reprocessed, self.escaped),
+            **kwargs,
         )
 
-    def _make_attenuated(self):
+    def _make_attenuated(self, **kwargs):
         return AttenuatedEmission(
             label="attenuated",
             tau_v=self._tau_v,
             dust_curve=self._dust_curve,
             apply_dust_to=self.reprocessed,
             emitter="stellar",
+            **kwargs,
         )
 
-    def _make_emergent(self):
+    def _make_emergent(self, **kwargs):
         # If fesc is zero the emergent spectra is just the attenuated spectra
         if self._fesc == 0.0:
             return AttenuatedEmission(
@@ -308,24 +326,27 @@ class PacmanEmission(StellarEmissionModel):
                 dust_curve=self._dust_curve,
                 apply_dust_to=self.reprocessed,
                 emitter="stellar",
+                **kwargs,
             )
         else:
             # Otherwise, emergent = attenuated + escaped
             return StellarEmissionModel(
                 label="emergent",
                 combine=(self.attenuated, self.escaped),
+                **kwargs,
             )
 
-    def _make_dust_emission(self, stellar_dust):
+    def _make_dust_emission(self, stellar_dust, **kwargs):
         return DustEmission(
             label="dust_emission",
             dust_emission_model=self._dust_emission_model,
             dust_lum_intrinsic=self.intrinsic,
             dust_lum_attenuated=self.attenuated,
             emitter="galaxy" if not stellar_dust else "stellar",
+            **kwargs,
         )
 
-    def _make_total(self, label, stellar_dust):
+    def _make_total(self, label, stellar_dust, **kwargs):
         if self._dust_emission_model is not None:
             # Define the related models
             related_models = [
@@ -355,6 +376,7 @@ class PacmanEmission(StellarEmissionModel):
                 combine=(self.dust_emission, self.emergent),
                 related_models=related_models,
                 emitter="galaxy" if not stellar_dust else "stellar",
+                **kwargs,
             )
         else:
             # OK, total = emergent so we need to handle whether
@@ -381,6 +403,7 @@ class PacmanEmission(StellarEmissionModel):
                     dust_curve=self._dust_curve,
                     apply_dust_to=self.intrinsic,
                     related_models=related_models,
+                    **kwargs,
                 )
             else:
                 # Otherwise, emergent = attenuated + escaped
@@ -405,6 +428,8 @@ class PacmanEmission(StellarEmissionModel):
                     grid=self._grid,
                     label="emergent" if label is None else label,
                     combine=(self.attenuated, self.escaped),
+                    related_models=related_models,
+                    **kwargs,
                 )
 
 
@@ -522,6 +547,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
         fesc_ly_alpha=1.0,
         label=None,
         stellar_dust=True,
+        **kwargs,
     ):
         """
         Initialize the PacmanEmission model.
@@ -548,6 +574,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             stellar_dust (bool): If True, the dust emission will be treated as
                 stellar emission, otherwise it will be treated as galaxy
                 emission.
+            **kwargs: Additional keyword arguments to pass to the models.
         """
         # Attach the grid
         self._grid = grid
@@ -577,46 +604,46 @@ class BimodalPacmanEmission(StellarEmissionModel):
             self.young_incident,
             self.old_incident,
             self.incident,
-        ) = self._make_incident()
+        ) = self._make_incident(**kwargs)
         (
             self.young_transmitted,
             self.old_transmitted,
             self.transmitted,
-        ) = self._make_transmitted()
+        ) = self._make_transmitted(**kwargs)
         (
             self.young_escaped,
             self.old_escaped,
             self.escaped,
-        ) = self._make_escaped()  # only if fesc > 0.0
+        ) = self._make_escaped(**kwargs)  # only if fesc > 0.0
         (
             self.young_nebular,
             self.old_nebular,
             self.nebular,
-        ) = self._make_nebular()
+        ) = self._make_nebular(**kwargs)
         (
             self.young_reprocessed,
             self.old_reprocessed,
             self.reprocessed,
-        ) = self._make_reprocessed()
+        ) = self._make_reprocessed(**kwargs)
         if not self.grid_reprocessed:
             (
                 self.young_intrinsic,
                 self.old_intrinsic,
                 self.intrinsic,
-            ) = self._make_intrinsic_no_reprocessing()
+            ) = self._make_intrinsic_no_reprocessing(**kwargs)
         else:
             (
                 self.young_intrinsic,
                 self.old_intrinsic,
                 self.intrinsic,
-            ) = self._make_intrinsic_reprocessed()
+            ) = self._make_intrinsic_reprocessed(**kwargs)
         (
             self.young_attenuated_nebular,
             self.young_attenuated_ism,
             self.young_attenuated,
             self.old_attenuated,
             self.attenuated,
-        ) = self._make_attenuated()
+        ) = self._make_attenuated(**kwargs)
         if (
             self.dust_emission_ism is not None
             and self.dust_emission_birth is not None
@@ -625,21 +652,21 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 self.young_emergent,
                 self.old_emergent,
                 self.emergent,
-            ) = self._make_emergent()
+            ) = self._make_emergent(**kwargs)
             (
                 self.young_dust_emission_birth,
                 self.young_dust_emission_ism,
                 self.young_dust_emission,
                 self.old_dust_emission,
                 self.dust_emission,
-            ) = self._make_dust_emission(stellar_dust)
+            ) = self._make_dust_emission(stellar_dust, **kwargs)
 
         # Finally make the TotalEmission model, this is
         # dust_emission + emergent if dust_emission is not None, otherwise it
         # is just emergent
-        self._make_total(label, stellar_dust)
+        self._make_total(label, stellar_dust, **kwargs)
 
-    def _make_incident(self):
+    def _make_incident(self, **kwargs):
         """
         Make the incident emission model.
 
@@ -658,6 +685,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
             mask_op="<",
+            **kwargs,
         )
         old_incident = IncidentEmission(
             grid=self._grid,
@@ -665,15 +693,17 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=self.age_pivot,
             mask_op=">=",
+            **kwargs,
         )
         incident = StellarEmissionModel(
             label="incident",
             combine=(young_incident, old_incident),
+            **kwargs,
         )
 
         return young_incident, old_incident, incident
 
-    def _make_transmitted(self):
+    def _make_transmitted(self, **kwargs):
         """
         Make the transmitted emission model.
 
@@ -697,6 +727,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op="<",
             fesc=self._fesc,
+            **kwargs,
         )
         old_transmitted = TransmittedEmission(
             grid=self._grid,
@@ -705,15 +736,17 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op=">=",
             fesc=self._fesc,
+            **kwargs,
         )
         transmitted = StellarEmissionModel(
             label="transmitted",
             combine=(young_transmitted, old_transmitted),
+            **kwargs,
         )
 
         return young_transmitted, old_transmitted, transmitted
 
-    def _make_escaped(self):
+    def _make_escaped(self, **kwargs):
         """
         Make the escaped emission model.
 
@@ -748,6 +781,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op="<",
             fesc=self._fesc,
+            **kwargs,
         )
         old_escaped = EscapedEmission(
             grid=self._grid,
@@ -756,15 +790,17 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op=">=",
             fesc=self._fesc,
+            **kwargs,
         )
         escaped = StellarEmissionModel(
             label="escaped",
             combine=(young_escaped, old_escaped),
+            **kwargs,
         )
 
         return young_escaped, old_escaped, escaped
 
-    def _make_nebular(self):
+    def _make_nebular(self, **kwargs):
         # No spectra if grid hasn't been reprocessed
         if not self.grid_reprocessed:
             return None, None, None
@@ -777,6 +813,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op="<",
             fesc=self._fesc_ly_alpha,
+            **kwargs,
         )
         old_line_cont = LineContinuumEmission(
             grid=self._grid,
@@ -785,6 +822,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op=">=",
             fesc=self._fesc_ly_alpha,
+            **kwargs,
         )
 
         # Get the nebular continuum emission
@@ -795,6 +833,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op="<",
             fesc=self._fesc,
+            **kwargs,
         )
         old_neb_cont = NebularContinuumEmission(
             grid=self._grid,
@@ -803,6 +842,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op=">=",
             fesc=self._fesc,
+            **kwargs,
         )
 
         young_nebular = NebularEmission(
@@ -815,6 +855,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             fesc_ly_alpha=self._fesc_ly_alpha,
             linecont=young_line_cont,
             nebular_continuum=young_neb_cont,
+            **kwargs,
         )
         old_nebular = NebularEmission(
             grid=self._grid,
@@ -826,15 +867,17 @@ class BimodalPacmanEmission(StellarEmissionModel):
             fesc_ly_alpha=self._fesc_ly_alpha,
             linecont=old_line_cont,
             nebular_continuum=old_neb_cont,
+            **kwargs,
         )
         nebular = StellarEmissionModel(
             label="nebular",
             combine=(young_nebular, old_nebular),
+            **kwargs,
         )
 
         return young_nebular, old_nebular, nebular
 
-    def _make_reprocessed(self):
+    def _make_reprocessed(self, **kwargs):
         # No spectra if grid hasn't been reprocessed
         if not self.grid_reprocessed:
             return None, None, None
@@ -842,19 +885,22 @@ class BimodalPacmanEmission(StellarEmissionModel):
         young_reprocessed = StellarEmissionModel(
             label="young_reprocessed",
             combine=(self.young_transmitted, self.young_nebular),
+            **kwargs,
         )
         old_reprocessed = StellarEmissionModel(
             label="old_reprocessed",
             combine=(self.old_transmitted, self.old_nebular),
+            **kwargs,
         )
         reprocessed = StellarEmissionModel(
             label="reprocessed",
             combine=(young_reprocessed, old_reprocessed),
+            **kwargs,
         )
 
         return young_reprocessed, old_reprocessed, reprocessed
 
-    def _make_intrinsic_no_reprocessing(self):
+    def _make_intrinsic_no_reprocessing(self, **kwargs):
         """
         Make the intrinsic emission model for an un-reprocessed grid.
 
@@ -875,6 +921,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op="<",
             fesc=self._fesc,
+            **kwargs,
         )
         old_intrinsic = IncidentEmission(
             grid=self._grid,
@@ -883,54 +930,63 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op=">=",
             fesc=self._fesc,
+            **kwargs,
         )
         intrinsic = StellarEmissionModel(
             label="intrinsic",
             combine=(young_intrinsic, old_intrinsic),
+            **kwargs,
         )
 
         return young_intrinsic, old_intrinsic, intrinsic
 
-    def _make_intrinsic_reprocessed(self):
+    def _make_intrinsic_reprocessed(self, **kwargs):
         # If fesc is zero then the intrinsic emission is the same as the
         # reprocessed emission
         if self._fesc == 0.0:
             young_intrinsic = StellarEmissionModel(
                 label="young_intrinsic",
                 combine=(self.young_nebular, self.young_transmitted),
+                **kwargs,
             )
             old_intrinsic = StellarEmissionModel(
                 label="old_intrinsic",
                 combine=(self.old_nebular, self.old_transmitted),
+                **kwargs,
             )
             intrinsic = StellarEmissionModel(
                 label="intrinsic",
                 combine=(young_intrinsic, old_intrinsic),
+                **kwargs,
             )
         else:
             # Otherwise, intrinsic = reprocessed + escaped
             young_intrinsic = StellarEmissionModel(
                 label="young_intrinsic",
                 combine=(self.young_reprocessed, self.young_escaped),
+                **kwargs,
             )
             old_intrinsic = StellarEmissionModel(
                 label="old_intrinsic",
                 combine=(self.old_reprocessed, self.old_escaped),
+                **kwargs,
             )
             intrinsic = StellarEmissionModel(
                 label="intrinsic",
                 combine=(young_intrinsic, old_intrinsic),
+                **kwargs,
             )
 
         return young_intrinsic, old_intrinsic, intrinsic
 
-    def _make_attenuated(self):
+    def _make_attenuated(self, **kwargs):
         young_attenuated_nebular = AttenuatedEmission(
             label="young_attenuated_nebular",
             tau_v=self.tau_v_birth,
             dust_curve=self._dust_curve_birth,
             apply_dust_to=self.young_reprocessed,
             emitter="stellar",
+            **kwargs,
         )
         young_attenuated_ism = AttenuatedEmission(
             label="young_attenuated_ism",
@@ -938,6 +994,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             dust_curve=self._dust_curve_ism,
             apply_dust_to=self.young_reprocessed,
             emitter="stellar",
+            **kwargs,
         )
         young_attenuated = AttenuatedEmission(
             label="young_attenuated",
@@ -945,6 +1002,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             dust_curve=self._dust_curve_ism,
             apply_dust_to=young_attenuated_nebular,
             emitter="stellar",
+            **kwargs,
         )
         old_attenuated = AttenuatedEmission(
             label="old_attenuated",
@@ -952,10 +1010,12 @@ class BimodalPacmanEmission(StellarEmissionModel):
             dust_curve=self._dust_curve_ism,
             apply_dust_to=self.old_reprocessed,
             emitter="stellar",
+            **kwargs,
         )
         attenuated = StellarEmissionModel(
             label="attenuated",
             combine=(young_attenuated, old_attenuated),
+            **kwargs,
         )
 
         return (
@@ -966,7 +1026,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             attenuated,
         )
 
-    def _make_emergent(self):
+    def _make_emergent(self, **kwargs):
         # If fesc is zero the emergent spectra is just the attenuated spectra
         if self._fesc == 0.0:
             young_emergent = AttenuatedEmission(
@@ -975,6 +1035,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 dust_curve=self._dust_curve_ism,
                 apply_dust_to=self.young_attenuated_nebular,
                 emitter="stellar",
+                **kwargs,
             )
             old_emergent = AttenuatedEmission(
                 label="old_emergent",
@@ -982,29 +1043,34 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 dust_curve=self._dust_curve_ism,
                 apply_dust_to=self.old_intrinsic,
                 emitter="stellar",
+                **kwargs,
             )
             emergent = StellarEmissionModel(
                 label="emergent",
                 combine=(young_emergent, old_emergent),
+                **kwargs,
             )
         else:
             # Otherwise, emergent = attenuated + escaped
             young_emergent = StellarEmissionModel(
                 label="young_emergent",
                 combine=(self.young_attenuated, self.young_escaped),
+                **kwargs,
             )
             old_emergent = StellarEmissionModel(
                 label="old_emergent",
                 combine=(self.old_attenuated, self.old_escaped),
+                **kwargs,
             )
             emergent = StellarEmissionModel(
                 label="emergent",
                 combine=(young_emergent, old_emergent),
+                **kwargs,
             )
 
         return young_emergent, old_emergent, emergent
 
-    def _make_dust_emission(self, stellar_dust):
+    def _make_dust_emission(self, stellar_dust, **kwargs):
         young_dust_emission_birth = DustEmission(
             label="young_dust_emission_birth",
             dust_emission_model=self.dust_emission_birth,
@@ -1014,6 +1080,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op="<",
             emitter="stellar" if stellar_dust else "galaxy",
+            **kwargs,
         )
         young_dust_emission_ism = DustEmission(
             label="young_dust_emission_ism",
@@ -1024,11 +1091,13 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op="<",
             emitter="stellar" if stellar_dust else "galaxy",
+            **kwargs,
         )
         young_dust_emission = EmissionModel(
             label="young_dust_emission",
             combine=(young_dust_emission_birth, young_dust_emission_ism),
             emitter="stellar" if stellar_dust else "galaxy",
+            **kwargs,
         )
         old_dust_emission = DustEmission(
             label="old_dust_emission",
@@ -1039,11 +1108,13 @@ class BimodalPacmanEmission(StellarEmissionModel):
             mask_thresh=self.age_pivot,
             mask_op=">=",
             emitter="stellar" if stellar_dust else "galaxy",
+            **kwargs,
         )
         dust_emission = EmissionModel(
             label="dust_emission",
             combine=(young_dust_emission, old_dust_emission),
             emitter="stellar" if stellar_dust else "galaxy",
+            **kwargs,
         )
 
         return (
@@ -1054,7 +1125,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
             dust_emission,
         )
 
-    def _make_total(self, label, stellar_dust):
+    def _make_total(self, label, stellar_dust, **kwargs):
         if (
             self.dust_emission_ism is not None
             and self.dust_emission_birth is not None
@@ -1064,11 +1135,13 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 label="young_total",
                 combine=(self.young_dust_emission, self.young_emergent),
                 emitter="stellar" if stellar_dust else "galaxy",
+                **kwargs,
             )
             old_total = EmissionModel(
                 label="old_total",
                 combine=(self.old_dust_emission, self.old_emergent),
                 emitter="stellar" if stellar_dust else "galaxy",
+                **kwargs,
             )
 
             # Define the related models
@@ -1117,6 +1190,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 combine=(young_total, old_total),
                 related_models=related_models,
                 emitter="stellar" if stellar_dust else "galaxy",
+                **kwargs,
             )
         else:
             # OK, total = emergent so we need to handle whether
@@ -1129,6 +1203,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                     dust_curve=self._dust_curve_ism,
                     apply_dust_to=self.young_intrinsic,
                     emitter="stellar",
+                    **kwargs,
                 )
                 old_total = AttenuatedEmission(
                     label="old_emergent",
@@ -1136,6 +1211,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                     dust_curve=self._dust_curve_ism,
                     apply_dust_to=self.old_intrinsic,
                     emitter="stellar",
+                    **kwargs,
                 )
 
                 # Define the related models
@@ -1172,6 +1248,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                     label="emergent" if label is None else label,
                     combine=(young_total, old_total),
                     related_models=related_models,
+                    **kwargs,
                 )
 
             else:
@@ -1181,10 +1258,12 @@ class BimodalPacmanEmission(StellarEmissionModel):
                 young_total = StellarEmissionModel(
                     label="young_emergent",
                     combine=(self.young_attenuated, self.young_escaped),
+                    **kwargs,
                 )
                 old_total = StellarEmissionModel(
                     label="old_emergent",
                     combine=(self.old_attenuated, self.old_escaped),
+                    **kwargs,
                 )
 
                 # Define the related models
@@ -1224,6 +1303,7 @@ class BimodalPacmanEmission(StellarEmissionModel):
                     label="emergent" if label is None else label,
                     combine=(young_total, old_total),
                     related_models=related_models,
+                    **kwargs,
                 )
 
 
@@ -1269,6 +1349,7 @@ class CharlotFall2000(BimodalPacmanEmission):
         dust_emission_birth=None,
         label=None,
         stellar_dust=True,
+        **kwargs,
     ):
         """
         Initialize the PacmanEmission model.
@@ -1293,6 +1374,7 @@ class CharlotFall2000(BimodalPacmanEmission):
             stellar_dust (bool): If True, the dust emission will be treated as
                 stellar emission, otherwise it will be treated as galaxy
                 emission.
+            kwargs: Additional keyword arguments to pass to the models.
         """
         # Call the parent constructor to intialise the model
         BimodalPacmanEmission.__init__(
@@ -1307,6 +1389,7 @@ class CharlotFall2000(BimodalPacmanEmission):
             dust_emission_birth,
             label=label,
             stellar_dust=stellar_dust,
+            **kwargs,
         )
 
 
@@ -1337,6 +1420,7 @@ class ScreenEmission(PacmanEmission):
         dust_curve,
         dust_emission=None,
         label=None,
+        **kwargs,
     ):
         """
         Initialize the ScreenEmission model.
@@ -1350,6 +1434,7 @@ class ScreenEmission(PacmanEmission):
             label (str): The label for the total emission model. If None
                 this will be set to "total" or "emergent" if dust_emission is
                 None.
+            kwargs: Additional keyword arguments to pass to the models.
         """
         # Call the parent constructor to intialise the model
         PacmanEmission.__init__(
@@ -1361,4 +1446,5 @@ class ScreenEmission(PacmanEmission):
             fesc=0.0,
             fesc_ly_alpha=1.0,
             label=label,
+            **kwargs,
         )

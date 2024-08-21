@@ -106,6 +106,49 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             A dictionary of component attributes/parameters which should be
             fixed and thus ignore the value of the component attribute. This
             should take the form {<parameter_name>: <value>}.
+        emitter (str):
+            The emitter this emission model acts on. Default is "stellar".
+        apply_dust_to (EmissionModel):
+            The model to apply the dust curve to.
+        dust_curve (emission_models.attenuation.*):
+            The dust curve to apply.
+        tau_v (float/ndarray/str/tuple):
+            The optical depth to apply. Can be a float, ndarray, or a string
+            to a component attribute. Can also be a tuple combining any of
+            these.
+        generator (EmissionModel):
+            The emission generation model. This must define a get_spectra
+            method.
+        lum_intrinsic_model (EmissionModel):
+            The intrinsic model to use deriving the dust luminosity when
+            computing dust emission.
+        lum_attenuated_model (EmissionModel):
+            The attenuated model to use deriving the dust luminosity when
+            computing dust emission.
+        mask_attr (str):
+            The component attribute to mask on.
+        mask_thresh (unyt_quantity):
+            The threshold for the mask.
+        mask_op (str):
+            The operation to apply. Can be "<", ">", "<=", ">=", "==", or "!=".
+        fesc (float):
+            The escape fraction.
+        scale_by (list):
+            A list of attributes to scale the spectra by.
+        post_processing (list):
+            A list of post processing functions to apply to the emission after
+            it has been generated. Each function must take a dict containing
+            the spectra/lines, the emitters, and the emission model, and return
+            the same dict with the post processing applied.
+        save (bool):
+            A flag for whether the emission produced by this model should be
+            "saved", i.e. attached to the emitter. If False, the emission will
+            be discarded after it has been used. Default is True.
+        per_particle (bool):
+            A flag for whether the emission produced by this model should be
+            "per particle". If True, the spectra and lines will be stored per
+            particle. Integrated spectra are made automatically by summing the
+            per particle spectra. Default is False.
     """
 
     # Define quantities
@@ -133,6 +176,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         scale_by=None,
         post_processing=(),
         save=True,
+        per_particle=False,
         **kwargs,
     ):
         """
@@ -215,6 +259,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 be "saved", i.e. attached to the emitter. If False, the
                 emission will be discarded after it has been used. Default is
                 True.
+            per_particle (bool):
+                A flag for whether the emission produced by this model should
+                be "per particle". If True, the spectra and lines will be
+                stored per particle. Integrated spectra are made automatically
+                by summing the per particle spectra. Default is False.
             **kwargs:
                 Any additional keyword arguments to store. These can be used
                 to store additional information needed by the model.
@@ -238,6 +287,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         # Attach which emitter we are working with
         self._emitter = emitter
+
+        # Are we making per particle emission?
+        self._per_particle = per_particle
 
         # Define the container which will hold mask information
         self.masks = []
@@ -528,6 +580,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # Report if the resulting emission will be saved
             parts.append(f"  Save emission: {model._save}")
+
+            # Report if the resulting emission will be per particle
+            if model._per_particle:
+                parts.append("  Per particle emission: True")
 
             # Print any fixed parameters if there are any
             if len(model.fixed_parameters) > 0:
@@ -920,6 +976,40 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         else:
             for model in self._models.values():
                 model.set_emitter(emitter)
+
+        # Unpack the model now we're done
+        self.unpack_model()
+
+    @property
+    def per_particle(self):
+        """Get the per particle flag."""
+        return self._per_particle
+
+    def set_per_particle(self, per_particle):
+        """
+        Set the per particle flag.
+
+        For per particle spectra we need all children to also be per particle.
+
+        Args:
+            per_particle (bool):
+                Whether to set the per particle flag.
+            set_all (bool):
+                Whether to set the per particle flag on all models.
+        """
+        # Set the per particle flag (but we don't want to set it on a
+        # galaxy model since they are never per particle by definition)
+        if self.emitter != "galaxy":
+            self._per_particle = per_particle
+
+        # Set the per particle flag on all children
+        for model in self._children:
+            model.set_per_particle(per_particle)
+
+        # If this model also has related spectra we'd better make those
+        # per particle too or bad things will happen downstream
+        for model in self.related_models:
+            model.set_per_particle(per_particle)
 
         # Unpack the model now we're done
         self.unpack_model()
@@ -1639,6 +1729,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # know whether to include it in the legend
         some_discarded = False
 
+        # Define a flag for whether there are per_particle models
+        some_per_particle = False
+
         # Plot the tree using Matplotlib
         fig, ax = plt.subplots(figsize=figsize)
 
@@ -1654,7 +1747,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # If the model isn't saved apply some transparency
             if not self[node].save:
-                alpha = 0.6
+                alpha = 0.7
                 some_discarded = True
             else:
                 alpha = 1.0
@@ -1667,13 +1760,38 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 bbox=dict(
                     facecolor=color,
                     edgecolor="black",
-                    boxstyle="round,pad=0.3"
+                    boxstyle="round,pad=0.5"
                     if node not in extract_labels
-                    else "square,pad=0.3",
+                    else "square,pad=0.5",
+                    alpha=alpha,
                 ),
                 fontsize=fontsize,
-                alpha=alpha,
+                zorder=1,
             )
+
+            # If we have a per particle model overlay a hatched box. To make]
+            # this readable we need to overlay a box with a transparent face
+            if self[node].per_particle:
+                some_per_particle = True
+                ax.text(
+                    x,
+                    -y,  # Invert y-axis for bottom-to-top
+                    node,
+                    ha="center",
+                    va="center",
+                    bbox=dict(
+                        facecolor=color,
+                        edgecolor="black",
+                        boxstyle="round,pad=0.5"
+                        if node not in extract_labels
+                        else "square,pad=0.5",
+                        hatch="//",
+                        alpha=0.3,
+                    ),
+                    fontsize=fontsize,
+                    alpha=1.0,
+                    zorder=2,
+                )
 
             # Used a dashed outline for masked nodes
             bbox = text.get_bbox_patch()
@@ -1697,6 +1815,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     linestyle=linestyle,
                     color="black",
                     lw=1,
+                    zorder=0,
                 )
 
         # Create legend elements
@@ -1738,7 +1857,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     facecolor="gold",
                     edgecolor="black",
                     label="Stellar",
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
                 )
             )
         if "blackhole" in components:
@@ -1750,7 +1869,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     facecolor="royalblue",
                     edgecolor="black",
                     label="Black Hole",
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
                 )
             )
         if "galaxy" in components:
@@ -1762,7 +1881,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     facecolor="forestgreen",
                     edgecolor="black",
                     label="Galaxy",
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
                 )
             )
 
@@ -1777,7 +1896,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     edgecolor="black",
                     label="Masked",
                     linestyle="dashed",
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
                 )
             )
 
@@ -1791,7 +1910,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     facecolor="grey",
                     edgecolor="black",
                     label="Saved",
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
                 )
             )
             handles.append(
@@ -1803,7 +1922,23 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     edgecolor="black",
                     label="Discarded",
                     alpha=0.6,
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
+                )
+            )
+
+        # If we have per particle models include them in the legend
+        if some_per_particle:
+            handles.append(
+                mpatches.FancyBboxPatch(
+                    (0.1, 0.1),
+                    width=0.5,
+                    height=0.1,
+                    facecolor="none",
+                    edgecolor="black",
+                    label="Per Particle",
+                    hatch="//",
+                    alpha=0.3,
+                    boxstyle="round,pad=0.5",
                 )
             )
 
@@ -1939,7 +2074,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
     def _get_spectra(
         self,
         emitters,
-        per_particle,
         dust_curves=None,
         tau_v=None,
         fesc=None,
@@ -1947,6 +2081,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         mask=None,
         verbose=True,
         spectra=None,
+        particle_spectra=None,
         _is_related=False,
         **kwargs,
     ):
@@ -1961,8 +2096,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             emitters (Stars/BlackHoles):
                 The emitters to generate the spectra for in the form of a
                 dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
-            per_particle (bool):
-                Are we generating per particle?
             dust_curves (dict):
                 An overide to the emisison model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
@@ -2020,6 +2153,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             spectra (dict)
                 A dictionary of spectra to add to. This is used for recursive
                 calls to this function.
+            particle_spectra (dict)
+                A dictionary of particle spectra to add to. This is used for
+                recursive calls to this function.
             _is_related (bool)
                 Are we generating related model spectra? If so we don't want
                 to apply any post processing functions or delete any spectra,
@@ -2058,6 +2194,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # Make a spectra dictionary if we haven't got one yet
         if spectra is None:
             spectra = {}
+        if particle_spectra is None:
+            particle_spectra = {}
 
         # We need to make sure the root is being saved, otherwise this is a bit
         # nonsensical.
@@ -2069,11 +2207,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             )
 
         # Perform all extractions
-        spectra = self._extract_spectra(
+        spectra, particle_spectra = self._extract_spectra(
             emission_model,
             emitters,
-            per_particle,
             spectra,
+            particle_spectra,
             verbose,
             **kwargs,
         )
@@ -2088,20 +2226,24 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             # tree
             for related_model in this_model.related_models:
                 if related_model.label not in spectra:
-                    spectra.update(
-                        related_model._get_spectra(
-                            emitters,
-                            per_particle,
-                            dust_curves=dust_curves,
-                            tau_v=tau_v,
-                            fesc=fesc,
-                            mask=mask,
-                            verbose=verbose,
-                            spectra=spectra,
-                            _is_related=True,
-                            **kwargs,
-                        )
+                    (
+                        rel_spectra,
+                        rel_particle_spectra,
+                    ) = related_model._get_spectra(
+                        emitters,
+                        dust_curves=dust_curves,
+                        tau_v=tau_v,
+                        fesc=fesc,
+                        mask=mask,
+                        verbose=verbose,
+                        spectra=spectra,
+                        particle_spectra=particle_spectra,
+                        _is_related=True,
+                        **kwargs,
                     )
+
+                    spectra.update(rel_particle_spectra)
+                    particle_spectra.update(rel_particle_spectra)
 
             # Skip models for a different emitters
             if (
@@ -2124,27 +2266,29 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # Are we doing a combination?
             if this_model._is_combining:
-                spectra = self._combine_spectra(
+                spectra, particle_spectra = self._combine_spectra(
                     emission_model,
                     spectra,
+                    particle_spectra,
                     this_model,
                 )
 
             elif this_model._is_dust_attenuating:
-                spectra = self._dust_attenuate_spectra(
+                spectra, particle_spectra = self._dust_attenuate_spectra(
                     this_model,
                     spectra,
+                    particle_spectra,
                     emitter,
                     this_mask,
                 )
 
             elif this_model._is_dust_emitting or this_model._is_generating:
-                spectra = self._generate_spectra(
+                spectra, particle_spectra = self._generate_spectra(
                     this_model,
                     emission_model,
                     spectra,
+                    particle_spectra,
                     self.lam,
-                    per_particle,
                     emitter,
                 )
 
@@ -2181,20 +2325,32 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         )
 
                     # Scale the spectra by this attribute
+                    if this_model.per_particle:
+                        particle_spectra[label] *= scaler_arr
                     spectra[label]._lnu *= scaler_arr
 
                 elif scaler in spectra:
                     # Compute the scaling
-                    scaling = (
-                        spectra[scaler].measure_bolometric_luminosity()
-                        / spectra[label].measure_bolometric_luminosity()
-                    ).value
+                    if this_model.per_particle:
+                        scaling = (
+                            particle_spectra[
+                                scaler
+                            ].measure_bolometric_luminosity()
+                            / particle_spectra[
+                                label
+                            ].measure_bolometric_luminosity()
+                        ).value
+                    else:
+                        scaling = (
+                            spectra[scaler].measure_bolometric_luminosity()
+                            / spectra[label].measure_bolometric_luminosity()
+                        ).value
 
                     # Scale the spectra (handling 1D and 2D cases)
-                    if spectra[label]._lnu.ndim > 1:
-                        spectra[label]._lnu *= scaling[:, None]
-                    else:
-                        spectra[label]._lnu *= scaling
+                    if this_model.per_particle:
+                        particle_spectra[label] *= scaling[:, None]
+                    spectra[label]._lnu *= scaling
+
                 else:
                     raise exceptions.InconsistentArguments(
                         f"Can't scale spectra by {scaler}."
@@ -2206,6 +2362,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             # Apply any post processing functions
             for func in self._post_processing:
                 spectra = func(spectra, emitters, self)
+                if len(particle_spectra) > 0:
+                    particle_spectra = func(particle_spectra, emitters, self)
 
             # Loop over all models and delete those spectra if we aren't saving
             # them (we have to this after post processing incase the deleted
@@ -2213,14 +2371,15 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             for model in emission_model._models.values():
                 if not model.save and model.label in spectra:
                     del spectra[model.label]
+                    if model.per_particle and model.label in particle_spectra:
+                        del particle_spectra[model.label]
 
-        return spectra
+        return spectra, particle_spectra
 
     def _get_lines(
         self,
         line_ids,
         emitters,
-        per_particle,
         dust_curves=None,
         tau_v=None,
         fesc=None,
@@ -2228,6 +2387,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         mask=None,
         verbose=True,
         lines=None,
+        particle_lines=None,
         _is_related=False,
         **kwargs,
     ):
@@ -2244,8 +2404,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             emitters (Stars/BlackHoles):
                 The emitters to generate the lines for in the form of a
                 dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
-            per_particle (bool):
-                Are we generating lines per particle?
             dust_curves (dict):
                 An overide to the emisison model dust curves. Either:
                     - None, indicating the dust_curves defined on the emission
@@ -2303,6 +2461,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             lines (dict)
                 A dictionary of lines to add to. This is used for recursive
                 calls to this function.
+            particle_lines (dict)
+                A dictionary of particle lines to add to. This is used for
+                recursive calls to this function.
             _is_related (bool)
                 Are we generating related model lines? If so we don't want
                 to apply any post processing functions or delete any lines,
@@ -2331,6 +2492,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # If we haven't got a lines dictionary yet we'll make one
         if lines is None:
             lines = {}
+        if particle_lines is None:
+            particle_lines = {}
 
         # We need to make sure the root is being saved, otherwise this is a bit
         # nonsensical.
@@ -2342,12 +2505,12 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             )
 
         # Perform all extractions
-        lines = self._extract_lines(
+        lines, particle_lines = self._extract_lines(
             line_ids,
             emission_model,
             emitters,
-            per_particle,
             lines,
+            particle_lines,
             verbose,
             **kwargs,
         )
@@ -2362,21 +2525,22 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             # tree
             for related_model in this_model.related_models:
                 if related_model.label not in lines:
-                    lines.update(
-                        related_model._get_lines(
-                            line_ids,
-                            emitters,
-                            per_particle,
-                            dust_curves=dust_curves,
-                            tau_v=tau_v,
-                            fesc=fesc,
-                            mask=mask,
-                            verbose=verbose,
-                            lines=lines,
-                            _is_related=True,
-                            **kwargs,
-                        )
+                    rel_lines, rel_particle_lines = related_model._get_lines(
+                        line_ids,
+                        emitters,
+                        dust_curves=dust_curves,
+                        tau_v=tau_v,
+                        fesc=fesc,
+                        mask=mask,
+                        verbose=verbose,
+                        lines=lines,
+                        particle_lines=particle_lines,
+                        _is_related=True,
+                        **kwargs,
                     )
+
+                    lines.update(rel_lines)
+                    particle_lines.update(rel_particle_lines)
 
             # Skip models for a different emitters
             if (
@@ -2399,29 +2563,31 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # Are we doing a combination?
             if this_model._is_combining:
-                lines = self._combine_lines(
+                lines, particle_lines = self._combine_lines(
                     line_ids,
                     emission_model,
                     lines,
+                    particle_lines,
                     this_model,
                 )
 
             elif this_model._is_dust_attenuating:
-                lines = self._dust_attenuate_lines(
+                lines, particle_lines = self._dust_attenuate_lines(
                     line_ids,
                     this_model,
                     lines,
+                    particle_lines,
                     emitter,
                     this_mask,
                 )
 
             elif this_model._is_dust_emitting or this_model._is_generating:
-                lines = self._generate_lines(
+                lines, particle_lines = self._generate_lines(
                     line_ids,
                     this_model,
                     emission_model,
                     lines,
-                    per_particle,
+                    particle_lines,
                     emitter,
                 )
 
@@ -2431,6 +2597,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     continue
                 elif hasattr(emitter, scaler):
                     for line_id in line_ids:
+                        if this_model.per_particle:
+                            particle_lines[label][
+                                line_id
+                            ]._luminosity *= getattr(emitter, scaler)
+                            particle_lines[label][
+                                line_id
+                            ]._continuum *= getattr(emitter, scaler)
                         lines[label][line_id]._luminosity *= getattr(
                             emitter, scaler
                         )
@@ -2452,10 +2625,18 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 # conversion
                 if isinstance(lines[label], dict):
                     lines[label] = LineCollection(lines[label])
+                if self._models[label].per_particle and isinstance(
+                    particle_lines[label], dict
+                ):
+                    particle_lines[label] = LineCollection(
+                        particle_lines[label]
+                    )
 
             # Apply any post processing functions
             for func in self._post_processing:
                 lines = func(lines, emitters, self)
+                if len(particle_lines) > 0:
+                    particle_lines = func(particle_lines, emitters, self)
 
             # Loop over all models and delete those lines if we aren't saving
             # them (we have to this after post processing incase the deleted
@@ -2463,8 +2644,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             for model in emission_model._models.values():
                 if not model.save and model.label in lines:
                     del lines[model.label]
+                    if model.per_particle and model.label in particle_lines:
+                        del particle_lines[model.label]
 
-        return lines
+        return lines, particle_lines
 
 
 class StellarEmissionModel(EmissionModel):
@@ -2525,4 +2708,10 @@ class GalaxyEmissionModel(EmissionModel):
         if self._is_extracting:
             raise exceptions.InconsistentArguments(
                 "A GalaxyEmissionModel cannot be an extraction model."
+            )
+
+        # Ensure we aren't trying to make a per particle galaxy emission
+        if self.per_particle:
+            raise exceptions.InconsistentArguments(
+                "A GalaxyEmissionModel cannot be a per particle model."
             )

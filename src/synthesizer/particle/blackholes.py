@@ -24,7 +24,7 @@ from synthesizer.line import Line
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer.utils import TableFormatter, value_to_array
-from synthesizer.warnings import warn
+from synthesizer.warnings import deprecated, warn
 
 
 class BlackHoles(Particles, BlackholesComponent):
@@ -775,6 +775,10 @@ class BlackHoles(Particles, BlackholesComponent):
         else:
             return Line(*lines)
 
+    @deprecated(
+        message="is now just a wrapper "
+        "around get_spectra. It will be removed by v1.0.0."
+    )
     def get_particle_spectra(
         self,
         emission_model,
@@ -836,23 +840,24 @@ class BlackHoles(Particles, BlackholesComponent):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
-        # Get the spectra
-        spectra = emission_model._get_spectra(
-            emitters={"blackhole": self},
-            per_particle=True,
+        previous_per_part = emission_model.per_particle
+        emission_model.set_per_particle(True)
+        spectra = self.get_spectra(
+            emission_model=emission_model,
             dust_curves=dust_curves,
             tau_v=tau_v,
-            fesc=covering_fraction,
+            covering_fraction=covering_fraction,
             mask=mask,
             verbose=verbose,
             **kwargs,
         )
+        emission_model.set_per_particle(previous_per_part)
+        return spectra
 
-        # Update the spectra dictionary
-        self.particle_spectra.update(spectra)
-
-        return self.particle_spectra[emission_model.label]
-
+    @deprecated(
+        message="is now just a wrapper "
+        "around get_lines. It will be removed by v1.0.0."
+    )
     def get_particle_lines(
         self,
         line_ids,
@@ -917,11 +922,11 @@ class BlackHoles(Particles, BlackholesComponent):
                 A LineCollection object containing the lines defined by the
                 root model.
         """
-        # Get the lines
-        lines = emission_model._get_lines(
+        previous_per_part = emission_model.per_particle
+        emission_model.set_per_particle(True)
+        lines = self.get_lines(
             line_ids=line_ids,
-            emitters={"blackhole": self},
-            per_particle=True,
+            emission_model=emission_model,
             dust_curves=dust_curves,
             tau_v=tau_v,
             covering_fraction=covering_fraction,
@@ -929,8 +934,5 @@ class BlackHoles(Particles, BlackholesComponent):
             verbose=verbose,
             **kwargs,
         )
-
-        # Update the lines dictionary
-        self.particle_lines.update(lines)
-
-        return self.particle_lines[emission_model.label]
+        emission_model.set_per_particle(previous_per_part)
+        return lines
