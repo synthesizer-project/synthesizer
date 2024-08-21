@@ -2268,12 +2268,16 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # Are we doing a combination?
             if this_model._is_combining:
-                spectra, particle_spectra = self._combine_spectra(
-                    emission_model,
-                    spectra,
-                    particle_spectra,
-                    this_model,
-                )
+                try:
+                    spectra, particle_spectra = self._combine_spectra(
+                        emission_model,
+                        spectra,
+                        particle_spectra,
+                        this_model,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}")
+                    raise e
 
             elif this_model._is_dust_attenuating:
                 spectra, particle_spectra = self._dust_attenuate_spectra(
