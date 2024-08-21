@@ -777,6 +777,15 @@ class Combination:
                 lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
             )
 
+        print(
+            "Combining:",
+            this_model.label,
+            out_spec.shape,
+            this_model.emitter,
+            this_model.combine,
+            this_model.per_particle,
+        )
+
         # Combine the spectra
         for combine_model in this_model.combine:
             if this_model.per_particle:
