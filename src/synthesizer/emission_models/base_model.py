@@ -2276,7 +2276,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         this_model,
                     )
                 except Exception as e:
-                    print(f"Error in {this_model.label}")
+                    print(f"Error in {this_model.label}!")
                     raise e
 
             elif this_model._is_dust_attenuating:
