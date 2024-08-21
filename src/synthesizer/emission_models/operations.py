@@ -782,7 +782,11 @@ class Combination:
             this_model.label,
             out_spec.shape,
             this_model.emitter,
-            this_model.combine,
+            [
+                this_model.combine[i].label
+                for i in range(len(this_model.combine))
+            ],
+            spectra[this_model.combine[0].label],
             this_model.per_particle,
         )
 
