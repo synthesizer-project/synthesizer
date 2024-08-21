@@ -1724,6 +1724,9 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # know whether to include it in the legend
         some_discarded = False
 
+        # Define a flag for whether there are per_particle models
+        some_per_particle = False
+
         # Plot the tree using Matplotlib
         fig, ax = plt.subplots(figsize=figsize)
 
@@ -1739,7 +1742,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # If the model isn't saved apply some transparency
             if not self[node].save:
-                alpha = 0.6
+                alpha = 0.7
                 some_discarded = True
             else:
                 alpha = 1.0
@@ -1752,13 +1755,38 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 bbox=dict(
                     facecolor=color,
                     edgecolor="black",
-                    boxstyle="round,pad=0.3"
+                    boxstyle="round,pad=0.5"
                     if node not in extract_labels
-                    else "square,pad=0.3",
+                    else "square,pad=0.5",
+                    alpha=alpha,
                 ),
                 fontsize=fontsize,
-                alpha=alpha,
+                zorder=1,
             )
+
+            # If we have a per particle model overlay a hatched box. To make]
+            # this readable we need to overlay a box with a transparent face
+            if self[node].per_particle:
+                some_per_particle = True
+                ax.text(
+                    x,
+                    -y,  # Invert y-axis for bottom-to-top
+                    node,
+                    ha="center",
+                    va="center",
+                    bbox=dict(
+                        facecolor=color,
+                        edgecolor="black",
+                        boxstyle="round,pad=0.5"
+                        if node not in extract_labels
+                        else "square,pad=0.5",
+                        hatch="//",
+                        alpha=0.3,
+                    ),
+                    fontsize=fontsize,
+                    alpha=1.0,
+                    zorder=2,
+                )
 
             # Used a dashed outline for masked nodes
             bbox = text.get_bbox_patch()
@@ -1778,10 +1806,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 tx, ty = pos[target]
                 ax.plot(
                     [sx, tx],
-                    [-sy, -ty],  # Invert y-axis for bottom-to-top
+                    [-sy - 1, -ty + 1],  # Invert y-axis for bottom-to-top
                     linestyle=linestyle,
                     color="black",
                     lw=1,
+                    zorder=0,
                 )
 
         # Create legend elements
@@ -1823,7 +1852,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     facecolor="gold",
                     edgecolor="black",
                     label="Stellar",
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
                 )
             )
         if "blackhole" in components:
@@ -1835,7 +1864,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     facecolor="royalblue",
                     edgecolor="black",
                     label="Black Hole",
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
                 )
             )
         if "galaxy" in components:
@@ -1847,7 +1876,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     facecolor="forestgreen",
                     edgecolor="black",
                     label="Galaxy",
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
                 )
             )
 
@@ -1862,7 +1891,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     edgecolor="black",
                     label="Masked",
                     linestyle="dashed",
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
                 )
             )
 
@@ -1876,7 +1905,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     facecolor="grey",
                     edgecolor="black",
                     label="Saved",
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
                 )
             )
             handles.append(
@@ -1888,7 +1917,23 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     edgecolor="black",
                     label="Discarded",
                     alpha=0.6,
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.5",
+                )
+            )
+
+        # If we have per particle models include them in the legend
+        if some_per_particle:
+            handles.append(
+                mpatches.FancyBboxPatch(
+                    (0.1, 0.1),
+                    width=0.5,
+                    height=0.1,
+                    facecolor="none",
+                    edgecolor="black",
+                    label="Per Particle",
+                    hatch="//",
+                    alpha=0.3,
+                    boxstyle="round,pad=0.5",
                 )
             )
 
