@@ -1569,7 +1569,7 @@ class Stars(Particles, StarsComponent):
         return fig, ax
 
     @deprecated(
-        message="get_particle_spectra is now just a wrapper "
+        message="is now just a wrapper "
         "around get_spectra. It will be removed by v1.0.0."
     )
     def get_particle_spectra(
@@ -1650,7 +1650,7 @@ class Stars(Particles, StarsComponent):
         return spectra
 
     @deprecated(
-        message="get_particle_lines is now just a wrapper "
+        message="is now just a wrapper "
         "around get_lines. It will be removed by v1.0.0."
     )
     def get_particle_lines(
