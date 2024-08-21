@@ -1006,6 +1006,11 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         for model in self._children:
             model.set_per_particle(per_particle)
 
+        # If this model also has related spectra we'd better make those
+        # per particle too or bad things will happen downstream
+        for model in self.related_models:
+            model.set_per_particle(per_particle)
+
         # Unpack the model now we're done
         self.unpack_model()
 
