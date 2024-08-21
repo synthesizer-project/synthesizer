@@ -341,7 +341,9 @@ class Generation:
             spectra[this_model.label] = Sed(
                 lam, np.zeros((emitter.nparticles, lam.size))
             )
-            return spectra
+            if per_particle:
+                particle_spectra[this_model.label] = spectra[this_model.label]
+            return spectra, particle_spectra
 
         # Handle the dust emission case
         if this_model._is_dust_emitting:
@@ -456,7 +458,13 @@ class Generation:
                     luminosity=np.zeros(emitter.nparticles),
                     continuum=np.zeros(emitter.nparticles),
                 )
-            return lines
+
+            # We need to make sure we do this for each particle too if needs
+            # be
+            if per_particle:
+                particle_lines[this_model.label] = lines[this_model.label]
+
+            return lines, particle_lines
 
         # Now we have the spectra we can get the emission at each line
         # and include it
