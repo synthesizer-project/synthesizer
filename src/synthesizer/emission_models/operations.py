@@ -396,6 +396,12 @@ class Generation:
         if per_particle:
             particle_spectra[this_model.label] = sed
             spectra[this_model.label] = sed.sum()
+            print(
+                "Generating:",
+                this_model.label,
+                spectra[this_model.label].shape,
+                particle_spectra[this_model.label].shape,
+            )
         else:
             spectra[this_model.label] = sed
 
@@ -620,6 +626,12 @@ class DustAttenuation:
         if this_model.per_particle:
             particle_spectra[this_model.label] = sed
             spectra[this_model.label] = sed.sum()
+            print(
+                "Dust attenuating:",
+                this_model.label,
+                spectra[this_model.label].shape,
+                particle_spectra[this_model.label].shape,
+            )
         else:
             spectra[this_model.label] = sed
 
@@ -753,14 +765,14 @@ class Combination:
         """
         # Create an empty spectra to add to
         if this_model.per_particle:
-            particle_spectra[this_model.label] = Sed(
+            out_spec = Sed(
                 emission_model.lam,
                 lnu=np.zeros_like(
                     particle_spectra[this_model.combine[0].label]._lnu
                 ),
             )
         else:
-            spectra[this_model.label] = Sed(
+            out_spec = Sed(
                 emission_model.lam,
                 lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
             )
@@ -768,20 +780,22 @@ class Combination:
         # Combine the spectra
         for combine_model in this_model.combine:
             if this_model.per_particle:
-                particle_spectra[this_model.label]._lnu += particle_spectra[
-                    combine_model.label
-                ]._lnu
+                out_spec._lnu += particle_spectra[combine_model.label]._lnu
             else:
-                spectra[this_model.label]._lnu += spectra[
-                    combine_model.label
-                ]._lnu
+                out_spec._lnu += spectra[combine_model.label]._lnu
 
-        # If we made a per particle spectra we need to sum it and get the
-        # integrated spectra
+        # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
-            spectra[this_model.label] = particle_spectra[
-                this_model.label
-            ].sum()
+            particle_spectra[this_model.label] = out_spec
+            spectra[this_model.label] = out_spec.sum()
+            print(
+                "Combining:",
+                this_model.label,
+                spectra[this_model.label].shape,
+                particle_spectra[this_model.label].shape,
+            )
+        else:
+            spectra[this_model.label] = out_spec
 
         return spectra, particle_spectra
 
