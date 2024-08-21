@@ -139,6 +139,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         covering_fraction_blr,
         torus_emission_model,
         label="intrinsic",
+        **kwargs,
     ):
         """
         Initialize the UnifiedAGN model.
@@ -150,14 +151,18 @@ class UnifiedAGN(BlackHoleEmissionModel):
             covering_fraction_blr (float): The covering fraction of the BLR.
             torus_emission_model (synthesizer.dust.EmissionModel): The dust
                 emission model to use for the torus.
+            label (str): The label for the model.
+            **kwargs: Any additional keyword arguments to pass to the
+                BlackHoleEmissionModel.
         """
         # Get the incident istropic disc emission model
         self.disc_incident_isotropic = self._make_disc_incident_isotropic(
             nlr_grid,
+            **kwargs,
         )
 
         # Get the incident model accounting for the geometry but unmasked
-        self.disc_incident = self._make_disc_incident(nlr_grid)
+        self.disc_incident = self._make_disc_incident(nlr_grid, **kwargs)
 
         # Get the transmitted disc emission models
         (
@@ -169,6 +174,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             blr_grid,
             covering_fraction_nlr,
             covering_fraction_blr,
+            **kwargs,
         )
 
         # Get the escaped disc emission model
@@ -176,10 +182,11 @@ class UnifiedAGN(BlackHoleEmissionModel):
             nlr_grid,
             covering_fraction_nlr,
             covering_fraction_blr,
+            **kwargs,
         )
 
         # Get the disc emission model
-        self.disc = self._make_disc()
+        self.disc = self._make_disc(**kwargs)
 
         # Get the line regions
         self.nlr, self.blr = self._make_line_regions(
@@ -187,10 +194,11 @@ class UnifiedAGN(BlackHoleEmissionModel):
             blr_grid,
             covering_fraction_nlr,
             covering_fraction_blr,
+            **kwargs,
         )
 
         # Get the torus emission model
-        self.torus = self._make_torus(torus_emission_model)
+        self.torus = self._make_torus(torus_emission_model, **kwargs)
 
         # Create the final model
         BlackHoleEmissionModel.__init__(
@@ -207,20 +215,22 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 self.disc_incident,
             ),
             post_processing=(scale_by_incident_isotropic,),
+            **kwargs,
         )
 
-    def _make_disc_incident_isotropic(self, grid):
+    def _make_disc_incident_isotropic(self, grid, **kwargs):
         """Make the disc spectra assuming isotropic emission."""
         model = BlackHoleEmissionModel(
             grid=grid,
             label="disc_incident_isotropic",
             extract="incident",
             fixed_parameters={"cosine_inclination": 0.5},
+            **kwargs,
         )
 
         return model
 
-    def _make_disc_incident(self, grid):
+    def _make_disc_incident(self, grid, **kwargs):
         """Make the disc spectra."""
         model = BlackHoleEmissionModel(
             grid=grid,
@@ -229,6 +239,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            **kwargs,
         )
 
         return model
@@ -239,6 +250,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         blr_grid,
         covering_fraction_nlr,
         covering_fraction_blr,
+        **kwargs,
     ):
         """Make the disc transmitted spectra."""
         # Make the line regions
@@ -250,6 +262,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            **kwargs,
         )
         blr = BlackHoleEmissionModel(
             grid=blr_grid,
@@ -259,6 +272,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            **kwargs,
         )
 
         # Combine the models
@@ -268,6 +282,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            **kwargs,
         )
 
         return nlr, blr, model
@@ -277,6 +292,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         grid,
         covering_fraction_nlr,
         covering_fraction_blr,
+        **kwargs,
     ):
         """
         Make the disc escaped spectra.
@@ -289,11 +305,12 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="disc_escaped",
             extract="incident",
             fesc=(covering_fraction_nlr + covering_fraction_blr),
+            **kwargs,
         )
 
         return model
 
-    def _make_disc(self):
+    def _make_disc(self, **kwargs):
         """Make the disc spectra."""
         return BlackHoleEmissionModel(
             label="disc",
@@ -301,6 +318,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            **kwargs,
         )
 
     def _make_line_regions(
@@ -309,6 +327,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
         blr_grid,
         covering_fraction_nlr,
         covering_fraction_blr,
+        **kwargs,
     ):
         """Make the line regions."""
         # Make the line regions with fixed inclination
@@ -321,6 +340,7 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            **kwargs,
         )
         blr = BlackHoleEmissionModel(
             grid=blr_grid,
@@ -331,14 +351,16 @@ class UnifiedAGN(BlackHoleEmissionModel):
             mask_attr="_torus_edgeon_cond",
             mask_thresh=90 * deg,
             mask_op="<",
+            **kwargs,
         )
         return nlr, blr
 
-    def _make_torus(self, torus_emission_model):
+    def _make_torus(self, torus_emission_model, **kwargs):
         """Make the torus spectra."""
         return BlackHoleEmissionModel(
             label="torus",
             generator=torus_emission_model,
             lum_intrinsic_model=self.disc_incident_isotropic,
             scale_by="torus_fraction",
+            **kwargs,
         )
