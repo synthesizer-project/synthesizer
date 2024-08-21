@@ -767,6 +767,7 @@ class Combination:
                     combine_model.label
                 ]._lnu[~nan_mask]
             else:
+                nan_mask = np.isnan(spectra[combine_model.label]._lnu)
                 out_spec._lnu[~nan_mask] += spectra[combine_model.label]._lnu[
                     ~nan_mask
                 ]
