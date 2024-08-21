@@ -762,9 +762,14 @@ class Combination:
         # Combine the spectra
         for combine_model in this_model.combine:
             if this_model.per_particle:
-                out_spec._lnu += particle_spectra[combine_model.label]._lnu
+                nan_mask = np.isnan(particle_spectra[combine_model.label]._lnu)
+                out_spec._lnu[~nan_mask] += particle_spectra[
+                    combine_model.label
+                ]._lnu[~nan_mask]
             else:
-                out_spec._lnu += spectra[combine_model.label]._lnu
+                out_spec._lnu[~nan_mask] += spectra[combine_model.label]._lnu[
+                    ~nan_mask
+                ]
 
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
