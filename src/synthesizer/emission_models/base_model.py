@@ -2389,7 +2389,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         del particle_spectra[model.label]
 
         for key, spec in spectra.items():
-            print(spec.shape, particle_spectra[key].shape)
+            if key not in particle_spectra:
+                print(key, spec.shape)
+            else:
+                print(key, spec.shape, particle_spectra[key].shape)
 
         return spectra, particle_spectra
 
