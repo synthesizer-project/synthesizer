@@ -736,6 +736,13 @@ class Combination:
                     combine_model.label
                 ]._lnu
 
+        # If we made a per particle spectra we need to sum it and get the
+        # integrated spectra
+        if this_model.per_particle:
+            spectra[this_model.label] = particle_spectra[
+                this_model.label
+            ].sum()
+
         return spectra, particle_spectra
 
     def _combine_lines(
