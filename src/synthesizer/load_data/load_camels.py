@@ -312,8 +312,8 @@ def load_CAMELS_Astrid(
     """
 
     with h5py.File(f"{_dir}/{snap_name}", "r") as hf:
-        redshift = hf["Header"].attrs["Redshift"].astype(np.float32)
-        scale_factor = hf["Header"].attrs["Time"][0].astype(np.float32)
+        redshift = hf["Header"].attrs["Redshift"].astype(np.float32)[0]
+        scale_factor = hf["Header"].attrs["Time"].astype(np.float32)[0]
         h = hf["Header"].attrs["HubbleParam"][0]
         Om0 = hf["Header"].attrs["Omega0"][0]
 
@@ -321,8 +321,7 @@ def load_CAMELS_Astrid(
         coods = hf["PartType4/Coordinates"][:]  # kpc (comoving)
         masses = hf["PartType4/Masses"][:]
 
-        # TODO: update with correct scaling
-        imasses = np.ones(len(masses)) * 0.00155
+        imasses = np.ones(len(masses)) * 1.27e-4
 
         _metals = hf["PartType4/GFM_Metals"][:]
         metallicity = hf["PartType4/GFM_Metallicity"][:]
@@ -794,7 +793,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
         g_hsml=g_hsml,
     )
 
-    galaxies = pool.map(_f, mask)
+    galaxies = list(pool.map(_f, mask))
     pool.close()
 
     return galaxies
