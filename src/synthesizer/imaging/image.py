@@ -267,10 +267,6 @@ class Image:
         # strip them off
         coordinates = coordinates.to(self.resolution.units).value
 
-        # In case coordinates haven't been centered we need to centre them
-        if not (coordinates.min() < 0 and coordinates.max() > 0):
-            coordinates -= np.average(coordinates, axis=0, weights=signal)
-
         self.arr = np.histogram2d(
             coordinates[:, 0],
             coordinates[:, 1],
@@ -380,10 +376,6 @@ class Image:
         # strip them off
         coordinates = coordinates.to(self.resolution.units).value
         smoothing_lengths = smoothing_lengths.to(self.resolution.units).value
-
-        # In case coordinates haven't been centered we need to centre them
-        if not (coordinates.min() < 0 and coordinates.max() > 0):
-            coordinates -= np.average(coordinates, axis=0, weights=signal)
 
         # Prepare the inputs, we need to make sure we are passing C contiguous
         # arrays.
