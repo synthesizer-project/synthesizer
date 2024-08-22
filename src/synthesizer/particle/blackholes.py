@@ -24,7 +24,7 @@ from synthesizer.line import Line
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer.utils import TableFormatter, value_to_array
-from synthesizer.warnings import warn
+from synthesizer.warnings import deprecated, warn
 
 
 class BlackHoles(Particles, BlackholesComponent):
@@ -168,7 +168,7 @@ class BlackHoles(Particles, BlackholesComponent):
             masses=masses,
             redshift=redshift,
             softening_length=softening_length,
-            nparticles=len(masses),
+            nparticles=masses.size,
             centre=centre,
             tau_v=tau_v,
             name="Black Holes",
@@ -229,6 +229,10 @@ class BlackHoles(Particles, BlackholesComponent):
                 If any arguments are incompatible or not as expected an error
                 is thrown.
         """
+        # Need an early exit if we have no black holes since any
+        # multidimensional  attributes will trigger the error below erroneously
+        if self.nbh == 0:
+            return
 
         # Ensure all arrays are the expected length
         for key in self.attrs:
@@ -427,6 +431,7 @@ class BlackHoles(Particles, BlackholesComponent):
         self,
         grid,
         line_id,
+        line_type,
         fesc,
         mask,
         grid_assignment_method,
@@ -440,6 +445,9 @@ class BlackHoles(Particles, BlackholesComponent):
                 The AGN grid object to extract lines from.
             line_id (str)
                 The id of the line to extract.
+            line_type (str)
+                The type of line to extract from the grid. Must match the
+                spectra/line type in the grid file.
             fesc (float/array-like, float)
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
@@ -542,11 +550,11 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # Get the line grid and continuum
         grid_line = np.ascontiguousarray(
-            grid.lines[line_id]["luminosity"],
+            grid.line_lums[line_type][line_id],
             np.float64,
         )
         grid_continuum = np.ascontiguousarray(
-            grid.lines[line_id]["continuum"],
+            grid.line_conts[line_type][line_id],
             np.float64,
         )
 
@@ -623,6 +631,10 @@ class BlackHoles(Particles, BlackholesComponent):
                 f"The Grid does not contain the key '{spectra_name}'"
             )
 
+        # If we have no black holes return zeros
+        if self.nbh == 0:
+            return np.zeros((self.nbh, len(grid.lam)))
+
         from ..extensions.particle_spectra import compute_particle_seds
 
         # Prepare the arguments for the C function.
@@ -651,6 +663,7 @@ class BlackHoles(Particles, BlackholesComponent):
         self,
         grid,
         line_id,
+        line_type,
         fesc,
         mask=None,
         method="cic",
@@ -672,6 +685,9 @@ class BlackHoles(Particles, BlackholesComponent):
                 A list of line_ids or a str denoting a single line.
                 Doublets can be specified as a nested list or using a
                 comma (e.g. 'OIII4363,OIII4959').
+            line_type (str)
+                The type of line to extract from the grid. Must match the
+                spectra/line type in the grid file.
             fesc (float/array-like, float)
                 Fraction of blackhole emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
@@ -699,6 +715,20 @@ class BlackHoles(Particles, BlackholesComponent):
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
+        # If we have no black holes return zeros
+        if self.nbh == 0:
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
+
         # Ensure and warn that the masking hasn't removed everything
         if mask is not None and np.sum(mask) == 0:
             warn("Age mask has filtered out all particles")
@@ -707,8 +737,7 @@ class BlackHoles(Particles, BlackholesComponent):
                 *[
                     Line(
                         line_id=line_id_,
-                        wavelength=grid.lines[line_id_]["wavelength"]
-                        * angstrom,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
                         luminosity=np.zeros(self.nparticles) * erg / s,
                         continuum=np.zeros(self.nparticles) * erg / s / Hz,
                     )
@@ -727,13 +756,14 @@ class BlackHoles(Particles, BlackholesComponent):
             # Get this line's wavelength
             # TODO: The units here should be extracted from the grid but aren't
             # yet stored.
-            lam = grid.lines[line_id_]["wavelength"] * angstrom
+            lam = grid.line_lams[line_id_] * angstrom
 
             # Get the luminosity and continuum
             _lum, _cont = compute_particle_line(
                 *self._prepare_line_args(
                     grid,
                     line_id_,
+                    line_type,
                     fesc,
                     mask=mask,
                     grid_assignment_method=method,
@@ -767,6 +797,10 @@ class BlackHoles(Particles, BlackholesComponent):
         else:
             return Line(*lines)
 
+    @deprecated(
+        message="is now just a wrapper "
+        "around get_spectra. It will be removed by v1.0.0."
+    )
     def get_particle_spectra(
         self,
         emission_model,
@@ -828,23 +862,24 @@ class BlackHoles(Particles, BlackholesComponent):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
-        # Get the spectra
-        spectra = emission_model._get_spectra(
-            emitters={"blackhole": self},
-            per_particle=True,
+        previous_per_part = emission_model.per_particle
+        emission_model.set_per_particle(True)
+        spectra = self.get_spectra(
+            emission_model=emission_model,
             dust_curves=dust_curves,
             tau_v=tau_v,
-            fesc=covering_fraction,
+            covering_fraction=covering_fraction,
             mask=mask,
             verbose=verbose,
             **kwargs,
         )
+        emission_model.set_per_particle(previous_per_part)
+        return spectra
 
-        # Update the spectra dictionary
-        self.particle_spectra.update(spectra)
-
-        return self.particle_spectra[emission_model.label]
-
+    @deprecated(
+        message="is now just a wrapper "
+        "around get_lines. It will be removed by v1.0.0."
+    )
     def get_particle_lines(
         self,
         line_ids,
@@ -909,11 +944,11 @@ class BlackHoles(Particles, BlackholesComponent):
                 A LineCollection object containing the lines defined by the
                 root model.
         """
-        # Get the lines
-        lines = emission_model._get_lines(
+        previous_per_part = emission_model.per_particle
+        emission_model.set_per_particle(True)
+        lines = self.get_lines(
             line_ids=line_ids,
-            emitters={"blackhole": self},
-            per_particle=True,
+            emission_model=emission_model,
             dust_curves=dust_curves,
             tau_v=tau_v,
             covering_fraction=covering_fraction,
@@ -921,8 +956,5 @@ class BlackHoles(Particles, BlackholesComponent):
             verbose=verbose,
             **kwargs,
         )
-
-        # Update the lines dictionary
-        self.particle_lines.update(lines)
-
-        return self.particle_lines[emission_model.label]
+        emission_model.set_per_particle(previous_per_part)
+        return lines

@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from scipy.integrate import simpson, trapezoid
+
 from synthesizer.extensions.integration import (
     simps_last_axis,
     trapz_last_axis,

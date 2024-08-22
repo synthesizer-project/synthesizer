@@ -6,6 +6,8 @@ An example of how to do image addition and testing error functionality.
 """
 
 import numpy as np
+from unyt import Myr, kpc
+
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.exceptions import InconsistentAddition
 from synthesizer.filters import FilterCollection as Filters
@@ -14,7 +16,6 @@ from synthesizer.imaging import Image, ImageCollection
 from synthesizer.parametric import Stars
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.parametric.morphology import Sersic2D
-from unyt import Myr, kpc
 
 if __name__ == "__main__":
     # First set up some stuff so we can make demonstration images.

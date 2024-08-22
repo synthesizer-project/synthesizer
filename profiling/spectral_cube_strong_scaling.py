@@ -1,8 +1,8 @@
-"""A script to test the strong scaling of the integrated spectra calculation.
+"""A script to test the strong scaling of the spectral data cube calculation.
 
 Usage:
-    python int_spectra_strong_scaling.py --basename test --max_threads 8
-       --nstars 10**5
+    python spectral_cube_strong_scaling.py --basename test --max_threads 8
+       --nstars 10**5 --average_over 10
 """
 
 import argparse
@@ -14,11 +14,18 @@ import time
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Myr
+from astropy.cosmology import Planck15 as cosmo
+from scipy.spatial import cKDTree
+from unyt import Myr, kpc
 
+from synthesizer.emission_models import IncidentEmission
+from synthesizer.filters import FilterCollection as Filters
 from synthesizer.grid import Grid
+from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
+from synthesizer.particle.galaxy import Galaxy
+from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfhz
 
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -28,24 +35,48 @@ plt.rcParams["font.serif"] = ["Times New Roman"]
 np.random.seed(42)
 
 
-def int_spectra_strong_scaling(
+def calculate_smoothing_lengths(positions, num_neighbors=56):
+    """Calculate the SPH smoothing lengths for a set of coordinates."""
+    tree = cKDTree(positions)
+    distances, _ = tree.query(positions, k=num_neighbors + 1)
+
+    # The k-th nearest neighbor distance (k = num_neighbors)
+    kth_distances = distances[:, num_neighbors]
+
+    # Set the smoothing length to the k-th nearest neighbor
+    # distance divided by 2.0
+    smoothing_lengths = kth_distances / 2.0
+
+    return smoothing_lengths
+
+
+def cube_strong_scaling(
     basename,
     max_threads=8,
-    nstars=10**5,
+    nstars=10**4,
     average_over=10,
-    gam="cic",
+    type="smoothed",
 ):
-    """Profile the cpu time usage of the integrated spectra calculation."""
+    """Profile the cpu time usage of the data cube calculation."""
     # Define the grid
     grid_name = "test_grid"
     grid_dir = "../tests/test_grid/"
-    grid = Grid(grid_name, grid_dir=grid_dir)
+    grid = Grid(grid_name, grid_dir=grid_dir, lam_lims=(1000, 100000))
+
+    # Define the width of the data cube
+    width = 30 * kpc
+
+    # Define data cube resolution (here we arbitrarily set it to 100
+    # pixels along an axis)
+    resolution = width / 100
 
     # Define the grid (normally this would be defined by an SPS grid)
     log10ages = np.arange(6.0, 10.5, 0.1)
     metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
-    metal_dist = ZDist.Normal(0.005, 0.01)
-    sfh = SFH.Constant(100 * Myr)  # constant star formation
+    Z_p = {"metallicity": 0.01}
+    metal_dist = ZDist.DeltaConstant(**Z_p)
+    sfh_p = {"duration": 100 * Myr}
+    sfh = SFH.Constant(**sfh_p)  # constant star formation
 
     # Generate the star formation metallicity history
     mass = 10**10
@@ -57,20 +88,67 @@ def int_spectra_strong_scaling(
         initial_mass=mass,
     )
 
+    # Generate some random coordinates
+    coords = CoordinateGenerator.generate_3D_gaussian(
+        nstars,
+        mean=np.array([50, 50, 50]),
+        cov=np.array([[0.0001, 0, 0], [0, 0.0001, 0], [0, 0, 0.0001]]),
+    )
+
+    # Calculate the smoothing lengths
+    smls = calculate_smoothing_lengths(coords, num_neighbors=56)
+
     # Sample the SFZH, producing a Stars object
+    # we will also pass some keyword arguments for attributes
+    # we will need for imaging
     stars = sample_sfhz(
         param_stars.sfzh,
         param_stars.log10ages,
         param_stars.log10metallicities,
         nstars,
+        coordinates=coords,
         current_masses=np.full(nstars, 10**8.7 / nstars),
+        smoothing_lengths=smls,
         redshift=1,
+        centre=np.array([50, 50, 50]),
     )
 
-    # Get spectra in serial first to get over any overhead due to linking
+    # Create galaxy object
+    gal = Galaxy("Galaxy", stars=stars, redshift=1)
+    gal.stars.get_radii()
+    print(gal.stars.radii.max())
+
+    # Calculate the stellar rest frame SEDs for all particles in erg / s / Hz
+    model = IncidentEmission(grid, per_particle=True)
+    sed = gal.stars.get_spectra(model)
+
+    # Calculate the observed SED in nJy
+    sed.get_fnu(cosmo, gal.redshift, igm=None)
+
+    filter_codes = [
+        "JWST/NIRCam.F200W",
+    ]
+
+    filters = Filters(filter_codes, new_lam=grid.lam)
+
+    gal.stars.particle_spectra["incident"].get_photo_luminosities(filters)
+
+    # Get the kernel
+    kernel = Kernel().get_kernel()
+
+    # Get the tau_vs in serial first to get over any overhead due to linking
     # the first time the function is called
-    print("Initial serial spectra calculation")
-    stars.get_spectra_incident(grid, nthreads=1, grid_assignment_method=gam)
+    print("Initial serial calculation")
+    gal.get_data_cube(
+        resolution,
+        fov=width,
+        lam=grid.lam,
+        cube_type=type,
+        stellar_spectra="incident",
+        blackhole_spectra=None,
+        kernel=kernel,
+        kernel_threshold=1,
+    )
     print()
 
     # Step 1: Save original stdout file descriptor and redirect
@@ -90,13 +168,21 @@ def int_spectra_strong_scaling(
             print(f"=== Testing with {nthreads} threads ===")
             for i in range(average_over):
                 spec_start = time.time()
-                stars.get_spectra_incident(
-                    grid, nthreads=nthreads, grid_assignment_method=gam
+                gal.get_data_cube(
+                    resolution,
+                    fov=width,
+                    lam=grid.lam,
+                    cube_type=type,
+                    stellar_spectra="incident",
+                    blackhole_spectra=None,
+                    kernel=kernel,
+                    kernel_threshold=1,
+                    nthreads=nthreads,
                 )
                 execution_time = time.time() - spec_start
 
                 print(
-                    "[Total] Getting spectra execution time:",
+                    "[Total] Getting data cube execution time:",
                     execution_time,
                 )
 
@@ -111,15 +197,21 @@ def int_spectra_strong_scaling(
                 print(f"=== Testing with {max_threads} threads ===")
                 for i in range(average_over):
                     spec_start = time.time()
-                    stars.get_spectra_incident(
-                        grid,
+                    gal.get_data_cube(
+                        resolution,
+                        fov=width,
+                        lam=grid.lam,
+                        cube_type=type,
+                        stellar_spectra="incident",
+                        blackhole_spectra=None,
+                        kernel=kernel,
+                        kernel_threshold=1,
                         nthreads=max_threads,
-                        grid_assignment_method=gam,
                     )
                     execution_time = time.time() - spec_start
 
                     print(
-                        "[Total] Getting spectra execution time:",
+                        "[Total] Getting data cube execution time:",
                         execution_time,
                     )
 
@@ -206,7 +298,7 @@ def int_spectra_strong_scaling(
 
     # Save to a text file
     np.savetxt(
-        f"{basename}_integrated_strong_scaling_{gam}_{nstars}.txt",
+        f"{basename}_data_cube_strong_scaling_{nstars}.txt",
         values,
         fmt=[
             "%.10f" if key != "Threads" else "%d"
@@ -238,7 +330,7 @@ def int_spectra_strong_scaling(
         )
 
     ax_main.set_ylabel("Time (s)")
-    ax_main.set_title(f"Integrated Spectra Strong Scaling ({nstars} stars)")
+    ax_main.set_title(f"Data Cube Strong Scaling ({nstars} stars)")
     ax_main.grid(True)
 
     # Speedup plot
@@ -295,7 +387,7 @@ def int_spectra_strong_scaling(
     ax_speedup.legend(handles=handles, loc="upper left")
 
     fig.savefig(
-        f"{basename}_integrated_strong_scaling_{gam}_NStars"
+        f"{basename}_data_cube_scaling_NStars"
         f"{nstars}_TotThreahs{max_threads}.png",
         dpi=300,
         bbox_inches="tight",
@@ -324,7 +416,7 @@ if __name__ == "__main__":
     args.add_argument(
         "--nstars",
         type=int,
-        default=10**5,
+        default=10**4,
         help="The number of stars to use in the simulation.",
     )
 
@@ -336,18 +428,18 @@ if __name__ == "__main__":
     )
 
     args.add_argument(
-        "--grid_assign",
+        "--type",
         type=str,
-        default="cic",
-        help="The grid assignment method (cic or ngp).",
+        default="smoothed",
+        help="What type of spectral data cube to make, smoothed or hist.",
     )
 
     args = args.parse_args()
 
-    int_spectra_strong_scaling(
+    cube_strong_scaling(
         args.basename,
         args.max_threads,
         args.nstars,
         args.average_over,
-        args.grid_assign,
+        args.type,
     )

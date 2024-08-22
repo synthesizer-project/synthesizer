@@ -328,6 +328,7 @@ class BlackHole(BlackholesComponent):
         self,
         grid,
         line_id,
+        line_type,
         fesc,
         mask,
         grid_assignment_method,
@@ -341,6 +342,9 @@ class BlackHole(BlackholesComponent):
                 The AGN grid object to extract lines from.
             line_id (str)
                 The id of the line to extract.
+            line_type (str)
+                The type of line to extract from the grid. This must match a
+                type of line stored in the grid.
             fesc (float/array-like, float)
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
@@ -443,11 +447,11 @@ class BlackHole(BlackholesComponent):
 
         # Get the line grid and continuum
         grid_line = np.ascontiguousarray(
-            grid.lines[line_id]["luminosity"],
+            grid.line_lums[line_type][line_id],
             np.float64,
         )
         grid_continuum = np.ascontiguousarray(
-            grid.lines[line_id]["continuum"],
+            grid.line_conts[line_type][line_id],
             np.float64,
         )
 

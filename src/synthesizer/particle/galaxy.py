@@ -16,9 +16,11 @@ Example usage:
 
 """
 
+import copy
+
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Myr, unyt_quantity
+from unyt import Myr, rad, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -26,6 +28,7 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import Gas, Stars
+from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.warnings import deprecated, warn
 
 
@@ -567,7 +570,7 @@ class Galaxy(BaseGalaxy):
 
         return tau_v
 
-    @deprecated
+    @deprecated()
     def calculate_los_tau_v(
         self,
         kappa,
@@ -750,21 +753,26 @@ class Galaxy(BaseGalaxy):
         self, stellar_mass_weighted_age=None, ism_metallicity=None
     ):
         """
-        Fitting function for the dust-to-metals ratio based on
+        Calculate the dust to metal ratio based on stellar age and metallicity.
+
+        This uses a fitting function for the dust-to-metals ratio based on
         galaxy properties, from L-GALAXIES dust modeling.
 
         Vijayan+19: https://arxiv.org/abs/1904.02196
+
+        Note this will recalculate the dust masses based on the new dust-to-
+        metal ratio.
 
         Args:
             stellar_mass_weighted_age (float)
                 Mass weighted age of stars in Myr. Defaults to None,
                 and uses value provided on this galaxy object (in Gyr)
-                ism_metallicity (float)
+            ism_metallicity (float)
                 Mass weighted gas-phase metallicity. Defaults to None,
                 and uses value provided on this galaxy object
                 (dimensionless)
         """
-
+        # Ensure we have what we need for the calculation
         if stellar_mass_weighted_age is None:
             if self.stellar_mass_weighted_age is None:
                 raise ValueError("No stellar_mass_weighted_age provided")
@@ -797,6 +805,13 @@ class Galaxy(BaseGalaxy):
         # Save under gas properties
         self.gas.dust_to_metal_ratio = dtm
 
+        # We need to recalculate the dust masses so things don't end up
+        # inconsistent (dust_masses are automatically calculated at
+        # intialisation). If the user handed dust masses and then called this
+        # function, they will be overwritten and it will be confusing but
+        # that's so unlikely and they'll work out when they see this comment.
+        self.gas.dust_masses = self.gas.masses * self.gas.dust_to_metal_ratio
+
         return dtm
 
     def get_images_luminosity(
@@ -808,6 +823,7 @@ class Galaxy(BaseGalaxy):
         blackhole_photometry=None,
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make an ImageCollection from luminosities.
@@ -845,6 +861,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image : array-like
@@ -869,7 +887,7 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_hist(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_luminosities,
+                    ].photo_lnu,
                     coordinates=self.stars.centered_coordinates,
                 )
 
@@ -878,11 +896,12 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_smoothed(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_luminosities,
+                    ].photo_lnu,
                     coordinates=self.stars.centered_coordinates,
                     smoothing_lengths=self.stars.smoothing_lengths,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
+                    nthreads=nthreads,
                 )
 
             else:
@@ -900,7 +919,7 @@ class Galaxy(BaseGalaxy):
             blackhole_imgs.get_imgs_hist(
                 photometry=self.black_holes.particle_spectra[
                     blackhole_photometry
-                ].photo_luminosities,
+                ].photo_lnu,
                 coordinates=self.black_holes.centered_coordinates,
             )
 
@@ -920,6 +939,7 @@ class Galaxy(BaseGalaxy):
         blackhole_photometry=None,
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make an ImageCollection from fluxes.
@@ -957,6 +977,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image : array-like
@@ -981,7 +1003,7 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_hist(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_fluxes,
+                    ].photo_fnu,
                     coordinates=self.stars.centered_coordinates,
                 )
 
@@ -990,11 +1012,12 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_smoothed(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_fluxes,
+                    ].photo_fnu,
                     coordinates=self.stars.centered_coordinates,
                     smoothing_lengths=self.stars.smoothing_lengths,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
+                    nthreads=nthreads,
                 )
 
             else:
@@ -1012,7 +1035,7 @@ class Galaxy(BaseGalaxy):
             blackhole_imgs.get_imgs_hist(
                 photometry=self.black_holes.particle_spectra[
                     blackhole_photometry
-                ].photo_fluxes,
+                ].photo_fnu,
                 coordinates=self.black_holes.centered_coordinates,
             )
 
@@ -1030,6 +1053,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a mass map, either with or without smoothing.
@@ -1047,6 +1071,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1073,6 +1099,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1090,6 +1117,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a mass map, either with or without smoothing.
@@ -1107,6 +1135,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1133,6 +1163,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.gas.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1150,6 +1181,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make an age map, either with or without smoothing.
@@ -1170,6 +1202,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1196,6 +1230,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1226,6 +1261,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         # Divide out the mass contribution, handling zero contribution pixels
@@ -1246,6 +1282,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a stellar metal mass map, either with or without smoothing.
@@ -1263,6 +1300,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1289,6 +1328,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1306,6 +1346,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a gas metal mass map, either with or without smoothing.
@@ -1325,6 +1366,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1351,6 +1394,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.gas.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1368,6 +1412,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a stellar metallicity map, either with or without smoothing.
@@ -1388,6 +1433,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1399,11 +1446,12 @@ class Galaxy(BaseGalaxy):
             img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
         )
 
         # Make the mass image
         mass_img = self.get_map_stellar_mass(
-            resolution, fov, img_type, kernel, kernel_threshold
+            resolution, fov, img_type, kernel, kernel_threshold, nthreads
         )
 
         # Divide out the mass contribution, handling zero contribution pixels
@@ -1424,6 +1472,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a gas metallicity map, either with or without smoothing.
@@ -1446,6 +1495,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1457,11 +1508,12 @@ class Galaxy(BaseGalaxy):
             img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
         )
 
         # Make the mass image
         mass_img = self.get_map_gas_mass(
-            resolution, fov, img_type, kernel, kernel_threshold
+            resolution, fov, img_type, kernel, kernel_threshold, nthreads
         )
 
         # Divide out the mass contribution, handling zero contribution pixels
@@ -1483,6 +1535,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         age_bin=100 * Myr,
+        nthreads=1,
     ):
         """
         Make a SFR map, either with or without smoothing.
@@ -1507,6 +1560,8 @@ class Galaxy(BaseGalaxy):
             age_bin (unyt_quantity/float)
                 The size of the age bin used to calculate the star formation
                 rate. If supplied without units, the unit system is assumed.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1544,6 +1599,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths[mask],
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1566,6 +1622,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         age_bin=100 * Myr,
+        nthreads=1,
     ):
         """
         Make a SFR map, either with or without smoothing.
@@ -1591,6 +1648,8 @@ class Galaxy(BaseGalaxy):
             age_bin (unyt_quantity/float)
                 The size of the age bin used to calculate the star formation
                 rate. If supplied without units, the unit system is assumed.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1603,6 +1662,7 @@ class Galaxy(BaseGalaxy):
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             age_bin=age_bin,
+            nthreads=nthreads,
         )
 
         # Convert the SFR map to sSFR
@@ -1622,6 +1682,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         quantity="lnu",
+        nthreads=1,
     ):
         """
         Make a SpectralCube from an Sed held by this galaxy.
@@ -1658,12 +1719,16 @@ class Galaxy(BaseGalaxy):
             quantity (str):
                 The Sed attribute/quantity to sort into the data cube, i.e.
                 "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             SpectralCube
                 The spectral data cube object containing the derived
                 data cube.
         """
+        start = tic()
+
         # Make sure we have an image to make
         if stellar_spectra is None and blackhole_spectra is None:
             raise exceptions.InconsistentArguments(
@@ -1694,6 +1759,7 @@ class Galaxy(BaseGalaxy):
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     quantity=quantity,
+                    nthreads=nthreads,
                 )
 
         # Make blackhole image if requested
@@ -1718,11 +1784,154 @@ class Galaxy(BaseGalaxy):
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     quantity=quantity,
+                    nthreads=nthreads,
                 )
 
         # Return the images, combining if there are multiple components
         if stellar_spectra is not None and blackhole_spectra is not None:
+            toc("Computing stellar and blackhole spectral data cubes", start)
             return stellar_cube + blackhole_cube
         elif stellar_spectra is not None:
+            toc("Computing stellar spectral data cube", start)
             return stellar_cube
+        toc("Computing blackhole spectral data cube", start)
         return blackhole_cube
+
+    def rotate_particles(
+        self,
+        phi=0 * rad,
+        theta=0 * rad,
+        rot_matrix=None,
+        inplace=True,
+    ):
+        """
+        Rotate coordinates.
+
+        This method can either use angles or a provided rotation matrix.
+
+        When using angles phi is the rotation around the z-axis while theta
+        is the rotation around the y-axis.
+
+        This can both be done in place or return a new instance, by default
+        this will be done in place.
+
+        Args:
+            phi (unyt_quantity):
+                The angle in radians to rotate around the z-axis. If rot_matrix
+                is defined this will be ignored.
+            theta (unyt_quantity):
+                The angle in radians to rotate around the y-axis. If rot_matrix
+                is defined this will be ignored.
+            rot_matrix (array-like, float):
+                A 3x3 rotation matrix to apply to the coordinates
+                instead of phi and theta.
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with the rotated coordinates,
+                if inplace is False.
+        """
+        # Are we rotating in place?
+        if inplace:
+            gal = self
+        else:
+            gal = copy.deepcopy(self)
+
+        # Do the stars
+        if gal.stars is not None:
+            gal.stars.rotate_particles(
+                phi=phi,
+                theta=theta,
+                rot_matrix=rot_matrix,
+                inplace=True,
+            )
+
+        # Do the gas
+        if gal.gas is not None:
+            gal.gas.rotate_particles(
+                phi=phi,
+                theta=theta,
+                rot_matrix=rot_matrix,
+                inplace=True,
+            )
+
+        # Do the black holes
+        if gal.black_holes is not None:
+            gal.black_holes.rotate_particles(
+                phi=phi,
+                theta=theta,
+                rot_matrix=rot_matrix,
+                inplace=True,
+            )
+
+        # If we aren't rotating in place we need to return a new instance
+        if not inplace:
+            return gal
+        return
+
+    def rotate_edge_on(self, component="stars", inplace=True):
+        """
+        Rotate the particle distribution to edge-on.
+
+        This will rotate the particle distribution such that the angular
+        momentum vector is aligned with the y-axis in an image
+
+        Args:
+            component (str):
+                The component whose angular momentum vector should be used for
+                the rotation. Options are "stars", "gas" and "black_holes".
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with rotated coordinates,
+                if inplace is False.
+        """
+        # Get the angular momentum to rotate towards
+        angular_momentum = getattr(self, component).angular_momentum
+
+        # Get the rotation matrix to rotate ang_mom_hat to the y-axis
+        rot_matrix = get_rotation_matrix(
+            angular_momentum,
+            np.array([1, 0, 0]),
+        )
+
+        # Call the rotate_particles method with the computed angles
+        return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
+
+    def rotate_face_on(self, component="stars", inplace=True):
+        """
+        Rotate the particle distribution to face-on.
+
+        This will rotate the particle distribution such that the angular
+        momentum vector is aligned with the z-axis in an image.
+
+        Args:
+            component (str):
+                The component whose angular momentum vector should be used for
+                the rotation. Options are "stars", "gas" and "black_holes".
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with rotated coordinates,
+                if inplace is False.
+        """
+        # Get the angular momentum to rotate towards
+        angular_momentum = getattr(self, component).angular_momentum
+
+        # Get the rotation matrix to rotate ang_mom_hat to the z-axis
+        rot_matrix = get_rotation_matrix(
+            angular_momentum,
+            np.array([0, 0, -1]),
+        )
+
+        # Call the rotate_particles method with the computed angles
+        return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)

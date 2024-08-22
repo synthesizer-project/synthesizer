@@ -13,7 +13,19 @@ Example usage:
 """
 
 import numpy as np
-from unyt import Angstrom, Hz, c, cm, erg, nJy, pc, s, unyt_array
+from unyt import (
+    Angstrom,
+    Hz,
+    arcsecond,
+    c,
+    cm,
+    erg,
+    kpc,
+    nJy,
+    pc,
+    s,
+    unyt_array,
+)
 
 from synthesizer import exceptions
 from synthesizer.utils import has_units
@@ -103,6 +115,46 @@ def fnu_to_lnu(fnu, cosmo, redshift):
     lnu /= 1 + redshift
 
     return lnu.to(erg / s / Hz)
+
+
+def lnu_to_fnu(lnu, cosmo, redshift):
+    """
+    Convert spectral luminosity density to spectral flux density.
+
+    The conversion is done using the formula:
+
+            F_nu = L_nu * (1 + z) / 4 / pi / D_L**2
+
+    The result will be in units of nJy.
+
+    Args:
+        lnu (unyt_quantity/unyt_array)
+            The spectral luminosity density to be converted to flux, can
+            either be a singular value or array.
+        cosmo (astropy.cosmology)
+            The cosmology object used to calculate luminosity distance.
+        redshift (float)
+            The redshift of the rest frame.
+
+    Returns:
+        unyt_quantity/unyt_array
+            The converted spectral flux density.
+
+    Raises:
+        IncorrectUnits
+            If units are missing an error is raised.
+    """
+    # Ensure we have units
+    if not has_units(lnu):
+        raise exceptions.IncorrectUnits("lnu must be given with unyt units.")
+
+    # Calculate the luminosity distance (need to convert from astropy to unyt)
+    lum_dist = cosmo.luminosity_distance(redshift).to("cm").value * cm
+
+    # Calculate the flux in interim units
+    fnu = lnu * (1 + redshift) / 4 / np.pi / lum_dist**2
+
+    return fnu.to(nJy)
 
 
 def fnu_to_apparent_mag(fnu):
@@ -512,3 +564,57 @@ def tau_lam_to_tau_v(dust_curve, tau_lam, lam):
 
     tau_norm = dust_curve.get_tau(lam)
     return tau_lam / tau_norm
+
+
+def spatial_to_angular_at_z(spatial, cosmo, redshift):
+    """
+    Convert spatial distance to angular distance at a specified redshift.
+
+    Args:
+        spatial (unyt_quantity):
+            The spatial distance to convert.
+        cosmo (astropy.cosmology):
+            The cosmology object used to calculate angular diameter distance.
+        redshift (float):
+            The redshift of the source.
+
+    Returns:
+        unyt_quantity
+            The converted angular distance in arcseconds.
+    """
+    # Get the conversion factor
+    arcsec_per_kpc_at_z = (
+        cosmo.arcsec_per_kpc_proper(redshift).value * arcsecond / kpc
+    )
+
+    # Convert spatial to kpc
+    spatial_kpc = spatial.to("kpc")
+
+    return spatial_kpc * arcsec_per_kpc_at_z
+
+
+def angular_to_spatial_at_z(angular, cosmo, redshift):
+    """
+    Convert angular distance to spatial distance at a specified redshift.
+
+    Args:
+        angular (unyt_quantity):
+            The angular distance to convert.
+        cosmo (astropy.cosmology):
+            The cosmology object used to calculate angular diameter distance.
+        redshift (float):
+            The redshift of the source.
+
+    Returns:
+        unyt_quantity
+            The converted spatial distance in kpc.
+    """
+    # Get the conversion factor
+    kpc_per_arcsec_at_z = (
+        1 / cosmo.arcsec_per_kpc_proper(redshift).value * kpc / arcsecond
+    )
+
+    # Convert angular to arcseconds
+    angular_arcsec = angular.to("arcsecond")
+
+    return angular_arcsec * kpc_per_arcsec_at_z

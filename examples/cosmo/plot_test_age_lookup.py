@@ -13,6 +13,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology import Planck15
+
 from synthesizer.load_data.utils import age_lookup_table, lookup_age
 
 # get scale factors from test file
@@ -37,9 +38,9 @@ for delta_a in [1e-2, 1e-3, 1e-4, 1e-5, 5e-6]:
         np.log10(np.abs((part_ages - part_ages_proper).value)),
         s=1,
         alpha=1,
-        label=delta_a
+        label=delta_a,
     )
 
-ax.legend(title=r'$\Delta a$:')
-ax.set_ylabel(r'$\Delta \mathrm{log_{10} \, age \;\; (Gyr)}$')
+ax.legend(title=r"$\Delta a$:")
+ax.set_ylabel(r"$\Delta \mathrm{log_{10} \, age \;\; (Gyr)}$")
 plt.show()
