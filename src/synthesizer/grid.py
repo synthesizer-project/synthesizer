@@ -1188,8 +1188,7 @@ class Template:
             )
 
         # Compute the scaling based on normalisation
-        scaling = (bolometric_luminosity / self.normalisation).value
-        print(scaling)
+        scaling = bolometric_luminosity.value
 
         # Handle the dimensions of the bolometric luminosity
         if bolometric_luminosity.shape[0] == 1:
