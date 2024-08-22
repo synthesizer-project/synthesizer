@@ -1154,6 +1154,8 @@ class Template:
         # It's convenient to have an sed object for the next steps
         sed = Sed(lam, lnu)
 
+        print("Before interpolation:", lnu)
+
         # Before we do anything, do we have a grid we need to unify with?
         if unify_with_grid is not None:
             # Interpolate the template Sed onto the grid wavelength array
