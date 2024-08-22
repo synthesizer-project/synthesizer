@@ -1202,6 +1202,4 @@ class Template:
                 scaling[:, None] * self.lnu * (1 - self.fesc),
             )
 
-        print(sed)
-
         return sed
