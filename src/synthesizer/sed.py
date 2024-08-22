@@ -1151,7 +1151,7 @@ class Sed:
             new_lam = rebin_1d(self.lam, resample_factor, func=np.mean)
 
         # Evaluate the function at the desired wavelengths
-        new_spectra = spectres(new_lam, self._lam, self._lnu)
+        new_spectra = spectres(new_lam, self._lam, self._lnu, fill=0)
 
         # Instantiate the new Sed
         sed = Sed(new_lam, new_spectra)
@@ -1163,6 +1163,14 @@ class Sed:
             sed.obsnu = sed._nu / (1.0 + self.redshift)
             sed.fnu = spectres(sed._obslam, self._obslam, self._fnu)
             sed.redshift = self.redshift
+
+        # Clean up nans, we shouldn't get them but they do appear sometimes...
+        sed._lnu = np.nan_to_num(sed._lnu)
+        sed._fnu = np.nan_to_num(sed._fnu)
+        sed._lam = np.nan_to_num(sed._lam)
+        sed._nu = np.nan_to_num(sed._nu)
+        sed._obslam = np.nan_to_num(sed._obslam)
+        sed._obsnu = np.nan_to_num(sed._obsnu)
 
         toc("Resampling Sed", start)
 
