@@ -1206,5 +1206,6 @@ class Template:
             )
 
         print(sed)
+        print(self.lnu)
 
         return sed
