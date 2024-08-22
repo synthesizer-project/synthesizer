@@ -1791,7 +1791,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         alpha=0.3,
                     ),
                     fontsize=fontsize,
-                    alpha=1.0,
+                    alpha=alpha,
                     zorder=2,
                 )
 
@@ -2244,7 +2244,7 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                         **kwargs,
                     )
 
-                    spectra.update(rel_particle_spectra)
+                    spectra.update(rel_spectra)
                     particle_spectra.update(rel_particle_spectra)
 
             # Skip models for a different emitters
@@ -2268,31 +2268,43 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # Are we doing a combination?
             if this_model._is_combining:
-                spectra, particle_spectra = self._combine_spectra(
-                    emission_model,
-                    spectra,
-                    particle_spectra,
-                    this_model,
-                )
+                try:
+                    spectra, particle_spectra = self._combine_spectra(
+                        emission_model,
+                        spectra,
+                        particle_spectra,
+                        this_model,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
 
             elif this_model._is_dust_attenuating:
-                spectra, particle_spectra = self._dust_attenuate_spectra(
-                    this_model,
-                    spectra,
-                    particle_spectra,
-                    emitter,
-                    this_mask,
-                )
+                try:
+                    spectra, particle_spectra = self._dust_attenuate_spectra(
+                        this_model,
+                        spectra,
+                        particle_spectra,
+                        emitter,
+                        this_mask,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
 
             elif this_model._is_dust_emitting or this_model._is_generating:
-                spectra, particle_spectra = self._generate_spectra(
-                    this_model,
-                    emission_model,
-                    spectra,
-                    particle_spectra,
-                    self.lam,
-                    emitter,
-                )
+                try:
+                    spectra, particle_spectra = self._generate_spectra(
+                        this_model,
+                        emission_model,
+                        spectra,
+                        particle_spectra,
+                        self.lam,
+                        emitter,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
 
             # Are we scaling the spectra?
             for scaler in this_model.scale_by:
@@ -2565,33 +2577,45 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
             # Are we doing a combination?
             if this_model._is_combining:
-                lines, particle_lines = self._combine_lines(
-                    line_ids,
-                    emission_model,
-                    lines,
-                    particle_lines,
-                    this_model,
-                )
+                try:
+                    lines, particle_lines = self._combine_lines(
+                        line_ids,
+                        emission_model,
+                        lines,
+                        particle_lines,
+                        this_model,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
 
             elif this_model._is_dust_attenuating:
-                lines, particle_lines = self._dust_attenuate_lines(
-                    line_ids,
-                    this_model,
-                    lines,
-                    particle_lines,
-                    emitter,
-                    this_mask,
-                )
+                try:
+                    lines, particle_lines = self._dust_attenuate_lines(
+                        line_ids,
+                        this_model,
+                        lines,
+                        particle_lines,
+                        emitter,
+                        this_mask,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
 
             elif this_model._is_dust_emitting or this_model._is_generating:
-                lines, particle_lines = self._generate_lines(
-                    line_ids,
-                    this_model,
-                    emission_model,
-                    lines,
-                    particle_lines,
-                    emitter,
-                )
+                try:
+                    lines, particle_lines = self._generate_lines(
+                        line_ids,
+                        this_model,
+                        emission_model,
+                        lines,
+                        particle_lines,
+                        emitter,
+                    )
+                except Exception as e:
+                    print(f"Error in {this_model.label}!")
+                    raise e
 
             # Are we scaling the spectra?
             for scaler in this_model.scale_by:
