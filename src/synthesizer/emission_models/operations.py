@@ -338,10 +338,12 @@ class Generation:
         # If we have an empty emitter we can just return zeros (only applicable
         # when nparticles exists in the emitter)
         if getattr(emitter, "nparticles", 1) == 0:
-            spectra[this_model.label] = Sed(
-                lam, np.zeros((emitter.nparticles, lam.size))
-            )
-            return spectra
+            spectra[this_model.label] = Sed(lam, np.zeros(lam.size))
+            if per_particle:
+                particle_spectra[this_model.label] = Sed(
+                    lam, np.zeros((emitter.nparticles, lam.size))
+                )
+            return spectra, particle_spectra
 
         # Handle the dust emission case
         if this_model._is_dust_emitting:
@@ -456,7 +458,13 @@ class Generation:
                     luminosity=np.zeros(emitter.nparticles),
                     continuum=np.zeros(emitter.nparticles),
                 )
-            return lines
+
+            # We need to make sure we do this for each particle too if needs
+            # be
+            if per_particle:
+                particle_lines[this_model.label] = lines[this_model.label]
+
+            return lines, particle_lines
 
         # Now we have the spectra we can get the emission at each line
         # and include it
@@ -585,7 +593,6 @@ class DustAttenuation:
         # to extract from the emitter
         tau_v = 1
         for tv in this_model.tau_v:
-            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
             tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
 
         # Get the spectra to apply dust to
@@ -739,14 +746,14 @@ class Combination:
         """
         # Create an empty spectra to add to
         if this_model.per_particle:
-            particle_spectra[this_model.label] = Sed(
+            out_spec = Sed(
                 emission_model.lam,
                 lnu=np.zeros_like(
                     particle_spectra[this_model.combine[0].label]._lnu
                 ),
             )
         else:
-            spectra[this_model.label] = Sed(
+            out_spec = Sed(
                 emission_model.lam,
                 lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
             )
@@ -754,20 +761,22 @@ class Combination:
         # Combine the spectra
         for combine_model in this_model.combine:
             if this_model.per_particle:
-                particle_spectra[this_model.label]._lnu += particle_spectra[
+                nan_mask = np.isnan(particle_spectra[combine_model.label]._lnu)
+                out_spec._lnu[~nan_mask] += particle_spectra[
                     combine_model.label
-                ]._lnu
+                ]._lnu[~nan_mask]
             else:
-                spectra[this_model.label]._lnu += spectra[
-                    combine_model.label
-                ]._lnu
+                nan_mask = np.isnan(spectra[combine_model.label]._lnu)
+                out_spec._lnu[~nan_mask] += spectra[combine_model.label]._lnu[
+                    ~nan_mask
+                ]
 
-        # If we made a per particle spectra we need to sum it and get the
-        # integrated spectra
+        # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
-            spectra[this_model.label] = particle_spectra[
-                this_model.label
-            ].sum()
+            particle_spectra[this_model.label] = out_spec
+            spectra[this_model.label] = out_spec.sum()
+        else:
+            spectra[this_model.label] = out_spec
 
         return spectra, particle_spectra
 

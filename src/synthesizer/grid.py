@@ -1187,20 +1187,19 @@ class Template:
                 "bolometric luminosity must be provided with units"
             )
 
+        # Compute the scaling based on normalisation
+        scaling = bolometric_luminosity.value
+
         # Handle the dimensions of the bolometric luminosity
         if bolometric_luminosity.shape[0] == 1:
             sed = Sed(
                 self.lam,
-                bolometric_luminosity.to(self.lnu.units * Hz).value
-                * self.lnu
-                * (1 - self.fesc),
+                scaling * self.lnu * (1 - self.fesc),
             )
         else:
             sed = Sed(
                 self.lam,
-                bolometric_luminosity.to(self.lnu.units * Hz).value[:, None]
-                * self.lnu
-                * (1 - self.fesc),
+                scaling[:, None] * self.lnu * (1 - self.fesc),
             )
 
         return sed
