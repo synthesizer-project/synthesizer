@@ -1187,6 +1187,8 @@ class Template:
                 "bolometric luminosity must be provided with units"
             )
 
+        print(bolometric_luminosity)
+
         # Handle the dimensions of the bolometric luminosity
         if bolometric_luminosity.shape[0] == 1:
             sed = Sed(
