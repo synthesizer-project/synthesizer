@@ -10,6 +10,8 @@ photometry.
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology import Planck18 as cosmo
+from unyt import Myr, dimensionless
+
 from synthesizer.emission_models import (
     AttenuatedEmission,
     CharlotFall2000,
@@ -23,7 +25,6 @@ from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 from synthesizer.sed import Sed
-from unyt import Myr, dimensionless
 
 # Get the grid
 grid_dir = "../../tests/test_grid"
@@ -79,7 +80,7 @@ spec.get_fnu0()
 fc = UVJ(new_lam=grid.lam)
 
 # And then we can apply it using the `Sed` helper function.
-_UVJ = spec.get_photo_fluxes(fc)
+_UVJ = spec.get_photo_fnu(fc)
 print(_UVJ)
 
 # ## Young and old stellar populations
@@ -261,7 +262,7 @@ spec.get_fnu0()
 
 fc = UVJ(new_lam=grid.lam)
 
-_UVJ = spec.get_photo_fluxes(fc)
+_UVJ = spec.get_photo_fnu(fc)
 print(_UVJ)
 _UVJ.plot_photometry(show=True)
 
@@ -275,7 +276,7 @@ mstar = np.log10(
 
 
 specs.get_fnu0()
-_UVJ = specs.get_photo_fluxes(fc)
+_UVJ = specs.get_photo_fnu(fc)
 
 UV = _UVJ["U"] / _UVJ["V"]
 VJ = _UVJ["V"] / _UVJ["J"]
@@ -299,10 +300,8 @@ plt.colorbar(
 g.get_observed_spectra(cosmo=cosmo)
 
 # Get UVJ photometry for all spectra
-g.get_photo_luminosities(fc)
-g.get_photo_fluxes(fc)
+g.get_photo_lnu(fc)
+g.get_photo_fnu(fc)
 
-print(
-    "Stellar luminosities available:", list(g.stars.photo_luminosities.keys())
-)
-print("Stellar fluxes available:", list(g.stars.photo_fluxes.keys()))
+print("Stellar luminosities available:", list(g.stars.photo_lnu.keys()))
+print("Stellar fluxes available:", list(g.stars.photo_fnu.keys()))

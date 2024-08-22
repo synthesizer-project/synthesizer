@@ -11,12 +11,13 @@ on a parametric stars object.
 
 import matplotlib.pyplot as plt
 import numpy as np
+from unyt import Myr
+
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.load_data.load_camels import load_CAMELS_IllustrisTNG
 from synthesizer.parametric import SFH, Stars
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr
 
 if __name__ == "__main__":
     grid_dir = "../../tests/test_grid"
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     # Loop through each young star particle
     for _pmask in np.where(pmask)[0]:
         # Initialise SFH object
-        sfh = SFH.Constant(duration=age_lim)
+        sfh = SFH.Constant(max_age=age_lim)
 
         # Create a parametric stars object
         stars.append(

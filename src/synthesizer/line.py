@@ -327,7 +327,6 @@ class LineCollection:
             line (synthesizer.line.Line)
                 A synthesizer.line.Line object.
         """
-
         return self.lines[line_id]
 
     def concatenate(self, other):

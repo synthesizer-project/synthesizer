@@ -5,13 +5,17 @@ methods common to all child particle types. It should rarely if ever be
 directly instantiated.
 """
 
+import copy
+
 import numpy as np
 from numpy.random import multivariate_normal
-from unyt import unyt_array, unyt_quantity
+from unyt import rad, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.units import Quantity
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.geometry import get_rotation_matrix
+from synthesizer.warnings import deprecation
 
 
 class Particles:
@@ -81,7 +85,7 @@ class Particles:
                 The redshift/s of the particles.
             softening_length (float)
                 The physical gravitational softening length.
-            nparticle (int)
+            nparticles (int)
                 How many particles are there?
             centre (array, float)
                 Centre of the particle distribution.
@@ -104,8 +108,8 @@ class Particles:
         self.particle_lines = {}
 
         # Initialise the particle photometry dictionaries
-        self.particle_photo_luminosities = {}
-        self.particle_photo_fluxes = {}
+        self.particle_photo_lnu = {}
+        self.particle_photo_fnu = {}
 
         # Set unit information
 
@@ -138,6 +142,36 @@ class Particles:
         # Attach the name of the particle type
         self.name = name
 
+    @property
+    def particle_photo_fluxes(self):
+        """
+        Get the particle photometry fluxes.
+
+        Returns:
+            dict
+                The photometry fluxes.
+        """
+        deprecation(
+            "The `particle_photo_fluxes` attribute is deprecated. Use "
+            "`particle_photo_fnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_fnu
+
+    @property
+    def photo_luminosities(self):
+        """
+        Get the photometry luminosities.
+
+        Returns:
+            dict
+                The photometry luminosities.
+        """
+        deprecation(
+            "The `particle_photo_luminosities` attribute is deprecated. Use "
+            "`particle_photo_lnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_lnu
+
     def _check_part_args(
         self, coordinates, velocities, masses, softening_length
     ):
@@ -167,55 +201,6 @@ class Particles:
                 "softening_length must have unyt units associated to them."
             )
 
-    def rotate_particles(self):
-        """
-        Rotate the particle distribution.
-
-        Not yet implemented.
-        """
-        raise exceptions.UnimplementedFunctionality(
-            "Not yet implemented! Feel free to implement and raise a "
-            "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
-            "docs/CONTRIBUTING.md"
-        )
-
-    def convert_to_physical_properties(
-        self,
-    ):
-        """
-        Convert comoving coordinates and velocities to physical.
-
-        Note that redshift must be provided to perform this conversion.
-
-        Since smoothing lengths are not universal quantities their existence is
-        checked before trying to convert them.
-        """
-        raise exceptions.UnimplementedFunctionality(
-            "Not yet implemented! Feel free to implement and raise a "
-            "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
-            "docs/CONTRIBUTING.md"
-        )
-
-    def convert_to_comoving_properties(
-        self,
-    ):
-        """
-        Convert physical coordinates and velocities to comoving.
-
-        Note that redshift must be provided to perform this conversion.
-
-        Since smoothing lengths are not universal quantities their existence is
-        checked before trying to convert them.
-        """
-        raise exceptions.UnimplementedFunctionality(
-            "Not yet implemented! Feel free to implement and raise a "
-            "pull request. Guidance for contributing can be found at "
-            "https://github.com/flaresimulations/synthesizer/blob/main/"
-            "docs/CONTRIBUTING.md"
-        )
-
     @property
     def centered_coordinates(self):
         """Returns the coordinates centred on the geometric mean."""
@@ -242,7 +227,7 @@ class Particles:
 
         return np.log10(mets)
 
-    def get_particle_photo_luminosities(self, filters, verbose=True):
+    def get_particle_photo_lnu(self, filters, verbose=True):
         """
         Calculate luminosity photometry using a FilterCollection object.
 
@@ -253,19 +238,19 @@ class Particles:
                 Are we talking?
 
         Returns:
-            photo_luminosities (dict)
+            photo_lnu (dict)
                 A dictionary of rest frame broadband luminosities.
         """
         # Loop over spectra in the component
         for spectra in self.particle_spectra:
             # Create the photometry collection and store it in the object
-            self.particle_photo_luminosities[spectra] = self.particle_spectra[
+            self.particle_photo_lnu[spectra] = self.particle_spectra[
                 spectra
-            ].get_photo_luminosities(filters, verbose)
+            ].get_photo_lnu(filters, verbose)
 
-        return self.particle_photo_luminosities
+        return self.particle_photo_lnu
 
-    def get_particle_photo_fluxes(self, filters, verbose=True):
+    def get_particle_photo_fnu(self, filters, verbose=True):
         """
         Calculate flux photometry using a FilterCollection object.
 
@@ -282,11 +267,11 @@ class Particles:
         # Loop over spectra in the component
         for spectra in self.particle_spectra:
             # Create the photometry collection and store it in the object
-            self.particle_photo_fluxes[spectra] = self.particle_spectra[
+            self.particle_photo_fnu[spectra] = self.particle_spectra[
                 spectra
-            ].get_photo_fluxes(filters, verbose)
+            ].get_photo_fnu(filters, verbose)
 
-        return self.particle_photo_fluxes
+        return self.particle_photo_fnu
 
     def get_mask(self, attr, thresh, op, mask=None):
         """
@@ -496,19 +481,19 @@ class Particles:
                 The radius of the particle distribution.
         """
         # Check we have that spectra type, if so unpack it
-        if spectra_type not in self.particle_photo_luminosities:
+        if spectra_type not in self.particle_photo_lnu:
             raise exceptions.InconsistentArguments(
                 f"{spectra_type} not found in particle photometry. "
-                "Call get_particle_photo_luminosities first."
+                "Call get_particle_photo_lnu first."
             )
         else:
-            phot_collection = self.particle_photo_luminosities[spectra_type]
+            phot_collection = self.particle_photo_lnu[spectra_type]
 
         # Check we have the filter code
         if filter_code not in phot_collection.filter_codes:
             raise exceptions.InconsistentArguments(
                 f"{filter_code} not found in particle photometry. "
-                "Call get_particle_photo_luminosities first."
+                "Call get_particle_photo_lnu first."
             )
         else:
             light = phot_collection[filter_code]
@@ -532,19 +517,19 @@ class Particles:
                 The radius of the particle distribution.
         """
         # Check we have that spectra type, if so unpack it
-        if spectra_type not in self.particle_photo_fluxes:
+        if spectra_type not in self.particle_photo_fnu:
             raise exceptions.InconsistentArguments(
                 f"{spectra_type} not found in particle photometry. "
-                "Call get_particle_photo_fluxes first."
+                "Call get_particle_photo_fnu first."
             )
         else:
-            phot_collection = self.particle_photo_fluxes[spectra_type]
+            phot_collection = self.particle_photo_fnu[spectra_type]
 
         # Check we have the filter code
         if filter_code not in phot_collection.filter_codes:
             raise exceptions.InconsistentArguments(
                 f"{filter_code} not found in particle photometry. "
-                "Call get_particle_photo_fluxes first."
+                "Call get_particle_photo_fnu first."
             )
         else:
             light = phot_collection[filter_code]
@@ -741,6 +726,14 @@ class Particles:
             compute_column_density,
         )
 
+        # If have no particles return 0
+        if self.nparticles == 0:
+            return np.zeros(self.nparticles)
+
+        # If the other particles have no particles return 0
+        if other_parts.nparticles == 0:
+            return np.zeros(self.nparticles)
+
         # If we don't have a mask make a fake one for consistency
         if mask is None:
             mask = np.ones(self.nparticles, dtype=bool)
@@ -758,6 +751,188 @@ class Particles:
                 nthreads,
             )
         )
+
+    def rotate_particles(
+        self,
+        phi=0 * rad,
+        theta=0 * rad,
+        rot_matrix=None,
+        inplace=True,
+    ):
+        """
+        Rotate coordinates.
+
+        This method can either use angles or a provided rotation matrix.
+
+        When using angles phi is the rotation around the z-axis while theta
+        is the rotation around the y-axis.
+
+        This can both be done in place or return a new instance, by default
+        this will be done in place.
+
+        Args:
+            phi (unyt_quantity):
+                The angle in radians to rotate around the z-axis. If rot_matrix
+                is defined this will be ignored.
+            theta (unyt_quantity):
+                The angle in radians to rotate around the y-axis. If rot_matrix
+                is defined this will be ignored.
+            rot_matrix (array-like, float):
+                A 3x3 rotation matrix to apply to the coordinates
+                instead of phi and theta.
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with the rotated coordinates,
+                if inplace is False.
+        """
+        # Are we using angles?
+        if rot_matrix is None:
+            # Ensure we have units and convert to radians
+            if isinstance(phi, unyt_quantity):
+                phi = phi.to("rad").value
+            else:
+                raise exceptions.InconsistentArguments(
+                    "phi must have units associated to "
+                    f"it (type(phi)={type(phi)})"
+                )
+            if isinstance(theta, unyt_quantity):
+                theta = theta.to("rad").value
+            else:
+                raise exceptions.InconsistentArguments(
+                    "theta must have units associated to "
+                    f"it (type(theta)={type(theta)})"
+                )
+
+            # Rotation matrix around z-axis (phi)
+            rot_matrix_z = np.array(
+                [
+                    [np.cos(phi), -np.sin(phi), 0],
+                    [np.sin(phi), np.cos(phi), 0],
+                    [0, 0, 1],
+                ]
+            )
+
+            # Rotation matrix around y-axis (theta)
+            rot_matrix_y = np.array(
+                [
+                    [np.cos(theta), 0, np.sin(theta)],
+                    [0, 1, 0],
+                    [-np.sin(theta), 0, np.cos(theta)],
+                ]
+            )
+
+            # Combined rotation matrix
+            rot_matrix = np.dot(rot_matrix_y, rot_matrix_z)
+
+        # Are we rotating in place or returning a new instance?
+        if inplace:
+            # Rotate the coordinates
+            self.coordinates = np.dot(self.coordinates, rot_matrix.T)
+            self.velocities = np.dot(self.velocities, rot_matrix.T)
+
+            return
+
+        # Ok, we're returning a new one, make a copy
+        new_parts = copy.deepcopy(self)
+
+        # Rotate the coordinates
+        new_parts.coordinates = np.dot(new_parts.coordinates, rot_matrix.T)
+        new_parts.velocities = np.dot(new_parts.velocities, rot_matrix.T)
+
+        # Return the new one
+        return new_parts
+
+    @property
+    def angular_momentum(self):
+        """
+        Calculate the total angular momentum vector of the particles.
+
+        Returns:
+            unyt_array
+                The angular momentum vector of the particle system.
+        """
+        # Ensure we have all the attributes we need
+        if self.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                "Can't calculate angular momentum without coordinates."
+            )
+        if self.velocities is None:
+            raise exceptions.InconsistentArguments(
+                "Can't calculate angular momentum without velocities."
+            )
+        if self.masses is None:
+            raise exceptions.InconsistentArguments(
+                "Can't calculate angular momentum without masses."
+            )
+
+        # We have to do some unit gymnastics to make sure we return sensible
+        # units. Since coordinates and velocities won't necessarily agree
+        # on the length unit we adopt the velocity length unit which we can
+        # extract with some simple string manipulation.
+        distance_unit = str(self.velocities.units).split("/")[0]
+        ang_mom_unit = (
+            f"{distance_unit} * {self.masses.units} * {self.velocities.units}"
+        )
+
+        # Cross product of position and velocity, weighted by mass
+        return np.sum(
+            np.cross(self.coordinates, self.velocities) * self.masses[:, None],
+            axis=0,
+        ).to(ang_mom_unit)
+
+    def rotate_edge_on(self, inplace=True):
+        """
+        Rotate the particle distribution to edge-on.
+
+        This will rotate the particle distribution such that the angular
+        momentum vector is aligned with the y-axis in an image.
+
+        Args:
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with rotated coordinates,
+                if inplace is False.
+        """
+        # Get the rotation matrix to rotate ang_mom_hat to the y-axis
+        rot_matrix = get_rotation_matrix(
+            self.angular_momentum, np.array([1, 0, 0])
+        )
+
+        # Call the rotate_particles method with the computed angles
+        return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
+
+    def rotate_face_on(self, inplace=True):
+        """
+        Rotate the particle distribution to face-on.
+
+        This will rotate the particle distribution such that the angular
+        momentum vector is aligned with the z-axis in an image.
+
+        Args:
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with rotated coordinates,
+                if inplace is False.
+        """
+        # Get the rotation matrix to rotate ang_mom_hat to the z-axis
+        rot_matrix = get_rotation_matrix(
+            self.angular_momentum, np.array([0, 0, -1])
+        )
+
+        # Call the rotate_particles method with the computed angles
+        return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
 
 
 class CoordinateGenerator:
@@ -785,7 +960,7 @@ class CoordinateGenerator:
         """
 
         # If we haven't been passed a covariance make one
-        if not cov:
+        if cov is None:
             cov = np.zeros((3, 3))
             np.fill_diagonal(cov, 1.0)
 

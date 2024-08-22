@@ -11,7 +11,7 @@ from synthesizer import exceptions
 from synthesizer.line import Line
 from synthesizer.sed import plot_spectra
 from synthesizer.units import Quantity
-from synthesizer.warnings import warn
+from synthesizer.warnings import deprecated, deprecation, warn
 
 
 class BlackholesComponent:
@@ -154,8 +154,8 @@ class BlackholesComponent:
         self.spectra = {}
 
         # Intialise the photometry dictionaries
-        self.photo_luminosities = {}
-        self.photo_fluxes = {}
+        self.photo_lnu = {}
+        self.photo_fnu = {}
 
         # Save the black hole properties
         self.mass = mass
@@ -262,6 +262,36 @@ class BlackholesComponent:
                 self.inclination.to("radian").value
             )
 
+    @property
+    def photo_fluxes(self):
+        """
+        Get the photometry fluxes.
+
+        Returns:
+            dict
+                The photometry fluxes.
+        """
+        deprecation(
+            "The `photo_fluxes` attribute is deprecated. Use "
+            "`photo_fnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_fnu
+
+    @property
+    def photo_luminosities(self):
+        """
+        Get the photometry luminosities.
+
+        Returns:
+            dict
+                The photometry luminosities.
+        """
+        deprecation(
+            "The `photo_luminosities` attribute is deprecated. Use "
+            "`photo_lnu` instead. Will be removed in v1.0.0"
+        )
+        return self.photo_lnu
+
     def _prepare_sed_args(self, *args, **kwargs):
         """
         This method is a prototype for generating the arguments for spectra
@@ -321,6 +351,11 @@ class BlackholesComponent:
                 f"The Grid does not contain the key '{spectra_name}'"
             )
 
+        # If we have have 0 particles (regardless of mask) just return an
+        # array of zeros
+        if hasattr(self, "nbh") and self.nbh == 0:
+            return np.zeros(len(grid.lam))
+
         # If the mask is False (parametric case) or contains only
         # 0 (particle case) just return an array of zeros
         if isinstance(mask, bool) and not mask:
@@ -347,6 +382,7 @@ class BlackholesComponent:
         self,
         grid,
         line_id,
+        line_type,
         fesc,
         mask=None,
         method="cic",
@@ -367,6 +403,9 @@ class BlackholesComponent:
                 A list of line_ids or a str denoting a single line.
                 Doublets can be specified as a nested list or using a
                 comma (e.g. 'OIII4363,OIII4959').
+            line_type (str)
+                The type of line to extract from the grid. Must match the
+                spectra/line type in the grid file.
             fesc (float/array-like, float)
                 Fraction of AGN emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
@@ -394,6 +433,21 @@ class BlackholesComponent:
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
+        # If we have have 0 particles (regardless of mask) just return a line
+        # containing zeros
+        if hasattr(self, "nbh") and self.nbh == 0:
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
+                        luminosity=0 * erg / s,
+                        continuum=0 * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
+
         # Ensure and warn that the masking hasn't removed everything
         if mask is not None and np.sum(mask) == 0:
             warn("Age mask has filtered out all particles")
@@ -402,8 +456,7 @@ class BlackholesComponent:
                 *[
                     Line(
                         line_id=line_id_,
-                        wavelength=grid.lines[line_id_]["wavelength"]
-                        * angstrom,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
                         luminosity=0 * erg / s,
                         continuum=0 * erg / s / Hz,
                     )
@@ -422,13 +475,14 @@ class BlackholesComponent:
             # Get this line's wavelength
             # TODO: The units here should be extracted from the grid but aren't
             # yet stored.
-            lam = grid.lines[line_id_]["wavelength"] * angstrom
+            lam = grid.line_lams[line_id_] * angstrom
 
             # Get the luminosity and continuum
             lum, cont = compute_integrated_line(
                 *self._prepare_line_args(
                     grid,
                     line_id_,
+                    line_type,
                     fesc,
                     mask=mask,
                     grid_assignment_method=method,
@@ -569,7 +623,7 @@ class BlackholesComponent:
 
         return self.accretion_rate_eddington
 
-    def get_photo_luminosities(self, filters, verbose=True):
+    def get_photo_lnu(self, filters, verbose=True):
         """
         Calculate luminosity photometry using a FilterCollection object.
 
@@ -580,19 +634,44 @@ class BlackholesComponent:
                 Are we talking?
 
         Returns:
-            photo_luminosities (dict)
+            photo_lnu (dict)
                 A dictionary of rest frame broadband luminosities.
         """
         # Loop over spectra in the component
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
-            self.photo_luminosities[spectra] = self.spectra[
-                spectra
-            ].get_photo_luminosities(filters, verbose)
+            self.photo_lnu[spectra] = self.spectra[spectra].get_photo_lnu(
+                filters, verbose
+            )
 
-        return self.photo_luminosities
+        return self.photo_lnu
 
-    def get_photo_fluxes(self, filters, verbose=True):
+    @deprecated(
+        "The `get_photo_luminosities` method is deprecated. Use "
+        "`get_photo_lnu` instead. Will be removed in v1.0.0"
+    )
+    def get_photo_luminosities(self, filters, verbose=True):
+        """
+        Calculate luminosity photometry using a FilterCollection object.
+
+        Alias to get_photo_lnu.
+
+        Photometry is calculated in spectral luminosity density units.
+
+        Args:
+            filters (filters.FilterCollection)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            PhotometryCollection
+                A PhotometryCollection object containing the luminosity
+                photometry in each filter in filters.
+        """
+        return self.get_photo_lnu(filters, verbose)
+
+    def get_photo_fnu(self, filters, verbose=True):
         """
         Calculate flux photometry using a FilterCollection object.
 
@@ -609,11 +688,36 @@ class BlackholesComponent:
         # Loop over spectra in the component
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
-            self.photo_fluxes[spectra] = self.spectra[
-                spectra
-            ].get_photo_fluxes(filters, verbose)
+            self.photo_fnu[spectra] = self.spectra[spectra].get_photo_fnu(
+                filters, verbose
+            )
 
-        return self.photo_fluxes
+        return self.photo_fnu
+
+    @deprecated(
+        "The `get_photo_fluxes` method is deprecated. Use "
+        "`get_photo_fnu` instead. Will be removed in v1.0.0"
+    )
+    def get_photo_fluxes(self, filters, verbose=True):
+        """
+        Calculate flux photometry using a FilterCollection object.
+
+        Alias to get_photo_fnu.
+
+        Photometry is calculated in spectral flux density units.
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            PhotometryCollection
+                A PhotometryCollection object containing the flux photometry
+                in each filter in filters.
+        """
+        return self.get_photo_fnu(filters, verbose)
 
     def plot_spectra(
         self,
@@ -738,9 +842,8 @@ class BlackholesComponent:
                 (spectra/particle_spectra)
         """
         # Get the spectra
-        spectra = emission_model._get_spectra(
+        spectra, particle_spectra = emission_model._get_spectra(
             emitters={"blackhole": self},
-            per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=covering_fraction,
@@ -752,6 +855,14 @@ class BlackholesComponent:
         # Update the spectra dictionary
         self.spectra.update(spectra)
 
+        # If we have particle spectra update the particle_spectra dictionary
+        # too
+        if hasattr(self, "particle_spectra"):
+            self.particle_spectra.update(particle_spectra)
+
+        # Return the spectra the user wants
+        if emission_model.per_particle:
+            return self.particle_spectra[emission_model.label]
         return self.spectra[emission_model.label]
 
     def get_lines(
@@ -819,10 +930,9 @@ class BlackholesComponent:
                 root model.
         """
         # Get the lines
-        lines = emission_model._get_lines(
+        lines, particle_lines = emission_model._get_lines(
             line_ids=line_ids,
             emitters={"blackhole": self},
-            per_particle=False,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=covering_fraction,
@@ -834,6 +944,13 @@ class BlackholesComponent:
         # Update the lines dictionary
         self.lines.update(lines)
 
+        # Update the particle lines dictionary if it exists
+        if hasattr(self, "particle_lines"):
+            self.particle_lines.update(particle_lines)
+
+        # Return the lines the user wants
+        if emission_model.per_particle:
+            return self.particle_lines[emission_model.label]
         return self.lines[emission_model.label]
 
     def clear_all_spectra(self):
@@ -850,12 +967,12 @@ class BlackholesComponent:
 
     def clear_all_photometry(self):
         """Clear all photometry from the component."""
-        self.photo_luminosities = {}
-        self.photo_fluxes = {}
-        if hasattr(self, "particle_photo_luminosities"):
-            self.particle_photo_luminosities = {}
-        if hasattr(self, "particle_photo_fluxes"):
-            self.particle_photo_fluxes = {}
+        self.photo_lnu = {}
+        self.photo_fnu = {}
+        if hasattr(self, "particle_photo_lnu"):
+            self.particle_photo_lnu = {}
+        if hasattr(self, "particle_photo_fnu"):
+            self.particle_photo_fnu = {}
 
     def clear_all_emissions(self):
         """

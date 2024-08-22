@@ -9,6 +9,7 @@ given choice of grid and ion.
 import argparse
 
 import matplotlib.pyplot as plt
+
 from synthesizer.grid import Grid
 
 if __name__ == "__main__":

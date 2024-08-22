@@ -271,14 +271,22 @@ extensions = [
     ),
     create_extension(
         "synthesizer.imaging.extensions.spectral_cube",
-        ["src/synthesizer/imaging/extensions/spectral_cube.c"],
+        [
+            "src/synthesizer/imaging/extensions/spectral_cube.c",
+            "src/synthesizer/extensions/property_funcs.c",
+            "src/synthesizer/extensions/timers.c",
+        ],
         compile_flags=compile_flags,
         links=link_args,
         include_dirs=include_dirs,
     ),
     create_extension(
         "synthesizer.imaging.extensions.image",
-        ["src/synthesizer/imaging/extensions/image.c"],
+        [
+            "src/synthesizer/imaging/extensions/image.c",
+            "src/synthesizer/extensions/property_funcs.c",
+            "src/synthesizer/extensions/timers.c",
+        ],
         compile_flags=compile_flags,
         links=link_args,
         include_dirs=include_dirs,
@@ -336,6 +344,17 @@ extensions = [
         [
             "src/synthesizer/extensions/integration.c",
             "src/synthesizer/extensions/property_funcs.c",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
+    create_extension(
+        "synthesizer.imaging.extensions.circular_aperture",
+        [
+            "src/synthesizer/imaging/extensions/circular_aperture.c",
+            "src/synthesizer/extensions/property_funcs.c",
+            "src/synthesizer/extensions/timers.c",
         ],
         compile_flags=compile_flags,
         links=link_args,

@@ -256,6 +256,13 @@ class Image:
             self.units = signal.units
             signal = signal.value
 
+        # Return an empty image if there are no particles
+        if signal.size == 0:
+            self.arr = np.zeros(self.npix)
+            return (
+                self.arr * self.units if self.units is not None else self.arr
+            )
+
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
         coordinates = coordinates.to(self.resolution.units).value
@@ -288,6 +295,7 @@ class Image:
         kernel=None,
         kernel_threshold=1,
         density_grid=None,
+        nthreads=1,
     ):
         """
         Calculate a smoothed image.
@@ -312,6 +320,9 @@ class Image:
                 The threshold for the kernel. (particle case only)
             density_grid (array_like, float):
                 The density grid to smooth over. (parametric case only)
+            nthreads (int):
+                The number of threads to use for the C extension. (particle
+                case only)
 
         Returns:
             img : array_like (float)
@@ -356,6 +367,13 @@ class Image:
                 self.arr * self.units if self.units is not None else self.arr
             )
 
+        # Return an empty image if there are no particles
+        if signal.size == 0:
+            self.arr = np.zeros(self.npix)
+            return (
+                self.arr * self.units if self.units is not None else self.arr
+            )
+
         from .extensions.image import make_img
 
         # Convert coordinates and smoothing lengths to the correct units and
@@ -390,6 +408,7 @@ class Image:
             coordinates.shape[0],
             kernel_threshold,
             kernel.size,
+            nthreads,
         )
 
         return self.arr * self.units if self.units is not None else self.arr
@@ -567,6 +586,8 @@ class Image:
         show=False,
         cmap="Greys_r",
         norm=None,
+        fig=None,
+        ax=None,
     ):
         """
         Plot an image.
@@ -585,6 +606,10 @@ class Image:
             tick_formatter (matplotlib.ticker.FuncFormatter)
                 An instance of the tick formatter for formatting the colorbar
                 ticks.
+            fig (matplotlib.pyplot.figure)
+                The figure object to plot on. If None a new figure is created.
+            ax (matplotlib.pyplot.figure.axis)
+                The axis object to plot on. If None a new axis is created.
 
         Returns:
             matplotlib.pyplot.figure
@@ -596,11 +621,13 @@ class Image:
         img = self.arr
 
         # Set up the figure
-        fig = plt.figure(figsize=(3.5, 3.5))
+        if fig is None:
+            fig = plt.figure(figsize=(3.5, 3.5))
 
         # Create the axis and turn off the ticks and frame
-        ax = fig.add_subplot(111)
-        ax.axis("off")
+        if ax is None:
+            ax = fig.add_subplot(111)
+            ax.axis("off")
 
         # Plot the image and remove the surrounding axis
         ax.imshow(
@@ -622,6 +649,8 @@ class Image:
         cbar_label=None,
         norm=None,
         tick_formatter=None,
+        fig=None,
+        ax=None,
     ):
         """
         Plot a map.
@@ -646,6 +675,10 @@ class Image:
             tick_formatter (matplotlib.ticker.FuncFormatter)
                 An instance of the tick formatter for formatting the colorbar
                 ticks.
+            fig (matplotlib.pyplot.figure)
+                The figure object to plot on. If None a new figure is created.
+            ax (matplotlib.pyplot.figure.axis)
+                The axis object to plot on. If None a new axis is created.
 
         Returns:
             matplotlib.pyplot.figure
@@ -657,10 +690,12 @@ class Image:
         img = self.arr
 
         # Set up the figure
-        fig = plt.figure(figsize=(3.5, 3.5))
+        if fig is None:
+            fig = plt.figure(figsize=(3.5, 3.5))
 
         # Create the axis
-        ax = fig.add_subplot(111)
+        if ax is None:
+            ax = fig.add_subplot(111)
 
         # Plot the image and remove the surrounding axis
         im = ax.imshow(
@@ -804,3 +839,56 @@ class Image:
             )
 
         return fig, ax
+
+    def get_signal_in_aperture(
+        self,
+        aperture_radius,
+        aperture_cent=None,
+        nthreads=1,
+    ):
+        """
+        Return the sum of the image within an aperture.
+
+        This uses fractional pixel coverage to calculate the overlap between
+        the aperture and each pixel.
+
+        Args:
+            aperture_radius (unyt_quantity, float)
+                The radius of the aperture.
+            aperture_cent (unyt_array, float)
+                The centre of the aperture (in pixel coordinates, i.e. the
+                centre is [npix/2, npix/2], top left is [0, 0], and bottom
+                right is [npix, npix]). If None then the centre is assumed to
+                be the maximum pixel.
+            nthreads (int)
+                The number of threads to use for the calculation. Default is 1.
+
+        Returns:
+            float
+                The sum of the image within the aperture.
+        """
+        # Convert the aperture radius to the correct units
+        aperture_radius = aperture_radius.to(self.resolution.units).value
+
+        # If the aperture centre isn't passed, assume it's the maximum
+        # pixel
+        if aperture_cent is None:
+            max_pixel = np.unravel_index(self.arr.argmax(), self.arr.shape)
+            aperture_cent = np.array(max_pixel) + 0.5
+
+        from synthesizer.imaging.extensions.circular_aperture import (
+            calculate_circular_overlap,
+        )
+
+        return (
+            calculate_circular_overlap(
+                self._resolution,
+                self.npix[0],
+                self.npix[1],
+                np.float64(aperture_radius),
+                self.arr,
+                np.float64(aperture_cent),
+                nthreads,
+            )
+            * self.units
+        )

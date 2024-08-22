@@ -36,7 +36,7 @@ from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.plt import single_histxy
-from synthesizer.warnings import warn
+from synthesizer.warnings import deprecated, warn
 
 
 class Stars(Particles, StarsComponent):
@@ -177,7 +177,7 @@ class Stars(Particles, StarsComponent):
             masses=current_masses,
             redshift=redshift,
             softening_length=softening_length,
-            nparticles=len(initial_masses),
+            nparticles=initial_masses.size,
             centre=centre,
             metallicity_floor=metallicity_floor,
             tau_v=tau_v,
@@ -193,7 +193,7 @@ class Stars(Particles, StarsComponent):
             )
 
         if len(ages) > 0:
-            if ages.min() < 0.:
+            if ages.min() < 0.0:
                 raise exceptions.InconsistentArguments(
                     "Ages cannot be negative."
                 )
@@ -461,6 +461,10 @@ class Stars(Particles, StarsComponent):
                 "The Grid does not contain the key '%s'" % spectra_name
             )
 
+        # If we have no stars just return zeros
+        if self.nstars == 0:
+            return np.zeros(len(grid.lam))
+
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
             # How many particles lie below the grid limits?
@@ -667,6 +671,7 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         line_id,
+        line_type,
         fesc,
         mask,
         grid_assignment_method,
@@ -680,6 +685,9 @@ class Stars(Particles, StarsComponent):
                 The SPS grid object to extract spectra from.
             line_id (str)
                 The id of the line to extract.
+            line_type (str)
+                The type of line to extract from the Grid. This must match a
+                type of spectra/lines stored in the Grid.
             fesc (float/array-like, float)
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
@@ -721,11 +729,11 @@ class Stars(Particles, StarsComponent):
 
         # Get the line grid and continuum
         grid_line = np.ascontiguousarray(
-            grid.lines[line_id]["luminosity"],
+            grid.line_lums[line_type][line_id],
             np.float64,
         )
         grid_continuum = np.ascontiguousarray(
-            grid.lines[line_id]["continuum"],
+            grid.line_conts[line_type][line_id],
             np.float64,
         )
 
@@ -764,6 +772,7 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         line_id,
+        line_type,
         fesc,
         mask=None,
         method="cic",
@@ -784,6 +793,9 @@ class Stars(Particles, StarsComponent):
                 A list of line_ids or a str denoting a single line.
                 Doublets can be specified as a nested list or using a
                 comma (e.g. 'OIII4363,OIII4959').
+            line_type (str):
+                The type of line to extract from the Grid. This must match a
+                type of spectra/lines stored in the Grid.
             fesc (float/array-like, float)
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
@@ -811,6 +823,20 @@ class Stars(Particles, StarsComponent):
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
+        # If we have no stars just return zeros
+        if self.nstars == 0:
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
+
         # Ensure and warn that the masking hasn't removed everything
         if mask is not None and np.sum(mask) == 0:
             warn("Age mask has filtered out all particles")
@@ -819,8 +845,7 @@ class Stars(Particles, StarsComponent):
                 *[
                     Line(
                         line_id=line_id_,
-                        wavelength=grid.lines[line_id_]["wavelength"]
-                        * angstrom,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
                         luminosity=np.zeros(self.nparticles) * erg / s,
                         continuum=np.zeros(self.nparticles) * erg / s / Hz,
                     )
@@ -839,13 +864,14 @@ class Stars(Particles, StarsComponent):
             # Get this line's wavelength
             # TODO: The units here should be extracted from the grid but aren't
             # yet stored.
-            lam = grid.lines[line_id_]["wavelength"] * angstrom
+            lam = grid.line_lams[line_id_] * angstrom
 
             # Get the luminosity and continuum
             lum, cont = compute_integrated_line(
                 *self._prepare_line_args(
                     grid,
                     line_id_,
+                    line_type,
                     fesc,
                     mask=mask,
                     grid_assignment_method=method,
@@ -927,6 +953,10 @@ class Stars(Particles, StarsComponent):
             raise exceptions.MissingSpectraType(
                 f"The Grid does not contain the key '{spectra_name}'"
             )
+
+        # If we have no stars just return zeros
+        if self.nstars == 0:
+            return np.zeros((self.nstars, len(grid.lam)))
 
         # Are we checking the particles are consistent with the grid?
         if do_grid_check:
@@ -1031,6 +1061,7 @@ class Stars(Particles, StarsComponent):
         self,
         grid,
         line_id,
+        line_type,
         fesc,
         mask=None,
         method="cic",
@@ -1052,6 +1083,9 @@ class Stars(Particles, StarsComponent):
                 A list of line_ids or a str denoting a single line.
                 Doublets can be specified as a nested list or using a
                 comma (e.g. 'OIII4363,OIII4959').
+            line_type (str):
+                The type of line to extract from the Grid. This must match a
+                type of spectra/lines stored in the Grid.
             fesc (float/array-like, float)
                 Fraction of stellar emission that escapes unattenuated from
                 the birth cloud. Can either be a single value
@@ -1079,6 +1113,20 @@ class Stars(Particles, StarsComponent):
         if not isinstance(line_id, str):
             raise exceptions.InconsistentArguments("line_id must be a string")
 
+        # If we have no stars just return zeros
+        if self.nstars == 0:
+            return Line(
+                *[
+                    Line(
+                        line_id=line_id_,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
+                    )
+                    for line_id_ in line_id.split(",")
+                ]
+            )
+
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
             warn("Age mask has filtered out all particles")
@@ -1087,10 +1135,9 @@ class Stars(Particles, StarsComponent):
                 *[
                     Line(
                         line_id=line_id_,
-                        wavelength=grid.lines[line_id_]["wavelength"]
-                        * angstrom,
-                        luminosity=0 * erg / s,
-                        continuum=0 * erg / s / Hz,
+                        wavelength=grid.line_lams[line_id_] * angstrom,
+                        luminosity=np.zeros(self.nparticles) * erg / s,
+                        continuum=np.zeros(self.nparticles) * erg / s / Hz,
                     )
                     for line_id_ in line_id.split(",")
                 ]
@@ -1107,13 +1154,14 @@ class Stars(Particles, StarsComponent):
             # Get this line's wavelength
             # TODO: The units here should be extracted from the grid but aren't
             # yet stored.
-            lam = grid.lines[line_id_]["wavelength"] * angstrom
+            lam = grid.line_lams[line_id_] * angstrom
 
             # Get the luminosity and continuum
             _lum, _cont = compute_particle_line(
                 *self._prepare_line_args(
                     grid,
                     line_id_,
+                    line_type,
                     fesc,
                     mask=mask,
                     grid_assignment_method=method,
@@ -1556,6 +1604,10 @@ class Stars(Particles, StarsComponent):
 
         return fig, ax
 
+    @deprecated(
+        message="is now just a wrapper "
+        "around get_spectra. It will be removed by v1.0.0."
+    )
     def get_particle_spectra(
         self,
         emission_model,
@@ -1568,6 +1620,9 @@ class Stars(Particles, StarsComponent):
     ):
         """
         Generate stellar spectra as described by the emission model.
+
+        Note: Now deprecated in favour of get_spectra and emission models
+        knowing which spectra should be per particle.
 
         Args:
             emission_model (EmissionModel):
@@ -1616,10 +1671,10 @@ class Stars(Particles, StarsComponent):
             appropriate spectra attribute of the component
             (spectra/particle_spectra).
         """
-        # Get the spectra
-        spectra = emission_model._get_spectra(
-            emitters={"stellar": self},
-            per_particle=True,
+        previous_per_part = emission_model.per_particle
+        emission_model.set_per_particle(True)
+        spectra = self.get_spectra(
+            emission_model,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=fesc,
@@ -1627,12 +1682,13 @@ class Stars(Particles, StarsComponent):
             verbose=verbose,
             **kwargs,
         )
+        emission_model.set_per_particle(previous_per_part)
+        return spectra
 
-        # Update the spectra dictionary
-        self.particle_spectra.update(spectra)
-
-        return self.particle_spectra[emission_model.label]
-
+    @deprecated(
+        message="is now just a wrapper "
+        "around get_lines. It will be removed by v1.0.0."
+    )
     def get_particle_lines(
         self,
         line_ids,
@@ -1646,6 +1702,9 @@ class Stars(Particles, StarsComponent):
     ):
         """
         Generate stellar lines as described by the emission model.
+
+        Note: Now deprecated in favour of get_lines and emission models
+        knowing which lines should be per particle.
 
         Args:
             line_ids (list):
@@ -1697,11 +1756,11 @@ class Stars(Particles, StarsComponent):
                 A LineCollection object containing the lines defined by the
                 root model.
         """
-        # Get the lines
-        lines = emission_model._get_lines(
-            line_ids=line_ids,
-            emitters={"stellar": self},
-            per_particle=True,
+        previous_per_part = emission_model.per_particle
+        emission_model.set_per_particle(True)
+        lines = self.get_lines(
+            line_ids,
+            emission_model,
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=fesc,
@@ -1709,11 +1768,8 @@ class Stars(Particles, StarsComponent):
             verbose=verbose,
             **kwargs,
         )
-
-        # Update the lines dictionary
-        self.particle_lines.update(lines)
-
-        return self.particle_lines[emission_model.label]
+        emission_model.set_per_particle(previous_per_part)
+        return lines
 
 
 def sample_sfhz(

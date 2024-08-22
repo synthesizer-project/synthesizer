@@ -3,7 +3,7 @@
 This module contains a single class definition which acts as a container
 for photometry data. It should never be directly instantiated, instead
 internal methods that calculate photometry
-(e.g. Sed.get_photo_luminosities)
+(e.g. Sed.get_photo_lnu)
 return an instance of this class.
 """
 
@@ -30,9 +30,9 @@ class PhotometryCollection:
     Attributes:
         photometry (Quantity):
             Quantity instance representing photometry data.
-        photo_luminosities (Quantity):
+        photo_lnu (Quantity):
             Quantity instance representing photometry data in the rest frame.
-        photo_fluxes (Quantity):
+        photo_fnu (Quantity):
             Quantity instance representing photometry data in the
             observer frame.
         filters (FilterCollection):
@@ -45,8 +45,8 @@ class PhotometryCollection:
     """
 
     # Define quantities (there has to be one for rest and observer frame)
-    photo_luminosities = Quantity()
-    photo_fluxes = Quantity()
+    photo_lnu = Quantity()
+    photo_fnu = Quantity()
 
     def __init__(self, filters, **kwargs):
         """
@@ -84,17 +84,17 @@ class PhotometryCollection:
         photometry = unyt_array(photometry, units=photometry[0].units)
 
         # Get the dimensions of a flux for testing
-        flux_dimensions = default_units["photo_fluxes"].units.dimensions
+        flux_dimensions = default_units["photo_fnu"].units.dimensions
 
         # Check if the photometry is flux or luminosity
         if photometry[0].units.dimensions == flux_dimensions:
-            self.photo_fluxes = photometry
-            self.photo_luminosities = None
-            self.photometry = self.photo_fluxes
+            self.photo_fnu = photometry
+            self.photo_lnu = None
+            self.photometry = self.photo_fnu
         else:
-            self.photo_luminosities = photometry
-            self.photo_fluxes = None
-            self.photometry = self.photo_luminosities
+            self.photo_lnu = photometry
+            self.photo_fnu = None
+            self.photometry = self.photo_lnu
 
         # Construct a dict for the look up, importantly we here store
         # the values in photometry not _photometry meaning they have units.
@@ -110,11 +110,11 @@ class PhotometryCollection:
         """
         Enable dictionary key look up syntax to extract specific photometry.
 
-        e.g. Sed.photo_luminosities["JWST/NIRCam.F150W"].
+        e.g. Sed.photo_lnu["JWST/NIRCam.F150W"].
 
         NOTE: this will always return photometry with units. Unitless
-        photometry is accessible in array form via self._photo_luminosities
-        or self._photo_fluxes based on what frame is desired. For
+        photometry is accessible in array form via self._photo_lnu
+        or self._photo_fnu based on what frame is desired. For
         internal use this should be fine and the UI (where this method
         would be used) should always return with units.
 
@@ -211,7 +211,7 @@ class PhotometryCollection:
         table = f"-{sep.replace('|', '-')}-\n"
 
         # Create the centered title
-        if self.photo_luminosities is not None:
+        if self.photo_lnu is not None:
             title = f"|{'PHOTOMETRY (LUMINOSITY)'.center(tot_width)}|"
         else:
             title = f"|{'PHOTOMETRY (FLUX)'.center(tot_width)}|"
@@ -362,7 +362,7 @@ class PhotometryCollection:
         y_units = re.sub(pattern, replacement, y_units).replace(r"\frac", "")
 
         # Label the x axis
-        if self.photo_luminosities is not None:
+        if self.photo_lnu is not None:
             ax.set_xlabel(r"$\lambda/[\mathrm{" + x_units + r"}]$")
         else:
             ax.set_xlabel(
@@ -370,7 +370,7 @@ class PhotometryCollection:
             )
 
         # Label the y axis handling all possibilities
-        if self.photo_luminosities is not None:
+        if self.photo_lnu is not None:
             ax.set_ylabel(r"$L/[\mathrm{" + y_units + r"}]$")
         else:
             ax.set_ylabel(r"$F/[\mathrm{" + y_units + r"}]$")

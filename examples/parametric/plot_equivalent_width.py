@@ -10,11 +10,12 @@ from a parametric galaxy
 
 import matplotlib.pyplot as plt
 import numpy as np
+from unyt import Myr
+
 from synthesizer.emission_models import IncidentEmission, ReprocessedEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr
 
 
 def set_index():
@@ -177,7 +178,7 @@ def measure_equivalent_width(
 
     Z_p = {"metallicity": Z}
     metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
-    sfh_p = {"duration": 100 * Myr}
+    sfh_p = {"max_age": 100 * Myr}
     sfh = SFH.Constant(**sfh_p)  # constant star formation
 
     # --- get 2D star formation and metal enrichment history for the

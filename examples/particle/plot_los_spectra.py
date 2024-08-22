@@ -11,6 +11,8 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import cKDTree
+from unyt import Myr
+
 from synthesizer.emission_models import TotalEmission
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.grid import Grid
@@ -21,7 +23,6 @@ from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.particles import CoordinateGenerator
 from synthesizer.particle.stars import sample_sfhz
-from unyt import Myr
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -62,6 +63,7 @@ model = TotalEmission(
     tau_v="tau_v",
     dust_curve=PowerLaw(slope=-1),
     fesc=0.1,
+    per_particle=True,
 )
 
 # Define the grid (normally this would be defined by an SPS grid)
@@ -131,7 +133,7 @@ sph_kernel = Kernel()
 kernel_data = sph_kernel.get_kernel()
 
 # Calculate the tau_vs
-galaxy.calculate_los_tau_v(
+galaxy.get_stellar_los_tau_v(
     kappa=0.07,
     kernel=kernel_data,
     force_loop=False,
@@ -139,7 +141,7 @@ galaxy.calculate_los_tau_v(
 
 # Get the spectra (this will automatically use the tau_vs we just calculated
 # since the emission model has tau_v="tau_v")
-galaxy.stars.get_particle_spectra(model)
+galaxy.stars.get_spectra(model)
 
 # Integrate the particle spectra
 galaxy.integrate_particle_spectra()

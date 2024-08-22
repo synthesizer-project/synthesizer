@@ -8,6 +8,8 @@ including photometry. This example will:
 - calculate spectral luminosity density
 """
 
+from unyt import Myr
+
 from synthesizer.emission_models import (
     AttenuatedEmission,
     BimodalPacmanEmission,
@@ -21,7 +23,6 @@ from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr
 
 if __name__ == "__main__":
     # Define the grid
@@ -31,7 +32,7 @@ if __name__ == "__main__":
 
     # Define the parameters of the star formation and metal enrichment
     # histories
-    sfh_p = {"duration": 10 * Myr}
+    sfh_p = {"max_age": 10 * Myr}
     Z_p = {
         "log10metallicity": -2.0
     }  # can also use linear metallicity e.g. {'Z': 0.01}
@@ -170,5 +171,5 @@ if __name__ == "__main__":
     }
     fc = FilterCollection(tophat_dict=tophats, new_lam=grid.lam)
 
-    bb_lnu = sed.get_photo_luminosities(fc)
+    bb_lnu = sed.get_photo_lnu(fc)
     print(bb_lnu)
