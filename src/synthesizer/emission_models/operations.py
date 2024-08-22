@@ -602,6 +602,9 @@ class DustAttenuation:
         else:
             apply_dust_to = spectra[this_model.apply_dust_to.label]
 
+        if this_model.emitter == "blackhole":
+            print("Blackhole tau used:", tau_v)
+
         # Otherwise, we are applying a dust curve (there's no
         # alternative)
         sed = apply_dust_to.apply_attenuation(
