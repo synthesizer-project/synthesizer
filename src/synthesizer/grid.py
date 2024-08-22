@@ -1154,8 +1154,6 @@ class Template:
         # It's convenient to have an sed object for the next steps
         sed = Sed(lam, lnu)
 
-        print("Before interpolation:", lnu)
-
         # Before we do anything, do we have a grid we need to unify with?
         if unify_with_grid is not None:
             # Interpolate the template Sed onto the grid wavelength array
@@ -1164,8 +1162,6 @@ class Template:
         # Attach the template now we've done the interpolation (if needed)
         self.lnu = sed.lnu
         self.lam = sed.lam
-
-        print("Pre-normalisation: ", self.lnu)
 
         # Normalise, just in case
         self.normalisation = sed.measure_bolometric_luminosity()
@@ -1191,9 +1187,6 @@ class Template:
                 "bolometric luminosity must be provided with units"
             )
 
-        print(bolometric_luminosity)
-        print(self.normalisation)
-
         # Compute the scaling based on normalisation
         scaling = (bolometric_luminosity / self.normalisation).value
         print(scaling)
@@ -1211,6 +1204,5 @@ class Template:
             )
 
         print(sed)
-        print(self.lnu)
 
         return sed
