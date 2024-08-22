@@ -1163,6 +1163,8 @@ class Template:
         self.lnu = sed.lnu
         self.lam = sed.lam
 
+        print("Pre-normalisation: ", self.lnu)
+
         # Normalise, just in case
         self.normalisation = sed.measure_bolometric_luminosity()
         self.lnu /= self.normalisation.value
@@ -1188,21 +1190,22 @@ class Template:
             )
 
         print(bolometric_luminosity)
+        print(self.normalisation)
+
+        # Compute the scaling based on normalisation
+        scaling = (bolometric_luminosity / self.normalisation).value
+        print(scaling)
 
         # Handle the dimensions of the bolometric luminosity
         if bolometric_luminosity.shape[0] == 1:
             sed = Sed(
                 self.lam,
-                bolometric_luminosity.to(self.lnu.units * Hz).value
-                * self.lnu
-                * (1 - self.fesc),
+                scaling * self.lnu * (1 - self.fesc),
             )
         else:
             sed = Sed(
                 self.lam,
-                bolometric_luminosity.to(self.lnu.units * Hz).value[:, None]
-                * self.lnu
-                * (1 - self.fesc),
+                scaling[:, None] * self.lnu * (1 - self.fesc),
             )
 
         print(sed)
