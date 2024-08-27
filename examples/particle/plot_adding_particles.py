@@ -11,6 +11,7 @@ what happens when an improper addition is attempted.
 import numpy as np
 from unyt import Msun, Myr
 
+from synthesizer.exceptions import InconsistentAddition
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
 
@@ -81,7 +82,7 @@ print(gas1 + gas2)
 try:
     print("Stars 1 + Gas 1:")
     print(stars1 + gas1)
-except TypeError as e:
+except InconsistentAddition as e:
     print(f"Error: {e}")
 
 # We also can't add particles with different redshifts
@@ -89,10 +90,11 @@ stars2.redshift = 2.0
 try:
     print("Stars 1 + Stars 2:")
     print(stars1 + stars2)
-except ValueError as e:
+except InconsistentAddition as e:
     print(f"Error: {e}")
 
 # If an attribute is absent from one of the particles, it will be ignored
+stars2.redshift = 1.0
 stars2.dummy_attr = None
 print("Stars 1 + Stars 2 (no dummy attr):")
 print(stars1 + stars2)
