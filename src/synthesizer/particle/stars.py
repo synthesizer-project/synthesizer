@@ -397,7 +397,6 @@ class Stars(Particles, StarsComponent):
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
-        parametric_sfh="constant",
         aperture=None,
         nthreads=0,
     ):
@@ -434,11 +433,6 @@ class Stars(Particles, StarsComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
-            parametric_sfh (string)
-                Form of the parametric SFH to use for young stars.
-                Currently two are supported, `Constant` and
-                `TruncatedExponential`, selected using the keyword
-                arguments `constant` and `exponential`.
             aperture (float)
                 If not None, specifies the radius of a spherical aperture
                 to apply to the particles.
@@ -566,11 +560,9 @@ class Stars(Particles, StarsComponent):
 
     def _parametric_young_stars(
         self,
-        pmask,
         age,
         parametric_sfh,
         grid,
-        spectra_name,
     ):
         """
         Replace young stars with individual parametric SFH's. Can be either a
@@ -580,8 +572,6 @@ class Stars(Particles, StarsComponent):
         star particle.
 
         Args:
-            pmask (bool array)
-                Star particles to replace
             age (float)
                 Age in Myr below which we replace Star particles.
                 Used to set the duration of parametric SFH
@@ -592,13 +582,13 @@ class Stars(Particles, StarsComponent):
                 arguments `constant` and `exponential`.
             grid (Grid)
                 The spectral grid object.
-            spectra_name (string)
-                The name of the target spectra inside the grid file.
 
         Returns:
             numpy.ndarray:
                 Numpy array of integrated spectra in units of (erg / s / Hz).
         """
+
+        pmask = self._get_masks(age, None)
 
         # initialise SFH object
         if parametric_sfh == "constant":
@@ -633,8 +623,59 @@ class Stars(Particles, StarsComponent):
         else:
             stars = stars[0]
 
-        # Get the spectra for this parametric form
-        return stars.generate_lnu(grid=grid, spectra_name=spectra_name)
+        # Create index pairs for the SFZH
+        index_pairs = np.asarray(
+            [
+                [[j, i] for i in np.arange(len(grid.metallicity))]
+                for j in np.arange(len(grid.log10age))
+            ]
+        )
+
+        # Find the grid indexes on the parametric grid
+        grid_indexes = index_pairs[stars.sfzh > 0]
+
+        # Create new particle stars object from non-empty SFZH entries
+        new_stars = self.__class__(
+            stars.sfzh[stars.sfzh > 0],
+            grid.log10ages[grid_indexes[:, 0]],
+            grid.metallicity[grid_indexes[:, 1]],
+        )
+
+        # Save the old stars privately
+        self._old_stars = self.__class__(
+            self.initial_masses[pmask],
+            self.ages[pmask],
+            self.metallicities[pmask],
+        )
+
+        # Remove the young stars from this object
+        self.initial_masses = self.initial_masses[~pmask]
+        self.ages = self.ages[~pmask]
+        self.metallicities = self.metallicities[~pmask]
+        if self.tau_v is not None:
+            self.tau_v = self.tau_v[~pmask]
+        if self.alpha_enhancement is not None:
+            self.alpha_enhancement = self.alpha_enhancement[~pmask]
+        if self.velocities is not None:
+            self.velocities = self.velocities[~pmask]
+        if self.current_masses is not None:
+            self.current_masses = self.current_masses[~pmask]
+        if self.smoothing_lengths is not None:
+            self.smoothing_lengths = self.smoothing_lengths[~pmask]
+        if self.s_oxygen is not None:
+            self.s_oxygen = self.s_oxygen[~pmask]
+        if self.s_hydrogen is not None:
+            self.s_hydrogen = self.s_hydrogen[~pmask]
+
+        if self.redshift is not None:
+            if isinstance(self.redshift, np.ndarray):
+                self.redshift = self.redshift[~pmask]
+        if self.smoothing_lengths is not None:
+            if isinstance(self.smoothing_lengths, np.ndarray):
+                self.smoothing_lengths = self.smoothing_lengths[~pmask]
+
+        # Dunder add to current stars object?!
+        self += new_stars
 
     def _prepare_line_args(
         self,
