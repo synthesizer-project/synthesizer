@@ -444,6 +444,10 @@ class Stars(Particles, StarsComponent):
             if callable(getattr(self, key)):
                 continue
 
+            # Skip any attributes which aren't on both objects
+            if key not in other.__dict__:
+                continue
+
             if key not in kwargs:
                 # Combine the attributes, concatenate if arrays, copied if
                 # scalars and the same for both objects or added if different
@@ -468,10 +472,6 @@ class Stars(Particles, StarsComponent):
                     getattr(self, key), (int, float)
                 ) and isinstance(getattr(other, key), (int, float)):
                     kwargs[key] = getattr(self, key) + getattr(other, key)
-                else:
-                    raise exceptions.InconsistentArguments(
-                        "Cannot add Stars objects with different %s" % key
-                    )
 
         return Stars(**kwargs)
 
