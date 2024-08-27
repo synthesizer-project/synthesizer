@@ -307,7 +307,7 @@ class Stars(Particles, StarsComponent):
         """
         # Check the other object is the same type
         if not isinstance(other, Stars):
-            raise exceptions.InconsistentArguments(
+            raise exceptions.InconsistentAddition(
                 "Cannot add Stars object to %s object" % type(other)
             )
 
@@ -398,7 +398,7 @@ class Stars(Particles, StarsComponent):
 
         # Handle the redshifts which must be the same
         if self.redshift != other.redshift:
-            raise exceptions.InconsistentArguments(
+            raise exceptions.InconsistentAddition(
                 "Cannot add Stars objects with different redshifts"
             )
         else:

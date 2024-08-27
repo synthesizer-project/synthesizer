@@ -240,7 +240,7 @@ class Gas(Particles):
         """
         # Ensure we have a gas object
         if not isinstance(other, Gas):
-            raise exceptions.InconsistentArguments(
+            raise exceptions.InconsistentAddition(
                 "Can only add two Gas objects together!"
             )
 
@@ -322,7 +322,7 @@ class Gas(Particles):
 
         # Handle the redshifts which must be the same
         if self.redshift != other.redshift:
-            raise exceptions.InconsistentArguments(
+            raise exceptions.InconsistentAddition(
                 "Cannot add Stars objects with different redshifts"
             )
         else:
