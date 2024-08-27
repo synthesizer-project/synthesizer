@@ -332,6 +332,10 @@ def combine_arrays(arr1, arr2):
         warn("One of the arrays is None, one is not. Returning None.")
         return None
 
+    # Ensure both arrays aren't 0 dimensional
+    elif arr1.ndim == 0 or arr2.ndim == 0:
+        return None
+
     # If both are not None then combine them
     else:
         return np.concatenate([arr1, arr2])
