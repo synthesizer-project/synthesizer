@@ -36,6 +36,7 @@ from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.plt import single_histxy
+from synthesizer.utils.util_funcs import combine_arrays
 from synthesizer.warnings import deprecated, warn
 
 
@@ -121,7 +122,7 @@ class Stars(Particles, StarsComponent):
         smoothing_lengths=None,
         s_oxygen=None,
         s_hydrogen=None,
-        softening_length=None,
+        softening_lengths=None,
         centre=None,
         metallicity_floor=1e-5,
         **kwargs,
@@ -158,7 +159,7 @@ class Stars(Particles, StarsComponent):
                 The fractional oxygen abundance.
             s_hydrogen (array-like, float)
                 The fractional hydrogen abundance.
-            softening_length (float)
+            softening_lengths (float)
                 The gravitational softening lengths of each stellar
                 particle in simulation units
             centre (array-like, float)
@@ -176,7 +177,7 @@ class Stars(Particles, StarsComponent):
             velocities=velocities,
             masses=current_masses,
             redshift=redshift,
-            softening_length=softening_length,
+            softening_lengths=softening_lengths,
             nparticles=initial_masses.size,
             centre=centre,
             metallicity_floor=metallicity_floor,
@@ -283,6 +284,196 @@ class Stars(Particles, StarsComponent):
         formatter = TableFormatter(self)
 
         return formatter.get_table("Stars")
+
+    def __add__(self, other):
+        """
+        Add two Stars objects together.
+
+        This will correctly combine named arguments and create a new Stars
+        object with the combined particles. Any extra keyword arguments will
+        be either concatenated for arrays, summed for differing scalars or
+        copied if the same for both objects.
+
+        If either object carries None for an attribute the new instance will
+        also have None for that attribute.
+
+        Args:
+            other (Stars)
+                The other Stars object to add to this one.
+
+        Returns:
+            Stars
+                A new Stars object containing the combined particles.
+        """
+        # Check the other object is the same type
+        if not isinstance(other, Stars):
+            raise exceptions.InconsistentArguments(
+                "Cannot add Stars object to %s object" % type(other)
+            )
+
+        # Concatenate all the named arguments which need it (Nones are handled
+        # inside the combine_arrays function)
+        initial_masses = combine_arrays(
+            self.initial_masses, other.initial_masses
+        )
+        ages = combine_arrays(self.ages, other.ages)
+        metallicities = combine_arrays(self.metallicities, other.metallicities)
+        alpha_enhancement = combine_arrays(
+            self.alpha_enhancement, other.alpha_enhancement
+        )
+        coordinates = combine_arrays(self.coordinates, other.coordinates)
+        velocities = combine_arrays(self.velocities, other.velocities)
+        current_masses = combine_arrays(
+            self.current_masses, other.current_masses
+        )
+        smoothing_lengths = combine_arrays(
+            self.smoothing_lengths, other.smoothing_lengths
+        )
+        s_oxygen = combine_arrays(self.s_oxygen, other.s_oxygen)
+        s_hydrogen = combine_arrays(self.s_hydrogen, other.s_hydrogen)
+
+        # Handle tau_v which can either be arrays or single values that need
+        # to be converted to arrays
+        if self.tau_v is None and other.tau_v is None:
+            tau_v = None
+        elif self.tau_v is None:
+            tau_v = None
+        elif other.tau_v is None:
+            tau_v = None
+        elif isinstance(self.tau_v, np.ndarray) and isinstance(
+            other.tau_v, np.ndarray
+        ):
+            tau_v = np.concatenate([self.tau_v, other.tau_v])
+        elif isinstance(self.tau_v, np.ndarray):
+            tau_v = np.concatenate(
+                [self.tau_v, np.full(other.nparticles, other.tau_v)]
+            )
+        elif isinstance(other.tau_v, np.ndarray):
+            tau_v = np.concatenate(
+                [np.full(self.nparticles, self.tau_v), other.tau_v]
+            )
+        else:
+            self_tau_v = np.full(self.nparticles, self.tau_v)
+            other_tau_v = np.full(other.nparticles, other.tau_v)
+            tau_v = np.concatenate([self_tau_v, other_tau_v])
+
+        # Handle softening lengths which can be arrays or single values that
+        # need to be converted to arrays
+        if self.softening_lengths is None and other.softening_lengths is None:
+            softening_lengths = None
+        elif self.softening_lengths is None:
+            softening_lengths = None
+        elif other.softening_lengths is None:
+            softening_lengths = None
+        elif isinstance(self.softening_lengths, np.ndarray) and isinstance(
+            other.softening_lengths, np.ndarray
+        ):
+            softening_lengths = np.concatenate(
+                [self.softening_lengths, other.softening_lengths]
+            )
+        elif isinstance(self.softening_lengths, np.ndarray):
+            softening_lengths = np.concatenate(
+                [
+                    self.softening_lengths,
+                    np.full(other.nparticles, other.softening_lengths),
+                ]
+            )
+        elif isinstance(other.softening_lengths, np.ndarray):
+            softening_lengths = np.concatenate(
+                [
+                    np.full(self.nparticles, self.softening_lengths),
+                    other.softening_lengths,
+                ]
+            )
+        else:
+            self_softening_lengths = np.full(
+                self.nparticles, self.softening_lengths
+            )
+            other_softening_lengths = np.full(
+                other.nparticles, other.softening_lengths
+            )
+            softening_lengths = np.concatenate(
+                [self_softening_lengths, other_softening_lengths]
+            )
+
+        # Handle the redshifts which must be the same
+        if self.redshift != other.redshift:
+            raise exceptions.InconsistentArguments(
+                "Cannot add Stars objects with different redshifts"
+            )
+        else:
+            redshift = self.redshift
+
+        # Handle the metallicity floors where we take the minimum
+        metallicity_floor = min(
+            self.metallicity_floor, other.metallicity_floor
+        )
+
+        # Handle the centre of the particles, this will be taken from the
+        # first object but warn if they differ (and are not None)
+        if self.centre is not None and other.centre is not None:
+            if not np.allclose(self.centre, other.centre):
+                warn(
+                    "Centres of the Stars objects differ. "
+                    "Using the centre of the first object."
+                )
+        centre = self.centre
+
+        # Store everything we've done in a dictionary
+        kwargs = {
+            "initial_masses": initial_masses,
+            "ages": ages,
+            "metallicities": metallicities,
+            "redshift": redshift,
+            "tau_v": tau_v,
+            "alpha_enhancement": alpha_enhancement,
+            "coordinates": coordinates,
+            "velocities": velocities,
+            "current_masses": current_masses,
+            "smoothing_lengths": smoothing_lengths,
+            "s_oxygen": s_oxygen,
+            "s_hydrogen": s_hydrogen,
+            "softening_lengths": softening_lengths,
+            "centre": centre,
+            "metallicity_floor": metallicity_floor,
+        }
+
+        # Handle the extra keyword arguments
+        for key in self.__dict__.keys():
+            # Skip methods
+            if callable(getattr(self, key)):
+                continue
+
+            if key not in kwargs:
+                # Combine the attributes, concatenate if arrays, copied if
+                # scalars and the same for both objects or added if different
+                # on each. If the attribute is None for one object and not the
+                # other we'll assume None overall because the combination is
+                # undefined.
+                if getattr(self, key) is None or getattr(other, key) is None:
+                    kwargs[key] = None
+                elif isinstance(getattr(self, key), np.ndarray) and isinstance(
+                    getattr(other, key), np.ndarray
+                ):
+                    kwargs[key] = np.concatenate(
+                        [getattr(self, key), getattr(other, key)]
+                    )
+                elif (
+                    isinstance(getattr(self, key), (int, float))
+                    and isinstance(getattr(other, key), (int, float))
+                    and getattr(self, key) == getattr(other, key)
+                ):
+                    kwargs[key] = getattr(self, key)
+                elif isinstance(
+                    getattr(self, key), (int, float)
+                ) and isinstance(getattr(other, key), (int, float)):
+                    kwargs[key] = getattr(self, key) + getattr(other, key)
+                else:
+                    raise exceptions.InconsistentArguments(
+                        "Cannot add Stars objects with different %s" % key
+                    )
+
+        return Stars(**kwargs)
 
     def _prepare_sed_args(
         self,
