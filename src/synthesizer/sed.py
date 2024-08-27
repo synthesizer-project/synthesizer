@@ -615,11 +615,15 @@ class Sed:
                     np.array(
                         [
                             np.sum(_lnu * transmission) / np.sum(transmission)
-                            for _lnu in self._lnu
+                            for _lnu in self._lnu.reshape(
+                                -1, self._lnu.shape[-1]
+                            )
                         ]
                     )
                     * self.lnu.units
                 )
+
+                lnu = lnu.reshape(self._lnu.shape[:-1])
 
             else:
                 lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
@@ -803,9 +807,11 @@ class Sed:
                             np.log10(self._lam[s]), np.log10(_lnu[..., s])
                         )[0]
                         - 2.0
-                        for _lnu in self.lnu
+                        for _lnu in self.lnu.reshape(-1, self.lnu.shape[-1])
                     ]
                 )
+
+                beta = beta.reshape(self.lnu.shape[:-1])
 
             else:
                 beta = (
