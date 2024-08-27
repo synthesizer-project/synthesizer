@@ -363,7 +363,61 @@ class Particles:
         self.center = com
 
     def __add__(self, other):
-        pass
+        """
+        Combine to particle based objects.
+
+        Note that this will only combine attributes that are present in both
+        objects.
+        """
+        # First off, ensure we have two of the same object
+        if not isinstance(other, self.__class__):
+            raise exceptions.InconsistentArguments(
+                f"Can only {self.__class__.name} to {self.__class__.__name__}"
+            )
+
+        # Get the new stars object to add to
+        new_parts = copy.deepcopy(self)
+
+        # Find all the attributes on this object
+        attrs = set(self.__dict__.keys()).intersection(
+            set(other.__dict__.keys())
+        )
+
+        # Loop over attributes combining them with the new instance.
+        for attr in attrs:
+            # Handle the case where the attribute is a single number and is
+            # the same (i.e. redshift)
+            if isinstance(getattr(self, attr), (int, float)) and getattr(
+                self, attr
+            ) == getattr(other, attr):
+                setattr(new_parts, attr, getattr(self, attr))
+
+            # Handle the case where the attribute is a single number but not
+            # equal and requires addition, (i.e. nparticles)
+            elif isinstance(getattr(self, attr), (int, float)):
+                setattr(
+                    new_parts,
+                    attr,
+                    getattr(self, attr) + getattr(other, attr),
+                )
+
+            # Handle the array case where we need to concatenate
+            elif isinstance(
+                getattr(self, attr), (unyt_quantity, unyt_array, np.ndarray)
+            ):
+                setattr(
+                    new_parts,
+                    attr,
+                    np.concatenate(
+                        [getattr(self, attr), getattr(other, attr)]
+                    ),
+                )
+
+            # Otherwise, we can't add these
+            else:
+                raise exceptions.InconsistentArguments(
+                    f"Can't add {attr} attributes on {self.__class__.__name__}"
+                )
 
     def get_radii(self):
         """
