@@ -397,7 +397,6 @@ class Stars(Particles, StarsComponent):
         verbose=False,
         do_grid_check=False,
         grid_assignment_method="cic",
-        parametric_young_stars=None,
         parametric_sfh="constant",
         aperture=None,
         nthreads=0,
@@ -435,9 +434,6 @@ class Stars(Particles, StarsComponent):
                 point. Allowed methods are cic (cloud in cell) or nearest
                 grid point (ngp) or there uppercase equivalents (CIC, NGP).
                 Defaults to cic.
-            parametric_young_stars (bool/float)
-                If not None, specifies age in Myr below which we replace
-                individual star particles with a parametric SFH.
             parametric_sfh (string)
                 Form of the parametric SFH to use for young stars.
                 Currently two are supported, `Constant` and
@@ -551,30 +547,6 @@ class Stars(Particles, StarsComponent):
         else:
             aperture_mask = np.ones(self.nparticles, dtype=bool)
 
-        if parametric_young_stars:
-            # Get mask for particles we're going to replace with parametric
-            pmask = self._get_masks(parametric_young_stars, None)
-
-            # Check we have particles to replace
-            if np.sum(pmask & aperture_mask) > 0:
-                # Update the young/old mask to ignore those we're replacing
-                mask[pmask] = False
-
-                lnu_parametric = self._parametric_young_stars(
-                    pmask=pmask & aperture_mask,
-                    age=parametric_young_stars,
-                    parametric_sfh=parametric_sfh,
-                    grid=grid,
-                    spectra_name=spectra_name,
-                )
-            else:
-                # Create a dummy empty array
-                lnu_parametric = np.zeros(len(grid.lam))
-
-            if np.sum(mask & aperture_mask) == 0:
-                warn("All particles replaced with parametric forms")
-                return lnu_parametric
-
         from ..extensions.integrated_spectra import compute_integrated_sed
 
         # Prepare the arguments for the C function.
@@ -590,10 +562,7 @@ class Stars(Particles, StarsComponent):
         # Get the integrated spectra in grid units (erg / s / Hz)
         lnu_particle = compute_integrated_sed(*args)
 
-        if parametric_young_stars:
-            return lnu_particle + lnu_parametric
-        else:
-            return lnu_particle
+        return lnu_particle
 
     def _parametric_young_stars(
         self,
