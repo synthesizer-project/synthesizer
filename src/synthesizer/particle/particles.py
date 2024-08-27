@@ -362,6 +362,9 @@ class Particles:
 
         self.center = com
 
+    def __add__(self, other):
+        pass
+
     def get_radii(self):
         """
         Calculate the radii of the particles.
