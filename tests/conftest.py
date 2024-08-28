@@ -1,10 +1,10 @@
-import pytest
 import numpy as np
+import pytest
 from unyt import Msun, Myr
 
+from synthesizer.grid import Grid
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
-from synthesizer.grid import Grid
 
 
 @pytest.fixture
