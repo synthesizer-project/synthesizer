@@ -783,6 +783,10 @@ class Stars(Particles, StarsComponent):
         self.initial_masses = self.initial_masses[~pmask]
         self.ages = self.ages[~pmask]
         self.metallicities = self.metallicities[~pmask]
+        if self.masses is not None:
+            self.masses = self.masses[~pmask]
+        if self.coordinates is not None:
+            self.coordinates = self.coordinates[~pmask]
         if self.tau_v is not None:
             self.tau_v = self.tau_v[~pmask]
         if self.alpha_enhancement is not None:
@@ -791,8 +795,6 @@ class Stars(Particles, StarsComponent):
             self.velocities = self.velocities[~pmask]
         if self.current_masses is not None:
             self.current_masses = self.current_masses[~pmask]
-        if self.smoothing_lengths is not None:
-            self.smoothing_lengths = self.smoothing_lengths[~pmask]
         if self.s_oxygen is not None:
             self.s_oxygen = self.s_oxygen[~pmask]
         if self.s_hydrogen is not None:
@@ -804,6 +806,12 @@ class Stars(Particles, StarsComponent):
         if self.smoothing_lengths is not None:
             if isinstance(self.smoothing_lengths, np.ndarray):
                 self.smoothing_lengths = self.smoothing_lengths[~pmask]
+
+        self.nparticles = len(self.initial_masses)
+        self.nstars = self.nparticles
+
+        # Check the arguments we've been given
+        self._check_star_args()
 
     def _parametric_young_stars(
         self,
@@ -856,9 +864,18 @@ class Stars(Particles, StarsComponent):
 
             for key, value in kwargs.items():
                 setattr(self, key, value)
+    
+            self.nparticles = len(self.initial_masses)
+            self.nstars = self.nparticles
+
+            # Check the arguments we've been given
+            self._check_star_args()
 
         # Mask for particles below age
         pmask = self._get_masks(age, None)
+
+        if np.sum(pmask) == 0:
+            return None
 
         # initialise SFH object
         if parametric_sfh == "constant":
@@ -879,6 +896,8 @@ class Stars(Particles, StarsComponent):
             )
 
         stars = [None] * np.sum(pmask)
+
+        print(stars)
 
         # Loop through particles to be replaced
         for i, _pmask in enumerate(np.where(pmask)[0]):
@@ -907,12 +926,6 @@ class Stars(Particles, StarsComponent):
 
         # Find the grid indexes on the parametric grid
         grid_indexes = index_pairs[stars.sfzh > 0]
-
-        # if isinstance(self.redshift, np.ndarray):
-        #     # Assume median of redshift array for new parametric particles
-        #     new_redshifts = np.median(self.redshift)
-        # else:
-        #     new_redshifts = self.redshift
 
         # Create new particle stars object from non-empty SFZH entries
         new_stars = self.__class__(
