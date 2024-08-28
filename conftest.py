@@ -12,7 +12,7 @@ def test_grid():
     """
     Returns a Grid object
     """
-    return Grid("test_grid", grid_dir="tests/test_grid")
+    return Grid("test_grid.hdf5", grid_dir="tests/test_grid")
 
 
 @pytest.fixture
