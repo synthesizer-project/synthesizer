@@ -862,7 +862,7 @@ class Stars(Particles, StarsComponent):
 
         # initialise SFH object
         if parametric_sfh == "constant":
-            sfh = SFH.Constant(duration=age)
+            sfh = SFH.Constant(max_age=age)
         elif parametric_sfh == "exponential":
             sfh = SFH.TruncatedExponential(
                 tau=age / 2,
