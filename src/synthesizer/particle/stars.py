@@ -24,7 +24,7 @@ import os
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Hz, angstrom, erg, s
+from unyt import Hz, angstrom, erg, s, Myr
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
@@ -230,6 +230,9 @@ class Stars(Particles, StarsComponent):
         # Intialise the flag for resampling
         self.resampled = False
 
+        # Initialise the flag for parametric young stars
+        self.parametric_young_stars = False
+
         # Set a frontfacing clone of the number of particles
         # with clearer naming
         self.nstars = self.nparticles
@@ -285,25 +288,19 @@ class Stars(Particles, StarsComponent):
 
         return formatter.get_table("Stars")
 
-    def __add__(self, other):
+    def _concatenate_stars_arrays(self, other):
         """
-        Add two Stars objects together.
-
-        This will correctly combine named arguments and create a new Stars
-        object with the combined particles. Any extra keyword arguments will
-        be either concatenated for arrays, summed for differing scalars or
-        copied if the same for both objects.
-
-        If either object carries None for an attribute the new instance will
-        also have None for that attribute.
+        Create a dictionary of attributes from two stars objects combined,
+        self and `other`.
 
         Args:
             other (Stars)
                 The other Stars object to add to this one.
 
         Returns:
-            Stars
-                A new Stars object containing the combined particles.
+            dict
+                A dictionary of all the attributes of the combined Stars
+                objects
         """
         # Check the other object is the same type
         if not isinstance(other, Stars):
@@ -472,6 +469,30 @@ class Stars(Particles, StarsComponent):
                     getattr(self, key), (int, float)
                 ) and isinstance(getattr(other, key), (int, float)):
                     kwargs[key] = getattr(self, key) + getattr(other, key)
+
+        return kwargs
+
+    def __add__(self, other):
+        """
+        Add two Stars objects together.
+
+        This will correctly combine named arguments and create a new Stars
+        object with the combined particles. Any extra keyword arguments will
+        be either concatenated for arrays, summed for differing scalars or
+        copied if the same for both objects.
+
+        If either object carries None for an attribute the new instance will
+        also have None for that attribute.
+
+        Args:
+            other (Stars)
+                The other Stars object to add to this one.
+
+        Returns:
+            Stars
+                A new Stars object containing the combined particles.
+        """
+        kwargs = self._concatenate_stars_arrays(other)
 
         return Stars(**kwargs)
 
@@ -749,6 +770,41 @@ class Stars(Particles, StarsComponent):
 
         return lnu_particle
 
+    def _remove_stars(self, pmask):
+        """
+        Update stars attribute arrays based on a mask, `pmask`.
+
+        Args:
+            pmask (array-like, bool)
+                A boolean mask to remove stars from the object.
+        """
+
+        # Remove the masked stars from this object
+        self.initial_masses = self.initial_masses[~pmask]
+        self.ages = self.ages[~pmask]
+        self.metallicities = self.metallicities[~pmask]
+        if self.tau_v is not None:
+            self.tau_v = self.tau_v[~pmask]
+        if self.alpha_enhancement is not None:
+            self.alpha_enhancement = self.alpha_enhancement[~pmask]
+        if self.velocities is not None:
+            self.velocities = self.velocities[~pmask]
+        if self.current_masses is not None:
+            self.current_masses = self.current_masses[~pmask]
+        if self.smoothing_lengths is not None:
+            self.smoothing_lengths = self.smoothing_lengths[~pmask]
+        if self.s_oxygen is not None:
+            self.s_oxygen = self.s_oxygen[~pmask]
+        if self.s_hydrogen is not None:
+            self.s_hydrogen = self.s_hydrogen[~pmask]
+
+        if self.redshift is not None:
+            if isinstance(self.redshift, np.ndarray):
+                self.redshift = self.redshift[~pmask]
+        if self.smoothing_lengths is not None:
+            if isinstance(self.smoothing_lengths, np.ndarray):
+                self.smoothing_lengths = self.smoothing_lengths[~pmask]
+
     def _parametric_young_stars(
         self,
         age,
@@ -779,13 +835,40 @@ class Stars(Particles, StarsComponent):
                 Numpy array of integrated spectra in units of (erg / s / Hz).
         """
 
+        if self.parametric_young_stars is not False:
+            warn(
+                (
+                    "This Stars object has already replaced young stars."
+                    "\nParametrisation:"
+                    f" {self.parametric_young_stars['parametrisation']}, "
+                    f"\nAge: {self.parametric_young_stars['age']}. \n"
+                    "Undoing before applying new parametric form..."
+                )
+            )
+
+            pmask = self._get_masks(self.parametric_young_stars["age"], None)
+
+            # Remove the 'parametric' stars from the object
+            self._remove_stars(pmask)
+
+            # Add old stars back on to object
+            kwargs = self._concatenate_stars_arrays(self._old_stars)
+
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+        # Mask for particles below age
         pmask = self._get_masks(age, None)
 
         # initialise SFH object
         if parametric_sfh == "constant":
             sfh = SFH.Constant(duration=age)
         elif parametric_sfh == "exponential":
-            sfh = SFH.TruncatedExponential(tau=age / 2, max_age=age)
+            sfh = SFH.TruncatedExponential(
+                tau=age / 2,
+                max_age=age,
+                min_age=0.0 * Myr,
+            )
         else:
             raise ValueError(
                 (
@@ -825,11 +908,18 @@ class Stars(Particles, StarsComponent):
         # Find the grid indexes on the parametric grid
         grid_indexes = index_pairs[stars.sfzh > 0]
 
+        # if isinstance(self.redshift, np.ndarray):
+        #     # Assume median of redshift array for new parametric particles
+        #     new_redshifts = np.median(self.redshift)
+        # else:
+        #     new_redshifts = self.redshift
+
         # Create new particle stars object from non-empty SFZH entries
         new_stars = self.__class__(
             stars.sfzh[stars.sfzh > 0],
             grid.log10ages[grid_indexes[:, 0]],
             grid.metallicity[grid_indexes[:, 1]],
+            redshift=self.redshift,
         )
 
         # Save the old stars privately
@@ -837,36 +927,21 @@ class Stars(Particles, StarsComponent):
             self.initial_masses[pmask],
             self.ages[pmask],
             self.metallicities[pmask],
+            redshift=self.redshift,
         )
 
-        # Remove the young stars from this object
-        self.initial_masses = self.initial_masses[~pmask]
-        self.ages = self.ages[~pmask]
-        self.metallicities = self.metallicities[~pmask]
-        if self.tau_v is not None:
-            self.tau_v = self.tau_v[~pmask]
-        if self.alpha_enhancement is not None:
-            self.alpha_enhancement = self.alpha_enhancement[~pmask]
-        if self.velocities is not None:
-            self.velocities = self.velocities[~pmask]
-        if self.current_masses is not None:
-            self.current_masses = self.current_masses[~pmask]
-        if self.smoothing_lengths is not None:
-            self.smoothing_lengths = self.smoothing_lengths[~pmask]
-        if self.s_oxygen is not None:
-            self.s_oxygen = self.s_oxygen[~pmask]
-        if self.s_hydrogen is not None:
-            self.s_hydrogen = self.s_hydrogen[~pmask]
+        self._remove_stars(pmask)
 
-        if self.redshift is not None:
-            if isinstance(self.redshift, np.ndarray):
-                self.redshift = self.redshift[~pmask]
-        if self.smoothing_lengths is not None:
-            if isinstance(self.smoothing_lengths, np.ndarray):
-                self.smoothing_lengths = self.smoothing_lengths[~pmask]
+        # Add to current stars object
+        kwargs = self._concatenate_stars_arrays(new_stars)
 
-        # Dunder add to current stars object?!
-        self += new_stars
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        self.parametric_young_stars = {
+            "parametrisation": parametric_sfh,
+            "age": age,
+        }
 
     def _prepare_line_args(
         self,
