@@ -231,7 +231,7 @@ class Stars(Particles, StarsComponent):
         self.resampled = False
 
         # Initialise the flag for parametric young stars
-        self.parametric_young_stars = False
+        self.young_stars_parametrisation = False
 
         # Set a frontfacing clone of the number of particles
         # with clearer naming
@@ -733,13 +733,20 @@ class Stars(Particles, StarsComponent):
 
         # Get particle age masks
         if mask is None:
-            mask = self._get_masks(young, old)
+            mask = np.ones(self.nparticles)
+
+        age_mask = self._get_masks(young, old)
 
         # Ensure and warn that the masking hasn't removed everything
         if np.sum(mask) == 0:
-            warn("Age mask has filtered out all particles")
-
+            warn("`mask` has filtered out all particles")
             return np.zeros(len(grid.lam))
+
+        if np.sum(age_mask) == 0:
+            warn("Age mask has filtered out all particles")
+            return np.zeros(len(grid.lam))
+
+        mask = mask & age_mask
 
         if aperture is not None:
             # Get aperture mask
@@ -813,11 +820,12 @@ class Stars(Particles, StarsComponent):
         # Check the arguments we've been given
         self._check_star_args()
 
-    def _parametric_young_stars(
+    def parametric_young_stars(
         self,
         age,
         parametric_sfh,
         grid,
+        **kwargs,
     ):
         """
         Replace young stars with individual parametric SFH's. Can be either a
@@ -843,26 +851,26 @@ class Stars(Particles, StarsComponent):
                 Numpy array of integrated spectra in units of (erg / s / Hz).
         """
 
-        if self.parametric_young_stars is not False:
+        if self.young_stars_parametrisation != False:
             warn(
                 (
                     "This Stars object has already replaced young stars."
                     "\nParametrisation:"
-                    f" {self.parametric_young_stars['parametrisation']}, "
-                    f"\nAge: {self.parametric_young_stars['age']}. \n"
+                    f" {self.young_stars_parametrisation['parametrisation']}, "
+                    f"\nAge: {self.young_stars_parametrisation['age']}. \n"
                     "Undoing before applying new parametric form..."
                 )
             )
 
-            pmask = self._get_masks(self.parametric_young_stars["age"], None)
+            pmask = self._get_masks(self.young_stars_parametrisation["age"], None)
 
             # Remove the 'parametric' stars from the object
             self._remove_stars(pmask)
 
             # Add old stars back on to object
-            kwargs = self._concatenate_stars_arrays(self._old_stars)
+            concat_arrays = self._concatenate_stars_arrays(self._old_stars)
 
-            for key, value in kwargs.items():
+            for key, value in concat_arrays.items():
                 setattr(self, key, value)
     
             self.nparticles = len(self.initial_masses)
@@ -879,12 +887,13 @@ class Stars(Particles, StarsComponent):
 
         # initialise SFH object
         if parametric_sfh == "constant":
-            sfh = SFH.Constant(max_age=age)
+            sfh = SFH.Constant(max_age=age, **kwargs)
         elif parametric_sfh == "exponential":
             sfh = SFH.TruncatedExponential(
                 tau=age / 2,
                 max_age=age,
                 min_age=0.0 * Myr,
+                **kwargs,
             )
         else:
             raise ValueError(
@@ -896,8 +905,6 @@ class Stars(Particles, StarsComponent):
             )
 
         stars = [None] * np.sum(pmask)
-
-        print(stars)
 
         # Loop through particles to be replaced
         for i, _pmask in enumerate(np.where(pmask)[0]):
@@ -915,6 +922,8 @@ class Stars(Particles, StarsComponent):
             stars = sum(stars[1:], stars[0])
         else:
             stars = stars[0]
+
+        self._parametric_young_stars = stars
 
         # Create index pairs for the SFZH
         index_pairs = np.asarray(
@@ -946,12 +955,18 @@ class Stars(Particles, StarsComponent):
         self._remove_stars(pmask)
 
         # Add to current stars object
-        kwargs = self._concatenate_stars_arrays(new_stars)
+        concat_arrays = self._concatenate_stars_arrays(new_stars)
 
-        for key, value in kwargs.items():
+        for key, value in concat_arrays.items():
             setattr(self, key, value)
+        
+        self.nparticles = len(self.initial_masses)
+        self.nstars = self.nparticles
 
-        self.parametric_young_stars = {
+        # Check the arguments we've been given
+        self._check_star_args()
+
+        self.young_stars_parametrisation = {
             "parametrisation": parametric_sfh,
             "age": age,
         }
