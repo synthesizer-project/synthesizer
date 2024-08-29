@@ -1,10 +1,10 @@
 """A module for working with arrays of stellar particles.
 
-Contains the Stars class for use with particle based systems. This houses all
+Contains the Stars class for use with particle based systems. This contains all
 the data detailing collections of stellar particles. Each property is
 stored in (N_star, ) shaped arrays for efficiency.
 
-We also provide functions for creating "fake" stellar distributions by
+We also provide functions for creating "fake" stellar distributions, by
 sampling a SFZH.
 
 In both cases a myriad of extra optional properties can be set by providing
@@ -14,7 +14,7 @@ Example usages:
 
     stars = Stars(initial_masses, ages, metallicities,
                   redshift=redshift, current_masses=current_masses, ...)
-    stars = sample_sfhz(sfzh, n, total_initial_mass,
+    stars = sample_sfzh(sfzh, n, total_initial_mass,
                         smoothing_lengths=smoothing_lengths,
                         tau_v=tau_vs, coordinates=coordinates, ...)
 """
@@ -851,7 +851,7 @@ class Stars(Particles, StarsComponent):
                 Numpy array of integrated spectra in units of (erg / s / Hz).
         """
 
-        if self.young_stars_parametrisation != False:
+        if self.young_stars_parametrisation is not False:
             warn(
                 (
                     "This Stars object has already replaced young stars."
@@ -862,7 +862,10 @@ class Stars(Particles, StarsComponent):
                 )
             )
 
-            pmask = self._get_masks(self.young_stars_parametrisation["age"], None)
+            pmask = self._get_masks(
+                self.young_stars_parametrisation["age"],
+                None
+            )
 
             # Remove the 'parametric' stars from the object
             self._remove_stars(pmask)
@@ -942,6 +945,7 @@ class Stars(Particles, StarsComponent):
             grid.log10ages[grid_indexes[:, 0]],
             grid.metallicity[grid_indexes[:, 1]],
             redshift=self.redshift,
+            masses=np.zeros(np.sum(stars.sfzh > 0)),
         )
 
         # Save the old stars privately
@@ -950,6 +954,7 @@ class Stars(Particles, StarsComponent):
             self.ages[pmask],
             self.metallicities[pmask],
             redshift=self.redshift,
+            masses=self.masses[pmask],
         )
 
         self._remove_stars(pmask)
@@ -2076,7 +2081,7 @@ class Stars(Particles, StarsComponent):
         return lines
 
 
-def sample_sfhz(
+def sample_sfzh(
     sfzh,
     log10ages,
     log10metallicities,

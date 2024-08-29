@@ -20,7 +20,7 @@ from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.particles import CoordinateGenerator
-from synthesizer.particle.stars import sample_sfhz
+from synthesizer.particle.stars import sample_sfzh
 
 
 def calculate_smoothing_lengths(positions, num_neighbors=56):
@@ -94,7 +94,7 @@ smls = calculate_smoothing_lengths(coords, num_neighbors=56)
 # Sample the SFZH, producing a Stars object
 # we will also pass some keyword arguments for attributes
 # we will need for imaging
-stars = sample_sfhz(
+stars = sample_sfzh(
     param_stars.sfzh,
     param_stars.log10ages,
     param_stars.log10metallicities,
