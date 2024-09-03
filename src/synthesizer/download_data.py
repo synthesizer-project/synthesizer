@@ -93,10 +93,14 @@ def _download_from_dropbox(
             the same name as the download.
     """
     # Define the base URL
-    dropbox_url = "https://www.dropbox.com/s/"
+    dropbox_url = "https://www.dropbox.com/scl/fi/"
 
     # Define the full URL
-    url = f"{dropbox_url}/{db_id}/{filename}?dl=1"
+    url = (
+        f"{dropbox_url}/{db_id[0]}/{filename}"
+        f"?rlkey={db_id[1]}&st={db_id[2]}&dl=1"
+    )
+    # url = "https://www.dropbox.com/scl/fi/z6vbxpndmak7w83xt24x3/bpass-2.2.1-bin_chabrier03-0.1-300.0_cloudy-c23.01-sps.hdf5?rlkey=078fk0ttwpxg49yy60z0zzelh&st=orpc20cw&dl=1"
 
     # If we have no save file name then its the same as the download
     if save_filename is None:
@@ -180,9 +184,9 @@ def download_test_grids(destination):
     # Define the dropbox ids for each file (only used if we fall back on
     # dropbox)
     db_ids = [
-        "z6vbxpndmak7w83xt24x3",
-        "zjim8bpiquggs2yatxvsz",
-        "cigwp1b6oplmmnu4e68ns",
+        ("z6vbxpndmak7w83xt24x3", "078fk0ttwpxg49yy60z0zzelh", "3g8i5bnq"),
+        ("zjim8bpiquggs2yatxvsz", "ce2ozz64kp4ii4hehejizakoq", "z6ziagfc"),
+        ("cigwp1b6oplmmnu4e68ns", "xhfz356nc2cjlivce9rx3k4y9", "sv76rwoi"),
     ]
 
     # Define the file names the downloads will be saved as
@@ -210,7 +214,7 @@ def download_stellar_test_grids(destination):
         "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5",
         destination,
         "test_grid.hdf5",
-        "z6vbxpndmak7w83xt24x3",
+        ("z6vbxpndmak7w83xt24x3", "078fk0ttwpxg49yy60z0zzelh", "3g8i5bnq"),
     )
 
 
@@ -231,8 +235,8 @@ def download_agn_test_grids(destination):
     # Define the dropbox ids for each file (only used if we fall back on
     # dropbox)
     db_ids = [
-        "zjim8bpiquggs2yatxvsz",
-        "cigwp1b6oplmmnu4e68ns",
+        ("zjim8bpiquggs2yatxvsz", "ce2ozz64kp4ii4hehejizakoq", "z6ziagfc"),
+        ("cigwp1b6oplmmnu4e68ns", "xhfz356nc2cjlivce9rx3k4y9", "sv76rwoi"),
     ]
 
     # Define the file names the downloads will be saved as
@@ -255,7 +259,12 @@ def download_dust_grid(destination):
             The path to the destination directory.
     """
     # Download the dust grid
-    _download("MW3.1.hdf5", destination, "MW3.1.hdf5", "7fzg4rvw9toeh2fgt6m78")
+    _download(
+        "MW3.1.hdf5",
+        destination,
+        "MW3.1.hdf5",
+        ("7fzg4rvw9toeh2fgt6m78", "7n4f135b36lq429ts8jsi4zx1", "2tb1rfw7"),
+    )
 
 
 def download_camels_data(snap, lh, destination):
