@@ -610,7 +610,7 @@ class Sed:
         # Apply the correct method
         if integration_method == "average":
             # Apply to the correct axis of the spectra
-            if self.ndim == 2:
+            if self.ndim >= 2:
                 lnu = (
                     np.array(
                         [
@@ -796,7 +796,7 @@ class Sed:
             s = (self.lam > window[0]) & (self.lam < window[1])
 
             # Handle different spectra dimensions
-            if self.ndim == 2:
+            if self.ndim >= 2:
                 beta = np.array(
                     [
                         linregress(
@@ -1058,7 +1058,7 @@ class Sed:
         mean_red = np.mean(red)
 
         # Handle different spectra shapes
-        if self.ndim == 2:
+        if self.ndim >= 2:
             # Multiple spectra case
 
             # Perform polyfit for the continuum fit for all spectra
