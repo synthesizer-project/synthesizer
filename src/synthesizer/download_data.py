@@ -23,25 +23,42 @@ from tqdm import tqdm
 from synthesizer import exceptions
 
 
-def _download(url, save_dir, filename=None):
+def _download_from_xcs_host(filename, save_dir, save_filename=None):
     """
-    Download the file at the given URL to the given path.
+    Download the file from the XCS server.
 
     Args:
-        url (str)
-            The url to download from.
+        filename (str)
+            The name of the file to download.
         save_dir (str)
             The directory in which to save the file.
+        save_filename (str)
+            The name to save the file as. If None, the file will be saved with
+            the same name as the download.
     """
-    if filename is None:
-        # Get the file name
-        filename = url.split("/")[-1]
+    # Define the base URL
+    xcs_url = (
+        "https://xcs-host.phys.sussex.ac.uk/html/sym_links/synthesizer_data/"
+    )
+
+    # Define the full URL
+    url = xcs_url + filename
+
+    # If we have no save file name then its the same as the download
+    if save_filename is None:
+        save_filename = filename
 
     # Define the save path
-    save_path = f"{save_dir}/{filename}"
+    save_path = f"{save_dir}/{save_filename}"
 
     # Download the file
     response = requests.get(url, stream=True)
+
+    # Ensure the request was successful
+    if response.status_code != 200:
+        raise exceptions.DownloadError(
+            f"Failed to download {url}. Status code: {response.status_code}"
+        )
 
     # Sizes in bytes.
     total_size = int(response.headers.get("content-length", 0))
@@ -55,6 +72,100 @@ def _download(url, save_dir, filename=None):
                 f.write(chunk)
 
 
+def _download_from_dropbox(
+    filename,
+    db_id,
+    save_dir,
+    save_filename=None,
+):
+    """
+    Download the file from the Dropbox server.
+
+    Args:
+        filename (str)
+            The name of the file to download.
+        db_id (str)
+            The Dropbox ID of the file.
+        save_dir (str)
+            The directory in which to save the file.
+        save_filename (str)
+            The name to save the file as. If None, the file will be saved with
+            the same name as the download.
+    """
+    # Define the base URL
+    dropbox_url = "https://www.dropbox.com/scl/fi/"
+
+    # Define the full URL
+    url = (
+        f"{dropbox_url}/{db_id[0]}/{filename}"
+        f"?rlkey={db_id[1]}&st={db_id[2]}&dl=1"
+    )
+    # url = "https://www.dropbox.com/scl/fi/z6vbxpndmak7w83xt24x3/bpass-2.2.1-bin_chabrier03-0.1-300.0_cloudy-c23.01-sps.hdf5?rlkey=078fk0ttwpxg49yy60z0zzelh&st=orpc20cw&dl=1"
+
+    # If we have no save file name then its the same as the download
+    if save_filename is None:
+        save_filename = filename
+
+    # Define the save path
+    save_path = f"{save_dir}/{save_filename}"
+
+    # Download the file
+    response = requests.get(url, stream=True)
+
+    # Ensure the request was successful
+    if response.status_code != 200:
+        raise exceptions.DownloadError(
+            f"Failed to download {url}. Status code: {response.status_code}"
+        )
+
+    # Sizes in bytes.
+    total_size = int(response.headers.get("content-length", 0))
+    block_size = 1024
+
+    # Stream the file to disk with a nice progress bar.
+    with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
+        with open(save_path, "wb") as f:
+            for chunk in response.iter_content(block_size):
+                progress_bar.update(len(chunk))
+                f.write(chunk)
+
+
+def _download(
+    filename,
+    save_dir,
+    save_filename=None,
+    db_id=None,
+):
+    """
+    Download the file at the given URL to the given path.
+
+    Args:
+        filename (str)
+            The name of the file to download.
+        save_dir (str)
+            The directory in which to save the file.
+        save_filename (str)
+            The name to save the file as. If None, the file will be saved with
+            the same name as the download.
+        db_id (str)
+            The Dropbox ID of the file. (Only needed to use the dropbox
+            fall back when the primary host fails.)
+    """
+    # If we don't have a dropbox alternative just use the primary, if it fails
+    # it fails
+    if db_id is None:
+        _download_from_xcs_host(filename, save_dir, save_filename)
+        return
+
+    # Try the primary host
+    try:
+        _download_from_xcs_host(filename, save_dir, save_filename)
+    except exceptions.DownloadError:
+        print("Failed to download from primary host. Trying dropbox...")
+        # If the primary host fails, try the dropbox alternative
+        _download_from_dropbox(filename, db_id, save_dir, save_filename)
+
+
 def download_test_grids(destination):
     """
     Download the test grids for synthesizer.
@@ -63,15 +174,19 @@ def download_test_grids(destination):
         destination (str)
             The path to the destination directory.
     """
-    base_url = (
-        "https://xcs-host.phys.sussex.ac.uk/html/sym_links/synthesizer_data/"
-    )
-
     # Define the files to get
     files = [
         "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5",
         "agnsed-limited_cloudy-c23.01-blr.hdf5",
         "agnsed-limited_cloudy-c23.01-nlr.hdf5",
+    ]
+
+    # Define the dropbox ids for each file (only used if we fall back on
+    # dropbox)
+    db_ids = [
+        ("z6vbxpndmak7w83xt24x3", "078fk0ttwpxg49yy60z0zzelh", "3g8i5bnq"),
+        ("zjim8bpiquggs2yatxvsz", "ce2ozz64kp4ii4hehejizakoq", "z6ziagfc"),
+        ("cigwp1b6oplmmnu4e68ns", "xhfz356nc2cjlivce9rx3k4y9", "sv76rwoi"),
     ]
 
     # Define the file names the downloads will be saved as
@@ -82,8 +197,8 @@ def download_test_grids(destination):
     ]
 
     # Download each file
-    for f, outf in zip(files, out_files):
-        _download(base_url + f, destination, outf)
+    for f, outf, db_id in zip(files, out_files, db_ids):
+        _download(f, destination, outf, db_id)
 
 
 def download_stellar_test_grids(destination):
@@ -94,13 +209,13 @@ def download_stellar_test_grids(destination):
         destination (str)
             The path to the destination directory.
     """
-    url = (
-        "https://xcs-host.phys.sussex.ac.uk/html/sym_links/synthesizer_data/"
-        "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5"
+    # Download the stellar grid
+    _download(
+        "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5",
+        destination,
+        "test_grid.hdf5",
+        ("z6vbxpndmak7w83xt24x3", "078fk0ttwpxg49yy60z0zzelh", "3g8i5bnq"),
     )
-
-    # Download each file
-    _download(url, destination, "test_grid.hdf5")
 
 
 def download_agn_test_grids(destination):
@@ -111,14 +226,17 @@ def download_agn_test_grids(destination):
         destination (str)
             The path to the destination directory.
     """
-    base_url = (
-        "https://xcs-host.phys.sussex.ac.uk/html/sym_links/synthesizer_data/"
-    )
-
     # Define the files to get
     files = [
         "agnsed-limited_cloudy-c23.01-blr.hdf5",
         "agnsed-limited_cloudy-c23.01-nlr.hdf5",
+    ]
+
+    # Define the dropbox ids for each file (only used if we fall back on
+    # dropbox)
+    db_ids = [
+        ("zjim8bpiquggs2yatxvsz", "ce2ozz64kp4ii4hehejizakoq", "z6ziagfc"),
+        ("cigwp1b6oplmmnu4e68ns", "xhfz356nc2cjlivce9rx3k4y9", "sv76rwoi"),
     ]
 
     # Define the file names the downloads will be saved as
@@ -128,8 +246,8 @@ def download_agn_test_grids(destination):
     ]
 
     # Download each file
-    for f, outf in zip(files, out_files):
-        _download(base_url + f, destination, outf)
+    for f, outf, db_id in zip(files, out_files, db_ids):
+        _download(f, destination, outf, db_id)
 
 
 def download_dust_grid(destination):
@@ -140,12 +258,13 @@ def download_dust_grid(destination):
         destination (str)
             The path to the destination directory.
     """
-    base_url = (
-        "https://xcs-host.phys.sussex.ac.uk/html/sym_links/synthesizer_data/"
+    # Download the dust grid
+    _download(
+        "MW3.1.hdf5",
+        destination,
+        "MW3.1.hdf5",
+        ("7fzg4rvw9toeh2fgt6m78", "7n4f135b36lq429ts8jsi4zx1", "2tb1rfw7"),
     )
-
-    # Download each file
-    _download(base_url + "MW3.1.hdf5", destination)
 
 
 def download_camels_data(snap, lh, destination):
