@@ -43,6 +43,13 @@ def _download(url, save_dir, filename=None):
     # Download the file
     response = requests.get(url, stream=True)
 
+    # Ensure the request was successful
+    if response.status_code != 200:
+        raise exceptions.DownloadError(
+            f"Failed to download {url}. \n"
+            "Status code: {response.status_code}"
+        )
+
     # Sizes in bytes.
     total_size = int(response.headers.get("content-length", 0))
     block_size = 1024
