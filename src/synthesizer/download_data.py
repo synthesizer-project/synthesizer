@@ -22,8 +22,32 @@ from tqdm import tqdm
 
 from synthesizer import exceptions
 
+# Define all the available files and their information
+AVAILABLE_FILES = {
+    "test_grid.hdf5": {
+        "file": "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5",
+        "id": "ywu3dy73cdezohvytyb9k",
+        "rlkey": "05agbbdrmxytsc2x1x2jgh3xk",
+    },
+    "test_grid_agn-blr.hdf5": {
+        "file": "agnsed-limited_cloudy-c23.01-blr.hdf5",
+        "id": "4rnwbxnzwp3v0pmiju06h",
+        "rlkey": "rdqy9p7royyxnljtloh2a2zj7",
+    },
+    "test_grid_agn-nlr.hdf5": {
+        "file": "agnsed-limited_cloudy-c23.01-nlr.hdf5",
+        "id": "4dxp06jzv276pn8qxq1nx",
+        "rlkey": "35tietcw2j40q4ad1guj2swg1",
+    },
+    "MW3.1.hdf5": {
+        "file": "MW3.1.hdf5",
+        "id": "jidw4cgtf95x3gjvw4hj6",
+        "rlkey": "z7sbb7z5253dt90ootr5hm5jv",
+    },
+}
 
-def _download_from_xcs_host(filename, save_dir, save_filename=None):
+
+def _download_from_xcs_host(filename, save_dir):
     """
     Download the file from the XCS server.
 
@@ -32,9 +56,6 @@ def _download_from_xcs_host(filename, save_dir, save_filename=None):
             The name of the file to download.
         save_dir (str)
             The directory in which to save the file.
-        save_filename (str)
-            The name to save the file as. If None, the file will be saved with
-            the same name as the download.
     """
     # Define the base URL
     xcs_url = (
@@ -42,14 +63,10 @@ def _download_from_xcs_host(filename, save_dir, save_filename=None):
     )
 
     # Define the full URL
-    url = xcs_url + filename
-
-    # If we have no save file name then its the same as the download
-    if save_filename is None:
-        save_filename = filename
+    url = xcs_url + AVAILABLE_FILES[filename]["file"]
 
     # Define the save path
-    save_path = f"{save_dir}/{save_filename}"
+    save_path = f"{save_dir}/{filename}"
 
     # Download the file
     response = requests.get(url, stream=True)
@@ -72,42 +89,30 @@ def _download_from_xcs_host(filename, save_dir, save_filename=None):
                 f.write(chunk)
 
 
-def _download_from_dropbox(
-    filename,
-    db_id,
-    save_dir,
-    save_filename=None,
-):
+def _download_from_dropbox(filename, save_dir):
     """
     Download the file from the Dropbox server.
 
     Args:
         filename (str)
             The name of the file to download.
-        db_id (str)
-            The Dropbox ID of the file.
         save_dir (str)
             The directory in which to save the file.
-        save_filename (str)
-            The name to save the file as. If None, the file will be saved with
-            the same name as the download.
     """
     # Define the base URL
     dropbox_url = "https://www.dropbox.com/scl/fi/"
 
+    # Unpack the file details for extraction
+    file_details = AVAILABLE_FILES[filename]
+
     # Define the full URL
     url = (
-        f"{dropbox_url}/{db_id[0]}/{filename}"
-        f"?rlkey={db_id[1]}&st={db_id[2]}&dl=1"
+        f"{dropbox_url}/{file_details['id']}/{file_details['file']}"
+        f"?rlkey={file_details['rlkey']}&dl=1"
     )
-    # url = "https://www.dropbox.com/scl/fi/z6vbxpndmak7w83xt24x3/bpass-2.2.1-bin_chabrier03-0.1-300.0_cloudy-c23.01-sps.hdf5?rlkey=078fk0ttwpxg49yy60z0zzelh&st=orpc20cw&dl=1"
-
-    # If we have no save file name then its the same as the download
-    if save_filename is None:
-        save_filename = filename
 
     # Define the save path
-    save_path = f"{save_dir}/{save_filename}"
+    save_path = f"{save_dir}/{filename}"
 
     # Download the file
     response = requests.get(url, stream=True)
@@ -133,8 +138,6 @@ def _download_from_dropbox(
 def _download(
     filename,
     save_dir,
-    save_filename=None,
-    db_id=None,
 ):
     """
     Download the file at the given URL to the given path.
@@ -144,26 +147,14 @@ def _download(
             The name of the file to download.
         save_dir (str)
             The directory in which to save the file.
-        save_filename (str)
-            The name to save the file as. If None, the file will be saved with
-            the same name as the download.
-        db_id (str)
-            The Dropbox ID of the file. (Only needed to use the dropbox
-            fall back when the primary host fails.)
     """
-    # If we don't have a dropbox alternative just use the primary, if it fails
-    # it fails
-    if db_id is None:
-        _download_from_xcs_host(filename, save_dir, save_filename)
-        return
-
     # Try the primary host
     try:
-        _download_from_xcs_host(filename, save_dir, save_filename)
+        _download_from_xcs_host(filename, save_dir)
     except exceptions.DownloadError:
         print("Failed to download from primary host. Trying dropbox...")
         # If the primary host fails, try the dropbox alternative
-        _download_from_dropbox(filename, db_id, save_dir, save_filename)
+        _download_from_dropbox(filename, save_dir)
 
 
 def download_test_grids(destination):
@@ -174,31 +165,13 @@ def download_test_grids(destination):
         destination (str)
             The path to the destination directory.
     """
-    # Define the files to get
-    files = [
-        "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5",
-        "agnsed-limited_cloudy-c23.01-blr.hdf5",
-        "agnsed-limited_cloudy-c23.01-nlr.hdf5",
-    ]
-
-    # Define the dropbox ids for each file (only used if we fall back on
-    # dropbox)
-    db_ids = [
-        ("z6vbxpndmak7w83xt24x3", "078fk0ttwpxg49yy60z0zzelh", "3g8i5bnq"),
-        ("zjim8bpiquggs2yatxvsz", "ce2ozz64kp4ii4hehejizakoq", "z6ziagfc"),
-        ("cigwp1b6oplmmnu4e68ns", "xhfz356nc2cjlivce9rx3k4y9", "sv76rwoi"),
-    ]
-
-    # Define the file names the downloads will be saved as
-    out_files = [
+    # Download each file
+    for f in [
         "test_grid.hdf5",
         "test_grid_agn-blr.hdf5",
         "test_grid_agn-nlr.hdf5",
-    ]
-
-    # Download each file
-    for f, outf, db_id in zip(files, out_files, db_ids):
-        _download(f, destination, outf, db_id)
+    ]:
+        _download(f, destination)
 
 
 def download_stellar_test_grids(destination):
@@ -210,12 +183,7 @@ def download_stellar_test_grids(destination):
             The path to the destination directory.
     """
     # Download the stellar grid
-    _download(
-        "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5",
-        destination,
-        "test_grid.hdf5",
-        ("z6vbxpndmak7w83xt24x3", "078fk0ttwpxg49yy60z0zzelh", "3g8i5bnq"),
-    )
+    _download("test_grid.hdf5", destination)
 
 
 def download_agn_test_grids(destination):
@@ -226,28 +194,9 @@ def download_agn_test_grids(destination):
         destination (str)
             The path to the destination directory.
     """
-    # Define the files to get
-    files = [
-        "agnsed-limited_cloudy-c23.01-blr.hdf5",
-        "agnsed-limited_cloudy-c23.01-nlr.hdf5",
-    ]
-
-    # Define the dropbox ids for each file (only used if we fall back on
-    # dropbox)
-    db_ids = [
-        ("zjim8bpiquggs2yatxvsz", "ce2ozz64kp4ii4hehejizakoq", "z6ziagfc"),
-        ("cigwp1b6oplmmnu4e68ns", "xhfz356nc2cjlivce9rx3k4y9", "sv76rwoi"),
-    ]
-
-    # Define the file names the downloads will be saved as
-    out_files = [
-        "test_grid_agn-blr.hdf5",
-        "test_grid_agn-nlr.hdf5",
-    ]
-
     # Download each file
-    for f, outf, db_id in zip(files, out_files, db_ids):
-        _download(f, destination, outf, db_id)
+    for f in ["test_grid_agn-blr.hdf5", "test_grid_agn-nlr.hdf5"]:
+        _download(f, destination)
 
 
 def download_dust_grid(destination):
@@ -259,12 +208,7 @@ def download_dust_grid(destination):
             The path to the destination directory.
     """
     # Download the dust grid
-    _download(
-        "MW3.1.hdf5",
-        destination,
-        "MW3.1.hdf5",
-        ("7fzg4rvw9toeh2fgt6m78", "7n4f135b36lq429ts8jsi4zx1", "2tb1rfw7"),
-    )
+    _download("MW3.1.hdf5", destination)
 
 
 def download_camels_data(snap, lh, destination):
