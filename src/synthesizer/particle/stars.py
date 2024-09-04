@@ -199,6 +199,25 @@ class Stars(Particles, StarsComponent):
                     "Ages cannot be negative."
                 )
 
+        # Check for nan and inf on input
+        if np.sum(~np.isfinite(initial_masses)) > 0:
+            raise ValueError((
+                'NaN or inf on `initial_masses` input, '
+                f'indices: {np.where(~np.isfinite(initial_masses))[0]}'
+            ))
+        
+        if np.sum(~np.isfinite(ages)) > 0:
+            raise ValueError((
+                'NaN or inf on `ages` input, '
+                f'indices: {np.where(~np.isfinite(ages))[0]}'
+            ))
+
+        if np.sum(~np.isfinite(metallicities)) > 0:
+            raise ValueError((
+                'NaN or inf on `metallicities` input, '
+                f'indices: {np.where(~np.isfinite(metallicities))[0]}'
+            ))
+
         # Set always required stellar particle properties
         self.initial_masses = initial_masses
         self.ages = ages
@@ -772,7 +791,7 @@ class Stars(Particles, StarsComponent):
 
         # Get particle age masks
         if mask is None:
-            mask = np.ones(self.nparticles)
+            mask = np.ones(self.nparticles, dtype=bool)
 
         age_mask = self._get_masks(young, old)
 
