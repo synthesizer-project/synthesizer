@@ -201,22 +201,28 @@ class Stars(Particles, StarsComponent):
 
         # Check for nan and inf on input
         if np.sum(~np.isfinite(initial_masses)) > 0:
-            raise ValueError((
-                'NaN or inf on `initial_masses` input, '
-                f'indices: {np.where(~np.isfinite(initial_masses))[0]}'
-            ))
-        
+            raise ValueError(
+                (
+                    "NaN or inf on `initial_masses` input, "
+                    f"indices: {np.where(~np.isfinite(initial_masses))[0]}"
+                )
+            )
+
         if np.sum(~np.isfinite(ages)) > 0:
-            raise ValueError((
-                'NaN or inf on `ages` input, '
-                f'indices: {np.where(~np.isfinite(ages))[0]}'
-            ))
+            raise ValueError(
+                (
+                    "NaN or inf on `ages` input, "
+                    f"indices: {np.where(~np.isfinite(ages))[0]}"
+                )
+            )
 
         if np.sum(~np.isfinite(metallicities)) > 0:
-            raise ValueError((
-                'NaN or inf on `metallicities` input, '
-                f'indices: {np.where(~np.isfinite(metallicities))[0]}'
-            ))
+            raise ValueError(
+                (
+                    "NaN or inf on `metallicities` input, "
+                    f"indices: {np.where(~np.isfinite(metallicities))[0]}"
+                )
+            )
 
         # Set always required stellar particle properties
         self.initial_masses = initial_masses
@@ -270,14 +276,14 @@ class Stars(Particles, StarsComponent):
         Args:
             timescale (float)
                 The timescale over which to calculate the star formation rate.
-        
+
         Returns:
             sfr (float)
                 The star formation rate of the stellar particles.
         """
         age_mask = self.ages < timescale
         sfr = np.sum(self.initial_masses[age_mask]) / timescale  # Msun / Myr
-        return sfr.to('Msun / yr')
+        return sfr.to("Msun / yr")
 
     @property
     def total_mass(self):
@@ -288,7 +294,7 @@ class Stars(Particles, StarsComponent):
             total_mass (float)
                 The total mass of the stellar particles.
         """
-        total_mass = 0.
+        total_mass = 0.0
 
         # Check if we're using parametric young stars
         if self.young_stars_parametrisation is not False:
@@ -296,7 +302,7 @@ class Stars(Particles, StarsComponent):
             total_mass += np.sum(self._old_stars.masses)
 
         # Get current masses of particles (if parametric young
-        # stars are used, then the new star particles *should* 
+        # stars are used, then the new star particles *should*
         # have zero current mass)
         total_mass += np.sum(self.masses)
 
@@ -921,8 +927,7 @@ class Stars(Particles, StarsComponent):
             )
 
             pmask = self._get_masks(
-                self.young_stars_parametrisation["age"],
-                None
+                self.young_stars_parametrisation["age"], None
             )
 
             # Remove the 'parametric' stars from the object
@@ -933,7 +938,7 @@ class Stars(Particles, StarsComponent):
 
             for key, value in concat_arrays.items():
                 setattr(self, key, value)
-    
+
             self.nparticles = len(self.initial_masses)
             self.nstars = self.nparticles
 
@@ -1022,7 +1027,7 @@ class Stars(Particles, StarsComponent):
 
         for key, value in concat_arrays.items():
             setattr(self, key, value)
-        
+
         self.nparticles = len(self.initial_masses)
         self.nstars = self.nparticles
 
