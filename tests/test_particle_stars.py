@@ -3,6 +3,7 @@ from unyt import Myr
 
 from synthesizer.exceptions import InconsistentAddition
 from synthesizer.particle.stars import Stars
+from synthesizer.parametric.stars import Stars as ParaStars
 
 
 def test_cant_add_different_types(particle_stars_A, particle_gas_A):
@@ -48,16 +49,18 @@ def test_parametric_young_stars(particle_stars_A, test_grid):
     Test we can use parametric_young_stars to replace
     young star particles.
     """
-    particle_stars_A._parametric_young_stars(
+    particle_stars_A.parametric_young_stars(
         age=10 * Myr,
         parametric_sfh="constant",
         grid=test_grid,
     )
 
     assert isinstance(particle_stars_A, Stars)
-    assert isinstance(particle_stars_A.parametric_young_stars, dict)
-    assert particle_stars_A.parametric_young_stars["age"] == 10 * Myr
+    assert isinstance(particle_stars_A._parametric_young_stars, ParaStars)
+    assert isinstance(particle_stars_A._old_stars, Stars)
+    assert isinstance(particle_stars_A.young_stars_parametrisation, dict)
+    assert particle_stars_A.young_stars_parametrisation["age"] == 10 * Myr
     assert (
-        particle_stars_A.parametric_young_stars["parametrisation"]
+        particle_stars_A.young_stars_parametrisation["parametrisation"]
         == "constant"
     )
