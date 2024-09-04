@@ -2,8 +2,8 @@ import pytest
 from unyt import Myr
 
 from synthesizer.exceptions import InconsistentAddition
-from synthesizer.particle.stars import Stars
 from synthesizer.parametric.stars import Stars as ParaStars
+from synthesizer.particle.stars import Stars
 
 
 def test_cant_add_different_types(particle_stars_A, particle_gas_A):

@@ -1017,7 +1017,9 @@ class Stars(Particles, StarsComponent):
             self.ages[pmask],
             self.metallicities[pmask],
             redshift=self.redshift,
-            current_masses=(self.masses[pmask] if self.masses is not None else None),
+            current_masses=(
+                self.masses[pmask] if self.masses is not None else None
+            ),
         )
 
         self._remove_stars(pmask)
