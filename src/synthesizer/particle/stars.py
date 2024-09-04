@@ -244,6 +244,45 @@ class Stars(Particles, StarsComponent):
         # parametric galaxy
         self.sfzh = None
 
+    def get_sfr(self, timescale=10 * Myr):
+        """
+        Return the star formation rate of the stellar particles.
+
+        Args:
+            timescale (float)
+                The timescale over which to calculate the star formation rate.
+        
+        Returns:
+            sfr (float)
+                The star formation rate of the stellar particles.
+        """
+        age_mask = self.ages < timescale
+        sfr = np.sum(self.initial_masses[age_mask]) / timescale  # Msun / Myr
+        return sfr.to('Msun / yr')
+
+    @property
+    def total_mass(self):
+        """
+        Return the total mass of the stellar particles.
+
+        Returns:
+            total_mass (float)
+                The total mass of the stellar particles.
+        """
+        total_mass = 0.
+
+        # Check if we're using parametric young stars
+        if self.young_stars_parametrisation is not False:
+            # Grab the old particle masses and sum
+            total_mass += np.sum(self._old_stars.masses)
+
+        # Get current masses of particles (if parametric young
+        # stars are used, then the new star particles *should* 
+        # have zero current mass)
+        total_mass += np.sum(self.masses)
+
+        return total_mass
+
     @property
     def log10ages(self):
         """
