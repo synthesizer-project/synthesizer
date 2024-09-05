@@ -833,6 +833,8 @@ class FilterCollection:
 
     def find_filter(self, rest_frame_lam, redshift=None, method="pivot"):
         """
+        Return the filter containing the passed rest frame wavelength.
+
         Takes a rest frame target wavelength and returns the filter that probes
         that wavelength.
 
@@ -849,7 +851,7 @@ class FilterCollection:
                                  wavelength is returned.
 
         Args:
-            rest_frame_lam (float):
+            rest_frame_lam (unyt_quantity):
                 The wavelength to find the nearest filter to.
             redshift (float):
                 The redshift of the observation. None for rest_frame, defaults
@@ -868,6 +870,14 @@ class FilterCollection:
                 If the passed wavelength is out of range of any of the filters
                 then an error is thrown.
         """
+        # Ensure the rest frame wavelength has units
+        if not isinstance(rest_frame_lam, unyt_quantity):
+            raise exceptions.MissingUnits(
+                "The rest_frame_lam must have units!"
+            )
+
+        # Convert to the correct units
+        rest_frame_lam = rest_frame_lam.in_units(self.lam.units)
 
         # Are we working in a shifted frame or not?
         if redshift is not None:
@@ -880,24 +890,18 @@ class FilterCollection:
 
         # Which method are we using?
         if method == "pivot":
-            # Calculate each filters pivot wavelength
-            pivot_lams = self._pivot_lams
-
             # Find the index of the closest pivot wavelength to lam
-            ind = np.argmin(np.abs(pivot_lams - lam))
+            ind = np.argmin(np.abs(self.pivot_lams - lam))
 
         elif method == "mean":
-            # Calculate each filters mean wavelength
-            mean_lams = self._mean_lams
-
             # Find the index of the closest mean wavelength to lam
-            ind = np.argmin(np.abs(mean_lams - lam))
+            ind = np.argmin(np.abs(self.mean_lams - lam))
 
         elif method == "transmission":
             # Compute the transmission in each filter at lam
             transmissions = np.zeros(len(self))
             for ind, f in enumerate(self):
-                transmissions[ind] = f.t[np.argmin(np.abs(self._lam - lam))]
+                transmissions[ind] = f.t[np.argmin(np.abs(self.lam - lam))]
 
             # Find the index of the filter with the peak transmission
             ind = np.argmax(transmissions)
@@ -913,7 +917,7 @@ class FilterCollection:
         f = self.filters[fcode]
 
         # Get the transmission
-        transmission = f.t[np.argmin(np.abs(self._lam - lam))]
+        transmission = f.t[np.argmin(np.abs(self.lam - lam))]
 
         # Ensure the transmission is non-zero at the desired wavelength
         if transmission == 0:
