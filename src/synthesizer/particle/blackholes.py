@@ -160,15 +160,6 @@ class BlackHoles(Particles, BlackholesComponent):
         spins = value_to_array(spins)
         metallicities = value_to_array(metallicities)
         smoothing_lengths = value_to_array(smoothing_lengths)
-        ionisation_parameter_blr = value_to_array(ionisation_parameter_blr)
-        hydrogen_density_blr = value_to_array(hydrogen_density_blr)
-        covering_fraction_blr = value_to_array(covering_fraction_blr)
-        velocity_dispersion_blr = value_to_array(velocity_dispersion_blr)
-        ionisation_parameter_nlr = value_to_array(ionisation_parameter_nlr)
-        hydrogen_density_nlr = value_to_array(hydrogen_density_nlr)
-        covering_fraction_nlr = value_to_array(covering_fraction_nlr)
-        velocity_dispersion_nlr = value_to_array(velocity_dispersion_nlr)
-        theta_torus = value_to_array(theta_torus)
 
         # Instantiate parents
         Particles.__init__(
