@@ -1635,8 +1635,18 @@ class Filter:
         xs_in_band = xs[in_band]
         t_in_band = t[in_band]
 
+        # Warn and exit if there are no array elements in this band
+        if arr_in_band.size == 0:
+            warn(f"{self.filter_code} outside of emission array.")
+            return 0 if arr.ndim == 1 else np.zeros(arr.shape[0])
+
         # Multiply the array by the filter transmission curve
         transmission = arr_in_band * t_in_band
+
+        # Ensure we actually have some transmission in this band, no point
+        # in calling the C extensions if not
+        if np.sum(transmission) == 0:
+            return 0 if arr.ndim == 1 else np.zeros(arr.shape[0])
 
         # Sum over the final axis to "collect" transmission in this filer
         sum_per_x = integrate_last_axis(
