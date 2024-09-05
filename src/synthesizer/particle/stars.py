@@ -892,11 +892,11 @@ class Stars(Particles, StarsComponent):
         **kwargs,
     ):
         """
-        Replace young stars with individual parametric SFH's. Can be either a
-        constant or truncated exponential, selected with the `parametric_sfh`
-        argument. Returns the emission from these replaced particles assuming
-        this SFH. The metallicity is set to the metallicity of the parent
-        star particle.
+        Replace young stars with individual parametric SFH's.
+
+        Can be either a constant or truncated exponential, selected with the
+        `parametric_sfh` argument. The metallicity is set to the metallicity
+        of the parent star particle.
 
         Args:
             age (float)
@@ -909,12 +909,7 @@ class Stars(Particles, StarsComponent):
                 arguments `constant` and `exponential`.
             grid (Grid)
                 The spectral grid object.
-
-        Returns:
-            numpy.ndarray:
-                Numpy array of integrated spectra in units of (erg / s / Hz).
         """
-
         if self.young_stars_parametrisation is not False:
             warn(
                 (
