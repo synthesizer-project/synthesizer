@@ -525,9 +525,14 @@ class Casey12(EmissionBase):
                     The wavelengths at which to calculate lnu.
             """
             return (
-                self.n_pl
-                * ((lam / self.lam_c) ** (self.alpha))
-                * np.exp(-((lam / self.lam_c) ** 2))
+                (
+                    self.n_pl
+                    * ((lam / self.lam_c) ** (self.alpha))
+                    * np.exp(-((lam / self.lam_c) ** 2))
+                ).value
+                * erg
+                / s
+                / Hz
             )
 
         def _blackbody(lam: unyt_array) -> unyt_array:
@@ -539,10 +544,15 @@ class Casey12(EmissionBase):
                     The wavelengths at which to calculate lnu.
             """
             return (
-                self.N_bb
-                * (1 - np.exp(-((self.lam_0 / lam) ** self.emissivity)))
-                * (c / lam) ** 3
-                / (np.exp((h * c) / (lam * kb * self.temperature)) - 1.0)
+                (
+                    self.N_bb
+                    * (1 - np.exp(-((self.lam_0 / lam) ** self.emissivity)))
+                    * (c / lam) ** 3
+                    / (np.exp((h * c) / (lam * kb * self.temperature)) - 1.0)
+                ).value
+                * erg
+                / s
+                / Hz
             )
 
         return _power_law(c / nu) + _blackbody(c / nu)
@@ -769,9 +779,9 @@ class IR_templates:
             )
 
         # Ensure wavelengths have units
-        if has_units(lam):
+        if not has_units(lam):
             raise exceptions.MissingUnits(
-                "Wavelength must be a given without units."
+                "Wavelength must be a given with units."
             )
 
         # Interpret the dust spectra for the given
