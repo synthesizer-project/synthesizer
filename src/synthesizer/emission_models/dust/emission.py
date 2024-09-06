@@ -202,7 +202,7 @@ class EmissionBase:
 
         return sed
 
-    def apply_cmb_heating(self, emissivity: float, z: float) -> None:
+    def apply_cmb_heating(self, emissivity: float, redshift: float) -> None:
         """
         Return the factor by which the CMB boosts the infrared luminosity.
 
@@ -211,17 +211,17 @@ class EmissionBase:
         Args:
             emissivity (float)
                 The emissivity index in the FIR (no unit)
-            z (float)
+            redshift (float)
                 The redshift of the galaxy
         """
-        # Temperature of CMB at z=0
+        # Temperature of CMB at redshift=0
         _T_cmb_0 = 2.73 * K
-        _T_cmb_z = _T_cmb_0 * (1 + z)
+        _T_cmb_redshift = _T_cmb_0 * (1 + redshift)
         _exp_factor = 4.0 + emissivity
 
         _temperature = (
             self.temperature**_exp_factor
-            + _T_cmb_z**_exp_factor
+            + _T_cmb_redshift**_exp_factor
             - _T_cmb_0**_exp_factor
         ) ** (1 / _exp_factor)
 
@@ -236,18 +236,26 @@ class EmissionBase:
 class Blackbody(EmissionBase):
     """
     A class to generate a blackbody emission spectrum.
+
+    Attributes:
+        temperature (float)
+            The temperature of the dust.
+        cmb_heating (bool)
+            Option for adding heating by CMB.
+        redshift (float)
+            Redshift.
     """
 
     temperature: unyt_quantity
     cmb_heating: bool
-    z: float
+    redshift: float
 
     @accepts(temperature=temperature_dim)
     def __init__(
         self,
         temperature: unyt_quantity,
         cmb_heating: bool = False,
-        z: float = 0,
+        redshift: float = 0,
     ) -> None:
         """
         A function to generate a simple blackbody spectrum.
@@ -259,7 +267,7 @@ class Blackbody(EmissionBase):
             cmb_heating (bool)
                 Option for adding heating by CMB
 
-            z (float)
+            redshift (float)
                 Redshift of the galaxy
 
         """
@@ -272,7 +280,7 @@ class Blackbody(EmissionBase):
         if cmb_heating:
             # calculate the factor by which the CMB boosts the
             # infrared luminosity
-            self.apply_cmb_heating(emissivity=emissivity, z=z)
+            self.apply_cmb_heating(emissivity=emissivity, redshift=redshift)
         else:
             self.temperature_z = temperature
 
@@ -315,7 +323,7 @@ class Greybody(EmissionBase):
         cmb_heating (bool)
             Option for adding heating by CMB
 
-        z (float)
+        redshift (float)
             Redshift of the galaxy
 
     """
@@ -323,7 +331,7 @@ class Greybody(EmissionBase):
     temperature: unyt_quantity
     emissivity: float
     cmb_heating: bool
-    z: float
+    redshift: float
 
     @accepts(temperature=temperature_dim)
     def __init__(
@@ -331,7 +339,7 @@ class Greybody(EmissionBase):
         temperature: unyt_quantity,
         emissivity: float,
         cmb_heating: bool = False,
-        z: float = 0,
+        redshift: float = 0,
     ) -> None:
         """
         Initialise the dust emission model.
@@ -346,7 +354,7 @@ class Greybody(EmissionBase):
             cmb_heating (bool)
                 Option for adding heating by CMB
 
-            z (float)
+            redshift (float)
                 Redshift of the galaxy
 
         """
@@ -356,7 +364,7 @@ class Greybody(EmissionBase):
         if cmb_heating:
             # calculate the factor by which the CMB boosts the
             # infrared luminosity
-            self.apply_cmb_heating(emissivity=emissivity, z=z)
+            self.apply_cmb_heating(emissivity=emissivity, redshift=redshift)
         else:
             self.temperature_z = temperature
 
@@ -418,7 +426,7 @@ class Casey12(EmissionBase):
         cmb_heating (bool)
                 Option for adding heating by CMB
 
-        z (float)
+        redshift (float)
             Redshift of the galaxy
 
     """
@@ -429,7 +437,7 @@ class Casey12(EmissionBase):
     N_bb: float
     lam_0: unyt_quantity
     cmb_heating: bool
-    z: float
+    redshift: float
 
     @accepts(temperature=temperature_dim)
     def __init__(
@@ -440,7 +448,7 @@ class Casey12(EmissionBase):
         N_bb: float = 1.0,
         lam_0: unyt_quantity = 200.0 * um,
         cmb_heating: bool = False,
-        z: float = 0,
+        redshift: float = 0,
     ) -> None:
         """
         Args:
@@ -465,7 +473,7 @@ class Casey12(EmissionBase):
             cmb_heating (bool)
                 Option for adding heating by CMB
 
-            z (float)
+            redshift (float)
                 Redshift of the galaxy
 
         """
@@ -475,7 +483,7 @@ class Casey12(EmissionBase):
         if cmb_heating:
             # calculate the factor by which the CMB boosts the
             # infrared luminosity
-            self.apply_cmb_heating(emissivity=emissivity, z=z)
+            self.apply_cmb_heating(emissivity=emissivity, redshift=redshift)
         else:
             self.temperature_z = temperature
 
