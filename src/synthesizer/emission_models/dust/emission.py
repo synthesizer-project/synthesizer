@@ -1,14 +1,32 @@
-"""Module containing dust emission functionality"""
+"""A module defining emission generation classes.
+
+This module provides classes for generating spectra from specific
+parametrisations. Each of these will return a normalised spectrum.
+
+Possible classes include:
+    - Blackbody: A simple blackbody spectrum.
+    - Greybody: A greybody spectrum.
+    - Casey12: A dust emission spectrum using the Casey (2012) model.
+    - IR_templates: A class to generates dust emission spectra using
+        the Draine and Li (2007) model.
+
+Example usage:
+
+        blackbody = Blackbody(temperature=20 * K)
+        greybody = Greybody(temperature=20 * K, emissivity=1.5)
+        casey12 = Casey12(temperature=20 * K, emissivity=1.5, alpha=2.0)
+        ir_templates = IR_templates(grid, mdust=1e6 * Msun)
+        ir_templates.dl07()
+        ir_templates.get_spectra(lam, intrinsic_sed=sed1, attenuated_sed=sed2)
+"""
 
 from functools import partial
 from typing import Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy import integrate
 from scipy.optimize import fsolve
 from unyt import (
-    Angstrom,
     Hz,
     K,
     Lsun,
@@ -55,7 +73,7 @@ class EmissionBase:
         cmb_factor: float = 1,
     ) -> None:
         """
-        Initialises the base class for dust emission models.
+        Initialise the base class for dust emission models.
 
         Args:
             temperature (float)
@@ -64,38 +82,22 @@ class EmissionBase:
                 The multiplicative factor to account for
                 CMB heating at high-redshift
         """
-
+        # Attach the common attributes
         self.temperature = temperature
         self.cmb_factor = cmb_factor
 
     def _lnu(
         self, *args: Optional[Union[unyt_array, NDArray[np.float64]]]
     ) -> Optional[Union[unyt_array, NDArray[np.float64]]]:
-        """
-        A prototype private method used during integration. This should be
-        overloaded by child classes!
-        """
+        """Generate the unnormalised spectrum."""
         raise exceptions.UnimplementedFunctionality(
             "EmissionBase should not be instantiated directly!"
             " Instead use one to child models (Blackbody, Greybody, Casey12)."
         )
 
-    def normalisation(self) -> float:
-        """
-        Provide normalisation of _lnu by integrating the function from 8->1000
-        um.
-        """
-        return integrate.quad(
-            lambda x: self._lnu(x * Hz),
-            c / (1000 * um),
-            c / (8 * um),
-            full_output=False,
-            limit=100,
-        )[0]
-
     def get_spectra(
         self,
-        _lam,
+        lam,
         intrinsic_sed=None,
         attenuated_sed=None,
     ):
@@ -103,7 +105,7 @@ class EmissionBase:
         Return the normalised lnu for the provided wavelength grid.
 
         Args:
-            _lam (float/array-like, float)
+            lam (float/array-like, float)
                 An array of wavelengths (expected in AA, global unit)
             intrinsic_sed (Sed)
                 The intrinsic SED to scale with dust.
@@ -113,7 +115,7 @@ class EmissionBase:
         # If we haven't been given spectra to scale with dust just return the
         # spectra
         if intrinsic_sed is None and attenuated_sed is None:
-            return self._get_spectra(_lam)
+            return self._get_spectra(lam)
 
         # If we have been given spectra to scale with dust, we need to scale
         # the dust spectra to the bolometric luminosity of the input spectra
@@ -147,7 +149,7 @@ class EmissionBase:
         if bolometric_luminosity.value.ndim == 0:
             lnu = (
                 bolometric_luminosity.to("erg/s").value
-                * self._get_spectra(_lam)._lnu
+                * self._get_spectra(lam)._lnu
                 * erg
                 / s
                 / Hz
@@ -157,14 +159,14 @@ class EmissionBase:
                 np.expand_dims(
                     bolometric_luminosity.to("erg/s").value, axis=-1
                 )
-                * self._get_spectra(_lam)._lnu
+                * self._get_spectra(lam)._lnu
                 * erg
                 / s
                 / Hz
             )
 
         # Create new Sed object containing dust emission spectra
-        return Sed(_lam, lnu=lnu)
+        return Sed(lam, lnu=lnu)
 
     def _get_spectra(self, lam: unyt_array) -> Sed:
         """
@@ -736,18 +738,18 @@ class IR_templates:
 
     def get_spectra(
         self,
-        _lam,
+        lam,
         intrinsic_sed=None,
         attenuated_sed=None,
         dust_components=False,
         **kwargs,
     ):
         """
-        Returns the lnu for the provided wavelength grid
+        Return the lnu for the provided wavelength grid.
 
         Arguments:
-            _lam (float/array-like, float)
-                    An array of wavelengths (expected in AA, global unit)
+            lam (float/array-like, float)
+                    An array of wavelengths.
             intrinsic_sed (Sed)
                 The intrinsic SED to scale with dust.
             attenuated_sed (Sed)
@@ -756,7 +758,7 @@ class IR_templates:
                     If True, returns the constituent dust components
 
         """
-
+        # Calculate the dust luminosity
         if self.template == "DL07":
             if self.verbose:
                 print("Using the Draine & Li 2007 dust models")
@@ -779,10 +781,11 @@ class IR_templates:
                 f"{self.template} not a valid model!"
             )
 
-        if has_units(_lam):
-            lam = _lam
-        else:
-            lam = _lam * Angstrom
+        # Ensure wavelengths have units
+        if has_units(lam):
+            raise exceptions.MissingUnits(
+                "Wavelength must be a given without units."
+            )
 
         # interpret the dust spectra for the given
         # wavelength range
