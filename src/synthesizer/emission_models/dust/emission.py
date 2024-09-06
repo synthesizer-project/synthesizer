@@ -509,10 +509,11 @@ class Casey12(EmissionBase):
                 The unnormalised spectral luminosity density.
 
         """
-        # Essential, when using scipy.integrate, since
-        # the integration limits are passed unitless
-        if np.isscalar(nu):
-            nu *= Hz
+        # Ensure we have units
+        if not has_units(nu):
+            raise exceptions.MissingUnits(
+                f"Frequency must be a given with units. (type(nu)={type(nu)})"
+            )
 
         # Define a function to calcualate the power-law component.
         def _power_law(lam: unyt_array) -> float:
