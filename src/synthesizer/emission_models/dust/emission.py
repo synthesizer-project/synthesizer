@@ -30,6 +30,7 @@ from synthesizer import exceptions
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
 from synthesizer.utils import planck
+from synthesizer.utils.util_funcs import has_units
 from synthesizer.warnings import warn
 
 
@@ -85,7 +86,7 @@ class EmissionBase:
         um.
         """
         return integrate.quad(
-            self._lnu,
+            lambda x: self._lnu(x * Hz),
             c / (1000 * um),
             c / (8 * um),
             full_output=False,
@@ -165,25 +166,29 @@ class EmissionBase:
         # Create new Sed object containing dust emission spectra
         return Sed(_lam, lnu=lnu)
 
-    def _get_spectra(
-        self, _lam: Union[NDArray[np.float64], unyt_array]
-    ) -> Sed:
+    def _get_spectra(self, lam: unyt_array) -> Sed:
         """
         Return the normalised lnu for the provided wavelength grid.
 
         Args:
-            _lam (float/array-like, float)
+            lam (float/array-like, float)
                     An array of wavelengths (expected in AA, global unit)
 
+        Returns:
+            lnu (unyt_array)
+                The spectral luminosity density.
         """
-        if isinstance(_lam, (unyt_quantity, unyt_array)):
-            lam = _lam
-        else:
-            lam = _lam * Angstrom
+        # Ensure we have units
+        if not has_units(lam):
+            raise exceptions.InconsistentArguments(
+                "Wavelength must be a given with units. "
+                f"(type(lam)={type(lam)})"
+            )
 
-        lnu = (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
+        # Get frequencies
+        nu = (c / lam).to(Hz)
 
-        sed = Sed(lam=lam, lnu=lnu)
+        sed = Sed(lam=lam, lnu=self._lnu(nu))
 
         # Normalise the spectrum
         sed._lnu /= np.expand_dims(
@@ -282,6 +287,17 @@ class Blackbody(EmissionBase):
                 The unnormalised spectral luminosity density.
 
         """
+        # Ensure we have units on nu
+        if not has_units(nu):
+            raise exceptions.InconsistentArguments(
+                f"Frequency must be a given with units. (type(nu)={type(nu)})"
+            )
+
+        # Ensure we have the correct units on nu
+        if nu.units != Hz:
+            raise exceptions.InconsistentArguments(
+                "Frequency must be given in Hz."
+            )
 
         return planck(nu, self.temperature)
 
@@ -358,6 +374,17 @@ class Greybody(EmissionBase):
                 The unnormalised spectral luminosity density.
 
         """
+        # Ensure we have units on nu
+        if not has_units(nu):
+            raise exceptions.InconsistentArguments(
+                f"Frequency must be a given with units. (type(nu)={type(nu)})"
+            )
+
+        # Ensure we have the correct units on nu
+        if nu.units != Hz:
+            raise exceptions.InconsistentArguments(
+                "Frequency must be given in Hz."
+            )
 
         return nu**self.emissivity * planck(nu, self.temperature)
 
@@ -752,7 +779,7 @@ class IR_templates:
                 f"{self.template} not a valid model!"
             )
 
-        if isinstance(_lam, (unyt_quantity, unyt_array)):
+        if has_units(_lam):
             lam = _lam
         else:
             lam = _lam * Angstrom
