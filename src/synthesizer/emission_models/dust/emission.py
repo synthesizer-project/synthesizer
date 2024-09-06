@@ -389,7 +389,7 @@ class Greybody(EmissionBase):
                 "Frequency must be given in Hz."
             )
 
-        return nu**self.emissivity * planck(nu, self.temperature)
+        return self.emissivity * planck(nu, self.temperature)
 
 
 class Casey12(EmissionBase):
