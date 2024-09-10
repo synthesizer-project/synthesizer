@@ -18,9 +18,20 @@ import re
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import interp1d
-from scipy.stats import linregress
+from scipy.stats import linregress, norm
 from spectres import spectres
-from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
+from unyt import (
+    Hz,
+    angstrom,
+    c,
+    cm,
+    erg,
+    eV,
+    h,
+    pc,
+    s,
+    unyt_array,
+)
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
@@ -1317,6 +1328,70 @@ class Sed:
         A wrapper for synthesizer.sed.plot_spectra_as_rainbow()
         """
         return plot_spectra_as_rainbow(self, **kwargs)
+
+    # @accepts(velocity_fwhm=length/time, velocity_sigma=length/time)
+    def add_doppler_broadening(self, velocity_fwhm=None, velocity_sigma=None):
+        """
+        Add Doppler broadening to the spectra. This updates self.lnu to
+        include Gaussian Doppler broadening.
+
+        Args:
+            velocity_fwhm (unyt.array.unyt_quantity)
+                The FWHM of the velocity distribution.
+            velocity_sigma (unyt.array.unyt_quantity)
+                The standard deviation (scale, sigma) of the velocity
+                distribution.
+
+        Updates:
+            self.lnu
+        """
+
+        # Check to see if either of the measures of velocity dispersion have
+        # been provided.
+        if (velocity_sigma is None) and (velocity_fwhm is None):
+            raise exceptions.MissingArgument("")
+
+        # If velocity_sigma has not been provided go ahead and calculate it.
+        if velocity_sigma is None:
+            # Standard relationship between sigma (scale) and FWHM for a
+            # Normal distribution.
+            velocity_sigma = velocity_fwhm / np.sqrt(8 * np.log(2))
+
+        # set up new an array to hold the new spectra
+        new_sed_lnu = np.zeros(len(self.lam))
+
+        # set the first and last values to the original since these are not
+        # calculated
+        new_sed_lnu[0] = self._lnu[0]
+        new_sed_lnu[-1] = self._lnu[-1]
+
+        nu_lower = 0.5 * (self.nu[1:-1] + self.nu[2:])
+        nu_upper = 0.5 * (self.nu[:-2] + self.nu[1:-1])
+
+        # Loop over each resolution element, ignoring the first and last
+        # element. This is because to do this properly we are going to
+        # calculate the probability in each bin using the CDF.
+        for nu0, lnu0 in zip(self.nu[1:-1], self.lnu[1:-1]):
+            # Calculate sigma in freuqncy space.
+            nu_sigma = velocity_sigma * nu0 / c
+
+            # Convert to a dimensionless scale.
+            scale = nu_sigma.to("THz").value
+
+            # Calculate the upper and lower edges of the resolution element.
+            lower_edges = (nu_lower - nu0).to("THz").value
+            upper_edges = (nu_upper - nu0).to("THz").value
+
+            # Now calcualte the fraction of the flux that falls in each
+            # resolution element.
+            fraction = norm.cdf(upper_edges, scale=scale) - norm.cdf(
+                lower_edges, scale=scale
+            )
+
+            new_sed_lnu[1:-1] += lnu0.to("erg/s/Hz").value * fraction
+
+        # replace lnu
+        self.lnu = new_sed_lnu * erg / s / Hz
 
 
 def plot_spectra(
