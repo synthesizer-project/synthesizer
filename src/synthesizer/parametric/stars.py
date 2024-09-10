@@ -681,9 +681,7 @@ class Stars(StarsComponent):
 
         # Check we have units
         if not has_units(lum):
-            raise exceptions.IncorrectUnits(
-                "lum must be given with unyt units"
-            )
+            raise exceptions.MissingUnits("lum must be given with unyt units")
 
         # Calculate the current luminosity in scale_filter
         sed = self.spectra[spectra_type]
