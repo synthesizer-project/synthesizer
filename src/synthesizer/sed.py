@@ -503,13 +503,16 @@ class Sed:
         # NOTE: the integration is done "backwards" when integrating over
         # frequency. It's faster to just multiply by -1 than to reverse the
         # array.
-        self.bolometric_luminosity = -integrate_last_axis(
+        integral = -integrate_last_axis(
             self._nu,
             self._lnu,
             nthreads=nthreads,
             method=integration_method,
         )
         toc("Calculating bolometric luminosity", start)
+
+        # Assign the integral to the bolometric luminosity
+        self.bolometric_luminosity = integral * self.lnu.units * self.nu.units
 
         return self.bolometric_luminosity
 
