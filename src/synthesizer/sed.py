@@ -20,7 +20,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from spectres import spectres
-from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
+from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
@@ -97,17 +97,7 @@ class Sed:
         self.description = description
 
         # Set the wavelength
-        if isinstance(lam, (unyt_array, np.ndarray)):
-            self.lam = lam
-        elif isinstance(lam, list):
-            self.lam = np.asarray(lam)  # \AA
-        else:
-            raise ValueError(
-                (
-                    "`lam` must be a unyt_array, list, list of "
-                    "lists, or N-d numpy array"
-                )
-            )
+        self.lam = lam
 
         # Calculate frequency
         self.nu = c / self.lam
@@ -117,17 +107,7 @@ class Sed:
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
         else:
-            if isinstance(lnu, (unyt_array, np.ndarray)):
-                self.lnu = lnu
-            elif isinstance(lnu, list):
-                self.lnu = np.asarray(lnu)
-            else:
-                raise ValueError(
-                    (
-                        "`lnu` must be a unyt_array, list, list "
-                        "of lists, or N-d numpy array"
-                    )
-                )
+            self.lnu = lnu
 
         # Prepare for bolometric luminosity calculation
         self.bolometric_luminosity = None
