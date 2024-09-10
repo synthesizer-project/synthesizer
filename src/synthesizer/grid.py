@@ -718,7 +718,10 @@ class Grid:
 
         # Throw an exception if grid point is outside grid bounds
         try:
-            return Sed(self.lam, lnu=self.spectra[spectra_id][grid_point])
+            return Sed(
+                self.lam,
+                lnu=self.spectra[spectra_id][grid_point] * erg / s / Hz,
+            )
         except IndexError:
             # Modify the error message for clarity
             raise IndexError(
