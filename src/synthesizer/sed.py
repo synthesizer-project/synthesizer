@@ -20,7 +20,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 from spectres import spectres
-from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s, unyt_array
+from unyt import Hz, angstrom, c, cm, erg, eV, h, pc, s
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
@@ -97,17 +97,7 @@ class Sed:
         self.description = description
 
         # Set the wavelength
-        if isinstance(lam, (unyt_array, np.ndarray)):
-            self.lam = lam
-        elif isinstance(lam, list):
-            self.lam = np.asarray(lam)  # \AA
-        else:
-            raise ValueError(
-                (
-                    "`lam` must be a unyt_array, list, list of "
-                    "lists, or N-d numpy array"
-                )
-            )
+        self.lam = lam
 
         # Calculate frequency
         self.nu = c / self.lam
@@ -117,17 +107,7 @@ class Sed:
         if lnu is None:
             self.lnu = np.zeros(self.lam.shape)
         else:
-            if isinstance(lnu, (unyt_array, np.ndarray)):
-                self.lnu = lnu
-            elif isinstance(lnu, list):
-                self.lnu = np.asarray(lnu)
-            else:
-                raise ValueError(
-                    (
-                        "`lnu` must be a unyt_array, list, list "
-                        "of lists, or N-d numpy array"
-                    )
-                )
+            self.lnu = lnu
 
         # Prepare for bolometric luminosity calculation
         self.bolometric_luminosity = None
@@ -523,13 +503,16 @@ class Sed:
         # NOTE: the integration is done "backwards" when integrating over
         # frequency. It's faster to just multiply by -1 than to reverse the
         # array.
-        self.bolometric_luminosity = -integrate_last_axis(
+        integral = -integrate_last_axis(
             self._nu,
             self._lnu,
             nthreads=nthreads,
             method=integration_method,
         )
         toc("Calculating bolometric luminosity", start)
+
+        # Assign the integral to the bolometric luminosity
+        self.bolometric_luminosity = integral * self.lnu.units * self.nu.units
 
         return self.bolometric_luminosity
 
