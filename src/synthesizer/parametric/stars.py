@@ -681,9 +681,7 @@ class Stars(StarsComponent):
 
         # Check we have units
         if not has_units(lum):
-            raise exceptions.IncorrectUnits(
-                "lum must be given with unyt units"
-            )
+            raise exceptions.MissingUnits("lum must be given with unyt units")
 
         # Calculate the current luminosity in scale_filter
         sed = self.spectra[spectra_type]
@@ -696,7 +694,7 @@ class Stars(StarsComponent):
         conversion = lum / current_lum
 
         # Apply conversion to the masses
-        self.initial_mass *= conversion
+        self._initial_mass *= conversion
 
         # Apply the conversion to all spectra
         for key in self.spectra:
@@ -762,7 +760,7 @@ class Stars(StarsComponent):
         conversion = flux / current_flux
 
         # Apply conversion to the masses
-        self.initial_mass *= conversion
+        self._initial_mass *= conversion
 
         # Apply the conversion to all spectra
         for key in self.spectra:
