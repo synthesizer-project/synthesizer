@@ -760,7 +760,7 @@ class Stars(StarsComponent):
         conversion = flux / current_flux
 
         # Apply conversion to the masses
-        self.initial_mass *= conversion
+        self._initial_mass *= conversion
 
         # Apply the conversion to all spectra
         for key in self.spectra:
