@@ -222,7 +222,7 @@ class Sed:
             # Concatenate this lnu array
             new_lnu = np.concatenate((new_lnu, other_lnu))
 
-        return Sed(self._lam, new_lnu)
+        return Sed(self.lam, new_lnu * self.lnu.units)
 
     def __add__(self, second_sed):
         """
@@ -317,7 +317,7 @@ class Sed:
                 A new instance of Sed with scaled lnu.
         """
 
-        return Sed(self._lam, lnu=scaling * self._lnu)
+        return Sed(self.lam, lnu=scaling * self.lnu)
 
     def __rmul__(self, scaling):
         """
@@ -336,7 +336,7 @@ class Sed:
                 A new instance of Sed with scaled lnu.
         """
 
-        return Sed(self._lam, lnu=scaling * self._lnu)
+        return Sed(self._lam, lnu=scaling * self.lnu)
 
     def __str__(self):
         """
