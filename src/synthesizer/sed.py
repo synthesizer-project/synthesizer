@@ -91,6 +91,12 @@ class Sed:
             description (string)
                 An optional descriptive string defining the Sed.
         """
+        # Ensure we have units
+        if not has_units(lam):
+            raise exceptions.MissingUnits("lam must have units.")
+        if lnu is not None and not has_units(lnu):
+            raise exceptions.MissingUnits("lnu must have units.")
+
         start = tic()
 
         # Set the description
@@ -98,12 +104,6 @@ class Sed:
 
         # Set the wavelength
         self.lam = lam
-
-        # Ensure we have units
-        if not has_units(lam):
-            raise exceptions.MissingUnits("lam must have units.")
-        if lnu is not None and not has_units(lnu):
-            raise exceptions.MissingUnits("lnu must have units.")
 
         # Calculate frequency
         self.nu = c / self.lam
