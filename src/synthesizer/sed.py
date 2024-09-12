@@ -100,7 +100,7 @@ class Sed:
         self.lam = lam
 
         # Ensure we have units
-        if not has_units(self.lam):
+        if not has_units(lam):
             raise exceptions.MissingUnits("lam must have units.")
         if lnu is not None and not has_units(lnu):
             raise exceptions.MissingUnits("lnu must have units.")
@@ -266,7 +266,7 @@ class Sed:
             )
 
         # They're compatible, add them and make a new Sed
-        new_sed = Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+        new_sed = Sed(self.lam, lnu=self.lnu + second_sed.lnu)
 
         # If fnu exists on both then we need to add those too
         if (self.fnu is not None) and (second_sed.fnu is not None):
