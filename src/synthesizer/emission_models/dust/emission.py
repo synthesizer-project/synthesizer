@@ -148,11 +148,7 @@ class EmissionBase:
         # multidiensional arrays properly)
         if bolometric_luminosity.value.ndim == 0:
             lnu = (
-                bolometric_luminosity.to("erg/s").value
-                * self._get_spectra(lam)._lnu
-                * erg
-                / s
-                / Hz
+                bolometric_luminosity.to("erg/s") * self._get_spectra(lam).lnu
             )
         else:
             lnu = (
@@ -164,6 +160,8 @@ class EmissionBase:
                 / s
                 / Hz
             )
+
+        print(bolometric_luminosity)
 
         # Create new Sed object containing dust emission spectra
         return Sed(lam, lnu=lnu)
@@ -190,11 +188,12 @@ class EmissionBase:
         # Get frequencies
         nu = (c / lam).to(Hz)
 
+        print(self._lnu(nu))
         sed = Sed(lam=lam, lnu=self._lnu(nu))
 
         # Normalise the spectrum
         sed._lnu /= np.expand_dims(
-            sed.measure_bolometric_luminosity().value, axis=-1
+            sed.measure_bolometric_luminosity(), axis=-1
         )
 
         # Apply heating due to CMB, if applicable
@@ -389,7 +388,7 @@ class Greybody(EmissionBase):
                 "Frequency must be given in Hz."
             )
 
-        return (nu / Hz) * self.emissivity * planck(nu, self.temperature)
+        return (nu / Hz) ** self.emissivity * planck(nu, self.temperature)
 
 
 class Casey12(EmissionBase):
