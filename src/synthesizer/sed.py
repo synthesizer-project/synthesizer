@@ -1147,14 +1147,16 @@ class Sed:
         new_spectra = spectres(new_lam, self._lam, self._lnu, fill=0)
 
         # Instantiate the new Sed
-        sed = Sed(new_lam, new_spectra)
+        sed = Sed(new_lam, new_spectra * self.lnu.units)
 
         # If self also has fnu we should resample those too and store the
         # shifted wavelengths and frequencies
         if self.fnu is not None:
-            sed.obslam = sed._lam * (1.0 + self.redshift)
-            sed.obsnu = sed._nu / (1.0 + self.redshift)
-            sed.fnu = spectres(sed._obslam, self._obslam, self._fnu)
+            sed.obslam = sed.lam * (1.0 + self.redshift)
+            sed.obsnu = sed.nu / (1.0 + self.redshift)
+            sed.fnu = (
+                spectres(sed._obslam, self._obslam, self._fnu) * self.fnu.units
+            )
             sed.redshift = self.redshift
 
         # Clean up nans, we shouldn't get them but they do appear sometimes...
