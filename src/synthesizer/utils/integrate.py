@@ -53,10 +53,14 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
         trapz_last_axis if method == "trapz" else simps_last_axis
     )
 
-    # Scale the integrand and xs to avoid numerical issues
-    xscale = xs.max()
-    yscale = ys.max()
-    xs /= xscale
-    ys /= yscale
+    # We need to make a copy of xs and ys to avoid modifying in place
+    _xs = xs.copy()
+    _ys = ys.copy()
 
-    return integration_function(xs, ys, nthreads) * xscale * yscale
+    # Scale the integrand and xs to avoid numerical issues
+    xscale = _xs.max()
+    yscale = _ys.max()
+    _xs /= xscale
+    _ys /= yscale
+
+    return integration_function(_xs, _ys, nthreads) * xscale * yscale
