@@ -591,9 +591,9 @@ class DustAttenuation:
         """
         # Unpack the tau_v value unpacking any attributes we need
         # to extract from the emitter
-        tau_v = 1
+        tau_v = 0
         for tv in this_model.tau_v:
-            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
+            tau_v += getattr(emitter, tv) if isinstance(tv, str) else tv
 
         # Get the spectra to apply dust to
         if this_model.per_particle:
@@ -650,10 +650,9 @@ class DustAttenuation:
         """
         # Unpack the tau_v value unpacking any attributes we need
         # to extract from the emitter
-        tau_v = 1
+        tau_v = 0
         for tv in this_model.tau_v:
-            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
-            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
+            tau_v += getattr(emitter, tv) if isinstance(tv, str) else tv
 
         # Get the lines to apply dust to
         if this_model.per_particle:
