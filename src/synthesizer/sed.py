@@ -148,11 +148,15 @@ class Sed:
             sum_over = tuple(range(0, len(self._lnu.shape) - 1))
 
             # Create a new sed object with the first Lnu dimension collapsed
-            new_sed = Sed(self.lam, np.nansum(self._lnu, axis=sum_over))
+            new_sed = Sed(
+                self.lam, np.nansum(self._lnu, axis=sum_over) * self.lnu.units
+            )
 
             # If fnu exists, sum that too
             if self.fnu is not None:
-                new_sed.fnu = np.nansum(self.fnu, axis=sum_over)
+                new_sed.fnu = (
+                    np.nansum(self._fnu, axis=sum_over) * self.fnu.units
+                )
                 new_sed.obsnu = self.obsnu
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
@@ -1232,7 +1236,7 @@ class Sed:
         else:
             spectra[mask] *= transmission
 
-        return Sed(self.lam, lnu=spectra)
+        return Sed(self.lam, lnu=spectra * self.lnu.units)
 
     def calculate_ionising_photon_production_rate(
         self, ionisation_energy=13.6 * eV, limit=100, nthreads=1
