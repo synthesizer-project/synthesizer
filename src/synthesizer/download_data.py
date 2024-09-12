@@ -155,6 +155,13 @@ def _download(
         print("Failed to download from primary host. Trying dropbox...")
         # If the primary host fails, try the dropbox alternative
         _download_from_dropbox(filename, save_dir)
+    except KeyboardInterrupt as e:
+        # Re-raise the keyboard interrupt
+        raise KeyboardInterrupt(e)
+    except Exception as e:
+        print("Failed to download from primary host:", e)
+        print("Trying dropbox...")
+        _download_from_dropbox(filename, save_dir)
 
 
 def download_test_grids(destination):
