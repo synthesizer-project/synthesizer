@@ -91,6 +91,12 @@ class Sed:
             description (string)
                 An optional descriptive string defining the Sed.
         """
+        # Ensure we have units
+        if not has_units(lam):
+            raise exceptions.MissingUnits("lam must have units.")
+        if lnu is not None and not has_units(lnu):
+            raise exceptions.MissingUnits("lnu must have units.")
+
         start = tic()
 
         # Set the description
@@ -142,11 +148,15 @@ class Sed:
             sum_over = tuple(range(0, len(self._lnu.shape) - 1))
 
             # Create a new sed object with the first Lnu dimension collapsed
-            new_sed = Sed(self.lam, np.nansum(self._lnu, axis=sum_over))
+            new_sed = Sed(
+                self.lam, np.nansum(self._lnu, axis=sum_over) * self.lnu.units
+            )
 
             # If fnu exists, sum that too
             if self.fnu is not None:
-                new_sed.fnu = np.nansum(self.fnu, axis=sum_over)
+                new_sed.fnu = (
+                    np.nansum(self._fnu, axis=sum_over) * self.fnu.units
+                )
                 new_sed.obsnu = self.obsnu
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
@@ -212,7 +222,7 @@ class Sed:
             # Concatenate this lnu array
             new_lnu = np.concatenate((new_lnu, other_lnu))
 
-        return Sed(self._lam, new_lnu)
+        return Sed(self.lam, new_lnu * self.lnu.units)
 
     def __add__(self, second_sed):
         """
@@ -256,7 +266,7 @@ class Sed:
             )
 
         # They're compatible, add them and make a new Sed
-        new_sed = Sed(self._lam, lnu=self._lnu + second_sed._lnu)
+        new_sed = Sed(self.lam, lnu=self.lnu + second_sed.lnu)
 
         # If fnu exists on both then we need to add those too
         if (self.fnu is not None) and (second_sed.fnu is not None):
@@ -307,7 +317,7 @@ class Sed:
                 A new instance of Sed with scaled lnu.
         """
 
-        return Sed(self._lam, lnu=scaling * self._lnu)
+        return Sed(self.lam, lnu=scaling * self.lnu)
 
     def __rmul__(self, scaling):
         """
@@ -326,7 +336,7 @@ class Sed:
                 A new instance of Sed with scaled lnu.
         """
 
-        return Sed(self._lam, lnu=scaling * self._lnu)
+        return Sed(self._lam, lnu=scaling * self.lnu)
 
     def __str__(self):
         """
@@ -1137,14 +1147,16 @@ class Sed:
         new_spectra = spectres(new_lam, self._lam, self._lnu, fill=0)
 
         # Instantiate the new Sed
-        sed = Sed(new_lam, new_spectra)
+        sed = Sed(new_lam, new_spectra * self.lnu.units)
 
         # If self also has fnu we should resample those too and store the
         # shifted wavelengths and frequencies
         if self.fnu is not None:
-            sed.obslam = sed._lam * (1.0 + self.redshift)
-            sed.obsnu = sed._nu / (1.0 + self.redshift)
-            sed.fnu = spectres(sed._obslam, self._obslam, self._fnu)
+            sed.obslam = sed.lam * (1.0 + self.redshift)
+            sed.obsnu = sed.nu / (1.0 + self.redshift)
+            sed.fnu = (
+                spectres(sed._obslam, self._obslam, self._fnu) * self.fnu.units
+            )
             sed.redshift = self.redshift
 
         # Clean up nans, we shouldn't get them but they do appear sometimes...
@@ -1226,7 +1238,7 @@ class Sed:
         else:
             spectra[mask] *= transmission
 
-        return Sed(self.lam, lnu=spectra)
+        return Sed(self.lam, lnu=spectra * self.lnu.units)
 
     def calculate_ionising_photon_production_rate(
         self, ionisation_energy=13.6 * eV, limit=100, nthreads=1

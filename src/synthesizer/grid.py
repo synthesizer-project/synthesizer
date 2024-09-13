@@ -986,7 +986,7 @@ class Grid:
             Sed
                 The spectra grid as an Sed object.
         """
-        return Sed(self.lam, self.spectra[spectra_type])
+        return Sed(self.lam, self.spectra[spectra_type] * erg / s / Hz)
 
     def truncate_grid_lam(self, min_lam, max_lam):
         """
