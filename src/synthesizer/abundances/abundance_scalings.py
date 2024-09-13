@@ -30,15 +30,15 @@ class Dopita2006:
         self.available_elements = ["N", "C"]
 
         # the reference metallicity for the model
-        self.reference_metallicity = 0.016
+        self.reference_metallicities = 0.016
 
-    def nitrogen(self, metallicity):
+    def nitrogen(self, metallicities):
         """
         Scaling function for Nitrogen.
 
         Args:
-            metallicity (float)
-                The metallicity (mass fraction in metals)
+            metallicities (float)
+                The metallicities (mass fraction in metals)
 
         Returns:
             abundance (float)
@@ -46,22 +46,23 @@ class Dopita2006:
 
         """
 
-        # the metallicity scaled to the Dopita (2006) value
-        scaled_metallicity = metallicity / self.reference_metallicity
+        # the metallicities scaled to the Dopita (2006) value
+        scaled_metallicities = metallicities / self.reference_metallicities
 
         abundance = np.log10(
-            1.1e-5 * scaled_metallicity + 4.9e-5 * (scaled_metallicity) ** 2
+            1.1e-5 * scaled_metallicities
+            + 4.9e-5 * (scaled_metallicities) ** 2
         )
 
         return abundance
 
-    def carbon(self, metallicity):
+    def carbon(self, metallicities):
         """
         Scaling functions for Carbon.
 
         Args:
-            metallicity (float)
-                The metallicity (mass fraction in metals)
+            metallicities (float)
+                The metallicities (mass fraction in metals)
 
         Returns:
             abundance (float)
@@ -69,11 +70,11 @@ class Dopita2006:
 
         """
 
-        # the metallicity scaled to the Dopita (2006) value
-        scaled_metallicity = metallicity / self.reference_metallicity
+        # the metallicities scaled to the Dopita (2006) value
+        scaled_metallicities = metallicities / self.reference_metallicities
 
         abundance = np.log10(
-            6e-5 * scaled_metallicity + 2e-4 * (scaled_metallicity) ** 2
+            6e-5 * scaled_metallicities + 2e-4 * (scaled_metallicities) ** 2
         )
 
         return abundance
@@ -102,7 +103,7 @@ class GalacticConcordance:
         self.bibcode = "2017MNRAS.466.4403N"
 
         # the reference metallicity (mass fraction in metals), i.e. Z
-        self.reference_metallicity = 0.015
+        self.reference_metallicities = 0.015
 
         # logarthmic abundances, i.e. log10(N_element/N_H)
         self.reference_abundance = {
@@ -207,7 +208,7 @@ class GalacticConcordance:
             scaling_parameter,
             lower_break=-0.25,
             upper_break=0.5,
-            reference_metallicity=0.015,
+            reference_metallicities=0.015,
             reference_abundances={},
         ):
             """
@@ -225,7 +226,7 @@ class GalacticConcordance:
                 upper_break (float)
                     The upper-break (O/H) above which the abundance simply
                     scales with metallicity. By default 0.5.
-                reference_metallicity (float)
+                reference_metallicities (float)
                     The reference metallicity.
                 reference_abundances (dict, float)
                     Dictionary of reference abundances.
@@ -240,24 +241,24 @@ class GalacticConcordance:
             self.scaling_parameter = scaling_parameter
 
             # should try and inherit these
-            self.reference_metallicity = reference_metallicity
+            self.reference_metallicities = reference_metallicities
             self.reference_abundances = reference_abundances
 
-        def __call__(self, metallicity):
+        def __call__(self, metallicities):
             """
-            Calculate the abundance for a given metallicity.
+            Calculate the abundance for a given metallicities.
 
             Arguments:
-                metallicity (float)
-                    The metallicity.
+                metallicities (float)
+                    The metallicities.
 
             Returns:
                 abundance (float)
                     The abundance of the specific element.
             """
 
-            # calculate log10(oxygen to hydrogen) for a given metallicity
-            log10xi = np.log10(metallicity / self.reference_metallicity)
+            # calculate log10(oxygen to hydrogen) for a given metallicities
+            log10xi = np.log10(metallicities / self.reference_metallicities)
 
             if log10xi < self.lower_break:
                 delta_x = self.scaling_parameter
@@ -274,13 +275,13 @@ class GalacticConcordance:
 
             return abundance
 
-    def oxygen_to_hydrogen(self, metallicity):
+    def oxygen_to_hydrogen(self, metallicities):
         """
         Calculate the oxygen to hydrogen ratio (O/H) for the provided
         metallicity.
 
         Arguments:
-            metallicity (float)
+            metallicities (float)
                 The metallicity.
 
         Returns:
@@ -290,7 +291,7 @@ class GalacticConcordance:
 
         # calculate oxygen to hydroge for a given metallicity
         return self.reference_oxygen_abundance + np.log10(
-            metallicity / self.reference_metallicity
+            metallicities / self.reference_metallicities
         )
 
     def nitrogen_to_oxygen(self, oxygen_to_hydrogen):
@@ -313,13 +314,13 @@ class GalacticConcordance:
 
         return nitrogen_to_oxygen
 
-    def nitrogen(self, metallicity):
+    def nitrogen(self, metallicities):
         """
-        Calculate the Nitrogen abundance (N/H) for a given metallicity.
+        Calculate the Nitrogen abundance (N/H) for a given metallicities.
 
         Args:
-            metallicity (float)
-                The metallicity.
+            metallicities (float)
+                The metallicities.
 
         Returns:
             abundance (float)
@@ -328,7 +329,7 @@ class GalacticConcordance:
         """
 
         # calculate oxygen to hydrogen for a given metallicity
-        oxygen_to_hydrogen = self.oxygen_to_hydrogen(metallicity)
+        oxygen_to_hydrogen = self.oxygen_to_hydrogen(metallicities)
 
         abundance = (
             self.nitrogen_to_oxygen(oxygen_to_hydrogen) + oxygen_to_hydrogen
@@ -356,13 +357,13 @@ class GalacticConcordance:
 
         return carbon_to_oxygen
 
-    def carbon(self, metallicity):
+    def carbon(self, metallicities):
         """
         Calculate the Carbon abundance (C/H) for a given metallicity.
 
         Args:
-            metallicity (float)
-                The metallicity.
+            metallicities (float)
+                The metallicities.
 
         Returns:
             abundance (float)
@@ -371,7 +372,7 @@ class GalacticConcordance:
         """
 
         # calculate oxygen to hydrogen for a given metallicity
-        oxygen_to_hydrogen = self.oxygen_to_hydrogen(metallicity)
+        oxygen_to_hydrogen = self.oxygen_to_hydrogen(metallicities)
 
         abundance = (
             self.carbon_to_oxygen(oxygen_to_hydrogen) + oxygen_to_hydrogen
