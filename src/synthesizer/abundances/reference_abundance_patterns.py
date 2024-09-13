@@ -25,7 +25,7 @@ class Asplund2009:
         self.bibcode = "2009ARA&A..47..481A"
 
         # total metallicity
-        self.metallicity = 0.0134
+        self.metallicities = 0.0134
 
         # logarthmic abundances, i.e. log10(N_element/N_H)
         self.abundance = {
@@ -77,8 +77,8 @@ class GalacticConcordance:
         self.arxiv = None
         self.bibcode = "2017MNRAS.466.4403N"
 
-        # total metallicity
-        self.metallicity = 0.015
+        # total metallicities
+        self.metallicities = 0.015
 
         # logarthmic abundances, i.e. log10(N_element/N_H)
         self.abundance = {
@@ -129,8 +129,8 @@ class Gutkin2016:
         self.arxiv = "arXiv:1607.06086"
         self.bibcode = "2016MNRAS.462.1757G"
 
-        # total metallicity
-        self.metallicity = 0.01524
+        # total metallicities
+        self.metallicities = 0.01524
 
         # logarthmic abundances, i.e. log10(N_element/N_H)
         self.abundance = {
