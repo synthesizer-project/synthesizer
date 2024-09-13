@@ -236,9 +236,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
             grid=grid,
             label="disc_incident",
             extract="incident",
-            mask_attr="_torus_edgeon_cond",
-            mask_thresh=90 * deg,
-            mask_op="<",
             **kwargs,
         )
 
@@ -279,9 +276,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
         model = BlackHoleEmissionModel(
             label="disc_transmitted",
             combine=(nlr, blr),
-            mask_attr="_torus_edgeon_cond",
-            mask_thresh=90 * deg,
-            mask_op="<",
             **kwargs,
         )
 
@@ -305,6 +299,9 @@ class UnifiedAGN(BlackHoleEmissionModel):
             label="disc_escaped",
             extract="incident",
             fesc=(covering_fraction_nlr + covering_fraction_blr),
+            mask_attr="_torus_edgeon_cond",
+            mask_thresh=90 * deg,
+            mask_op="<",
             **kwargs,
         )
 
@@ -315,9 +312,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
         return BlackHoleEmissionModel(
             label="disc",
             combine=(self.disc_transmitted, self.disc_escaped),
-            mask_attr="_torus_edgeon_cond",
-            mask_thresh=90 * deg,
-            mask_op="<",
             **kwargs,
         )
 
@@ -337,9 +331,6 @@ class UnifiedAGN(BlackHoleEmissionModel):
             extract="nebular",
             fesc=1 - covering_fraction_nlr,
             fixed_parameters={"cosine_inclination": 0.5},
-            mask_attr="_torus_edgeon_cond",
-            mask_thresh=90 * deg,
-            mask_op="<",
             **kwargs,
         )
         blr = BlackHoleEmissionModel(
