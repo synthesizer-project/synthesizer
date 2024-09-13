@@ -126,7 +126,10 @@ class Extraction:
                     mask=this_mask,
                     verbose=verbose,
                     **kwargs,
-                ),
+                )
+                * erg
+                / s
+                / Hz,
             )
 
             # Store the spectra in the right place (integrating if we
@@ -366,6 +369,7 @@ class Generation:
                 intrinsic,
                 attenuated,
             )
+
         elif this_model.lum_intrinsic_model is not None:
             # otherwise we are scaling by a single spectra
             sed = generator.get_spectra(
@@ -750,12 +754,18 @@ class Combination:
                 emission_model.lam,
                 lnu=np.zeros_like(
                     particle_spectra[this_model.combine[0].label]._lnu
-                ),
+                )
+                * erg
+                / s
+                / Hz,
             )
         else:
             out_spec = Sed(
                 emission_model.lam,
-                lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
+                lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu)
+                * erg
+                / s
+                / Hz,
             )
 
         # Combine the spectra
