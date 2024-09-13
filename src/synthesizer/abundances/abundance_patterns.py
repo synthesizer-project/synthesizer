@@ -2,7 +2,7 @@
 
 Abundance patterns describe the relative abundances of elements in a particular
 component of a galaxy (e.g. stars, gas, dust). This code is used to define
-abundance patterns as a function of metallicity, alpha enhancement, etc.
+abundance patterns as a function of metallicities, alpha enhancement, etc.
 
 The main current use of this code is in the creation cloudy input models when
 processing SPS incident grids to model nebular emission.
@@ -30,8 +30,8 @@ class Abundances:
     scaling and depletion on to dust.
 
     Attributes:
-        metallicity (float)
-            Mass fraction in metals, default is reference metallicity.
+        metallicities (float)
+            Mass fraction in metals, default is reference metallicities.
             Optional initialisation argument. If not provided is calculated
             from the provided abundance pattern.
         alpha (float)
@@ -68,7 +68,7 @@ class Abundances:
         dust (dict, float)
             The logarithmic abundance of each element in the dust phase.
         metal_mass_fraction (float)
-            Mass fraction in metals. Since this should be metallicity it is
+            Mass fraction in metals. Since this should be metallicities it is
             redundant but serves as a useful test.
         dust_mass_fraction (float)
             Mass fraction in metals.
@@ -78,7 +78,7 @@ class Abundances:
 
     def __init__(
         self,
-        metallicity=None,
+        metallicities=None,
         alpha=0.0,
         abundances=None,
         reference=reference_abundance_patterns.GalacticConcordance,
@@ -90,14 +90,14 @@ class Abundances:
         Initialise an abundance pattern
 
         Args:
-            metallicity (float)
-                Mass fraction in metals, default is reference metallicity.
+            metallicities (float)
+                Mass fraction in metals, default is reference metallicities.
             alpha (float)
                 Enhancement of the alpha elements relative to the reference
                 abundance pattern.
             abundances (dict, float/str)
                 A dictionary containing the abundances for specific elements or
-                functions to calculate them for the specified metallicity.
+                functions to calculate them for the specified metallicities.
             reference (class or str)
                 Reference abundance pattern object or str defining the class.
             depletion (dict, float)
@@ -126,7 +126,7 @@ class Abundances:
         }
 
         # save all arguments to object
-        self.metallicity = metallicity  # mass fraction in metals
+        self.metallicities = metallicities  # mass fraction in metals
         self.alpha = alpha
         self.reference = reference
         # depletion on to dust
@@ -151,19 +151,19 @@ class Abundances:
         if isinstance(self.reference, type):
             self.reference = self.reference()
 
-        # If a metallicity is not provided use the metallicity assumed by the
+        # If metallicities is not provided use the metallicities assumed by the
         # Reference abundance pattern.
-        if self.metallicity is None:
-            self.metallicity = self.reference.metallicity
+        if self.metallicities is None:
+            self.metallicities = self.reference.metallicities
 
         # Set helium mass fraction following Bressan et al. (2012)
         # 10.1111/j.1365-2966.2012.21948.x
         # https://ui.adsabs.harvard.edu/abs/2012MNRAS.427..127B/abstract
-        self.helium_mass_fraction = 0.2485 + 1.7756 * self.metallicity
+        self.helium_mass_fraction = 0.2485 + 1.7756 * self.metallicities
 
         # Define mass fraction in hydrogen
         self.hydrogen_mass_fraction = (
-            1.0 - self.helium_mass_fraction - self.metallicity
+            1.0 - self.helium_mass_fraction - self.metallicities
         )
 
         # logathrimic total abundance of element relative to H
@@ -178,10 +178,10 @@ class Abundances:
         )
 
         # Scale elemental abundances from reference abundances based on given
-        # metallicity
+        # metallicities
         for e in self.metals:
             total[e] = self.reference.abundance[e] + np.log10(
-                self.metallicity / self.reference.metallicity
+                self.metallicities / self.reference.metallicities
             )
 
         # Scale alpha-element abundances from reference abundances
@@ -209,12 +209,12 @@ class Abundances:
 
                     # get the specific function request by value
                     scaling_function = getattr(scaling_study, element_name)
-                    total[element] = scaling_function(metallicity)
+                    total[element] = scaling_function(metallicities)
 
                     # Setting alpha or abundances will result in the
-                    # metallicity no longer being correct. To account for
+                    # metallicities no longer being correct. To account for
                     # this we need to rescale the abundances to recover
-                    # the correct metallicity. However, we don't want to
+                    # the correct metallicities. However, we don't want to
                     # rescale the things we've changed. For this reason,
                     # here we record the elements which have changed. See
                     # below for the rescaling.
@@ -268,7 +268,7 @@ class Abundances:
 
                         # if value is a str use this to call the specific
                         # function to calculate the abundance from the
-                        # metallicity.
+                        # metallicities.
                         elif isinstance(value, str):
                             # get the class holding functions for this element
                             scaling_study = getattr(
@@ -284,12 +284,12 @@ class Abundances:
                                 scaling_study, element_name
                             )
 
-                            total[element] = scaling_function(metallicity)
+                            total[element] = scaling_function(metallicities)
 
                         # Setting alpha or abundances will result in the
                         # metallicity no longer being correct. To account for
                         # this we need to rescale the abundances to recover
-                        # the correct metallicity. However, we don't want to
+                        # the correct metallicities. However, we don't want to
                         # rescale the things we've changed. For this reason,
                         # here we record the elements which have changed. See
                         # below for the rescaling.
@@ -314,9 +314,9 @@ class Abundances:
         # and so (by rearranging) the scaling factor is:
         scaling = (
             mass_in_unscaled_metals
-            - self.metallicity * mass_in_unscaled_metals
-            - self.metallicity * mass_in_non_metals
-        ) / (mass_in_scaled_metals * (self.metallicity - 1))
+            - self.metallicities * mass_in_unscaled_metals
+            - self.metallicities * mass_in_non_metals
+        ) / (mass_in_scaled_metals * (self.metallicities - 1))
 
         # now apply this scaling
         for i in scaled_metals:
@@ -337,7 +337,7 @@ class Abundances:
             self.gas = self.total
             self.depletion = {element: 1.0 for element in self.all_elements}
             self.dust = {element: -np.inf for element in self.all_elements}
-            self.metal_mass_fraction = self.metallicity
+            self.metal_mass_fraction = self.metallicities
             self.dust_mass_fraction = 0.0
             self.dust_to_metal_ratio = 0.0
 
@@ -509,8 +509,8 @@ class Abundances:
         summary += "ABUNDANCE PATTERN SUMMARY\n"
         summary += f"X: {self.hydrogen_mass_fraction:.3f}\n"
         summary += f"Y: {self.helium_mass_fraction:.3f}\n"
-        summary += f"Z: {self.metallicity:.3f}\n"
-        ratio = self.metallicity / self.reference.metallicity
+        summary += f"Z: {self.metallicities:.3f}\n"
+        ratio = self.metallicities / self.reference.metallicities
         summary += f"Z/Z_ref: {ratio:.2g}\n"
         summary += f"alpha: {self.alpha:.3f}\n"
         summary += f"dust mass fraction: {self.dust_mass_fraction}\n"
