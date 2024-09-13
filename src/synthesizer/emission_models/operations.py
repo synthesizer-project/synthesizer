@@ -105,6 +105,7 @@ class Extraction:
             # Fix any parameters we need to fix
             prev_properties = {}
             for prop in this_model.fixed_parameters:
+                prev_properties[prop] = getattr(emitter, prop, None)
                 setattr(emitter, prop, this_model.fixed_parameters[prop])
 
             # Get the generator function
