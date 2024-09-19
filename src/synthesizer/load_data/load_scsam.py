@@ -5,7 +5,10 @@ Currently implemented are loading methods for
 - SC-SAM (using a particle method)
 """
 
+import h5py
 import numpy as np
+import tqdm
+from astropy.cosmology import FlatLambdaCDM
 from scipy.interpolate import NearestNDInterpolator as NNI
 from scipy.interpolate import RegularGridInterpolator as RGI
 from unyt import Msun, yr
@@ -68,7 +71,8 @@ def load_SCSAM(fname, method, grid=None, verbose=False):
             Z_len, age_len = [int(i) for i in line.split()]
             if verbose:
                 print(
-                    f"There are {Z_len} metallicity bins and "
+                    f"There are {Z_len} metallicity bins"
+                    " and "
                     f"{age_len} age bins."
                 )
 
@@ -271,3 +275,255 @@ def _load_SCSAM_parametric_galaxy(
     parametric_galaxy = ParametricGalaxy(stars)
 
     return parametric_galaxy
+
+
+def load_SCSAM_new(
+    grid,
+    z,
+    basepath="data/",
+    nsub=1,
+    snap_num=91,
+    method="RGI",
+    verbose=False,
+    N_gal=None,
+    Z_floor=1e-10,
+):
+    """
+    Args:
+        fname (string)
+            hdf5 file name for subvolume
+        nsub (int)
+            number of subvolumes
+        snap_num (int)
+            snapshot number
+        method (string)
+    """
+    n = int(np.round(nsub ** (1 / 3)))
+    subvolumes = [
+        [i, j, k] for i in range(n) for j in range(n) for k in range(n)
+    ]
+
+    sfh_res_snap = load_snapshot(
+        basepath, snap_num, subvolumes, "Histprop", None, flag=True
+    )
+    sfh_res_snap = {
+        key: value.astype(np.float64) for key, value in sfh_res_snap.items()
+    }
+
+    with h5py.File(f"{basepath}/volume.hdf5", "r") as hf:
+        ages_grid = hf["0_0_0/Header/SFH_tbins"][:]
+        h = hf["0_0_0/Header"].attrs["h"]
+        Om0 = hf["0_0_0/Header"].attrs["Omega_m"]
+
+    dmstar = sfh_res_snap["HistpropSFH"]  # Mstar / Msol
+    metals = sfh_res_snap["HistpropZt"]  # Z / Zsol
+    # All above is data loading
+
+    cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
+    universe_age = cosmo.age(z).value  # Gyr
+
+    # Remove bins beyond the age of the Universe
+    ages_mask = (universe_age - ages_grid) > 0.0
+
+    # Make sure we include the last bin (age > Universe age)
+    ages_mask[np.where(ages_mask)[0][-1] + 1] = True
+    ages_grid = ages_grid[ages_mask]
+
+    # Set last age bin to age of the Universe
+    ages_grid[-1] = universe_age
+
+    # Convert these to stellar population age
+    ages_grid = np.abs(ages_grid - universe_age)
+
+    if np.sum(dmstar[:, ~ages_mask]) > 0:
+        raise ValueError(
+            (
+                "Non-zero SFH bins above the age of the Universe"
+                ", is your assumed cosmology correct? "
+                f"{np.sum(dmstar[:, ~ages_mask])},"
+                f" {np.where(dmstar[:, ~ages_mask] > 0)}"
+            )
+        )
+
+    dmstar = dmstar[:, ages_mask]
+
+    if N_gal is None:
+        N_gal = len(dmstar)
+
+    galaxies = [None] * N_gal
+    sfzhs = [None] * N_gal
+    Z_grids = [None] * N_gal
+    ages_grids = [None] * N_gal
+
+    binlims = np.array([np.log10(Z_floor)])
+    binlims = np.append(
+        binlims,
+        grid.log10metallicities[1:-1] - np.diff(grid.log10metallicities)[1:],
+    )
+    binlims = np.append(binlims, 1)
+
+    for g in tqdm.tqdm(np.arange(N_gal)):
+        Z = (metals[g, ages_mask] / dmstar[g]) * 0.02
+        Z[Z == 0] = Z_floor
+        Z[~np.isfinite(Z)] = Z_floor
+        Z_grid = np.unique(Z[np.argsort(Z)])
+
+        sfzh = np.zeros((np.sum(ages_mask), len(binlims)))
+        Z_idx = np.digitize(Z, 10**binlims, right=True)
+
+        for i in np.arange(len(ages_grid)):
+            sfzh[i, Z_idx[i]] += dmstar[g][i]
+
+        galaxies[g] = _load_SCSAM_parametric_galaxy(
+            sfzh[::-1, :],
+            ages_grid[::-1],
+            10**grid.log10metallicities,
+            method,
+            grid,
+            verbose=verbose,
+        )
+
+        sfzhs[g] = sfzh
+        Z_grids[g] = Z_grid
+        ages_grids[g] = ages_grid
+
+    return galaxies, sfzhs, Z_grids, ages_grids
+
+
+def load_snapshot(
+    base_path,
+    snap_num,
+    subvolumes,
+    group,
+    fields,
+    flag=False,
+    verbose=True,
+    file_name="volume",
+):
+    """
+    Load SCSAM snapshot information.
+
+    Duplicated from [scsample](https://github.com/aust427/scsample)
+
+    Args:
+        base_path (string)
+            base path to data repository
+        snap_num (int)
+            snapshot number
+        subvolumes (string)
+            what subvolume(s) to load
+        group (string)
+            what catalog to query
+        fields (list)
+            fields to retrieve
+        flag (bool)
+            if fields need to be checked
+        verbose (bool)
+            verbosity flag
+        file_name (string)
+            hdf5 output file name
+    """
+    n_init = []
+
+    for subvolume in subvolumes:
+        with h5py.File("{}/{}.hdf5".format(base_path, file_name), "r") as f:
+            subvol = f["{}_{}_{}".format(*subvolume)]
+            header = dict(subvol["Header"].attrs.items())
+            header.update(
+                {
+                    key: subvol["Header"][key][:]
+                    for key in subvol["Header"].keys()
+                }
+            )
+
+        n_init.append(header["Nsubgroups_ThisSubvol_Redshift_SFH"][snap_num])
+
+    # initialize objects structure
+    result = {}
+
+    with h5py.File("{}/{}.hdf5".format(base_path, file_name), "r") as f:
+        subvol = f["{}_{}_{}".format(*subvolumes[0])]
+        if not fields:
+            fields = list(subvol[group].keys())
+
+        for field in fields:
+            if field not in subvol[group].keys():
+                raise Exception(
+                    f"Catalog does not have requested field: {field}"
+                )
+
+            shape = list(subvol[group][field].shape)
+            shape[0] = np.sum(n_init)
+
+            # allocate within return dict
+            result[field] = np.zeros(shape, dtype=subvol[group][field].dtype)
+
+    offset = 0
+
+    for subvolume in tqdm.tqdm(subvolumes, disable=not verbose):
+        filter_fields = load_subvolume(
+            base_path, subvolume, "Linkprop", fields=None, flag=True
+        )
+
+        subvol_result = load_subvolume(
+            base_path, subvolume, group, fields, flag=False
+        )
+
+        idx = filter_fields["LinkpropSnapNum"] == snap_num  # filter_condition
+
+        for field in subvol_result.keys():
+            if len(subvol_result[field].shape) != 1:
+                result[field][offset : offset + n_init[0], :] = subvol_result[
+                    field
+                ][idx]
+            else:
+                result[field][offset : offset + n_init[0]] = subvol_result[
+                    field
+                ][idx]
+
+        offset += n_init[0]
+        del n_init[0]
+
+    return result
+
+
+def load_subvolume(
+    base_path, subvolume, group, fields, flag=False, file_name="volume"
+):
+    """Return SCSAM queried results for a specific subvolume
+
+    Duplicated from [scsample](https://github.com/aust427/scsample)
+
+    Args:
+        base_path (string)
+            base path to data repository
+        subvolume (string)
+            what subvolume to to load
+        group (string)
+            what catalog to query
+        fields (list)
+            fields to retrieve
+        flag (bool)
+            if fields need to be checked
+
+    Returns:
+        result (dict)
+    """
+    result = {}
+
+    with h5py.File("{}/{}.hdf5".format(base_path, file_name), "r") as f:
+        subvol = f["{}_{}_{}".format(*subvolume)]
+        if flag:
+            if not fields:
+                fields = list(subvol[group].keys())
+
+            for field in fields:
+                if field not in subvol[group].keys():
+                    raise Exception(
+                        f"Catalog does not have requested field: {field}"
+                    )
+
+        for field in fields:
+            result[field] = subvol[group][field][:]
+
+    return result
