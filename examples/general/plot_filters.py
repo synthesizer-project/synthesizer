@@ -6,11 +6,12 @@ A demonstration of filter and filter collections creation and usage.
 """
 
 import numpy as np
+from unyt import angstrom
 
 from synthesizer.filters import UVJ, Filter, FilterCollection
 
 # Define some wavelengths (in A) over which we want to define our filters
-lams = np.linspace(2000, 55000, 1000)
+lams = np.linspace(2000, 55000, 1000) * angstrom
 
 # Define an individual filter from SVO.
 filt = Filter("JWST/NIRCam.F200W", new_lam=lams)
