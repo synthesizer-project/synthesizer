@@ -823,7 +823,7 @@ class BlackHoles(Particles, BlackholesComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     @deprecated(
         message="is now just a wrapper "

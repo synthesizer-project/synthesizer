@@ -15,7 +15,7 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
-from unyt import Hz, Msun, angstrom, erg, nJy, s, unyt_array, unyt_quantity
+from unyt import Hz, Msun, angstrom, erg, nJy, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
@@ -148,7 +148,7 @@ class Stars(StarsComponent):
         """
 
         # Instantiate the parent
-        StarsComponent.__init__(self, 10**log10ages, metallicities)
+        StarsComponent.__init__(self, 10**log10ages * yr, metallicities)
 
         # Set the age grid properties
         self.log10ages = log10ages
@@ -569,7 +569,7 @@ class Stars(StarsComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     def calculate_median_age(self):
         """

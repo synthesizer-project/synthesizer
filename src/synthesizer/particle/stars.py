@@ -903,7 +903,7 @@ class Stars(Particles, StarsComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     def generate_particle_lnu(
         self,
@@ -1203,7 +1203,7 @@ class Stars(Particles, StarsComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     @accepts(young=yr, old=yr)
     def _get_masks(self, young=None, old=None):
@@ -1795,7 +1795,7 @@ def sample_sfhz(
     log10ages,
     log10metallicities,
     nstar,
-    initial_mass=1,
+    initial_mass=1 * Msun,
     **kwargs,
 ):
     """
@@ -1847,7 +1847,7 @@ def sample_sfhz(
     # Instantiate Stars object with extra keyword arguments
     stars = Stars(
         initial_mass * np.ones(nstar),
-        10**log10ages,
+        10**log10ages * yr,
         10**log10metallicities,
         **kwargs,
     )

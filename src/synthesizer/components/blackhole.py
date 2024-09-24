@@ -516,7 +516,7 @@ class BlackholesComponent:
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     def __str__(self):
         """
