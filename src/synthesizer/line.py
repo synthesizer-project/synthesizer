@@ -16,11 +16,11 @@ in plots etc.
 """
 
 import numpy as np
-from unyt import Angstrom, cm, unyt_array, unyt_quantity
+from unyt import Angstrom, Hz, angstrom, cm, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.warnings import deprecation
 
 
@@ -577,6 +577,11 @@ class Line:
     luminosity = Quantity()
     flux = Quantity()
 
+    @accepts(
+        wavelength=angstrom,
+        luminosity=erg / s,
+        continuum=erg / s / Hz,
+    )
     def __init__(
         self,
         *lines,
@@ -659,6 +664,11 @@ class Line:
         """Return the equivalent width."""
         return self.luminosity / self.continuum_llam
 
+    @accepts(
+        wavelength=angstrom,
+        luminosity=erg / s,
+        continuum=erg / s / Hz,
+    )
     def _make_line_from_values(
         self, line_id, wavelength, luminosity, continuum
     ):

@@ -27,15 +27,16 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import interp1d
-from unyt import Angstrom, Hz, c, unyt_array, unyt_quantity
+from unyt import Hz, angstrom, c, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer._version import __version__
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils.integrate import integrate_last_axis
 from synthesizer.warnings import warn
 
 
+@accepts(new_lam=angstrom)
 def UVJ(new_lam=None):
     """
     Helper function to produce a FilterCollection containing
@@ -102,6 +103,8 @@ class FilterCollection:
     lam = Quantity()
     mean_lams = Quantity()
     pivot_lams = Quantity()
+
+    accepts(new_lam=angstrom)
 
     def __init__(
         self,
@@ -637,6 +640,7 @@ class FilterCollection:
 
         return new_lam
 
+    @accepts(new_lam=angstrom)
     def resample_filters(
         self, new_lam=None, lam_size=None, fill_gaps=False, verbose=True
     ):
@@ -831,6 +835,7 @@ class FilterCollection:
 
         return mean_lams
 
+    @accepts(rest_frame_lam=angstrom)
     def find_filter(self, rest_frame_lam, redshift=None, method="pivot"):
         """
         Return the filter containing the passed rest frame wavelength.
@@ -870,15 +875,6 @@ class FilterCollection:
                 If the passed wavelength is out of range of any of the filters
                 then an error is thrown.
         """
-        # Ensure the rest frame wavelength has units
-        if not isinstance(rest_frame_lam, unyt_quantity):
-            raise exceptions.MissingUnits(
-                "The rest_frame_lam must have units!"
-            )
-
-        # Convert to the correct units
-        rest_frame_lam = rest_frame_lam.in_units(self.lam.units)
-
         # Are we working in a shifted frame or not?
         if redshift is not None:
             # Get the shifted wavelength
@@ -1097,6 +1093,13 @@ class Filter:
     original_lam = Quantity()
     original_nu = Quantity()
 
+    @accepts(
+        lam_min=angstrom,
+        lam_max=angstrom,
+        lam_eff=angstrom,
+        lam_fwhm=angstrom,
+        new_lam=angstrom,
+    )
     def __init__(
         self,
         filter_code,
@@ -1456,6 +1459,7 @@ class Filter:
             self.lam = self.original_lam
             self.t = self.original_t
 
+    @accepts(new_lam=angstrom)
     def _interpolate_wavelength(self, new_lam=None):
         """
         Interpolates a filter transmission curve onto the Filter's wavelength
@@ -1584,10 +1588,10 @@ class Filter:
 
             # Ensure the passed wavelengths have units
             if not isinstance(lam, unyt_array):
-                lam *= Angstrom
+                lam *= angstrom
 
             # Use the passed wavelength and original lam
-            xs = lam.to(Angstrom).value
+            xs = lam.to(angstrom).value
             original_xs = self._original_lam
 
         elif nu is not None:

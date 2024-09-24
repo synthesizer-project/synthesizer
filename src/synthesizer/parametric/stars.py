@@ -15,14 +15,14 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
-from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, Msun, angstrom, erg, nJy, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
 from synthesizer.line import Line
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, has_units
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
@@ -92,6 +92,7 @@ class Stars(StarsComponent):
     # Define quantities
     initial_mass = Quantity()
 
+    @accepts(initial_mass=Msun.in_base("galactic"))
     def __init__(
         self,
         log10ages,
@@ -650,6 +651,7 @@ class Stars(StarsComponent):
 
         return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
 
+    @accepts(lum=erg / s / Hz)
     def scale_mass_by_luminosity(self, lum, scale_filter, spectra_type):
         """
         Scale the mass of the stellar population to match a luminosity in a
@@ -679,10 +681,6 @@ class Stars(StarsComponent):
                 "corresponding spectra method?"
             )
 
-        # Check we have units
-        if not has_units(lum):
-            raise exceptions.MissingUnits("lum must be given with unyt units")
-
         # Calculate the current luminosity in scale_filter
         sed = self.spectra[spectra_type]
         current_lum = (
@@ -705,6 +703,7 @@ class Stars(StarsComponent):
         # Apply correction to the SFZH
         self.sfzh *= conversion
 
+    @accepts(flux=nJy)
     def scale_mass_by_flux(self, flux, scale_filter, spectra_type):
         """
         Scale the mass of the stellar population to match a flux in a

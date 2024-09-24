@@ -4,9 +4,12 @@ The class described in this module should never be directly instatiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
 
+from unyt import Mpc
+
 from synthesizer import exceptions
 from synthesizer.emission_models.attenuation.igm import Inoue14
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
+from synthesizer.units import accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.warnings import deprecated, deprecation
 
@@ -31,6 +34,7 @@ class BaseGalaxy:
             The BlackHole/s object holding information about the black hole/s.
     """
 
+    @accepts(centre=Mpc)
     def __init__(self, stars, gas, black_holes, redshift, centre, **kwargs):
         """
         Instantiate the base Galaxy class.

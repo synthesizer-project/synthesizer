@@ -5,11 +5,11 @@ particle.Stars and parametric.Stars and contains attributes
 and methods common between them.
 """
 
-from unyt import unyt_quantity
+from unyt import Myr, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.sed import plot_spectra
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.warnings import deprecated, deprecation
 
 
@@ -29,6 +29,7 @@ class StarsComponent:
     # Define quantities
     ages = Quantity()
 
+    @accepts(ages=Myr)
     def __init__(
         self,
         ages,
