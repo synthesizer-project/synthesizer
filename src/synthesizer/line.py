@@ -16,7 +16,7 @@ in plots etc.
 """
 
 import numpy as np
-from unyt import Angstrom, Hz, angstrom, cm, erg, s, unyt_array, unyt_quantity
+from unyt import Angstrom, Hz, angstrom, cm, erg, s
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
@@ -685,23 +685,6 @@ class Line:
             continuum (unyt_quantity)
                 The continuum of the line.
         """
-        # Ensure we have units
-        if not isinstance(wavelength, (unyt_quantity, unyt_array)):
-            raise exceptions.MissingUnits(
-                "Wavelength, luminosity, and continuum must all have units. "
-                "Wavelength units missing..."
-            )
-        if not isinstance(luminosity, (unyt_quantity, unyt_array)):
-            raise exceptions.MissingUnits(
-                "Wavelength, luminosity, and continuum must all have units. "
-                "Luminosity units missing..."
-            )
-        if not isinstance(continuum, (unyt_quantity, unyt_array)):
-            raise exceptions.MissingUnits(
-                "Wavelength, luminosity, and continuum must all have units. "
-                "Continuum units missing..."
-            )
-
         # Set the line attributes
         self.wavelength = wavelength
         self.luminosity = luminosity
