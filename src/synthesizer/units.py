@@ -521,7 +521,9 @@ def accepts(**units):
 
     Args:
         **units
-            A dictionary of the form {"variable": unyt.unit}.
+            The keyword arguments defined with this decorator. Each takes the
+            form of argument=unit_for_argument. In reality this is a
+            dictionary of the form {"variable": unyt.unit}.
 
     Returns:
         function
@@ -565,7 +567,7 @@ def accepts(**units):
                     if not has_units(value):
                         raise exceptions.MissingUnits(
                             f"{name} is missing units! Expected to "
-                            f"be in {units[name]}."
+                            f"be in {units[name]} (or equivalent)."
                         )
 
                     # Convert to the expected units
@@ -575,7 +577,7 @@ def accepts(**units):
                         except UnitConversionError:
                             raise exceptions.IncorrectUnits(
                                 f"{name} passed with incompatible units. "
-                                f"Expected {units[name]} but "
+                                f"Expected {units[name]} (or equivalent) but "
                                 f"got {value.units}."
                             )
 
@@ -588,7 +590,7 @@ def accepts(**units):
                     if not has_units(value):
                         raise exceptions.MissingUnits(
                             f"{name} is missing units! Expected to "
-                            f"be in {units[name]}."
+                            f"be in {units[name]} (or equivalent)."
                         )
 
                     # Convert to the expected units
@@ -598,7 +600,7 @@ def accepts(**units):
                         except UnitConversionError:
                             raise exceptions.IncorrectUnits(
                                 f"{name} passed with incompatible units. "
-                                f"Expected {units[name]} but "
+                                f"Expected {units[name]} (or equivalent) but "
                                 f"got {value.units}."
                             )
 
