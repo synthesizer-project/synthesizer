@@ -7,37 +7,62 @@ Example usage:
 """
 
 import numpy as np
-from unyt import c, h, kb, unyt_array, unyt_quantity
+import unyt.physical_constants as const
+from unyt import Hz, erg, pc, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.warnings import warn
 
 
-def planck(nu, temperature):
+def planck(frequency, temperature):
     """
-    Planck's law.
+    Compute the planck distribution for a given frequency and temperature.
 
-    Args:
-        nu (unyt_array/array-like, float)
-            The frequencies at which to calculate the distribution.
-        temperature  (float/array-like, float)
-            The dust temperature. Either a single value or the same size
-            as nu.
+    This function computes the spectral radiance of a black body at a given
+    frequency and temperature using Planck's law. The spectral radiance is
+    then converted to spectral luminosity density assuming a luminosity
+    distance of 10 pc.
+
+    Parameters:
+        frequency (float or unyt_quantity): Frequency of the radiation in Hz.
+        temperature (float or unyt_quantity): Temperature in Kelvin.
 
     Returns:
-        array-like, float
-            The values of the distribution at nu.
+        unyt_quantity: Spectral luminosity density in erg/s/Hz.
     """
+    # Ensure we have unyt quantities
+    if not has_units(frequency):
+        raise exceptions.InconsistentArguments(
+            "Frequency must have units (e.g. Hz) to calculate Planck's law."
+        )
+    if not has_units(temperature):
+        raise exceptions.InconsistentArguments(
+            "Temperature must have units (e.g. K) to calculate Planck's law."
+        )
 
-    return (2.0 * h * (nu**3) * (c**-2)) * (
-        1.0 / (np.exp(h * nu / (kb * temperature)) - 1.0)
+    # Ensure frequency is in Hz and temperature is in K
+    frequency = frequency.to("Hz")
+    temperature = temperature.to("K")
+
+    # Planck's law: B(ν, T) = (2*h*ν^3) / (c^2 * (exp(hν / kT) - 1))
+    exponent = (const.h * frequency) / (const.kb * temperature)
+    spectral_radiance = (2 * const.h * frequency**3) / (
+        const.c**2 * (np.exp(exponent) - 1)
     )
+
+    # Convert from spectral radiance density to spectral luminosity density,
+    # here we'll assume a luminosity distance of 10 pc
+    lnu = spectral_radiance * 4 * np.pi * (10 * pc) ** 2
+
+    # Convert the result to erg/s/Hz and return
+    return lnu.to(erg / s / Hz)
 
 
 def has_units(x):
     """
-    Check whether the passed variable has units, i.e. is a unyt_quanity or
-    unyt_array.
+    Check whether the passed variable has units.
+
+    This will check the argument is a unyt_quanity or unyt_array.
 
     Args:
         x (generic variable)
@@ -47,7 +72,6 @@ def has_units(x):
         bool
             True if the variable has units, False otherwise.
     """
-
     # Do the check
     if isinstance(x, (unyt_array, unyt_quantity)):
         return True

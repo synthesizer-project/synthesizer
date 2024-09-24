@@ -718,7 +718,10 @@ class Grid:
 
         # Throw an exception if grid point is outside grid bounds
         try:
-            return Sed(self.lam, lnu=self.spectra[spectra_id][grid_point])
+            return Sed(
+                self.lam,
+                lnu=self.spectra[spectra_id][grid_point] * erg / s / Hz,
+            )
         except IndexError:
             # Modify the error message for clarity
             raise IndexError(
@@ -983,7 +986,7 @@ class Grid:
             Sed
                 The spectra grid as an Sed object.
         """
-        return Sed(self.lam, self.spectra[spectra_type])
+        return Sed(self.lam, self.spectra[spectra_type] * erg / s / Hz)
 
     def truncate_grid_lam(self, min_lam, max_lam):
         """
