@@ -583,6 +583,12 @@ def accepts(**units):
 
             # Check the keyword arguments
             for name, value in kwargs.items():
+                # If the argument is None just skip it, its an optional
+                # argument that hasn't been passed... or the user has
+                # somehow managed to pass None which is a bit weird
+                if value is None:
+                    continue
+
                 # If the argument exists in the units dictionary we can check
                 # it, otherwise there's nothing to do
                 if name in units:
