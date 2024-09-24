@@ -315,7 +315,7 @@ def load_SCSAM_new(
         h = hf["0_0_0/Header"].attrs["h"]
         Om0 = hf["0_0_0/Header"].attrs["Omega_m"]
 
-    dmstar = sfh_res_snap["HistpropSFH"]  # Mstar / Msol
+    dmstar = sfh_res_snap["HistpropSFH"]  # Mstar / 1e9 Msol
     metals = sfh_res_snap["HistpropZt"]  # Z / Zsol
     # All above is data loading
 
@@ -327,13 +327,18 @@ def load_SCSAM_new(
 
     # Make sure we include the last bin (age > Universe age)
     ages_mask[np.where(ages_mask)[0][-1] + 1] = True
-    ages_grid = ages_grid[ages_mask]
+
+    # find delta t in last bin
+    dm_last_bin = 1 - (ages_grid[-1] - universe_age) / (
+        ages_grid[2] - ages_grid[1]
+    )
 
     # Set last age bin to age of the Universe
+    ages_grid = ages_grid[ages_mask]
     ages_grid[-1] = universe_age
 
     # Convert these to stellar population age
-    ages_grid = np.abs(ages_grid - universe_age)
+    ages_grid = universe_age - ages_grid
 
     if np.sum(dmstar[:, ~ages_mask]) > 0:
         raise ValueError(
@@ -345,16 +350,23 @@ def load_SCSAM_new(
             )
         )
 
+    # Filter the mass array by our new ages mask
     dmstar = dmstar[:, ages_mask]
+
+    # Correct the mass in the last bin
+    dmstar[-1] *= dm_last_bin
 
     if N_gal is None:
         N_gal = len(dmstar)
 
     galaxies = [None] * N_gal
+
+    # Define some lists to return for testing
     sfzhs = [None] * N_gal
     Z_grids = [None] * N_gal
     ages_grids = [None] * N_gal
 
+    # Metallicity bins, starting at floor
     binlims = np.array([np.log10(Z_floor)])
     binlims = np.append(
         binlims,
@@ -362,27 +374,35 @@ def load_SCSAM_new(
     )
     binlims = np.append(binlims, 1)
 
+    # Loop through each galaxy
     for g in tqdm.tqdm(np.arange(N_gal)):
+        # Define metallicity array
         Z = (metals[g, ages_mask] / dmstar[g]) * 0.02
         Z[Z == 0] = Z_floor
         Z[~np.isfinite(Z)] = Z_floor
         Z_grid = np.unique(Z[np.argsort(Z)])
 
+        # define sfzh 2D array
         sfzh = np.zeros((np.sum(ages_mask), len(binlims)))
+
+        # Find metallicity index
         Z_idx = np.digitize(Z, 10**binlims, right=True)
 
+        # Assign our mass to the grid at these metallicities
         for i in np.arange(len(ages_grid)):
             sfzh[i, Z_idx[i]] += dmstar[g][i]
 
+        # Load into a parametric galaxy object
         galaxies[g] = _load_SCSAM_parametric_galaxy(
-            sfzh[::-1, :],
-            ages_grid[::-1],
+            sfzh,
+            ages_grid,
             10**grid.log10metallicities,
             method,
             grid,
             verbose=verbose,
         )
 
+        # Save arrays for testing
         sfzhs[g] = sfzh
         Z_grids[g] = Z_grid
         ages_grids[g] = ages_grid
