@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dust_extinction.grain_models import WD01
 from scipy import interpolate
-from unyt import angstrom, micron
+from unyt import angstrom, um
 
 from synthesizer import exceptions
 from synthesizer.units import accepts
@@ -280,7 +280,7 @@ class PowerLaw(AttenuationLaw):
         )
 
 
-@accepts(lam=micron, cent_lam=micron, gamma=micron)
+@accepts(lam=um, cent_lam=um, gamma=um)
 def N09Tau(lam, slope, cent_lam, ampl, gamma):
     """
     Generate the transmission curve for the Noll+2009 attenuation curve.
@@ -376,13 +376,13 @@ class Calzetti2000(AttenuationLaw):
 
     """
 
-    @accepts(cent_lam=micron, gamma=micron)
+    @accepts(cent_lam=um, gamma=um)
     def __init__(
         self,
         slope=0,
-        cent_lam=0.2175 * micron,
+        cent_lam=0.2175 * um,
         ampl=0,
-        gamma=0.035 * micron,
+        gamma=0.035 * um,
     ):
         """
         Initialise the dust curve.
@@ -569,7 +569,7 @@ class GrainsWD01(AttenuationLaw):
         return self.emodel.extinguish(x=lam.to_astropy(), Av=1.086 * tau_v)
 
 
-@accepts(lam=micron)
+@accepts(lam=um)
 def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
     """
     Drude-like parametric expression for the attenuation curve from Li+08.
@@ -577,7 +577,7 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
     Args:
 
         lam (array-like, float)
-            The wavelengths (micron units) at which to calculate transmission.
+            The wavelengths (microns units) at which to calculate transmission.
         UV_slope (float)
             Dimensionless parameter describing the UV-FUV slope
         OPT_NIR_slope (float)
