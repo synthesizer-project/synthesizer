@@ -558,6 +558,9 @@ def accepts(**units):
             Returns:
                 The result of the wrapped function.
             """
+            # Convert the positional arguments to a list
+            args = list(args)
+
             # Check the positional arguments
             for i, (name, value) in enumerate(zip(arg_names, args)):
                 # If the argument exists in the units dictionary we can check
