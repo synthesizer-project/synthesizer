@@ -11,6 +11,7 @@ import unyt.physical_constants as const
 from unyt import Hz, erg, pc, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.units import has_units
 from synthesizer.warnings import warn
 
 
@@ -56,27 +57,6 @@ def planck(frequency, temperature):
 
     # Convert the result to erg/s/Hz and return
     return lnu.to(erg / s / Hz)
-
-
-def has_units(x):
-    """
-    Check whether the passed variable has units.
-
-    This will check the argument is a unyt_quanity or unyt_array.
-
-    Args:
-        x (generic variable)
-            The variables to check.
-
-    Returns:
-        bool
-            True if the variable has units, False otherwise.
-    """
-    # Do the check
-    if isinstance(x, (unyt_array, unyt_quantity)):
-        return True
-
-    return False
 
 
 def rebin_1d(arr, resample_factor, func=np.sum):

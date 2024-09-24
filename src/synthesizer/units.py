@@ -24,6 +24,8 @@ Example usage:
 
 """
 
+from functools import wraps
+
 from unyt import (
     Angstrom,
     Hz,
@@ -41,7 +43,9 @@ from unyt import (
     unyt_quantity,
     yr,
 )
+from unyt.exceptions import UnitConversionError
 
+from synthesizer import exceptions
 from synthesizer.warnings import warn
 
 # Define an importable dictionary with the default unit system
@@ -479,3 +483,102 @@ class Quantity:
 
         # Set the attribute
         setattr(obj, self.private_name, value)
+
+
+def has_units(x):
+    """
+    Check whether the passed variable has units.
+
+    This will check the argument is a unyt_quanity or unyt_array.
+
+    Args:
+        x (generic variable)
+            The variables to check.
+
+    Returns:
+        bool
+            True if the variable has units, False otherwise.
+    """
+    # Do the check
+    if isinstance(x, (unyt_array, unyt_quantity)):
+        return True
+
+    return False
+
+
+def accepts(**units):
+    """
+    Check arguments passed to the wrapped function have compatible units.
+
+    This decorator will cross check any of the arguments passed to the wrapped
+    function with the units defined in this decorators kwargs. If units are
+    not compatible or are missing an error will be raised. If the units don't
+    match the defined units in units then the values will be converted to the
+    correct units.
+
+    This is inspired by the accepts decorator in the unyt package, but includes
+    Synthesizer specific errors and conversion functionality.
+
+    Args:
+        **units
+            A dictionary of the form {"variable": unyt.unit}.
+
+    Returns:
+        function
+            The wrapped function.
+    """
+
+    def check_accepts(func):
+        """
+        Check arguments passed to the wrapped function have compatible units.
+
+        Args:
+            func (function)
+                The function to be wrapped.
+
+        Returns:
+            function
+                The wrapped function.
+        """
+        arg_names = func.__code__.co_varnames
+
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            """
+            Handle all the arguments passed to the wrapped function.
+
+            Args:
+                *args
+                    The arguments passed to the wrapped function.
+                **kwargs
+                    The keyword arguments passed to the wrapped function.
+
+            Returns:
+                The result of the wrapped function.
+            """
+            # Check the positional arguments
+            for i, (name, value) in enumerate(zip(arg_names, args)):
+                # If the argument exists in the units dictionary we can check
+                # it, otherwise there's nothing to do
+                if name in units:
+                    # Are we missing units on the passed argument?
+                    if not has_units(value):
+                        raise exceptions.MissingUnits(
+                            f"{name} is missing units! Expected to "
+                            f"be in {units[name]}."
+                        )
+
+                    # Convert to the expected units
+                    if value.units != units[name]:
+                        try:
+                            args[i] = value.to(units[name])
+                        except UnitConversionError:
+                            raise exceptions.IncorrectUnits(
+                                f"{name} passed with incompatible units. "
+                                f"Expected {units[name]} but "
+                                f"got {value.units}."
+                            )
+
+            return func(*args, **kwargs)
+
+        return wrapped
