@@ -794,7 +794,7 @@ class Grid:
                 )
             )
 
-        return Line(*lines)
+        return Line(combine_lines=lines)
 
     def get_lines(self, grid_point, line_ids=None):
         """

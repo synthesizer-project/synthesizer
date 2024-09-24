@@ -54,9 +54,9 @@ def UVJ(new_lam=None):
 
     # Define the UVJ filters dictionary.
     tophat_dict = {
-        "U": {"lam_eff": 3650, "lam_fwhm": 660},
-        "V": {"lam_eff": 5510, "lam_fwhm": 880},
-        "J": {"lam_eff": 12200, "lam_fwhm": 2130},
+        "U": {"lam_eff": 3650 * angstrom, "lam_fwhm": 660 * angstrom},
+        "V": {"lam_eff": 5510 * angstrom, "lam_fwhm": 880 * angstrom},
+        "J": {"lam_eff": 12200 * angstrom, "lam_fwhm": 2130 * angstrom},
     }
 
     return FilterCollection(tophat_dict=tophat_dict, new_lam=new_lam)
