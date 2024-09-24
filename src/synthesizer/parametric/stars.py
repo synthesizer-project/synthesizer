@@ -23,7 +23,7 @@ from synthesizer.line import Line
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter, has_units
+from synthesizer.utils import TableFormatter
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
 
@@ -731,12 +731,6 @@ class Stars(StarsComponent):
                 f"The requested spectra type ({spectra_type}) does not exist"
                 " in this stellar population. Have you called the "
                 "corresponding spectra method?"
-            )
-
-        # Check we have units
-        if not has_units(flux):
-            raise exceptions.IncorrectUnits(
-                "lum must be given with unyt units"
             )
 
         # Get the sed object
