@@ -569,9 +569,32 @@ def accepts(**units):
                         )
 
                     # Convert to the expected units
-                    if value.units != units[name]:
+                    elif value.units != units[name]:
                         try:
                             args[i] = value.to(units[name])
+                        except UnitConversionError:
+                            raise exceptions.IncorrectUnits(
+                                f"{name} passed with incompatible units. "
+                                f"Expected {units[name]} but "
+                                f"got {value.units}."
+                            )
+
+            # Check the keyword arguments
+            for name, value in kwargs.items():
+                # If the argument exists in the units dictionary we can check
+                # it, otherwise there's nothing to do
+                if name in units:
+                    # Are we missing units on the passed argument?
+                    if not has_units(value):
+                        raise exceptions.MissingUnits(
+                            f"{name} is missing units! Expected to "
+                            f"be in {units[name]}."
+                        )
+
+                    # Convert to the expected units
+                    elif value.units != units[name]:
+                        try:
+                            kwargs[name] = value.to(units[name])
                         except UnitConversionError:
                             raise exceptions.IncorrectUnits(
                                 f"{name} passed with incompatible units. "
@@ -582,3 +605,5 @@ def accepts(**units):
             return func(*args, **kwargs)
 
         return wrapped
+
+    return check_accepts
