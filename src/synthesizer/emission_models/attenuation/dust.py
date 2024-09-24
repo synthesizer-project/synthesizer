@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dust_extinction.grain_models import WD01
 from scipy import interpolate
-from unyt import angstrom, microns
+from unyt import angstrom, micron
 
 from synthesizer import exceptions
 from synthesizer.units import accepts
@@ -280,7 +280,7 @@ class PowerLaw(AttenuationLaw):
         )
 
 
-@accepts(lam=microns, cent_lam=microns, gamma=microns)
+@accepts(lam=micron, cent_lam=micron, gamma=micron)
 def N09Tau(lam, slope, cent_lam, ampl, gamma):
     """
     Generate the transmission curve for the Noll+2009 attenuation curve.
@@ -376,9 +376,13 @@ class Calzetti2000(AttenuationLaw):
 
     """
 
-    @accepts(cent_lam=microns, gamma=microns)
+    @accepts(cent_lam=micron, gamma=micron)
     def __init__(
-        self, slope=0, cent_lam=0.2175 * microns, ampl=0, gamma=0.035 * microns
+        self,
+        slope=0,
+        cent_lam=0.2175 * micron,
+        ampl=0,
+        gamma=0.035 * micron,
     ):
         """
         Initialise the dust curve.
@@ -565,7 +569,7 @@ class GrainsWD01(AttenuationLaw):
         return self.emodel.extinguish(x=lam.to_astropy(), Av=1.086 * tau_v)
 
 
-@accepts(lam=microns)
+@accepts(lam=micron)
 def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
     """
     Drude-like parametric expression for the attenuation curve from Li+08.
