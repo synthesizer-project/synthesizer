@@ -20,7 +20,7 @@ import copy
 
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Myr, rad, unyt_quantity
+from unyt import Mpc, Msun, Myr, rad, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -28,6 +28,7 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import Gas, Stars
+from synthesizer.units import accepts
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.warnings import deprecated, warn
 
@@ -52,6 +53,7 @@ class Galaxy(BaseGalaxy):
         "gas_mass",
     ]
 
+    @accepts(centre=Mpc)
     def __init__(
         self,
         name="particle galaxy",
@@ -201,6 +203,7 @@ class Galaxy(BaseGalaxy):
                 "setting sf_gas_mass and sf_gas_metallicity to `None`"
             )
 
+    @accepts(initial_masses=Msun.in_base("galactic"), ages=Myr)
     def load_stars(
         self,
         initial_masses=None,
@@ -260,6 +263,7 @@ class Galaxy(BaseGalaxy):
         if self.centre is not None:
             self.stars.centre = self.centre
 
+    @accepts(masses=Msun.in_base("galactic"))
     def load_gas(
         self,
         masses=None,
@@ -749,6 +753,7 @@ class Galaxy(BaseGalaxy):
 
         return gamma
 
+    @accepts(stellar_mass_weighted_age=Myr)
     def dust_to_metal_vijayan19(
         self, stellar_mass_weighted_age=None, ism_metallicity=None
     ):
@@ -1797,6 +1802,7 @@ class Galaxy(BaseGalaxy):
         toc("Computing blackhole spectral data cube", start)
         return blackhole_cube
 
+    @accepts(phi=rad, theta=rad)
     def rotate_particles(
         self,
         phi=0 * rad,

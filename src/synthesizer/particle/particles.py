@@ -9,10 +9,10 @@ import copy
 
 import numpy as np
 from numpy.random import multivariate_normal
-from unyt import rad, unyt_array, unyt_quantity
+from unyt import Mpc, Msun, km, rad, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.warnings import deprecation
@@ -58,6 +58,13 @@ class Particles:
     centre = Quantity()
     radii = Quantity()
 
+    @accepts(
+        coordinates=Mpc,
+        velocities=km / s,
+        masses=Msun.in_base("galactic"),
+        softening_length=Mpc,
+        centre=Mpc,
+    )
     def __init__(
         self,
         coordinates,
@@ -379,6 +386,7 @@ class Particles:
         # Calculate the radii
         self.radii = np.linalg.norm(self.centered_coordinates, axis=1)
 
+    @accepts(aperture_radius=Mpc)
     def _aperture_mask(self, aperture_radius):
         """
         Mask for particles within spherical aperture.
@@ -752,6 +760,7 @@ class Particles:
             )
         )
 
+    @accepts(phi=rad, theta=rad)
     def rotate_particles(
         self,
         phi=0 * rad,
