@@ -311,7 +311,7 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
             V-band normalised optical depth for given wavelength
     """
     lam_v = 0.55
-    k_lam = np.zeros_like(lam)
+    k_lam = np.zeros_like(lam.value)
 
     # Masking for different regimes in the Calzetti curve
     ok1 = (lam >= 0.12) * (lam < 0.63)  # 0.12um<=lam<0.63um
@@ -320,18 +320,18 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     if np.sum(ok1) > 0:  # equation 1
         k_lam[ok1] = (
             -2.156
-            + (1.509 / lam[ok1])
-            - (0.198 / lam[ok1] ** 2)
-            + (0.011 / lam[ok1] ** 3)
+            + (1.509 / lam.value[ok1])
+            - (0.198 / lam.value[ok1] ** 2)
+            + (0.011 / lam.value[ok1] ** 3)
         )
         func = interpolate.interp1d(
-            lam[ok1], k_lam[ok1], fill_value="extrapolate"
+            lam.value[ok1], k_lam[ok1], fill_value="extrapolate"
         )
     if np.sum(ok2) > 0:  # equation 2
-        k_lam[ok2] = -1.857 + (1.040 / lam[ok2])
+        k_lam[ok2] = -1.857 + (1.040 / lam.value[ok2])
     if np.sum(ok3) > 0:
         # Extrapolating the 0.12um<=lam<0.63um regime
-        k_lam[ok3] = func(lam[ok3])
+        k_lam[ok3] = func(lam.value[ok3])
 
     # Using the Calzetti attenuation curve normalised
     # to Av=4.05
@@ -607,8 +607,8 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
 
     # Attenuation curve (normalized to Av)
     term1 = UV_slope / (
-        (lam / 0.08) ** OPT_NIR_slope
-        + (lam / 0.08) ** -OPT_NIR_slope
+        (lam.value / 0.08) ** OPT_NIR_slope
+        + (lam.value / 0.08) ** -OPT_NIR_slope
         + FUV_slope
     )
     term2 = (
@@ -619,8 +619,10 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
             / (6.88**OPT_NIR_slope + 0.145**OPT_NIR_slope + FUV_slope)
             - bump / 4.6
         )
-    ) / ((lam / 0.046) ** 2.0 + (lam / 0.046) ** -2.0 + 90.0)
-    term3 = bump / ((lam / 0.2175) ** 2.0 + (lam / 0.2175) ** -2.0 - 1.95)
+    ) / ((lam.value / 0.046) ** 2.0 + (lam.value / 0.046) ** -2.0 + 90.0)
+    term3 = bump / (
+        (lam.value / 0.2175) ** 2.0 + (lam.value / 0.2175) ** -2.0 - 1.95
+    )
 
     AlamAV = term1 + term2 + term3
 

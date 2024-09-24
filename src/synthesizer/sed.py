@@ -1220,7 +1220,7 @@ class Sed:
                 )
 
         # Compute the transmission
-        transmission = dust_curve.get_transmission(tau_v, self._lam)
+        transmission = dust_curve.get_transmission(tau_v, self.lam)
 
         # Get a copy of the rest frame spectra, we need to avoid
         # modifying the original
