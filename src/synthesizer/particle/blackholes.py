@@ -16,13 +16,26 @@ Example usages:
 import os
 
 import numpy as np
-from unyt import Hz, angstrom, cm, deg, erg, km, rad, s, unyt_array
+from unyt import (
+    Hz,
+    Mpc,
+    Msun,
+    angstrom,
+    cm,
+    deg,
+    erg,
+    km,
+    rad,
+    s,
+    unyt_array,
+    yr,
+)
 
 from synthesizer import exceptions
 from synthesizer.components import BlackholesComponent
 from synthesizer.line import Line
 from synthesizer.particle.particles import Particles
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, value_to_array
 from synthesizer.warnings import deprecated, warn
 
@@ -70,6 +83,21 @@ class BlackHoles(Particles, BlackholesComponent):
     # Define quantities
     smoothing_lengths = Quantity()
 
+    @accepts(
+        masses=Msun.in_base("galactic"),
+        accretion_rates=Msun.in_base("galactic") / yr,
+        inclinations=deg,
+        coordinates=Mpc,
+        velocities=km / s,
+        softening_length=Mpc,
+        smoothing_lengths=Mpc,
+        centre=Mpc,
+        hydrogen_density_blr=1 / cm**3,
+        hydrogen_density_nlr=1 / cm**3,
+        velocity_dispersion_blr=km / s,
+        velocity_dispersion_nlr=km / s,
+        theta_torus=deg,
+    )
     def __init__(
         self,
         masses,

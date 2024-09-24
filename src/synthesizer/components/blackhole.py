@@ -5,12 +5,12 @@ ever instantiated by the parametric/particle child classes.
 """
 
 import numpy as np
-from unyt import Hz, angstrom, c, cm, deg, erg, km, s
+from unyt import Hz, Msun, angstrom, c, cm, deg, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.line import Line
 from synthesizer.sed import plot_spectra
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.warnings import deprecated, deprecation, warn
 
 
@@ -80,6 +80,18 @@ class BlackholesComponent:
     bb_temperature = Quantity()
     mass = Quantity()
 
+    @accepts(
+        mass=Msun.in_base("galactic"),
+        accretion_rate=Msun.in_base("galactic") / yr,
+        accretion_rate_eddington=Msun.in_base("galactic") / yr,
+        inclination=deg,
+        bolometric_luminosity=erg / s,
+        hydrogen_density_blr=cm**-3,
+        hydrogen_density_nlr=cm**-3,
+        velocity_dispersion_blr=km / s,
+        velocity_dispersion_nlr=km / s,
+        theta_torus=deg,
+    )
     def __init__(
         self,
         mass=None,
