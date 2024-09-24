@@ -21,9 +21,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dust_extinction.grain_models import WD01
 from scipy import interpolate
-from unyt import Angstrom, unyt_array, unyt_quantity
+from unyt import angstrom, microns
 
 from synthesizer import exceptions
+from synthesizer.units import accepts
 
 this_dir, this_filename = os.path.split(__file__)
 
@@ -61,6 +62,7 @@ class AttenuationLaw:
             " Instead use one to child models (" + ", ".join(__all__) + ")"
         )
 
+    @accepts(lam=angstrom)
     def get_transmission(self, tau_v, lam):
         """
         Compute the transmission curve.
@@ -99,6 +101,7 @@ class AttenuationLaw:
 
         return np.exp(-exponent)
 
+    @accepts(lam=angstrom)
     def plot_attenuation(
         self,
         lam,
@@ -159,6 +162,7 @@ class AttenuationLaw:
 
         return fig, ax
 
+    @accepts(lam=angstrom)
     def plot_transmission(
         self,
         tau_v,
@@ -241,6 +245,7 @@ class PowerLaw(AttenuationLaw):
         AttenuationLaw.__init__(self, description)
         self.slope = slope
 
+    @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam):
         """
         Calculate optical depth at a wavelength.
@@ -254,8 +259,9 @@ class PowerLaw(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-        return (lam / 5500.0) ** self.slope
+        return (lam / (5500.0 * angstrom)) ** self.slope
 
+    @accepts(lam=angstrom)
     def get_tau(self, lam):
         """
         Calculate V-band normalised optical depth.
@@ -269,9 +275,12 @@ class PowerLaw(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-        return self.get_tau_at_lam(lam) / self.get_tau_at_lam(5500.0)
+        return self.get_tau_at_lam(lam) / self.get_tau_at_lam(
+            5500.0 * angstrom
+        )
 
 
+@accepts(lam=microns, cent_lam=microns, gamma=microns)
 def N09Tau(lam, slope, cent_lam, ampl, gamma):
     """
     Generate the transmission curve for the Noll+2009 attenuation curve.
@@ -301,33 +310,28 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
         (array-like, float)
             V-band normalised optical depth for given wavelength
     """
-    # Wavelength in microns
-    if isinstance(lam, (unyt_quantity, unyt_array)):
-        lam_micron = lam.to("um").v
-    else:
-        lam_micron = lam / 1e4
     lam_v = 0.55
-    k_lam = np.zeros_like(lam_micron)
+    k_lam = np.zeros_like(lam)
 
     # Masking for different regimes in the Calzetti curve
-    ok1 = (lam_micron >= 0.12) * (lam_micron < 0.63)  # 0.12um<=lam<0.63um
-    ok2 = (lam_micron >= 0.63) * (lam_micron < 31.0)  # 0.63um<=lam<=31um
-    ok3 = lam_micron < 0.12  # lam<0.12um
+    ok1 = (lam >= 0.12) * (lam < 0.63)  # 0.12um<=lam<0.63um
+    ok2 = (lam >= 0.63) * (lam < 31.0)  # 0.63um<=lam<=31um
+    ok3 = lam < 0.12  # lam<0.12um
     if np.sum(ok1) > 0:  # equation 1
         k_lam[ok1] = (
             -2.156
-            + (1.509 / lam_micron[ok1])
-            - (0.198 / lam_micron[ok1] ** 2)
-            + (0.011 / lam_micron[ok1] ** 3)
+            + (1.509 / lam[ok1])
+            - (0.198 / lam[ok1] ** 2)
+            + (0.011 / lam[ok1] ** 3)
         )
         func = interpolate.interp1d(
-            lam_micron[ok1], k_lam[ok1], fill_value="extrapolate"
+            lam[ok1], k_lam[ok1], fill_value="extrapolate"
         )
     if np.sum(ok2) > 0:  # equation 2
-        k_lam[ok2] = -1.857 + (1.040 / lam_micron[ok2])
+        k_lam[ok2] = -1.857 + (1.040 / lam[ok2])
     if np.sum(ok3) > 0:
         # Extrapolating the 0.12um<=lam<0.63um regime
-        k_lam[ok3] = func(lam_micron[ok3])
+        k_lam[ok3] = func(lam[ok3])
 
     # Using the Calzetti attenuation curve normalised
     # to Av=4.05
@@ -339,15 +343,15 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     # UV bump feature expression from Noll+2009
     D_lam = (
         ampl
-        * ((lam_micron * gamma) ** 2)
-        / ((lam_micron**2 - cent_lam**2) ** 2 + (lam_micron * gamma) ** 2)
+        * ((lam * gamma) ** 2)
+        / ((lam**2 - cent_lam**2) ** 2 + (lam * gamma) ** 2)
     )
 
     # Normalising with the value at 0.55um, to obtain
     # normalised optical depth
     tau_x_v = (k_lam + D_lam) / k_v
 
-    return tau_x_v * (lam_micron / lam_v) ** slope
+    return tau_x_v * (lam / lam_v) ** slope
 
 
 class Calzetti2000(AttenuationLaw):
@@ -372,7 +376,10 @@ class Calzetti2000(AttenuationLaw):
 
     """
 
-    def __init__(self, slope=0, cent_lam=0.2175, ampl=0, gamma=0.035):
+    @accepts(cent_lam=microns, gamma=microns)
+    def __init__(
+        self, slope=0, cent_lam=0.2175 * microns, ampl=0, gamma=0.035 * microns
+    ):
         """
         Initialise the dust curve.
 
@@ -402,6 +409,7 @@ class Calzetti2000(AttenuationLaw):
         self.ampl = ampl
         self.gamma = gamma
 
+    @accepts(lam=angstrom)
     def get_tau(self, lam):
         """
         Calculate V-band normalised optical depth.
@@ -451,6 +459,7 @@ class MWN18(AttenuationLaw):
             5500.0, self.data.f.mw_df_lam[::-1], self.data.f.mw_df_chi[::-1]
         )
 
+    @accepts(lam=angstrom)
     def get_tau(self, lam, interp="cubic"):
         """
         Calculate V-band normalised optical depth.
@@ -476,12 +485,6 @@ class MWN18(AttenuationLaw):
             kind=interp,
             fill_value="extrapolate",
         )
-
-        if isinstance(lam, (unyt_quantity, unyt_array)):
-            lam = lam.to("Angstrom").v
-        else:
-            lam = lam
-
         return func(lam) / self.tau_lam_v
 
 
@@ -523,6 +526,7 @@ class GrainsWD01(AttenuationLaw):
             self.model = model
         self.emodel = WD01(self.model)
 
+    @accepts(lam=angstrom)
     def get_tau(self, lam):
         """
         Calculate V-band normalised optical depth.
@@ -536,12 +540,9 @@ class GrainsWD01(AttenuationLaw):
             float/array-like, float
                 The optical depth.
         """
-        if isinstance(lam, (unyt_quantity, unyt_array)):
-            _lam = lam.to("Angstrom").v
-        else:
-            _lam = lam
-        return self.emodel((_lam * Angstrom).to_astropy())
+        return self.emodel(lam.to_astropy())
 
+    @accepts(lam=angstrom)
     def get_transmission(self, tau_v, lam):
         """
         Return the transmitted flux/luminosity fraction.
@@ -561,15 +562,10 @@ class GrainsWD01(AttenuationLaw):
                 shape for singular tau_v values or (tau_v.size, lam.size)
                 tau_v is an array.
         """
-        if isinstance(lam, (unyt_quantity, unyt_array)):
-            _lam = lam.to("Angstrom").v
-        else:
-            _lam = lam
-        return self.emodel.extinguish(
-            x=(_lam * Angstrom).to_astropy(), Av=1.086 * tau_v
-        )
+        return self.emodel.extinguish(x=lam.to_astropy(), Av=1.086 * tau_v)
 
 
+@accepts(lam=microns)
 def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
     """
     Drude-like parametric expression for the attenuation curve from Li+08.
@@ -605,16 +601,10 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
     if model == "LMC":
         UV_slope, OPT_NIR_slope, FUV_slope, bump = 4.47, 2.39, -0.988, 0.0221
 
-    # Wavelength in microns
-    if isinstance(lam, (unyt_quantity, unyt_array)):
-        lam_micron = lam.to("um").v
-    else:
-        lam_micron = lam / 1e4
-
     # Attenuation curve (normalized to Av)
     term1 = UV_slope / (
-        (lam_micron / 0.08) ** OPT_NIR_slope
-        + (lam_micron / 0.08) ** -OPT_NIR_slope
+        (lam / 0.08) ** OPT_NIR_slope
+        + (lam / 0.08) ** -OPT_NIR_slope
         + FUV_slope
     )
     term2 = (
@@ -625,10 +615,8 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
             / (6.88**OPT_NIR_slope + 0.145**OPT_NIR_slope + FUV_slope)
             - bump / 4.6
         )
-    ) / ((lam_micron / 0.046) ** 2.0 + (lam_micron / 0.046) ** -2.0 + 90.0)
-    term3 = bump / (
-        (lam_micron / 0.2175) ** 2.0 + (lam_micron / 0.2175) ** -2.0 - 1.95
-    )
+    ) / ((lam / 0.046) ** 2.0 + (lam / 0.046) ** -2.0 + 90.0)
+    term3 = bump / ((lam / 0.2175) ** 2.0 + (lam / 0.2175) ** -2.0 - 1.95)
 
     AlamAV = term1 + term2 + term3
 
@@ -712,6 +700,7 @@ class ParametricLi08(AttenuationLaw):
         else:
             self.model = "Custom"
 
+    @accepts(lam=angstrom)
     def get_tau(self, lam):
         """
         Calculate V-band normalised optical depth.
