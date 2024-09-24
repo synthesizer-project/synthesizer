@@ -105,6 +105,7 @@ class Extraction:
             # Fix any parameters we need to fix
             prev_properties = {}
             for prop in this_model.fixed_parameters:
+                prev_properties[prop] = getattr(emitter, prop, None)
                 setattr(emitter, prop, this_model.fixed_parameters[prop])
 
             # Get the generator function
@@ -125,7 +126,10 @@ class Extraction:
                     mask=this_mask,
                     verbose=verbose,
                     **kwargs,
-                ),
+                )
+                * erg
+                / s
+                / Hz,
             )
 
             # Store the spectra in the right place (integrating if we
@@ -365,6 +369,7 @@ class Generation:
                 intrinsic,
                 attenuated,
             )
+
         elif this_model.lum_intrinsic_model is not None:
             # otherwise we are scaling by a single spectra
             sed = generator.get_spectra(
@@ -591,9 +596,9 @@ class DustAttenuation:
         """
         # Unpack the tau_v value unpacking any attributes we need
         # to extract from the emitter
-        tau_v = 1
+        tau_v = 0
         for tv in this_model.tau_v:
-            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
+            tau_v += getattr(emitter, tv) if isinstance(tv, str) else tv
 
         # Get the spectra to apply dust to
         if this_model.per_particle:
@@ -650,10 +655,9 @@ class DustAttenuation:
         """
         # Unpack the tau_v value unpacking any attributes we need
         # to extract from the emitter
-        tau_v = 1
+        tau_v = 0
         for tv in this_model.tau_v:
-            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
-            tau_v *= getattr(emitter, tv) if isinstance(tv, str) else tv
+            tau_v += getattr(emitter, tv) if isinstance(tv, str) else tv
 
         # Get the lines to apply dust to
         if this_model.per_particle:
@@ -750,12 +754,18 @@ class Combination:
                 emission_model.lam,
                 lnu=np.zeros_like(
                     particle_spectra[this_model.combine[0].label]._lnu
-                ),
+                )
+                * erg
+                / s
+                / Hz,
             )
         else:
             out_spec = Sed(
                 emission_model.lam,
-                lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu),
+                lnu=np.zeros_like(spectra[this_model.combine[0].label]._lnu)
+                * erg
+                / s
+                / Hz,
             )
 
         # Combine the spectra

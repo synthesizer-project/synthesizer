@@ -1,14 +1,32 @@
-"""Module containing dust emission functionality"""
+"""A module defining emission generation classes.
+
+This module provides classes for generating spectra from specific
+parametrisations. Each of these will return a normalised spectrum.
+
+Possible classes include:
+    - Blackbody: A simple blackbody spectrum.
+    - Greybody: A greybody spectrum.
+    - Casey12: A dust emission spectrum using the Casey (2012) model.
+    - IR_templates: A class to generates dust emission spectra using
+        the Draine and Li (2007) model.
+
+Example usage:
+
+        blackbody = Blackbody(temperature=20 * K)
+        greybody = Greybody(temperature=20 * K, emissivity=1.5)
+        casey12 = Casey12(temperature=20 * K, emissivity=1.5, alpha=2.0)
+        ir_templates = IR_templates(grid, mdust=1e6 * Msun)
+        ir_templates.dl07()
+        ir_templates.get_spectra(lam, intrinsic_sed=sed1, attenuated_sed=sed2)
+"""
 
 from functools import partial
 from typing import Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy import integrate
 from scipy.optimize import fsolve
 from unyt import (
-    Angstrom,
     Hz,
     K,
     Lsun,
@@ -30,6 +48,7 @@ from synthesizer import exceptions
 from synthesizer.grid import Grid
 from synthesizer.sed import Sed
 from synthesizer.utils import planck
+from synthesizer.utils.util_funcs import has_units
 from synthesizer.warnings import warn
 
 
@@ -54,7 +73,7 @@ class EmissionBase:
         cmb_factor: float = 1,
     ) -> None:
         """
-        Initialises the base class for dust emission models.
+        Initialise the base class for dust emission models.
 
         Args:
             temperature (float)
@@ -63,38 +82,22 @@ class EmissionBase:
                 The multiplicative factor to account for
                 CMB heating at high-redshift
         """
-
+        # Attach the common attributes
         self.temperature = temperature
         self.cmb_factor = cmb_factor
 
     def _lnu(
         self, *args: Optional[Union[unyt_array, NDArray[np.float64]]]
     ) -> Optional[Union[unyt_array, NDArray[np.float64]]]:
-        """
-        A prototype private method used during integration. This should be
-        overloaded by child classes!
-        """
+        """Generate the unnormalised spectrum."""
         raise exceptions.UnimplementedFunctionality(
             "EmissionBase should not be instantiated directly!"
             " Instead use one to child models (Blackbody, Greybody, Casey12)."
         )
 
-    def normalisation(self) -> float:
-        """
-        Provide normalisation of _lnu by integrating the function from 8->1000
-        um.
-        """
-        return integrate.quad(
-            self._lnu,
-            c / (1000 * um),
-            c / (8 * um),
-            full_output=False,
-            limit=100,
-        )[0]
-
     def get_spectra(
         self,
-        _lam,
+        lam,
         intrinsic_sed=None,
         attenuated_sed=None,
     ):
@@ -102,7 +105,7 @@ class EmissionBase:
         Return the normalised lnu for the provided wavelength grid.
 
         Args:
-            _lam (float/array-like, float)
+            lam (float/array-like, float)
                 An array of wavelengths (expected in AA, global unit)
             intrinsic_sed (Sed)
                 The intrinsic SED to scale with dust.
@@ -112,7 +115,7 @@ class EmissionBase:
         # If we haven't been given spectra to scale with dust just return the
         # spectra
         if intrinsic_sed is None and attenuated_sed is None:
-            return self._get_spectra(_lam)
+            return self._get_spectra(lam)
 
         # If we have been given spectra to scale with dust, we need to scale
         # the dust spectra to the bolometric luminosity of the input spectra
@@ -146,44 +149,42 @@ class EmissionBase:
         if bolometric_luminosity.value.ndim == 0:
             lnu = (
                 bolometric_luminosity.to("erg/s").value
-                * self._get_spectra(_lam)._lnu
-                * erg
-                / s
-                / Hz
+                * self._get_spectra(lam).lnu
             )
         else:
             lnu = (
                 np.expand_dims(
                     bolometric_luminosity.to("erg/s").value, axis=-1
                 )
-                * self._get_spectra(_lam)._lnu
-                * erg
-                / s
-                / Hz
+                * self._get_spectra(lam).lnu
             )
 
         # Create new Sed object containing dust emission spectra
-        return Sed(_lam, lnu=lnu)
+        return Sed(lam, lnu=lnu)
 
-    def _get_spectra(
-        self, _lam: Union[NDArray[np.float64], unyt_array]
-    ) -> Sed:
+    def _get_spectra(self, lam: unyt_array) -> Sed:
         """
         Return the normalised lnu for the provided wavelength grid.
 
         Args:
-            _lam (float/array-like, float)
+            lam (float/array-like, float)
                     An array of wavelengths (expected in AA, global unit)
 
+        Returns:
+            lnu (unyt_array)
+                The spectral luminosity density.
         """
-        if isinstance(_lam, (unyt_quantity, unyt_array)):
-            lam = _lam
-        else:
-            lam = _lam * Angstrom
+        # Ensure we have units
+        if not has_units(lam):
+            raise exceptions.InconsistentArguments(
+                "Wavelength must be a given with units. "
+                f"(type(lam)={type(lam)})"
+            )
 
-        lnu = (erg / s / Hz) * self._lnu(c / lam).value / self.normalisation()
+        # Get frequencies
+        nu = (c / lam).to(Hz)
 
-        sed = Sed(lam=lam, lnu=lnu)
+        sed = Sed(lam=lam, lnu=self._lnu(nu))
 
         # Normalise the spectrum
         sed._lnu /= np.expand_dims(
@@ -195,7 +196,7 @@ class EmissionBase:
 
         return sed
 
-    def apply_cmb_heating(self, emissivity: float, z: float) -> None:
+    def apply_cmb_heating(self, emissivity: float, redshift: float) -> None:
         """
         Return the factor by which the CMB boosts the infrared luminosity.
 
@@ -204,17 +205,17 @@ class EmissionBase:
         Args:
             emissivity (float)
                 The emissivity index in the FIR (no unit)
-            z (float)
+            redshift (float)
                 The redshift of the galaxy
         """
-        # Temperature of CMB at z=0
+        # Temperature of CMB at redshift=0
         _T_cmb_0 = 2.73 * K
-        _T_cmb_z = _T_cmb_0 * (1 + z)
+        _T_cmb_redshift = _T_cmb_0 * (1 + redshift)
         _exp_factor = 4.0 + emissivity
 
         _temperature = (
             self.temperature**_exp_factor
-            + _T_cmb_z**_exp_factor
+            + _T_cmb_redshift**_exp_factor
             - _T_cmb_0**_exp_factor
         ) ** (1 / _exp_factor)
 
@@ -229,21 +230,29 @@ class EmissionBase:
 class Blackbody(EmissionBase):
     """
     A class to generate a blackbody emission spectrum.
+
+    Attributes:
+        temperature (float)
+            The temperature of the dust.
+        cmb_heating (bool)
+            Option for adding heating by CMB.
+        redshift (float)
+            Redshift.
     """
 
     temperature: unyt_quantity
     cmb_heating: bool
-    z: float
+    redshift: float
 
     @accepts(temperature=temperature_dim)
     def __init__(
         self,
         temperature: unyt_quantity,
         cmb_heating: bool = False,
-        z: float = 0,
+        redshift: float = 0,
     ) -> None:
         """
-        A function to generate a simple blackbody spectrum.
+        Generate a simple blackbody spectrum.
 
         Args:
             temperature (unyt_array)
@@ -252,20 +261,20 @@ class Blackbody(EmissionBase):
             cmb_heating (bool)
                 Option for adding heating by CMB
 
-            z (float)
+            redshift (float)
                 Redshift of the galaxy
 
         """
-
         EmissionBase.__init__(self, temperature)
 
-        # emmissivity of true blackbody is 1
+        # Emmissivity of true blackbody is 1
         emissivity = 1.0
 
+        # Are we adding heating by the CMB?
         if cmb_heating:
-            # calculate the factor by which the CMB boosts the
+            # Calculate the factor by which the CMB boosts the
             # infrared luminosity
-            self.apply_cmb_heating(emissivity=emissivity, z=z)
+            self.apply_cmb_heating(emissivity=emissivity, redshift=redshift)
         else:
             self.temperature_z = temperature
 
@@ -282,6 +291,17 @@ class Blackbody(EmissionBase):
                 The unnormalised spectral luminosity density.
 
         """
+        # Ensure we have units on nu
+        if not has_units(nu):
+            raise exceptions.InconsistentArguments(
+                f"Frequency must be a given with units. (type(nu)={type(nu)})"
+            )
+
+        # Ensure we have the correct units on nu
+        if nu.units != Hz:
+            raise exceptions.InconsistentArguments(
+                "Frequency must be given in Hz."
+            )
 
         return planck(nu, self.temperature)
 
@@ -293,19 +313,16 @@ class Greybody(EmissionBase):
     Attributes:
         emissivity (float)
             The emissivity of the dust (dimensionless).
-
         cmb_heating (bool)
             Option for adding heating by CMB
-
-        z (float)
+        redshift (float)
             Redshift of the galaxy
-
     """
 
     temperature: unyt_quantity
     emissivity: float
     cmb_heating: bool
-    z: float
+    redshift: float
 
     @accepts(temperature=temperature_dim)
     def __init__(
@@ -313,7 +330,7 @@ class Greybody(EmissionBase):
         temperature: unyt_quantity,
         emissivity: float,
         cmb_heating: bool = False,
-        z: float = 0,
+        redshift: float = 0,
     ) -> None:
         """
         Initialise the dust emission model.
@@ -321,24 +338,20 @@ class Greybody(EmissionBase):
         Args:
             temperature (unyt_array)
                 The temperature of the dust.
-
             emissivity (float)
                 The Emissivity (dimensionless).
-
             cmb_heating (bool)
                 Option for adding heating by CMB
-
-            z (float)
+            redshift (float)
                 Redshift of the galaxy
-
         """
-
         EmissionBase.__init__(self, temperature)
 
+        # Are we adding heating by the CMB?
         if cmb_heating:
-            # calculate the factor by which the CMB boosts the
+            # Calculate the factor by which the CMB boosts the
             # infrared luminosity
-            self.apply_cmb_heating(emissivity=emissivity, z=z)
+            self.apply_cmb_heating(emissivity=emissivity, redshift=redshift)
         else:
             self.temperature_z = temperature
 
@@ -358,40 +371,44 @@ class Greybody(EmissionBase):
                 The unnormalised spectral luminosity density.
 
         """
+        # Ensure we have units on nu
+        if not has_units(nu):
+            raise exceptions.InconsistentArguments(
+                f"Frequency must be a given with units. (type(nu)={type(nu)})"
+            )
 
-        return nu**self.emissivity * planck(nu, self.temperature)
+        # Ensure we have the correct units on nu
+        if nu.units != Hz:
+            raise exceptions.InconsistentArguments(
+                "Frequency must be given in Hz."
+            )
+
+        return (nu / Hz) ** self.emissivity * planck(nu, self.temperature)
 
 
 class Casey12(EmissionBase):
     """
     A class to generate a dust emission spectrum using the Casey (2012) model.
+
     https://ui.adsabs.harvard.edu/abs/2012MNRAS.425.3094C/abstract
 
     Attributes:
         emissivity (float)
             The emissivity of the dust (dimensionless).
-
         alpha (float)
             The power-law slope (dimensionless)  [good value = 2.0].
-
         n_bb (float)
             Normalisation of the blackbody component [default 1.0].
-
         lam_0 (float)
             Wavelength where the dust optical depth is unity.
-
         lam_c (float)
             The power law turnover wavelength.
-
         n_pl (float)
             The power law normalisation.
-
         cmb_heating (bool)
                 Option for adding heating by CMB
-
-        z (float)
+        redshift (float)
             Redshift of the galaxy
-
     """
 
     temperature: unyt_quantity
@@ -400,7 +417,7 @@ class Casey12(EmissionBase):
     N_bb: float
     lam_0: unyt_quantity
     cmb_heating: bool
-    z: float
+    redshift: float
 
     @accepts(temperature=temperature_dim)
     def __init__(
@@ -411,42 +428,36 @@ class Casey12(EmissionBase):
         N_bb: float = 1.0,
         lam_0: unyt_quantity = 200.0 * um,
         cmb_heating: bool = False,
-        z: float = 0,
+        redshift: float = 0,
     ) -> None:
         """
+        Initialise the dust emission model.
+
         Args:
             lam (unyt_array)
                 The wavelengths at which to calculate the emission.
-
             temperature (unyt_array)
                 The temperature of the dust.
-
             emissivity (float)
                 The emissivity (dimensionless) [good value = 1.6].
-
             alpha (float)
                 The power-law slope (dimensionless)  [good value = 2.0].
-
             n_bb (float)
                 Normalisation of the blackbody component [default 1.0].
-
             lam_0 (float)
                 Wavelength where the dust optical depth is unity.
-
             cmb_heating (bool)
                 Option for adding heating by CMB
-
-            z (float)
+            redshift (float)
                 Redshift of the galaxy
-
         """
-
         EmissionBase.__init__(self, temperature)
 
+        # Are we adding heating by the CMB?
         if cmb_heating:
-            # calculate the factor by which the CMB boosts the
+            # Calculate the factor by which the CMB boosts the
             # infrared luminosity
-            self.apply_cmb_heating(emissivity=emissivity, z=z)
+            self.apply_cmb_heating(emissivity=emissivity, redshift=redshift)
         else:
             self.temperature_z = temperature
 
@@ -471,7 +482,6 @@ class Casey12(EmissionBase):
 
         # See Casey+2012, Table 1 for the expression
         # Missing factors of lam_c and c in some places
-
         self.n_pl = (
             self.N_bb
             * (1 - np.exp(-((self.lam_0 / self.lam_c) ** emissivity)))
@@ -493,11 +503,11 @@ class Casey12(EmissionBase):
                 The unnormalised spectral luminosity density.
 
         """
-
-        # Essential, when using scipy.integrate, since
-        # the integration limits are passed unitless
-        if np.isscalar(nu):
-            nu *= Hz
+        # Ensure we have units
+        if not has_units(nu):
+            raise exceptions.MissingUnits(
+                f"Frequency must be a given with units. (type(nu)={type(nu)})"
+            )
 
         # Define a function to calcualate the power-law component.
         def _power_law(lam: unyt_array) -> float:
@@ -509,9 +519,14 @@ class Casey12(EmissionBase):
                     The wavelengths at which to calculate lnu.
             """
             return (
-                self.n_pl
-                * ((lam / self.lam_c) ** (self.alpha))
-                * np.exp(-((lam / self.lam_c) ** 2))
+                (
+                    self.n_pl
+                    * ((lam / self.lam_c) ** (self.alpha))
+                    * np.exp(-((lam / self.lam_c) ** 2))
+                ).value
+                * erg
+                / s
+                / Hz
             )
 
         def _blackbody(lam: unyt_array) -> unyt_array:
@@ -523,10 +538,15 @@ class Casey12(EmissionBase):
                     The wavelengths at which to calculate lnu.
             """
             return (
-                self.N_bb
-                * (1 - np.exp(-((self.lam_0 / lam) ** self.emissivity)))
-                * (c / lam) ** 3
-                / (np.exp((h * c) / (lam * kb * self.temperature)) - 1.0)
+                (
+                    self.N_bb
+                    * (1 - np.exp(-((self.lam_0 / lam) ** self.emissivity)))
+                    * (c / lam) ** 3
+                    / (np.exp((h * c) / (lam * kb * self.temperature)) - 1.0)
+                ).value
+                * erg
+                / s
+                / Hz
             )
 
         return _power_law(c / nu) + _blackbody(c / nu)
@@ -660,7 +680,7 @@ class IR_templates:
         umins: NDArray[np.float32] = self.grid.umin
         alphas: NDArray[np.float32] = self.grid.alpha
 
-        # default Umax=1e7
+        # Default Umax=1e7
         umax: float = 1e7
 
         if self.MH is None:
@@ -668,7 +688,7 @@ class IR_templates:
                 "No hydrogen gas mass provided, assuming a"
                 f"dust-to-gas ratio of {self.dgr}"
             )
-            # calculate MH: Mass in hydrogen gas
+            # Calculate MH: Mass in hydrogen gas
             self.MH = 0.74 * self.mdust / self.dgr
 
         if (self.gamma is None) or (self.umin is None) or (self.alpha == 2.0):
@@ -709,18 +729,18 @@ class IR_templates:
 
     def get_spectra(
         self,
-        _lam,
+        lam,
         intrinsic_sed=None,
         attenuated_sed=None,
         dust_components=False,
         **kwargs,
     ):
         """
-        Returns the lnu for the provided wavelength grid
+        Return the lnu for the provided wavelength grid.
 
         Arguments:
-            _lam (float/array-like, float)
-                    An array of wavelengths (expected in AA, global unit)
+            lam (float/array-like, float)
+                    An array of wavelengths.
             intrinsic_sed (Sed)
                 The intrinsic SED to scale with dust.
             attenuated_sed (Sed)
@@ -729,7 +749,7 @@ class IR_templates:
                     If True, returns the constituent dust components
 
         """
-
+        # Calculate the dust luminosity
         if self.template == "DL07":
             if self.verbose:
                 print("Using the Draine & Li 2007 dust models")
@@ -752,12 +772,13 @@ class IR_templates:
                 f"{self.template} not a valid model!"
             )
 
-        if isinstance(_lam, (unyt_quantity, unyt_array)):
-            lam = _lam
-        else:
-            lam = _lam * Angstrom
+        # Ensure wavelengths have units
+        if not has_units(lam):
+            raise exceptions.MissingUnits(
+                "Wavelength must be a given with units."
+            )
 
-        # interpret the dust spectra for the given
+        # Interpret the dust spectra for the given
         # wavelength range
         self.grid.interp_spectra(new_lam=lam)
         lnu_old = (
@@ -790,19 +811,21 @@ class IR_templates:
 
 def u_mean_magdis12(mdust: float, ldust: float, p0: float) -> float:
     """
+    Calculate the mean radiation field heating the dust.
+
     P0 value obtained from stacking analysis in Magdis+12
     For alpha=2.0
     https://ui.adsabs.harvard.edu/abs/2012ApJ...760....6M/abstract
     """
-
     return ldust / (p0 * mdust)
 
 
 def u_mean(umin: float, umax: float, gamma: float) -> float:
     """
+    Calculate the mean radiation field heating the dust.
+
     For fixed alpha=2.0, get <U> for Draine and Li model
     """
-
     return (1.0 - gamma) * umin + gamma * np.log(umax / umin) / (
         umin ** (-1) - umax ** (-1)
     )
@@ -810,7 +833,8 @@ def u_mean(umin: float, umax: float, gamma: float) -> float:
 
 def solve_umin(umin: float, umax: float, u_avg: float, gamma: float) -> float:
     """
+    Solve for Umin in the Draine and Li model.
+
     For fixed alpha=2.0, equation to solve to <U> in Draine and Li
     """
-
     return u_mean(umin, umax, gamma) - u_avg
