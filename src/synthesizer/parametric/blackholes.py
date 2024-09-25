@@ -378,9 +378,10 @@ class BlackHole(BlackholesComponent):
                 " a line region (nlr or blr)."
             )
 
-        # Handle the case where mask is None
+        # Handle the case where mask is None, we need to make a mask of size
+        # 1 since a parametric blackhole is always singular
         if mask is None:
-            mask = np.ones(self.nbh, dtype=bool)
+            mask = np.ones(1, dtype=bool)
 
         # Set up the inputs to the C function.
         grid_props = [
