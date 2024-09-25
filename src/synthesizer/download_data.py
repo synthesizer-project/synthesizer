@@ -69,7 +69,7 @@ def _download_from_xcs_host(filename, save_dir):
     save_path = f"{save_dir}/{filename}"
 
     # Download the file
-    response = requests.get(url, stream=True)
+    response = requests.get(url, stream=True, timeout=10)
 
     # Ensure the request was successful
     if response.status_code != 200:
