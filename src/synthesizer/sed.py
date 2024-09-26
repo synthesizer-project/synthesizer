@@ -115,9 +115,6 @@ class Sed:
         else:
             self.lnu = lnu
 
-        # Prepare for bolometric luminosity calculation
-        self.bolometric_luminosity = None
-
         # Redshift of the SED
         self.redshift = 0
 
@@ -438,6 +435,22 @@ class Sed:
                 The shape of self.lnu
         """
         return self.lnu.shape
+
+    @property
+    def bolometric_luminosity(self, integration_method="trapz", nthreads=1):
+        # Calculate the bolometric luminosity
+        # NOTE: the integration is done "backwards" when integrating over
+        # frequency. It's faster to just multiply by -1 than to reverse the
+        # array.
+        integral = -integrate_last_axis(
+            self._nu,
+            self._lnu,
+            nthreads=nthreads,
+            method=integration_method,
+        )
+
+        # return the bolometric luminosity with units
+        return integral * self.lnu.units * self.nu.units
 
     def get_lnu_at_nu(self, nu, kind=False):
         """
