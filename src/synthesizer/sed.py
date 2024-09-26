@@ -34,7 +34,7 @@ from synthesizer.utils import (
     wavelength_to_rgba,
 )
 from synthesizer.utils.integrate import integrate_last_axis
-from synthesizer.warnings import warn
+from synthesizer.warnings import deprecated, warn
 
 
 class Sed:
@@ -489,6 +489,11 @@ class Sed:
         """
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
+    @deprecated(
+        message=(
+            "Deprecated in favour of bolometric_luminosity" " propery method"
+        )
+    )
     def measure_bolometric_luminosity(
         self, integration_method="trapz", nthreads=1
     ):
@@ -515,6 +520,7 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
+
         start = tic()
 
         # Calculate the bolometric luminosity
