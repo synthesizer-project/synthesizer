@@ -2347,17 +2347,13 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     # Compute the scaling
                     if this_model.per_particle:
                         scaling = (
-                            particle_spectra[
-                                scaler
-                            ].measure_bolometric_luminosity()
-                            / particle_spectra[
-                                label
-                            ].measure_bolometric_luminosity()
+                            particle_spectra[scaler].bolometric_luminosity
+                            / particle_spectra[label].bolometric_luminosity
                         ).value
                     else:
                         scaling = (
-                            spectra[scaler].measure_bolometric_luminosity()
-                            / spectra[label].measure_bolometric_luminosity()
+                            spectra[scaler].bolometric_luminosity
+                            / spectra[label].bolometric_luminosity
                         ).value
 
                     # Scale the spectra (handling 1D and 2D cases)
