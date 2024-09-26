@@ -2622,7 +2622,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 if scaler is None:
                     continue
                 elif hasattr(emitter, scaler):
-                    print(scaler)
                     for line_id in line_ids:
                         if this_model.per_particle:
                             particle_lines[label][
