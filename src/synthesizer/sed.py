@@ -453,6 +453,15 @@ class Sed:
         # return the bolometric luminosity with units
         return integral * self.lnu.units * self.nu.units
 
+    @property
+    def _bolometric_luminosity(self):
+        # Return bolometric luminosity in the base synthesizer units as a
+        # float.
+
+        return self.bolometric_luminosity.to(
+            self.lnu.units * self.nu.units
+        ).value
+
     def get_lnu_at_nu(self, nu, kind=False):
         """
         Return lnu with units at a provided frequency using 1d interpolation.
