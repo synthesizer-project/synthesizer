@@ -130,6 +130,9 @@ class BlackHole(BlackholesComponent):
             **kwargs,
         )
 
+        # by definition a parametric blackhole is only one blackhole
+        self.nbh = 1
+
         # Ensure the offset has units
         if not has_units(offset):
             raise exceptions.MissingUnits(
