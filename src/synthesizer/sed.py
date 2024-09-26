@@ -436,16 +436,18 @@ class Sed:
         return self.lnu.shape
 
     @property
-    def bolometric_luminosity(self, integration_method="trapz", nthreads=1):
-        # Calculate the bolometric luminosity
+    def bolometric_luminosity(self):
+        # Calculate the bolometric luminosity using the trapezium rule.
+        # NOTE: to use an alternative integration method
+        # measure_bolometric_luminosity method can be used instead.
         # NOTE: the integration is done "backwards" when integrating over
         # frequency. It's faster to just multiply by -1 than to reverse the
         # array.
         integral = -integrate_last_axis(
             self._nu,
             self._lnu,
-            nthreads=nthreads,
-            method=integration_method,
+            nthreads=1,
+            method="trapz",
         )
 
         # return the bolometric luminosity with units
