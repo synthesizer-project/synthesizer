@@ -39,7 +39,7 @@ def scale_by_incident_isotropic(emission, emitters, model):
     # Handle lines and spectra differently
     if isinstance(emission[list(emission.keys())[0]], Sed):
         # Get the isotropic bolometric luminosity
-        emission["disc_incident_isotropic"].measure_bolometric_luminosity()
+        emission["disc_incident_isotropic"].bolometric_luminosity
         isotropic_bolo_lum = emission[
             "disc_incident_isotropic"
         ]._bolometric_luminosity
