@@ -437,9 +437,18 @@ class Sed:
 
     @property
     def bolometric_luminosity(self):
+        """
+        Return the bolometric luminosity of the SED with units.
+
+        This will integrate the SED using the trapezium method over the
+        final axis (which is always the wavelength axis) for an arbitrary
+        number of dimensions.
+
+        Returns:
+            bolometric_luminosity (unyt_array)
+                The bolometric luminosity.
+        """
         # Calculate the bolometric luminosity using the trapezium rule.
-        # NOTE: to use an alternative integration method
-        # measure_bolometric_luminosity method can be used instead.
         # NOTE: the integration is done "backwards" when integrating over
         # frequency. It's faster to just multiply by -1 than to reverse the
         # array.
@@ -450,17 +459,23 @@ class Sed:
             method="trapz",
         )
 
-        # return the bolometric luminosity with units
+        # Return the bolometric luminosity with units
         return integral * self.lnu.units * self.nu.units
 
     @property
     def _bolometric_luminosity(self):
-        # Return bolometric luminosity in the base synthesizer units as a
-        # float.
+        """
+        Return the bolometric luminosity of the SED without units.
 
-        return self.bolometric_luminosity.to(
-            self.lnu.units * self.nu.units
-        ).value
+        This will integrate the SED using the trapezium method over the
+        final axis (which is always the wavelength axis) for an arbitrary
+        number of dimensions.
+
+        Returns:
+            bolometric_luminosity (float)
+                The bolometric luminosity.
+        """
+        return self.bolometric_luminosity.value
 
     def get_lnu_at_nu(self, nu, kind=False):
         """
