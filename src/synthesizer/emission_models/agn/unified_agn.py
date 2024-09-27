@@ -74,7 +74,7 @@ def scale_by_incident_isotropic(emission, emitters, model):
 
     else:
         # Loop over the different emissions
-        for key, emission in emission.items():
+        for key, line_collection in emission.items():
             # Get the model
             this_model = model[key]
 
@@ -85,8 +85,10 @@ def scale_by_incident_isotropic(emission, emitters, model):
             # Get the emitter
             emitter = emitters[this_model.emitter]
 
+            print(line_collection)
+
             # Loop over the lines
-            for line_id, line in emission[key]:
+            for line in line_collection:
                 # Get the continuum of the isotropic disc emission
                 isotropic_continuum = line._continuum
 
