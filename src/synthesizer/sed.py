@@ -502,7 +502,7 @@ class Sed:
 
     @deprecated(
         message=(
-            "Deprecated in favour of bolometric_luminosity" " propery method"
+            "Deprecated in favour of bolometric_luminosity propery method"
         )
     )
     def measure_bolometric_luminosity(
