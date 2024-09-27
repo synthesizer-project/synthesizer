@@ -487,7 +487,7 @@ class Generation:
             out_lines[line_id] = Line(
                 line_id=line_id,
                 wavelength=lam,
-                luminosity=0 * erg / s,
+                luminosity=0.0 * erg / s,
                 continuum=cont,
             )
 
