@@ -8,7 +8,7 @@ including photometry. This example will:
 - calculate spectral luminosity density
 """
 
-from unyt import Myr
+from unyt import Msun, Myr
 
 from synthesizer.emission_models import (
     AttenuatedEmission,
@@ -36,7 +36,7 @@ if __name__ == "__main__":
     Z_p = {
         "log10metallicity": -2.0
     }  # can also use linear metallicity e.g. {'Z': 0.01}
-    stellar_mass = 1e8
+    stellar_mass = 1e8 * Msun
 
     # Define the functional form of the star formation and metal enrichment
     # histories
