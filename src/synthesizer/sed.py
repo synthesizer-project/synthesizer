@@ -559,6 +559,7 @@ class Sed:
 
         return integral * self.lnu.units * self.nu.units
 
+    @accepts(window=(angstrom, angstrom))
     def measure_window_luminosity(
         self, window, integration_method="trapz", nthreads=1
     ):
@@ -604,6 +605,7 @@ class Sed:
 
         return luminosity
 
+    @accepts(window=(angstrom, angstrom))
     def measure_window_lnu(
         self, window, integration_method="trapz", nthreads=1
     ):
@@ -789,8 +791,12 @@ class Sed:
             integration_method=integration_method,
         )
 
+    @accepts(window=(angstrom, angstrom))
     def measure_beta(
-        self, window=(1250.0, 3000.0), nthreads=1, integration_method="trapz"
+        self,
+        window=(1250.0 * angstrom, 3000.0 * angstrom),
+        nthreads=1,
+        integration_method="trapz",
     ):
         """
         Measure the UV continuum slope (beta).
@@ -1053,6 +1059,11 @@ class Sed:
 
         return 2.5 * np.log10(self.photo_fnu[f2] / self.photo_fnu[f1])
 
+    @accepts(
+        feature=(angstrom, angstrom),
+        blue=(angstrom, angstrom),
+        red=(angstrom, angstrom),
+    )
     def measure_index(self, feature, blue, red):
         """
         Measure an absorption feature index.
