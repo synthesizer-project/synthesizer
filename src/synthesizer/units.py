@@ -506,6 +506,95 @@ def has_units(x):
     return False
 
 
+def _check_arg(units, name, value):
+    """
+    Check the units of an argument.
+
+    This function is used to check the units of an argument passed to
+    a function. If the units are missing or incompatible an error will be
+    raised. If the units don't match the defined units in units then the values
+    will be converted to the correct units.
+
+    Args:
+        units (dict)
+            The dictionary of units defined in the accepts decorator.
+        name (str)
+            The name of the argument.
+        value (generic variable)
+            The value of the argument.
+
+    Returns:
+        generic variable
+            The value of the argument with the correct units.
+
+    Raises:
+        MissingUnits
+            If the argument is missing units.
+        IncorrectUnits
+            If the argument has incompatible units.
+    """
+    # If the argument is None just skip it, its an optional
+    # argument that hasn't been passed... or the user has
+    # somehow managed to pass None which is a bit weird
+    if value is None:
+        return None
+
+    # Early exit if the argument isn't in the units dictionary
+    if name not in units:
+        return value
+
+    # Handle the unyt_array/unyt_quantity cases
+    if isinstance(value, (unyt_array, unyt_quantity)):
+        # We know we have units but are they compatible?
+        if value.units != units[name]:
+            try:
+                return value.to(units[name])
+            except UnitConversionError:
+                raise exceptions.IncorrectUnits(
+                    f"{name} passed with incompatible units. "
+                    f"Expected {units[name]} (or equivalent) but "
+                    f"got {value.units}."
+                )
+
+    # Handle the list/tuple case
+    elif isinstance(value, (list, tuple)):
+        # Define a new list to hold the converted values
+        converted = []
+
+        # Loop over the elements of the argument checking
+        # they have units and those units are compatible
+        for j, v in enumerate(value):
+            # Are we missing units on the passed argument?
+            if not has_units(v):
+                raise exceptions.MissingUnits(
+                    f"{name} is missing units! Expected"
+                    f"to be in {units[name]} "
+                    "(or equivalent)."
+                )
+
+            # Convert to the expected units
+            elif v.units != units[name][j]:
+                try:
+                    converted[j] = _check_arg(units, name, v)
+                except UnitConversionError:
+                    raise exceptions.IncorrectUnits(
+                        f"{name}@{j} passed with "
+                        "incompatible units. "
+                        f"Expected {units[name][j]}"
+                        " (or equivalent) but "
+                        f"got {v.units}."
+                    )
+
+        return converted
+
+    # If None of these were true then we haven't got units.
+    else:
+        raise exceptions.MissingUnits(
+            f"{name} is missing units! Expected to "
+            f"be in {units[name]} (or equivalent)."
+        )
+
+
 def accepts(**units):
     """
     Check arguments passed to the wrapped function have compatible units.
@@ -563,151 +652,11 @@ def accepts(**units):
 
             # Check the positional arguments
             for i, (name, value) in enumerate(zip(arg_names, args)):
-                # If the argument is None just skip it, its an optional
-                # argument that hasn't been passed... or the user has
-                # somehow managed to pass None which is a bit weird
-                if value is None:
-                    continue
-
-                # If the argument exists in the units dictionary we can check
-                # it, otherwise there's nothing to do
-                if name in units:
-                    # Do we have a tuple/list/array of units?
-                    if isinstance(units[name], (list, tuple)):
-                        # Ensure the passed arguments are iterable
-                        if not isinstance(value, (list, tuple)):
-                            raise exceptions.IncorrectUnits(
-                                f"{name} expects an iterable with units. "
-                                f"Expected {units[name]} (or equivalent) but "
-                                f"got {value}."
-                            )
-
-                        # Ensure the passed arguments are the same length
-                        elif len(value) != len(units[name]):
-                            raise exceptions.IncorrectUnits(
-                                f"{name} expects an iterable with units of "
-                                f"length {len(units[name])} but "
-                                f"got {len(value)}."
-                            )
-
-                        # Ok, we have a list to check, ensure they have units
-                        # and those units are compatible
-                        else:
-                            # Loop over the elements of the argument checking
-                            # they have units and those units are compatible
-                            for j, v in enumerate(value):
-                                # Are we missing units on the passed argument?
-                                if not has_units(v):
-                                    raise exceptions.MissingUnits(
-                                        f"{name} is missing units! Expected"
-                                        f"to be in {units[name]} "
-                                        "(or equivalent)."
-                                    )
-
-                                # Convert to the expected units
-                                elif v.units != units[name][j]:
-                                    try:
-                                        args[i][j] = v.to(units[name][j])
-                                    except UnitConversionError:
-                                        raise exceptions.IncorrectUnits(
-                                            f"{name}@{j} passed with "
-                                            "incompatible units. "
-                                            f"Expected {units[name][j]}"
-                                            " (or equivalent) but "
-                                            f"got {v.units}."
-                                        )
-
-                    # Are we missing units on the passed argument?
-                    elif not has_units(value):
-                        raise exceptions.MissingUnits(
-                            f"{name} is missing units! Expected to "
-                            f"be in {units[name]} (or equivalent)."
-                        )
-
-                    # Convert to the expected units
-                    elif value.units != units[name]:
-                        try:
-                            args[i] = value.to(units[name])
-                        except UnitConversionError:
-                            raise exceptions.IncorrectUnits(
-                                f"{name} passed with incompatible units. "
-                                f"Expected {units[name]} (or equivalent) but "
-                                f"got {value.units}."
-                            )
+                args[i] = _check_arg(units, name, value)
 
             # Check the keyword arguments
             for name, value in kwargs.items():
-                # If the argument is None just skip it, its an optional
-                # argument that hasn't been passed... or the user has
-                # somehow managed to pass None which is a bit weird
-                if value is None:
-                    continue
-
-                # If the argument exists in the units dictionary we can check
-                # it, otherwise there's nothing to do
-                if name in units:
-                    # Do we have a tuple/list/array of units?
-                    if isinstance(units[name], (list, tuple)):
-                        # Ensure the passed arguments are iterable
-                        if not isinstance(value, (list, tuple)):
-                            raise exceptions.IncorrectUnits(
-                                f"{name} expects an iterable with units. "
-                                f"Expected {units[name]} (or equivalent) but "
-                                f"got {value}."
-                            )
-
-                        # Ensure the passed arguments are the same length
-                        elif len(value) != len(units[name]):
-                            raise exceptions.IncorrectUnits(
-                                f"{name} expects an iterable with units of "
-                                f"length {len(units[name])} but "
-                                f"got {len(value)}."
-                            )
-
-                        # Ok, we have a list to check, ensure they have units
-                        # and those units are compatible
-                        else:
-                            # Loop over the elements of the argument checking
-                            # they have units and those units are compatible
-                            for j, v in enumerate(value):
-                                # Are we missing units on the passed argument?
-                                if not has_units(v):
-                                    raise exceptions.MissingUnits(
-                                        f"{name} is missing units! Expected"
-                                        f"to be in {units[name]} "
-                                        "(or equivalent)."
-                                    )
-
-                                # Convert to the expected units
-                                elif v.units != units[name][j]:
-                                    try:
-                                        kwargs[name][j] = v.to(units[name][j])
-                                    except UnitConversionError:
-                                        raise exceptions.IncorrectUnits(
-                                            f"{name}@{j} passed with "
-                                            "incompatible units. "
-                                            f"Expected {units[name][j]}"
-                                            " (or equivalent) but "
-                                            f"got {v.units}."
-                                        )
-
-                    # Are we missing units on the passed argument?
-                    elif not has_units(value):
-                        raise exceptions.MissingUnits(
-                            f"{name} is missing units! Expected to "
-                            f"be in {units[name]} (or equivalent)."
-                        )
-
-                    # Convert to the expected units
-                    elif value.units != units[name]:
-                        try:
-                            kwargs[name] = value.to(units[name])
-                        except UnitConversionError:
-                            raise exceptions.IncorrectUnits(
-                                f"{name} passed with incompatible units. "
-                                f"Expected {units[name]} (or equivalent) but "
-                                f"got {value.units}."
-                            )
+                kwargs[name] = _check_arg(units, name, value)
 
             return func(*args, **kwargs)
 
