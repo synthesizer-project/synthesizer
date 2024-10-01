@@ -8,7 +8,7 @@ including photometry. This example will:
 - calculate spectral luminosity density
 """
 
-from unyt import Msun, Myr
+from unyt import Msun, Myr, angstrom
 
 from synthesizer.emission_models import (
     AttenuatedEmission,
@@ -165,9 +165,9 @@ if __name__ == "__main__":
 
     # Generate broadband photometry using 3 top-hat filters
     tophats = {
-        "U": {"lam_eff": 3650, "lam_fwhm": 660},
-        "V": {"lam_eff": 5510, "lam_fwhm": 880},
-        "J": {"lam_eff": 12200, "lam_fwhm": 2130},
+        "U": {"lam_eff": 3650 * angstrom, "lam_fwhm": 660 * angstrom},
+        "V": {"lam_eff": 5510 * angstrom, "lam_fwhm": 880 * angstrom},
+        "J": {"lam_eff": 12200 * angstrom, "lam_fwhm": 2130 * angstrom},
     }
     fc = FilterCollection(tophat_dict=tophats, new_lam=grid.lam)
 
