@@ -11,7 +11,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Myr
+from unyt import Mpc, Msun, Myr
 
 from synthesizer.grid import Grid
 from synthesizer.kernel_functions import Kernel
@@ -64,7 +64,7 @@ sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation
 
 # Generate the star formation metallicity history
-mass = 10**10
+mass = 10**10 * Msun
 param_stars = ParametricStars(
     log10ages,
     metallicities,
@@ -83,13 +83,16 @@ n = 100
 # First make the stars
 
 # Generate some random coordinates
-coords = CoordinateGenerator.generate_3D_gaussian(
-    n,
-    mean=np.array([50, 50, 50]),
+coords = (
+    CoordinateGenerator.generate_3D_gaussian(
+        n,
+        mean=np.array([50, 50, 50]),
+    )
+    * Mpc
 )
 
 # Calculate the smoothing lengths
-smls = calculate_smoothing_lengths(coords, num_neighbors=56)
+smls = calculate_smoothing_lengths(coords, num_neighbors=56) * Mpc
 
 # Sample the SFZH, producing a Stars object
 # we will also pass some keyword arguments for attributes
@@ -100,7 +103,7 @@ stars = sample_sfhz(
     param_stars.log10metallicities,
     n,
     coordinates=coords,
-    current_masses=np.full(n, 10**8.7 / n),
+    current_masses=np.full(n, 10**8.7 / n) * Msun,
     smoothing_lengths=smls,
     redshift=1,
 )
@@ -110,16 +113,19 @@ ngas = 1000
 # Now make the gas
 
 # Generate some random coordinates
-coords = CoordinateGenerator.generate_3D_gaussian(
-    ngas,
-    mean=np.array([50, 50, 50]),
+coords = (
+    CoordinateGenerator.generate_3D_gaussian(
+        ngas,
+        mean=np.array([50, 50, 50]),
+    )
+    * Mpc
 )
 
 # Calculate the smoothing lengths
-smls = calculate_smoothing_lengths(coords, num_neighbors=56)
+smls = calculate_smoothing_lengths(coords, num_neighbors=56) * Mpc
 
 gas = Gas(
-    masses=np.random.uniform(10**6, 10**6.5, ngas),
+    masses=np.random.uniform(10**6, 10**6.5, ngas) * Msun,
     metallicities=np.random.uniform(0.01, 0.05, ngas),
     coordinates=coords,
     smoothing_lengths=smls,

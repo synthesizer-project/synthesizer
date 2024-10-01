@@ -69,7 +69,7 @@ angles = np.arctan2(disk_coords[:, 1], disk_coords[:, 0])
 disk_velocities[:, 0] = -vrot * np.sin(angles)  # Tangential velocity in x
 disk_velocities[:, 1] = vrot * np.cos(angles)  # Tangential velocity in y
 bulge_velocities = np.random.normal(0, sigma_bulge, size=(n_bulge, 3))
-velocities = np.vstack([disk_velocities, bulge_velocities])
+velocities = np.vstack([disk_velocities, bulge_velocities]) * km / s
 
 
 # Define the other properties we'll need
@@ -139,7 +139,7 @@ gas_cov = np.array(
         [0, 0, 30.0],  # Larger spread in z direction
     ]
 )
-gas_coords = CoordinateGenerator.generate_3D_gaussian(ngas, cov=gas_cov)
+gas_coords = CoordinateGenerator.generate_3D_gaussian(ngas, cov=gas_cov) * kpc
 gas_velocities = np.random.normal(0, 50, size=(ngas, 3)) * km / s
 gas_masses = np.ones(ngas) * 1e6 * Msun
 gas_metallcities = np.random.rand(ngas) * 0.02
