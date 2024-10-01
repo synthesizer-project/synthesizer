@@ -561,16 +561,8 @@ def accepts(**units):
             # Convert the positional arguments to a list
             args = list(args)
 
-            # Combine the kwargs and args
-            combined_args = []
-            for i, name in enumerate(arg_names):
-                if name in kwargs:
-                    combined_args.append(kwargs[name])
-                else:
-                    combined_args.append(args[i])
-
             # Check the positional arguments
-            for i, (name, value) in enumerate(zip(arg_names, combined_args)):
+            for i, (name, value) in enumerate(zip(arg_names, args)):
                 # If the argument is None just skip it, its an optional
                 # argument that hasn't been passed... or the user has
                 # somehow managed to pass None which is a bit weird
@@ -612,11 +604,8 @@ def accepts(**units):
                                         "(or equivalent)."
                                     )
 
-                                # Convert to the expected units for args
-                                elif (
-                                    v.units != units[name][j]
-                                    and name not in kwargs
-                                ):
+                                # Convert to the expected units
+                                elif v.units != units[name][j]:
                                     try:
                                         args[i][j] = v.to(units[name][j])
                                     except UnitConversionError:
@@ -628,11 +617,69 @@ def accepts(**units):
                                             f"got {v.units}."
                                         )
 
-                                # Convert to the expected units for kwargs
-                                elif (
-                                    v.units != units[name][j]
-                                    and name in kwargs
-                                ):
+                    # Are we missing units on the passed argument?
+                    elif not has_units(value):
+                        raise exceptions.MissingUnits(
+                            f"{name} is missing units! Expected to "
+                            f"be in {units[name]} (or equivalent)."
+                        )
+
+                    # Convert to the expected units
+                    elif value.units != units[name]:
+                        try:
+                            args[i] = value.to(units[name])
+                        except UnitConversionError:
+                            raise exceptions.IncorrectUnits(
+                                f"{name} passed with incompatible units. "
+                                f"Expected {units[name]} (or equivalent) but "
+                                f"got {value.units}."
+                            )
+
+            # Check the keyword arguments
+            for name, value in kwargs.items():
+                # If the argument is None just skip it, its an optional
+                # argument that hasn't been passed... or the user has
+                # somehow managed to pass None which is a bit weird
+                if value is None:
+                    continue
+
+                # If the argument exists in the units dictionary we can check
+                # it, otherwise there's nothing to do
+                if name in units:
+                    # Do we have a tuple/list/array of units?
+                    if isinstance(units[name], (list, tuple)):
+                        # Ensure the passed arguments are iterable
+                        if not isinstance(value, (list, tuple)):
+                            raise exceptions.IncorrectUnits(
+                                f"{name} expects an iterable with units. "
+                                f"Expected {units[name]} (or equivalent) but "
+                                f"got {value}."
+                            )
+
+                        # Ensure the passed arguments are the same length
+                        elif len(value) != len(units[name]):
+                            raise exceptions.IncorrectUnits(
+                                f"{name} expects an iterable with units of "
+                                f"length {len(units[name])} but "
+                                f"got {len(value)}."
+                            )
+
+                        # Ok, we have a list to check, ensure they have units
+                        # and those units are compatible
+                        else:
+                            # Loop over the elements of the argument checking
+                            # they have units and those units are compatible
+                            for j, v in enumerate(value):
+                                # Are we missing units on the passed argument?
+                                if not has_units(v):
+                                    raise exceptions.MissingUnits(
+                                        f"{name} is missing units! Expected"
+                                        f"to be in {units[name]} "
+                                        "(or equivalent)."
+                                    )
+
+                                # Convert to the expected units
+                                elif v.units != units[name][j]:
                                     try:
                                         kwargs[name][j] = v.to(units[name][j])
                                     except UnitConversionError:
@@ -652,18 +699,7 @@ def accepts(**units):
                         )
 
                     # Convert to the expected units
-                    elif value.units != units[name] and name not in kwargs:
-                        try:
-                            args[i] = value.to(units[name])
-                        except UnitConversionError:
-                            raise exceptions.IncorrectUnits(
-                                f"{name} passed with incompatible units. "
-                                f"Expected {units[name]} (or equivalent) but "
-                                f"got {value.units}."
-                            )
-
-                    # Convert to the expected units
-                    elif value.units != units[name] and name in kwargs:
+                    elif value.units != units[name]:
                         try:
                             kwargs[name] = value.to(units[name])
                         except UnitConversionError:
