@@ -555,6 +555,9 @@ def _check_arg(units, name, value):
                     f"Expected {units[name]} (or equivalent) but "
                     f"got {value.units}."
                 )
+        else:
+            # Otherwise the value is in the expected units
+            return value
 
     # Handle the list/tuple case
     elif isinstance(value, (list, tuple)):
@@ -584,6 +587,9 @@ def _check_arg(units, name, value):
                         " (or equivalent) but "
                         f"got {v.units}."
                     )
+            else:
+                # Otherwise the value is in the expected units
+                converted[j] = v
 
         return converted
 
