@@ -342,10 +342,14 @@ class Generation:
         # If we have an empty emitter we can just return zeros (only applicable
         # when nparticles exists in the emitter)
         if getattr(emitter, "nparticles", 1) == 0:
-            spectra[this_model.label] = Sed(lam, np.zeros(lam.size))
+            spectra[this_model.label] = Sed(
+                lam,
+                np.zeros(lam.size) * erg / s / Hz,
+            )
             if per_particle:
                 particle_spectra[this_model.label] = Sed(
-                    lam, np.zeros((emitter.nparticles, lam.size))
+                    lam,
+                    np.zeros((emitter.nparticles, lam.size)) * erg / s / Hz,
                 )
             return spectra, particle_spectra
 
@@ -487,7 +491,7 @@ class Generation:
             out_lines[line_id] = Line(
                 line_id=line_id,
                 wavelength=lam,
-                luminosity=0 * erg / s,
+                luminosity=0.0 * erg / s,
                 continuum=cont,
             )
 
