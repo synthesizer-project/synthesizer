@@ -653,7 +653,8 @@ def accepts(**units):
             Returns:
                 The result of the wrapped function.
             """
-            # Convert the positional arguments to a list
+            # Convert the positional arguments to a list (it must be mutable
+            # for what comes next)
             args = list(args)
 
             # Check the positional arguments
