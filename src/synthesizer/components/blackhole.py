@@ -165,6 +165,9 @@ class BlackholesComponent:
         # Initialise spectra
         self.spectra = {}
 
+        # Initialise lines
+        self.lines = {}
+
         # Intialise the photometry dictionaries
         self.photo_lnu = {}
         self.photo_fnu = {}
@@ -453,8 +456,8 @@ class BlackholesComponent:
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
-                        luminosity=0 * erg / s,
-                        continuum=0 * erg / s / Hz,
+                        luminosity=0.0 * erg / s,
+                        continuum=0.0 * erg / s / Hz,
                     )
                     for line_id_ in line_id.split(",")
                 ]
@@ -469,8 +472,8 @@ class BlackholesComponent:
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
-                        luminosity=0 * erg / s,
-                        continuum=0 * erg / s / Hz,
+                        luminosity=0.0 * erg / s,
+                        continuum=0.0 * erg / s / Hz,
                     )
                     for line_id_ in line_id.split(",")
                 ]
