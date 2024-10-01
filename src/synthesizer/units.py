@@ -576,9 +576,9 @@ def _check_arg(units, name, value):
                 )
 
             # Convert to the expected units
-            elif v.units != units[name][j]:
+            elif v.units != units[name]:
                 try:
-                    converted[j] = _check_arg(units, name, v)
+                    converted.append(_check_arg(units, name, v))
                 except UnitConversionError:
                     raise exceptions.IncorrectUnits(
                         f"{name}@{j} passed with "
@@ -589,7 +589,7 @@ def _check_arg(units, name, value):
                     )
             else:
                 # Otherwise the value is in the expected units
-                converted[j] = v
+                converted.append(v)
 
         return converted
 
