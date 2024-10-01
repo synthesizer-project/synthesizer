@@ -36,14 +36,9 @@ def scale_by_incident_isotropic(emission, emitters, model):
         emitters (dict): The emitters used to generate the emission.
         model (UnifiedAGN): The Unified AGN model.
     """
+
     # Handle lines and spectra differently
     if isinstance(emission[list(emission.keys())[0]], Sed):
-        # Get the isotropic bolometric luminosity
-        emission["disc_incident_isotropic"].bolometric_luminosity
-        isotropic_bolo_lum = emission[
-            "disc_incident_isotropic"
-        ]._bolometric_luminosity
-
         # Scale the spectra
         for key, spectra in emission.items():
             # Get the model
@@ -57,7 +52,7 @@ def scale_by_incident_isotropic(emission, emitters, model):
             emitter = emitters[this_model.emitter]
 
             # Get the scaling
-            scaling = emitter._bolometric_luminosity / isotropic_bolo_lum
+            scaling = emitter._bolometric_luminosity
 
             # Scale the spectra
             if spectra.ndim == 1 and scaling.ndim == 0:
@@ -73,6 +68,16 @@ def scale_by_incident_isotropic(emission, emitters, model):
                 spectra._lnu = spectra._lnu * np.expand_dims(scaling, axis=-1)
 
     else:
+        disc_bolometric_luminosity = (
+            emitters["blackhole"]
+            .spectra["disc_incident_isotropic"]
+            ._bolometric_luminosity
+        )
+        blackhole_bolometric_luminosity = emitters[
+            "blackhole"
+        ]._bolometric_luminosity
+        scaling = blackhole_bolometric_luminosity / disc_bolometric_luminosity
+
         # Loop over the different emissions
         for key, line_collection in emission.items():
             # Get the model
@@ -85,16 +90,11 @@ def scale_by_incident_isotropic(emission, emitters, model):
             # Get the emitter
             emitter = emitters[this_model.emitter]
 
-            print(line_collection)
+            # Get the scaling
+            scaling = emitter._bolometric_luminosity
 
             # Loop over the lines
             for line in line_collection:
-                # Get the continuum of the isotropic disc emission
-                isotropic_continuum = line._continuum
-
-                # Get the scaling
-                scaling = emitter._bolometric_luminosity / isotropic_continuum
-
                 # Scale the line
                 line._luminosity *= scaling
                 line._continuum *= scaling
