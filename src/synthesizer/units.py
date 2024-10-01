@@ -533,9 +533,9 @@ def _check_arg(units, name, value):
         IncorrectUnits
             If the argument has incompatible units.
     """
-    # If the argument is None just skip it, its an optional
-    # argument that hasn't been passed... or the user has
-    # somehow managed to pass None which is a bit weird
+    # If the argument is None just skip it, its an optional argument that
+    # hasn't been passed... or the user has somehow managed to pass None
+    # which is sufficently weird to cause an obvious error elsewhere
     if value is None:
         return None
 
@@ -561,8 +561,8 @@ def _check_arg(units, name, value):
 
     # Handle the list/tuple case
     elif isinstance(value, (list, tuple)):
-        # Define a new list to hold the converted values
-        converted = []
+        # Ensure the value is mutable
+        converted = list(value)
 
         # Loop over the elements of the argument checking
         # they have units and those units are compatible
@@ -594,11 +594,10 @@ def _check_arg(units, name, value):
         return converted
 
     # If None of these were true then we haven't got units.
-    else:
-        raise exceptions.MissingUnits(
-            f"{name} is missing units! Expected to "
-            f"be in {units[name]} (or equivalent)."
-        )
+    raise exceptions.MissingUnits(
+        f"{name} is missing units! Expected to "
+        f"be in {units[name]} (or equivalent)."
+    )
 
 
 def accepts(**units):
