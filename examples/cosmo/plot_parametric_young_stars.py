@@ -35,7 +35,7 @@ if __name__ == "__main__":
     model = IncidentEmission(grid)
 
     # Select a single galaxy
-    gal = gals[1]
+    gal = gals[2]
 
     # Age limit at which we replace star particles
     age_lim = 500 * Myr
