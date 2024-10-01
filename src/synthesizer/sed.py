@@ -470,7 +470,7 @@ class Sed:
                 The bolometric luminosity.
         """
         return self.bolometric_luminosity.value
- 
+
     @accepts(nu=Hz)
     def get_lnu_at_nu(self, nu, kind=False):
         """
