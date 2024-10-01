@@ -34,7 +34,7 @@ from synthesizer.utils import (
     wavelength_to_rgba,
 )
 from synthesizer.utils.integrate import integrate_last_axis
-from synthesizer.warnings import warn
+from synthesizer.warnings import deprecated, warn
 
 
 class Sed:
@@ -75,7 +75,6 @@ class Sed:
     fnu = Quantity()
     obsnu = Quantity()
     obslam = Quantity()
-    bolometric_luminosity = Quantity()
 
     def __init__(self, lam, lnu=None, description=None):
         """
@@ -114,9 +113,6 @@ class Sed:
             self.lnu = np.zeros(self.lam.shape)
         else:
             self.lnu = lnu
-
-        # Prepare for bolometric luminosity calculation
-        self.bolometric_luminosity = None
 
         # Redshift of the SED
         self.redshift = 0
@@ -439,6 +435,48 @@ class Sed:
         """
         return self.lnu.shape
 
+    @property
+    def bolometric_luminosity(self):
+        """
+        Return the bolometric luminosity of the SED with units.
+
+        This will integrate the SED using the trapezium method over the
+        final axis (which is always the wavelength axis) for an arbitrary
+        number of dimensions.
+
+        Returns:
+            bolometric_luminosity (unyt_array)
+                The bolometric luminosity.
+        """
+        # Calculate the bolometric luminosity using the trapezium rule.
+        # NOTE: the integration is done "backwards" when integrating over
+        # frequency. It's faster to just multiply by -1 than to reverse the
+        # array.
+        integral = -integrate_last_axis(
+            self._nu,
+            self._lnu,
+            nthreads=1,
+            method="trapz",
+        )
+
+        # Return the bolometric luminosity with units
+        return integral * self.lnu.units * self.nu.units
+
+    @property
+    def _bolometric_luminosity(self):
+        """
+        Return the bolometric luminosity of the SED without units.
+
+        This will integrate the SED using the trapezium method over the
+        final axis (which is always the wavelength axis) for an arbitrary
+        number of dimensions.
+
+        Returns:
+            bolometric_luminosity (float)
+                The bolometric luminosity.
+        """
+        return self.bolometric_luminosity.value
+
     def get_lnu_at_nu(self, nu, kind=False):
         """
         Return lnu with units at a provided frequency using 1d interpolation.
@@ -477,6 +515,11 @@ class Sed:
         """
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
+    @deprecated(
+        message=(
+            "Deprecated in favour of bolometric_luminosity propery method"
+        )
+    )
     def measure_bolometric_luminosity(
         self, integration_method="trapz", nthreads=1
     ):
@@ -503,11 +546,8 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        start = tic()
 
-        # Don't duplicate the calculation if we already have it
-        if self.bolometric_luminosity is not None:
-            return self.bolometric_luminosity
+        start = tic()
 
         # Calculate the bolometric luminosity
         # NOTE: the integration is done "backwards" when integrating over
@@ -521,10 +561,7 @@ class Sed:
         )
         toc("Calculating bolometric luminosity", start)
 
-        # Assign the integral to the bolometric luminosity
-        self.bolometric_luminosity = integral * self.lnu.units * self.nu.units
-
-        return self.bolometric_luminosity
+        return integral * self.lnu.units * self.nu.units
 
     def measure_window_luminosity(
         self, window, integration_method="trapz", nthreads=1

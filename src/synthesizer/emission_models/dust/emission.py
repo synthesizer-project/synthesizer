@@ -121,10 +121,6 @@ class EmissionBase:
         # the dust spectra to the bolometric luminosity of the input spectra
         # and then add the input spectra to the dust spectra
         elif intrinsic_sed is not None and attenuated_sed is not None:
-            # Measure bolometric luminosities
-            intrinsic_sed.measure_bolometric_luminosity()
-            attenuated_sed.measure_bolometric_luminosity()
-
             # Calculate the bolometric dust luminosity as the difference
             # between the intrinsic and attenuated
             bolometric_luminosity = (
@@ -135,7 +131,6 @@ class EmissionBase:
         # If we only have the intrinsic SED, we can just scale the emission
         elif intrinsic_sed is not None:
             # Measure bolometric luminosity
-            intrinsic_sed.measure_bolometric_luminosity()
             bolometric_luminosity = intrinsic_sed.bolometric_luminosity
 
         else:
@@ -187,9 +182,7 @@ class EmissionBase:
         sed = Sed(lam=lam, lnu=self._lnu(nu))
 
         # Normalise the spectrum
-        sed._lnu /= np.expand_dims(
-            sed.measure_bolometric_luminosity().value, axis=-1
-        )
+        sed._lnu /= np.expand_dims(sed._bolometric_luminosity, axis=-1)
 
         # Apply heating due to CMB, if applicable
         sed._lnu *= self.cmb_factor
@@ -762,8 +755,8 @@ class IR_templates:
                 # Calculate the bolometric dust luminosity as the difference
                 # between the intrinsic and attenuated
                 ldust = (
-                    intrinsic_sed.measure_bolometric_luminosity()
-                    - attenuated_sed.measure_bolometric_luminosity()
+                    intrinsic_sed.bolometric_luminosity
+                    - attenuated_sed.bolometric_luminosity
                 )
                 self.ldust = ldust.to("Lsun")
             self.dl07()
