@@ -39,7 +39,7 @@ from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.line import Line, LineCollection, flatten_linelist
 from synthesizer.sed import Sed
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.warnings import warn
 
@@ -102,6 +102,7 @@ class Grid:
     # Define Quantities
     lam = Quantity()
 
+    @accepts(new_lam=angstrom)
     def __init__(
         self,
         grid_name,
@@ -575,6 +576,7 @@ class Grid:
             )
         return lines, wavelengths
 
+    @accepts(new_lam=angstrom)
     def interp_spectra(self, new_lam, loop_grid=False):
         """
         Interpolates the spectra grid onto the provided wavelength grid.
@@ -591,12 +593,6 @@ class Grid:
                 grid, or loop over the first axes. The latter is less memory
                 intensive, but slower. Defaults to False.
         """
-        # Handle and remove the units from the passed wavelengths if needed
-        if isinstance(new_lam, unyt_array):
-            if new_lam.units != self.lam.units:
-                new_lam = new_lam.to(self.lam.units)
-            new_lam = new_lam.value
-
         # Loop over spectra to interpolate
         for spectra_type in self.available_spectra:
             # Are we doing the look up in one go, or looping?
@@ -605,14 +601,22 @@ class Grid:
 
                 # Loop over first axis of spectra array
                 for i, _spec in enumerate(self.spectra[spectra_type]):
-                    new_spectra[i] = spectres(new_lam, self._lam, _spec)
+                    new_spectra[i] = spectres(
+                        new_lam.value,
+                        self._lam,
+                        _spec,
+                        fill=0,
+                    )
 
                 del self.spectra[spectra_type]
                 new_spectra = np.asarray(new_spectra)
             else:
                 # Evaluate the function at the desired wavelengths
                 new_spectra = spectres(
-                    new_lam, self._lam, self.spectra[spectra_type]
+                    new_lam.value,
+                    self._lam,
+                    self.spectra[spectra_type],
+                    fill=0,
                 )
 
             # Update this spectra
@@ -643,6 +647,8 @@ class Grid:
     def get_nearest_index(value, array):
         """
         Calculate the closest index in an array for a given value.
+
+        TODO: What is this doing here!?
 
         Args:
             value (float/unyt_quantity)
@@ -788,7 +794,7 @@ class Grid:
                 )
             )
 
-        return Line(*lines)
+        return Line(combine_lines=lines)
 
     def get_lines(self, grid_point, line_ids=None):
         """
@@ -988,6 +994,7 @@ class Grid:
         """
         return Sed(self.lam, self.spectra[spectra_type] * erg / s / Hz)
 
+    @accepts(min_lam=angstrom, max_lam=angstrom)
     def truncate_grid_lam(self, min_lam, max_lam):
         """
         Truncate the grid to a specific wavelength range.
@@ -1124,6 +1131,7 @@ class Template:
     lam = Quantity()
     lnu = Quantity()
 
+    @accepts(lam=angstrom, lnu=erg / s / Hz)
     def __init__(
         self,
         lam,
@@ -1148,12 +1156,6 @@ class Template:
             **kwargs
 
         """
-        # Ensure we have been given units
-        if not isinstance(lam, unyt_array):
-            raise exceptions.MissingUnits("lam must be provided with units")
-        if not isinstance(lnu, unyt_array):
-            raise exceptions.MissingUnits("lnu must be provided with units")
-
         # It's convenient to have an sed object for the next steps
         sed = Sed(lam, lnu)
 
@@ -1173,6 +1175,7 @@ class Template:
         # Set the escape fraction
         self.fesc = fesc
 
+    @accepts(bolometric_luminosity=erg / s)
     def get_spectra(self, bolometric_luminosity):
         """
         Calculate the blackhole spectra by scaling the template.

@@ -8,12 +8,14 @@ Example usage:
 
 import numpy as np
 import unyt.physical_constants as const
-from unyt import Hz, erg, pc, s, unyt_array, unyt_quantity
+from unyt import Hz, K, erg, pc, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+from synthesizer.units import accepts
 from synthesizer.warnings import warn
 
 
+@accepts(frequency=Hz, temperature=K)
 def planck(frequency, temperature):
     """
     Compute the planck distribution for a given frequency and temperature.
@@ -30,20 +32,6 @@ def planck(frequency, temperature):
     Returns:
         unyt_quantity: Spectral luminosity density in erg/s/Hz.
     """
-    # Ensure we have unyt quantities
-    if not has_units(frequency):
-        raise exceptions.InconsistentArguments(
-            "Frequency must have units (e.g. Hz) to calculate Planck's law."
-        )
-    if not has_units(temperature):
-        raise exceptions.InconsistentArguments(
-            "Temperature must have units (e.g. K) to calculate Planck's law."
-        )
-
-    # Ensure frequency is in Hz and temperature is in K
-    frequency = frequency.to("Hz")
-    temperature = temperature.to("K")
-
     # Planck's law: B(ν, T) = (2*h*ν^3) / (c^2 * (exp(hν / kT) - 1))
     exponent = (const.h * frequency) / (const.kb * temperature)
     spectral_radiance = (2 * const.h * frequency**3) / (
@@ -56,27 +44,6 @@ def planck(frequency, temperature):
 
     # Convert the result to erg/s/Hz and return
     return lnu.to(erg / s / Hz)
-
-
-def has_units(x):
-    """
-    Check whether the passed variable has units.
-
-    This will check the argument is a unyt_quanity or unyt_array.
-
-    Args:
-        x (generic variable)
-            The variables to check.
-
-    Returns:
-        bool
-            True if the variable has units, False otherwise.
-    """
-    # Do the check
-    if isinstance(x, (unyt_array, unyt_quantity)):
-        return True
-
-    return False
 
 
 def rebin_1d(arr, resample_factor, func=np.sum):
