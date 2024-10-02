@@ -9,10 +9,10 @@ import copy
 
 import numpy as np
 from numpy.random import multivariate_normal
-from unyt import rad, unyt_array, unyt_quantity
+from unyt import Mpc, Msun, km, rad, s
 
 from synthesizer import exceptions
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.warnings import deprecation
@@ -58,6 +58,13 @@ class Particles:
     centre = Quantity()
     radii = Quantity()
 
+    @accepts(
+        coordinates=Mpc,
+        velocities=km / s,
+        masses=Msun.in_base("galactic"),
+        softening_length=Mpc,
+        centre=Mpc,
+    )
     def __init__(
         self,
         coordinates,
@@ -171,35 +178,6 @@ class Particles:
             "`particle_photo_lnu` instead. Will be removed in v1.0.0"
         )
         return self.photo_lnu
-
-    def _check_part_args(
-        self, coordinates, velocities, masses, softening_length
-    ):
-        """
-        Sanitize the inputs ensuring all arguments agree and are compatible.
-
-        Raises:
-            InconsistentArguments
-                If any arguments are incompatible or not as expected an error
-                is thrown.
-        """
-        # Ensure all quantities have units
-        if not isinstance(coordinates, unyt_array):
-            raise exceptions.InconsistentArguments(
-                "coordinates must have unyt units associated to them."
-            )
-        if not isinstance(velocities, unyt_array):
-            raise exceptions.InconsistentArguments(
-                "velocities must have unyt units associated to them."
-            )
-        if not isinstance(masses, unyt_array):
-            raise exceptions.InconsistentArguments(
-                "masses must have unyt units associated to them."
-            )
-        if not isinstance(softening_length, unyt_quantity):
-            raise exceptions.InconsistentArguments(
-                "softening_length must have unyt units associated to them."
-            )
 
     @property
     def centered_coordinates(self):
@@ -379,6 +357,7 @@ class Particles:
         # Calculate the radii
         self.radii = np.linalg.norm(self.centered_coordinates, axis=1)
 
+    @accepts(aperture_radius=Mpc)
     def _aperture_mask(self, aperture_radius):
         """
         Mask for particles within spherical aperture.
@@ -752,6 +731,7 @@ class Particles:
             )
         )
 
+    @accepts(phi=rad, theta=rad)
     def rotate_particles(
         self,
         phi=0 * rad,
@@ -791,22 +771,6 @@ class Particles:
         """
         # Are we using angles?
         if rot_matrix is None:
-            # Ensure we have units and convert to radians
-            if isinstance(phi, unyt_quantity):
-                phi = phi.to("rad").value
-            else:
-                raise exceptions.InconsistentArguments(
-                    "phi must have units associated to "
-                    f"it (type(phi)={type(phi)})"
-                )
-            if isinstance(theta, unyt_quantity):
-                theta = theta.to("rad").value
-            else:
-                raise exceptions.InconsistentArguments(
-                    "theta must have units associated to "
-                    f"it (type(theta)={type(theta)})"
-                )
-
             # Rotation matrix around z-axis (phi)
             rot_matrix_z = np.array(
                 [

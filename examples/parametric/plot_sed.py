@@ -8,7 +8,7 @@ including photometry. This example will:
 - calculate spectral luminosity density
 """
 
-from unyt import Myr
+from unyt import Msun, Myr, angstrom
 
 from synthesizer.emission_models import (
     AttenuatedEmission,
@@ -36,7 +36,7 @@ if __name__ == "__main__":
     Z_p = {
         "log10metallicity": -2.0
     }  # can also use linear metallicity e.g. {'Z': 0.01}
-    stellar_mass = 1e8
+    stellar_mass = 1e8 * Msun
 
     # Define the functional form of the star formation and metal enrichment
     # histories
@@ -165,9 +165,9 @@ if __name__ == "__main__":
 
     # Generate broadband photometry using 3 top-hat filters
     tophats = {
-        "U": {"lam_eff": 3650, "lam_fwhm": 660},
-        "V": {"lam_eff": 5510, "lam_fwhm": 880},
-        "J": {"lam_eff": 12200, "lam_fwhm": 2130},
+        "U": {"lam_eff": 3650 * angstrom, "lam_fwhm": 660 * angstrom},
+        "V": {"lam_eff": 5510 * angstrom, "lam_fwhm": 880 * angstrom},
+        "J": {"lam_eff": 12200 * angstrom, "lam_fwhm": 2130 * angstrom},
     }
     fc = FilterCollection(tophat_dict=tophats, new_lam=grid.lam)
 
