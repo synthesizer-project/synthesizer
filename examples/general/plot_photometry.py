@@ -15,7 +15,7 @@ including photometry. This example will:
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 from astropy.cosmology import Planck18 as cosmo
-from unyt import Myr
+from unyt import Msun, Myr
 
 from synthesizer.emission_models import PacmanEmission
 from synthesizer.emission_models.attenuation import PowerLaw
@@ -50,7 +50,7 @@ if __name__ == "__main__":
     Z_p = {
         "log10metallicity": -2.0
     }  # can also use linear metallicity e.g. {'Z': 0.01}
-    stellar_mass = 1e9
+    stellar_mass = 1e9 * Msun
 
     # define the functional form of the star formation and metal
     # enrichment histories

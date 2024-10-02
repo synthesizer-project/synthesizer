@@ -1,15 +1,18 @@
 """ """
 
 import numpy as np
+from unyt import Mpc
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.imaging import ImageCollection, SpectralCube
+from synthesizer.units import accepts
 
 
 class Galaxy(BaseGalaxy):
     """A class defining parametric galaxy objects"""
 
+    @accepts(centre=Mpc)
     def __init__(
         self,
         stars=None,

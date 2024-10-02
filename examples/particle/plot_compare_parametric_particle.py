@@ -8,7 +8,7 @@ numbers of particles
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Myr
+from unyt import Msun, Myr
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
@@ -38,7 +38,7 @@ sfzh = ParametricStars(
     grid.metallicity,
     sf_hist=sfh,
     metal_dist=metal_dist,
-    initial_mass=1,
+    initial_mass=1 * Msun,
 )
 
 # Compute the parametric sed
@@ -63,7 +63,7 @@ for nstar in [1, 10, 100, 1000]:
         sfzh.log10ages,
         sfzh.log10metallicities,
         nstar,
-        initial_mass=1 / nstar,
+        initial_mass=1 / nstar * Msun,
     )
 
     # Get the particle galaxy

@@ -11,7 +11,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Myr
+from unyt import Mpc, Msun, Myr
 
 from synthesizer.emission_models import TotalEmission
 from synthesizer.emission_models.attenuation import PowerLaw
@@ -75,7 +75,7 @@ sfh_p = {"duration": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation
 
 # Generate the star formation metallicity history
-mass = 10**10
+mass = 10**10 * Msun
 param_stars = ParametricStars(
     log10ages,
     metallicities,
@@ -102,9 +102,9 @@ stars = sample_sfhz(
     param_stars.log10ages,
     param_stars.log10metallicities,
     nstars,
-    coordinates=coords,
-    current_masses=np.full(nstars, 10**8.7 / nstars),
-    smoothing_lengths=smls,
+    coordinates=coords * Mpc,
+    current_masses=np.full(nstars, 10**8.7 / nstars) * Msun,
+    smoothing_lengths=smls * Mpc,
     redshift=1,
 )
 
@@ -117,10 +117,10 @@ coords = CoordinateGenerator.generate_3D_gaussian(ngas)
 smls = calculate_smoothing_lengths(coords)
 
 gas = Gas(
-    masses=np.random.uniform(10**6, 10**6.5, ngas),
+    masses=np.random.uniform(10**6, 10**6.5, ngas) * Msun,
     metallicities=np.random.uniform(0.01, 0.05, ngas),
-    coordinates=coords,
-    smoothing_lengths=smls,
+    coordinates=coords * Mpc,
+    smoothing_lengths=smls * Mpc,
     dust_to_metal_ratio=0.2,
 )
 
