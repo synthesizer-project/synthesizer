@@ -10,12 +10,12 @@ It includes the following steps:
 
 import matplotlib.pyplot as plt
 import numpy as np
+
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 
 if __name__ == "__main__":
-
     # Define the grid
     grid_name = "test_grid"
     grid_dir = "../../tests/test_grid/"
