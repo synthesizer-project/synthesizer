@@ -3,13 +3,19 @@
 This module contains functions and decorators for issuing warnings to the end
 user.
 
-Example usage:
+Example usage::
 
     deprecation("x will have to be a unyt_array in future versions.")
 
-    @deprecated
+    @deprecated()
     def old_function():
         pass
+
+    @deprecated("will be removed in v2.0")
+    def old_function():
+        pass
+
+    warn("This is a warning message.")
 
 """
 
@@ -36,7 +42,7 @@ def deprecation(message, category=FutureWarning):
     warnings.warn(message, category=category, stacklevel=3)
 
 
-def deprecated(func, message=None, category=FutureWarning):
+def deprecated(message=None, category=FutureWarning):
     """
     Decorate a function to mark it as deprecated.
 
@@ -54,24 +60,27 @@ def deprecated(func, message=None, category=FutureWarning):
 
     """
 
-    def wrapped(*args, **kwargs):
-        # Determine the specific deprecation message
-        if message is None:
-            _message = (
-                f"{func.__name__} is deprecated and "
-                "will be removed in a future version."
+    def _deprecated(func):
+        def wrapped(*args, **kwargs):
+            # Determine the specific deprecation message
+            if message is None:
+                _message = (
+                    f"{func.__name__} is deprecated and "
+                    "will be removed in a future version."
+                )
+            else:
+                _message = f"{func.__name__} {message}"
+
+            # Issue the warning
+            deprecation(
+                _message,
+                category=category,
             )
-        else:
-            _message = f"{func.__name__} {message}"
+            return func(*args, **kwargs)
 
-        # Issue the warning
-        deprecation(
-            _message,
-            category=category,
-        )
-        return func(*args, **kwargs)
+        return wrapped
 
-    return wrapped
+    return _deprecated
 
 
 def warn(message, category=RuntimeWarning, stacklevel=3):

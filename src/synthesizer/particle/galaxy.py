@@ -12,21 +12,25 @@ spectra for all particles in a simulation.)
 Example usage:
 
     galaxy = Galaxy(stars, gas, black_holes, ...)
-    galaxystars.get_spectra_incident(...)
+    galaxy.stars.get_spectra(...)
 
 """
 
+import copy
+
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Myr, unyt_quantity
+from unyt import Mpc, Msun, Myr, rad, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging import Image, ImageCollection, SpectralCube
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle import Gas, Stars
-from synthesizer.sed import Sed
-from synthesizer.warnings import warn
+from synthesizer.units import accepts
+from synthesizer.utils.geometry import get_rotation_matrix
+from synthesizer.warnings import deprecated, warn
 
 
 class Galaxy(BaseGalaxy):
@@ -49,6 +53,7 @@ class Galaxy(BaseGalaxy):
         "gas_mass",
     ]
 
+    @accepts(centre=Mpc)
     def __init__(
         self,
         name="particle galaxy",
@@ -57,7 +62,7 @@ class Galaxy(BaseGalaxy):
         black_holes=None,
         redshift=None,
         centre=None,
-        verbose=True,
+        **kwargs,
     ):
         """Initialise a particle based Galaxy with objects derived from
            Particles.
@@ -78,6 +83,8 @@ class Galaxy(BaseGalaxy):
             centre (float)
                 Centre of the galaxy particles. Can be defined in a number
                 of ways (e.g. centre of mass)
+            **kwargs
+                Arbitrary keyword arguments.
 
         Raises:
             InconsistentArguments
@@ -93,21 +100,16 @@ class Galaxy(BaseGalaxy):
 
         # Set the type of galaxy
         self.galaxy_type = "Particle"
-        self.verbose = verbose
 
         # Instantiate the parent (load stars and gas below)
         BaseGalaxy.__init__(
             self,
-            stars=None,
-            gas=None,
+            stars=stars,
+            gas=gas,
             black_holes=black_holes,
             redshift=redshift,
             centre=centre,
         )
-
-        # Manually load stars and gas at particle level
-        self.load_stars(stars=stars)
-        self.load_gas(gas=gas)
 
         # Define a name for this galaxy
         self.name = name
@@ -125,6 +127,10 @@ class Galaxy(BaseGalaxy):
                 getattr(self, attr)
             except AttributeError:
                 setattr(self, attr, None)
+
+        # Attach any additional keyword arguments
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def calculate_integrated_stellar_properties(self):
         """
@@ -197,6 +203,7 @@ class Galaxy(BaseGalaxy):
                 "setting sf_gas_mass and sf_gas_metallicity to `None`"
             )
 
+    @accepts(initial_masses=Msun.in_base("galactic"), ages=Myr)
     def load_stars(
         self,
         initial_masses=None,
@@ -206,8 +213,10 @@ class Galaxy(BaseGalaxy):
         **kwargs,
     ):
         """
-        Load arrays for star properties into a `Stars`  object,
-        and attach to this galaxy object
+        Load arrays for star properties into a `Stars`  object.
+
+        This will populate the stars attribute with the instantiated Stars
+        object.
 
         Args:
             initial_masses (array_like, float)
@@ -251,8 +260,10 @@ class Galaxy(BaseGalaxy):
 
         # Assign additional galaxy-level properties
         self.stars.redshift = self.redshift
-        self.stars.centre = self.centre
+        if self.centre is not None:
+            self.stars.centre = self.centre
 
+    @accepts(masses=Msun.in_base("galactic"))
     def load_gas(
         self,
         masses=None,
@@ -261,8 +272,9 @@ class Galaxy(BaseGalaxy):
         **kwargs,
     ):
         """
-        Load arrays for gas particle properties into a `Gas` object,
-        and attach to this galaxy object
+        Load arrays for gas particle properties into a `Gas` object.
+
+        This will populate the gas attribute with the instantiated Gas object.
 
         Args:
             masses : array_like (float)
@@ -271,10 +283,8 @@ class Galaxy(BaseGalaxy):
                 gas particle metallicity (total metal fraction)
             gas (gas particle object)
                 A pre-existing gas particle object to use. Defaults to None.
-        **kwargs
-
-        Returns:
-            None
+            **kwargs
+                Arbitrary keyword arguments.
         """
         if gas is not None:
             # Add Gas particle object to this galaxy
@@ -283,7 +293,7 @@ class Galaxy(BaseGalaxy):
             # If nothing has been provided, just set to None and return
             if (masses is None) | (metallicities is None):
                 warn(
-                    "In `load_stars`: one of either `masses`"
+                    "In `load_gas`: one of either `masses`"
                     " or `metallicities` is not provided, setting "
                     "`gas` object to `None`"
                 )
@@ -297,7 +307,8 @@ class Galaxy(BaseGalaxy):
 
         # Assign additional galaxy-level properties
         self.gas.redshift = self.redshift
-        self.gas.centre = self.centre
+        if self.centre is not None:
+            self.gas.centre = self.centre
 
     def calculate_black_hole_metallicity(self, default_metallicity=0.012):
         """
@@ -367,201 +378,45 @@ class Galaxy(BaseGalaxy):
         # Assign the metallicity we have found
         self.black_holes.metallicities = metallicities
 
-    def _prepare_los_args(self, kernel, mask, threshold, force_loop):
-        """
-        A method to prepare the arguments for line of sight metal surface
-        density computation with the C function.
-
-        Args:
-            kernel (array_like, float)
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
-            mask (bool)
-                A mask to be applied to the stars. Surface densities will only
-                be computed and returned for stars with True in the mask.
-            threshold (float)
-                The threshold above which the SPH kernel is 0. This is normally
-                at a value of the impact parameter of q = r / h = 1.
-        """
-
-        # If we have no gas, throw an error
-        if self.gas is None:
-            raise exceptions.InconsistentArguments(
-                "No Gas object has been provided! We can't calculate line of "
-                "sight dust attenuation without a Gas object containing the "
-                "dust!"
-            )
-
-        # Ensure we actually have the properties needed
-        if self.stars.coordinates is None:
-            raise exceptions.InconsistentArguments(
-                "Star object is missing coordinates!"
-            )
-        if self.gas.coordinates is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing coordinates!"
-            )
-        if self.gas.smoothing_lengths is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing smoothing lengths!"
-            )
-        if self.gas.metallicities is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing metallicities!"
-            )
-        if self.gas.masses is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing masses!"
-            )
-        if self.gas.dust_to_metal_ratio is None:
-            raise exceptions.InconsistentArguments(
-                "Gas object is missing DTMs (dust_to_metal_ratio)!"
-            )
-
-        # Set up the kernel inputs to the C function.
-        kernel = np.ascontiguousarray(kernel, dtype=np.float64)
-        kdim = kernel.size
-
-        # Set up the stellar inputs to the C function.
-        star_pos = np.ascontiguousarray(
-            self.stars._coordinates[mask, :], dtype=np.float64
-        )
-        nstar = self.stars._coordinates[mask, :].shape[0]
-
-        # Set up the gas inputs to the C function.
-        gas_pos = np.ascontiguousarray(self.gas._coordinates, dtype=np.float64)
-        gas_sml = np.ascontiguousarray(
-            self.gas._smoothing_lengths, dtype=np.float64
-        )
-        gas_met = np.ascontiguousarray(
-            self.gas.metallicities, dtype=np.float64
-        )
-        gas_mass = np.ascontiguousarray(self.gas._masses, dtype=np.float64)
-        if isinstance(self.gas.dust_to_metal_ratio, float):
-            gas_dtm = np.ascontiguousarray(
-                np.full_like(gas_mass, self.gas.dust_to_metal_ratio),
-                dtype=np.float64,
-            )
-        else:
-            gas_dtm = np.ascontiguousarray(
-                self.gas.dust_to_metal_ratio, dtype=np.float64
-            )
-        ngas = gas_mass.size
-
-        return (
-            kernel,
-            star_pos,
-            gas_pos,
-            gas_sml,
-            gas_met,
-            gas_mass,
-            gas_dtm,
-            nstar,
-            ngas,
-            kdim,
-            threshold,
-            np.max(gas_sml),
-            force_loop,
-        )
-
     def integrate_particle_spectra(self):
-        """
-        Integrates all particle spectra on any attached components.
-        """
-
+        """Integrate all particle spectra on any attached components."""
         # Handle stellar spectra
         if self.stars is not None:
-            # Loop over stellar particle spectra
-            for key, sed in self.stars.particle_spectra.items():
-                self.stars.spectra[key] = Sed(
-                    sed.lam,
-                    np.sum(sed._lnu, axis=0),
-                )
+            self.stars.integrate_particle_spectra()
 
         # Handle black hole spectra
         if self.black_holes is not None:
-            # Loop over stellar particle spectra
-            for key, sed in self.black_holes.particle_spectra.items():
-                self.black_holes.spectra[key] = Sed(
-                    sed.lam,
-                    np.sum(sed._lnu, axis=0),
-                )
+            self.black_holes.integrate_particle_spectra()
 
         # Handle gas spectra
         if self.gas is not None:
             # Nothing to do here... YET
             pass
 
-    def get_line_los():
-        """
-        ParticleGalaxy specific method for obtaining the line luminosities
-        subject to line of sight attenuation to each star particle.
-        """
-
-        pass
-
-    def get_particle_line_intrinsic(self, grid):
-        # """
-        # Calculate line luminosities from individual young stellar particles
-
-        # Warning: slower than calculating integrated line luminosities,
-        # particularly where young particles are resampled, as it does
-        # not use vectorisation.
-
-        # Args:
-        #     grid (object):
-        #         `Grid` object.
-        # """
-        # age_mask = self.stars.log10ages < grid.max_age
-        # lum = np.zeros((np.sum(age_mask), len(grid.lines)))
-
-        # if np.sum(age_mask) == 0:
-        #     return lum
-        # else:
-        #     for i, (mass, age, metal) in enumerate(zip(
-        #             self.stars.initial_masses[age_mask],
-        #             self.stars.log10ages[age_mask],
-        #             self.stars.log10metallicities[age_mask])):
-
-        #         weights_temp = self._calculate_weights(grid, metal, age,
-        #                                                mass,
-        #                                                young_stars=True)
-        #         lum[i] = np.sum(grid.line_luminosities * weights_temp,
-        #                         axis=(1, 2))
-
-        # return lum
-
-        pass
-
-    def get_particle_line_attenuated():
-        pass
-
-    def get_particle_line_screen():
-        pass
-
-    def get_particle_line_los():
-        pass
-
-    def calculate_los_tau_v(
+    def get_stellar_los_tau_v(
         self,
         kappa,
         kernel,
         mask=None,
         threshold=1,
         force_loop=0,
+        min_count=100,
+        nthreads=1,
     ):
         """
-        Calculate tau_v for each star particle based on the distribution of
-        stellar and gas particles.
+        Calculate the LOS optical depth for each star particle.
+
+        This will calculate the optical depth for each star particle based on
+        the gas particle distribution. The stars are considered to interact
+        with a gas particle if gas_z > star_z and the star postion is within
+        the SPH kernel of the gas particle.
 
         Note: the resulting tau_vs will be associated to the stars object at
         self.stars.tau_v.
 
         Args:
             kappa (float)
-                ...
+                The dust opacity in units of Msun / pc**2.
             kernel (array_like/float)
                 A 1D description of the SPH kernel. Values must be in ascending
                 order such that a k element array can be indexed for the value
@@ -577,19 +432,42 @@ class Galaxy(BaseGalaxy):
                 By default (False) the C function will only loop over nearby
                 gas particles to search for contributions to the LOS surface
                 density. This forces the loop over *all* gas particles.
+            min_count (int)
+                The minimum number of particles in a leaf cell of the tree
+                used to search for gas particles. Can be used to tune the
+                performance of the tree search in extreme cases. If there are
+                fewer particles in a leaf cell than this value, the search
+                will be performed with a brute force loop.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
         """
+        start = tic()
 
-        from ..extensions.los import compute_dust_surface_dens
-
-        # If we don't have a mask make a fake one for consistency
-        if mask is None:
-            mask = np.ones(self.stars.nparticles, dtype=bool)
-
-        # Prepare the arguments
-        args = self._prepare_los_args(kernel, mask, threshold, force_loop)
+        # Ensure we have stars and gas
+        if self.stars is None:
+            raise exceptions.InconsistentArguments(
+                "No Stars object has been provided! We can't calculate line "
+                "of sight dust attenuation without a Stars object containing "
+                "the stellar particles!"
+            )
+        if self.gas is None:
+            raise exceptions.InconsistentArguments(
+                "No Gas object has been provided! We can't calculate line of "
+                "sight dust attenuation without a Gas object containing the "
+                "dust!"
+            )
 
         # Compute the dust surface densities
-        los_dustsds = compute_dust_surface_dens(*args)  # Msun / Mpc**2
+        los_dustsds = self.stars.get_los_column_density(
+            self.gas,
+            "dust_masses",
+            kernel,
+            mask=mask,
+            threshold=threshold,
+            force_loop=force_loop,
+            min_count=min_count,
+            nthreads=nthreads,
+        )  # Msun / Mpc**2
 
         los_dustsds /= (1e6) ** 2  # Msun / pc**2
 
@@ -600,6 +478,190 @@ class Galaxy(BaseGalaxy):
         if self.stars.tau_v is None:
             self.stars.tau_v = np.zeros(self.stars.nparticles)
         self.stars.tau_v[mask] = tau_v
+
+        toc("Calculating stellar LOS tau_v", start)
+
+        return tau_v
+
+    def get_black_hole_los_tau_v(
+        self,
+        kappa,
+        kernel,
+        mask=None,
+        threshold=1,
+        force_loop=0,
+        min_count=100,
+        nthreads=1,
+    ):
+        """
+        Calculate the LOS optical depth for each black hole particle.
+
+        This will calculate the optical depth for each black hole particle
+        based on the gas particle distribution. The black holes are considered
+        to interact with a gas particle if gas_z > black_hole_z and the black
+        hole postion is within the SPH kernel of the gas particle.
+
+        Note: the resulting tau_vs will be associated to the black_holes object
+        at self.black_holes.tau_v.
+
+        Args:
+            kappa (float)
+                The dust opacity in units of Msun / pc**2.
+            kernel (array_like/float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value
+                of impact parameter q via kernel[int(k*q)]. Note, this can be
+                an arbitrary kernel.
+            mask (bool)
+                A mask to be applied to the black holes. Surface densities will
+                only be computed and returned for black holes with True in the
+                mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
+            force_loop (bool)
+                By default (False) the C function will only loop over nearby
+                gas particles to search for contributions to the LOS surface
+                density. This forces the loop over *all* gas particles.
+            min_count (int)
+                The minimum number of particles in a leaf cell of the tree
+                used to search for gas particles. Can be used to tune the
+                performance of the tree search in extreme cases. If there are
+                fewer particles in a leaf cell than this value, the search
+                will be performed with a brute force loop.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
+        """
+        start = tic()
+
+        # Ensure we have black holes and gas
+        if self.black_holes is None:
+            raise exceptions.InconsistentArguments(
+                "No BlackHoles object has been provided! We can't calculate "
+                "line of sight dust attenuation without a BlackHoles object "
+                "containing the black hole particles!"
+            )
+        if self.gas is None:
+            raise exceptions.InconsistentArguments(
+                "No Gas object has been provided! We can't calculate line of "
+                "sight dust attenuation without a Gas object containing the "
+                "dust!"
+            )
+
+        # Compute the dust surface densities
+        los_dustsds = self.black_holes.get_los_column_density(
+            self.gas,
+            "dust_masses",
+            kernel,
+            mask=mask,
+            threshold=threshold,
+            force_loop=force_loop,
+            min_count=min_count,
+            nthreads=nthreads,
+        )
+
+        los_dustsds /= (1e6) ** 2  # Msun / pc**2
+
+        # Finalise the calculation
+        tau_v = kappa * los_dustsds
+
+        # Store the result in self.black_holes
+        if self.black_holes.tau_v is None:
+            self.black_holes.tau_v = np.zeros(self.black_holes.nbh)
+        self.black_holes.tau_v[mask] = tau_v
+
+        toc("Calculating black hole LOS tau_v", start)
+
+        return tau_v
+
+    @deprecated()
+    def calculate_los_tau_v(
+        self,
+        kappa,
+        kernel,
+        mask=None,
+        threshold=1,
+        force_loop=0,
+        min_count=100,
+        nthreads=1,
+    ):
+        """
+        Calculate the LOS optical depth for each star particle.
+
+        This will calculate the optical depth for each star particle based on
+        the gas particle distribution. The stars are considered to interact
+        with a gas particle if gas_z > star_z and the star postion is within
+        the SPH kernel of the gas particle.
+
+        Note: the resulting tau_vs will be associated to the stars object at
+        self.stars.tau_v.
+
+        Args:
+            kappa (float)
+                The dust opacity in units of Msun / pc**2.
+            kernel (array_like/float)
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value
+                of impact parameter q via kernel[int(k*q)]. Note, this can be
+                an arbitrary kernel.
+            mask (bool)
+                A mask to be applied to the stars. Surface densities will only
+                be computed and returned for stars with True in the mask.
+            threshold (float)
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
+            force_loop (bool)
+                By default (False) the C function will only loop over nearby
+                gas particles to search for contributions to the LOS surface
+                density. This forces the loop over *all* gas particles.
+            min_count (int)
+                The minimum number of particles in a leaf cell of the tree
+                used to search for gas particles. Can be used to tune the
+                performance of the tree search in extreme cases. If there are
+                fewer particles in a leaf cell than this value, the search
+                will be performed with a brute force loop.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
+        """
+        start = tic()
+
+        # Ensure we have stars and gas
+        if self.stars is None:
+            raise exceptions.InconsistentArguments(
+                "No Stars object has been provided! We can't calculate line "
+                "of sight dust attenuation without a Stars object containing "
+                "the stellar particles!"
+            )
+        if self.gas is None:
+            raise exceptions.InconsistentArguments(
+                "No Gas object has been provided! We can't calculate line of "
+                "sight dust attenuation without a Gas object containing the "
+                "dust!"
+            )
+
+        # Compute the dust surface densities
+        los_dustsds = self.stars.get_los_column_density(
+            self.gas,
+            "dust_masses",
+            kernel,
+            mask=mask,
+            threshold=threshold,
+            force_loop=force_loop,
+            min_count=min_count,
+            nthreads=nthreads,
+        )  # Msun / Mpc**2
+
+        los_dustsds /= (1e6) ** 2  # Msun / pc**2
+
+        # Finalise the calculation
+        tau_v = kappa * los_dustsds
+
+        # Store the result in self.stars
+        if self.stars.tau_v is None:
+            self.stars.tau_v = np.zeros(self.stars.nparticles)
+        self.stars.tau_v[mask] = tau_v
+
+        toc("Calculating LOS tau_v", start)
 
         return tau_v
 
@@ -691,25 +753,31 @@ class Galaxy(BaseGalaxy):
 
         return gamma
 
+    @accepts(stellar_mass_weighted_age=Myr)
     def dust_to_metal_vijayan19(
         self, stellar_mass_weighted_age=None, ism_metallicity=None
     ):
         """
-        Fitting function for the dust-to-metals ratio based on
+        Calculate the dust to metal ratio based on stellar age and metallicity.
+
+        This uses a fitting function for the dust-to-metals ratio based on
         galaxy properties, from L-GALAXIES dust modeling.
 
         Vijayan+19: https://arxiv.org/abs/1904.02196
+
+        Note this will recalculate the dust masses based on the new dust-to-
+        metal ratio.
 
         Args:
             stellar_mass_weighted_age (float)
                 Mass weighted age of stars in Myr. Defaults to None,
                 and uses value provided on this galaxy object (in Gyr)
-                ism_metallicity (float)
+            ism_metallicity (float)
                 Mass weighted gas-phase metallicity. Defaults to None,
                 and uses value provided on this galaxy object
                 (dimensionless)
         """
-
+        # Ensure we have what we need for the calculation
         if stellar_mass_weighted_age is None:
             if self.stellar_mass_weighted_age is None:
                 raise ValueError("No stellar_mass_weighted_age provided")
@@ -742,6 +810,13 @@ class Galaxy(BaseGalaxy):
         # Save under gas properties
         self.gas.dust_to_metal_ratio = dtm
 
+        # We need to recalculate the dust masses so things don't end up
+        # inconsistent (dust_masses are automatically calculated at
+        # intialisation). If the user handed dust masses and then called this
+        # function, they will be overwritten and it will be confusing but
+        # that's so unlikely and they'll work out when they see this comment.
+        self.gas.dust_masses = self.gas.masses * self.gas.dust_to_metal_ratio
+
         return dtm
 
     def get_images_luminosity(
@@ -753,6 +828,7 @@ class Galaxy(BaseGalaxy):
         blackhole_photometry=None,
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make an ImageCollection from luminosities.
@@ -790,6 +866,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image : array-like
@@ -814,7 +892,7 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_hist(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_luminosities,
+                    ].photo_lnu,
                     coordinates=self.stars.centered_coordinates,
                 )
 
@@ -823,11 +901,12 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_smoothed(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_luminosities,
+                    ].photo_lnu,
                     coordinates=self.stars.centered_coordinates,
                     smoothing_lengths=self.stars.smoothing_lengths,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
+                    nthreads=nthreads,
                 )
 
             else:
@@ -845,7 +924,7 @@ class Galaxy(BaseGalaxy):
             blackhole_imgs.get_imgs_hist(
                 photometry=self.black_holes.particle_spectra[
                     blackhole_photometry
-                ].photo_luminosities,
+                ].photo_lnu,
                 coordinates=self.black_holes.centered_coordinates,
             )
 
@@ -865,6 +944,7 @@ class Galaxy(BaseGalaxy):
         blackhole_photometry=None,
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make an ImageCollection from fluxes.
@@ -902,6 +982,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image : array-like
@@ -926,7 +1008,7 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_hist(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_fluxes,
+                    ].photo_fnu,
                     coordinates=self.stars.centered_coordinates,
                 )
 
@@ -935,11 +1017,12 @@ class Galaxy(BaseGalaxy):
                 stellar_imgs.get_imgs_smoothed(
                     photometry=self.stars.particle_spectra[
                         stellar_photometry
-                    ].photo_fluxes,
+                    ].photo_fnu,
                     coordinates=self.stars.centered_coordinates,
                     smoothing_lengths=self.stars.smoothing_lengths,
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
+                    nthreads=nthreads,
                 )
 
             else:
@@ -957,7 +1040,7 @@ class Galaxy(BaseGalaxy):
             blackhole_imgs.get_imgs_hist(
                 photometry=self.black_holes.particle_spectra[
                     blackhole_photometry
-                ].photo_fluxes,
+                ].photo_fnu,
                 coordinates=self.black_holes.centered_coordinates,
             )
 
@@ -975,6 +1058,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a mass map, either with or without smoothing.
@@ -992,6 +1076,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1018,6 +1104,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1035,6 +1122,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a mass map, either with or without smoothing.
@@ -1052,6 +1140,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1078,6 +1168,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.gas.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1095,6 +1186,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make an age map, either with or without smoothing.
@@ -1115,6 +1207,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1141,6 +1235,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1171,6 +1266,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         # Divide out the mass contribution, handling zero contribution pixels
@@ -1191,6 +1287,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a stellar metal mass map, either with or without smoothing.
@@ -1208,6 +1305,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1234,6 +1333,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1251,6 +1351,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a gas metal mass map, either with or without smoothing.
@@ -1270,6 +1371,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1296,6 +1399,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.gas.smoothing_lengths,
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1313,6 +1417,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a stellar metallicity map, either with or without smoothing.
@@ -1333,6 +1438,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1344,11 +1451,12 @@ class Galaxy(BaseGalaxy):
             img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
         )
 
         # Make the mass image
         mass_img = self.get_map_stellar_mass(
-            resolution, fov, img_type, kernel, kernel_threshold
+            resolution, fov, img_type, kernel, kernel_threshold, nthreads
         )
 
         # Divide out the mass contribution, handling zero contribution pixels
@@ -1369,6 +1477,7 @@ class Galaxy(BaseGalaxy):
         img_type="hist",
         kernel=None,
         kernel_threshold=1,
+        nthreads=1,
     ):
         """
         Make a gas metallicity map, either with or without smoothing.
@@ -1391,6 +1500,8 @@ class Galaxy(BaseGalaxy):
                 module. Only used for smoothed images.
             kernel_threshold (float)
                 The kernel's impact parameter threshold (by default 1).
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1402,11 +1513,12 @@ class Galaxy(BaseGalaxy):
             img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
         )
 
         # Make the mass image
         mass_img = self.get_map_gas_mass(
-            resolution, fov, img_type, kernel, kernel_threshold
+            resolution, fov, img_type, kernel, kernel_threshold, nthreads
         )
 
         # Divide out the mass contribution, handling zero contribution pixels
@@ -1428,6 +1540,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         age_bin=100 * Myr,
+        nthreads=1,
     ):
         """
         Make a SFR map, either with or without smoothing.
@@ -1452,6 +1565,8 @@ class Galaxy(BaseGalaxy):
             age_bin (unyt_quantity/float)
                 The size of the age bin used to calculate the star formation
                 rate. If supplied without units, the unit system is assumed.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1489,6 +1604,7 @@ class Galaxy(BaseGalaxy):
                 smoothing_lengths=self.stars.smoothing_lengths[mask],
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
             )
 
         else:
@@ -1511,6 +1627,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         age_bin=100 * Myr,
+        nthreads=1,
     ):
         """
         Make a SFR map, either with or without smoothing.
@@ -1536,6 +1653,8 @@ class Galaxy(BaseGalaxy):
             age_bin (unyt_quantity/float)
                 The size of the age bin used to calculate the star formation
                 rate. If supplied without units, the unit system is assumed.
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             Image
@@ -1548,6 +1667,7 @@ class Galaxy(BaseGalaxy):
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             age_bin=age_bin,
+            nthreads=nthreads,
         )
 
         # Convert the SFR map to sSFR
@@ -1567,6 +1687,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         quantity="lnu",
+        nthreads=1,
     ):
         """
         Make a SpectralCube from an Sed held by this galaxy.
@@ -1603,12 +1724,16 @@ class Galaxy(BaseGalaxy):
             quantity (str):
                 The Sed attribute/quantity to sort into the data cube, i.e.
                 "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
+            nthreads (int)
+                The number of threads to use in the tree search. Default is 1.
 
         Returns:
             SpectralCube
                 The spectral data cube object containing the derived
                 data cube.
         """
+        start = tic()
+
         # Make sure we have an image to make
         if stellar_spectra is None and blackhole_spectra is None:
             raise exceptions.InconsistentArguments(
@@ -1639,6 +1764,7 @@ class Galaxy(BaseGalaxy):
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     quantity=quantity,
+                    nthreads=nthreads,
                 )
 
         # Make blackhole image if requested
@@ -1663,11 +1789,155 @@ class Galaxy(BaseGalaxy):
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     quantity=quantity,
+                    nthreads=nthreads,
                 )
 
         # Return the images, combining if there are multiple components
         if stellar_spectra is not None and blackhole_spectra is not None:
+            toc("Computing stellar and blackhole spectral data cubes", start)
             return stellar_cube + blackhole_cube
         elif stellar_spectra is not None:
+            toc("Computing stellar spectral data cube", start)
             return stellar_cube
+        toc("Computing blackhole spectral data cube", start)
         return blackhole_cube
+
+    @accepts(phi=rad, theta=rad)
+    def rotate_particles(
+        self,
+        phi=0 * rad,
+        theta=0 * rad,
+        rot_matrix=None,
+        inplace=True,
+    ):
+        """
+        Rotate coordinates.
+
+        This method can either use angles or a provided rotation matrix.
+
+        When using angles phi is the rotation around the z-axis while theta
+        is the rotation around the y-axis.
+
+        This can both be done in place or return a new instance, by default
+        this will be done in place.
+
+        Args:
+            phi (unyt_quantity):
+                The angle in radians to rotate around the z-axis. If rot_matrix
+                is defined this will be ignored.
+            theta (unyt_quantity):
+                The angle in radians to rotate around the y-axis. If rot_matrix
+                is defined this will be ignored.
+            rot_matrix (array-like, float):
+                A 3x3 rotation matrix to apply to the coordinates
+                instead of phi and theta.
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with the rotated coordinates,
+                if inplace is False.
+        """
+        # Are we rotating in place?
+        if inplace:
+            gal = self
+        else:
+            gal = copy.deepcopy(self)
+
+        # Do the stars
+        if gal.stars is not None:
+            gal.stars.rotate_particles(
+                phi=phi,
+                theta=theta,
+                rot_matrix=rot_matrix,
+                inplace=True,
+            )
+
+        # Do the gas
+        if gal.gas is not None:
+            gal.gas.rotate_particles(
+                phi=phi,
+                theta=theta,
+                rot_matrix=rot_matrix,
+                inplace=True,
+            )
+
+        # Do the black holes
+        if gal.black_holes is not None:
+            gal.black_holes.rotate_particles(
+                phi=phi,
+                theta=theta,
+                rot_matrix=rot_matrix,
+                inplace=True,
+            )
+
+        # If we aren't rotating in place we need to return a new instance
+        if not inplace:
+            return gal
+        return
+
+    def rotate_edge_on(self, component="stars", inplace=True):
+        """
+        Rotate the particle distribution to edge-on.
+
+        This will rotate the particle distribution such that the angular
+        momentum vector is aligned with the y-axis in an image
+
+        Args:
+            component (str):
+                The component whose angular momentum vector should be used for
+                the rotation. Options are "stars", "gas" and "black_holes".
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with rotated coordinates,
+                if inplace is False.
+        """
+        # Get the angular momentum to rotate towards
+        angular_momentum = getattr(self, component).angular_momentum
+
+        # Get the rotation matrix to rotate ang_mom_hat to the y-axis
+        rot_matrix = get_rotation_matrix(
+            angular_momentum,
+            np.array([1, 0, 0]),
+        )
+
+        # Call the rotate_particles method with the computed angles
+        return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
+
+    def rotate_face_on(self, component="stars", inplace=True):
+        """
+        Rotate the particle distribution to face-on.
+
+        This will rotate the particle distribution such that the angular
+        momentum vector is aligned with the z-axis in an image.
+
+        Args:
+            component (str):
+                The component whose angular momentum vector should be used for
+                the rotation. Options are "stars", "gas" and "black_holes".
+            inplace (bool):
+                Whether to perform the rotation in place or return a new
+                instance.
+
+        Returns:
+            Particles
+                A new instance of the particles with rotated coordinates,
+                if inplace is False.
+        """
+        # Get the angular momentum to rotate towards
+        angular_momentum = getattr(self, component).angular_momentum
+
+        # Get the rotation matrix to rotate ang_mom_hat to the z-axis
+        rot_matrix = get_rotation_matrix(
+            angular_momentum,
+            np.array([0, 0, -1]),
+        )
+
+        # Call the rotate_particles method with the computed angles
+        return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)

@@ -1,18 +1,43 @@
+"""A module to load IllustrisTNG data into galaxy objects.
+
+This module provides a function to load particle data from the IllustrisTNG
+simulation into galaxy objects. The data is loaded from the group and particle
+files, and the particles associated with each subhalo are loaded individually.
+
+The module requires the `illustris_python` module, which must be installed
+manually. The `load_IllustrisTNG` function loads the particles associated with
+each subhalo individually, rather than the whole simulation volume particle
+arrays; this can be slower for certain volumes, but avoids memory issues for
+higher resolution boxes.
+
+Example usage::
+
+    galaxies, subhalo_mask = load_IllustrisTNG(
+        directory="path/to/data",
+        snap_number=99,
+        stellar_mass_limit=8.5e6,
+        verbose=True,
+        dtm=0.3,
+        physical=True,
+        metals=True,
+    )
+"""
+
 import numpy as np
-from astropy.cosmology import FlatLambdaCDM
+from astropy.cosmology import Planck15
 from tqdm import tqdm
 from unyt import Msun, kpc, yr
+
+from synthesizer.exceptions import UnmetDependency
 
 try:
     import illustris_python as il
 except ImportError:
-    print(
-        "The `illustris_python` module is not installed. "
-        "Please refer to the website for installation instructions: "
-        "https://github.com/illustristng/illustris_python"
-        "\nExiting..."
+    raise UnmetDependency(
+        "The `illustris_python` module is required to load IllustrisTNG data. "
+        "Install synthesizer with the `illustris` extra dependencies:"
+        " `pip install .[illustris]`."
     )
-    exit
 
 
 from ..particle.galaxy import Galaxy
@@ -28,7 +53,7 @@ def load_IllustrisTNG(
     metals=True,
 ):
     """
-    Load IllustrisTNG particle data into galaxy objects
+    Load IllustrisTNG particle data into galaxy objects.
 
     Uses the `illustris_python` module, which must be installed manually.
     Loads the particles associated with each subhalo individually, rather than
@@ -63,7 +88,6 @@ def load_IllustrisTNG(
         subhalo_mask (array, bool):
             Boolean array of selected galaxies from the subhalo catalogue.
     """
-
     # Do some simple argument preparation
     snap_number = int(snap_number)
 
@@ -72,23 +96,22 @@ def load_IllustrisTNG(
 
     # Get header information
     header = il.groupcat.loadHeader(directory, snap_number)
-    scale_factor = header['Time']
-    redshift = header['Redshift']
-    Om0 = header['Omega0']
-    h = header['HubbleParam']
+    scale_factor = header["Time"].astype(np.float32)
+    redshift = header["Redshift"].astype(np.float32)
+    h = header["HubbleParam"]
 
     if verbose:
         print("Loading subhalo catalogue...")
 
     # Load subhalo properties (positions and stellar masses)
-    fields = ['SubhaloMassType', 'SubhaloPos']
+    fields = ["SubhaloMassType", "SubhaloPos"]
     output = il.groupcat.loadSubhalos(directory, snap_number, fields=fields)
 
     # Perform stellar mass masking
-    stellar_mass = output['SubhaloMassType'][:, 4]
+    stellar_mass = output["SubhaloMassType"][:, 4]
     subhalo_mask = (stellar_mass * 1e10) > stellar_mass_limit
 
-    subhalo_pos = output['SubhaloPos'][subhalo_mask]
+    subhalo_pos = output["SubhaloPos"][subhalo_mask]
 
     if verbose:
         print(
@@ -102,13 +125,8 @@ def load_IllustrisTNG(
         print("Loading particle information...")
 
     for i, (idx, pos) in tqdm(
-        enumerate(
-            zip(
-                np.where(subhalo_mask)[0],
-                subhalo_pos
-            )
-        ),
-        total=np.sum(subhalo_mask)
+        enumerate(zip(np.where(subhalo_mask)[0], subhalo_pos)),
+        total=np.sum(subhalo_mask),
     ):
         galaxies[i] = Galaxy(verbose=False)
         galaxies[i].redshift = redshift
@@ -120,38 +138,37 @@ def load_IllustrisTNG(
         galaxies[i].centre = pos * kpc
 
         star_fields = [
-            'GFM_StellarFormationTime',
-            'Coordinates',
-            'Masses',
-            'GFM_InitialMass',
-            'GFM_Metallicity',
-            'SubfindHsml',
+            "GFM_StellarFormationTime",
+            "Coordinates",
+            "Masses",
+            "GFM_InitialMass",
+            "GFM_Metallicity",
+            "SubfindHsml",
         ]
         if metals:
-            star_fields.append('GFM_Metals')
+            star_fields.append("GFM_Metals")
 
         output = il.snapshot.loadSubhalo(
-            directory, snap_number, idx, 'stars', fields=star_fields
+            directory, snap_number, idx, "stars", fields=star_fields
         )
 
-        if output['count'] > 0:
-
+        if output["count"] > 0:
             # Mask for wind particles
-            mask = output['GFM_StellarFormationTime'] <= 0.0
+            mask = output["GFM_StellarFormationTime"] <= 0.0
 
             # filter particle arrays
-            imasses = output['GFM_InitialMass'][~mask]
-            form_time = output['GFM_StellarFormationTime'][~mask]
-            coods = output['Coordinates'][~mask]
-            metallicities = output['GFM_Metallicity'][~mask]
-            masses = output['Masses'][~mask]
-            hsml = output['SubfindHsml'][~mask]
+            imasses = output["GFM_InitialMass"][~mask]
+            form_time = output["GFM_StellarFormationTime"][~mask]
+            coods = output["Coordinates"][~mask]
+            metallicities = output["GFM_Metallicity"][~mask]
+            masses = output["Masses"][~mask]
+            hsml = output["SubfindHsml"][~mask]
 
             masses = (masses * 1e10) / h
             imasses = (imasses * 1e10) / h
 
             if metals:
-                _metals = output['GFM_Metals'][~mask]
+                _metals = output["GFM_Metals"][~mask]
                 s_oxygen = _metals[:, 4]
                 s_hydrogen = 1.0 - np.sum(_metals[:, 1:], axis=1)
             else:
@@ -164,7 +181,7 @@ def load_IllustrisTNG(
                 hsml *= scale_factor
 
             # convert formation times to ages
-            cosmo = FlatLambdaCDM(H0=h * 100, Om0=Om0)
+            cosmo = Planck15
             universe_age = cosmo.age(1.0 / scale_factor - 1)
             _ages = cosmo.age(1.0 / form_time - 1)
             ages = (universe_age - _ages).value * 1e9  # yr
@@ -186,23 +203,22 @@ def load_IllustrisTNG(
             )
 
         gas_fields = [
-            'StarFormationRate',
-            'Coordinates',
-            'Masses',
-            'GFM_Metallicity',
-            'SubfindHsml',
+            "StarFormationRate",
+            "Coordinates",
+            "Masses",
+            "GFM_Metallicity",
+            "SubfindHsml",
         ]
         output = il.snapshot.loadSubhalo(
-            directory, snap_number, idx, 'gas', fields=gas_fields
+            directory, snap_number, idx, "gas", fields=gas_fields
         )
 
-        if output['count'] > 0:
-
-            g_masses = output['Masses']
-            g_sfr = output['StarFormationRate']
-            g_coods = output['Coordinates']
-            g_hsml = output['SubfindHsml']
-            g_metals = output['GFM_Metallicity']
+        if output["count"] > 0:
+            g_masses = output["Masses"]
+            g_sfr = output["StarFormationRate"]
+            g_coods = output["Coordinates"]
+            g_hsml = output["SubfindHsml"]
+            g_metals = output["GFM_Metallicity"]
 
             g_masses = (g_masses * 1e10) / h
             star_forming = g_sfr > 0.0  # star forming gas particles

@@ -10,13 +10,15 @@ Example for generating a rest-frame physical scale image. This example will:
 """
 
 import matplotlib.pyplot as plt
+from unyt import Msun, Myr, kpc
+
+from synthesizer.emission_models import ReprocessedEmission
 from synthesizer.filters import UVJ
 from synthesizer.grid import Grid
 from synthesizer.imaging import ImageCollection
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.parametric.morphology import Sersic2D
-from unyt import Myr, kpc
 
 if __name__ == "__main__":
     # Define the morphology using a simple effective radius and slope
@@ -31,17 +33,20 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
+    # Create the emission model
+    model = ReprocessedEmission(grid)
+
     # Define the SFZDist
     Z_p = {"metallicity": 0.01}
     metal_dist = ZDist.DeltaConstant(**Z_p)
-    sfh_p = {"duration": 100 * Myr}
+    sfh_p = {"max_age": 100 * Myr}
     sfh = SFH.Constant(**sfh_p)  # constant star formation
     sfzh = Stars(
         grid.log10age,
         grid.metallicity,
         sf_hist=sfh,
         metal_dist=metal_dist,
-        initial_mass=10**9,
+        initial_mass=10**9 * Msun,
         morphology=morph,
     )
 
@@ -49,13 +54,13 @@ if __name__ == "__main__":
     galaxy = Galaxy(sfzh)
 
     # Generate stellar spectra
-    galaxy.stars.get_spectra_incident(grid)
+    galaxy.stars.get_spectra(model)
 
     # Get a UVJ filter set
     filters = UVJ()
 
     # Get photometry
-    galaxy.stars.spectra["incident"].get_photo_luminosities(filters)
+    galaxy.stars.spectra["reprocessed"].get_photo_lnu(filters)
 
     # Define geometry of the images
     resolution = 0.01 * kpc  # resolution in kpc
@@ -70,7 +75,7 @@ if __name__ == "__main__":
 
     # Get the photometric images
     img.get_imgs_smoothed(
-        photometry=galaxy.stars.spectra["incident"].photo_luminosities,
+        photometry=galaxy.stars.spectra["reprocessed"].photo_lnu,
         density_grid=morph.get_density_grid(resolution, img.npix),
     )
 
@@ -83,7 +88,7 @@ if __name__ == "__main__":
     # We can also do the same with a helper function on the galaxy object
     img = galaxy.get_images_luminosity(
         resolution=resolution,
-        stellar_photometry="incident",
+        stellar_photometry="reprocessed",
         fov=fov,
     )
 

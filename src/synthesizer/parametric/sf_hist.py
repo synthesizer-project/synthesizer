@@ -24,15 +24,17 @@ from scipy.integrate import cumtrapz
 from unyt import yr
 
 from synthesizer import exceptions
-from synthesizer.stats import weighted_mean, weighted_median
+from synthesizer.utils.stats import weighted_mean, weighted_median
+from synthesizer.warnings import warn
 
 # Define a list of the available parametrisations
 parametrisations = (
     "Constant",
-    "Exponential" "TruncatedExponential",
-    "LogNormal",
-    "ExponentiallyyDeclining",
-    "DelayedExponentiallyDeclining",
+    "Gaussian",
+    "Exponential",
+    "TruncatedExponential",
+    "DecliningExponential",
+    "DelayedExponential" "LogNormal",
     "DoublePowerLaw",
     "DenseBasis",
 )
@@ -99,7 +101,7 @@ class Common:
 
     def calculate_sfh(self, t_range=(0, 10**10), dt=10**6):
         """
-        Calcualte the age of a given star formation history.
+        Calculate the age of a given star formation history.
 
         Args:
             t_range (tuple, float)
@@ -122,9 +124,29 @@ class Common:
 
         return t, sfh
 
+    def plot_sfh(self, t_range=(0, 10**10), dt=10**6, log=False):
+        """
+        Create a quick plot of the star formation history.
+
+        Args:
+            t_range (tuple, float)
+                The age limits over which to calculate the SFH.
+            dt (float)
+                The interval between age bins.
+        """
+
+        t, sfr = self.calculate_sfh(t_range=t_range, dt=dt)
+        plt.plot(t, sfr)
+
+        if log:
+            plt.xscale("log")
+            plt.yscale("log")
+
+        plt.show()
+
     def calculate_median_age(self, t_range=(0, 10**10), dt=10**6):
         """
-        Calcualte the median age of a given star formation history.
+        Calculate the median age of a given star formation history.
 
         Args:
             t_range (tuple, float)
@@ -234,28 +256,46 @@ class Constant(Common):
     A constant star formation history.
 
     The SFR is defined such that:
-        sfr = 1; t<=duration
-        sfr = 0; t>duration
+        sfr = 1; min_age<t<=max_age
+        sfr = 0; t>max_age, t<min_age
 
     Attributes:
-        duration (float)
-            The duration of the period of constant star formation.
+        max_age (unyt_quantity)
+            The age above which the star formation history is truncated.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
     """
 
-    def __init__(self, duration):
+    def __init__(self, max_age=100 * yr, min_age=0 * yr, duration=None):
         """
         Initialise the parent and this parametrisation of the SFH.
 
         Args:
+            max_age (unyt_quantity)
+                The age above which the star formation history is truncated.
+                If min_age = 0 then this is the duration of star formation.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
             duration (unyt_quantity)
-                The duration of the period of constant star formation.
+
         """
 
+        if duration is not None:
+            warn(
+                "The use of duration is deprecated in favour of max_age",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            max_age = duration
+
         # Initialise the parent
-        Common.__init__(self, name="Constant", duration=duration)
+        Common.__init__(
+            self, name="Constant", min_age=min_age, max_age=max_age
+        )
 
         # Set the model parameters
-        self.duration = duration.to("yr").value
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """
@@ -267,34 +307,54 @@ class Constant(Common):
         """
 
         # Set the SFR based on the duration.
-        if age <= self.duration:
+        if (age <= self.max_age) & (age >= self.min_age):
             return 1.0
         return 0.0
 
 
-class Exponential(Common):
+class Gaussian(Common):
     """
-    An exponential star formation history.
+    A Gaussian star formation history.
 
     Attributes:
-        tau (float)
-            The "stretch" parameter of the exponential.
+        peak_age (unyt_quantity)
+            The age at which the star formation peaks, i.e. the age at which
+            the gaussian is centred.
+        sigma (unyt_quantity)
+            The standard deviation of the gaussian function.
+        max_age (unyt_quantity)
+            The age above which the star formation history is truncated.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
     """
 
-    def __init__(self, tau):
+    def __init__(self, peak_age, sigma, max_age=1e11 * yr, min_age=0 * yr):
         """
         Initialise the parent and this parametrisation of the SFH.
 
         Args:
-            tau (unyt_quantity)
-                The "stretch" parameter of the exponential.
+            max_age (unyt_quantity)
+                The age above which the star formation history is truncated.
+                If min_age = 0 then this is the duration of star formation.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
         """
 
         # Initialise the parent
-        Common.__init__(self, name="Exponential", tau=tau)
+        Common.__init__(
+            self,
+            name="Gaussian",
+            peak_age=peak_age,
+            sigma=sigma,
+            min_age=min_age,
+            max_age=max_age,
+        )
 
         # Set the model parameters
-        self.tau = tau.to("yr").value
+        self.peak_age = peak_age.to("yr").value
+        self.sigma = sigma.to("yr").value
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """
@@ -304,10 +364,84 @@ class Exponential(Common):
             age (float)
                 The age (in years) at which to evaluate the SFR.
         """
-        return np.exp(-age / self.tau)
+
+        # Set the SFR based on the duration.
+        if (age <= self.max_age) & (age >= self.min_age):
+            return np.exp(-np.power((age - self.peak_age) / self.sigma, 2.0))
+        return 0.0
 
 
-class TruncatedExponential(Common):
+class Exponential(Common):
+    """
+    A exponential star formation history that can be truncated.
+
+    Note: synthesizer uses age (not t) as its parameter such that:
+        t = max_age - age
+
+    Attributes:
+        tau (unyt_quantity)
+            The "stretch" parameter of the exponential.
+        max_age (unyt_quantity)
+            The age above which the star formation history is truncated.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
+    """
+
+    def __init__(self, tau, max_age, min_age=0.0 * yr):
+        """
+        Initialise the parent and this parametrisation of the SFH.
+
+        Args:
+            tau (unyt_quantity)
+                The "stretch" parameter of the exponential. Here a positive
+                tau produces a declining exponential, i.e. the star formation
+                rate decreases with time, but decreases with age. A negative
+                tau indicates an increasing star formation history.
+            max_age (unyt_quantity)
+                The age above which the star formation history is truncated.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
+        """
+
+        # Raise exception if tau is zero
+        if tau == 0.0:
+            raise exceptions.InconsistentArguments("tau must be non-zero!")
+
+        # Initialise the parent
+        Common.__init__(
+            self,
+            name="Exponential",
+            tau=tau,
+            max_age=max_age,
+            min_age=min_age,
+        )
+
+        # Set the model parameters
+        self.tau = tau.to("yr").value
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
+
+    def _sfr(self, age):
+        """
+        Get the amount SFR weight in a single age bin.
+
+        Args:
+            age (float)
+                The age (in years) at which to evaluate the SFR.
+        """
+
+        # define time coordinate
+        t = self.max_age - age
+
+        if (age < self.max_age) and (age >= self.min_age):
+            return np.exp(-(t - self.max_age) / self.tau)
+            # equivalent to:
+            # return np.exp(age / self.tau)
+
+        return 0.0
+
+
+class TruncatedExponential(Exponential):
     """
     A truncated exponential star formation history.
 
@@ -315,33 +449,86 @@ class TruncatedExponential(Common):
         tau (unyt_quantity)
             The "stretch" parameter of the exponential.
         max_age (unyt_quantity)
-            The age at which the exponential is truncated. Above this age
-            the SFR is 0.
+            The age above which the star formation history is truncated.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
     """
 
-    def __init__(self, tau, max_age):
+    def __init__(self, tau, max_age, min_age):
         """
         Initialise the parent and this parametrisation of the SFH.
 
         Args:
             tau (unyt_quantity)
-                The "stretch" parameter of the exponential.
+                The "stretch" parameter of the exponential. Here a positive
+                tau produces a declining exponential, i.e. the star formation
+                rate decreases with time, but decreases with age. A negative
+                tau indicates an increasing star formation history.
             max_age (unyt_quantity)
-                The age at which the exponential is truncated. Above this age
-                the SFR is 0.
+                The age above which the star formation history is truncated.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
         """
+        Exponential.__init__(self, tau, max_age, min_age=min_age)
+
+
+class DecliningExponential(Exponential):
+    def __init__(self, tau, max_age, min_age=0.0 * yr):
+        if tau <= 0.0:
+            raise exceptions.InconsistentArguments(
+                "For a declining exponential tau must be positive!"
+            )
+        Exponential.__init__(self, tau, max_age, min_age=min_age)
+
+
+class DelayedExponential(Common):
+    """
+    A delayed exponential star formation history that can be truncated.
+    The "delayed" element results in a more gradual increase at earlier
+    times.
+
+    Attributes:
+        tau (unyt_quantity)
+            The "stretch" parameter of the exponential.
+        max_age (unyt_quantity)
+            The age above which the star formation history is truncated.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
+    """
+
+    def __init__(self, tau, max_age, min_age=0.0 * yr):
+        """
+        Initialise the parent and this parametrisation of the SFH.
+
+        Args:
+            tau (unyt_quantity)
+                The "stretch" parameter of the exponential. Here a positive
+                tau produces a declining exponential, i.e. the star formation
+                rate decreases with time, but decreases with age. A negative
+                tau indicates an increasing star formation history.
+            max_age (unyt_quantity)
+                The age above which the star formation history is truncated.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
+        """
+
+        # Raise exception if tau is zero
+        if tau == 0.0:
+            raise exceptions.InconsistentArguments("tau must be non-zero!")
 
         # Initialise the parent
         Common.__init__(
             self,
-            name="TruncatedExponential",
+            name="DelayedExponential",
             tau=tau,
             max_age=max_age,
+            min_age=min_age,
         )
 
         # Set the model parameters
         self.tau = tau.to("yr").value
         self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """
@@ -351,8 +538,12 @@ class TruncatedExponential(Common):
             age (float)
                 The age (in years) at which to evaluate the SFR.
         """
-        if age < self.max_age:
-            return np.exp(-age / self.tau)
+
+        # define time coordinate
+        t = self.max_age - age
+
+        if (age < self.max_age) and (age >= self.min_age):
+            return t * np.exp(-(t - self.max_age) / self.tau)
         return 0.0
 
 
@@ -365,11 +556,15 @@ class LogNormal(Common):
             The dimensionless "width" of the log normal distribution.
         peak_age (float)
             The peak of the log normal distribution.
-        max_age (float)
-            The maximum age of the log normal distribution.
+        max_age (unyt_quantity)
+            The maximum age of the log normal distribution. In addition to
+            truncating the star formation history this is used to define
+            the peak.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
     """
 
-    def __init__(self, tau, peak_age, max_age):
+    def __init__(self, tau, peak_age, max_age, min_age=0 * yr):
         """
         Initialise the parent and this parametrisation of the SFH.
 
@@ -379,7 +574,11 @@ class LogNormal(Common):
             peak_age (unyt_quantity)
                 The peak of the log normal distribution.
             max_age (unyt_quantity)
-                The maximum age of the log normal distribution.
+                The maximum age of the log normal distribution. In addition to
+                truncating the star formation history this is used to define
+                the peak.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
         """
 
         # Initialise the parent
@@ -389,12 +588,14 @@ class LogNormal(Common):
             tau=tau,
             peak_age=peak_age,
             max_age=max_age,
+            min_age=min_age,
         )
 
         # Set the model parameters
         self.peak_age = peak_age.to("yr").value
         self.tau = tau
         self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
         # Calculate the relative ages and peak for the calculation
         self.tpeak = self.max_age - self.peak_age
@@ -408,7 +609,7 @@ class LogNormal(Common):
             age (float)
                 The age (in years) at which to evaluate the SFR.
         """
-        if age < self.max_age:
+        if (age < self.max_age) & (age >= self.min_age):
             norm = 1.0 / (self.max_age - age)
             exponent = (
                 (np.log(self.max_age - age) - self.t_0) ** 2 / 2 / self.tau**2
@@ -418,147 +619,59 @@ class LogNormal(Common):
         return 0.0
 
 
-class ExponentiallyDeclining(Common):
-    """
-    An exponentially declining star formation history
-
-    Attributes:
-        tau (float)
-            The "stretch" parameter of the exponential.
-        initial_age (unyt_quantity)
-            The "start age" of the exponential, i.e. the age where
-            star formation is maximal.
-    """
-
-    def __init__(self, initial_age, tau, name=None):
-        """
-        Initialise the parent and this parametrisation of the SFH.
-
-        Args:
-            tau (unyt_quantity)
-                The "stretch" parameter of the exponential.
-            initial_age (unyt_quantity)
-                The "start age" of the exponential, i.e. the age where
-                star formation is maximal.
-        """
-
-        # Initialise the parent
-        Common.__init__(
-            self,
-            name="ExponentiallyDeclining",
-            tau=tau,
-            initial_age=initial_age,
-        )
-
-        # Set the model parameters
-        self.initial_age = initial_age.to("yr").value
-        self.tau = tau.to("yr").value
-
-    def _sfr(self, age):
-        """
-        Get the amount SFR weight in a single age bin.
-
-        Args:
-            age (float)
-                The age (in years) at which to evaluate the SFR.
-        """
-        if age < self.initial_age:
-            return np.exp(-1 * (self.initial_age - age) / self.tau)
-        return 0.0
-
-
-class DelayedExponentiallyDeclining(Common):
-    """
-    A delayed exponentially declining star formation history.
-
-    This is effectively the same as ExponentiallyDeclining with an overloaded
-    _sfr method.
-
-    Attributes:
-        tau (float)
-            The "stretch" parameter of the exponential.
-        initial_age (unyt_quantity)
-            The "start age" of the exponential, i.e. the age where
-            star formation is maximal.
-    """
-
-    def __init__(self, initial_age, tau):
-        """
-        Initialise the parent and this parametrisation of the SFH.
-
-        Args:
-            tau (unyt_quantity)
-                The "stretch" parameter of the exponential.
-            initial_age (unyt_quantity)
-                The "start age" of the exponential, i.e. the age where
-                star formation is maximal.
-        """
-
-        # Initialise the parent
-        Common.__init__(
-            self,
-            name="DelayedExponentiallyDeclining",
-            tau=tau,
-            initial_age=initial_age,
-        )
-
-        # Set the model parameters
-        self.initial_age = initial_age.to("yr").value
-        self.tau = tau.to("yr").value
-
-    def _sfr(self, age):
-        """
-        Get the amount SFR weight in a single age bin.
-
-        Args:
-            age (float)
-                The age (in years) at which to evaluate the SFR.
-        """
-        if age < self.initial_age:
-            norm = self.initial_age - age
-            return norm * np.exp(-1 * (self.initial_age - age) / self.tau)
-        return 0.0
-
-
 class DoublePowerLaw(Common):
     """
     A double power law star formation history.
 
     Attributes:
-        tau (float)
-            The normalisation of age before raising to the powers.
+        peak_age (unyt_quantity)
+            The age at which the star formation history peaks.
         alpha (float)
             The first power.
         beta (float)
             The second power.
+        max_age (unyt_quantity)
+            The age above which the star formation history is truncated.
+        min_age (unyt_quantity)
+            The age below which the star formation history is truncated.
     """
 
-    def __init__(self, tau, alpha, beta):
+    def __init__(
+        self, peak_age, alpha, beta, min_age=0 * yr, max_age=1e11 * yr
+    ):
         """
         Initialise the parent and this parametrisation of the SFH.
 
         Args:
-            tau (unyt_quantity)
-                The normalisation of age before raising to the powers.
+            peak_age (unyt_quantity)
+                The age at which the star formation history peaks.
             alpha (float)
                 The first power.
             beta (float)
                 The second power.
+            max_age (unyt_quantity)
+                The age above which the star formation history is truncated.
+            min_age (unyt_quantity)
+                The age below which the star formation history is truncated.
         """
 
         # Initialise the parent
         Common.__init__(
             self,
             name="DoublePowerLaw",
-            tau=tau,
+            peak_age=peak_age,
             alpha=alpha,
             beta=beta,
+            max_age=max_age,
+            min_age=min_age,
         )
 
         # Set the model parameters
-        self.tau = tau.to("yr").value
+        self.peak_age = peak_age.to("yr").value
         self.alpha = alpha
         self.beta = beta
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """
@@ -568,9 +681,12 @@ class DoublePowerLaw(Common):
             age (float)
                 The age (in years) at which to evaluate the SFR.
         """
-        term1 = (age / self.tau) ** self.alpha
-        term2 = (age / self.tau) ** self.beta
-        return (term1 + term2) ** -1
+        if (age < self.max_age) & (age >= self.min_age):
+            term1 = (age / self.peak_age) ** self.alpha
+            term2 = (age / self.peak_age) ** self.beta
+            return (term1 + term2) ** -1
+
+        return 0.0
 
 
 class DenseBasis(Common):

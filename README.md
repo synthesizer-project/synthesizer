@@ -8,14 +8,7 @@
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 
-Synthesizer is a python package for generating synthetic astrophysical spectra. It is intended to be modular, flexible and fast.
-
-Here are just some examples of what synthesizer can do:
-- generate spectra for parametric star formation and metal enrichment histories
-- generate spectra for galaxies from particle-based cosmological hydrodynamic simulations
-- measure spectral diagnostics for given spectra
-- easily compare stellar population synthesis models
-- apply screen dust models to intrinsic spectra
+Synthesizer is a python package for generating synthetic astrophysical observables. It is modular, flexible and fast.
 
 Read the documentation [here](https://flaresimulations.github.io/synthesizer/).
 

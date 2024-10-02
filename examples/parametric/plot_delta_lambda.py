@@ -10,10 +10,12 @@ It includes the following steps:
 
 import matplotlib.pyplot as plt
 import numpy as np
+from unyt import Msun, Myr
+
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr
 
 if __name__ == "__main__":
     # Define the grid
@@ -21,13 +23,16 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
+    # Define the emission model
+    model = IncidentEmission(grid)
+
     # define the parameters of the star formation and metal enrichment
     # histories
-    sfh_p = {"duration": 10 * Myr}
+    sfh_p = {"max_age": 10 * Myr}
     Z_p = {
         "log10metallicity": -2.0
     }  # can also use linear metallicity e.g. {'Z': 0.01}
-    stellar_mass = 1e8
+    stellar_mass = 1e8 * Msun
 
     # define the functional form of the star formation and metal enrichment
     # histories
@@ -51,7 +56,7 @@ if __name__ == "__main__":
     galaxy = Galaxy(stars, redshift=z)
 
     # Delta lambda model for pure stellar spectra
-    galaxy.stars.get_spectra_incident(grid)
+    galaxy.stars.get_spectra(model)
     lam, delta_lam = Grid.get_delta_lambda(grid)
     print("Mean delta: ", np.mean(delta_lam))
 

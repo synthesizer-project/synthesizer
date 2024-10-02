@@ -4,11 +4,10 @@ This is the parametric analog of particle.Stars. It not only computes and holds
 the SFZH grid but everything describing a parametric Galaxy's stellar
 component.
 
-Example usage:
+Example usage::
 
-    stars = Stars(log10ages, metallicities,
-                  sfzh=sfzh)
-    stars.get_spectra_incident(grid)
+    stars = Stars(log10ages, metallicities, sfzh=sfzh)
+    stars.get_spectra(emission_model)
     stars.plot_spectra()
 """
 
@@ -16,17 +15,17 @@ import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate
-from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, Msun, angstrom, erg, nJy, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
 from synthesizer.line import Line
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
-from synthesizer.plt import single_histxy
-from synthesizer.stats import weighted_mean, weighted_median
-from synthesizer.units import Quantity
-from synthesizer.utils import has_units
+from synthesizer.units import Quantity, accepts
+from synthesizer.utils import TableFormatter
+from synthesizer.utils.plt import single_histxy
+from synthesizer.utils.stats import weighted_mean, weighted_median
 
 
 class Stars(StarsComponent):
@@ -93,6 +92,7 @@ class Stars(StarsComponent):
     # Define quantities
     initial_mass = Quantity()
 
+    @accepts(initial_mass=Msun.in_base("galactic"))
     def __init__(
         self,
         log10ages,
@@ -148,7 +148,7 @@ class Stars(StarsComponent):
         """
 
         # Instantiate the parent
-        StarsComponent.__init__(self, 10**log10ages, metallicities)
+        StarsComponent.__init__(self, 10**log10ages * yr, metallicities)
 
         # Set the age grid properties
         self.log10ages = log10ages
@@ -370,7 +370,88 @@ class Stars(StarsComponent):
         # ... and multiply it by the initial mass of stars
         self.sfzh *= self._initial_mass
 
-    def generate_lnu(self, grid, spectra_name, old=None, young=None):
+    def get_mask(self, attr, thresh, op, mask=None):
+        """
+        Create a mask using a threshold and attribute on which to mask.
+
+        Args:
+            attr (str)
+                The attribute to derive the mask from.
+            thresh (float)
+                The threshold value.
+            op (str)
+                The operation to apply. Can be '<', '>', '<=', '>=', "==",
+                or "!=".
+            mask (array)
+                Optionally, a mask to combine with the new mask.
+
+        Returns:
+            mask (array)
+                The mask array.
+        """
+        # Get the attribute
+        attr = getattr(self, attr)
+
+        # Apply the operator
+        if op == ">":
+            new_mask = attr > thresh
+        elif op == "<":
+            new_mask = attr < thresh
+        elif op == ">=":
+            new_mask = attr >= thresh
+        elif op == "<=":
+            new_mask = attr <= thresh
+        elif op == "==":
+            new_mask = attr == thresh
+        elif op == "!=":
+            new_mask = attr != thresh
+        else:
+            raise exceptions.InconsistentArguments(
+                "Masking operation must be '<', '>', '<=', '>=', '==', or "
+                f"'!=', not {op}"
+            )
+
+        # Broadcast the mask to get a mask for SFZH bins
+        if new_mask.size == self.sfzh.shape[0]:
+            new_mask = np.outer(
+                new_mask, np.ones(self.sfzh.shape[1], dtype=int)
+            )
+        elif new_mask.size == self.sfzh.shape[1]:
+            new_mask = np.outer(
+                np.ones(self.sfzh.shape[0], dtype=int), new_mask
+            )
+        elif new_mask.shape == self.sfzh.shape:
+            pass  # nothing to do here
+        else:
+            raise exceptions.InconsistentArguments(
+                "Masking array must be the same shape as the SFZH grid "
+                f"or an axis (mask.shape={new_mask.shape}, "
+                f"sfzh.shape={self.sfzh.shape})"
+            )
+
+        # Combine with the existing mask
+        if mask is not None:
+            if mask.shape == new_mask.shape:
+                new_mask = np.logical_and(new_mask, mask)
+            else:
+                raise exceptions.InconsistentArguments(
+                    "Masking array must be the same shape as the SFZH grid "
+                    f"or an axis (mask.shape={new_mask.shape}, "
+                    f"sfzh.shape={self.sfzh.shape})"
+                )
+
+        return new_mask
+
+    def generate_lnu(
+        self,
+        grid,
+        spectra_name,
+        old=None,
+        young=None,
+        mask=None,
+        fesc=0.0,
+        **kwargs,
+    ):
         """
         Calculate rest frame spectra from an SPS Grid.
 
@@ -397,44 +478,32 @@ class Stars(StarsComponent):
         Returns:
             The Stars's integrated rest frame spectra in erg / s / Hz.
         """
-
         # Ensure arguments make sense
         if old is not None and young is not None:
             raise ValueError("Cannot provide old and young stars together")
 
-        # Get the indices of non-zero entries in the SFZH
-        non_zero_inds = np.where(self.sfzh > 0)
+        # Get a mask for non-zero bins in the SFZH
+        mask = self.get_mask("sfzh", 0, ">", mask=mask)
 
-        # Make the mask for relevent SFZH bins
-        if old:
-            sfzh_mask = self.log10ages[non_zero_inds[0]] > old
-        elif young:
-            sfzh_mask = self.log10ages[non_zero_inds[0]] <= young
-        else:
-            sfzh_mask = np.ones(
-                len(self.log10ages[non_zero_inds[0]]),
-                dtype=bool,
-            )
+        # Make the mask for relevent SFZH bins if we haven't been handed one.
+        if mask is not None:
+            if old is not None:
+                mask = self.get_mask("log10ages", old, ">", mask=mask)
+            elif young is not None:
+                mask = self.get_mask("log10ages", young, "<=", mask=mask)
 
         # Add an extra dimension to enable later summation
         sfzh = np.expand_dims(self.sfzh, axis=2)
 
-        # Account for the SFZH mask in the non-zero indices
-        non_zero_inds = (
-            non_zero_inds[0][sfzh_mask],
-            non_zero_inds[1][sfzh_mask],
-        )
-
         # Compute the spectra
-        spectra = np.sum(
-            grid.spectra[spectra_name][non_zero_inds[0], non_zero_inds[1], :]
-            * sfzh[non_zero_inds[0], non_zero_inds[1], :],
+        spectra = (1 - fesc) * np.sum(
+            grid.spectra[spectra_name][mask] * sfzh[mask],
             axis=0,
         )
 
         return spectra
 
-    def generate_line(self, grid, line_id, fesc, **kwargs):
+    def generate_line(self, grid, line_id, line_type, fesc, **kwargs):
         """
         Calculate rest frame line luminosity and continuum from an SPS Grid.
 
@@ -448,6 +517,8 @@ class Stars(StarsComponent):
             line_id (str):
                 A str denoting a line. Doublets can be specified using a
                 comma (e.g. 'OIII4363,OIII4959').
+            line_type (str):
+                The type of line to extract. This must match a key in the Grid.
             fesc (float):
                 The Lyman continuum escaped fraction, the fraction of
                 ionising photons that entirely escaped.
@@ -469,21 +540,20 @@ class Stars(StarsComponent):
             # Strip off any whitespace (can be left by split)
             line_id_ = line_id_.strip()
 
-            # Get the line from the grid
-            grid_line = grid.lines[line_id_]
-
             # Get this line's wavelength
             # TODO: The units here should be extracted from the grid but aren't
             # yet stored.
-            lam = grid.lines[line_id_]["wavelength"] * angstrom
+            lam = grid.line_lams[line_id_] * angstrom
 
             # Line luminosity erg/s
             lum = (1 - fesc) * np.sum(
-                grid_line["luminosity"] * self.sfzh, axis=(0, 1)
+                grid.line_lums[line_type][line_id_] * self.sfzh, axis=(0, 1)
             )
 
             # Continuum at line wavelength, erg/s/Hz
-            cont = np.sum(grid_line["continuum"] * self.sfzh, axis=(0, 1))
+            cont = (1 - fesc) * np.sum(
+                grid.line_conts[line_type][line_id_] * self.sfzh, axis=(0, 1)
+            )
 
             # Append this lines values to the containers
             lines.append(
@@ -499,7 +569,7 @@ class Stars(StarsComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     def calculate_median_age(self):
         """
@@ -521,24 +591,16 @@ class Stars(StarsComponent):
 
     def __str__(self):
         """
-        Overload the print function to give a basic summary of the
-        stellar population
+        Return a string representation of the stars object.
+
+        Returns:
+            table (str)
+                A string representation of the particle object.
         """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        # Define the output string
-        pstr = ""
-        pstr += "-" * 10 + "\n"
-        pstr += "SUMMARY OF BINNED SFZH" + "\n"
-        pstr += (
-            f'median age: {self.calculate_median_age().to("Myr"):.2f}' + "\n"
-        )
-        pstr += f'mean age: {self.calculate_mean_age().to("Myr"):.2f}' + "\n"
-        pstr += (
-            f"mean metallicity: {self.calculate_mean_metallicity():.4f}" + "\n"
-        )
-        pstr += "-" * 10 + "\n"
-
-        return pstr
+        return formatter.get_table("Stars")
 
     def __add__(self, other_stars):
         """
@@ -589,6 +651,7 @@ class Stars(StarsComponent):
 
         return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
 
+    @accepts(lum=erg / s / Hz)
     def scale_mass_by_luminosity(self, lum, scale_filter, spectra_type):
         """
         Scale the mass of the stellar population to match a luminosity in a
@@ -618,22 +681,18 @@ class Stars(StarsComponent):
                 "corresponding spectra method?"
             )
 
-        # Check we have units
-        if not has_units(lum):
-            raise exceptions.IncorrectUnits(
-                "lum must be given with unyt units"
-            )
-
         # Calculate the current luminosity in scale_filter
         sed = self.spectra[spectra_type]
-        current_lum = scale_filter.apply_filter(sed.lnu, nu=sed.nu)
+        current_lum = (
+            scale_filter.apply_filter(sed.lnu, nu=sed.nu) * sed.lnu.units
+        )
 
         # Calculate the conversion ratio between the requested and current
         # luminosity
         conversion = lum / current_lum
 
         # Apply conversion to the masses
-        self.initial_mass *= conversion
+        self._initial_mass *= conversion
 
         # Apply the conversion to all spectra
         for key in self.spectra:
@@ -644,6 +703,7 @@ class Stars(StarsComponent):
         # Apply correction to the SFZH
         self.sfzh *= conversion
 
+    @accepts(flux=nJy)
     def scale_mass_by_flux(self, flux, scale_filter, spectra_type):
         """
         Scale the mass of the stellar population to match a flux in a
@@ -673,12 +733,6 @@ class Stars(StarsComponent):
                 "corresponding spectra method?"
             )
 
-        # Check we have units
-        if not has_units(flux):
-            raise exceptions.IncorrectUnits(
-                "lum must be given with unyt units"
-            )
-
         # Get the sed object
         sed = self.spectra[spectra_type]
 
@@ -690,14 +744,16 @@ class Stars(StarsComponent):
             )
 
         # Calculate the current flux in scale_filter
-        current_flux = scale_filter.apply_filter(sed.fnu, nu=sed.obsnu)
+        current_flux = (
+            scale_filter.apply_filter(sed.fnu, nu=sed.obsnu) * sed.fnu.units
+        )
 
         # Calculate the conversion ratio between the requested and current
         # flux
         conversion = flux / current_flux
 
         # Apply conversion to the masses
-        self.initial_mass *= conversion
+        self._initial_mass *= conversion
 
         # Apply the conversion to all spectra
         for key in self.spectra:

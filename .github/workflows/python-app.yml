@@ -4,8 +4,6 @@
 name: Synthesizer
 
 on:
-  push:
-    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -23,7 +21,7 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
       with:
@@ -33,8 +31,18 @@ jobs:
         python -m pip install --upgrade pip
         pip install wheel
         sudo apt install pandoc
-        pip install .[test,docs]
-    - uses: chartboost/ruff-action@v1  # Lint with Ruff
+        WITH_OPENMP=1 pip install .[test,docs]
+        # Install loader dependencies (doing this separately because bigfile
+        # is not set up properly and depends on numpy and cython, the former
+        # we depend on, the latter we need to install)
+        pip install cython
+        WITH_OPENMP=1 pip install .[bluetides,eagle,illustris]
+        # Output the compilation report so it can be viewed in an action log
+        cat build_synth.log
+    - uses: chartboost/ruff-action@491342200cdd1cf4d5132a30ddc546b3b5bc531b  # Lint with Ruff
+      with:
+        version: 0.6.0
+        changed-files: 'true'
     - name: Download test data
       run: |
         # Download test grid data
@@ -43,7 +51,7 @@ jobs:
       run: |
         pytest
         # Test ipython notebooks
-        pytest --nbmake docs/source/*.ipynb docs/source/*/*.ipynb
+        pytest --nbmake docs/source/*/*.ipynb docs/source/*/*/*.ipynb
     - name: Sphinx Build
       run: |
         # Test sphinx build (runs all notebooks)

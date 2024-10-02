@@ -1,4 +1,5 @@
 import pytest
+
 from synthesizer.grid import Grid
 
 

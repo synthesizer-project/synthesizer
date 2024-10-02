@@ -12,12 +12,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology import Planck18 as cosmo
 from matplotlib.lines import Line2D
+from unyt import Hz, Msun, Myr, erg, nJy, s
+
 from synthesizer import galaxy
 from synthesizer.conversions import apparent_mag_to_fnu, fnu_to_lnu
+from synthesizer.emission_models import PacmanEmission
+from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.filters import Filter
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
-from unyt import Msun, Myr, erg, nJy
 
 # Set up a figure to plot on
 fig = plt.figure()
@@ -35,8 +38,17 @@ grid_name = "test_grid"
 grid_dir = "../../tests/test_grid/"
 grid = Grid(grid_name, grid_dir=grid_dir)
 
+# Define the emission model
+model = PacmanEmission(
+    grid,
+    fesc=0.5,
+    fesc_ly_alpha=0.5,
+    tau_v=0.1,
+    dust_curve=PowerLaw(slope=-1),
+)
+
 # Set up the SFH
-sfh = SFH.Constant(duration=100 * Myr)
+sfh = SFH.Constant(max_age=100 * Myr)
 
 # Set up the metallicity distribution
 metal_dist = ZDist.Normal(mean=0.01, sigma=0.005)
@@ -55,12 +67,7 @@ redshift = 12
 gal = galaxy(stars=stars, redshift=redshift)
 
 # Generate spectra using pacman model (complex)
-gal.stars.get_spectra_pacman(
-    grid,
-    fesc=0.5,
-    fesc_LyA=0.5,
-    tau_v=0.1,
-)
+gal.stars.get_spectra(model)
 
 # Get the observed spectra
 gal.get_observed_spectra(cosmo=cosmo)
@@ -88,7 +95,7 @@ ax_flux.plot(
 f = Filter(filter_code="JWST/NIRCam.F150W", new_lam=grid.lam)
 
 # First lets scale by luminosity
-scale_lum = 10**25.0 * erg
+scale_lum = 10**25.0 * erg / s / Hz
 gal.stars.scale_mass_by_luminosity(
     lum=scale_lum,
     scale_filter=f,
