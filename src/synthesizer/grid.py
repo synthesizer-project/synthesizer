@@ -1167,8 +1167,8 @@ class Template:
         self.lam = sed.lam
 
         # Normalise, just in case
-        self.normalisation = sed.measure_bolometric_luminosity()
-        self.lnu /= self.normalisation.value
+        self.normalisation = sed._bolometric_luminosity
+        self.lnu /= self.normalisation
 
         # Set the escape fraction
         self.fesc = fesc
