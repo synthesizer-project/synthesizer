@@ -20,12 +20,13 @@ Example usages::
 import os
 
 import numpy as np
-from unyt import cm, deg, km, kpc, s, unyt_array
+from unyt import Msun, cm, deg, erg, km, kpc, s, unyt_array, yr
 
 from synthesizer import exceptions
 from synthesizer.components import BlackholesComponent
 from synthesizer.parametric.morphology import PointSource
-from synthesizer.utils import TableFormatter, has_units
+from synthesizer.units import accepts
+from synthesizer.utils import TableFormatter
 
 
 class BlackHole(BlackholesComponent):
@@ -38,6 +39,18 @@ class BlackHole(BlackholesComponent):
             location of this blackhole
     """
 
+    @accepts(
+        mass=Msun.in_base("galactic"),
+        accretion_rate=Msun.in_base("galactic") / yr,
+        inclination=deg,
+        offset=kpc,
+        bolometric_luminosity=erg / s,
+        hydrogen_density_blr=1 / cm**3,
+        hydrogen_density_nlr=1 / cm**3,
+        velocity_dispersion_blr=km / s,
+        velocity_dispersion_nlr=km / s,
+        theta_torus=deg,
+    )
     def __init__(
         self,
         mass=None,
@@ -132,12 +145,6 @@ class BlackHole(BlackholesComponent):
 
         # by definition a parametric blackhole is only one blackhole
         self.nbh = 1
-
-        # Ensure the offset has units
-        if not has_units(offset):
-            raise exceptions.MissingUnits(
-                "The offset must be provided with units"
-            )
 
         # Initialise morphology using the in-built point-source class
         self.morphology = PointSource(offset=offset)

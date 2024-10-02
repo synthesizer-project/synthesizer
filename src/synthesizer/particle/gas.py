@@ -14,10 +14,11 @@ Example usages:
 """
 
 import numpy as np
+from unyt import Mpc, Msun, km, s
 
 from synthesizer import exceptions
 from synthesizer.particle.particles import Particles
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.warnings import warn
 
@@ -67,6 +68,15 @@ class Gas(Particles):
     smoothing_lengths = Quantity()
     dust_masses = Quantity()
 
+    @accepts(
+        masses=Msun.in_base("galactic"),
+        coordinates=Mpc,
+        velocities=km / s,
+        smoothing_lengths=Mpc,
+        softening_length=Mpc,
+        dust_masses=Msun.in_base("galactic"),
+        centre=Mpc,
+    )
     def __init__(
         self,
         masses,

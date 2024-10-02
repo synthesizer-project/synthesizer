@@ -24,7 +24,7 @@ import os
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Hz, angstrom, erg, s
+from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components import StarsComponent
@@ -33,7 +33,7 @@ from synthesizer.line import Line
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.plt import single_histxy
 from synthesizer.warnings import deprecated, warn
@@ -107,6 +107,16 @@ class Stars(Particles, StarsComponent):
     current_masses = Quantity()
     smoothing_lengths = Quantity()
 
+    @accepts(
+        initial_masses=Msun.in_base("galactic"),
+        ages=Myr,
+        coordinates=Mpc,
+        velocities=km / s,
+        current_masses=Msun.in_base("galactic"),
+        smoothing_lengths=Mpc,
+        softening_length=Mpc,
+        centre=Mpc,
+    )
     def __init__(
         self,
         initial_masses,
@@ -893,7 +903,7 @@ class Stars(Particles, StarsComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
     def generate_particle_lnu(
         self,
@@ -1193,8 +1203,9 @@ class Stars(Particles, StarsComponent):
         if len(lines) == 1:
             return lines[0]
         else:
-            return Line(*lines)
+            return Line(combine_lines=lines)
 
+    @accepts(young=yr, old=yr)
     def _get_masks(self, young=None, old=None):
         """
         Get masks for which components we are handling, if a sub-component
@@ -1222,16 +1233,17 @@ class Stars(Particles, StarsComponent):
         # Get the appropriate mask
         if young:
             # Mask out old stars
-            s = self.log10ages <= np.log10(young.to("yr"))
+            s = self.log10ages <= np.log10(young)
         elif old:
             # Mask out young stars
-            s = self.log10ages > np.log10(old.to("yr"))
+            s = self.log10ages > np.log10(old)
         else:
             # Nothing to mask out
             s = np.ones(self.nparticles, dtype=bool)
 
         return s
 
+    @accepts(stellar_mass=Msun.in_base("galactic"))
     def renormalise_mass(self, stellar_mass):
         """
         Renormalises and overwrites the initial masses. Useful when rescaling
@@ -1275,6 +1287,11 @@ class Stars(Particles, StarsComponent):
 
         return (low_lim_g + (upp_lim_g - low_lim_g) * rand) ** (1 / g)
 
+    @accepts(
+        min_age=yr,
+        min_mass=Msun.in_base("galactic"),
+        max_mass=Msun.in_base("galactic"),
+    )
     def resample_young_stars(
         self,
         min_age=1e8,
@@ -1772,12 +1789,13 @@ class Stars(Particles, StarsComponent):
         return lines
 
 
+@accepts(initial_mass=Msun.in_base("galactic"))
 def sample_sfhz(
     sfzh,
     log10ages,
     log10metallicities,
     nstar,
-    initial_mass=1,
+    initial_mass=1 * Msun,
     **kwargs,
 ):
     """
@@ -1829,7 +1847,7 @@ def sample_sfhz(
     # Instantiate Stars object with extra keyword arguments
     stars = Stars(
         initial_mass * np.ones(nstar),
-        10**log10ages,
+        10**log10ages * yr,
         10**log10metallicities,
         **kwargs,
     )

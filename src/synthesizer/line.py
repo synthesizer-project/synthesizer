@@ -16,11 +16,11 @@ in plots etc.
 """
 
 import numpy as np
-from unyt import Angstrom, cm, unyt_array, unyt_quantity
+from unyt import Angstrom, Hz, angstrom, cm, erg, s
 
 from synthesizer import exceptions, line_ratios
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
 from synthesizer.warnings import deprecation
 
 
@@ -577,21 +577,23 @@ class Line:
     luminosity = Quantity()
     flux = Quantity()
 
+    @accepts(
+        wavelength=angstrom,
+        luminosity=erg / s,
+        continuum=erg / s / Hz,
+    )
     def __init__(
         self,
-        *lines,
         line_id=None,
         wavelength=None,
         luminosity=None,
         continuum=None,
+        combine_lines=(),
     ):
         """
         Initialise the Line object.
 
         Args:
-            lines (Line)
-                Any number of Line objects to combine into a single Line. If
-                these are passed all other kwargs are ignored.
             line_id (str)
                 The id of the line. If creating a >=doublet the line id will be
                 derived while combining lines. This will not be used if lines
@@ -605,6 +607,9 @@ class Line:
             continuum (unyt_quantity)
                 The continuum at the line. This will not be used if
                 lines are passed.
+            combine_lines (tuple, Line)
+                Any number of Line objects to combine into a single Line. If
+                these are passed all other kwargs are ignored.
         """
         # Flag deprecation of list and tuple ids
         if isinstance(line_id, (list, tuple)):
@@ -616,7 +621,7 @@ class Line:
         # We need to check which version of the inputs we've been given, 3
         # values describing a single line or a set of lines to combine?
         if (
-            len(lines) == 0
+            len(combine_lines) == 0
             and line_id is not None
             and wavelength is not None
             and luminosity is not None
@@ -628,8 +633,8 @@ class Line:
                 luminosity,
                 continuum,
             )
-        elif len(lines) > 0:
-            self._make_line_from_lines(*lines)
+        elif len(combine_lines) > 0:
+            self._make_line_from_lines(combine_lines)
         else:
             raise exceptions.InconsistentArguments(
                 "A Line needs either its wavelength, luminosity, and continuum"
@@ -638,7 +643,9 @@ class Line:
 
         # Initialise an attribute to hold any individual lines used to make
         # this one.
-        self.individual_lines = lines if len(lines) > 0 else [self]
+        self.individual_lines = (
+            combine_lines if len(combine_lines) > 0 else [self]
+        )
 
         # Initialise the flux (populated by get_flux when called)
         self.flux = None
@@ -659,6 +666,11 @@ class Line:
         """Return the equivalent width."""
         return self.luminosity / self.continuum_llam
 
+    @accepts(
+        wavelength=angstrom,
+        luminosity=erg / s,
+        continuum=erg / s / Hz,
+    )
     def _make_line_from_values(
         self, line_id, wavelength, luminosity, continuum
     ):
@@ -675,35 +687,18 @@ class Line:
             continuum (unyt_quantity)
                 The continuum of the line.
         """
-        # Ensure we have units
-        if not isinstance(wavelength, (unyt_quantity, unyt_array)):
-            raise exceptions.MissingUnits(
-                "Wavelength, luminosity, and continuum must all have units. "
-                "Wavelength units missing..."
-            )
-        if not isinstance(luminosity, (unyt_quantity, unyt_array)):
-            raise exceptions.MissingUnits(
-                "Wavelength, luminosity, and continuum must all have units. "
-                "Luminosity units missing..."
-            )
-        if not isinstance(continuum, (unyt_quantity, unyt_array)):
-            raise exceptions.MissingUnits(
-                "Wavelength, luminosity, and continuum must all have units. "
-                "Continuum units missing..."
-            )
-
         # Set the line attributes
         self.wavelength = wavelength
         self.luminosity = luminosity
         self.continuum = continuum
         self.id = get_line_id(line_id)
 
-    def _make_line_from_lines(self, *lines):
+    def _make_line_from_lines(self, lines):
         """
         Create a line by combining other lines.
 
         Args:
-            lines (Line)
+            lines (tuple, Line)
                 Any number of Line objects to combine into a single line.
         """
         # Ensure we've been handed lines
@@ -716,9 +711,9 @@ class Line:
 
         # Combine the Line attributes (units are guaranteed here since the
         # quantities are coming directly from a Line)
-        self.wavelength = np.mean([line._wavelength for line in lines], axis=0)
-        self.luminosity = np.sum([line._luminosity for line in lines], axis=0)
-        self.continuum = np.sum([line._continuum for line in lines], axis=0)
+        self.wavelength = np.mean([line.wavelength for line in lines], axis=0)
+        self.luminosity = np.sum([line.luminosity for line in lines], axis=0)
+        self.continuum = np.sum([line.continuum for line in lines], axis=0)
 
         # Derive the line id
         self.id = get_line_id([line.id for line in lines])
@@ -782,7 +777,7 @@ class Line:
             (Line)
                 New instance of Line containing both lines.
         """
-        return Line(self, second_line)
+        return Line(combine_lines=(self, second_line))
 
     def sum(self):
         """
@@ -821,7 +816,7 @@ class Line:
 
         return self.flux
 
-    def combine(self, lines):
+    def combine(self, *lines):
         """
         Combine this line with an arbitrary number of other lines.
 
@@ -845,7 +840,7 @@ class Line:
                 "continuum"
             )
 
-        return Line(self, *lines)
+        return Line(self, combine_lines=lines)
 
     def apply_attenuation(
         self,
@@ -898,7 +893,7 @@ class Line:
                 )
 
         # Compute the transmission
-        transmission = dust_curve.get_transmission(tau_v, self._wavelength)
+        transmission = dust_curve.get_transmission(tau_v, self.wavelength)
 
         # Apply the transmision
         att_lum = self.luminosity

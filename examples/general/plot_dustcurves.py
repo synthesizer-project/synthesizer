@@ -8,7 +8,7 @@ Plot dust curves
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Angstrom
+from unyt import Angstrom, um
 
 from synthesizer.emission_models import attenuation
 
@@ -27,7 +27,12 @@ models = [
 
 params = [
     {"slope": -1.0},
-    {"slope": 0.0, "cent_lam": 0.2175, "ampl": 1.26, "gamma": 0.0356},
+    {
+        "slope": 0.0,
+        "cent_lam": 0.2175 * um,
+        "ampl": 1.26,
+        "gamma": 0.0356 * um,
+    },
     {},
     {"model": "MW"},
     {"model": "SMC"},

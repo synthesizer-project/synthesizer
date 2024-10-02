@@ -10,7 +10,7 @@ Example for generating a rest-frame physical scale image. This example will:
 """
 
 import matplotlib.pyplot as plt
-from unyt import Myr, kpc
+from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import ReprocessedEmission
 from synthesizer.filters import UVJ
@@ -46,7 +46,7 @@ if __name__ == "__main__":
         grid.metallicity,
         sf_hist=sfh,
         metal_dist=metal_dist,
-        initial_mass=10**9,
+        initial_mass=10**9 * Msun,
         morphology=morph,
     )
 
