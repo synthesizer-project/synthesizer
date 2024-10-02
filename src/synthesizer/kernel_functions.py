@@ -21,7 +21,7 @@ class Kernel:
     line-of-sight.
     """
 
-    def __init__(self, name="sph_anarchy", binsize=1000):
+    def __init__(self, name="sph_anarchy", binsize=10000):
         self.name = name
         self.binsize = binsize
 

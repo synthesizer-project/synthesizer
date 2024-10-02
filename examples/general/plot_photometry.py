@@ -15,12 +15,15 @@ including photometry. This example will:
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 from astropy.cosmology import Planck18 as cosmo
+from unyt import Msun, Myr
+
+from synthesizer.emission_models import PacmanEmission
+from synthesizer.emission_models.attenuation import PowerLaw
+from synthesizer.emission_models.attenuation.igm import Madau96
 from synthesizer.filters import FilterCollection
 from synthesizer.grid import Grid
-from synthesizer.igm import Madau96
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr
 
 if __name__ == "__main__":
     # Get the location of this script, __file__ is the absolute path of this
@@ -32,13 +35,22 @@ if __name__ == "__main__":
     grid_dir = "../../tests/test_grid/"
     grid = Grid(grid_name, grid_dir=grid_dir)
 
+    # Define the emission model
+    model = PacmanEmission(
+        grid,
+        tau_v=0.1,
+        dust_curve=PowerLaw(slope=-1),
+        fesc=0.5,
+        fesc_ly_alpha=0.5,
+    )
+
     # define the parameters of the star formation and metal
     # enrichment histories
-    sfh_p = {"duration": 10 * Myr}
+    sfh_p = {"max_age": 10 * Myr}
     Z_p = {
         "log10metallicity": -2.0
     }  # can also use linear metallicity e.g. {'Z': 0.01}
-    stellar_mass = 1e9
+    stellar_mass = 1e9 * Msun
 
     # define the functional form of the star formation and metal
     # enrichment histories
@@ -85,9 +97,7 @@ if __name__ == "__main__":
     seds = {}
     for z in zs:
         # Generate spectra using pacman model (complex)
-        seds[z] = galaxy.stars.get_spectra_pacman(
-            grid, fesc=0.5, fesc_LyA=0.5, tau_v=0.1
-        )
+        seds[z] = galaxy.stars.get_spectra(model)
 
         # Generate observed frame spectra
         seds[z].get_fnu(cosmo, z, igm=Madau96)

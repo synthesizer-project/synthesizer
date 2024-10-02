@@ -10,10 +10,12 @@ from a parametric galaxy
 
 import matplotlib.pyplot as plt
 import numpy as np
+from unyt import Msun, Myr, angstrom
+
+from synthesizer.emission_models import IncidentEmission, ReprocessedEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
-from unyt import Myr
 
 
 def set_index():
@@ -24,7 +26,7 @@ def set_index():
     A pseudo-continuum is defined, made up of a blue and red shifted window.
 
     Returns:
-        tuple: A tuple containing the following lists:
+        tuple: A tuple containing the following list:
             - index (int): List of UV indices.
             - index_window (int): List of absorption window bounds.
             - blue_window (int): List of blue shifted window bounds.
@@ -88,14 +90,18 @@ def equivalent_width(grids, uv_index, index_window, blue_window, red_window):
     # enrichment histories.
     grid = Grid(grids, grid_dir=grid_dir)
     Z = grid.metallicity
-    stellar_mass = 1e8
+    stellar_mass = 1e8 * Msun
 
     # -- Calculate the equivalent width for each defined index
     for i, index in enumerate(uv_index):
         eqw = []
 
         # Compute each index for each metallicity in the grid.
-        feature, blue, red = index_window[i], blue_window[i], red_window[i]
+        feature, blue, red = (
+            index_window[i] * angstrom,
+            blue_window[i] * angstrom,
+            red_window[i] * angstrom,
+        )
 
         for k in range(0, len(Z)):
             eqw.append(
@@ -168,12 +174,15 @@ def measure_equivalent_width(
     Raises:
         ValueError: If mode is invalid.
     """
+    # Get the emission model
+    incident_model = IncidentEmission(grid)
+    model = ReprocessedEmission(grid, related_models=[incident_model])
 
     stellar_mass = smass
 
     Z_p = {"metallicity": Z}
     metal_dist = ZDist.DeltaConstant(**Z_p)  # constant metallicity
-    sfh_p = {"duration": 100 * Myr}
+    sfh_p = {"max_age": 100 * Myr}
     sfh = SFH.Constant(**sfh_p)  # constant star formation
 
     # --- get 2D star formation and metal enrichment history for the
@@ -189,7 +198,7 @@ def measure_equivalent_width(
     # --- create a galaxy object
     galaxy = Galaxy(sfzh)
 
-    galaxy.stars.get_spectra_reprocessed(grid, fesc=0.0)
+    galaxy.stars.get_spectra(model)
 
     # --- generate spectra
     if mode == 0:

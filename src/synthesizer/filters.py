@@ -5,10 +5,7 @@ described by a Filter object and Filters grouped into a FilterCollection.
 These objects house all the functionality for working with filters with and
 without a grid object.
 
-Typical usage examples where trans is a transmission curve array, lams is a
-wavelength array, fs is a list of SVO database filter codes, tophats is a
-dictionary defining top hot filters and generics is a dictionary of
-transmission curves:
+Example usage::
 
     filt = Filter("generic/filter.1", transmission=trans, new_lam=lams)
     filt = Filter("top_hat/filter.1", lam_min=3000, lam_max=5500)
@@ -29,16 +26,17 @@ from urllib.error import URLError
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy import integrate
 from scipy.interpolate import interp1d
-from unyt import Angstrom, Hz, c, unyt_array, unyt_quantity
+from unyt import Hz, angstrom, c, unyt_array, unyt_quantity
 
-import synthesizer.exceptions as exceptions
+from synthesizer import exceptions
 from synthesizer._version import __version__
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
+from synthesizer.utils.integrate import integrate_last_axis
 from synthesizer.warnings import warn
 
 
+@accepts(new_lam=angstrom)
 def UVJ(new_lam=None):
     """
     Helper function to produce a FilterCollection containing
@@ -56,9 +54,9 @@ def UVJ(new_lam=None):
 
     # Define the UVJ filters dictionary.
     tophat_dict = {
-        "U": {"lam_eff": 3650, "lam_fwhm": 660},
-        "V": {"lam_eff": 5510, "lam_fwhm": 880},
-        "J": {"lam_eff": 12200, "lam_fwhm": 2130},
+        "U": {"lam_eff": 3650 * angstrom, "lam_fwhm": 660 * angstrom},
+        "V": {"lam_eff": 5510 * angstrom, "lam_fwhm": 880 * angstrom},
+        "J": {"lam_eff": 12200 * angstrom, "lam_fwhm": 2130 * angstrom},
     }
 
     return FilterCollection(tophat_dict=tophat_dict, new_lam=new_lam)
@@ -106,6 +104,8 @@ class FilterCollection:
     mean_lams = Quantity()
     pivot_lams = Quantity()
 
+    accepts(new_lam=angstrom)
+
     def __init__(
         self,
         filter_codes=None,
@@ -115,6 +115,7 @@ class FilterCollection:
         path=None,
         new_lam=None,
         fill_gaps=True,
+        verbose=True,
     ):
         """
         Intialise the FilterCollection.
@@ -214,13 +215,13 @@ class FilterCollection:
             # If we weren't passed a wavelength grid we need to resample the
             # filters onto a universal wavelength grid.
             if self.lam is None:
-                self.resample_filters(fill_gaps=fill_gaps)
+                self.resample_filters(fill_gaps=fill_gaps, verbose=verbose)
 
         # If we were passed a wavelength array we need to resample on to
         # it. NOTE: this can also be done for a loaded FilterCollection
         # so we just do it here outside the logic
         if new_lam is not None:
-            self.resample_filters(new_lam)
+            self.resample_filters(new_lam, verbose=verbose)
 
         # Calculate mean and pivot wavelengths for each filter
         self.mean_lams = self.calc_mean_lams()
@@ -639,6 +640,7 @@ class FilterCollection:
 
         return new_lam
 
+    @accepts(new_lam=angstrom)
     def resample_filters(
         self, new_lam=None, lam_size=None, fill_gaps=False, verbose=True
     ):
@@ -833,8 +835,11 @@ class FilterCollection:
 
         return mean_lams
 
+    @accepts(rest_frame_lam=angstrom)
     def find_filter(self, rest_frame_lam, redshift=None, method="pivot"):
         """
+        Return the filter containing the passed rest frame wavelength.
+
         Takes a rest frame target wavelength and returns the filter that probes
         that wavelength.
 
@@ -851,7 +856,7 @@ class FilterCollection:
                                  wavelength is returned.
 
         Args:
-            rest_frame_lam (float):
+            rest_frame_lam (unyt_quantity):
                 The wavelength to find the nearest filter to.
             redshift (float):
                 The redshift of the observation. None for rest_frame, defaults
@@ -870,7 +875,6 @@ class FilterCollection:
                 If the passed wavelength is out of range of any of the filters
                 then an error is thrown.
         """
-
         # Are we working in a shifted frame or not?
         if redshift is not None:
             # Get the shifted wavelength
@@ -882,24 +886,18 @@ class FilterCollection:
 
         # Which method are we using?
         if method == "pivot":
-            # Calculate each filters pivot wavelength
-            pivot_lams = self._pivot_lams
-
             # Find the index of the closest pivot wavelength to lam
-            ind = np.argmin(np.abs(pivot_lams - lam))
+            ind = np.argmin(np.abs(self.pivot_lams - lam))
 
         elif method == "mean":
-            # Calculate each filters mean wavelength
-            mean_lams = self._mean_lams
-
             # Find the index of the closest mean wavelength to lam
-            ind = np.argmin(np.abs(mean_lams - lam))
+            ind = np.argmin(np.abs(self.mean_lams - lam))
 
         elif method == "transmission":
             # Compute the transmission in each filter at lam
             transmissions = np.zeros(len(self))
             for ind, f in enumerate(self):
-                transmissions[ind] = f.t[np.argmin(np.abs(self._lam - lam))]
+                transmissions[ind] = f.t[np.argmin(np.abs(self.lam - lam))]
 
             # Find the index of the filter with the peak transmission
             ind = np.argmax(transmissions)
@@ -915,7 +913,7 @@ class FilterCollection:
         f = self.filters[fcode]
 
         # Get the transmission
-        transmission = f.t[np.argmin(np.abs(self._lam - lam))]
+        transmission = f.t[np.argmin(np.abs(self.lam - lam))]
 
         # Ensure the transmission is non-zero at the desired wavelength
         if transmission == 0:
@@ -1095,6 +1093,13 @@ class Filter:
     original_lam = Quantity()
     original_nu = Quantity()
 
+    @accepts(
+        lam_min=angstrom,
+        lam_max=angstrom,
+        lam_eff=angstrom,
+        lam_fwhm=angstrom,
+        new_lam=angstrom,
+    )
     def __init__(
         self,
         filter_code,
@@ -1454,6 +1459,7 @@ class Filter:
             self.lam = self.original_lam
             self.t = self.original_t
 
+    @accepts(new_lam=angstrom)
     def _interpolate_wavelength(self, new_lam=None):
         """
         Interpolates a filter transmission curve onto the Filter's wavelength
@@ -1514,6 +1520,8 @@ class Filter:
         lam=None,
         nu=None,
         verbose=True,
+        nthreads=1,
+        integration_method="trapz",
     ):
         """
         Apply the transmission curve to any array.
@@ -1542,6 +1550,12 @@ class Filter:
                 provided.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use in the integration. If -1 then
+                all available threads are used. Defaults to 1.
+            integration_method (str)
+                The method to use in the integration. Can be either "trapz"
+                or "simps". Defaults to "trapz".
 
         Returns:
             float
@@ -1552,6 +1566,9 @@ class Filter:
             ValueError
                 If the shape of the transmission and wavelength array differ
                 the convolution cannot be done.
+            InconsistentArguments
+                If `integration_method` is an incompatible option an error
+                is raised.
         """
         # Initialise the xs were about to set and use
         xs = None
@@ -1571,10 +1588,10 @@ class Filter:
 
             # Ensure the passed wavelengths have units
             if not isinstance(lam, unyt_array):
-                lam *= Angstrom
+                lam *= angstrom
 
             # Use the passed wavelength and original lam
-            xs = lam.to(Angstrom).value
+            xs = lam.to(angstrom).value
             original_xs = self._original_lam
 
         elif nu is not None:
@@ -1626,15 +1643,31 @@ class Filter:
         xs_in_band = xs[in_band]
         t_in_band = t[in_band]
 
+        # Warn and exit if there are no array elements in this band
+        if arr_in_band.size == 0:
+            warn(f"{self.filter_code} outside of emission array.")
+            return 0 if arr.ndim == 1 else np.zeros(arr.shape[0])
+
         # Multiply the array by the filter transmission curve
         transmission = arr_in_band * t_in_band
 
+        # Ensure we actually have some transmission in this band, no point
+        # in calling the C extensions if not
+        if np.sum(transmission) == 0:
+            return 0 if arr.ndim == 1 else np.zeros(arr.shape[0])
+
         # Sum over the final axis to "collect" transmission in this filer
-        sum_per_x = integrate.trapezoid(
-            transmission / xs_in_band, xs_in_band, axis=-1
+        sum_per_x = integrate_last_axis(
+            xs_in_band,
+            transmission / xs_in_band,
+            nthreads=nthreads,
+            method=integration_method,
         )
-        sum_den = integrate.trapezoid(
-            t_in_band / xs_in_band, xs_in_band, axis=-1
+        sum_den = integrate_last_axis(
+            xs_in_band,
+            t_in_band / xs_in_band,
+            nthreads=nthreads,
+            method=integration_method,
         )
         sum_in_band = sum_per_x / sum_den
 

@@ -12,8 +12,8 @@ In the documentation below we demonstrate producing spectral data cubes and phot
 .. toctree::
    :maxdepth: 2
 
-   parametric_data_cube
-   particle_data_cube
-   parametric_imaging
    particle_imaging
+   parametric_imaging
+   particle_data_cube
+   parametric_data_cube
    property_maps

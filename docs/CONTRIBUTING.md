@@ -99,9 +99,11 @@ Example toctree:
 
 ### Adding example scripts
 
-The `examples/` top level directory contains a number of self contained example scripts (python, `.py`) for particular use cases that may not belong in the main documentation, but are still useful for many users. We use the [sphinx-gallery](https://sphinx-gallery.github.io/stable/index.html) extension to build a gallery of our examples in the documentation.
+The `examples/` top level directory contains a number of self contained example scripts (python, `.py`) for particular use cases that may not belong in the main documentation, but are still useful for many users. We use the [sphinx-gallery](https://sphinx-gallery.github.io/stable/index.html) extension to build a gallery of our examples in the documentation. A helpful side effect of this is that we can use the examples suite as a further test suite of more advanced use cases (though this requires certain conventions to be followed, see below)
 
-**Important**: each script (`.py`) should have a top level docstring written in reST, with a header. Examples that do not will fail the automated build process. Further details are provided [here](https://sphinx-gallery.github.io/stable/syntax.html). For example:
+**Important**: If an example is named `plot_*.py` then `sphinx-gallery` will attempt to run the script and use any images generated in the gallery thumbnail. Images should be generated using `plt.show()` and not saved to disk. If examples are not preceded with `plot_` then they will **not** be run when compiling the documentation, and any errors will not be caught.
+
+Each script (`.py`) should have a top level docstring written in reST, with a header. Examples that do not will fail the automated build process. Further details are provided [here](https://sphinx-gallery.github.io/stable/syntax.html). For example:
 
     """
     "This" is my example-script
@@ -113,4 +115,16 @@ The `examples/` top level directory contains a number of self contained example 
 
 Subfolders of examples should contain a `README.rst` with a section heading (please follow the template in other subfolders).
 
-If an example is named `plot_*.py` then `sphinx-gallery` will attempt to run the script and use any images generated in the gallery thumbnail. Images should be generated using `plt.show()` and not saved to disk.
+## Debugging C development
+
+If you are writing C extensions for synthesizer you can include debugging checks and optionally activate them using the `WITH_DEBUGGING_CHECKS` preprocessor directive. To use this wrap the debugging code in an ifdef:
+
+```
+#ifdef WITH_DEBUGGING_CHECKS
+debugging code...
+#endif
+```
+
+To activate debugging checks simply install with `WITH_DEBUGGING_CHECKS=1 pip install .`.
+
+It is also advisable to turn warnings into errors by including `-Werror` in the CFLAGS, however, the Python source code itself will fail with this turned on for some compilers because it does produce some warnings (observed with gcc).

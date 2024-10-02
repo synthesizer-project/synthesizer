@@ -13,15 +13,32 @@ Example usage:
 """
 
 import numpy as np
-from unyt import Angstrom, Hz, c, cm, erg, nJy, pc, s, unyt_array
+from unyt import (
+    Hz,
+    angstrom,
+    arcsecond,
+    c,
+    cm,
+    erg,
+    kpc,
+    nJy,
+    pc,
+    s,
+)
 
-from synthesizer import exceptions
-from synthesizer.utils import has_units
+from synthesizer.units import accepts
 
 
+@accepts(flux=erg / s / cm**2)
 def flux_to_luminosity(flux, cosmo, redshift):
     """
-    Converts flux to luminosity in erg / s.
+    Convert flux to luminosity.
+
+    The conversion is done using the formula:
+
+            L = F * 4 * pi * D_L**2 / (1 + z)
+
+    The result will be in units of erg / s.
 
     Args:
         flux (unyt_quantity/unyt_array)
@@ -40,11 +57,6 @@ def flux_to_luminosity(flux, cosmo, redshift):
         IncorrectUnits
             If units are missing an error is raised.
     """
-
-    # Ensure we have units
-    if not has_units(flux):
-        raise exceptions.IncorrectUnits("Flux must be given with unyt units.")
-
     # Calculate the luminosity distance (need to convert from astropy to unyt)
     lum_dist = cosmo.luminosity_distance(redshift).to("cm").value * cm
 
@@ -57,10 +69,16 @@ def flux_to_luminosity(flux, cosmo, redshift):
     return lum.to(erg / s)
 
 
+@accepts(fnu=nJy)
 def fnu_to_lnu(fnu, cosmo, redshift):
     """
-    Converts spectral flux density to spectral luminosity density
-    in erg / s / Hz.
+    Convert spectral flux density to spectral luminosity density.
+
+    The conversion is done using the formula:
+
+            L_nu = F_nu * 4 * pi * D_L**2 / (1 + z)
+
+    The result will be in units of erg / s / Hz.
 
     Args:
         fnu (unyt_quantity/unyt_array)
@@ -79,11 +97,6 @@ def fnu_to_lnu(fnu, cosmo, redshift):
         IncorrectUnits
             If units are missing an error is raised.
     """
-
-    # Ensure we have units
-    if not has_units(fnu):
-        raise exceptions.IncorrectUnits("fnu must be given with unyt units.")
-
     # Calculate the luminosity distance (need to convert from astropy to unyt)
     lum_dist = cosmo.luminosity_distance(redshift).to("cm").value * cm
 
@@ -96,9 +109,51 @@ def fnu_to_lnu(fnu, cosmo, redshift):
     return lnu.to(erg / s / Hz)
 
 
+@accepts(lnu=erg / s / Hz)
+def lnu_to_fnu(lnu, cosmo, redshift):
+    """
+    Convert spectral luminosity density to spectral flux density.
+
+    The conversion is done using the formula:
+
+            F_nu = L_nu * (1 + z) / 4 / pi / D_L**2
+
+    The result will be in units of nJy.
+
+    Args:
+        lnu (unyt_quantity/unyt_array)
+            The spectral luminosity density to be converted to flux, can
+            either be a singular value or array.
+        cosmo (astropy.cosmology)
+            The cosmology object used to calculate luminosity distance.
+        redshift (float)
+            The redshift of the rest frame.
+
+    Returns:
+        unyt_quantity/unyt_array
+            The converted spectral flux density.
+
+    Raises:
+        IncorrectUnits
+            If units are missing an error is raised.
+    """
+    # Calculate the luminosity distance (need to convert from astropy to unyt)
+    lum_dist = cosmo.luminosity_distance(redshift).to("cm").value * cm
+
+    # Calculate the flux in interim units
+    fnu = lnu * (1 + redshift) / 4 / np.pi / lum_dist**2
+
+    return fnu.to(nJy)
+
+
+@accepts(fnu=nJy)
 def fnu_to_apparent_mag(fnu):
     """
-    Converts flux to apparent AB magnitude.
+    Convert flux to apparent AB magnitude.
+
+    The conversion is done using the formula:
+
+                m = -2.5 * log10(fnu / (10**9 * nJy)) + 8.9
 
     Args:
         flux (unyt_quantity/unyt_array)
@@ -112,17 +167,18 @@ def fnu_to_apparent_mag(fnu):
         IncorrectUnits
             If units are missing an error is raised.
     """
-
-    # Ensure we have units
-    if not has_units(fnu):
-        raise exceptions.IncorrectUnits("fnu must be given with unyt units.")
-
     return -2.5 * np.log10(fnu / (10**9 * nJy)) + 8.9
 
 
 def apparent_mag_to_fnu(app_mag):
     """
-    Converts apparent AB magnitude to flux.
+    Convert apparent AB magnitude to flux.
+
+    The conversion is done using the formula:
+
+                F_nu = 10**9 * 10**(-0.4 * (m - 8.9)) * nJy
+
+    The result will be in units of nJy.
 
     Args:
         app_mag (float)
@@ -134,14 +190,19 @@ def apparent_mag_to_fnu(app_mag):
             The flux.
 
     """
-
     return 10**9 * 10 ** (-0.4 * (app_mag - 8.9)) * nJy
 
 
+@accepts(lam=angstrom, llam=erg / s / angstrom)
 def llam_to_lnu(lam, llam):
     """
-    Converts spectral luminosity density in terms of wavelength (llam) to
-    spectral luminosity density in terms of frequency (lnu).
+    Convert spectral luminosity density per wavelength to per frequency.
+
+    The conversion is done using the formula:
+
+                L_nu = L_lam * lam**2 / c
+
+    The result will be in units of erg / s / Hz.
 
     Args:
         lam (unyt_quantity/unyt_array)
@@ -157,20 +218,19 @@ def llam_to_lnu(lam, llam):
         IncorrectUnits
             If units are missing an error is raised.
     """
-
-    # Ensure we have units
-    if not has_units(llam):
-        raise exceptions.IncorrectUnits("llam must be given with unyt units.")
-    if not has_units(lam):
-        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
-
     return (llam * lam**2 / c).to("erg / s / Hz")
 
 
+@accepts(lam=angstrom, lnu=erg / s / Hz)
 def lnu_to_llam(lam, lnu):
     """
-    Converts spectral luminoisty density in terms of frequency (lnu)
-    to luminoisty in terms of wavelength (llam).
+    Convert spectral luminoisty density per frequency to per wavelength.
+
+    The conversion is done using the formula:
+
+                    L_lam = L_nu * c / lam**2
+
+    The result will be in units of erg / s / A.
 
     Args:
         lam (unyt_quantity/unyt_array)
@@ -187,20 +247,19 @@ def lnu_to_llam(lam, lnu):
         IncorrectUnits
             If units are missing an error is raised.
     """
-
-    # Ensure we have units
-    if not has_units(lnu):
-        raise exceptions.IncorrectUnits("lnu must be given with unyt units.")
-    if not has_units(lam):
-        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
-
     return ((lnu * c) / lam**2).to("erg / s / angstrom")
 
 
+@accepts(lam=angstrom, flam=erg / s / cm**2 / angstrom)
 def flam_to_fnu(lam, flam):
     """
-    Converts spectral flux in terms of wavelength (f_lam) to spectral flux
-    in terms of frequency (f_nu).
+    Convert spectral flux density per wavelength to per frequency.
+
+    The conversion is done using the formula:
+
+                    F_nu = F_lam * lam**2 / c
+
+    The result will be in units of nJy.
 
     Args:
         lam (unyt_quantity/unyt_array)
@@ -216,20 +275,19 @@ def flam_to_fnu(lam, flam):
         IncorrectUnits
             If units are missing an error is raised.
     """
-
-    # Ensure we have units
-    if not has_units(flam):
-        raise exceptions.IncorrectUnits("flam must be given with unyt units.")
-    if not has_units(lam):
-        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
-
     return (flam * lam**2 / c).to("nJy")
 
 
+@accepts(lam=angstrom, fnu=nJy)
 def fnu_to_flam(lam, fnu):
     """
-    Converts spectral flux density in terms of frequency (f_nu)
-    to flux in terms of wavelength (flam).
+    Convert spectral flux density per frequency to per wavelength.
+
+    The conversion is done using the formula:
+
+                    F_lam = F_nu * c / lam**2
+
+    The result will be in units of erg / s / A.
 
     Args:
         lam (unyt_quantity/unyt_array)
@@ -246,18 +304,18 @@ def fnu_to_flam(lam, fnu):
         IncorrectUnits
             If units are missing an error is raised.
     """
-
-    # Ensure we have units
-    if not has_units(fnu):
-        raise exceptions.IncorrectUnits("fnu must be given with unyt units.")
-    if not has_units(lam):
-        raise exceptions.IncorrectUnits("lam must be given with unyt units.")
-
     return ((fnu * c) / lam**2).to("erg / s / angstrom / cm**2")
 
 
 def absolute_mag_to_lnu(ab_mag):
-    """Convert absolute magnitude (M) to luminosity.
+    """
+    Convert absolute magnitude (M) to luminosity.
+
+    The conversion is done using the formula:
+
+                    L_nu = 10**(-0.4 * (M + 48.6)) * dist_mod
+
+    The result will be in units of erg / s / Hz.
 
     Args:
         ab_mag (float)
@@ -267,15 +325,20 @@ def absolute_mag_to_lnu(ab_mag):
         unyt_quantity/unyt_array
             The luminosity in erg / s / Hz.
     """
-
     # Define the distance modulus at 10 pcs
     dist_mod = 4 * np.pi * (10 * pc).to("cm").value ** 2
 
     return 10 ** (-0.4 * (ab_mag + 48.6)) * dist_mod * erg / s / Hz
 
 
+@accepts(lnu=erg / s / Hz)
 def lnu_to_absolute_mag(lnu):
-    """Convert spectral luminosity density to absolute magnitude (M).
+    """
+    Convert spectral luminosity density to absolute magnitude (M).
+
+    The conversion is done using the formula:
+
+                    M = -2.5 * log10(L_nu / dist_mod / (erg / s / Hz)) - 48.6
 
     Args:
         unyt_quantity/unyt_array
@@ -289,11 +352,6 @@ def lnu_to_absolute_mag(lnu):
         IncorrectUnits
             If units are missing an error is raised.
     """
-
-    # Enusre we have units
-    if not has_units(lnu):
-        raise exceptions.IncorrectUnits("lnu must be given with unyt units.")
-
     # Define the distance modulus at 10 pcs
     dist_mod = 4 * np.pi * ((10 * pc).to("cm").value * cm) ** 2
 
@@ -303,9 +361,10 @@ def lnu_to_absolute_mag(lnu):
     return -2.5 * np.log10(lnu / dist_mod / (erg / s / Hz)) - 48.6
 
 
+@accepts(wavelength=angstrom)
 def vacuum_to_air(wavelength):
     """
-    A function for converting a vacuum wavelength into an air wavelength.
+    Convert a vacuum wavelength into an air wavelength.
 
     Arguments:
         wavelength (float or unyt_array)
@@ -315,15 +374,10 @@ def vacuum_to_air(wavelength):
         wavelength (unyt_array)
             A wavelength in vacuum.
     """
+    # Calculate wavelenegth squared for simplicty
+    wave2 = wavelength.to("angstrom").value ** 2.0
 
-    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
-    if not isinstance(wavelength, unyt_array):
-        wavelength *= Angstrom
-
-    # calculate wavelenegth squared for simplicty
-    wave2 = wavelength.to("Angstrom").value ** 2.0
-
-    # calcualte conversion factor
+    # Calcualte conversion factor
     conversion = (
         1.0 + 2.735182e-4 + 131.4182 / wave2 + 2.76249e8 / (wave2**2.0)
     )
@@ -331,9 +385,10 @@ def vacuum_to_air(wavelength):
     return wavelength / conversion
 
 
+@accepts(wavelength=angstrom)
 def air_to_vacuum(wavelength):
     """
-    A function for converting an air wavelength into a vacuum wavelength.
+    Convert an air wavelength into a vacuum wavelength.
 
     Arguments
         wavelength (float or unyt_array)
@@ -343,13 +398,8 @@ def air_to_vacuum(wavelength):
         wavelength (unyt_array)
             A wavelength in vacuum.
     """
-
-    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
-    if not isinstance(wavelength, unyt_array):
-        wavelength *= Angstrom
-
     # Convert to wavenumber squared
-    sigma2 = (1.0e4 / wavelength.to("Angstrom").value) ** 2.0
+    sigma2 = (1.0e4 / wavelength.to("angstrom").value) ** 2.0
 
     # Compute conversion factor
     conversion = (
@@ -362,9 +412,10 @@ def air_to_vacuum(wavelength):
     return wavelength * conversion
 
 
+@accepts(wavelength=angstrom)
 def standard_to_vacuum(wavelength):
     """
-    A function for converting a standard wavelength into a vacuum wavelength.
+    Convert a standard wavelength into a vacuum wavelength.
 
     Standard wavelengths are defined in vacuum at <2000A and air at >= 2000A.
 
@@ -376,23 +427,19 @@ def standard_to_vacuum(wavelength):
         wavelength (unyt_array)
             A wavelength in vacuum.
     """
-
-    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
-    if not isinstance(wavelength, unyt_array):
-        wavelength *= Angstrom
-
-    # if wavelength is < 2000A simply return since no change required.
-    if wavelength <= 2000.0 * Angstrom:
+    # If wavelength is < 2000A simply return since no change required.
+    if wavelength <= 2000.0 * angstrom:
         return wavelength
 
-    # otherwise conver to vacuum
+    # Otherwise, convert to vacuum
     else:
         return air_to_vacuum(wavelength)
 
 
+@accepts(wavelength=angstrom)
 def vacuum_to_standard(wavelength):
     """
-    A function for converting a vacuum wavelength into a standard wavelength.
+    Convert a vacuum wavelength into a standard wavelength.
 
     Standard wavelengths are defined in vacuum at <2000A and air at >= 2000A.
 
@@ -404,15 +451,112 @@ def vacuum_to_standard(wavelength):
         wavelength (unyt_array)
             A standard wavelength.
     """
-
-    # if wavelength is not a unyt_array conver to one assume unit is Anstrom.
-    if not isinstance(wavelength, unyt_array):
-        wavelength *= Angstrom
-
-    # if wavelength is < 2000A simply return since no change required.
-    if wavelength <= 2000.0 * Angstrom:
+    # If wavelength is < 2000A simply return since no change required.
+    if wavelength <= 2000.0 * angstrom:
         return wavelength
 
-    # otherwise conver to vacuum
+    # Otherwise, convert to vacuum
     else:
         return vacuum_to_air(wavelength)
+
+
+def attenuation_to_optical_depth(attenuation):
+    """
+    Convert attenuation to optical depth.
+
+    Args:
+        attenuation (float):
+            The attenuation to convert.
+
+    Return:
+        float
+            The converted optical depth.
+    """
+    return attenuation / (2.5 * np.log10(np.e))
+
+
+def optical_depth_to_attenuation(optical_depth):
+    """
+    Convert optical depth to attenuation.
+
+    Args:
+        optical depth (float):
+            The optical depth to convert.
+
+    Return:
+        float
+            The converted attenuation.
+    """
+    return 2.5 * np.log10(np.e) * optical_depth
+
+
+@accepts(lam=angstrom)
+def tau_lam_to_tau_v(dust_curve, tau_lam, lam):
+    """
+    Convert optical depth in any given band to v-band optical depth.
+
+    Args:
+        dust_curve (AttenuationBase):
+            The attenutation law to use.
+        tau_lam (float):
+            The optical depth to convert.
+        lam (unyt_quantity):
+            The wavelength at which tau_lam was calculated.
+
+    Return:
+        float
+            The converted optical depth.
+    """
+    # Convert to angstrom
+    lam = lam.to("angstrom")
+
+    tau_norm = dust_curve.get_tau(lam)
+    return tau_lam / tau_norm
+
+
+@accepts(spatial=kpc)
+def spatial_to_angular_at_z(spatial, cosmo, redshift):
+    """
+    Convert spatial distance to angular distance at a specified redshift.
+
+    Args:
+        spatial (unyt_quantity):
+            The spatial distance to convert.
+        cosmo (astropy.cosmology):
+            The cosmology object used to calculate angular diameter distance.
+        redshift (float):
+            The redshift of the source.
+
+    Returns:
+        unyt_quantity
+            The converted angular distance in arcseconds.
+    """
+    # Get the conversion factor
+    arcsec_per_kpc_at_z = (
+        cosmo.arcsec_per_kpc_proper(redshift).value * arcsecond / kpc
+    )
+    return spatial * arcsec_per_kpc_at_z
+
+
+@accepts(angular=arcsecond)
+def angular_to_spatial_at_z(angular, cosmo, redshift):
+    """
+    Convert angular distance to spatial distance at a specified redshift.
+
+    Args:
+        angular (unyt_quantity):
+            The angular distance to convert.
+        cosmo (astropy.cosmology):
+            The cosmology object used to calculate angular diameter distance.
+        redshift (float):
+            The redshift of the source.
+
+    Returns:
+        unyt_quantity
+            The converted spatial distance in kpc.
+    """
+    # Get the conversion factor
+    kpc_per_arcsec_at_z = (
+        1 / cosmo.arcsec_per_kpc_proper(redshift).value * kpc / arcsecond
+    )
+    return angular * kpc_per_arcsec_at_z

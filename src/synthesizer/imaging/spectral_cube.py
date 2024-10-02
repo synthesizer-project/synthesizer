@@ -8,7 +8,8 @@ particles/a density grid over the data cube.
 This file is part of the synthesizer package and is distributed under the
 terms of the MIT license. See the LICENSE.md file for details.
 
-Example usage:
+Example usage::
+
     # Create a data cube
     cube = SpectralCube(
         resolution=0.1,
@@ -38,7 +39,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
 
-import synthesizer.exceptions as exceptions
+from synthesizer import exceptions
 from synthesizer.units import Quantity
 
 
@@ -251,6 +252,7 @@ class SpectralCube:
         sed,
         coordinates=None,
         quantity="lnu",
+        nthreads=1,
     ):
         """
         Calculate a spectral data cube with no smoothing.
@@ -266,14 +268,17 @@ class SpectralCube:
             quantity (str):
                 The Sed attribute/quantity to sort into the data cube, i.e.
                 "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
+            nthreads (int):
+                The number of threads to use for the C extensions.
 
         Returns:
             array_like (float):
                 A 3D array containing particle spectra sorted into the data
                 cube. (npix[0], npix[1], lam.size)
         """
-        # Sample the spectra onto the wavelength grid
-        sed = sed.get_resampled_sed(new_lam=self.lam)
+        # Sample the spectra onto the wavelength grid if we need to
+        if not np.array_equal(self.lam, sed.lam):
+            sed = sed.get_resampled_sed(new_lam=self.lam)
 
         # Store the Sed and quantity
         self.sed = sed
@@ -317,6 +322,7 @@ class SpectralCube:
             self.npix[1],
             coordinates.shape[0],
             self.lam.size,
+            nthreads,
         )
 
         return self.arr * self.units
@@ -330,6 +336,7 @@ class SpectralCube:
         kernel_threshold=1,
         density_grid=None,
         quantity="lnu",
+        nthreads=1,
     ):
         """
         Calculate a spectral data cube with smoothing.
@@ -358,6 +365,9 @@ class SpectralCube:
             quantity (str):
                 The Sed attribute/quantity to sort into the data cube, i.e.
                 "lnu", "llam", "luminosity", "fnu", "flam" or "flux".
+            nthreads (int):
+                The number of threads to use for the C extensions. (particle
+                case only).
 
         Returns:
             array_like (float):
@@ -388,8 +398,9 @@ class SpectralCube:
                 "smoothing_lengths, and kernel arguments to be passed."
             )
 
-        # Sample the spectra onto the wavelength grid
-        sed = sed.get_resampled_sed(new_lam=self.lam)
+        # Sample the spectra onto the wavelength grid if we need to
+        if not np.array_equal(self.lam, sed.lam):
+            sed = sed.get_resampled_sed(new_lam=self.lam)
 
         # Store the Sed and quantity
         self.sed = sed
@@ -445,6 +456,7 @@ class SpectralCube:
             self.lam.size,
             kernel_threshold,
             kernel.size,
+            nthreads,
         )
 
         return self.arr * self.units

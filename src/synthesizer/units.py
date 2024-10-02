@@ -24,6 +24,8 @@ Example usage:
 
 """
 
+from functools import wraps
+
 from unyt import (
     Angstrom,
     Hz,
@@ -41,7 +43,9 @@ from unyt import (
     unyt_quantity,
     yr,
 )
+from unyt.exceptions import UnitConversionError
 
+from synthesizer import exceptions
 from synthesizer.warnings import warn
 
 # Define an importable dictionary with the default unit system
@@ -73,6 +77,7 @@ default_units = {
     "flam": erg / s / Angstrom / cm**2,
     "equivalent_width": Angstrom,
     "coordinates": Mpc,
+    "radii": Mpc,
     "smoothing_lengths": Mpc,
     "softening_length": Mpc,
     "velocities": km / s,
@@ -93,8 +98,9 @@ default_units = {
     "fov": Mpc,
     "orig_resolution": Mpc,
     "centre": Mpc,
-    "photo_luminosities": erg / s / Hz,
-    "photo_fluxes": erg / s / cm**2 / Hz,
+    "photo_lnu": erg / s / Hz,
+    "photo_fnu": erg / s / cm**2 / Hz,
+    "softening_lengths": Mpc,
 }
 
 
@@ -204,9 +210,9 @@ class Units(metaclass=UnitSingleton):
         flux (unyt.unit_object.Unit)
             "Rest frame" Spectral flux density (at 10 pc) unit.
 
-        photo_luminosities (unyt.unit_object.Unit)
+        photo_lnu (unyt.unit_object.Unit)
             Rest frame photometry unit.
-        photo_fluxes (unyt.unit_object.Unit)
+        photo_fnu (unyt.unit_object.Unit)
             Observer frame photometry unit.
 
         ew (unyt.unit_object.Unit)
@@ -214,6 +220,10 @@ class Units(metaclass=UnitSingleton):
 
         coordinates (unyt.unit_object.Unit)
             Particle coordinate unit.
+        centre (unyt.unit_object.Unit)
+            Galaxy/particle distribution centre unit.
+        radii (unyt.unit_object.Unit)
+            Particle radii unit.
         smoothing_lengths (unyt.unit_object.Unit)
             Particle smoothing length unit.
         softening_length (unyt.unit_object.Unit)
@@ -257,8 +267,9 @@ class Units(metaclass=UnitSingleton):
             Field of View unit.
         orig_resolution (unyt.unit_object.Unit)
             Original resolution (for resampling) unit.
-        centre (unyt.unit_object.Unit)
-            Centre of the image unit.
+
+        softening_lengths (unyt.unit_object.Unit)
+            Particle gravitational softening length unit.
     """
 
     def __init__(self, units=None, force=False):
@@ -276,7 +287,6 @@ class Units(metaclass=UnitSingleton):
             force (bool)
                 A flag for whether to force an update of the Units object.
         """
-
         # First define all possible units with their defaults
 
         # Wavelengths
@@ -316,14 +326,16 @@ class Units(metaclass=UnitSingleton):
         self.flux = erg / s / cm**2  # rest frame "flux" at 10 pc
 
         # Photometry
-        self.photo_luminosities = erg / s / Hz  # rest frame photometry
-        self.photo_fluxes = erg / s / cm**2 / Hz  # observer frame photometry
+        self.photo_lnu = erg / s / Hz  # rest frame photometry
+        self.photo_fnu = erg / s / cm**2 / Hz  # observer frame photometry
 
         # Equivalent width
         self.equivalent_width = Angstrom
 
         # Spatial quantities
         self.coordinates = Mpc
+        self.centre = Mpc
+        self.radii = Mpc
         self.smoothing_lengths = Mpc
         self.softening_length = Mpc
 
@@ -361,7 +373,9 @@ class Units(metaclass=UnitSingleton):
         self.resolution = Mpc
         self.fov = Mpc
         self.orig_resolution = Mpc
-        self.centre = Mpc
+
+        # Gravitational softening lengths
+        self.softening_lengths = Mpc
 
         # Do we have any modifications to the default unit system
         if units is not None:
@@ -371,9 +385,7 @@ class Units(metaclass=UnitSingleton):
                 setattr(self, key, units[key])
 
     def __str__(self):
-        """
-        Enables the printing of the current unit system.
-        """
+        """Enable printing of the current unit system."""
         out_str = "Unit System: \n"
         for key in default_units:
             out_str += (
@@ -471,3 +483,189 @@ class Quantity:
 
         # Set the attribute
         setattr(obj, self.private_name, value)
+
+
+def has_units(x):
+    """
+    Check whether the passed variable has units.
+
+    This will check the argument is a unyt_quanity or unyt_array.
+
+    Args:
+        x (generic variable)
+            The variables to check.
+
+    Returns:
+        bool
+            True if the variable has units, False otherwise.
+    """
+    # Do the check
+    if isinstance(x, (unyt_array, unyt_quantity)):
+        return True
+
+    return False
+
+
+def _check_arg(units, name, value):
+    """
+    Check the units of an argument.
+
+    This function is used to check the units of an argument passed to
+    a function. If the units are missing or incompatible an error will be
+    raised. If the units don't match the defined units in units then the values
+    will be converted to the correct units.
+
+    Args:
+        units (dict)
+            The dictionary of units defined in the accepts decorator.
+        name (str)
+            The name of the argument.
+        value (generic variable)
+            The value of the argument.
+
+    Returns:
+        generic variable
+            The value of the argument with the correct units.
+
+    Raises:
+        MissingUnits
+            If the argument is missing units.
+        IncorrectUnits
+            If the argument has incompatible units.
+    """
+    # If the argument is None just skip it, its an optional argument that
+    # hasn't been passed... or the user has somehow managed to pass None
+    # which is sufficently weird to cause an obvious error elsewhere
+    if value is None:
+        return None
+
+    # Early exit if the argument isn't in the units dictionary
+    if name not in units:
+        return value
+
+    # Handle the unyt_array/unyt_quantity cases
+    if isinstance(value, (unyt_array, unyt_quantity)):
+        # We know we have units but are they compatible?
+        if value.units != units[name]:
+            try:
+                return value.to(units[name])
+            except UnitConversionError:
+                raise exceptions.IncorrectUnits(
+                    f"{name} passed with incompatible units. "
+                    f"Expected {units[name]} (or equivalent) but "
+                    f"got {value.units}."
+                )
+        else:
+            # Otherwise the value is in the expected units
+            return value
+
+    # Handle the list/tuple case
+    elif isinstance(value, (list, tuple)):
+        # Ensure the value is mutable
+        converted = list(value)
+
+        # Loop over the elements of the argument checking
+        # they have units and those units are compatible
+        for j, v in enumerate(value):
+            # Are we missing units on the passed argument?
+            if not has_units(v):
+                raise exceptions.MissingUnits(
+                    f"{name} is missing units! Expected"
+                    f"to be in {units[name]} "
+                    "(or equivalent)."
+                )
+
+            # Convert to the expected units
+            elif v.units != units[name]:
+                try:
+                    converted.append(_check_arg(units, name, v))
+                except UnitConversionError:
+                    raise exceptions.IncorrectUnits(
+                        f"{name}@{j} passed with "
+                        "incompatible units. "
+                        f"Expected {units[name][j]}"
+                        " (or equivalent) but "
+                        f"got {v.units}."
+                    )
+            else:
+                # Otherwise the value is in the expected units
+                converted.append(v)
+
+        return converted
+
+    # If None of these were true then we haven't got units.
+    raise exceptions.MissingUnits(
+        f"{name} is missing units! Expected to "
+        f"be in {units[name]} (or equivalent)."
+    )
+
+
+def accepts(**units):
+    """
+    Check arguments passed to the wrapped function have compatible units.
+
+    This decorator will cross check any of the arguments passed to the wrapped
+    function with the units defined in this decorators kwargs. If units are
+    not compatible or are missing an error will be raised. If the units don't
+    match the defined units in units then the values will be converted to the
+    correct units.
+
+    This is inspired by the accepts decorator in the unyt package, but includes
+    Synthesizer specific errors and conversion functionality.
+
+    Args:
+        **units
+            The keyword arguments defined with this decorator. Each takes the
+            form of argument=unit_for_argument. In reality this is a
+            dictionary of the form {"variable": unyt.unit}.
+
+    Returns:
+        function
+            The wrapped function.
+    """
+
+    def check_accepts(func):
+        """
+        Check arguments passed to the wrapped function have compatible units.
+
+        Args:
+            func (function)
+                The function to be wrapped.
+
+        Returns:
+            function
+                The wrapped function.
+        """
+        arg_names = func.__code__.co_varnames
+
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            """
+            Handle all the arguments passed to the wrapped function.
+
+            Args:
+                *args
+                    The arguments passed to the wrapped function.
+                **kwargs
+                    The keyword arguments passed to the wrapped function.
+
+            Returns:
+                The result of the wrapped function.
+            """
+            # Convert the positional arguments to a list (it must be mutable
+            # for what comes next)
+            args = list(args)
+
+            # Check the positional arguments
+            for i, (name, value) in enumerate(zip(arg_names, args)):
+                args[i] = _check_arg(units, name, value)
+
+            # Check the keyword arguments
+            for name, value in kwargs.items():
+                kwargs[name] = _check_arg(units, name, value)
+
+            return func(*args, **kwargs)
+
+        return wrapped
+
+    return check_accepts

@@ -8,10 +8,12 @@
 import os
 import sys
 
+from synthesizer._version import __version__
+
 project = "synthesizer"
-copyright = "2024, Chris Lovell, Stephen Wilkins, Aswin Vijayan, Will Roper"
-author = "Chris Lovell, Stephen Wilkins, Aswin Vijayan, Will Roper"
-release = "0.3.0-beta"
+copyright = "2024, Chris Lovell, Will Roper, Aswin Vijayan, Stephen Wilkins"
+author = "Chris Lovell, Will Roper, Aswin Vijayan, Stephen Wilkins"
+release = __version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -38,6 +40,7 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_gallery.gen_gallery",
     "sphinx_toolbox.collapse",
+    "sphinx_copybutton",  # Add a copy button to code blocks
 ]
 
 sphinx_gallery_conf = {
@@ -47,13 +50,16 @@ sphinx_gallery_conf = {
     "nested_sections": True,
     # Directory where function/class granular galleries are stored
     "backreferences_dir": "_autosummary/backreferences",
-    # Modules for which function/class level galleries are created. In
-    # this case sphinx_gallery and numpy in a tuple of strings.
+    # Modules for which function/class level galleries are created
     "doc_module": ("synthesizer"),
-    #     # Regexes to match objects to exclude from implicit backreferences.
-    #     # The default option is an empty set, i.e. exclude nothing.
-    #     # To exclude everything, use: '.*'
-    #     # 'exclude_implicit_doc': {r'pyplot\.show'},
+    "abort_on_example_error": True,
+    # "show_memory": True,
+    # "recommender": {
+    #     "enable": True,
+    #     "n_examples": 5,
+    #     "min_df": 3,
+    #     "max_df": 0.9,
+    # },
 }
 
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
@@ -83,7 +89,7 @@ master_doc = "index"
 
 html_static_path = []
 
-html_logo = "synth.png"
+html_logo = "img/synthesizer_logo.png"
 
 # html_theme = 'sphinx_rtd_theme'
 html_theme = "furo"

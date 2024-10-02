@@ -6,10 +6,12 @@ A demonstration of filter and filter collections creation and usage.
 """
 
 import numpy as np
+from unyt import angstrom
+
 from synthesizer.filters import UVJ, Filter, FilterCollection
 
 # Define some wavelengths (in A) over which we want to define our filters
-lams = np.linspace(2000, 55000, 1000)
+lams = np.linspace(2000, 55000, 1000) * angstrom
 
 # Define an individual filter from SVO.
 filt = Filter("JWST/NIRCam.F200W", new_lam=lams)
@@ -25,9 +27,9 @@ fc1 = FilterCollection(filter_codes=fs, new_lam=lams)
 # ... or a mixture assuming the wavelengths are in the same unit system.
 fs = [f"JWST/NIRCam.{f}" for f in ["F090W", "F250M"]]
 tophats = {
-    "U": {"lam_eff": 3650, "lam_fwhm": 660},
-    "V": {"lam_eff": 5510, "lam_fwhm": 880},
-    "J": {"lam_eff": 12200, "lam_fwhm": 2130},
+    "U": {"lam_eff": 3650 * angstrom, "lam_fwhm": 660 * angstrom},
+    "V": {"lam_eff": 5510 * angstrom, "lam_fwhm": 880 * angstrom},
+    "J": {"lam_eff": 12200 * angstrom, "lam_fwhm": 2130 * angstrom},
 }
 generics = {"filter1": trans}
 fc2 = FilterCollection(

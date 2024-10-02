@@ -33,6 +33,7 @@ def galaxy(
     black_holes=None,
     redshift=None,
     name="galaxy",
+    **kwargs,
 ):
     """A factory fucntion to return the desired type of galaxy.
 
@@ -62,6 +63,9 @@ def galaxy(
             Only applicable to a particle.Galaxy.
         redshift (float)
             The redshift of the galaxy.
+        **kwargs
+            Additional keyword arguments that are passed to the appropriate
+            galaxy object.
 
     Returns:
         Galaxy (particle.Galaxy/parametric.Galaxy)
@@ -90,6 +94,7 @@ def galaxy(
             redshift=redshift,
             black_holes=black_holes,
             name=name,
+            **kwargs,
         )
 
     # Otherwise, we need a particle.Galaxy
@@ -99,4 +104,5 @@ def galaxy(
         gas=gas,
         black_holes=black_holes,
         redshift=redshift,
+        **kwargs,
     )

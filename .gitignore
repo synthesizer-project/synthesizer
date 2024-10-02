@@ -8,6 +8,9 @@ docs/source/_autosummary
 docs/source/auto_examples/
 docs/source/gen_modules/
 src/synthesizer/_version.py
+docs/source/sg_execution_times.rst
+docs/test_filter_collection.hdf5
+*.hdf5
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

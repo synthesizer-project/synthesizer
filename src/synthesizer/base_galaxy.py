@@ -4,9 +4,14 @@ The class described in this module should never be directly instatiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
 
+from unyt import Mpc
+
 from synthesizer import exceptions
-from synthesizer.igm import Inoue14
+from synthesizer.emission_models.attenuation.igm import Inoue14
 from synthesizer.sed import Sed, plot_observed_spectra, plot_spectra
+from synthesizer.units import accepts
+from synthesizer.utils import TableFormatter
+from synthesizer.warnings import deprecated, deprecation
 
 
 class BaseGalaxy:
@@ -29,6 +34,7 @@ class BaseGalaxy:
             The BlackHole/s object holding information about the black hole/s.
     """
 
+    @accepts(centre=Mpc)
     def __init__(self, stars, gas, black_holes, redshift, centre, **kwargs):
         """
         Instantiate the base Galaxy class.
@@ -40,14 +46,27 @@ class BaseGalaxy:
         regardless to unify the Galaxy syntax for both cases.
 
         Args:
-
+            stars (particle.Stars/parametric.Stars)
+                The Stars object holding information about the stellar
+                population.
+            gas (particle.Gas/parametric.Gas)
+                The Gas object holding information about the gas distribution.
+            black_holes (particle.BlackHoles/parametric.BlackHole)
+                The BlackHole/s object holding information about the
+                black hole/s.
+            redshift (float)
+                The redshift of the galaxy.
+            centre (array)
+                The centre of the galaxy.
+            **kwargs
+                Any additional attributes to attach to the galaxy object.
         """
         # Add some place holder attributes which are overloaded on the children
         self.spectra = {}
 
         # Initialise the photometry dictionaries
-        self.photo_luminosities = {}
-        self.photo_fluxes = {}
+        self.photo_lnu = {}
+        self.photo_fnu = {}
 
         # Attach the components
         self.stars = stars
@@ -67,50 +86,56 @@ class BaseGalaxy:
                 "`parametric.galaxy.Galaxy`"
             )
 
-    def get_spectra_dust(self, emissionmodel):
-        """
-        Calculates dust emission spectra using the attenuated and intrinsic
-        spectra that have already been generated and an emission model.
+        # Attach any additional attributes
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
-        Args:
-            emissionmodel (synthesizer.dust.emission.*)
-                The emission model from the dust module used to create dust
-                emission.
+    @property
+    def photo_fluxes(self):
+        """
+        Get the photometry fluxes.
 
         Returns:
-            Sed
-                A Sed object containing the dust emission spectra
+            dict
+                The photometry fluxes.
         """
-
-        # Use wavelength grid from attenuated spectra
-        lam = self.stars.spectra["emergent"].lam
-
-        # Calculate the bolometric dust luminosity as the difference between
-        # the intrinsic and attenuated
-        dust_bolometric_luminosity = (
-            self.stars.spectra["intrinsic"].measure_bolometric_luminosity()
-            - self.stars.spectra["emergent"].measure_bolometric_luminosity()
+        deprecation(
+            "The `photo_fluxes` attribute is deprecated. Use "
+            "`photo_fnu` instead. Will be removed in v1.0.0"
         )
+        return self.photo_fnu
 
-        # Get the spectrum and normalise it properly
-        lnu = dust_bolometric_luminosity.to("erg/s").value * emissionmodel.lnu(
-            lam
+    @property
+    def photo_luminosities(self):
+        """
+        Get the photometry luminosities.
+
+        Returns:
+            dict
+                The photometry luminosities.
+        """
+        deprecation(
+            "The `photo_luminosities` attribute is deprecated. Use "
+            "`photo_lnu` instead. Will be removed in v1.0.0"
         )
+        return self.photo_lnu
 
-        # Create new Sed object containing dust emission spectra
-        sed = Sed(lam, lnu=lnu)
+    def __str__(self):
+        """
+        Return a string representation of the galaxy object.
 
-        # Associate that with the component's spectra dictionary
-        self.stars.spectra["dust"] = sed
-        self.stars.spectra["total"] = (
-            self.stars.spectra["dust"] + self.stars.spectra["emergent"]
-        )
+        Returns:
+            table (str)
+                A string representation of the galaxy object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        return sed
+        return formatter.get_table("Galaxy")
 
     def get_equivalent_width(self, feature, blue, red, spectra_to_plot=None):
         """
-        Gets all equivalent widths associated with a sed object
+        Get all equivalent widths associated with a sed object
 
         Parameters
         ----------
@@ -124,7 +149,6 @@ class BaseGalaxy:
         equivalent_width : float
             The calculated equivalent width at the current index.
         """
-
         equivalent_width = None
 
         if not isinstance(spectra_to_plot, list):
@@ -265,46 +289,78 @@ class BaseGalaxy:
             if len(lst) > 1:
                 self.spectra[key] = sum(lst)
 
-    def get_photo_luminosities(self, filters, verbose=True):
+    def get_photo_lnu(self, filters, verbose=True):
         """
         Calculate luminosity photometry using a FilterCollection object.
+
+        Photometry is calculated in spectral luminosity density units.
 
         Args:
             filters (filters.FilterCollection)
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+
+        Returns:
+            PhotometryCollection
+                A PhotometryCollection object containing the luminosity
+                photometry in each filter in filters.
         """
         # Get stellar photometry
         if self.stars is not None:
-            self.stars.get_photo_luminosities(filters, verbose)
+            self.stars.get_photo_lnu(filters, verbose)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.stars, "particle_spectra", None) is not None:
-                self.stars.get_particle_photo_luminosities(filters, verbose)
+                self.stars.get_particle_photo_lnu(filters, verbose)
 
         # Get black hole photometry
         if self.black_holes is not None:
-            self.black_holes.get_photo_luminosities(filters, verbose)
+            self.black_holes.get_photo_lnu(filters, verbose)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.black_holes, "particle_spectra", None) is not None:
-                self.black_holes.get_particle_photo_luminosities(
-                    filters, verbose
-                )
+                self.black_holes.get_particle_photo_lnu(filters, verbose)
 
         # Get the combined photometry
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
-            self.photo_luminosities[spectra] = self.spectra[
-                spectra
-            ].get_photo_luminosities(filters, verbose)
+            self.photo_lnu[spectra] = self.spectra[spectra].get_photo_lnu(
+                filters, verbose
+            )
 
-    def get_photo_fluxes(self, filters, verbose=True):
+    @deprecated(
+        "The `get_photo_luminosities` method is deprecated. Use "
+        "`get_photo_lnu` instead. Will be removed in v1.0.0"
+    )
+    def get_photo_luminosities(self, filters, verbose=True):
+        """
+        Calculate luminosity photometry using a FilterCollection object.
+
+        Alias to get_photo_lnu.
+
+        Photometry is calculated in spectral luminosity density units.
+
+        Args:
+            filters (filters.FilterCollection)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            PhotometryCollection
+                A PhotometryCollection object containing the luminosity
+                photometry in each filter in filters.
+        """
+        return self.get_photo_lnu(filters, verbose)
+
+    def get_photo_fnu(self, filters, verbose=True):
         """
         Calculate flux photometry using a FilterCollection object.
+
+        Photometry is calculated in spectral flux density units.
 
         Args:
             filters (object)
@@ -313,33 +369,59 @@ class BaseGalaxy:
                 Are we talking?
 
         Returns:
-            (dict)
-                A dictionary of fluxes in each filter in filters.
+            PhotometryCollection
+                A PhotometryCollection object containing the flux photometry
+                in each filter in filters.
         """
         # Get stellar photometry
         if self.stars is not None:
-            self.stars.get_photo_fluxes(filters, verbose)
+            self.stars.get_photo_fnu(filters, verbose)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.stars, "particle_spectra", None) is not None:
-                self.stars.get_particle_photo_fluxes(filters, verbose)
+                self.stars.get_particle_photo_fnu(filters, verbose)
 
         # Get black hole photometry
         if self.black_holes is not None:
-            self.black_holes.get_photo_fluxes(filters, verbose)
+            self.black_holes.get_photo_fnu(filters, verbose)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.black_holes, "particle_spectra", None) is not None:
-                self.black_holes.get_particle_photo_fluxes(filters, verbose)
+                self.black_holes.get_particle_photo_fnu(filters, verbose)
 
         # Get the combined photometry
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
-            self.photo_fluxes[spectra] = self.spectra[
-                spectra
-            ].get_photo_fluxes(filters, verbose)
+            self.photo_fnu[spectra] = self.spectra[spectra].get_photo_fnu(
+                filters, verbose
+            )
+
+    @deprecated(
+        "The `get_photo_fluxes` method is deprecated. Use "
+        "`get_photo_fnu` instead. Will be removed in v1.0.0"
+    )
+    def get_photo_fluxes(self, filters, verbose=True):
+        """
+        Calculate flux photometry using a FilterCollection object.
+
+        Alias to get_photo_fnu.
+
+        Photometry is calculated in spectral flux density units.
+
+        Args:
+            filters (object)
+                A FilterCollection object.
+            verbose (bool)
+                Are we talking?
+
+        Returns:
+            PhotometryCollection
+                A PhotometryCollection object containing the flux photometry
+                in each filter in filters.
+        """
+        return self.get_photo_fnu(filters, verbose)
 
     def plot_spectra(
         self,
@@ -668,3 +750,282 @@ class BaseGalaxy:
             filters=filters,
             quantity_to_plot=quantity_to_plot,
         )
+
+    def get_spectra(
+        self,
+        emission_model,
+        dust_curves=None,
+        tau_v=None,
+        fesc=None,
+        covering_fraction=None,
+        mask=None,
+        verbose=True,
+        **kwargs,
+    ):
+        """
+        Generate spectra as described by the emission model.
+
+        Args:
+            emission_model (EmissionModel):
+                The emission model to use.
+            dust_curves (dict):
+                An override to the emission model dust curves. Either:
+                    - None, indicating the dust_curves defined on the emission
+                      models should be used.
+                    - A single dust curve to apply to all emission models.
+                    - A dictionary of the form {<label>: <dust_curve instance>}
+                      to use a specific dust curve instance with particular
+                      properties.
+            tau_v (dict):
+                An override to the dust model optical depth. Either:
+                    - None, indicating the tau_v defined on the emission model
+                      should be used.
+                    - A float to use as the optical depth for all models.
+                    - A dictionary of the form {<label>: float(<tau_v>)}
+                      to use a specific optical depth with a particular
+                      model or {<label>: str(<attribute>)} to use an attribute
+                      of the component as the optical depth.
+            fesc (dict):
+                An override to the emission model escape fraction. Either:
+                    - None, indicating the fesc defined on the emission model
+                      should be used.
+                    - A float to use as the escape fraction for all models.
+                    - A dictionary of the form {<label>: float(<fesc>)}
+                      to use a specific escape fraction with a particular
+                      model or {<label>: str(<attribute>)} to use an
+                      attribute of the component as the escape fraction.
+            mask (dict):
+                An override to the emission model mask. Either:
+                    - None, indicating the mask defined on the emission model
+                      should be used.
+                    - A dictionary of the form {<label>: {"attr": attr,
+                      "thresh": thresh, "op": op}} to add a specific mask to
+                      a particular model.
+            verbose (bool)
+                Are we talking?
+            kwargs (dict)
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            dict
+                The combined spectra for the galaxy.
+        """
+        # Get the spectra
+        spectra, particle_spectra = emission_model._get_spectra(
+            emitters={"stellar": self.stars, "blackhole": self.black_holes},
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            verbose=verbose,
+            **kwargs,
+        )
+
+        # Unpack the spectra to the right component
+        for model in emission_model._models.values():
+            # Skip models we aren't saving
+            if not model.save:
+                continue
+            if model.emitter == "galaxy":
+                self.spectra[model.label] = spectra[model.label]
+            elif model.emitter == "stellar":
+                self.stars.spectra[model.label] = spectra[model.label]
+            elif model.emitter == "blackhole":
+                self.black_holes.spectra[model.label] = spectra[model.label]
+            else:
+                raise KeyError(
+                    f"Unknown emitter in emission model. ({model.emitter})"
+                )
+
+            # If the model is particle based then we need to save the particle
+            # spectra
+            if model.per_particle:
+                if model.emitter == "stellar":
+                    self.stars.particle_spectra[model.label] = (
+                        particle_spectra[model.label]
+                    )
+                elif model.emitter == "blackhole":
+                    self.black_holes.particle_spectra[model.label] = (
+                        particle_spectra[model.label]
+                    )
+                else:
+                    raise KeyError(
+                        "Unknown emitter in per particle "
+                        f"emission model. ({model.emitter})"
+                    )
+
+        return self.spectra[emission_model.label]
+
+    def get_lines(
+        self,
+        line_ids,
+        emission_model,
+        dust_curves=None,
+        tau_v=None,
+        fesc=None,
+        covering_fraction=None,
+        mask=None,
+        verbose=True,
+        **kwargs,
+    ):
+        """
+        Generate lines as described by the emission model.
+
+        Args:
+            line_ids (list):
+                A list of line ids to include in the spectra.
+            emission_model (EmissionModel):
+                The emission model to use.
+            dust_curves (dict):
+                An override to the emission model dust curves. Either:
+                    - None, indicating the dust_curves defined on the emission
+                      models should be used.
+                    - A single dust curve to apply to all emission models.
+                    - A dictionary of the form {<label>: <dust_curve instance>}
+                      to use a specific dust curve instance with particular
+                      properties.
+            tau_v (dict):
+                An override to the dust model optical depth. Either:
+                    - None, indicating the tau_v defined on the emission model
+                      should be used.
+                    - A float to use as the optical depth for all models.
+                    - A dictionary of the form {<label>: float(<tau_v>)}
+                      to use a specific optical depth with a particular
+                      model or {<label>: str(<attribute>)} to use an attribute
+                      of the component as the optical depth.
+            fesc (dict):
+                An override to the emission model escape fraction. Either:
+                    - None, indicating the fesc defined on the emission model
+                      should be used.
+                    - A float to use as the escape fraction for all models.
+                    - A dictionary of the form {<label>: float(<fesc>)}
+                      to use a specific escape fraction with a particular
+                      model or {<label>: str(<attribute>)} to use an
+                      attribute of the component as the escape fraction.
+            mask (dict):
+                An override to the emission model mask. Either:
+                    - None, indicating the mask defined on the emission model
+                      should be used.
+                    - A dictionary of the form {<label>: {"attr": attr,
+                      "thresh": thresh, "op": op}} to add a specific mask to
+                      a particular model.
+            verbose (bool)
+                Are we talking?
+            kwargs (dict)
+                Any additional keyword arguments to pass to the generator
+                function.
+
+        Returns:
+            dict
+                The combined lines for the galaxy.
+        """
+        # Get the lines
+        lines, particle_lines = emission_model._get_lines(
+            line_ids=line_ids,
+            emitters={"stellar": self.stars, "blackhole": self.black_holes},
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            verbose=verbose,
+            **kwargs,
+        )
+
+        # Unpack the lines to the right component
+        for model in emission_model._models.values():
+            # Skip models we aren't saving
+            if not model.save:
+                continue
+            if model.emitter == "galaxy":
+                self.lines[model.label] = lines[model.label]
+            elif model.emitter == "stellar":
+                self.stars.lines[model.label] = lines[model.label]
+            elif model.emitter == "blackhole":
+                self.black_holes.lines[model.label] = lines[model.label]
+            else:
+                raise KeyError(
+                    f"Unknown emitter in emission model. ({model.emitter})"
+                )
+
+            # If the model is particle based then we need to save the particle
+            # lines
+            if model.per_particle:
+                if model.emitter == "stellar":
+                    self.stars.particle_lines[model.label] = particle_lines[
+                        model.label
+                    ]
+                elif model.emitter == "blackhole":
+                    self.black_holes.particle_lines[model.label] = (
+                        particle_lines[model.label]
+                    )
+                else:
+                    raise KeyError(
+                        "Unknown emitter in per particle "
+                        f"emission model. ({model.emitter})"
+                    )
+
+        return self.lines[emission_model.label]
+
+    def clear_all_spectra(self):
+        """
+        Clear all spectra.
+
+        This method is a quick helper to clear all spectra from the
+        galaxy object and its components. This will cover both integrated and
+        per particle spectra if present.
+        """
+        # Clear spectra
+        self.spectra = {}
+        if self.stars is not None:
+            self.stars.clear_all_spectra()
+        if self.black_holes is not None:
+            self.black_holes.clear_all_spectra()
+
+    def clear_all_lines(self):
+        """
+        Clear all lines.
+
+        This method is a quick helper to clear all lines from the galaxy object
+        and its components. This will cover both integrated and per particle
+        lines if present.
+        """
+        # Clear lines
+        self.lines = {}
+        if self.stars is not None:
+            self.stars.clear_all_lines()
+        if self.black_holes is not None:
+            self.black_holes.clear_all_lines()
+
+    def clear_all_photometry(self):
+        """
+        Clear all photometry.
+
+        This method is a quick helper to clear all photometry from the galaxy
+        object and its components. This will cover both integrated and per
+        particle photometry if present.
+        """
+        # Clear photometry
+        self.photo_lnu = {}
+        self.photo_fnu = {}
+        if self.stars is not None:
+            self.stars.clear_all_photometry()
+        if self.black_holes is not None:
+            self.black_holes.clear_all_photometry()
+
+    def clear_all_emissions(self):
+        """
+        Clear all spectra, lines and photometry.
+
+        This method is a quick helper to clear all spectra, lines, and
+        photometry from the galaxy object and its components. This will cover
+        both integrated and per particle emission.
+        """
+        # Clear spectra
+        self.clear_all_spectra()
+
+        # Clear lines
+        self.clear_all_lines()
+
+        # Clear photometry
+        self.clear_all_photometry()

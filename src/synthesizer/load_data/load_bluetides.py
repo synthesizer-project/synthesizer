@@ -1,14 +1,26 @@
+"""A module to load Bluetides data into a galaxy object.
+
+Example usage::
+
+    from synthesizer.data import load_BlueTides
+
+    # Load Bluetides data for z=7
+    galaxies = load_BlueTides("7")
+"""
+
 import numpy as np
 import scipy.interpolate as interpolate
+
+from synthesizer.exceptions import UnmetDependency
 
 try:
     from bigfile import BigFile
 except ImportError:
-    print(
-        "bigfile.BigFile not found. Please install it using "
-        "'pip install bigfile'"
+    raise UnmetDependency(
+        "The `bigfile` module is required to load Bluetides data. "
+        "Install synthesizer with the `bluetides` extra dependencies:"
+        " `pip install .[bluetides]`."
     )
-    exit()
 from scipy import integrate
 from unyt import Msun, Myr, c, kpc, yr
 
@@ -19,7 +31,7 @@ class BlueTidesDataHolder:
     """
     A holder for BlueTides data that makes it easier to work with.
 
-    The class can be pickled as follows:
+    The class can be pickled as follows::
 
         file_name = f'bluetides_{z}.pkl'
         with open(file_name, 'wb') as file:
@@ -30,7 +42,7 @@ class BlueTidesDataHolder:
             )
             print(f'Object successfully saved to "{file_name}"')
 
-    *** everything is in proper distance
+    Everything is in proper distance.
     """
 
     def __init__(
@@ -40,6 +52,22 @@ class BlueTidesDataHolder:
         end_of_arr=108001,
         sort_bhar=True,
     ):
+        """
+        Initialize the BlueTidesDataHolder object.
+
+        Args:
+            z (str):
+                Desired redshift to extract BlueTides galaxies.
+            bluetides_data_folder (str):
+                Location of BlueTides pig/sunset files
+            end_of_arr (int):
+                Last galaxy to include in BlueTides dataholder, selection of
+                this value should be done with care to avoid galaxies with BHs
+                too close to the seed mass (10^5.8 solar masses). This is
+                ~160000 for z=6.5-7, ~90090 for z=7.5. (default=108001)
+            sort_bhar (bool):
+                Whether or not to sort the BlueTides data by BHAR
+        """
         # Units
         self.factor = (
             121.14740013761634  # GADGET unit Protonmass / Bolztman const

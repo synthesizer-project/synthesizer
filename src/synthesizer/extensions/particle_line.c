@@ -16,211 +16,441 @@
 
 /* Local includes */
 #include "macros.h"
+#include "property_funcs.h"
+#include "timers.h"
 #include "weights.h"
 
 /**
- * @brief This calculates the line emission/continuum of a particle using a
- * cloud in cell approach.
+ * @brief This calculates particle lines using a cloud in cell approach.
  *
- * @param grid_props: An array of the properties along each grid axis.
- * @param part_props: An array of the particle properties, in the same property
- *                    order as grid props.
- * @param mass: The mass of the current particle.
- * @param grid_lines: The grid of SPS line emission.
- * @param grid_continuum: The grid of SPS continuum emission.
- * @param dims: The length of each grid dimension.
- * @param ndim: The number of grid dimensions.
- * @param line_lum: The array of particle line luminosities to populate.
- * @param line_cont: The array of particle continuum luminosities to populate.
- * @param fesc: The escape fraction.
- * @param p: The index of the current particle.
+ * This is the serial version of the function.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param lines_lum: The output array for the line luminosity.
+ * @param lines_cont: The output array for the continuum luminosity.
  */
-void line_loop_cic(const double **grid_props, const double **part_props,
-                   const double mass, const double *grid_lines,
-                   const double *grid_continuum, const int *dims,
-                   const int ndim, double *line_lum, double *line_cont,
-                   const double fesc, const int p) {
+static void lines_loop_cic_serial(struct grid *grid, struct particles *parts,
+                                  double *lines_lum, double *lines_cont) {
 
-  /* Setup the index and mass fraction arrays. */
-  int part_indices[ndim];
-  double axis_fracs[ndim];
+  /* Unpack the grid properties. */
+  int *dims = grid->dims;
+  int ndim = grid->ndim;
+  double **grid_props = grid->props;
+  const double *grid_lines = grid->lines;
+  const double *grid_continuum = grid->continuum;
 
-  /* Loop over dimensions finding the mass weightings and indicies. */
-  for (int dim = 0; dim < ndim; dim++) {
+  /* Unpack the particles properties. */
+  double *part_masses = parts->mass;
+  double **part_props = parts->props;
+  double *fesc = parts->fesc;
+  int npart = parts->npart;
 
-    /* Get this array of grid properties for this dimension */
-    const double *grid_prop = grid_props[dim];
+  /* Loop over particles. */
+  for (int p = 0; p < npart; p++) {
 
-    /* Get this particle property. */
-    const double part_val = part_props[dim][p];
+    /* Get this particle's mass. */
+    const double mass = part_masses[p];
 
-    /* Here we need to handle if we are outside the range of values. If so
-     * there's no point in searching and we return the edge nearest to the
-     * value. */
-    int part_cell;
-    double frac;
-    if (part_val <= grid_prop[0]) {
+    /* Setup the index and mass fraction arrays. */
+    int part_indices[ndim];
+    double axis_fracs[ndim];
 
-      /* Use the grid edge. */
-      part_cell = 0;
-      frac = 0;
+    /* Get the grid indices and cell fractions for the particle. */
+    get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
+                          part_props, p);
 
-    } else if (part_val > grid_prop[dims[dim] - 1]) {
-
-      /* Use the grid edge. */
-      part_cell = dims[dim] - 1;
-      frac = 1;
-
-    } else {
-
-      /* Find the grid index corresponding to this particle property. */
-      part_cell =
-          binary_search(/*low*/ 0, /*high*/ dims[dim] - 1, grid_prop, part_val);
-
-      /* Calculate the fraction. Note, here we do the "low" cell, the cell
-       * above is calculated from this fraction. */
-      frac = (grid_prop[part_cell] - part_val) /
-             (grid_prop[part_cell] - grid_prop[part_cell - 1]);
-    }
-
-    /* Set the fraction for this dimension. */
-    axis_fracs[dim] = (1 - frac);
-
-    /* Set this index. */
-    part_indices[dim] = part_cell;
-  }
-
-  /* To combine fractions we will need an array of dimensions for the subset.
-   * These are always two in size, one for the low and one for high grid
-   * point. */
-  int sub_dims[ndim];
-  for (int idim = 0; idim < ndim; idim++) {
-    sub_dims[idim] = 2;
-  }
-
-  /* Now loop over this collection of cells collecting and setting their
-   * weights. */
-  for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
-
-    /* Set up some index arrays we'll need. */
-    int subset_ind[ndim];
-    int frac_ind[ndim];
-
-    /* Get the multi-dimensional version of icell. */
-    get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
-
-    /* Multiply all contributing fractions and get the fractions index
-     * in the grid. */
-    double frac = 1;
+    /* To combine fractions we will need an array of dimensions for the
+     * subset. These are always two in size, one for the low and one for high
+     * grid point. */
+    int sub_dims[ndim];
     for (int idim = 0; idim < ndim; idim++) {
-      if (subset_ind[idim] == 0) {
-        frac *= (1 - axis_fracs[idim]);
-        frac_ind[idim] = part_indices[idim] - 1;
-      } else {
-        frac *= axis_fracs[idim];
-        frac_ind[idim] = part_indices[idim];
-      }
+      sub_dims[idim] = 2;
     }
 
-    /* Early skip for cells contributing a 0 fraction. */
-    if (frac <= 0)
-      continue;
+    /* Now loop over this collection of cells collecting and setting their
+     * weights. */
+    for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
 
-    /* We have a contribution, get the flattened index into the grid array. */
-    const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+      /* Set up some index arrays we'll need. */
+      int subset_ind[ndim];
+      int frac_ind[ndim];
 
-    /* Define the weight. */
-    double weight = mass * frac;
+      /* Get the multi-dimensional version of icell. */
+      get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
 
-    /* Add the contribution to this particle. */
-    line_lum[p] += grid_lines[grid_ind] * (1 - fesc) * weight;
-    line_cont[p] += grid_continuum[grid_ind] * (1 - fesc) * weight;
+      /* Multiply all contributing fractions and get the fractions index
+       * in the grid. */
+      double frac = 1;
+      for (int idim = 0; idim < ndim; idim++) {
+        if (subset_ind[idim] == 0) {
+          frac *= (1 - axis_fracs[idim]);
+          frac_ind[idim] = part_indices[idim] - 1;
+        } else {
+          frac *= axis_fracs[idim];
+          frac_ind[idim] = part_indices[idim];
+        }
+      }
+
+      /* Nothing to do if fraction is 0. */
+      if (frac == 0) {
+        continue;
+      }
+
+      /* Define the weight. */
+      double weight = frac * mass * (1.0 - fesc[p]);
+
+      /* We have a contribution, get the flattened index into the grid array. */
+      const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+
+      /* Add the contribution to this particle. */
+      lines_lum[p] += grid_lines[grid_ind] * weight;
+      lines_cont[p] += grid_continuum[grid_ind] * weight;
+    }
   }
 }
 
 /**
- * @brief This calculates the line emission/continuum of a particle using a
- * nearest grid point approach.
+ * @brief This calculates the grid weights in each grid cell using a cloud
+ *        in cell approach.
  *
- * @param grid_props: An array of the properties along each grid axis.
- * @param part_props: An array of the particle properties, in the same property
- *                    order as grid props.
- * @param mass: The mass of the current particle.
- * @param grid_lines: The grid of SPS line emission.
- * @param grid_continuum: The grid of SPS continuum emission.
- * @param dims: The length of each grid dimension.
- * @param ndim: The number of grid dimensions.
- * @param line_lum: The array of particle line luminosities to populate.
- * @param line_cont: The array of particle continuum luminosities to populate.
- * @param fesc: The escape fraction.
- * @param p: The index of the current particle.
+ * This is the parallel version of the function.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param lines_lum: The output array for the line luminosity.
+ * @param lines_cont: The output array for the continuum luminosity.
+ * @param nthreads: The number of threads to use.
  */
-void line_loop_ngp(const double **grid_props, const double **part_props,
-                   const double mass, const double *grid_lines,
-                   const double *grid_continuum, const int *dims,
-                   const int ndim, double *line_lum, double *line_cont,
-                   const double fesc, const int p) {
+#ifdef WITH_OPENMP
+static void lines_loop_cic_omp(struct grid *grid, struct particles *parts,
+                               double *lines_lum, double *lines_cont,
+                               int nthreads) {
 
-  /* Setup the index array. */
-  int part_indices[ndim];
+  /* How many particles should each thread get? */
+  int npart_per_thread = (int)(ceil(parts->npart / nthreads));
 
-  /* Loop over dimensions finding the indicies. */
-  for (int dim = 0; dim < ndim; dim++) {
+#pragma omp parallel num_threads(nthreads)
+  {
 
-    /* Get this array of grid properties for this dimension */
-    const double *grid_prop = grid_props[dim];
+    /* Unpack the grid properties. */
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    double **grid_props = grid->props;
+    const double *grid_lines = grid->lines;
+    const double *grid_continuum = grid->continuum;
 
-    /* Get this particle property. */
-    const double part_val = part_props[dim][p];
+    /* Unpack the particles properties. */
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    double *fesc = parts->fesc;
+    int npart = parts->npart;
 
-    /* Here we need to handle if we are outside the range of values. If so
-     * there's no point in searching and we return the edge nearest to the
-     * value. */
-    int part_cell;
-    if (part_val <= grid_prop[0]) {
+    /* Get the thread id. */
+    int tid = omp_get_thread_num();
 
-      /* Use the grid edge. */
-      part_cell = 0;
-
-    } else if (part_val > grid_prop[dims[dim] - 1]) {
-
-      /* Use the grid edge. */
-      part_cell = dims[dim] - 1;
-
-    } else {
-
-      /* Find the grid index corresponding to this particle property. */
-      part_cell =
-          binary_search(/*low*/ 1, /*high*/ dims[dim] - 1, grid_prop, part_val);
+    /* Calculate start and end indices for each thread */
+    int start = tid * npart_per_thread;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
     }
+#ifdef WITH_DEBUGGING_CHECKS
+    else {
+#pragma omp critical
+      PyErr_SetString(PyExc_RuntimeError,
+                      "Not all particles distributed to threads.");
+      free(spectra);
+      spectra = NULL;
+      return;
+    }
+#endif
 
-    /* Set the index to the closest grid point either side of part_val. */
-    if (part_cell == 0) {
-      /* Handle the case where part_cell - 1 doesn't exist. */
-      part_indices[dim] = part_cell;
-    } else if ((part_val - grid_prop[part_cell - 1]) <
-               (grid_prop[part_cell] - part_val)) {
-      part_indices[dim] = part_cell - 1;
-    } else {
-      part_indices[dim] = part_cell;
+    /* Loop over particles. */
+    for (int p = start; p < end; p++) {
+
+      /* Get this particle's mass. */
+      const double mass = part_masses[p];
+
+      /* Setup the index and mass fraction arrays. */
+      int part_indices[ndim];
+      double axis_fracs[ndim];
+
+      /* Get the grid indices and cell fractions for the particle. */
+      get_part_ind_frac_cic(part_indices, axis_fracs, dims, ndim, grid_props,
+                            part_props, p);
+
+      /* To combine fractions we will need an array of dimensions for the
+       * subset. These are always two in size, one for the low and one for high
+       * grid point. */
+      int sub_dims[ndim];
+      for (int idim = 0; idim < ndim; idim++) {
+        sub_dims[idim] = 2;
+      }
+
+      /* Now loop over this collection of cells collecting and setting their
+       * weights. */
+      for (int icell = 0; icell < (int)pow(2, (double)ndim); icell++) {
+
+        /* Set up some index arrays we'll need. */
+        int subset_ind[ndim];
+        int frac_ind[ndim];
+
+        /* Get the multi-dimensional version of icell. */
+        get_indices_from_flat(icell, ndim, sub_dims, subset_ind);
+
+        /* Multiply all contributing fractions and get the fractions index
+         * in the grid. */
+        double frac = 1;
+        for (int idim = 0; idim < ndim; idim++) {
+          if (subset_ind[idim] == 0) {
+            frac *= (1 - axis_fracs[idim]);
+            frac_ind[idim] = part_indices[idim] - 1;
+          } else {
+            frac *= axis_fracs[idim];
+            frac_ind[idim] = part_indices[idim];
+          }
+        }
+
+        if (frac == 0) {
+          continue;
+        }
+
+        /* Define the weight. */
+        double weight = frac * mass * (1.0 - fesc[p]);
+
+        /* We have a contribution, get the flattened index into the grid array.
+         */
+        const int grid_ind = get_flat_index(frac_ind, dims, ndim);
+
+        /* Add the contribution to this particle. */
+        lines_lum[p] += grid_lines[grid_ind] * weight;
+        lines_cont[p] += grid_continuum[grid_ind] * weight;
+      }
     }
   }
+}
+#endif
 
-  /* Get the weight's index. */
-  const int grid_ind = get_flat_index(part_indices, dims, ndim);
+/**
+ * @brief This calculates particle lines using a cloud in cell approach.
+ *
+ * This is a wrapper which calls the correct function based on the number of
+ * threads requested and whether OpenMP is available.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param lines_lum: The output array for the line luminosity.
+ * @param lines_cont: The output array for the continuum luminosity.
+ * @param nthreads: The number of threads to use.
+ */
+void lines_loop_cic(struct grid *grid, struct particles *parts,
+                    double *lines_lum, double *lines_cont, const int nthreads) {
 
-  /* Add the contribution to this particle. */
-  line_lum[p] += grid_lines[grid_ind] * (1 - fesc) * mass;
-  line_cont[p] += grid_continuum[grid_ind] * (1 - fesc) * mass;
+  double start_time = tic();
+
+  /* Call the correct function for the configuration/number of threads. */
+
+#ifdef WITH_OPENMP
+
+  /* If we have multiple threads and OpenMP we can parallelise. */
+  if (nthreads > 1) {
+    lines_loop_cic_omp(grid, parts, lines_lum, lines_cont, nthreads);
+  }
+  /* Otherwise there's no point paying the OpenMP overhead. */
+  else {
+    lines_loop_cic_serial(grid, parts, lines_lum, lines_cont);
+  }
+
+#else
+
+  (void)nthreads;
+
+  /* We don't have OpenMP, just call the serial version. */
+  lines_loop_cic_serial(grid, parts, lines_lum, lines_cont);
+
+#endif
+  toc("Cloud in Cell particle lines loop", start_time);
 }
 
+/**
+ * @brief This calculates particle lines using a nearest grid point approach.
+ *
+ * This is the serial version of the function.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param lines_lum: The output array for the line luminosity.
+ * @param lines_cont: The output array for the continuum luminosity.
+ */
+static void lines_loop_ngp_serial(struct grid *grid, struct particles *parts,
+                                  double *lines_lum, double *lines_cont) {
+
+  /* Unpack the grid properties. */
+  int *dims = grid->dims;
+  int ndim = grid->ndim;
+  double **grid_props = grid->props;
+  const double *grid_lines = grid->lines;
+  const double *grid_continuum = grid->continuum;
+
+  /* Unpack the particles properties. */
+  double *part_masses = parts->mass;
+  double **part_props = parts->props;
+  double *fesc = parts->fesc;
+  int npart = parts->npart;
+
+  /* Loop over particles. */
+  for (int p = 0; p < npart; p++) {
+
+    /* Get this particle's mass. */
+    const double mass = part_masses[p];
+
+    /* Setup the index array. */
+    int part_indices[ndim];
+
+    /* Get the grid indices for the particle */
+    get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
+
+    /* Define the weight. */
+    double weight = mass * (1.0 - fesc[p]);
+
+    /* We have a contribution, get the flattened index into the grid array. */
+    const int grid_ind = get_flat_index(part_indices, dims, ndim);
+
+    /* Add the contribution to this particle. */
+    lines_lum[p] += grid_lines[grid_ind] * weight;
+    lines_cont[p] += grid_continuum[grid_ind] * weight;
+  }
+}
+
+/**
+ * @brief This calculates particle lines using a nearest grid point approach.
+ *
+ * This is the serial version of the function.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param lines_lum: The output array for the line luminosity.
+ * @param lines_cont: The output array for the continuum luminosity.
+ * @param nthreads: The number of threads to use.
+ */
+#ifdef WITH_OPENMP
+static void lines_loop_ngp_omp(struct grid *grid, struct particles *parts,
+                               double *lines_lum, double *lines_cont,
+                               int nthreads) {
+
+  /* How many particles should each thread get? */
+  int npart_per_thread = (int)(ceil(parts->npart / nthreads));
+
+#pragma omp parallel num_threads(nthreads)
+  {
+
+    /* Unpack the grid properties. */
+    int *dims = grid->dims;
+    int ndim = grid->ndim;
+    double **grid_props = grid->props;
+    const double *grid_lines = grid->lines;
+    const double *grid_continuum = grid->continuum;
+
+    /* Unpack the particles properties. */
+    double *part_masses = parts->mass;
+    double **part_props = parts->props;
+    double *fesc = parts->fesc;
+    int npart = parts->npart;
+
+    /* Get the thread id. */
+    int tid = omp_get_thread_num();
+
+    /* Calculate start and end indices for each thread */
+    int start = tid * npart_per_thread;
+    int end = start + npart_per_thread;
+    if (end >= npart) {
+      end = npart;
+    }
+#ifdef WITH_DEBUGGING_CHECKS
+    else {
+#pragma omp critical
+      PyErr_SetString(PyExc_RuntimeError,
+                      "Not all particles distributed to threads.");
+      free(spectra);
+      spectra = NULL;
+      return;
+    }
+#endif
+
+    /* Loop over particles. */
+    for (int p = start; p < end; p++) {
+
+      /* Get this particle's mass. */
+      const double mass = part_masses[p];
+
+      /* Setup the index array. */
+      int part_indices[ndim];
+
+      /* Get the grid indices for the particle */
+      get_part_inds_ngp(part_indices, dims, ndim, grid_props, part_props, p);
+
+      /* Define the weight. */
+      double weight = mass * (1.0 - fesc[p]);
+
+      /* We have a contribution, get the flattened index into the grid array. */
+      const int grid_ind = get_flat_index(part_indices, dims, ndim);
+
+      /* Add the contribution to this particle. */
+      lines_lum[p] += grid_lines[grid_ind] * weight;
+      lines_cont[p] += grid_continuum[grid_ind] * weight;
+    }
+  }
+}
+#endif
+
+/**
+ * @brief This calculates particle lines using a nearest grid point approach.
+ *
+ * This is a wrapper which calls the correct function based on the number of
+ * threads requested and whether OpenMP is available.
+ *
+ * @param grid: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param lines_lum: The output array for the line luminosity.
+ * @param lines_cont: The output array for the continuum luminosity.
+ * @param nthreads: The number of threads to use.
+ */
+void lines_loop_ngp(struct grid *grid, struct particles *parts,
+                    double *lines_lum, double *lines_cont, const int nthreads) {
+
+  double start_time = tic();
+
+  /* Call the correct function for the configuration/number of threads. */
+
+#ifdef WITH_OPENMP
+
+  /* If we have multiple threads and OpenMP we can parallelise. */
+  if (nthreads > 1) {
+    lines_loop_ngp_omp(grid, parts, lines_lum, lines_cont, nthreads);
+  }
+  /* Otherwise there's no point paying the OpenMP overhead. */
+  else {
+    lines_loop_ngp_serial(grid, parts, lines_lum, lines_cont);
+  }
+
+#else
+
+  (void)nthreads;
+
+  /* We don't have OpenMP, just call the serial version. */
+  lines_loop_ngp_serial(grid, parts, lines_lum, lines_cont);
+
+#endif
+  toc("Nearest Grid Point particle lines loop", start_time);
+}
 /**
  * @brief Computes per particle line emission for a collection of particles.
  *
  * @param np_grid_line: The SPS line emission array.
  * @param np_grid_continuum: The SPS continuum emission array.
  * @param grid_tuple: The tuple containing arrays of grid axis properties.
- * @param part_tuple: The tuple of particle property arrays (in the same order
+ * @param part_tuple: The tuple of particle property arrays(in the same order
  *                    as grid_tuple).
  * @param np_part_mass: The particle mass array.
  * @param fesc: The escape fraction.
@@ -231,120 +461,69 @@ void line_loop_ngp(const double **grid_props, const double **part_props,
  */
 PyObject *compute_particle_line(PyObject *self, PyObject *args) {
 
-  const int ndim;
-  const int npart, nlam;
-  const PyObject *grid_tuple, *part_tuple;
-  const PyArrayObject *np_grid_lines, *np_grid_continuum;
-  const PyArrayObject *np_fesc;
-  const PyArrayObject *np_part_mass, *np_ndims;
-  const char *method;
+  double start = tic();
+  double setup_start = tic();
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOiis", &np_grid_lines, &np_grid_continuum,
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
+  (void)self;
+
+  int ndim, npart, nthreads;
+  PyObject *grid_tuple, *part_tuple;
+  PyArrayObject *np_grid_lines, *np_grid_continuum;
+  PyArrayObject *np_fesc;
+  PyArrayObject *np_part_mass, *np_ndims;
+  char *method;
+
+  if (!PyArg_ParseTuple(args, "OOOOOOOiisi", &np_grid_lines, &np_grid_continuum,
                         &grid_tuple, &part_tuple, &np_part_mass, &np_fesc,
-                        &np_ndims, &ndim, &npart, &method))
-    /* Error message is already set here. */
+                        &np_ndims, &ndim, &npart, &method, &nthreads))
     return NULL;
 
-  /* Quick check to make sure our inputs are valid. */
-  if (ndim == 0) {
-    PyErr_SetString(
-        PyExc_ValueError,
-        "Grid appears to be dimensionless! Something awful has happened!");
-    return NULL;
-  }
-  if (npart == 0) {
-    PyErr_SetString(PyExc_ValueError, "No particles to process!");
+  /* Extract the grid struct. */
+  struct grid *grid_props = get_lines_grid_struct(
+      grid_tuple, np_ndims, np_grid_lines, np_grid_continuum, ndim, /*nlam*/ 1);
+  if (grid_props == NULL) {
     return NULL;
   }
 
-  /* Extract a pointer to the line grids */
-  const double *grid_lines = PyArray_DATA(np_grid_lines);
-
-  /* Extract a pointer to the continuum grid. */
-  const double *grid_continuum = PyArray_DATA(np_grid_continuum);
-
-  /* Set up arrays to hold the line emission and continuum. */
-  double *line_lum = malloc(npart * sizeof(double));
-  bzero(line_lum, npart * sizeof(double));
-  double *line_cont = malloc(npart * sizeof(double));
-  bzero(line_cont, npart * sizeof(double));
-
-  /* Extract a pointer to the grid dims */
-  const int *dims = PyArray_DATA(np_ndims);
-
-  /* Extract a pointer to the particle masses. */
-  const double *part_mass = PyArray_DATA(np_part_mass);
-
-  /* Extract a pointer to the fesc array. */
-  const double *fesc = PyArray_DATA(np_fesc);
-
-  /* Allocate a single array for grid properties*/
-  int nprops = 0;
-  for (int dim = 0; dim < ndim; dim++)
-    nprops += dims[dim];
-  const double **grid_props = malloc(nprops * sizeof(double *));
-
-  /* How many grid elements are there? */
-  int grid_size = 1;
-  for (int dim = 0; dim < ndim; dim++)
-    grid_size *= dims[dim];
-
-  /* Allocate an array to hold the grid weights. */
-  double *grid_weights = malloc(grid_size * sizeof(double));
-  bzero(grid_weights, grid_size * sizeof(double));
-
-  /* Unpack the grid property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    const PyArrayObject *np_grid_arr = PyTuple_GetItem(grid_tuple, idim);
-    const double *grid_arr = PyArray_DATA(np_grid_arr);
-
-    /* Assign this data to the property array. */
-    grid_props[idim] = grid_arr;
+  /* Extract the particle struct. */
+  struct particles *part_props =
+      get_part_struct(part_tuple, np_part_mass, np_fesc, npart, ndim);
+  if (part_props == NULL) {
+    return NULL;
   }
 
-  /* Allocate a single array for particle properties. */
-  const double **part_props = malloc(npart * ndim * sizeof(double *));
-
-  /* Unpack the particle property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    const PyArrayObject *np_part_arr = PyTuple_GetItem(part_tuple, idim);
-    const double *part_arr = PyArray_DATA(np_part_arr);
-
-    /* Assign this data to the property array. */
-    part_props[idim] = part_arr;
+  /* Allocate the lines arrays. */
+  double *lines_lum = calloc(npart, sizeof(double));
+  if (lines_lum == NULL) {
+    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for lines.");
+    return NULL;
+  }
+  double *lines_cont = calloc(npart, sizeof(double));
+  if (lines_cont == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for continuum.");
+    return NULL;
   }
 
-  /* Loop over particles. */
-  for (int p = 0; p < npart; p++) {
+  toc("Extracting Python data", setup_start);
 
-    /* Get this particle's mass. */
-    const double mass = part_mass[p];
-
-    /* Finally, compute the line for this particle using the
-     * requested method. */
-    if (strcmp(method, "cic") == 0) {
-      line_loop_cic(grid_props, part_props, mass, grid_lines, grid_continuum,
-                    dims, ndim, line_lum, line_cont, fesc[p], p);
-    } else if (strcmp(method, "ngp") == 0) {
-      line_loop_ngp(grid_props, part_props, mass, grid_lines, grid_continuum,
-                    dims, ndim, line_lum, line_cont, fesc[p], p);
-    } else {
-      /* Only print this warning once */
-      if (p == 0)
-        printf(
-            "Unrecognised gird assignment method (%s)! Falling back on CIC\n",
-            method);
-      line_loop_cic(grid_props, part_props, mass, grid_lines, grid_continuum,
-                    dims, ndim, line_lum, line_cont, fesc[p], p);
-    }
+  /* With everything set up we can compute the weights for each particle using
+   * the requested method. */
+  /* NOTE: rather than modify the weights function to make the 2 outputs
+   * we'll instead pass an array with line_lum at one end and line_cont at the
+   * other and then just extract the result later. */
+  if (strcmp(method, "cic") == 0) {
+    lines_loop_cic(grid_props, part_props, lines_lum, lines_cont, nthreads);
+  } else if (strcmp(method, "ngp") == 0) {
+    lines_loop_ngp(grid_props, part_props, lines_lum, lines_cont, nthreads);
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    return NULL;
   }
 
   /* Clean up memory! */
-  free(grid_weights);
   free(part_props);
   free(grid_props);
 
@@ -353,16 +532,18 @@ PyObject *compute_particle_line(PyObject *self, PyObject *args) {
       npart,
   };
   PyArrayObject *out_line = (PyArrayObject *)PyArray_SimpleNewFromData(
-      1, np_dims, NPY_FLOAT64, line_lum);
+      1, np_dims, NPY_FLOAT64, lines_lum);
   PyArrayObject *out_cont = (PyArrayObject *)PyArray_SimpleNewFromData(
-      1, np_dims, NPY_FLOAT64, line_cont);
+      1, np_dims, NPY_FLOAT64, lines_cont);
+
+  toc("Computing particles lines", start);
 
   return Py_BuildValue("(OO)", out_line, out_cont);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef LineMethods[] = {
-    {"compute_particle_line", compute_particle_line, METH_VARARGS,
+    {"compute_particle_line", (PyCFunction)compute_particle_line, METH_VARARGS,
      "Method for calculating particle intrinsic line emission."},
     {NULL, NULL, 0, NULL}};
 

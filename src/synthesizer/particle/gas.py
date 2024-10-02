@@ -14,10 +14,12 @@ Example usages:
 """
 
 import numpy as np
+from unyt import Mpc, Msun, km, s
 
 from synthesizer import exceptions
 from synthesizer.particle.particles import Particles
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, accepts
+from synthesizer.utils import TableFormatter
 from synthesizer.warnings import warn
 
 
@@ -66,6 +68,15 @@ class Gas(Particles):
     smoothing_lengths = Quantity()
     dust_masses = Quantity()
 
+    @accepts(
+        masses=Msun.in_base("galactic"),
+        coordinates=Mpc,
+        velocities=km / s,
+        smoothing_lengths=Mpc,
+        softening_length=Mpc,
+        dust_masses=Msun.in_base("galactic"),
+        centre=Mpc,
+    )
     def __init__(
         self,
         masses,
@@ -80,6 +91,9 @@ class Gas(Particles):
         dust_masses=None,
         verbose=False,
         centre=None,
+        metallicity_floor=1e-5,
+        tau_v=None,
+        **kwargs,
     ):
         """
         Initialise the gas object.
@@ -106,6 +120,17 @@ class Gas(Particles):
                 values for each gas particle.
             dust_masses (array_like, float)
                 Mass of dust in each particle in Msun.
+            verbose (bool)
+                Whether to print extra information to the console.
+            centre (array-like, float)
+                The centre of the galaxy in simulation length units.
+            metallicity_floor (float)
+                The metallicity floor when using log properties (only matters
+                for baryons). This is used to avoid log(0) errors.
+            tau_v (float)
+                The dust optical depth in the V band.
+            **kwargs
+                Extra optional properties to set on the gas object.
         """
 
         # Instantiate parent
@@ -116,13 +141,15 @@ class Gas(Particles):
             masses=masses,
             redshift=redshift,
             softening_length=softening_length,
-            nparticles=len(masses),
+            nparticles=masses.size,
             centre=centre,
+            metallicity_floor=metallicity_floor,
+            tau_v=tau_v,
+            name="Gas",
         )
 
         # Set the metallicites and log10 equivalent
         self.metallicities = metallicities
-        self.log10metallicities = np.log10(self.metallicities)
 
         # Set the star forming boolean mask array
         self.star_forming = star_forming
@@ -130,8 +157,12 @@ class Gas(Particles):
         # Set the smoothing lengths for these gas particles
         self.smoothing_lengths = smoothing_lengths
 
-        #
-        if (dust_to_metal_ratio is None) & (dust_masses is None):
+        # None metallicity warning already captured when loading gas
+        if (
+            (self.metallicities is not None)
+            & (dust_to_metal_ratio is None)
+            & (dust_masses is None)
+        ):
             warn(
                 "Neither dust mass nor dust to metal ratio "
                 "provided. Assuming dust to metal ratio = 0.3"
@@ -146,8 +177,8 @@ class Gas(Particles):
         else:  # if dust_masses is not None:
             self.dust_masses = dust_masses
 
-            # TODO: this should be removed when dust masses are
-            # properly propagated to LOS calculation
+            # Calculate the dust to metal ratio from the dust mass and
+            # metallicity
             self.dust_to_metal_ratio = self.dust_masses / (
                 self.masses * self.metallicities
             )
@@ -157,6 +188,10 @@ class Gas(Particles):
 
         # Check the arguments we've been given
         self._check_gas_args()
+
+        # Set any extra properties
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def _check_gas_args(self):
         """
@@ -186,3 +221,16 @@ class Gas(Particles):
         self.dust_masses = (
             self.masses * self.metallicities * self.dust_to_metal_ratio
         )
+
+    def __str__(self):
+        """
+        Return a string representation of the stars object.
+
+        Returns:
+            table (str)
+                A string representation of the particle object.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Gas")

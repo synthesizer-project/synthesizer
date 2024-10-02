@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
-from synthesizer.igm import Inoue14, Madau96
+
+from synthesizer.emission_models.attenuation.igm import Inoue14, Madau96
 
 
 @pytest.fixture
@@ -24,10 +25,10 @@ def test_M96_name(m96):
 def test_I14_transmission(i14):
     lam = np.loadtxt("tests/test_sed/lam.txt")
     z = 2.0
-    assert isinstance(i14.T(z, lam), np.ndarray)
+    assert isinstance(i14.get_transmission(z, lam), np.ndarray)
 
 
 def test_M96_transmission(m96):
     lam = np.loadtxt("tests/test_sed/lam.txt")
     z = 2.0
-    assert isinstance(m96.T(z, lam), np.ndarray)
+    assert isinstance(m96.get_transmission(z, lam), np.ndarray)
