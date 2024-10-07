@@ -2,19 +2,21 @@
 
 The class defined here should never be instantiated directly, there are only
 ever instantiated by the parametric/particle child classes.
+BlackholesComponent is a child class of Component.
 """
 
 import numpy as np
 from unyt import Hz, Msun, angstrom, c, cm, deg, erg, km, s, yr
 
 from synthesizer import exceptions
+from synthesizer.component import Component
 from synthesizer.line import Line
-from synthesizer.sed import plot_spectra
 from synthesizer.units import Quantity, accepts
-from synthesizer.warnings import deprecated, deprecation, warn
+from synthesizer.utils import TableFormatter
+from synthesizer.warnings import warn
 
 
-class BlackholesComponent:
+class BlackholesComponent(Component):
     """
     The parent class for stellar components of a galaxy.
 
@@ -162,19 +164,8 @@ class BlackholesComponent:
                 Any other parameter for the emission models can be provided as
                 kwargs.
         """
-        # Initialise spectra
-        self.spectra = {}
-
-        # Initialise lines
-        self.lines = {}
-
-        # Intialise the photometry dictionaries
-        self.photo_lnu = {}
-        self.photo_fnu = {}
-
-        # Define the dictionaries to hold the images
-        self.images_lnu = {}
-        self.images_fnu = {}
+        # Initialise the parent class
+        Component.__init__(self, "BlackHoles", **kwargs)
 
         # Save the black hole properties
         self.mass = mass
@@ -209,10 +200,6 @@ class BlackholesComponent:
         self.theta_torus = theta_torus
         self.torus_fraction = (self.theta_torus / (90 * deg)).value
         self._torus_edgeon_cond = self.inclination + self.theta_torus
-
-        # Set any of the extra attribute provided as kwargs
-        for key, val in kwargs.items():
-            setattr(self, key, val)
 
         # Check to make sure that both accretion rate and bolometric luminosity
         # haven't been provided because that could be confusing.
@@ -280,51 +267,6 @@ class BlackholesComponent:
             self.cosine_inclination = np.cos(
                 self.inclination.to("radian").value
             )
-
-    @property
-    def photo_fluxes(self):
-        """
-        Get the photometry fluxes.
-
-        Returns:
-            dict
-                The photometry fluxes.
-        """
-        deprecation(
-            "The `photo_fluxes` attribute is deprecated. Use "
-            "`photo_fnu` instead. Will be removed in v1.0.0"
-        )
-        return self.photo_fnu
-
-    @property
-    def photo_luminosities(self):
-        """
-        Get the photometry luminosities.
-
-        Returns:
-            dict
-                The photometry luminosities.
-        """
-        deprecation(
-            "The `photo_luminosities` attribute is deprecated. Use "
-            "`photo_lnu` instead. Will be removed in v1.0.0"
-        )
-        return self.photo_lnu
-
-    def _prepare_sed_args(self, *args, **kwargs):
-        """
-        This method is a prototype for generating the arguments for spectra
-        generation from AGN grids. It is redefined on the child classes to
-        handle the different attributes of parametric and particle cases.
-        """
-        raise Warning(
-            (
-                "_prepare_sed_args should be overloaded by child classes:\n"
-                "`particle.BlackHoles`\n"
-                "`parametric.BlackHole`\n"
-                "You should not be seeing this!!!"
-            )
-        )
 
     def generate_lnu(
         self,
@@ -525,47 +467,6 @@ class BlackholesComponent:
         else:
             return Line(combine_lines=lines)
 
-    def __str__(self):
-        """
-        Return a basic summary of the BlackHoles object.
-
-        Returns a string containing the total mass formed and lists of the
-        available SEDs, lines, and images.
-
-        Returns
-            str
-                Summary string containing the total mass formed and lists
-                of the available SEDs, lines, and images.
-        """
-        # Define the width to print within
-        width = 80
-        pstr = ""
-        pstr += "-" * width + "\n"
-        pstr += "SUMMARY OF BLACKHOLE".center(width + 4) + "\n"
-        # pstr += get_centred_art(Art.blackhole, width) + "\n"
-
-        pstr += f"Number of blackholes: {self.mass.size} \n"
-
-        for attribute_id in [
-            "mass",
-            "accretion_rate",
-            "accretion_rate_eddington",
-            "bolometric_luminosity",
-            "eddington_ratio",
-            "bb_temperature",
-            "eddington_luminosity",
-            "spin",
-            "epsilon",
-            "inclination",
-            "cosine_inclination",
-        ]:
-            attr = getattr(self, attribute_id, None)
-            if attr is not None:
-                attr = np.round(attr, 3)
-                pstr += f"{attribute_id}: {attr} \n"
-
-        return pstr
-
     def calculate_bolometric_luminosity(self):
         """
         Calculate the black hole bolometric luminosity. This is by itself
@@ -642,363 +543,15 @@ class BlackholesComponent:
 
         return self.accretion_rate_eddington
 
-    def get_photo_lnu(self, filters, verbose=True):
+    def __str__(self):
         """
-        Calculate luminosity photometry using a FilterCollection object.
-
-        Args:
-            filters (filters.FilterCollection)
-                A FilterCollection object.
-            verbose (bool)
-                Are we talking?
+        Return a string representation of the particle object.
 
         Returns:
-            photo_lnu (dict)
-                A dictionary of rest frame broadband luminosities.
+            table (str)
+                A string representation of the particle object.
         """
-        # Loop over spectra in the component
-        for spectra in self.spectra:
-            # Create the photometry collection and store it in the object
-            self.photo_lnu[spectra] = self.spectra[spectra].get_photo_lnu(
-                filters, verbose
-            )
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
 
-        return self.photo_lnu
-
-    @deprecated(
-        "The `get_photo_luminosities` method is deprecated. Use "
-        "`get_photo_lnu` instead. Will be removed in v1.0.0"
-    )
-    def get_photo_luminosities(self, filters, verbose=True):
-        """
-        Calculate luminosity photometry using a FilterCollection object.
-
-        Alias to get_photo_lnu.
-
-        Photometry is calculated in spectral luminosity density units.
-
-        Args:
-            filters (filters.FilterCollection)
-                A FilterCollection object.
-            verbose (bool)
-                Are we talking?
-
-        Returns:
-            PhotometryCollection
-                A PhotometryCollection object containing the luminosity
-                photometry in each filter in filters.
-        """
-        return self.get_photo_lnu(filters, verbose)
-
-    def get_photo_fnu(self, filters, verbose=True):
-        """
-        Calculate flux photometry using a FilterCollection object.
-
-        Args:
-            filters (object)
-                A FilterCollection object.
-            verbose (bool)
-                Are we talking?
-
-        Returns:
-            (dict)
-                A dictionary of fluxes in each filter in filters.
-        """
-        # Loop over spectra in the component
-        for spectra in self.spectra:
-            # Create the photometry collection and store it in the object
-            self.photo_fnu[spectra] = self.spectra[spectra].get_photo_fnu(
-                filters, verbose
-            )
-
-        return self.photo_fnu
-
-    @deprecated(
-        "The `get_photo_fluxes` method is deprecated. Use "
-        "`get_photo_fnu` instead. Will be removed in v1.0.0"
-    )
-    def get_photo_fluxes(self, filters, verbose=True):
-        """
-        Calculate flux photometry using a FilterCollection object.
-
-        Alias to get_photo_fnu.
-
-        Photometry is calculated in spectral flux density units.
-
-        Args:
-            filters (object)
-                A FilterCollection object.
-            verbose (bool)
-                Are we talking?
-
-        Returns:
-            PhotometryCollection
-                A PhotometryCollection object containing the flux photometry
-                in each filter in filters.
-        """
-        return self.get_photo_fnu(filters, verbose)
-
-    def plot_spectra(
-        self,
-        spectra_to_plot=None,
-        show=False,
-        ylimits=(),
-        xlimits=(),
-        figsize=(3.5, 5),
-        **kwargs,
-    ):
-        """
-        Plots either specific spectra (specified via spectra_to_plot) or all
-        spectra on the child Stars object.
-
-        Args:
-            spectra_to_plot (string/list, string)
-                The specific spectra to plot.
-                    - If None all spectra are plotted.
-                    - If a list of strings each specifc spectra is plotted.
-                    - If a single string then only that spectra is plotted.
-            show (bool)
-                Flag for whether to show the plot or just return the
-                figure and axes.
-            ylimits (tuple)
-                The limits to apply to the y axis. If not provided the limits
-                will be calculated with the lower limit set to 1000 (100)
-                times less than the peak of the spectrum for rest_frame
-                (observed) spectra.
-            xlimits (tuple)
-                The limits to apply to the x axis. If not provided the optimal
-                limits are found based on the ylimits.
-            figsize (tuple)
-                Tuple with size 2 defining the figure size.
-            kwargs (dict)
-                arguments to the `sed.plot_spectra` method called from this
-                wrapper
-
-        Returns:
-            fig (matplotlib.pyplot.figure)
-                The matplotlib figure object for the plot.
-            ax (matplotlib.axes)
-                The matplotlib axes object containing the plotted data.
-        """
-        # Handling whether we are plotting all spectra, specific spectra, or
-        # a single spectra
-        if spectra_to_plot is None:
-            spectra = self.spectra
-        elif isinstance(spectra_to_plot, (list, tuple)):
-            spectra = {key: self.spectra[key] for key in spectra_to_plot}
-        else:
-            spectra = self.spectra[spectra_to_plot]
-
-        return plot_spectra(
-            spectra,
-            show=show,
-            ylimits=ylimits,
-            xlimits=xlimits,
-            figsize=figsize,
-            draw_legend=isinstance(spectra, dict),
-            **kwargs,
-        )
-
-    def get_spectra(
-        self,
-        emission_model,
-        dust_curves=None,
-        tau_v=None,
-        covering_fraction=None,
-        mask=None,
-        verbose=True,
-        **kwargs,
-    ):
-        """
-        Generate black hole spectra as described by the emission model.
-
-        Args:
-            emission_model (EmissionModel):
-                The emission model to use.
-            dust_curves (dict):
-                An override to the emission model dust curves. Either:
-                    - None, indicating the dust_curves defined on the emission
-                      models should be used.
-                    - A single dust curve to apply to all emission models.
-                    - A dictionary of the form {<label>: <dust_curve instance>}
-                      to use a specific dust curve instance with particular
-                      properties.
-            tau_v (dict):
-                An override to the dust model optical depth. Either:
-                    - None, indicating the tau_v defined on the emission model
-                      should be used.
-                    - A float to use as the optical depth for all models.
-                    - A dictionary of the form {<label>: float(<tau_v>)}
-                      to use a specific optical depth with a particular
-                      model or {<label>: str(<attribute>)} to use an attribute
-                      of the component as the optical depth.
-            fesc (dict):
-                An override to the emission model escape fraction. Either:
-                    - None, indicating the fesc defined on the emission model
-                      should be used.
-                    - A float to use as the escape fraction for all models.
-                    - A dictionary of the form {<label>: float(<fesc>)}
-                      to use a specific escape fraction with a particular
-                      model or {<label>: str(<attribute>)} to use an
-                      attribute of the component as the escape fraction.
-            mask (dict):
-                An override to the emission model mask. Either:
-                    - None, indicating the mask defined on the emission model
-                      should be used.
-                    - A dictionary of the form {<label>: {"attr": attr,
-                      "thresh": thresh, "op": op}} to add a specific mask to
-                      a particular model.
-            verbose (bool)
-                Are we talking?
-            kwargs (dict)
-                Any additional keyword arguments to pass to the generator
-                function.
-
-        Returns:
-            dict
-                A dictionary of spectra which can be attached to the
-                appropriate spectra attribute of the component
-                (spectra/particle_spectra)
-        """
-        # Get the spectra
-        spectra, particle_spectra = emission_model._get_spectra(
-            emitters={"blackhole": self},
-            dust_curves=dust_curves,
-            tau_v=tau_v,
-            fesc=covering_fraction,
-            mask=mask,
-            verbose=verbose,
-            **kwargs,
-        )
-
-        # Update the spectra dictionary
-        self.spectra.update(spectra)
-
-        # If we have particle spectra update the particle_spectra dictionary
-        # too
-        if hasattr(self, "particle_spectra"):
-            self.particle_spectra.update(particle_spectra)
-
-        # Return the spectra the user wants
-        if emission_model.per_particle:
-            return self.particle_spectra[emission_model.label]
-        return self.spectra[emission_model.label]
-
-    def get_lines(
-        self,
-        line_ids,
-        emission_model,
-        dust_curves=None,
-        tau_v=None,
-        covering_fraction=None,
-        mask=None,
-        verbose=True,
-        **kwargs,
-    ):
-        """
-        Generate stellar lines as described by the emission model.
-
-        Args:
-            line_ids (list):
-                A list of line_ids. Doublets can be specified as a nested list
-                or using a comma (e.g. 'OIII4363,OIII4959').
-            emission_model (EmissionModel):
-                The emission model to use.
-            dust_curves (dict):
-                An override to the emission model dust curves. Either:
-                    - None, indicating the dust_curves defined on the emission
-                      models should be used.
-                    - A single dust curve to apply to all emission models.
-                    - A dictionary of the form {<label>: <dust_curve instance>}
-                      to use a specific dust curve instance with particular
-                      properties.
-            tau_v (dict):
-                An override to the dust model optical depth. Either:
-                    - None, indicating the tau_v defined on the emission model
-                      should be used.
-                    - A float to use as the optical depth for all models.
-                    - A dictionary of the form {<label>: float(<tau_v>)}
-                      to use a specific optical depth with a particular
-                      model or {<label>: str(<attribute>)} to use an attribute
-                      of the component as the optical depth.
-            fesc (dict):
-                An override to the emission model escape fraction. Either:
-                    - None, indicating the fesc defined on the emission model
-                      should be used.
-                    - A float to use as the escape fraction for all models.
-                    - A dictionary of the form {<label>: float(<fesc>)}
-                      to use a specific escape fraction with a particular
-                      model or {<label>: str(<attribute>)} to use an
-                      attribute of the component as the escape fraction.
-            mask (dict):
-                An override to the emission model mask. Either:
-                    - None, indicating the mask defined on the emission model
-                      should be used.
-                    - A dictionary of the form {<label>: {"attr": attr,
-                      "thresh": thresh, "op": op}} to add a specific mask to
-                      a particular model.
-            verbose (bool)
-                Are we talking?
-            kwargs (dict)
-                Any additional keyword arguments to pass to the generator
-                function.
-
-        Returns:
-            LineCollection
-                A LineCollection object containing the lines defined by the
-                root model.
-        """
-        # Get the lines
-        lines, particle_lines = emission_model._get_lines(
-            line_ids=line_ids,
-            emitters={"blackhole": self},
-            dust_curves=dust_curves,
-            tau_v=tau_v,
-            fesc=covering_fraction,
-            mask=mask,
-            verbose=verbose,
-            **kwargs,
-        )
-
-        # Update the lines dictionary
-        self.lines.update(lines)
-
-        # Update the particle lines dictionary if it exists
-        if hasattr(self, "particle_lines"):
-            self.particle_lines.update(particle_lines)
-
-        # Return the lines the user wants
-        if emission_model.per_particle:
-            return self.particle_lines[emission_model.label]
-        return self.lines[emission_model.label]
-
-    def clear_all_spectra(self):
-        """Clear all spectra from the component."""
-        self.spectra = {}
-        if hasattr(self, "particle_spectra"):
-            self.particle_spectra = {}
-
-    def clear_all_lines(self):
-        """Clear all lines from the component."""
-        self.lines = {}
-        if hasattr(self, "particle_lines"):
-            self.particle_lines = {}
-
-    def clear_all_photometry(self):
-        """Clear all photometry from the component."""
-        self.photo_lnu = {}
-        self.photo_fnu = {}
-        if hasattr(self, "particle_photo_lnu"):
-            self.particle_photo_lnu = {}
-        if hasattr(self, "particle_photo_fnu"):
-            self.particle_photo_fnu = {}
-
-    def clear_all_emissions(self):
-        """
-        Clear all emissions from the component.
-
-        This clears all spectra, lines, and photometry.
-        """
-        self.clear_all_spectra()
-        self.clear_all_lines()
-        self.clear_all_photometry()
+        return formatter.get_table("Black Holes")
