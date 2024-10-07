@@ -60,7 +60,7 @@ if __name__ == "__main__":
     filters = UVJ()
 
     # Get photometry
-    galaxy.stars.spectra["reprocessed"].get_photo_lnu(filters)
+    galaxy.stars.get_photo_lnu(filters)
 
     # Define geometry of the images
     resolution = 0.01 * kpc  # resolution in kpc
@@ -88,8 +88,8 @@ if __name__ == "__main__":
     # We can also do the same with a helper function on the galaxy object
     img = galaxy.get_images_luminosity(
         resolution=resolution,
-        stellar_photometry="reprocessed",
         fov=fov,
+        emission_model=model,
     )
 
     # and... print an ASCII representation
