@@ -1001,7 +1001,7 @@ def _generate_image_collection_generic(
     except KeyError:
         # Ok we are missing the photometry
         raise exceptions.MissingSpectraType(
-            f"Can't make an image for {label} without the photometry."
+            f"Can't make an image for {label} without the photometry. "
             "Did you not save the spectra or produce the photometry?"
         )
 
