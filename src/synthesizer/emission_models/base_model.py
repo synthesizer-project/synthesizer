@@ -2836,6 +2836,14 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                 images = self._combine_images(
                     images,
                     this_model,
+                    resolution,
+                    fov,
+                    img_type,
+                    do_flux,
+                    emitters,
+                    kernel,
+                    kernel_threshold,
+                    nthreads,
                 )
             elif this_model._is_dust_attenuating:
                 images = self._attenuate_images(
