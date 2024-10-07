@@ -1,6 +1,6 @@
-from synthesizer.particle.stars import Stars
-from synthesizer.particle.gas import Gas
 from synthesizer.particle.blackholes import BlackHoles
-from synthesizer.particle.particles import Particles as DarkMatter
 from synthesizer.particle.galaxy import Galaxy
-from synthesizer.particle.particles import CoordinateGenerator
+from synthesizer.particle.gas import Gas
+from synthesizer.particle.particles import CoordinateGenerator, Particles
+from synthesizer.particle.particles import Particles as DarkMatter
+from synthesizer.particle.stars import Stars
