@@ -172,6 +172,10 @@ class BlackholesComponent:
         self.photo_lnu = {}
         self.photo_fnu = {}
 
+        # Define the dictionaries to hold the images
+        self.images_lnu = {}
+        self.images_fnu = {}
+
         # Save the black hole properties
         self.mass = mass
         self.accretion_rate = accretion_rate

@@ -56,6 +56,10 @@ class StarsComponent:
         self.photo_lnu = {}
         self.photo_fnu = {}
 
+        # Define the dictionaries to hold the images
+        self.images_lnu = {}
+        self.images_fnu = {}
+
         # The common stellar attributes between particle and parametric stars
         self.ages = ages
         self.metallicities = metallicities
