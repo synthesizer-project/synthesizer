@@ -1059,6 +1059,14 @@ class Combination:
         self,
         images,
         this_model,
+        resolution,
+        fov,
+        img_type,
+        do_flux,
+        emitters,
+        kernel,
+        kernel_threshold,
+        nthreads,
     ):
         """
         Combine the images by addition.
@@ -1071,31 +1079,36 @@ class Combination:
             this_model (EmissionModel):
                 The model defining the combination.
         """
-        # Get the model labels we are combining
-        combine_labels = [model.label for model in this_model.combine]
+        # Get the image for each model we are combining
+        combine_labels = []
+        combine_images = []
+        for model in this_model.combine:
+            # If the image hasn't been made try to generate it
+            if model.label not in images:
+                img = _generate_image_collection_generic(
+                    resolution,
+                    fov,
+                    img_type,
+                    do_flux,
+                    model.per_particle,
+                    kernel,
+                    kernel_threshold,
+                    nthreads,
+                    model.label,
+                    emitters[model.emitter],
+                )
+            else:
+                img = images[model.label]
+            combine_labels.append(model.label)
+            combine_images.append(img)
 
         # Get the first image to add to
-        # (if it doesn't exist we have a problem)
-        if combine_labels[0] not in images:
-            raise exceptions.MissingImage(
-                f"No image found for {combine_labels[0]}, "
-                f"{this_model.label} requires"
-                f" {[model.label for model in this_model.combine]} for"
-                " combination."
-            )
-        out_image = images[combine_labels[0]]
+        out_image = combine_images[0]
 
         # Combine the images
         # Again, we have a problem if any don't exist
-        for combine_label in combine_labels[1:]:
-            if combine_label not in images:
-                raise exceptions.MissingImage(
-                    f"No image found for {combine_label}, "
-                    f"{this_model.label} requires"
-                    f" {[model.label for model in this_model.combine]} for"
-                    " combination."
-                )
-            out_image += images[combine_label]
+        for img in combine_images[1:]:
+            out_image += img
 
         # Store the image
         images[this_model.label] = out_image

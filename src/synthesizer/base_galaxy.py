@@ -1062,7 +1062,9 @@ class BaseGalaxy:
         # Unpack the images to the right component
         for model in emission_model._models.values():
             # Skip models we aren't saving
-            if not model.save:
+            if not model.save or (
+                limit_to is not None and model.label != limit_to
+            ):
                 continue
             if model.emitter == "galaxy":
                 self.images_lnu[model.label] = images[model.label]
@@ -1169,7 +1171,9 @@ class BaseGalaxy:
         # Unpack the images to the right component
         for model in emission_model._models.values():
             # Skip models we aren't saving
-            if not model.save:
+            if not model.save or (
+                limit_to is not None and model.label != limit_to
+            ):
                 continue
             if model.emitter == "galaxy":
                 self.images_fnu[model.label] = images[model.label]
