@@ -18,7 +18,7 @@ from scipy import integrate
 from unyt import Hz, Msun, angstrom, erg, nJy, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import exceptions
-from synthesizer.components import StarsComponent
+from synthesizer.components.stellar import StarsComponent
 from synthesizer.line import Line
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon

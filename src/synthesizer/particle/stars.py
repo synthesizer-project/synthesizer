@@ -27,7 +27,7 @@ import numpy as np
 from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, s, yr
 
 from synthesizer import exceptions
-from synthesizer.components import StarsComponent
+from synthesizer.components.stellar import StarsComponent
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line
 from synthesizer.parametric import SFH

@@ -12,8 +12,6 @@ respectively.
 from abc import ABC, abstractmethod
 
 from synthesizer import exceptions
-from synthesizer.parametric import BlackHole as ParametricBlackHole
-from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.sed import plot_spectra
 from synthesizer.warnings import deprecated, deprecation
 
@@ -470,10 +468,7 @@ class Component(ABC):
         """
         # Ensure we aren't trying to make a histogram for a parametric
         # component
-        if (
-            isinstance(self, (ParametricStars, ParametricBlackHole))
-            and img_type == "hist"
-        ):
+        if hasattr(self, "morphology") and img_type == "hist":
             raise exceptions.InconsistentArguments(
                 f"Parametric {self.component_type} can only produce "
                 "smoothed images."
@@ -567,10 +562,7 @@ class Component(ABC):
         """
         # Ensure we aren't trying to make a histogram for a parametric
         # component
-        if (
-            isinstance(self, (ParametricStars, ParametricBlackHole))
-            and img_type == "hist"
-        ):
+        if hasattr(self, "morphology") and img_type == "hist":
             raise exceptions.InconsistentArguments(
                 f"Parametric {self.component_type} can only produce "
                 "smoothed images."

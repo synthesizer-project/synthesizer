@@ -9,7 +9,7 @@ import numpy as np
 from unyt import Hz, Msun, angstrom, c, cm, deg, erg, km, s, yr
 
 from synthesizer import exceptions
-from synthesizer.component import Component
+from synthesizer.components.component import Component
 from synthesizer.line import Line
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter

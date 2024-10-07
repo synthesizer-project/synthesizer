@@ -26,8 +26,9 @@ from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging import Image, SpectralCube
-from synthesizer.parametric import Stars as ParametricStars
-from synthesizer.particle import Gas, Stars
+from synthesizer.parametric.stars import Stars as ParametricStars
+from synthesizer.particle.gas import Gas
+from synthesizer.particle.stars import Stars
 from synthesizer.units import accepts
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.warnings import deprecated, warn

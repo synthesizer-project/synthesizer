@@ -23,7 +23,7 @@ import numpy as np
 from unyt import Msun, cm, deg, erg, km, kpc, s, unyt_array, yr
 
 from synthesizer import exceptions
-from synthesizer.components import BlackholesComponent
+from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.parametric.morphology import PointSource
 from synthesizer.units import accepts
 
