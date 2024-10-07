@@ -818,3 +818,15 @@ class Stars(StarsComponent):
             plt.show()
 
         return fig, ax
+
+    def _prepare_sed_args(self, *args, **kwargs):
+        """Prepare arguments for SED generation."""
+        raise exceptions.NotImplementedError(
+            "Parametric stars don't currently require arg preparation"
+        )
+
+    def _prepare_line_args(self, *args, **kwargs):
+        """Prepare arguments for line generation."""
+        raise exceptions.NotImplementedError(
+            "Parametric stars don't currently require arg preparation"
+        )
