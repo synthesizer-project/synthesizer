@@ -978,6 +978,9 @@ def _generate_image_collection_generic(
             The label of the photometry to use.
         emitter (Stars/BlackHoles/BlackHole)
             The emitter object to create the images for.
+        mask (np.ndarray)
+            A mask to apply to the image. If None a mask of ones will be
+            generated.
 
     Returns:
         ImageCollection

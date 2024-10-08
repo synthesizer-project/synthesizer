@@ -2678,7 +2678,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         fov,
         emitters,
         img_type="smoothed",
-        mask=None,  # TODO: impelement the masking properly
         images=None,
         _is_related=False,
         limit_to=None,
@@ -2711,13 +2710,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             emitters (Stars/BlackHoles):
                 The emitters to generate the lines for in the form of a
                 dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
-            mask (dict):
-                An overide to the emission model mask. Either:
-                    - None, indicating the mask defined on the emission model
-                      should be used.
-                    - A dictionary of the form:
-                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
-                      to add a specific mask to a particular model.
             verbose (bool)
                 Are we talking?
             images (dict)
@@ -2748,16 +2740,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         # shallow copy so very cheap and doesn't copy any pointed to objects
         # only their reference)
         emission_model = copy.copy(self)
-
-        # Apply any overides we have
-        self._apply_overrides(
-            emission_model,
-            None,
-            None,
-            None,
-            None,
-            mask,
-        )
 
         # If we haven't got an images dictionary yet we'll make one
         if images is None:
@@ -2799,7 +2781,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             fov,
                             emitters,
                             img_type,
-                            mask,
                             images,
                             _is_related=True,
                             limit_to=limit_to,
