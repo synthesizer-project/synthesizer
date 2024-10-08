@@ -19,6 +19,8 @@ Example usage:
     print(formatter.generate_table())
 """
 
+import inspect
+
 import numpy as np
 from unyt import unyt_array
 
@@ -42,8 +44,40 @@ class TableFormatter:
             obj (object):
                 The object to be formatted into a table.
         """
+        # Attach the object
         self.obj = obj
+
+        # Get the object's attributes
         self.attributes = vars(obj)
+
+        # Update with property attributes
+        for name, member in inspect.getmembers(type(obj)):
+            # Skip non-properties
+            if not isinstance(member, property):
+                continue
+
+            # Skip if the property is already in the Attributes
+            if name in self.attributes:
+                continue
+
+            # Add the property to the attributes but some can fail if
+            # certain information is missing so we need to catch the
+            # exception and continue
+            try:
+                self.attributes[name] = getattr(obj, name)
+            except KeyboardInterrupt as e:
+                # If the user interrupts the process, raise the Exception
+                # regardless
+                raise KeyboardInterrupt(e)
+            except Exception:
+                continue
+
+        # Remove any private Attributes that aren't Quantities
+        self.attributes = {
+            key: value
+            for key, value in self.attributes.items()
+            if not (key[0] == "_" and getattr(obj, key[1:], None) is None)
+        }
 
     def format_array(self, array):
         """
