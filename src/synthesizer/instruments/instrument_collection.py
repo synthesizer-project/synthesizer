@@ -1,4 +1,41 @@
-"""A module defining a container for instruments."""
+"""A module defining a container for instruments.
+
+A InstrumentCollection is a container for Instrument objects. It can be
+treated as a dictionary of instruments, with the label of the instrument
+as the key. It can also be treated as an iterable, allowing for simple
+iteration over the instruments in the collection.
+
+InstrumentCollections can either be created from an existing file or
+initialised as an empty collection to which instruments can be added.
+
+Example usage:
+
+    # Create an empty InstrumentCollection
+    collection = InstrumentCollection()
+
+    # Add an instrument to the collection
+    instrument = Instrument(label="my_instrument", ...)
+    collection.add_instruments(instrument)
+
+    # Add multiple instruments to the collection
+    instrument1 = Instrument(label="instrument1", ...)
+    instrument2 = Instrument(label="instrument2", ...)
+    collection.add_instruments(instrument1, instrument2)
+
+    # Save the collection to a file
+    collection.save_instruments("path/to/file.hdf5")
+
+    # Load the collection from a file
+    collection = InstrumentCollection("path/to/file.hdf5")
+
+    # Iterate over the instruments in the collection
+    for instrument in collection:
+        print(instrument.label)
+
+    # Get an instrument by its label
+    instrument = collection["my_instrument"]
+
+"""
 
 import h5py
 from syntheiszer.instruments.instrument import Instrument
