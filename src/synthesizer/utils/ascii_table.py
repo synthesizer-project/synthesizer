@@ -204,7 +204,7 @@ class TableFormatter:
         """
         rows = []
         for attr, value in self.attributes.items():
-            if isinstance(value, list):
+            if isinstance(value, list) and len(value) > 0:
                 formatted_values = self.format_list(value)
                 for i, formatted_value in enumerate(formatted_values):
                     if i == 0:
