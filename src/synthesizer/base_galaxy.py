@@ -1030,6 +1030,9 @@ class BaseGalaxy:
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int)
                 The number of threads to use in the tree search. Default is 1.
+            limit_to (str)
+                Optionally pass a single model label to limit image generation
+                to only that model.
 
         Returns:
             Image : array-like
