@@ -125,7 +125,7 @@ class Instrument:
         # Ensure other is an Instrument or InstrumentCollection
         if not isinstance(other, (Instrument, InstrumentCollection)):
             raise exceptions.InstrumentError(
-                "Cannot combine Instrument with non-Instrument object."
+                f"Cannot combine Instrument with {type(other)}."
             )
 
         # If we have an instrument collection just use the instrument
