@@ -38,9 +38,8 @@ Example usage:
 """
 
 import h5py
-from syntesizer import exceptions
-from syntheiszer.instruments.instrument import Instrument
 
+from synthesizer import exceptions
 from synthesizer.utils.ascii_table import TableFormatter
 
 
@@ -97,6 +96,9 @@ class InstrumentCollection:
             filepath (str):
                 The path to the file containing the instruments to load.
         """
+        # Have to import here to avoid circular imports
+        from synthesizer.instruments import Instrument
+
         # Open the file
         with h5py.File(filepath, "r") as hdf:
             # Iterate over the groups in the file
@@ -115,6 +117,9 @@ class InstrumentCollection:
             *instruments (Instrument):
                 The instruments to add to the collection.
         """
+        # Have to import here to avoid circular imports
+        from synthesizer.instruments import Instrument
+
         # Iterate over the instruments to add
         for instrument in instruments:
             # Ensure the object is an Instrument
@@ -134,7 +139,7 @@ class InstrumentCollection:
             self.instrument_labels.append(instrument.label)
             self.ninstruments += 1
 
-    def save_instruments(self, filepath):
+    def write_instruments(self, filepath):
         """
         Save the instruments in the collection to a file.
 
@@ -206,10 +211,10 @@ class InstrumentCollection:
 
         Raises:
             KeyError
-                When the filter does not exist in self.filters an error is
-                raised.
+                When the instrument does not exist in self.instruments
+                an error is raised.
         """
-        return self.filters[key]
+        return self.instruments[key]
 
     def __str__(self):
         """
@@ -236,6 +241,9 @@ class InstrumentCollection:
             InstrumentCollection:
                 The combined InstrumentCollection.
         """
+        # Have to import here to avoid circular imports
+        from synthesizer.instruments import Instrument
+
         # Ensure other is an InstrumentCollection or Instrument
         if not isinstance(other, (InstrumentCollection, Instrument)):
             raise exceptions.InconsistentAddition(
