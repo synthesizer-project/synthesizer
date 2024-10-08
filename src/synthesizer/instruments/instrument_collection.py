@@ -38,6 +38,7 @@ Example usage:
 """
 
 import h5py
+from syntesizer import exceptions
 from syntheiszer.instruments.instrument import Instrument
 
 from synthesizer.utils.ascii_table import TableFormatter
@@ -114,7 +115,21 @@ class InstrumentCollection:
             *instruments (Instrument):
                 The instruments to add to the collection.
         """
+        # Iterate over the instruments to add
         for instrument in instruments:
+            # Ensure the object is an Instrument
+            if not isinstance(instrument, Instrument):
+                raise exceptions.InconsistentArgument(
+                    f"Object {instrument} is not an Instrument."
+                )
+
+            # Ensure the label doesn't already exist in the Collection
+            if instrument.label in self.instruments:
+                raise exceptions.DuplicateInstrument(
+                    f"Instrument {instrument.label} already exists."
+                )
+
+            # Add the instrument to the collection
             self.instruments[instrument.label] = instrument
             self.instrument_labels.append(instrument.label)
             self.ninstruments += 1
@@ -208,3 +223,31 @@ class InstrumentCollection:
         formatter = TableFormatter(self)
 
         return formatter.get_table("Instrument Collection")
+
+    def __add__(self, other):
+        """
+        Combine InstrumentCollections or add an Instrument to this collection.
+
+        Args:
+            other (InstrumentCollection/Instrument):
+                The InstrumentCollection/Instrument to combine with this one.
+
+        Returns:
+            InstrumentCollection:
+                The combined InstrumentCollection.
+        """
+        # Ensure other is an InstrumentCollection or Instrument
+        if not isinstance(other, (InstrumentCollection, Instrument)):
+            raise exceptions.InconsistentAddition(
+                f"Cannot combine InstrumentCollection with {type(other)}."
+            )
+
+        # Handle addition of InstrumentCollections
+        if isinstance(other, InstrumentCollection):
+            self.add_instruments(*other.instruments.values())
+            return self
+
+        # Otherwise we are adding a single Instrument into the collection
+        self.add_instruments(other)
+
+        return self
