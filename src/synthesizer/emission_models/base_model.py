@@ -2679,7 +2679,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
         emitters,
         img_type="smoothed",
         mask=None,  # TODO: impelement the masking properly
-        verbose=True,  # TODO: Don't think this is needed
         images=None,
         _is_related=False,
         limit_to=None,
@@ -2801,7 +2800,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             emitters,
                             img_type,
                             mask,
-                            verbose,
                             images,
                             _is_related=True,
                             limit_to=limit_to,
