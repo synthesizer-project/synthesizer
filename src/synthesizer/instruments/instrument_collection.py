@@ -40,6 +40,8 @@ Example usage:
 import h5py
 from syntheiszer.instruments.instrument import Instrument
 
+from synthesizer.utils.ascii_table import TableFormatter
+
 
 class InstrumentCollection:
     """
@@ -193,3 +195,16 @@ class InstrumentCollection:
                 raised.
         """
         return self.filters[key]
+
+    def __str__(self):
+        """
+        Return a string representation of the InstrumentCollection.
+
+        Returns:
+            str
+                A string representation of the InstrumentCollection.
+        """
+        # Intialise the table formatter
+        formatter = TableFormatter(self)
+
+        return formatter.get_table("Instrument Collection")
