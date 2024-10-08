@@ -1,6 +1,6 @@
 """"""
 
-from unyt import angstorm, kpc
+from unyt import angstrom, kpc
 
 from synthesizer import exceptions
 from synthesizer.instruments.instrument_collection import InstrumentCollection
@@ -15,7 +15,7 @@ class Instrument:
     resoluton = Quantity()
     lam = Quantity()
 
-    @accepts(resolution=kpc, lam=angstorm)
+    @accepts(resolution=kpc, lam=angstrom)
     def __init__(
         self,
         label,
@@ -61,6 +61,142 @@ class Instrument:
         # Set the noise maps of the Instrument (applicable for imaging and
         # resolved spectroscopy)
         self.noise_maps = noise_maps
+
+    @property
+    def can_do_photometry(self):
+        """
+        Return whether the Instrument can be used for photometry.
+
+        Returns:
+            bool:
+                Whether the Instrument can be used for photometry.
+        """
+        return self.filters is not None
+
+    @property
+    def can_do_imaging(self):
+        """
+        Return whether the Instrument can be used for simple imaging.
+
+        This flags whether the Instrument can be used for imaging basic
+        imaging without PSFs and noise.
+
+        Returns:
+            bool:
+                Whether the Instrument can be used for simple imaging.
+        """
+        return self.can_do_photometry and self.resolution is not None
+
+    @property
+    def can_do_psf_imaging(self):
+        """
+        Return whether the Instrument can be used for imaging with PSFs.
+
+        Returns:
+            bool:
+                Whether the Instrument can be used for imaging with PSFs.
+        """
+        return self.can_do_imaging and self.psfs is not None
+
+    @property
+    def can_do_noisy_imaging(self):
+        """
+        Return whether the Instrument can be used for imaging with noise.
+
+        This is a bit more complex than the other flags as it can be true
+        for various different noise definitions.
+
+        We ignore the depth aperature radius here since a depth and SNR
+        without it is assumed to be a point source depth.
+
+        Returns:
+            bool:
+                Whether the Instrument can be used for imaging with noise.
+        """
+        # Check we have a compatible noise definition
+        have_noise = self.noise_maps is not None
+        have_noise |= self.snrs is not None and self.depth is not None
+
+        return self.can_do_imaging and have_noise
+
+    @property
+    def can_do_spectroscopy(self):
+        """
+        Return whether the Instrument can be used for spectroscopy.
+
+        Returns:
+            bool:
+                Whether the Instrument can be used for spectroscopy.
+        """
+        return self.lam is not None
+
+    @property
+    def can_do_noisy_spectroscopy(self):
+        """
+        Return whether the Instrument can be used for spectroscopy with noise.
+
+        This is a bit more complex than the other flags as it can be true
+        for various different noise definitions.
+
+        We ignore the depth aperature radius here since a depth and SNR
+        without it is assumed to be a point source depth.
+
+        Returns:
+            bool:
+                Whether the Instrument can be used for spectroscopy
+                with noise.
+        """
+        # Check we have a compatible noise definition
+        have_noise = self.noise_maps is not None
+        have_noise |= self.snrs is not None and self.depth is not None
+
+        return self.can_do_spectroscopy and have_noise
+
+    @property
+    def can_do_resolved_spectroscopy(self):
+        """
+        Return whether the Instrument can be used for resolved spectroscopy.
+
+        Returns:
+            bool:
+                Whether the Instrument can be used for simple resolved
+                spectroscopy.
+        """
+        return self.can_do_spectroscopy and self.resolution is not None
+
+    @property
+    def can_do_psf_spectroscopy(self):
+        """
+        Return whether the Instrument can do smoothed resolved spectroscopy.
+
+        Returns:
+            bool:
+                Whether the Instrument can be used for smoothed resolved
+                spectroscopy.
+        """
+        return self.can_do_resolved_spectroscopy and self.psfs is not None
+
+    @property
+    def can_do_noisy_resolved_spectroscopy(self):
+        """
+        Return whether the Instrument can do noisy resolved spectroscopy.
+
+        This is a bit more complex than the other flags as it can be true
+        for various different noise definitions.
+
+        We ignore the depth aperature radius here since a depth and SNR
+        without it is assumed to be a point source depth.
+
+        Returns:
+            bool:
+                Whether the Instrument can be used for noisy resolved
+                spectroscopy.
+        """
+        # Check we have a compatible noise definition
+        have_noise = self.noise_maps is not None
+        have_noise |= self.snrs is not None and self.depth is not None
+
+        return self.can_do_resolved_spectroscopy and have_noise
 
     @classmethod
     def from_hdf5(cls, group):
@@ -124,7 +260,7 @@ class Instrument:
         """
         # Ensure other is an Instrument or InstrumentCollection
         if not isinstance(other, (Instrument, InstrumentCollection)):
-            raise exceptions.InstrumentError(
+            raise exceptions.InconsistentAddition(
                 f"Cannot combine Instrument with {type(other)}."
             )
 
@@ -145,8 +281,7 @@ class Instrument:
         collection = InstrumentCollection()
 
         # Add the two instruments to the Collection
-        collection.add_instrument(self)
-        collection.add_instrument(other)
+        collection.add_instruments(self, other)
 
         return collection
 
