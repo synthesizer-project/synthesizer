@@ -675,14 +675,14 @@ class Grid:
 
         return (np.abs(array - value)).argmin()
 
-    def get_grid_point(self, values):
+    def get_grid_point(self, **kwargs):
         """
         Identify the nearest grid point for a tuple of values.
 
         Args:
-            values (tuple)
-                The values for which we want the grid point. These have to be
-                in the same order as the axes.
+            **kwargs (dict)
+                Pairs of axis names and values for the desired grid point,
+                e.g. log10ages=9.3, log10metallicities=-2.1.
 
         Returns:
             tuple
@@ -691,7 +691,7 @@ class Grid:
         return tuple(
             [
                 self.get_nearest_index(value, getattr(self, axis))
-                for axis, value in zip(self.axes, values)
+                for axis, value in kwargs.items()
             ]
         )
 
