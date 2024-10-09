@@ -306,18 +306,22 @@ class Extraction:
             emitter = emitters[this_model.emitter]
 
             # Store the resulting image collection
-            images[label] = _generate_image_collection_generic(
-                resolution,
-                fov,
-                img_type,
-                do_flux,
-                this_model.per_particle,
-                kernel,
-                kernel_threshold,
-                nthreads,
-                label,
-                emitter,
-            )
+            try:
+                images[label] = _generate_image_collection_generic(
+                    resolution,
+                    fov,
+                    img_type,
+                    do_flux,
+                    this_model.per_particle,
+                    kernel,
+                    kernel_threshold,
+                    nthreads,
+                    label,
+                    emitter,
+                )
+            except Exception as e:
+                print(f"Failed to generate image for {label}: {e}")
+                raise e
 
         return images
 
