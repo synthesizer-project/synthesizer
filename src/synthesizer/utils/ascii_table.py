@@ -16,7 +16,7 @@ Example usage:
     # Example usage
     example = Example()
     formatter = TableFormatter(example)
-    print(formatter.generate_table())
+    print(formatter.get_table())
 """
 
 import inspect
