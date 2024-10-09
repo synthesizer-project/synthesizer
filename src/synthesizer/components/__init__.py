@@ -1,2 +1,0 @@
-from synthesizer.components.stellar import StarsComponent
-from synthesizer.components.blackhole import BlackholesComponent
