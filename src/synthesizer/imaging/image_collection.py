@@ -48,7 +48,6 @@ from unyt import unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.image import Image
-from synthesizer.particle import BlackHoles
 from synthesizer.units import Quantity
 
 
@@ -1008,7 +1007,7 @@ def _generate_image_collection_generic(
 
     # If the emitter is a particle BlackHoles object we can only make a hist
     # image
-    if isinstance(emitter, BlackHoles):
+    if getattr(emitter, "name", None) == "Black Holes":
         img_type = "hist"
 
     # Instantiate the Image colection ready to make the image.
