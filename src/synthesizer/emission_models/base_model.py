@@ -2771,10 +2771,6 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
             # Get this model
             this_model = emission_model._models[label]
 
-            # Skip if we didn't save this model
-            if not this_model.save:
-                continue
-
             # Get the images for the related models that don't appear in the
             # main tree
             for related_model in this_model.related_models:
@@ -2795,6 +2791,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                             **kwargs,
                         )
                     )
+
+            # Skip if we didn't save this model
+            if not this_model.save:
+                continue
 
             # Skip models for a different emitters
             if (
