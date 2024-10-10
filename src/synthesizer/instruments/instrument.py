@@ -1,4 +1,28 @@
-""""""
+"""A module defining a class for observational instruments.
+
+This module contains the `Instrument` class, which is used to define
+observational instruments for use in the `synthesizer` package. The
+`Instrument` class contains everything needed to define a telescope or
+spectrograph, including the filters, resolution, wavelength array, depth,
+depth aperture radius, signal-to-noise ratios, PSFs and noise_maps.
+
+`Instrument` objects can define instruments to be used for synthetic:
+    - Photometry (with or without noise)
+    - Imaging (with or without PSFs and noise)
+    - Spectroscopy (with or without noise)
+    - Resolved Spectroscopy (with or without PSFs and noise)
+
+Example usage:
+    # Create an Instrument object
+    instrument = Instrument(
+        label="HST",
+        filters=FilterCollection(...),
+        resolution=0.1 * kpc,
+        noise_maps={...},
+        psfs={...},
+        )
+    print(instrument)
+"""
 
 import h5py
 from unyt import angstrom, kpc
@@ -11,7 +35,39 @@ from synthesizer.utils.ascii_table import TableFormatter
 
 
 class Instrument:
-    """"""
+    """
+    A class containing the properties defining an observational instrument.
+
+    This class contains everything needed to define a telescope or
+    spectrograph, including the filters, resolution, wavelength array,
+    depth, depth aperture radius, signal-to-noise ratios, PSFs and noise_maps.
+
+    `Instrument` objects can define instruments to be used for synthetic:
+        - Photometry (with or without noise)
+        - Imaging (with or without PSFs and noise)
+        - Spectroscopy (with or without noise)
+        - Resolved Spectroscopy (with or without PSFs and noise)
+
+    Attributes:
+        label (str):
+            The label of the Instrument.
+        filters (FilterCollection):
+            The filters of the Instrument.
+        resolution (Quantity):
+            The resolution of the Instrument.
+        lam (Quantity):
+            The wavelength array of the Instrument.
+        depth (Quantity):
+            The depth of the Instrument.
+        depth_app_radius (Quantity):
+            The depth aperture radius of the Instrument.
+        snrs (Quantity):
+            The signal-to-noise ratios of the Instrument.
+        psfs (Quantity):
+            The PSFs of the Instrument.
+        noise_maps (Quantity):
+            The noise maps of the Instrument.
+    """
 
     # Define quantities
     resoluton = Quantity()
@@ -30,7 +86,43 @@ class Instrument:
         psfs=None,
         noise_maps=None,
     ):
-        """"""
+        """
+        Initialize an Instrument object.
+
+        Args:
+            label (str):
+                The label for the Instrument, e.g. HST-WFC3, JWST-NIRCam, etc.
+            filters (FilterCollection, optional):
+                The filters of the Instrument. Default is None.
+            resolution (unyt_quantity, optional):
+                The resolution of the Instrument (with units). Default is None.
+            lam (unyt_array, optional):
+                The wavelength array of the Instrument (with units). Default
+                is None.
+            depth (dict/float, optional):
+                The depth of the Instrument in apparent mags. If filters are
+                passed depth must be a dictionaries of depths with and entry
+                per filter. Default is None.
+            depth_app_radius (unyt_quantity, optional):
+                The depth aperture radius of the Instrument (with units).
+                If this is omitted but SNRs and depths are provided, it is
+                assumed that the depth is a point source depth.
+                Default is None.
+            snrs (Quantity, optional):
+                The signal-to-noise ratios of the Instrument.
+                Default is None.
+            psfs (Quantity, optional):
+                The PSFs of the Instrument. If doing imaging this should be
+                a dictionary of PSFs with an entry for each filter. If doing
+                resolved spectroscopy this should be an array.
+                Default is None.
+            noise_maps (Quantity, optional):
+                The noise maps of the Instrument. If doing imaging this should
+                be a dictionary of noise maps with an entry for each filter.
+                If doing resolved spectroscopy this should be an array with
+                noise as a function of wavelength.
+                Default is None.
+        """
         # Set the label of the Instrument
         self.label = label
 
