@@ -299,6 +299,10 @@ class Extraction:
             if limit_to is not None and label != limit_to:
                 continue
 
+            # Also skip any models we didn't save
+            if not self._models[label].save:
+                continue
+
             # Get the model
             this_model = self._models[label]
 
@@ -1089,18 +1093,22 @@ class Combination:
         for model in this_model.combine:
             # If the image hasn't been made try to generate it
             if model.label not in images:
-                img = _generate_image_collection_generic(
-                    resolution,
-                    fov,
-                    img_type,
-                    do_flux,
-                    model.per_particle,
-                    kernel,
-                    kernel_threshold,
-                    nthreads,
-                    model.label,
-                    emitters[model.emitter],
-                )
+                try:
+                    img = _generate_image_collection_generic(
+                        resolution,
+                        fov,
+                        img_type,
+                        do_flux,
+                        model.per_particle,
+                        kernel,
+                        kernel_threshold,
+                        nthreads,
+                        model.label,
+                        emitters[model.emitter],
+                    )
+                except Exception as e:
+                    print(f"Failed to generate image for {model.label}: {e}")
+                    raise e
             else:
                 img = images[model.label]
             combine_labels.append(model.label)
