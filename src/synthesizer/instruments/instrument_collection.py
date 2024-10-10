@@ -40,7 +40,9 @@ Example usage:
 import h5py
 
 from synthesizer import exceptions
+from synthesizer._version import __version__
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.warnings import warn
 
 
 class InstrumentCollection:
@@ -101,10 +103,22 @@ class InstrumentCollection:
 
         # Open the file
         with h5py.File(filepath, "r") as hdf:
+            # Warn if the synthesizer versions don't match
+            if hdf["Header"].attrs["synthesizer_version"] != __version__:
+                warn(
+                    "Synthesizer versions differ between the code and "
+                    "FilterCollection file! This is probably fine but there "
+                    "is no gaurantee it won't cause errors."
+                )
+
             # Iterate over the groups in the file
             for group in hdf:
+                # Skip the header group
+                if group == "Header":
+                    continue
+
                 # Create an instrument from the group
-                instrument = Instrument.from_hdf5(hdf[group])
+                instrument = Instrument._from_hdf5(hdf[group])
 
                 # Add the instrument to the collection
                 self.add_instruments(instrument)
@@ -149,10 +163,19 @@ class InstrumentCollection:
         """
         # Open the file
         with h5py.File(filepath, "w") as hdf:
+            # Create header group
+            head = hdf.create_group("Header")
+
+            # Include the Synthesizer version
+            head.attrs["synthesizer_version"] = __version__
+
+            # Include the number of instruments
+            head.attrs["ninstruments"] = self.ninstruments
+
             # Iterate over the instruments in the collection
             for label, instrument in self.instruments.items():
                 # Save the instrument to the file
-                instrument.save_hdf(hdf, label)
+                instrument.to_hdf5(hdf.create_group(label))
 
     def __len__(self):
         """Return the number of instruments in the collection."""
