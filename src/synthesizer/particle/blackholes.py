@@ -733,7 +733,7 @@ class BlackHoles(Particles, BlackholesComponent):
         # If we have no black holes return zeros
         if self.nbh == 0:
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -749,7 +749,7 @@ class BlackHoles(Particles, BlackholesComponent):
             warn("Age mask has filtered out all particles")
 
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
