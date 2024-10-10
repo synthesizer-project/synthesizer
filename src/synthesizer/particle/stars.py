@@ -27,22 +27,23 @@ import numpy as np
 from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, s, yr
 
 from synthesizer import exceptions
-from synthesizer.components import StarsComponent
+from synthesizer.components.stellar import StarsComponent
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.line import Line
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter
 from synthesizer.utils.plt import single_histxy
 from synthesizer.warnings import deprecated, warn
 
 
 class Stars(Particles, StarsComponent):
     """
-    The base Stars class. This contains all data a collection of stars could
-    contain. It inherits from the base Particles class holding attributes and
+    The base Stars class.
+
+    This contains all data a collection of stars could contain. It inherits
+    from the base Particles class holding attributes and
     methods common to all particle types.
 
     The Stars class can be handed to methods elsewhere to pass information
@@ -193,15 +194,9 @@ class Stars(Particles, StarsComponent):
             tau_v=tau_v,
             name="Stars",
         )
-        StarsComponent.__init__(self, ages, metallicities)
+        StarsComponent.__init__(self, ages, metallicities, **kwargs)
 
-        # Ensure initial masses is an accepted type to avoid
-        # issues when masking
-        if isinstance(initial_masses, list):
-            raise exceptions.InconsistentArguments(
-                "Initial mass should be numpy or unyt array."
-            )
-
+        # Ensure we don't have negative ages
         if len(ages) > 0:
             if ages.min() < 0.0:
                 raise exceptions.InconsistentArguments(
@@ -212,10 +207,6 @@ class Stars(Particles, StarsComponent):
         self.initial_masses = initial_masses
         self.ages = ages
         self.metallicities = metallicities
-
-        # Set the extra keyword arguments
-        for key, value in kwargs.items():
-            setattr(self, key, value)
 
         # Set the optional keyword arguments
 
@@ -250,17 +241,6 @@ class Stars(Particles, StarsComponent):
         # parametric galaxy
         self.sfzh = None
 
-    @property
-    def log10ages(self):
-        """
-        Return stellar particle ages in log (base 10).
-
-        Returns:
-            log10ages (array)
-                log10 stellar ages
-        """
-        return np.log10(self.ages)
-
     def _check_star_args(self):
         """
         Sanitizes the inputs ensuring all arguments agree and are compatible.
@@ -280,19 +260,6 @@ class Stars(Particles, StarsComponent):
                         "Inconsistent stellar array sizes! (nparticles=%d, "
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
-
-    def __str__(self):
-        """
-        Return a string representation of the stars object.
-
-        Returns:
-            table (str)
-                A string representation of the particle object.
-        """
-        # Intialise the table formatter
-        formatter = TableFormatter(self)
-
-        return formatter.get_table("Stars")
 
     def _prepare_sed_args(
         self,
