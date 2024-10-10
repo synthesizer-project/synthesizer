@@ -1087,6 +1087,19 @@ class Combination:
             this_model (EmissionModel):
                 The model defining the combination.
         """
+        # Check we saved the models we are combining
+        missing = [
+            model.label
+            for model in this_model.combine
+            if model.label not in images
+        ]
+        if len(missing) > 0:
+            raise exceptions.MissingSpectraType(
+                "The following models weren't saved when generating spectra: "
+                f"{missing}\n"
+                f"To make an image for {this_model.label} these must be saved."
+            )
+
         # Get the image for each model we are combining
         combine_labels = []
         combine_images = []
