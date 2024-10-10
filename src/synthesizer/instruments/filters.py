@@ -158,7 +158,6 @@ class FilterCollection:
                 NOTE: This will inflate the memory footprint of the filters
                 outside the region where transmission is non-zero.
         """
-
         # Define lists to hold our filters and filter codes
         self.filters = {}
         self.filter_codes = []
@@ -191,6 +190,15 @@ class FilterCollection:
         if path is not None:
             # Load the FilterCollection from the file
             self._load_filters(path)
+
+        # Are we creating an empty FilterCollection?
+        elif (
+            filter_codes is None
+            and tophat_dict is None
+            and generic_dict is None
+            and filters is None
+        ):
+            return
 
         else:
             # Ok, we aren't loading one. Make the filters instead.
@@ -227,9 +235,13 @@ class FilterCollection:
         self.mean_lams = self.calc_mean_lams()
         self.pivot_lams = self.calc_pivot_lams()
 
-    def _load_filters(self, path):
+    def _load_filters(self, path=None):
         """
         Load a `FilterCollection` from a HDF5 file.
+
+        This function can either load the `FilterCollection` from a file path
+        or from an already open HDF5 file. The latter is used when loading
+        an `Instrument` object from an `InstrumentCollection`.
 
         Args:
             path (str)
@@ -269,6 +281,55 @@ class FilterCollection:
         # We're done loading so lets merge the filters, if they need to be
         # resampled they will be at the end of the __init__
         self._merge_filter_lams()
+
+    @classmethod
+    def _from_hdf5(cls, hdf):
+        """
+        Load a `FilterCollection` from a HDF5 file.
+
+        This function can either load the `FilterCollection` from a file path
+        or from an already open HDF5 file. The latter is used when loading
+        an `Instrument` object from an `InstrumentCollection`.
+
+        Args:
+            hdf (h5py.File)
+                The HDF5 file from which to load the `FilterCollection`.
+        """
+        # Create the FilterCollection
+        fc = cls()
+
+        # Warn if the synthesizer versions don't match
+        if hdf["Header"].attrs["synthesizer_version"] != __version__:
+            warn(
+                "Synthesizer versions differ between the code and "
+                "FilterCollection file! This is probably fine but there "
+                "is no gaurantee it won't cause errors."
+            )
+
+        # Get the wavelength units
+        lam_units = hdf["Header"].attrs["Wavelength_units"]
+
+        # Get the FilterCollection level attributes and datasets,
+        # We apply the units to ensure conversions are done correctly
+        # within the Quantity instantiation
+        fc.nfilters = hdf["Header"].attrs["nfilters"]
+        fc.lam = unyt_array(hdf["Header"]["Wavelengths"][:], lam_units)
+        fc.filter_codes = hdf["Header"].attrs["filter_codes"]
+        print(fc.filter_codes)
+
+        # Loop over the groups and make the filters
+        for filter_code in fc.filter_codes:
+            # Get the filter
+            filt = Filter(filter_code, hdf=hdf)
+
+            # Store the created filter
+            fc.filters[filter_code] = filt
+
+        # We're done loading so lets merge the filters, if they need to be
+        # resampled they will be at the end of the __init__
+        fc._merge_filter_lams()
+
+        return fc
 
     def _include_svo_filters(self, filter_codes):
         """
@@ -959,18 +1020,18 @@ class FilterCollection:
 
         return f
 
-    def write_filters(self, path):
+    def _write_filters_to_group(self, hdf):
         """
-        Writes the current state of the FilterCollection to a HDF5 file.
+        Write the filters to a HDF5 group.
+
+        This is split off so that it can be called either from
+        write_filters or when writing out an Instrument
+        (instruments/Instrument.py).)
 
         Args:
-            path (str)
-                The file path at which to save the FilterCollection.
+            hdf (h5py.Group)
+                The group to write the filters to.
         """
-
-        # Open the HDF5 file  (will overwrite existing file at path)
-        hdf = h5py.File(path, "w")
-
         # Create header group
         head = hdf.create_group("Header")
 
@@ -1027,7 +1088,18 @@ class FilterCollection:
                     "Original_Transmission", data=filt.original_t
                 )
 
-        hdf.close()
+    def write_filters(self, path):
+        """
+        Write the current state of the FilterCollection to a HDF5 file.
+
+        Args:
+            path (str)
+                The file path at which to save the FilterCollection.
+        """
+        # Open the HDF5 file  (will overwrite existing file at path)
+        with h5py.File(path, "w") as hdf:
+            # Write the Filters
+            self._write_filters_to_group(hdf)
 
 
 class Filter:

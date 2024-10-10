@@ -1,8 +1,10 @@
 """"""
 
+import h5py
 from unyt import angstrom, kpc
 
 from synthesizer import exceptions
+from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_collection import InstrumentCollection
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
@@ -199,7 +201,7 @@ class Instrument:
         return self.can_do_resolved_spectroscopy and have_noise
 
     @classmethod
-    def from_hdf5(cls, group):
+    def _from_hdf5(cls, group):
         """
         Create an Instrument from an HDF5 group.
 
@@ -211,8 +213,98 @@ class Instrument:
             Instrument:
                 The Instrument created from the HDF5 group.
         """
-        raise exceptions.NotImplementedError(
-            "Loading an Instrument from an HDF5 file is not yet implemented."
+        # Unpack the filters if they are present
+        if "Filters" in group:
+            filters = FilterCollection._from_hdf5(group["Filters"])
+        else:
+            filters = None
+
+        #  Unpack the resolution
+        if "Resolution" in group:
+            resolution = Quantity(
+                group["Resolution"][()], group["Resolution"].attrs["units"]
+            )
+        else:
+            resolution = None
+
+        # Unpack the wavelenths
+        if "Wavelength" in group:
+            lam = Quantity(
+                group["Wavelength"][()], group["Wavelength"].attrs["units"]
+            )
+        else:
+            lam = None
+
+        # Unpack the depths, these can be either a group of datasets, a
+        # single dataset or not present
+        if "Depth" in group and isinstance(group["Depth"], h5py.Group):
+            depth = {
+                key: Quantity(value[()], value.attrs["units"])
+                for key, value in group["Depth"].items()
+            }
+        elif "Depth" in group:
+            depth = Quantity(group["Depth"][()], group["Depth"].attrs["units"])
+        else:
+            depth = None
+
+        # Unpack the depth aperture radius
+        if "DepthApertureRadius" in group:
+            depth_app_radius = Quantity(
+                group["DepthApertureRadius"][()],
+                group["DepthApertureRadius"].attrs["units"],
+            )
+        else:
+            depth_app_radius = None
+
+        # Unpack the SNRs, these can be either a group of datasets, a
+        # single dataset or not present
+        if "SNRs" in group and isinstance(group["SNRs"], h5py.Group):
+            snrs = {
+                key: Quantity(value[()], value.attrs["units"])
+                for key, value in group["SNRs"].items()
+            }
+        elif "SNRs" in group:
+            snrs = Quantity(group["SNRs"][()], group["SNRs"].attrs["units"])
+        else:
+            snrs = None
+
+        # Unpack the PSFs, these can be either a group of datasets, a
+        # single dataset or not present
+        if "PSFs" in group and isinstance(group["PSFs"], h5py.Group):
+            psfs = {
+                key: Quantity(value[()], value.attrs["units"])
+                for key, value in group["PSFs"].items()
+            }
+        elif "PSFs" in group:
+            psfs = Quantity(group["PSFs"][()], group["PSFs"].attrs["units"])
+        else:
+            psfs = None
+
+        # Unpack the noise maps, these can be either a group of datasets, a
+        # single dataset or not present
+        if "NoiseMaps" in group and isinstance(group["NoiseMaps"], h5py.Group):
+            noise_maps = {
+                key: Quantity(value[()], value.attrs["units"])
+                for key, value in group["NoiseMaps"].items()
+            }
+        elif "NoiseMaps" in group:
+            noise_maps = Quantity(
+                group["NoiseMaps"][()], group["NoiseMaps"].attrs["units"]
+            )
+        else:
+            noise_maps = None
+
+        # Create the Instrument
+        return cls(
+            label=group.attrs["label"],
+            filters=filters,
+            resolution=resolution,
+            lam=lam,
+            depth=depth,
+            depth_app_radius=depth_app_radius,
+            snrs=snrs,
+            psfs=psfs,
+            noise_maps=noise_maps,
         )
 
     def to_hdf5(self, group):
@@ -224,9 +316,91 @@ class Instrument:
                 The group in which to save the Instrument.
 
         """
-        raise exceptions.NotImplementedError(
-            "Saving an Instrument from an HDF5 file is not yet implemented."
-        )
+        # Write out the label, technically pointless because the group is
+        # named with the label but makes loading easier
+        group.attrs["label"] = self.label
+
+        # Write out the filters into a Filters group
+        if self.filters is not None:
+            filters_group = group.create_group("Filters")
+            self.filters._write_filters_to_group(filters_group)
+
+        # Write out the simple datasets
+        if self.resolution is not None:
+            ds = group.create_dataset(
+                "Resolution", data=self.resolution.value, dtype=float
+            )
+            ds.attrs["units"] = str(self.resolution.units)
+        if self.lam is not None:
+            ds = group.create_dataset(
+                "Wavelength", data=self.lam.value, dtype=float
+            )
+            ds.attrs["units"] = str(self.lam.units)
+        if self.depth_app_radius is not None:
+            ds = group.create_dataset(
+                "DepthApertureRadius",
+                data=self.depth_app_radius.value,
+                dtype=float,
+            )
+            ds.attrs["units"] = str(self.depth_app_radius.units)
+
+        # Write out the depth, SNRs, PSFs and noise which may be a group of
+        # datasets or a single datasets or not present
+        if self.depth is not None:
+            if isinstance(self.depth, dict):
+                depth_group = group.create_group("Depth")
+                for key, value in self.depth.items():
+                    ds = depth_group.create_dataset(
+                        key, data=value.value, dtype=float
+                    )
+                    ds.attrs["units"] = "dimensionless"
+            else:
+                ds = group.create_dataset(
+                    "Depth", data=self.depth.value, dtype=float
+                )
+                ds.attrs["units"] = "dimensionless"
+
+        if self.snrs is not None:
+            if isinstance(self.snrs, dict):
+                snrs_group = group.create_group("SNRs")
+                for key, value in self.snrs.items():
+                    ds = snrs_group.create_dataset(
+                        key, data=value.value, dtype=float
+                    )
+                    ds.attrs["units"] = "dimensionless"
+            else:
+                ds = group.create_dataset(
+                    "SNRs", data=self.snrs.value, dtype=float
+                )
+                ds.attrs["units"] = "dimensionless"
+
+        if self.psfs is not None:
+            if isinstance(self.psfs, dict):
+                psfs_group = group.create_group("PSFs")
+                for key, value in self.psfs.items():
+                    ds = psfs_group.create_dataset(
+                        key, data=value.value, dtype=float
+                    )
+                    ds.attrs["units"] = str(value.units)
+            else:
+                ds = group.create_dataset(
+                    "PSFs", data=self.psfs.value, dtype=float
+                )
+                ds.attrs["units"] = str(self.psfs.units)
+
+        if self.noise_maps is not None:
+            if isinstance(self.noise_maps, dict):
+                noise_group = group.create_group("NoiseMaps")
+                for key, value in self.noise_maps.items():
+                    ds = noise_group.create_dataset(
+                        key, data=value.value, dtype=float
+                    )
+                    ds.attrs["units"] = str(value.units)
+            else:
+                ds = group.create_dataset(
+                    "NoiseMaps", data=self.noise_maps.value, dtype=float
+                )
+                ds.attrs["units"] = str(self.noise_maps.units)
 
     def __str__(self):
         """
