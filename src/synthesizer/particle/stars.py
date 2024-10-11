@@ -803,7 +803,7 @@ class Stars(Particles, StarsComponent):
         # If we have no stars just return zeros
         if self.nstars == 0:
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -819,7 +819,7 @@ class Stars(Particles, StarsComponent):
             warn("Age mask has filtered out all particles")
 
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -1093,7 +1093,7 @@ class Stars(Particles, StarsComponent):
         # If we have no stars just return zeros
         if self.nstars == 0:
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -1109,7 +1109,7 @@ class Stars(Particles, StarsComponent):
             warn("Age mask has filtered out all particles")
 
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
