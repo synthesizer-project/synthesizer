@@ -385,3 +385,64 @@ class PointSource(MorphologyBase):
                 "Only kpc and milliarcsecond (mas) units are supported "
                 "for morphologies."
             )
+
+
+class Gaussian2D(MorphologyBase):
+    def __init__(
+        self, x=None, y=None, x_mean=0, y_mean=0, stddev_x=1, stddev_y=1, rho=0
+    ):
+        # Initialise obj with params:
+        self.x = x
+        self.y = y
+        self.x_mean = x_mean
+        self.y_mean = y_mean
+        self.stddev_x = stddev_x
+        self.stddev_y = stddev_y
+        self.rho = rho
+
+    # define 2D Gaussian matrix
+    def gaussian2D_mat(self):
+        # error for x, y = None
+        if self.x is None or self.y is None:
+            raise ValueError("x and y grids must be provided.")
+
+        # define covariance matrix
+        cov_mat = np.array(
+            [
+                [self.stddev_x**2, (self.rho * self.stddev_x * self.stddev_y)],
+                [(self.rho * self.stddev_x * self.stddev_y), self.stddev_y**2],
+            ]
+        )
+
+        # invert covariant matrix
+        inv_cov = np.linalg.inv(cov_mat)
+
+        # determinant of covariance matrix
+        det_cov = np.linalg.det(cov_mat)
+
+        # stack position deviation along third axis
+        stack = np.dstack((self.x - self.x_mean, self.y - self.y_mean))
+
+        # define coefficient of Gaussian
+        coeff = 1 / (2 * np.pi * (np.sqrt(det_cov)))
+
+        # define exponent of Gaussian
+        exp = np.einsum("...k, kl, ...l->...", stack, inv_cov, stack)
+
+        # calc Gaussian vals
+        g_2D_mat = coeff * np.exp(-0.5 * exp)
+
+        return g_2D_mat
+
+
+x = np.linspace(-5, 5, 100)
+y = np.linspace(-5, 5, 100)
+
+xx, yy = np.meshgrid(x, y)
+
+data = Gaussian2D(xx, yy, rho=0.9)
+
+zz = data.gaussian2D_mat()
+
+plt.contourf(xx, yy, zz)
+plt.show()
