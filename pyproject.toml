@@ -90,6 +90,7 @@ dependencies = [
   "spectres",
   "tqdm",
   "requests",
+  "pathos",
 ]
 
 # Optional dependencies for specific use cases
