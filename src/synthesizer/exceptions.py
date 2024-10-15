@@ -352,3 +352,37 @@ class DownloadError(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "There was an error downloading the data."
+
+
+class MissingPartition(Exception):
+    """
+    Exception class for when the partition hasn't been run for a Survey.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Partition hasn't been done yet."
+
+
+class SurveyNotReady(Exception):
+    """
+    Exception class for when a required survey step hasn't been run.
+    """
+
+    def __init__(self, *args):
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Survey isn't ready to run current operation."
