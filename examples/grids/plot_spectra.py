@@ -69,7 +69,10 @@ if __name__ == "__main__":
     grid = Grid(args.grid_name, grid_dir=args.grid_dir)
 
     # get the grid point for this log10age and metallicity
-    grid_point = grid.get_grid_point((args.log10age, args.metallicity))
+    grid_point = grid.get_grid_point(
+        log10ages=args.log10age,
+        metallicity=args.metallicity,
+    )
 
     # loop over available spectra and plot
     for spec_name in grid.available_spectra:

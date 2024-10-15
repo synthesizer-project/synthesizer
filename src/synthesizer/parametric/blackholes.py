@@ -23,10 +23,9 @@ import numpy as np
 from unyt import Msun, cm, deg, erg, km, kpc, s, unyt_array, yr
 
 from synthesizer import exceptions
-from synthesizer.components import BlackholesComponent
+from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.parametric.morphology import PointSource
 from synthesizer.units import accepts
-from synthesizer.utils import TableFormatter
 
 
 class BlackHole(BlackholesComponent):
@@ -496,16 +495,3 @@ class BlackHole(BlackholesComponent):
             grid_assignment_method,
             nthreads,
         )
-
-    def __str__(self):
-        """
-        Return a string representation of the particle object.
-
-        Returns:
-            table (str)
-                A string representation of the particle object.
-        """
-        # Intialise the table formatter
-        formatter = TableFormatter(self)
-
-        return formatter.get_table("Black Holes")

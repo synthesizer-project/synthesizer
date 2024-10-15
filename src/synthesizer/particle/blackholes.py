@@ -32,11 +32,11 @@ from unyt import (
 )
 
 from synthesizer import exceptions
-from synthesizer.components import BlackholesComponent
+from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.line import Line
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter, value_to_array
+from synthesizer.utils import value_to_array
 from synthesizer.warnings import deprecated, warn
 
 
@@ -271,19 +271,6 @@ class BlackHoles(Particles, BlackholesComponent):
                         "Inconsistent black hole array sizes! (nparticles=%d, "
                         "%s=%d)" % (self.nparticles, key, attr.shape[0])
                     )
-
-    def __str__(self):
-        """
-        Return a string representation of the particle object.
-
-        Returns:
-            table (str)
-                A string representation of the particle object.
-        """
-        # Intialise the table formatter
-        formatter = TableFormatter(self)
-
-        return formatter.get_table("Black Holes")
 
     def calculate_random_inclination(self):
         """
@@ -746,7 +733,7 @@ class BlackHoles(Particles, BlackholesComponent):
         # If we have no black holes return zeros
         if self.nbh == 0:
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
@@ -762,7 +749,7 @@ class BlackHoles(Particles, BlackholesComponent):
             warn("Age mask has filtered out all particles")
 
             return Line(
-                *[
+                combine_lines=[
                     Line(
                         line_id=line_id_,
                         wavelength=grid.line_lams[line_id_] * angstrom,
