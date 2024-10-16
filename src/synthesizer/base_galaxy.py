@@ -63,6 +63,7 @@ class BaseGalaxy:
         """
         # Add some place holder attributes which are overloaded on the children
         self.spectra = {}
+        self.lines = {}
 
         # Initialise the photometry dictionaries
         self.photo_lnu = {}
