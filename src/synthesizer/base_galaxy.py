@@ -61,7 +61,7 @@ class BaseGalaxy:
             **kwargs
                 Any additional attributes to attach to the galaxy object.
         """
-        # Add some place holder attributes which are overloaded on the children
+        # Container for the spectra and lines
         self.spectra = {}
         self.lines = {}
 
@@ -294,7 +294,7 @@ class BaseGalaxy:
             if len(lst) > 1:
                 self.spectra[key] = sum(lst)
 
-    def get_photo_lnu(self, filters, verbose=True):
+    def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate luminosity photometry using a FilterCollection object.
 
@@ -305,6 +305,9 @@ class BaseGalaxy:
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1, all
+                threads will be used.
 
         Returns:
             PhotometryCollection
@@ -313,27 +316,37 @@ class BaseGalaxy:
         """
         # Get stellar photometry
         if self.stars is not None:
-            self.stars.get_photo_lnu(filters, verbose)
+            self.stars.get_photo_lnu(filters, verbose, nthreads=nthreads)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.stars, "particle_spectra", None) is not None:
-                self.stars.get_particle_photo_lnu(filters, verbose)
+                self.stars.get_particle_photo_lnu(
+                    filters,
+                    verbose,
+                    nthreads=nthreads,
+                )
 
         # Get black hole photometry
         if self.black_holes is not None:
-            self.black_holes.get_photo_lnu(filters, verbose)
+            self.black_holes.get_photo_lnu(filters, verbose, nthreads=nthreads)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.black_holes, "particle_spectra", None) is not None:
-                self.black_holes.get_particle_photo_lnu(filters, verbose)
+                self.black_holes.get_particle_photo_lnu(
+                    filters,
+                    verbose,
+                    nthreads=nthreads,
+                )
 
         # Get the combined photometry
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
             self.photo_lnu[spectra] = self.spectra[spectra].get_photo_lnu(
-                filters, verbose
+                filters,
+                verbose,
+                nthreads=nthreads,
             )
 
     @deprecated(
@@ -361,7 +374,7 @@ class BaseGalaxy:
         """
         return self.get_photo_lnu(filters, verbose)
 
-    def get_photo_fnu(self, filters, verbose=True):
+    def get_photo_fnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate flux photometry using a FilterCollection object.
 
@@ -372,6 +385,9 @@ class BaseGalaxy:
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1, all
+                threads will be used.
 
         Returns:
             PhotometryCollection
@@ -380,27 +396,37 @@ class BaseGalaxy:
         """
         # Get stellar photometry
         if self.stars is not None:
-            self.stars.get_photo_fnu(filters, verbose)
+            self.stars.get_photo_fnu(filters, verbose, nthreads=nthreads)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.stars, "particle_spectra", None) is not None:
-                self.stars.get_particle_photo_fnu(filters, verbose)
+                self.stars.get_particle_photo_fnu(
+                    filters,
+                    verbose,
+                    nthreads=nthreads,
+                )
 
         # Get black hole photometry
         if self.black_holes is not None:
-            self.black_holes.get_photo_fnu(filters, verbose)
+            self.black_holes.get_photo_fnu(filters, verbose, nthreads=nthreads)
 
             # If we have particle spectra do that too (not applicable to
             # parametric Galaxy)
             if getattr(self.black_holes, "particle_spectra", None) is not None:
-                self.black_holes.get_particle_photo_fnu(filters, verbose)
+                self.black_holes.get_particle_photo_fnu(
+                    filters,
+                    verbose,
+                    nthreads=nthreads,
+                )
 
         # Get the combined photometry
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
             self.photo_fnu[spectra] = self.spectra[spectra].get_photo_fnu(
-                filters, verbose
+                filters,
+                verbose,
+                nthreads=nthreads,
             )
 
     @deprecated(
@@ -860,7 +886,18 @@ class BaseGalaxy:
                         f"emission model. ({model.emitter})"
                     )
 
-        return self.spectra[emission_model.label]
+        # Return the spectra at the root from the right place
+        if emission_model.emitter == "galaxy":
+            return self.spectra[emission_model.label]
+        elif emission_model.emitter == "stellar":
+            return self.stars.spectra[emission_model.label]
+        elif emission_model.emitter == "blackhole":
+            return self.black_holes.spectra[emission_model.label]
+        else:
+            raise KeyError(
+                "Unknown emitter in emission model. "
+                f"({emission_model.emitter})"
+            )
 
     def get_lines(
         self,
@@ -970,7 +1007,18 @@ class BaseGalaxy:
                         f"emission model. ({model.emitter})"
                     )
 
-        return self.lines[emission_model.label]
+        # Return the lines at the root from the right place
+        if emission_model.emitter == "galaxy":
+            return self.lines[emission_model.label]
+        elif emission_model.emitter == "stellar":
+            return self.stars.lines[emission_model.label]
+        elif emission_model.emitter == "blackhole":
+            return self.black_holes.lines[emission_model.label]
+        else:
+            raise KeyError(
+                "Unknown emitter in emission model. "
+                f"({emission_model.emitter})"
+            )
 
     def get_images_luminosity(
         self,

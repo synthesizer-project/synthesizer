@@ -205,7 +205,7 @@ class Particles:
 
         return np.log10(mets)
 
-    def get_particle_photo_lnu(self, filters, verbose=True):
+    def get_particle_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate luminosity photometry using a FilterCollection object.
 
@@ -214,6 +214,9 @@ class Particles:
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1, all
+                threads will be used.
 
         Returns:
             photo_lnu (dict)
@@ -224,11 +227,11 @@ class Particles:
             # Create the photometry collection and store it in the object
             self.particle_photo_lnu[spectra] = self.particle_spectra[
                 spectra
-            ].get_photo_lnu(filters, verbose)
+            ].get_photo_lnu(filters, verbose, nthreads=nthreads)
 
         return self.particle_photo_lnu
 
-    def get_particle_photo_fnu(self, filters, verbose=True):
+    def get_particle_photo_fnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate flux photometry using a FilterCollection object.
 
@@ -237,6 +240,9 @@ class Particles:
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1, all
+                threads will be used.
 
         Returns:
             (dict)
@@ -247,7 +253,7 @@ class Particles:
             # Create the photometry collection and store it in the object
             self.particle_photo_fnu[spectra] = self.particle_spectra[
                 spectra
-            ].get_photo_fnu(filters, verbose)
+            ].get_photo_fnu(filters, verbose, nthreads=nthreads)
 
         return self.particle_photo_fnu
 
