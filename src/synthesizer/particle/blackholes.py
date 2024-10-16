@@ -396,9 +396,9 @@ class BlackHoles(Particles, BlackholesComponent):
             for prop in props
         ]
 
-        # For black holes mass is a grid parameter but we still need to
-        # multiply by mass in the extensions so just multiply by 1
-        mass = np.ones(npart, dtype=np.float64)
+        # For black holes the grid Sed are normalised to 1.0 so we need to
+        # scale by the bolometric luminosity.
+        bol_lum = self.bolometric_luminosity.value
 
         # Make sure we get the wavelength index of the grid array
         nlam = np.int32(grid.spectra[spectra_type].shape[-1])
@@ -431,7 +431,7 @@ class BlackHoles(Particles, BlackholesComponent):
             grid_spectra,
             grid_props,
             props,
-            mass,
+            bol_lum,
             fesc,
             grid_dims,
             len(grid_props),
@@ -555,9 +555,9 @@ class BlackHoles(Particles, BlackholesComponent):
             for prop in props
         ]
 
-        # For black holes mass is a grid parameter but we still need to
-        # multiply by mass in the extensions so just multiply by 1
-        part_mass = np.ones(npart, dtype=np.float64)
+        # For black holes the grid Sed are normalised to 1.0 so we need to
+        # scale by the bolometric luminosity.
+        bol_lum = self.bolometric_luminosity.value
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(np.sum(mask))
@@ -594,7 +594,7 @@ class BlackHoles(Particles, BlackholesComponent):
             grid_continuum,
             grid_props,
             part_props,
-            part_mass,
+            bol_lum,
             fesc,
             grid_dims,
             len(grid_props),
@@ -671,6 +671,12 @@ class BlackHoles(Particles, BlackholesComponent):
         # If we have a mask we need to account for the zeroed spectra
         spec = np.zeros((self.nbh, masked_spec.shape[-1]))
         spec[mask] = masked_spec
+
+        print(self.bolometric_luminosity)
+
+        # scale by the bolometric luminosities of the blackholes
+        spec = spec * self.bolometric_luminosity
+
         return spec
 
     def generate_particle_line(
@@ -888,6 +894,7 @@ class BlackHoles(Particles, BlackholesComponent):
             **kwargs,
         )
         emission_model.set_per_particle(previous_per_part)
+
         return spectra
 
     @deprecated(
