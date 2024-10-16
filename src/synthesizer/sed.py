@@ -967,14 +967,6 @@ class Sed:
 
         # Loop over filters
         for f in filters:
-            # Check whether the filter transmission curve wavelength grid
-            # and the spectral grid are the same array
-            if not np.array_equal(f.lam, self.lam):
-                warn(
-                    "Filter wavelength grid is not "
-                    "the same as the SED wavelength grid."
-                )
-
             # Apply the filter transmission curve and store the resulting
             # luminosity
             bb_lum = f.apply_filter(self._lnu, nu=self._nu)
@@ -1015,14 +1007,6 @@ class Sed:
 
         # Loop over filters in filter collection
         for f in filters:
-            # Check whether the filter transmission curve wavelength grid
-            # and the spectral grid are the same array
-            if not np.array_equal(f.lam, self.lam):
-                warn(
-                    "Filter wavelength grid is not "
-                    "the same as the SED wavelength grid."
-                )
-
             # Calculate and store the broadband flux in this filter
             bb_flux = f.apply_filter(self._fnu, nu=self._obsnu)
             photo_fnu[f.filter_code] = bb_flux * self.fnu.units
