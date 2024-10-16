@@ -10,6 +10,7 @@ from pathos.multiprocessing import ProcessingPool as Pool
 from synthesizer import check_openmp, exceptions
 from synthesizer._version import __version__
 from synthesizer.instruments.filters import FilterCollection
+from synthesizer.survey.survey_utils import discover_outputs
 from synthesizer.utils.art import Art
 from synthesizer.warnings import warn
 
@@ -431,7 +432,7 @@ class Survey:
                 f" (found {type(func)})."
             )
 
-        # Warning the user if theres a name clash, we'll take the new one
+        # Warn the user if theres a name clash, we'll take the new one
         if func.__name__ in self._analysis_funcs:
             warn(
                 f"{func.__name__} already exists in the analysis functions. "
@@ -855,7 +856,7 @@ class Survey:
 
         pass
 
-    def write(self, outpath):
+    def write(self, outpath, particle_datasets=False):
         """"""
         # Do we have parallel h5py?
         if hasattr(h5py.get_config(), "mpi") and h5py.get_config().mpi:
@@ -863,6 +864,12 @@ class Survey:
         else:
             have_parallel_h5py = False
         pass
+
+        # Particle datasets are not yet implemented
+        if particle_datasets:
+            raise exceptions.NotImplemented(
+                "Particle datasets are not yet implemented."
+            )
 
         # We're done with everything so we know we'll have what is needed for
         # any extra analysis asked for by the user. We'll run these now.
@@ -879,7 +886,7 @@ class Survey:
                 # Create groups for the instruments, emission model, and
                 # galaxies
                 inst_group = hdf.create_group("Instruments")
-                # model_group = hdf.create_group("EmissionModel")
+                model_group = hdf.create_group("EmissionModel")
                 # gal_group= hdf.create_group("Galaxies")
 
                 # Write out the instruments
@@ -890,10 +897,18 @@ class Survey:
                     instrument.to_hdf5(inst_group.create_group(label))
 
                 # Write out the emission model
-                # for label, model in self.emission_model.items():
-                #     model.to_hdf5(model_group.create_group(label))
+                for label, model in self.emission_model.items():
+                    model.to_hdf5(model_group.create_group(label))
 
-        # Call the appropriate writer based on whether we have parallel h5py
+        # Find the output paths
+        output_variables = discover_outputs(self.galaxies)
+        for var in output_variables:
+            self._print(f"Found output variable: {var}")
+
+        self._print(f"Found {len(output_variables)} properties to output.")
+
+        # Call the appropriate galaxy property writer based on whether we
+        # have parallel h5py
         write_start = time.perf_counter()
         if have_parallel_h5py:
             self._parallel_write(outpath)

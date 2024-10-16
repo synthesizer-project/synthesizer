@@ -334,6 +334,20 @@ class Extraction:
 
         return summary
 
+    def extract_to_hdf5(self, group):
+        """Save the extraction model to an HDF5 group."""
+        # Flag it's extraction
+        group.attrs["type"] = "extraction"
+
+        # Save the grid
+        group.attrs["grid"] = self._grid.grid_name
+
+        # Save the extract key
+        group.attrs["extract"] = self._extract
+
+        # Save the escape fraction
+        group.attrs["fesc"] = self._fesc
+
 
 class Generation:
     """
@@ -660,6 +674,24 @@ class Generation:
 
         return summary
 
+    def generate_to_hdf5(self, group):
+        """Save the generation model to an HDF5 group."""
+        # Flag it's generation
+        group.attrs["type"] = "generation"
+
+        # Save the generator
+        group.attrs["generator"] = type(self._generator)
+
+        # Save the dust luminosity models
+        if self._lum_intrinsic_model is not None:
+            group.attrs["lum_intrinsic_model"] = (
+                self._lum_intrinsic_model.label
+            )
+        if self._lum_attenuated_model is not None:
+            group.attrs["lum_attenuated_model"] = (
+                self._lum_attenuated_model.label
+            )
+
 
 class DustAttenuation:
     """
@@ -897,6 +929,20 @@ class DustAttenuation:
 
         return summary
 
+    def attenuate_to_hdf5(self, group):
+        """Save the dust attenuation model to an HDF5 group."""
+        # Flag it's dust attenuation
+        group.attrs["type"] = "dust_attenuation"
+
+        # Save the dust curve
+        group.attrs["dust_curve"] = type(self._dust_curve)
+
+        # Save the model to apply the dust curve to
+        group.attrs["apply_dust_to"] = self._apply_dust_to.label
+
+        # Save the optical depth
+        group.attrs["tau_v"] = self._tau_v
+
 
 class Combination:
     """
@@ -1128,3 +1174,11 @@ class Combination:
         )
 
         return summary
+
+    def combine_to_hdf5(self, group):
+        """Save the combination model to an HDF5 group."""
+        # Flag it's combination
+        group.attrs["type"] = "combination"
+
+        # Save the models to combine
+        group.attrs["combine"] = [model.label for model in self._combine]
