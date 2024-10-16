@@ -130,7 +130,7 @@ class Component(ABC):
         """Prepare arguments for the line generation."""
         pass
 
-    def get_photo_lnu(self, filters, verbose=True):
+    def get_photo_lnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate luminosity photometry using a FilterCollection object.
 
@@ -139,6 +139,9 @@ class Component(ABC):
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1, all
+                threads will be used.
 
         Returns:
             photo_lnu (dict)
@@ -148,7 +151,9 @@ class Component(ABC):
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
             self.photo_lnu[spectra] = self.spectra[spectra].get_photo_lnu(
-                filters, verbose
+                filters,
+                verbose,
+                nthreads=nthreads,
             )
 
         return self.photo_lnu
@@ -178,7 +183,7 @@ class Component(ABC):
         """
         return self.get_photo_lnu(filters, verbose)
 
-    def get_photo_fnu(self, filters, verbose=True):
+    def get_photo_fnu(self, filters, verbose=True, nthreads=1):
         """
         Calculate flux photometry using a FilterCollection object.
 
@@ -187,6 +192,9 @@ class Component(ABC):
                 A FilterCollection object.
             verbose (bool)
                 Are we talking?
+            nthreads (int)
+                The number of threads to use for the integration. If -1, all
+                threads will be used.
 
         Returns:
             (dict)
@@ -196,7 +204,9 @@ class Component(ABC):
         for spectra in self.spectra:
             # Create the photometry collection and store it in the object
             self.photo_fnu[spectra] = self.spectra[spectra].get_photo_fnu(
-                filters, verbose
+                filters,
+                verbose,
+                nthreads=nthreads,
             )
 
         return self.photo_fnu
