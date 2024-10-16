@@ -233,16 +233,15 @@ class BlackHole(BlackholesComponent):
             tuple
                 A tuple of all the arguments required by the C extension.
         """
+
         # Which line region is this for?
         if "nlr" in grid.grid_name:
             line_region = "nlr"
         elif "blr" in grid.grid_name:
             line_region = "blr"
         else:
-            raise exceptions.InconsistentArguments(
-                "Grid used for blackholes does not appear to be for"
-                " a line region (nlr or blr)."
-            )
+            # this is a generic disc grid so no line_region
+            line_region = None
 
         # Set up the inputs to the C function.
         grid_props = [
