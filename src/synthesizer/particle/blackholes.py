@@ -672,11 +672,6 @@ class BlackHoles(Particles, BlackholesComponent):
         spec = np.zeros((self.nbh, masked_spec.shape[-1]))
         spec[mask] = masked_spec
 
-        print(self.bolometric_luminosity)
-
-        # scale by the bolometric luminosities of the blackholes
-        spec = spec * self.bolometric_luminosity
-
         return spec
 
     def generate_particle_line(
