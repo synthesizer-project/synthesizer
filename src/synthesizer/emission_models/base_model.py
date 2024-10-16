@@ -628,6 +628,10 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
 
         return "|\n|".join(parts)
 
+    def items(self):
+        """Return the items in the model."""
+        return self._models.items()
+
     def __getitem__(self, label):
         """
         Enable label look up.
