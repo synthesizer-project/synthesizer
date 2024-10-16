@@ -1314,18 +1314,25 @@ class Sed:
         x = self._lam
         y = (llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)).value
 
-        # Get value of luminosity at ionisation wavelength
-        ionisation_y = np.interp(
-            ionisation_wavelength.to(angstrom).value, x, y
-        )
-
         # Restrict arrays to ionisation regime
         x = x[ionisation_mask]
-        y = y[ionisation_mask]
+        if len(y.shape) == 1:
+            y = y[ionisation_mask]
+        else:
+            y = y[:, ionisation_mask]
 
-        # Add ionisation wavelength and luminosity values
-        x = np.append(x, ionisation_wavelength.to(angstrom).value)
-        y = np.append(y, ionisation_y)
+        # Add a final data point at the ionising energy to ensure full
+        # coverage.
+        x0 = ionisation_wavelength.to(angstrom).value
+        if len(y.shape) == 1:
+            y0 = np.interp(x0, x, y)
+            y = np.append(y, y0)
+        else:
+            y0 = np.array([np.interp(x0, x, y_) for y_ in y])
+            y0 = np.expand_dims(y0, 1)
+            y = np.append(y, y0, axis=1)
+
+        x = np.append(x, x0)
 
         ion_photon_prod_rate = integrate_last_axis(x, y, nthreads=nthreads) / s
 
