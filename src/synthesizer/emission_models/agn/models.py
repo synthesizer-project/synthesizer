@@ -250,7 +250,6 @@ class DiscIncidentEmission(BlackHoleEmissionModel):
             grid=grid,
             label=label,
             extract="incident",
-            scale_by="bolometric_luminosities",
             **kwargs,
         )
 
