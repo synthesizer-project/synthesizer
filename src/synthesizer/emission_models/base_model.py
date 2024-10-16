@@ -2306,11 +2306,8 @@ class EmissionModel(Extraction, Generation, DustAttenuation, Combination):
                     print(f"Error in {this_model.label}!")
                     raise e
 
-            print(this_model.scale_by)
-
             # Are we scaling the spectra?
             for scaler in this_model.scale_by:
-                print(scaler)
                 if scaler is None:
                     continue
                 if hasattr(emitter, scaler):
