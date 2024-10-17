@@ -31,7 +31,7 @@ class TableFormatter:
 
     Attributes:
         obj (object):
-            The object whose attributes are to be formattedinto a table.
+            The object whose attributes are to be formatted into a table.
         attributes (dict):
             A dictionary of the object's attributes.
     """
