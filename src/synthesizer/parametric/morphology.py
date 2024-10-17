@@ -114,8 +114,22 @@ class MorphologyBase(ABC):
 
 class Sersic2D(MorphologyBase):
     """
-    A class holding the Sersic2D profile. This is a wrapper around the
-    astropy.models.Sersic2D class.
+    A class holding the Sersic2D profile.
+
+    This is a wrapper around the astropy.models.Sersic2D class FOR NOW!!!!!
+
+    Attributes:
+        r_eff_kpc (float): The effective radius in kpc.
+        r_eff_mas (float): The effective radius in milliarcseconds.
+        sersic_index (float): The Sersic index.
+        ellipticity (float): The ellipticity.
+        theta (float): The rotation angle.
+        cosmo (astropy.cosmology): The cosmology object.
+        redshift (float): The redshift.
+        model_kpc (astropy.modeling.models.Sersic2D): The Sersic2D model in
+            kpc.
+        model_mas (astropy.modeling.models.Sersic2D): The Sersic2D model in
+            milliarcseconds.
     """
 
     def __init__(
@@ -217,10 +231,7 @@ class Sersic2D(MorphologyBase):
             self.model_mas = None
 
     def _check_args(self):
-        """
-        Tests the inputs to ensure they are a valid combination.
-        """
-
+        """Test the inputs to ensure they are a valid combination."""
         # Ensure at least one effective radius has been passed
         if self.r_eff_kpc is None and self.r_eff_mas is None:
             raise exceptions.InconsistentArguments(
@@ -237,11 +248,10 @@ class Sersic2D(MorphologyBase):
 
     def compute_density_grid(self, xx, yy, units=kpc):
         """
-        Compute the density grid defined by this morphology as a function of
-        the input coordinate grids.
+        Compute the density grid.
 
         This acts as a wrapper to astropy functionality (defined above) which
-        only work in units of kpc or milliarcseconds (mas)
+        only work in units of kpc or milliarcseconds (mas).
 
         Arguments
             xx: array-like (float)
@@ -255,7 +265,6 @@ class Sersic2D(MorphologyBase):
             density_grid : np.ndarray
                 The density grid produced
         """
-
         # Ensure we have the model corresponding to the requested units
         if units == kpc and self.model_kpc is None:
             raise exceptions.InconsistentArguments(
@@ -282,8 +291,18 @@ class Sersic2D(MorphologyBase):
 
 class PointSource(MorphologyBase):
     """
-    A class holding the Sersic2D profile. This is a wrapper around the
-    astropy.models.Sersic2D class.
+    A class holding a PointSource profile.
+
+    This is a morphology where a single cell of the density grid is populated.
+
+    Attributes:
+        cosmo (astropy.cosmology)
+            The cosmology object.
+        redshift (float)
+            The redshift.
+        offset_kpc (float)
+            The offset of the point source relative to the centre of the
+            image in kpc.
     """
 
     def __init__(
@@ -342,8 +361,7 @@ class PointSource(MorphologyBase):
 
     def compute_density_grid(self, xx, yy, units=kpc):
         """
-        Compute the density grid defined by this morphology as a function of
-        the input coordinate grids.
+        Compute the density grid.
 
         This acts as a wrapper to astropy functionality (defined above) which
         only work in units of kpc or milliarcseconds (mas)
@@ -360,7 +378,6 @@ class PointSource(MorphologyBase):
             density_grid : np.ndarray
                 The density grid produced
         """
-
         # Create empty density grid
         image = np.zeros((len(xx), len(yy)))
 
