@@ -12,6 +12,7 @@ from synthesizer._version import __version__
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.survey.survey_utils import (
     pack_data,
+    recursive_gather,
     sort_data_recursive,
     unpack_data,
     write_datasets_recursive,
@@ -994,12 +995,29 @@ class Survey:
         self._took(start, "Sorting data")
         return sorted_output
 
-    def _parallel_write(self, outpath, rank_output):
+    def _parallel_write(self, outpath, rank_output, out_paths, attr_paths):
         """"""
         # If we have parallel h5py we can write in parallel using MPI,
         # redirect to the function that does this.
         if hasattr(h5py.get_config(), "mpi") and h5py.get_config().mpi:
             self._true_parallel_write(outpath, rank_output)
+            return
+
+        # Ok, we have to bring it to rank 0 and write it out there.
+
+        # First we need to collect all the local data on each rank
+        rank_output = self._collect(rank_output, out_paths, attr_paths)
+
+        # Then we can recursively gather all the data on rank 0
+        output = recursive_gather(rank_output, self.comm)
+
+        # Finally we write out the data to the HDF5 file rooted at the galaxy
+        # group. We do this recursively to handle arbitrarily nested
+        # dictionaries.
+        if self.rank == 0:
+            with h5py.File(outpath, "a") as hdf:
+                write_datasets_recursive(hdf, output["Galaxies"], "Galaxies")
+        else:
             return
 
     def _true_parallel_write(self, outpath, rank_output):
