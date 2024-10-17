@@ -10,7 +10,10 @@ from pathos.multiprocessing import ProcessingPool as Pool
 from synthesizer import check_openmp, exceptions
 from synthesizer._version import __version__
 from synthesizer.instruments.filters import FilterCollection
-from synthesizer.survey.survey_utils import discover_outputs
+from synthesizer.survey.survey_utils import (
+    sort_data_recursive,
+    write_datasets_recursive,
+)
 from synthesizer.utils.art import Art
 from synthesizer.warnings import warn
 
@@ -120,12 +123,17 @@ class Survey:
         self._got_images_flux = False
         self._got_lnu_data_cubes = False
         self._got_fnu_data_cubes = False
+        self._got_spectroscopy = False
         self._got_sfzh = False
 
         # Define containers for any additional analysis functions
         self._analysis_funcs = {}
         self._analysis_args = {}
         self._analysis_kwargs = {}
+
+        # It'll be helpful later if we know what line IDs have been requested
+        # so we'll store these should get_lines be called.
+        self._line_ids = []
 
         # Everything that follows is only needed for hybrid parallelism
         # (running with MPI in addition to shared memory parallelism)
@@ -628,8 +636,11 @@ class Survey:
         for g in self.galaxies:
             g.get_lines(line_ids, self.emission_model, nthreads=self.nthreads)
 
+        # Store the line IDs for later
+        self._line_ids = line_ids
+
         # Done!
-        self._got_lines = True
+        self._got_lum_lines = True
         self._took(start, "Getting emission lines")
 
     def get_images_luminosity(
@@ -847,24 +858,285 @@ class Survey:
         # Done!
         self._took(start, "Extra analysis")
 
-    def _parallel_write(self, output_dir):
+    def _setup_output(self):
+        """"""
+        # Define a dictionary in which we'll collect EVERYTHING
+        output = {"Galaxies": {}}
+
+        # Set up the structure we know we'll need
+        if self._got_lnu_spectra:
+            output["Galaxies"]["SpectralLuminosityDensities"] = {}
+        if self._got_fnu_spectra:
+            output["Galaxies"]["SpectralFluxDensities"] = {}
+        if self._got_luminosities:
+            output["Galaxies"]["PhotometricLuminosities"] = {}
+        if self._got_fluxes:
+            output["Galaxies"]["PhotometricFluxes"] = {}
+        if self._got_lum_lines:
+            output["Galaxies"]["RestFrameEmissionLines"] = {}
+        if self._got_flux_lines:
+            output["Galaxies"]["ObservedEmissionLines"] = {}
+        if self._got_images_lum:
+            output["Galaxies"]["ImagesLuminosity"] = {}
+        if self._got_images_flux:
+            output["Galaxies"]["ImagesFlux"] = {}
+        if self._got_spectroscopy:
+            output["Galaxies"]["Spectroscopy"] = {}
+        for key in self.emission_model._models.keys():
+            # Skip unsaved models
+            if not self.emission_model._models[key].save:
+                continue
+
+            # Make the appropriate entries
+            if self._got_lnu_spectra:
+                output["Galaxies"]["SpectralLuminosityDensities"][key] = (
+                    np.zeros((self.n_galaxies, self.emission_model.lam.size))
+                )
+            if self._got_fnu_spectra:
+                output["Galaxies"]["SpectralFluxDensities"][key] = np.zeros(
+                    (self.n_galaxies, self.emission_model.lam.size)
+                )
+            if self._got_luminosities:
+                output["Galaxies"]["PhotometricLuminosities"][key] = {}
+            if self._got_fluxes:
+                output["Galaxies"]["PhotometricFluxes"][key] = {}
+            if self._got_lum_lines:
+                output["Galaxies"]["RestFrameEmissionLines"][key] = {
+                    l_id: {"Luminosities": [], "Continua": []}
+                    for l_id in self._line_ids
+                }
+            if self._got_flux_lines:
+                output["Galaxies"]["ObservedEmissionLines"][key] = {
+                    l_id: {"Fluxes": [], "Continua": []}
+                    for l_id in self._line_ids
+                }
+            if self._got_images_lum:
+                output["Galaxies"]["ImagesLuminosity"][key] = {}
+            if self._got_images_flux:
+                output["Galaxies"]["ImagesFlux"][key] = {}
+            if self._got_spectroscopy:
+                output["Galaxies"]["Spectroscopy"][key] = {}
+
+            # Loop over instruments and make entries for any instruments with
+            # photometry capabilities
+            for inst in self.instruments:
+                if inst.can_do_photometry:
+                    # Make the appropriate entries
+                    if self._got_luminosities:
+                        output["Galaxies"]["PhotometricLuminosities"][key][
+                            inst.label
+                        ] = {}
+                    if self._got_fluxes:
+                        output["Galaxies"]["PhotometricFluxes"][key][
+                            inst.label
+                        ] = {}
+
+                # Make entries for any instruments with imaging capabilities
+                if inst.can_do_imaging:
+                    # Make the appropriate entries
+                    if self._got_images_lum:
+                        output["Galaxies"]["ImagesLuminosity"][key][
+                            inst.label
+                        ] = {}
+                    if self._got_images_flux:
+                        output["Galaxies"]["ImagesFlux"][key][inst.label] = {}
+
+        return output
+
+    def _collect_threaded(self, output):
+        """"""
+        # Loop over the galaxies and collect everything we need
+        with Pool(self.nthreads) as pool:
+            for key, model in self.emission_model.items():
+                # Skip unsaved models
+                if not self.emission_model._models[key].save:
+                    continue
+
+                # Get the spectra if they were made
+                if self._got_lnu_spectra:
+                    if model.emitter == "galaxy":
+                        output["Galaxies"]["SpectralLuminosityDensities"][
+                            key
+                        ] = pool.map(
+                            partial(
+                                lambda g, key: g.spectra[key].lnu,
+                                key=key,
+                            ),
+                            self.galaxies,
+                        )
+                    elif model.emitter == "stellar":
+                        output["Galaxies"]["SpectralLuminosityDensities"][
+                            key
+                        ] = pool.map(
+                            partial(
+                                lambda g, key: g.stars.spectra[key].lnu,
+                                key=key,
+                            ),
+                            self.galaxies,
+                        )
+                    elif model.emitter == "blackhole":
+                        output["Galaxies"]["SpectralLuminosityDensities"][
+                            key
+                        ] = pool.map(
+                            partial(
+                                lambda g, key: g.blackholes.spectra[key].lnu,
+                                key=key,
+                            ),
+                            self.galaxies,
+                        )
+                    else:
+                        raise exceptions.SurveyError(
+                            f"Unknown emitter type '{model.emitter}'"
+                        )
+
+                if self._got_fnu_spectra:
+                    output["Galaxies"]["SpectralFluxDensities"][key] = (
+                        pool.map(
+                            partial(
+                                lambda g, key: g.spectra[key].fnu, key=key
+                            ),
+                            self.galaxies,
+                        )
+                    )
+
+                # Get the lines if they were made
+                if self._got_lum_lines:
+                    for l_id in self._line_ids:
+                        output["Galaxies"]["EmissionLines"][key][l_id][
+                            "Luminosities"
+                        ] = pool.map(
+                            partial(
+                                lambda g, key, l_id: g.lines[key][
+                                    l_id
+                                ].luminosity,
+                                key=key,
+                            ),
+                            self.galaxies,
+                        )
+                        output["Galaxies"]["EmissionLines"][key][l_id][
+                            "Continua"
+                        ] = pool.map(
+                            partial(
+                                lambda g, key, l_id: g.lines[key][
+                                    l_id
+                                ].continuum,
+                                key=key,
+                            ),
+                            self.galaxies,
+                        )
+
+                # Loop over instruments and collect any data created for them
+                for inst in self.instruments:
+                    # Get the photometry if it was made
+                    if self._got_luminosities and inst.can_do_photometry:
+                        for fcode in inst.filters.filter_codes:
+                            output["Galaxies"]["PhotometricLuminosities"][key][
+                                inst.label
+                            ][fcode] = pool.map(
+                                partial(
+                                    lambda g, key, fcode: g.photo_lnu[key][
+                                        fcode
+                                    ].photo_lnu,
+                                    key=key,
+                                    fcode=fcode,
+                                ),
+                                self.galaxies,
+                            )
+                    if self._got_fluxes and inst.can_do_photometry:
+                        for fcode in inst.filters.filter_codes:
+                            output["Galaxies"]["PhotometricFluxes"][key][
+                                inst.label
+                            ][fcode] = pool.map(
+                                partial(
+                                    lambda g, key, fcode: g.photo_fnu[key][
+                                        fcode
+                                    ].photo_fnu,
+                                    key=key,
+                                    fcode=fcode,
+                                ),
+                                self.galaxies,
+                            )
+
+                    # Get the images if they were made
+                    if self._got_images_lum and inst.can_do_imaging:
+                        for fcode in inst.filters.filter_codes:
+                            output["Galaxies"]["Images"][key][inst.label][
+                                fcode
+                            ] = pool.map(
+                                partial(
+                                    lambda g, key, fcode: g.images_lnu[key][
+                                        inst.label
+                                    ][fcode].arr
+                                    * g.images_lnu[key][inst.label][
+                                        fcode
+                                    ].units,
+                                    key=key,
+                                    fcode=fcode,
+                                ),
+                                self.galaxies,
+                            )
+                    if self._got_images_flux and inst.can_do_imaging:
+                        for fcode in inst.filters.filter_codes:
+                            output["Galaxies"]["Images"][key][inst.label][
+                                fcode
+                            ] = pool.map(
+                                partial(
+                                    lambda g, key, fcode: g.images_fnu[key][
+                                        inst.label
+                                    ][fcode].arr
+                                    * g.images_fnu[key][inst.label][
+                                        fcode
+                                    ].units,
+                                    key=key,
+                                    fcode=fcode,
+                                ),
+                                self.galaxies,
+                            )
+
+                    # Get the spectroscopy if it was made
+                    if self._got_spectroscopy and inst.can_do_spectroscopy:
+                        output["Galaxies"]["Spectroscopy"][key][inst.label] = (
+                            pool.map(
+                                partial(
+                                    lambda g, key: g.spectra[key].fnu,
+                                    key=key,
+                                ),
+                                self.galaxies,
+                            )
+                        )
+
+        # With everything collected we can sort it to be in the original order
+        # and return it
+        return sort_data_recursive(output, self.galaxy_indices)
+
+    def _parallel_write(self, outpath, rank_output):
+        """"""
+        # If we have parallel h5py we can write in parallel using MPI,
+        # redirect to the function that does this.
+        if hasattr(h5py.get_config(), "mpi") and h5py.get_config().mpi:
+            self._true_parallel_write(outpath, rank_output)
+            return
+
+    def _true_parallel_write(self, outpath, rank_output):
         """"""
         pass
 
-    def _serial_write(self, outpath):
+    def _serial_write(
+        self,
+        outpath,
+        output,
+    ):
         """"""
+        # Collected everything from the individual galaxies
+        output = self._collect_threaded(output)
 
-        pass
+        # Write out the data to the HDF5 file rooted at the galaxy group. We
+        # do this recursively to handle arbitrarily nested dictionaries.
+        with h5py.File(outpath, "a") as hdf:
+            write_datasets_recursive(hdf, output["Galaxies"], "Galaxies")
 
     def write(self, outpath, particle_datasets=False):
         """"""
-        # Do we have parallel h5py?
-        if hasattr(h5py.get_config(), "mpi") and h5py.get_config().mpi:
-            have_parallel_h5py = True
-        else:
-            have_parallel_h5py = False
-        pass
-
         # Particle datasets are not yet implemented
         if particle_datasets:
             raise exceptions.NotImplemented(
@@ -874,6 +1146,10 @@ class Survey:
         # We're done with everything so we know we'll have what is needed for
         # any extra analysis asked for by the user. We'll run these now.
         self._run_extra_analysis()
+
+        # Set up the outputs dictionary, this is where we'll collect everything
+        # together from the individual galaxies before writing it out.
+        output = self._setup_output()
 
         # Regardless of parallel HDF5, we first need to create our file, some
         # basic structure and store some top level metadata (we will
@@ -887,7 +1163,7 @@ class Survey:
                 # galaxies
                 inst_group = hdf.create_group("Instruments")
                 model_group = hdf.create_group("EmissionModel")
-                # gal_group= hdf.create_group("Galaxies")
+                hdf.create_group("Galaxies")  # we'll use this in a mo
 
                 # Write out the instruments
                 inst_group.attrs["ninstruments"] = (
@@ -900,20 +1176,13 @@ class Survey:
                 for label, model in self.emission_model.items():
                     model.to_hdf5(model_group.create_group(label))
 
-        # Find the output paths
-        output_variables = discover_outputs(self.galaxies)
-        for var in output_variables:
-            self._print(f"Found output variable: {var}")
-
-        self._print(f"Found {len(output_variables)} properties to output.")
-
         # Call the appropriate galaxy property writer based on whether we
         # have parallel h5py
         write_start = time.perf_counter()
-        if have_parallel_h5py:
+        if self.using_mpi:
             self._parallel_write(outpath)
         else:
-            self._serial_write(outpath)
+            self._serial_write(outpath, output)
         self._took(write_start, f"Writing output to {outpath}")
 
         # Totally done!
