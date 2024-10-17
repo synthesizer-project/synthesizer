@@ -17,6 +17,8 @@ Example usage::
     point_source = morphology.PointSource(offset=[0.0, 0.0])
 """
 
+from abc import ABC, abstractmethod
+
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.modeling.models import Sersic2D as Sersic2D_
@@ -26,7 +28,7 @@ from unyt.dimensions import angle, length
 from synthesizer import exceptions
 
 
-class MorphologyBase:
+class MorphologyBase(ABC):
     """
     A base class holding common methods for parametric morphology descriptions.
 
@@ -69,15 +71,14 @@ class MorphologyBase:
         )
         plt.show()
 
-    def compute_density_grid_from_arrays(self, *args):
+    @abstractmethod
+    def compute_density_grid(self, *args):
         """
         Compute the density grid from coordinate grids.
 
         This is a place holder method to be overwritten by child classes.
         """
-        raise exceptions.NotImplemented(
-            "This method should be overwritten by child classes"
-        )
+        pass
 
     def get_density_grid(self, resolution, npix):
         """
@@ -105,9 +106,7 @@ class MorphologyBase:
         xx, yy = np.meshgrid(xbin_centres, ybin_centres)
 
         # Extract the density grid from the morphology function
-        density_grid = self.compute_density_grid_from_arrays(
-            xx, yy, units=res.units
-        )
+        density_grid = self.compute_density_grid(xx, yy, units=res.units)
 
         # And normalise it...
         return density_grid / np.sum(density_grid)
@@ -236,7 +235,7 @@ class Sersic2D(MorphologyBase):
                 "comoslogical calculations."
             )
 
-    def compute_density_grid_from_arrays(self, xx, yy, units=kpc):
+    def compute_density_grid(self, xx, yy, units=kpc):
         """
         Compute the density grid defined by this morphology as a function of
         the input coordinate grids.
@@ -341,7 +340,7 @@ class PointSource(MorphologyBase):
             else:
                 self.offset_kpc = self.offset_mas * kpc_proper_per_mas
 
-    def compute_density_grid_from_arrays(self, xx, yy, units=kpc):
+    def compute_density_grid(self, xx, yy, units=kpc):
         """
         Compute the density grid defined by this morphology as a function of
         the input coordinate grids.
@@ -430,5 +429,5 @@ class Gaussian2D(MorphologyBase):
 
         return g_2D_mat
 
-    def compute_density_grid_from_arrays(self, x, y):
+    def compute_density_grid(self, x, y):
         return self.gaussian2D_mat(x, y)
