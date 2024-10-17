@@ -11,7 +11,9 @@ from synthesizer import check_openmp, exceptions
 from synthesizer._version import __version__
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.survey.survey_utils import (
+    pack_data,
     sort_data_recursive,
+    unpack_data,
     write_datasets_recursive,
 )
 from synthesizer.utils.art import Art
@@ -860,254 +862,137 @@ class Survey:
 
     def _setup_output(self):
         """"""
-        # Define a dictionary in which we'll collect EVERYTHING
-        output = {"Galaxies": {}}
+        start = time.perf_counter()
 
-        # Set up the structure we know we'll need
-        if self._got_lnu_spectra:
-            output["Galaxies"]["SpectralLuminosityDensities"] = {}
-        if self._got_fnu_spectra:
-            output["Galaxies"]["SpectralFluxDensities"] = {}
-        if self._got_luminosities:
-            output["Galaxies"]["PhotometricLuminosities"] = {}
-        if self._got_fluxes:
-            output["Galaxies"]["PhotometricFluxes"] = {}
-        if self._got_lum_lines:
-            output["Galaxies"]["RestFrameEmissionLines"] = {}
-        if self._got_flux_lines:
-            output["Galaxies"]["ObservedEmissionLines"] = {}
-        if self._got_images_lum:
-            output["Galaxies"]["ImagesLuminosity"] = {}
-        if self._got_images_flux:
-            output["Galaxies"]["ImagesFlux"] = {}
-        if self._got_spectroscopy:
-            output["Galaxies"]["Spectroscopy"] = {}
-        for key in self.emission_model._models.keys():
+        # Construct the data and outputs path
+        attr_paths = []
+        for label, model in self.emission_model._models.items():
             # Skip unsaved models
-            if not self.emission_model._models[key].save:
+            if not model.save:
                 continue
 
-            # Make the appropriate entries
+            # Get the right component
+            if model.emitter == "galaxy":
+                component = ""
+            elif model.emitter == "stellar":
+                component = "stars"
+            elif model.emitter == "blackhole":
+                component = "blackholes"
+
+            # Handle spectra paths
             if self._got_lnu_spectra:
-                output["Galaxies"]["SpectralLuminosityDensities"][key] = (
-                    np.zeros((self.n_galaxies, self.emission_model.lam.size))
-                )
+                attr_paths.append(f"{component}/spectra/{label}/lnu")
             if self._got_fnu_spectra:
-                output["Galaxies"]["SpectralFluxDensities"][key] = np.zeros(
-                    (self.n_galaxies, self.emission_model.lam.size)
-                )
-            if self._got_luminosities:
-                output["Galaxies"]["PhotometricLuminosities"][key] = {}
-            if self._got_fluxes:
-                output["Galaxies"]["PhotometricFluxes"][key] = {}
+                attr_paths.append(f"{component}/spectra/{label}/fnu")
+
+            # Handle line paths
             if self._got_lum_lines:
-                output["Galaxies"]["RestFrameEmissionLines"][key] = {
-                    l_id: {"Luminosities": [], "Continua": []}
-                    for l_id in self._line_ids
-                }
+                for l_id in self._line_ids:
+                    attr_paths.append(
+                        f"{component}/lines/{label}/{l_id}/luminosity"
+                    )
+                    attr_paths.append(
+                        f"{component}/lines/{label}/{l_id}/continuum"
+                    )
             if self._got_flux_lines:
-                output["Galaxies"]["ObservedEmissionLines"][key] = {
-                    l_id: {"Fluxes": [], "Continua": []}
-                    for l_id in self._line_ids
-                }
-            if self._got_images_lum:
-                output["Galaxies"]["ImagesLuminosity"][key] = {}
-            if self._got_images_flux:
-                output["Galaxies"]["ImagesFlux"][key] = {}
-            if self._got_spectroscopy:
-                output["Galaxies"]["Spectroscopy"][key] = {}
-
-            # Loop over instruments and make entries for any instruments with
-            # photometry capabilities
-            for inst in self.instruments:
-                if inst.can_do_photometry:
-                    # Make the appropriate entries
-                    if self._got_luminosities:
-                        output["Galaxies"]["PhotometricLuminosities"][key][
-                            inst.label
-                        ] = {}
-                    if self._got_fluxes:
-                        output["Galaxies"]["PhotometricFluxes"][key][
-                            inst.label
-                        ] = {}
-
-                # Make entries for any instruments with imaging capabilities
-                if inst.can_do_imaging:
-                    # Make the appropriate entries
-                    if self._got_images_lum:
-                        output["Galaxies"]["ImagesLuminosity"][key][
-                            inst.label
-                        ] = {}
-                    if self._got_images_flux:
-                        output["Galaxies"]["ImagesFlux"][key][inst.label] = {}
-
-        return output
-
-    def _collect_threaded(self, output):
-        """"""
-        # Loop over the galaxies and collect everything we need
-        with Pool(self.nthreads) as pool:
-            for key, model in self.emission_model.items():
-                # Skip unsaved models
-                if not self.emission_model._models[key].save:
-                    continue
-
-                # Get the spectra if they were made
-                if self._got_lnu_spectra:
-                    if model.emitter == "galaxy":
-                        output["Galaxies"]["SpectralLuminosityDensities"][
-                            key
-                        ] = pool.map(
-                            partial(
-                                lambda g, key: g.spectra[key].lnu,
-                                key=key,
-                            ),
-                            self.galaxies,
-                        )
-                    elif model.emitter == "stellar":
-                        output["Galaxies"]["SpectralLuminosityDensities"][
-                            key
-                        ] = pool.map(
-                            partial(
-                                lambda g, key: g.stars.spectra[key].lnu,
-                                key=key,
-                            ),
-                            self.galaxies,
-                        )
-                    elif model.emitter == "blackhole":
-                        output["Galaxies"]["SpectralLuminosityDensities"][
-                            key
-                        ] = pool.map(
-                            partial(
-                                lambda g, key: g.blackholes.spectra[key].lnu,
-                                key=key,
-                            ),
-                            self.galaxies,
-                        )
-                    else:
-                        raise exceptions.SurveyError(
-                            f"Unknown emitter type '{model.emitter}'"
-                        )
-
-                if self._got_fnu_spectra:
-                    output["Galaxies"]["SpectralFluxDensities"][key] = (
-                        pool.map(
-                            partial(
-                                lambda g, key: g.spectra[key].fnu, key=key
-                            ),
-                            self.galaxies,
-                        )
+                for l_id in self._line_ids:
+                    attr_paths.append(f"{component}.lines/{label}/{l_id}.flux")
+                    attr_paths.append(
+                        f"{component}/lines/{label}/{l_id}.continuum_flux"
                     )
 
-                # Get the lines if they were made
-                if self._got_lum_lines:
-                    for l_id in self._line_ids:
-                        output["Galaxies"]["EmissionLines"][key][l_id][
-                            "Luminosities"
-                        ] = pool.map(
-                            partial(
-                                lambda g, key, l_id: g.lines[key][
-                                    l_id
-                                ].luminosity,
-                                key=key,
-                            ),
-                            self.galaxies,
-                        )
-                        output["Galaxies"]["EmissionLines"][key][l_id][
-                            "Continua"
-                        ] = pool.map(
-                            partial(
-                                lambda g, key, l_id: g.lines[key][
-                                    l_id
-                                ].continuum,
-                                key=key,
-                            ),
-                            self.galaxies,
-                        )
-
-                # Loop over instruments and collect any data created for them
+            # Handle photometry paths
+            if self._got_luminosities:
                 for inst in self.instruments:
-                    # Get the photometry if it was made
-                    if self._got_luminosities and inst.can_do_photometry:
+                    if inst.can_do_photometry:
                         for fcode in inst.filters.filter_codes:
-                            output["Galaxies"]["PhotometricLuminosities"][key][
-                                inst.label
-                            ][fcode] = pool.map(
-                                partial(
-                                    lambda g, key, fcode: g.photo_lnu[key][
-                                        fcode
-                                    ].photo_lnu,
-                                    key=key,
-                                    fcode=fcode,
-                                ),
-                                self.galaxies,
+                            attr_paths.append(
+                                f"{component}/photo_lnu/{label}/{fcode}"
                             )
-                    if self._got_fluxes and inst.can_do_photometry:
+            if self._got_fluxes:
+                for inst in self.instruments:
+                    if inst.can_do_photometry:
                         for fcode in inst.filters.filter_codes:
-                            output["Galaxies"]["PhotometricFluxes"][key][
-                                inst.label
-                            ][fcode] = pool.map(
-                                partial(
-                                    lambda g, key, fcode: g.photo_fnu[key][
-                                        fcode
-                                    ].photo_fnu,
-                                    key=key,
-                                    fcode=fcode,
-                                ),
-                                self.galaxies,
+                            attr_paths.append(
+                                f"{component}/photo_fnu/{label}/{fcode}"
                             )
 
-                    # Get the images if they were made
-                    if self._got_images_lum and inst.can_do_imaging:
+            # Handle imaging paths
+            if self._got_images_lum:
+                for inst in self.instruments:
+                    if inst.can_do_imaging:
                         for fcode in inst.filters.filter_codes:
-                            output["Galaxies"]["Images"][key][inst.label][
-                                fcode
-                            ] = pool.map(
-                                partial(
-                                    lambda g, key, fcode: g.images_lnu[key][
-                                        inst.label
-                                    ][fcode].arr
-                                    * g.images_lnu[key][inst.label][
-                                        fcode
-                                    ].units,
-                                    key=key,
-                                    fcode=fcode,
-                                ),
-                                self.galaxies,
+                            attr_paths.append(
+                                f"{component}/images_lnu/{label}/{fcode}/arr"
                             )
-                    if self._got_images_flux and inst.can_do_imaging:
+            if self._got_images_flux:
+                for inst in self.instruments:
+                    if inst.can_do_imaging:
                         for fcode in inst.filters.filter_codes:
-                            output["Galaxies"]["Images"][key][inst.label][
-                                fcode
-                            ] = pool.map(
-                                partial(
-                                    lambda g, key, fcode: g.images_fnu[key][
-                                        inst.label
-                                    ][fcode].arr
-                                    * g.images_fnu[key][inst.label][
-                                        fcode
-                                    ].units,
-                                    key=key,
-                                    fcode=fcode,
-                                ),
-                                self.galaxies,
+                            attr_paths.append(
+                                f"{component}/images_fnu/{label}/{fcode}/arr"
                             )
 
-                    # Get the spectroscopy if it was made
-                    if self._got_spectroscopy and inst.can_do_spectroscopy:
-                        output["Galaxies"]["Spectroscopy"][key][inst.label] = (
-                            pool.map(
-                                partial(
-                                    lambda g, key: g.spectra[key].fnu,
-                                    key=key,
-                                ),
-                                self.galaxies,
-                            )
-                        )
+            # Handle spectroscopy paths
+            if self._got_spectroscopy:
+                for inst in self.instruments:
+                    attr_paths.append(
+                        f"{component}/spectra/{label}/{inst.label}"
+                    )
+
+        self._print(f"Found {len(attr_paths)} datsets to write out.")
+
+        # Convert the attribute paths into the output paths by removing
+        # underscores, converting to camel case, and replacing dots with
+        # slashes. This is the structure we'll use to write out the data.
+        out_paths = [
+            "Galaxies/"
+            + "/".join(
+                [
+                    "".join(
+                        [
+                            word if word[0].isupper() else word.capitalize()
+                            for word in p.split("_")
+                        ]
+                    )
+                    for p in path.replace(".", "/").split("/")
+                ]
+            )
+            for path in attr_paths
+        ]
+
+        # Define a dictionary in which we'll collect EVERYTHING
+        output = {}
+
+        # Populate it with the outpaths we just created
+        for path in out_paths:
+            path = path.split("/")
+            d = output
+            for key in path[:-1]:
+                d = d.setdefault(key, {})
+
+        # Done!
+        self._took(start, "Setting up output")
+
+        return output, out_paths, attr_paths
+
+    def _collect(self, output, out_paths, attr_paths):
+        """"""
+        start = time.perf_counter()
+        # Actually collect the data
+        for out_path, attr_path in zip(out_paths, attr_paths):
+            data = [unpack_data(g, attr_path) for g in self.galaxies]
+            pack_data(output, data, out_path)
+
+        # Done!
+        self._took(start, "Collecting data")
 
         # With everything collected we can sort it to be in the original order
         # and return it
-        return sort_data_recursive(output, self.galaxy_indices)
+        start = time.perf_counter()
+        sorted_output = sort_data_recursive(output, self.galaxy_indices)
+        self._took(start, "Sorting data")
+        return sorted_output
 
     def _parallel_write(self, outpath, rank_output):
         """"""
@@ -1125,10 +1010,12 @@ class Survey:
         self,
         outpath,
         output,
+        out_paths,
+        attr_paths,
     ):
         """"""
         # Collected everything from the individual galaxies
-        output = self._collect_threaded(output)
+        output = self._collect(output, out_paths, attr_paths)
 
         # Write out the data to the HDF5 file rooted at the galaxy group. We
         # do this recursively to handle arbitrarily nested dictionaries.
@@ -1149,7 +1036,7 @@ class Survey:
 
         # Set up the outputs dictionary, this is where we'll collect everything
         # together from the individual galaxies before writing it out.
-        output = self._setup_output()
+        output, out_paths, attr_paths = self._setup_output()
 
         # Regardless of parallel HDF5, we first need to create our file, some
         # basic structure and store some top level metadata (we will
@@ -1182,7 +1069,7 @@ class Survey:
         if self.using_mpi:
             self._parallel_write(outpath)
         else:
-            self._serial_write(outpath, output)
+            self._serial_write(outpath, output, out_paths, attr_paths)
         self._took(write_start, f"Writing output to {outpath}")
 
         # Totally done!
