@@ -1319,7 +1319,7 @@ class Sed:
         if len(y.shape) == 1:
             y = y[ionisation_mask]
         else:
-            y = y[:, ionisation_mask]
+            y = y[..., ionisation_mask]
 
         # Add a final data point at the ionising energy to ensure full
         # coverage.
@@ -1328,9 +1328,11 @@ class Sed:
             y0 = np.interp(x0, x, y)
             y = np.append(y, y0)
         else:
-            y0 = np.array([np.interp(x0, x, y_) for y_ in y])
-            y0 = np.expand_dims(y0, 1)
-            y = np.append(y, y0, axis=1)
+            y0 = np.apply_along_axis(
+                lambda y_: np.interp(x0, x, y_), axis=-1, arr=y
+            )
+            y0 = np.expand_dims(y0, -1)
+            y = np.append(y, y0, axis=-1)
 
         x = np.append(x, x0)
 
