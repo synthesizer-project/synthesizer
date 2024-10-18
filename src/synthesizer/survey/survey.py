@@ -1087,12 +1087,21 @@ class Survey:
         # Then we can recursively gather all the data on rank 0
         output = recursive_gather(rank_output, self.comm)
 
-        # Finally we write out the data to the HDF5 file rooted at the galaxy
-        # group. We do this recursively to handle arbitrarily nested
+        # We now need to gather the sorting indices so we can sort the data
+        # before writing it out (gathering is guaranteed to be in rank order
+        # so we can just gather the indices and get the same order as the data.
+        sinds = np.concatenate(self.comm.gather(self.galaxy_indices))
+
+        # Finally we sort and write out the data to the HDF5 file rooted at
+        # the galaxy group. We do this recursively to handle arbitrarily nested
         # dictionaries.
         if self.rank == 0:
             with h5py.File(outpath, "a") as hdf:
-                write_datasets_recursive(hdf, output["Galaxies"], "Galaxies")
+                write_datasets_recursive(
+                    hdf,
+                    sort_data_recursive(output["Galaxies"], sinds),
+                    "Galaxies",
+                )
         else:
             return
 
