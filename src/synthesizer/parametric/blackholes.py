@@ -293,7 +293,7 @@ class BlackHole(BlackholesComponent):
 
         # For black holes mass is a grid parameter but we still need to
         # multiply by mass in the extensions so just multiply by 1
-        mass = np.ones(1, dtype=np.float64)
+        bol_lum = self.bolometric_luminosity.value
 
         # Make sure we get the wavelength index of the grid array
         nlam = np.int32(grid.spectra[spectra_type].shape[-1])
@@ -322,7 +322,7 @@ class BlackHole(BlackholesComponent):
             grid_spectra,
             grid_props,
             props,
-            mass,
+            bol_lum,
             np.array([fesc]),
             grid_dims,
             len(grid_props),
