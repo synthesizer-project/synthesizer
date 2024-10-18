@@ -202,12 +202,17 @@ def sort_data_recursive(data, sinds):
     """
     # If the data isn't a dictionary just return the sorted data
     if not isinstance(data, dict):
-        data = np.array(data)
-
         # If there is no data we can't sort it, just return the empty array.
         # This can happen if there are no galaxies.
         if len(data) == 0:
             return data
+
+        # Convert the list of data to an array (but we don't want to lose the
+        # units)
+        if isinstance(data[0], (unyt_quantity, unyt_array)):
+            data = unyt_array(np.array([d.value for d in data]), data[0].units)
+        else:
+            data = np.array(data)
 
         return data[sinds]
 
