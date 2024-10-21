@@ -714,7 +714,7 @@ class FilterCollection:
                 diffs = np.diff(new_lam)
                 min_res_new = np.max(np.diff(new_lam))
 
-        return new_lam
+        return new_lam * piv_lams[0].units
 
     @accepts(new_lam=angstrom)
     def resample_filters(
@@ -767,7 +767,9 @@ class FilterCollection:
             # Are we making an array with a fixed size?
             if lam_size is not None:
                 # Create wavelength array
-                new_lam = np.linspace(min_lam, max_lam, lam_size)
+                new_lam = (
+                    np.linspace(min_lam, max_lam, lam_size) * min_lam.units
+                )
 
             else:
                 # Ok, we are trying to be clever, merge the filter wavelength
