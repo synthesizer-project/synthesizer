@@ -25,8 +25,10 @@ Contents
    spectra/spectra
    lines/lines
    filters/filters
+   instrumentation/instrument_example
    photometry/photometry
    imaging/imaging
+   surveys/survey_example
    parallelism/openmp
    advanced/advanced
    notebook_examples/cookbook
