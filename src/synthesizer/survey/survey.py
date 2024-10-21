@@ -138,8 +138,8 @@ class Survey:
         self,
         gal_loader_func,
         emission_model,
-        instruments,
         n_galaxies,
+        instruments=(),
         nthreads=1,
         comm=None,
         verbose=1,
@@ -744,6 +744,11 @@ class Survey:
                 "Cannot generate photometry before lnu spectra are generated! "
                 "Call get_spectra first."
             )
+        elif len(self.filters) == 0:
+            raise exceptions.SurveyNotReady(
+                "Cannot generate photometry without instruments! "
+                "Add instruments with filters and try again."
+            )
 
         # Loop over the galaxies and get the photometry, there is internal
         # shared memory parallelism in this process so we can just loop over
@@ -764,6 +769,11 @@ class Survey:
             raise exceptions.SurveyNotReady(
                 "Cannot generate photometry before fnu spectra are generated! "
                 "Call get_spectra with a cosmology object first."
+            )
+        elif len(self.filters) == 0:
+            raise exceptions.SurveyNotReady(
+                "Cannot generate photometry without instruments! "
+                "Add instruments with filters and try again."
             )
 
         # Loop over the galaxies and get the photometry, there is internal
