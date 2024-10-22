@@ -45,6 +45,9 @@ struct grid {
 
   /* The continuum array. */
   double *continuum;
+
+  /* Wavelength */
+  double *lam;
 };
 
 /* A struct to hold particle properties. */
