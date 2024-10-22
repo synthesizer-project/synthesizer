@@ -270,6 +270,18 @@ extensions = [
         include_dirs=include_dirs,
     ),
     create_extension(
+        "synthesizer.extensions.particle_spectra_with_shift",
+        [
+            "src/synthesizer/extensions/particle_spectra_with_shift.c",
+            "src/synthesizer/extensions/weights.c",
+            "src/synthesizer/extensions/property_funcs.c",
+            "src/synthesizer/extensions/timers.c",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
+    create_extension(
         "synthesizer.imaging.extensions.spectral_cube",
         [
             "src/synthesizer/imaging/extensions/spectral_cube.c",
