@@ -473,10 +473,10 @@ class Instrument:
                     ds = psfs_group.create_dataset(
                         key, data=value, dtype=float
                     )
-                    ds.attrs["units"] = str(value.units)
+                    ds.attrs["units"] = "dimensionless"
             else:
                 ds = group.create_dataset("PSFs", data=self.psfs, dtype=float)
-                ds.attrs["units"] = str(self.psfs.units)
+                ds.attrs["units"] = "dimensionless"
 
         if self.noise_maps is not None:
             if isinstance(self.noise_maps, dict):
