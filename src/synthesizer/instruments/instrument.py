@@ -471,13 +471,11 @@ class Instrument:
                 psfs_group = group.create_group("PSFs")
                 for key, value in self.psfs.items():
                     ds = psfs_group.create_dataset(
-                        key, data=value.value, dtype=float
+                        key, data=value, dtype=float
                     )
                     ds.attrs["units"] = str(value.units)
             else:
-                ds = group.create_dataset(
-                    "PSFs", data=self.psfs.value, dtype=float
-                )
+                ds = group.create_dataset("PSFs", data=self.psfs, dtype=float)
                 ds.attrs["units"] = str(self.psfs.units)
 
         if self.noise_maps is not None:
