@@ -1,1 +1,1 @@
-from survey import Survey
+from synthesizer.survey.survey import Survey
