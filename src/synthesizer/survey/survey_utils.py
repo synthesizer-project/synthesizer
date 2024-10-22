@@ -244,9 +244,9 @@ def write_datasets_recursive(hdf, data, key):
             else:
                 dset = hdf.create_dataset(key, data=data)
                 dset.attrs["Units"] = "dimensionless"
-        except TypeError:
-            print(f"Failed to write dataset {key}")
-            raise TypeError
+        except TypeError as e:
+            print(f"Failed to write dataset {key} (type={type(data)})")
+            raise TypeError(e)
         return
 
     # Loop over the data
@@ -301,9 +301,9 @@ def write_datasets_recursive_parallel(hdf, data, key, indexes, comm):
                     if isinstance(data, (unyt_quantity, unyt_array))
                     else data[idx]
                 )
-        except TypeError:
+        except TypeError as e:
             print(f"Failed to write dataset {key}")
-            raise TypeError
+            raise TypeError(e)
         return
 
     # Loop over the data
