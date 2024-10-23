@@ -196,6 +196,7 @@ class Survey:
 
         # How many galaxies are we going to be looking at?
         self.n_galaxies = n_galaxies
+        self.n_galaxies_pre_santise = n_galaxies
 
         # Initialise an attribute we'll store our galaxy indices into (this
         # will either be 0-n_galaxies or a subset of these indices if we are
@@ -696,6 +697,21 @@ class Survey:
             if g is None:
                 self.galaxies.remove(g)
                 self.galaxy_indices.pop(i)
+
+        # We want to report how many galaxies we actually loaded accounting
+        # for any sanitisation that may have occurred. In MPI land this means
+        # communicating counts
+        if self.using_mpi:
+            self.n_galaxies = self.comm.allreduce(len(self.galaxies), op=sum)
+        else:
+            self.n_galaxies = len(self.galaxies)
+
+        # Report how many galaxies we loaded amd how many were sanitised
+        self._print(
+            f"Loaded {self.n_galaxies} galaxies"
+            f" ({self.n_galaxies_pre_santise - self.n_galaxies}"
+            " were sanitised away)."
+        )
 
         # Done!
         self._loaded_galaxies = True
