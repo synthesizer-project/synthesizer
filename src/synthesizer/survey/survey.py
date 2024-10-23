@@ -721,6 +721,8 @@ class Survey:
                 The dust opacity coefficient in units of Msun / pc**2. Default
                 is 0.0795.
         """
+        start = time.perf_counter()
+
         # Loop over galaxies and compute the optical depths for the present
         # components. This can use internal shared memory parallelism so we
         # just loop over the galaxies.
@@ -739,6 +741,9 @@ class Survey:
                     threshold=kernel_threshold,
                     nthreads=self.nthreads,
                 )
+
+        # Done!
+        self._took(start, "Getting LOS optical depths")
 
     def get_sfzh(self, grid):
         """
