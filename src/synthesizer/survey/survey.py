@@ -38,8 +38,6 @@ from pathos.multiprocessing import ProcessingPool as Pool
 from synthesizer import check_openmp, exceptions
 from synthesizer._version import __version__
 from synthesizer.instruments.filters import FilterCollection
-from synthesizer.particle import BlackHoles as ParticleBlackHoles
-from synthesizer.particle import Stars as ParticleStars
 from synthesizer.survey.survey_utils import (
     pack_data,
     recursive_gather,
@@ -745,20 +743,18 @@ class Survey:
         # components. This can use internal shared memory parallelism so we
         # just loop over the galaxies.
         for g in self.galaxies:
-            if isinstance(g.stars, ParticleStars):
-                g.get_stellar_los_tau_v(
-                    kappa=kappa,
-                    kernel=kernel,
-                    threshold=kernel_threshold,
-                    nthreads=self.nthreads,
-                )
-            if isinstance(g.black_holes, ParticleBlackHoles):
-                g.get_black_hole_los_tau_v(
-                    kappa=kappa,
-                    kernel=kernel,
-                    threshold=kernel_threshold,
-                    nthreads=self.nthreads,
-                )
+            g.get_stellar_los_tau_v(
+                kappa=kappa,
+                kernel=kernel,
+                threshold=kernel_threshold,
+                nthreads=self.nthreads,
+            )
+            g.get_black_hole_los_tau_v(
+                kappa=kappa,
+                kernel=kernel,
+                threshold=kernel_threshold,
+                nthreads=self.nthreads,
+            )
 
         # Done!
         self._took(start, "Getting LOS optical depths")
