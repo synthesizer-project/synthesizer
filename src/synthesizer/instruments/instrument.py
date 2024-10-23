@@ -314,7 +314,7 @@ class Instrument:
         #  Unpack the resolution
         if "Resolution" in group:
             resolution = unyt_array(
-                group["Resolution"][()], group["Resolution"].attrs["units"]
+                group["Resolution"][...], group["Resolution"].attrs["units"]
             )
         else:
             resolution = None
@@ -322,7 +322,7 @@ class Instrument:
         # Unpack the wavelenths
         if "Wavelength" in group:
             lam = unyt_array(
-                group["Wavelength"][()], group["Wavelength"].attrs["units"]
+                group["Wavelength"][...], group["Wavelength"].attrs["units"]
             )
         else:
             lam = None
@@ -331,12 +331,12 @@ class Instrument:
         # single dataset or not present
         if "Depth" in group and isinstance(group["Depth"], h5py.Group):
             depth = {
-                key: unyt_array(value[()], value.attrs["units"])
+                key: unyt_array(value[...], value.attrs["units"])
                 for key, value in group["Depth"].items()
             }
         elif "Depth" in group:
             depth = unyt_array(
-                group["Depth"][()], group["Depth"].attrs["units"]
+                group["Depth"][...], group["Depth"].attrs["units"]
             )
         else:
             depth = None
@@ -344,7 +344,7 @@ class Instrument:
         # Unpack the depth aperture radius
         if "DepthApertureRadius" in group:
             depth_app_radius = unyt_array(
-                group["DepthApertureRadius"][()],
+                group["DepthApertureRadius"][...],
                 group["DepthApertureRadius"].attrs["units"],
             )
         else:
@@ -354,11 +354,11 @@ class Instrument:
         # single dataset or not present
         if "SNRs" in group and isinstance(group["SNRs"], h5py.Group):
             snrs = {
-                key: unyt_array(value[()], value.attrs["units"])
+                key: unyt_array(value[...], value.attrs["units"])
                 for key, value in group["SNRs"].items()
             }
         elif "SNRs" in group:
-            snrs = unyt_array(group["SNRs"][()], group["SNRs"].attrs["units"])
+            snrs = unyt_array(group["SNRs"][...], group["SNRs"].attrs["units"])
         else:
             snrs = None
 
@@ -366,11 +366,11 @@ class Instrument:
         # single dataset or not present
         if "PSFs" in group and isinstance(group["PSFs"], h5py.Group):
             psfs = {
-                key: unyt_array(value[()], value.attrs["units"])
+                key: unyt_array(value[...], value.attrs["units"])
                 for key, value in group["PSFs"].items()
             }
         elif "PSFs" in group:
-            psfs = unyt_array(group["PSFs"][()], group["PSFs"].attrs["units"])
+            psfs = unyt_array(group["PSFs"][...], group["PSFs"].attrs["units"])
         else:
             psfs = None
 
@@ -378,12 +378,12 @@ class Instrument:
         # single dataset or not present
         if "NoiseMaps" in group and isinstance(group["NoiseMaps"], h5py.Group):
             noise_maps = {
-                key: unyt_array(value[()], value.attrs["units"])
+                key: unyt_array(value[...], value.attrs["units"])
                 for key, value in group["NoiseMaps"].items()
             }
         elif "NoiseMaps" in group:
             noise_maps = unyt_array(
-                group["NoiseMaps"][()], group["NoiseMaps"].attrs["units"]
+                group["NoiseMaps"][...], group["NoiseMaps"].attrs["units"]
             )
         else:
             noise_maps = None
