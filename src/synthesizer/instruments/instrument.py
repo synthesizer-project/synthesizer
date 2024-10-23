@@ -365,10 +365,11 @@ class Instrument:
         # Unpack the PSFs, these can be either a group of datasets, a
         # single dataset or not present
         if "PSFs" in group and isinstance(group["PSFs"], h5py.Group):
-            psfs = {
-                key: unyt_array(value[key][...], value[key].attrs["units"])
-                for key, value in group["PSFs"].items()
-            }
+            psfs = {}
+            for key in group["PSFs"]:
+                psfs[key] = unyt_array(
+                    group["PSFs"][key][...], group["PSFs"][key].attrs["units"]
+                )
         elif "PSFs" in group:
             psfs = unyt_array(group["PSFs"][...], group["PSFs"].attrs["units"])
         else:
