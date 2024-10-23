@@ -38,6 +38,8 @@ from pathos.multiprocessing import ProcessingPool as Pool
 from synthesizer import check_openmp, exceptions
 from synthesizer._version import __version__
 from synthesizer.instruments.filters import FilterCollection
+from synthesizer.particle import BlackHoles as ParticleBlackHoles
+from synthesizer.particle import Stars as ParticleStars
 from synthesizer.survey.survey_utils import (
     pack_data,
     recursive_gather,
@@ -685,6 +687,45 @@ class Survey:
         # Done!
         self._loaded_galaxies = True
         self._took(start, "Loading galaxies")
+
+    def get_los_optical_depths(
+        self, kernel, kernel_threshold=1.0, kappa=0.0795
+    ):
+        """
+        Compute the Line of Sight optical depths for all particles.
+
+        This will compute the optical depths based on the line of sight dust
+        column density for all non-gas components. We project a ray along the
+        z axis (LOS) and any gas kernels it intersects are evaluated at the
+        intersection and their contributions to the optical depth is included.
+
+        Args:
+            kernel (array-like):
+                The gas SPH kernel.
+            kernel_threshold (float):
+                The threshold of the kernel. Default is 1.0.
+            kappa (float):
+                The dust opacity coefficient in units of Msun / pc**2. Default
+                is 0.0795.
+        """
+        # Loop over galaxies and compute the optical depths for the present
+        # components. This can use internal shared memory parallelism so we
+        # just loop over the galaxies.
+        for g in self.galaxies:
+            if isinstance(g.stars, ParticleStars):
+                g.get_stellar_los_tau_V(
+                    kappa=kappa,
+                    kernel=kernel,
+                    threshold=kernel_threshold,
+                    nthreads=self.nthreads,
+                )
+            if isinstance(g.black_holes, ParticleBlackHoles):
+                g.get_black_hole_los_tau_v(
+                    kappa=kappa,
+                    kernel=kernel,
+                    threshold=kernel_threshold,
+                    nthreads=self.nthreads,
+                )
 
     def get_sfzh(self, grid):
         """
