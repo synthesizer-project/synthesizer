@@ -702,7 +702,9 @@ class Survey:
         # for any sanitisation that may have occurred. In MPI land this means
         # communicating counts
         if self.using_mpi:
-            self.n_galaxies = self.comm.allreduce(len(self.galaxies), op=sum)
+            self.n_galaxies = self.comm.allreduce(
+                np.array([len(self.galaxies)]), op=sum
+            )[0]
         else:
             self.n_galaxies = len(self.galaxies)
 
