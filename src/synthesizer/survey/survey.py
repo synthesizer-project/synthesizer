@@ -640,11 +640,24 @@ class Survey:
         """
         start = time.perf_counter()
 
-        if self.nthreads > 1:
+        if self.nthreads > 1 and self.using_mpi:
+            self._print(
+                f"Loading {self.n_galaxies} galaxies"
+                f" with {self.gal_loader_func.__name__}"
+                f" distributed over {self.size} ranks with "
+                f"{self.nthreads} threads/rank..."
+            )
+        elif self.nthreads > 1:
             self._print(
                 f"Loading {self.n_galaxies} galaxies"
                 f" with {self.gal_loader_func.__name__}"
                 f" distributed over {self.nthreads} threads..."
+            )
+        elif self.using_mpi:
+            self._print(
+                f"Loading {self.n_galaxies} galaxies"
+                f" with {self.gal_loader_func.__name__}"
+                f" distributed over {self.size} ranks..."
             )
         else:
             self._print(
