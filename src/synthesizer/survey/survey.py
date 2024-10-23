@@ -726,7 +726,7 @@ class Survey:
         # just loop over the galaxies.
         for g in self.galaxies:
             if isinstance(g.stars, ParticleStars):
-                g.get_stellar_los_tau_V(
+                g.get_stellar_los_tau_v(
                     kappa=kappa,
                     kernel=kernel,
                     threshold=kernel_threshold,
