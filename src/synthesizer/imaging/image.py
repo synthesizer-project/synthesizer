@@ -349,9 +349,18 @@ class Image:
         if density_grid is None and (
             coordinates is None or smoothing_lengths is None or kernel is None
         ):
+            got_coords = "None" if coordinates is None else type(coordinates)
+            got_smls = (
+                "None"
+                if smoothing_lengths is None
+                else type(smoothing_lengths)
+            )
+            got_kernel = "None" if kernel is None else type(kernel)
             raise exceptions.InconsistentArguments(
-                "Particle based smoothed images require the coordinates, "
-                "smoothing_lengths, and kernel arguments to be passed."
+                "Particle based smoothed images require the coordinates"
+                f"({got_coords}), "
+                f"smoothing_lengths ({got_smls}), and kernel arguments "
+                f"({got_kernel}) to be passed."
             )
 
         # Handle the parametric case

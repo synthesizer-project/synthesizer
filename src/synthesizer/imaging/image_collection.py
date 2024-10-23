@@ -1024,6 +1024,11 @@ def _generate_image_collection_generic(
             "Did you not save the spectra or produce the photometry?"
         )
 
+    # If the emitter is a particle BlackHoles object we can only make a hist
+    # image
+    if getattr(emitter, "name", None) == "Black Holes":
+        img_type = "hist"
+
     # Instantiate the Image colection ready to make the image.
     imgs = ImageCollection(resolution=resolution, fov=fov)
 
