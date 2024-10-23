@@ -366,7 +366,7 @@ class Instrument:
         # single dataset or not present
         if "PSFs" in group and isinstance(group["PSFs"], h5py.Group):
             psfs = {
-                key: unyt_array(value[...], value.attrs["units"])
+                key: unyt_array(value[key][...], value[key].attrs["units"])
                 for key, value in group["PSFs"].items()
             }
         elif "PSFs" in group:
