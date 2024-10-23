@@ -25,7 +25,7 @@ Example usage:
 """
 
 import h5py
-from unyt import angstrom, kpc
+from unyt import angstrom, kpc, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.instruments.filters import FilterCollection
@@ -53,19 +53,19 @@ class Instrument:
             The label of the Instrument.
         filters (FilterCollection):
             The filters of the Instrument.
-        resolution (Quantity):
+        resolution (unyt_array):
             The resolution of the Instrument.
-        lam (Quantity):
+        lam (unyt_array):
             The wavelength array of the Instrument.
-        depth (Quantity):
+        depth (unyt_array):
             The depth of the Instrument.
-        depth_app_radius (Quantity):
+        depth_app_radius (unyt_array):
             The depth aperture radius of the Instrument.
-        snrs (Quantity):
+        snrs (unyt_array):
             The signal-to-noise ratios of the Instrument.
-        psfs (Quantity):
+        psfs (unyt_array):
             The PSFs of the Instrument.
-        noise_maps (Quantity):
+        noise_maps (unyt_array):
             The noise maps of the Instrument.
     """
 
@@ -108,15 +108,15 @@ class Instrument:
                 If this is omitted but SNRs and depths are provided, it is
                 assumed that the depth is a point source depth.
                 Default is None.
-            snrs (Quantity, optional):
+            snrs (unyt_array, optional):
                 The signal-to-noise ratios of the Instrument.
                 Default is None.
-            psfs (Quantity, optional):
+            psfs (unyt_array, optional):
                 The PSFs of the Instrument. If doing imaging this should be
                 a dictionary of PSFs with an entry for each filter. If doing
                 resolved spectroscopy this should be an array.
                 Default is None.
-            noise_maps (Quantity, optional):
+            noise_maps (unyt_array, optional):
                 The noise maps of the Instrument. If doing imaging this should
                 be a dictionary of noise maps with an entry for each filter.
                 If doing resolved spectroscopy this should be an array with
@@ -313,7 +313,7 @@ class Instrument:
 
         #  Unpack the resolution
         if "Resolution" in group:
-            resolution = Quantity(
+            resolution = unyt_array(
                 group["Resolution"][()], group["Resolution"].attrs["units"]
             )
         else:
@@ -321,7 +321,7 @@ class Instrument:
 
         # Unpack the wavelenths
         if "Wavelength" in group:
-            lam = Quantity(
+            lam = unyt_array(
                 group["Wavelength"][()], group["Wavelength"].attrs["units"]
             )
         else:
@@ -331,17 +331,19 @@ class Instrument:
         # single dataset or not present
         if "Depth" in group and isinstance(group["Depth"], h5py.Group):
             depth = {
-                key: Quantity(value[()], value.attrs["units"])
+                key: unyt_array(value[()], value.attrs["units"])
                 for key, value in group["Depth"].items()
             }
         elif "Depth" in group:
-            depth = Quantity(group["Depth"][()], group["Depth"].attrs["units"])
+            depth = unyt_array(
+                group["Depth"][()], group["Depth"].attrs["units"]
+            )
         else:
             depth = None
 
         # Unpack the depth aperture radius
         if "DepthApertureRadius" in group:
-            depth_app_radius = Quantity(
+            depth_app_radius = unyt_array(
                 group["DepthApertureRadius"][()],
                 group["DepthApertureRadius"].attrs["units"],
             )
@@ -352,11 +354,11 @@ class Instrument:
         # single dataset or not present
         if "SNRs" in group and isinstance(group["SNRs"], h5py.Group):
             snrs = {
-                key: Quantity(value[()], value.attrs["units"])
+                key: unyt_array(value[()], value.attrs["units"])
                 for key, value in group["SNRs"].items()
             }
         elif "SNRs" in group:
-            snrs = Quantity(group["SNRs"][()], group["SNRs"].attrs["units"])
+            snrs = unyt_array(group["SNRs"][()], group["SNRs"].attrs["units"])
         else:
             snrs = None
 
@@ -364,11 +366,11 @@ class Instrument:
         # single dataset or not present
         if "PSFs" in group and isinstance(group["PSFs"], h5py.Group):
             psfs = {
-                key: Quantity(value[()], value.attrs["units"])
+                key: unyt_array(value[()], value.attrs["units"])
                 for key, value in group["PSFs"].items()
             }
         elif "PSFs" in group:
-            psfs = Quantity(group["PSFs"][()], group["PSFs"].attrs["units"])
+            psfs = unyt_array(group["PSFs"][()], group["PSFs"].attrs["units"])
         else:
             psfs = None
 
@@ -376,11 +378,11 @@ class Instrument:
         # single dataset or not present
         if "NoiseMaps" in group and isinstance(group["NoiseMaps"], h5py.Group):
             noise_maps = {
-                key: Quantity(value[()], value.attrs["units"])
+                key: unyt_array(value[()], value.attrs["units"])
                 for key, value in group["NoiseMaps"].items()
             }
         elif "NoiseMaps" in group:
-            noise_maps = Quantity(
+            noise_maps = unyt_array(
                 group["NoiseMaps"][()], group["NoiseMaps"].attrs["units"]
             )
         else:
