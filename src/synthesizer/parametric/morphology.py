@@ -404,6 +404,25 @@ class PointSource(MorphologyBase):
 
 
 class Gaussian2D(MorphologyBase):
+    """
+    A class holding a 2-dimensional Gaussian distribution.
+
+    This is a morphology where a 2-dimensional Gaussian density grid is
+    populated based on provided x and y values.
+
+    Attributes:
+        x_mean: (float)
+            The mean of the Gaussian along the x-axis.
+        y_mean: (float)
+            The mean of the Gaussian along the y-axis.
+        stddev_x: (float)
+            The standard deviation along the x-axis.
+        stddev_y: (float)
+            The standard deviation along the y-axis.
+        rho: (float)
+            The population correlation coefficient between x and y.
+    """
+
     def __init__(self, x_mean=0, y_mean=0, stddev_x=1, stddev_y=1, rho=0):
         # Initialise obj with params:
         self.x_mean = x_mean
@@ -412,8 +431,43 @@ class Gaussian2D(MorphologyBase):
         self.stddev_y = stddev_y
         self.rho = rho
 
+        """
+        Initialise the morphology.
+
+        Arguments:
+            x_mean: (float)
+                The mean of the Gaussian along the x-axis.
+            y_mean: (float)
+                The mean of the Gaussian along the y-axis.
+            stddev_x: (float)
+                The standard deviation along the x-axis.
+            stddev_y: (float)
+                The standard deviation along the y-axis.
+            rho: (float)
+                The population correlation coefficient between x and y.
+        """
+
     # Define 2D Gaussian matrix
-    def gaussian2D_mat(self, x, y):
+    def compute_density_grid(self, x, y):
+        """
+        Compute density grid.
+
+        Arguments:
+            x: array-like (float)
+                A 1D array of x values.
+            y: array-like (float)
+                A 1D array of y values.
+
+        Returns:
+            g_2D_mat: np.ndarray:
+                A 2D array representing the Gaussian density values at each
+                (x, y) point.
+
+        Raises:
+            ValueError:
+                If either x or y is None.
+        """
+
         # Error for x, y = None
         if x is None or y is None:
             raise ValueError("x and y grids must be provided.")
@@ -445,6 +499,3 @@ class Gaussian2D(MorphologyBase):
         g_2D_mat = coeff * np.exp(-0.5 * exp)
 
         return g_2D_mat
-
-    def compute_density_grid(self, x, y):
-        return self.gaussian2D_mat(x, y)
