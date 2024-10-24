@@ -989,12 +989,12 @@ class Survey:
                 if self.nthreads > 1:
                     with Pool(self.nthreads) as pool:
                         pool.map(
-                            partial(self._apply_psfs, psfs=inst.psfs),
+                            partial(_apply_psfs, psfs=inst.psfs),
                             self.galaxies,
                         )
                 else:
                     for g in self.galaxies:
-                        self._apply_psfs(inst.psfs)
+                        _apply_psfs(inst.psfs)
 
             # If the instrument has noise we can apply that here. Again, if
             # we can we'll use a pool of threads to do this in parallel since
@@ -1006,7 +1006,7 @@ class Survey:
                         pool.map(_apply_noise, self.galaxies)
                 else:
                     for g in self.galaxies:
-                        self._apply_noise(instrument=inst)
+                        _apply_noise(instrument=inst)
 
         # Done!
         self._got_images_lum = True
