@@ -947,12 +947,12 @@ class Survey:
                 "Call get_photometry_luminosities first."
             )
 
-        def _apply_psfs(g):
+        def _apply_psfs(g, psfs):
             """"""
-            for inst in self.instruments:
-                if inst.can_do_psf_imaging:
-                    for img in g.images_lnu:
-                        img.apply_psfs(inst.psfs)
+            psfd_imgs = {}
+            for key, img in g.images_lnu.items():
+                psfd_imgs[key] = img.apply_psfs(inst.psfs)
+            g.images_psf_lnu = psfd_imgs
 
         def _apply_noise(g):
             """"""
@@ -994,7 +994,7 @@ class Survey:
                         )
                 else:
                     for g in self.galaxies:
-                        _apply_psfs(inst.psfs)
+                        _apply_psfs(g, inst.psfs)
 
             # If the instrument has noise we can apply that here. Again, if
             # we can we'll use a pool of threads to do this in parallel since
@@ -1050,12 +1050,12 @@ class Survey:
                 "Call get_photometry_fluxes first."
             )
 
-        def _apply_psfs(g):
+        def _apply_psfs(g, psfs):
             """"""
-            for inst in self.instruments:
-                if inst.can_do_psf_imaging:
-                    for img in g.images_fnu:
-                        img.apply_psfs(inst.psfs)
+            psfd_imgs = {}
+            for key, img in g.images_fnu.items():
+                psfd_imgs[key] = img.apply_psfs(inst.psfs)
+            g.images_psf_fnu = psfd_imgs
 
         def _apply_noise(g):
             """"""
@@ -1091,7 +1091,10 @@ class Survey:
                 # Do we have multiple threads?
                 if self.nthreads > 1:
                     with Pool(self.nthreads) as pool:
-                        pool.map(_apply_psfs, self.galaxies)
+                        pool.map(
+                            partial(_apply_psfs, psfs=inst.psfs),
+                            self.galaxies,
+                        )
                 else:
                     for g in self.galaxies:
                         _apply_psfs(g)
