@@ -1392,7 +1392,12 @@ class Survey:
         # If we have parallel h5py we can write in parallel using MPI,
         # redirect to the function that does this.
         if hasattr(h5py.get_config(), "mpi") and h5py.get_config().mpi:
-            self._true_parallel_write(outpath, rank_output)
+            self._true_parallel_write(
+                outpath,
+                rank_output,
+                out_paths,
+                attr_paths,
+            )
             return
 
         # Ok, we have to bring it to rank 0 and write it out there.
@@ -1557,7 +1562,7 @@ class Survey:
         # have parallel h5py
         write_start = time.perf_counter()
         if self.using_mpi:
-            self._parallel_write(outpath)
+            self._parallel_write(outpath, output, out_paths, attr_paths)
         else:
             self._serial_write(outpath, output, out_paths, attr_paths)
         self._took(write_start, f"Writing output to {outpath}")
