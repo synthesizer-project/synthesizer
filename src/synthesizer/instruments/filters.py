@@ -1232,7 +1232,7 @@ class Filter:
         """
 
         # Metadata of this filter
-        self.filter_code = filter_code
+        self.filter_code = filter_code.replace("/", ".")
         self.observatory = None
         self.instrument = None
         self.filter_ = None
