@@ -692,7 +692,11 @@ class Survey:
 
         # Sanitise the galaxies list to remove any None values
         galaxies = [g for g in self.galaxies if g is not None]
-        indices = [i for i, g in enumerate(self.galaxies) if g is not None]
+        indices = [
+            i
+            for i, g in zip(self.galaxy_indices, self.galaxies)
+            if g is not None
+        ]
         self.galaxies = galaxies
         self.galaxy_indices = indices
 
