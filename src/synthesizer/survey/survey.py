@@ -691,10 +691,10 @@ class Survey:
             ]
 
         # Sanitise the galaxies list to remove any None values
-        for i, g in enumerate(self.galaxies):
-            if g is None:
-                self.galaxies.remove(g)
-                self.galaxy_indices.pop(i)
+        galaxies = [g for g in self.galaxies if g is not None]
+        indices = [i for i, g in enumerate(self.galaxies) if g is not None]
+        self.galaxies = galaxies
+        self.galaxy_indices = indices
 
         # We want to report how many galaxies we actually loaded accounting
         # for any sanitisation that may have occurred. In MPI land this means
