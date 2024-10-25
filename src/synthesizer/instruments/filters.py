@@ -1232,7 +1232,7 @@ class Filter:
         """
 
         # Metadata of this filter
-        self.filter_code = filter_code.replace("/", ".")
+        self.filter_code = filter_code.replace("/", "_")
         self.observatory = None
         self.instrument = None
         self.filter_ = None
@@ -1525,8 +1525,8 @@ class Filter:
         self.filter_type = "SVO"
 
         # Get the information stored in the filter code
-        self.observatory = self.filter_code.split("/")[0]
-        self.instrument = self.filter_code.split("/")[1].split(".")[0]
+        self.observatory = self.filter_code.split("_")[0]
+        self.instrument = self.filter_code.split("_")[1].split(".")[0]
         self.filter_ = self.filter_code.split(".")[-1]
 
         # Read directly from the SVO archive.
