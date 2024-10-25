@@ -953,9 +953,12 @@ class Survey:
 
         def _apply_psfs(g, psfs):
             """"""
-            psfd_imgs = {}
-            for key, img in g.images_lnu.items():
-                psfd_imgs[key] = img.apply_psfs(inst.psfs)
+            psfd_imgs = getattr(g, "images_psf_lnu", {})
+            for key, imgs in g.images_lnu.items():
+                psfd_imgs.setdefault(key, {})
+                for f, img in imgs.items():
+                    if f in psfs:
+                        psfd_imgs[key][f] = img.apply_psf(psfs[f])
             g.images_psf_lnu = psfd_imgs
 
         def _apply_noise(g):
@@ -1056,10 +1059,13 @@ class Survey:
 
         def _apply_psfs(g, psfs):
             """"""
-            psfd_imgs = {}
-            for key, img in g.images_fnu.items():
-                psfd_imgs[key] = img.apply_psfs(inst.psfs)
-            g.images_psf_fnu = psfd_imgs
+            psfd_imgs = getattr(g, "images_psf_lnu", {})
+            for key, imgs in g.images_lnu.items():
+                psfd_imgs.setdefault(key, {})
+                for f, img in imgs.items():
+                    if f in psfs:
+                        psfd_imgs[key][f] = img.apply_psf(psfs[f])
+            g.images_psf_lnu = psfd_imgs
 
         def _apply_noise(g):
             """"""
