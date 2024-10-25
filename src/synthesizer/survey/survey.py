@@ -1298,7 +1298,9 @@ class Survey:
                 [
                     "".join(
                         [
-                            word if word[0].isupper() else word.capitalize()
+                            word
+                            if len(word) > 0 and word[0].isupper()
+                            else word.capitalize()
                             for word in p.split("_")
                         ]
                     )
